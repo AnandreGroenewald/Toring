@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="af">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Stapel — Stapel hoog. Staan sterk.</title>
+  <meta name="description" content="Stapel is ’n gratis Afrikaanse blokstapel-speletjie in jou blaaier. Bou elke dag die Daaglikse Toring: dieselfde blokke en weer vir almal, een poging. Stapel hoog. Staan sterk.">
+  <meta name="theme-color" content="#5ec1f5">
+  <meta name="color-scheme" content="light">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Stapel">
+  <meta name="application-name" content="Stapel">
+
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="af_ZA">
+  <meta property="og:site_name" content="Stapel">
+  <meta property="og:title" content="Stapel — Stapel hoog. Staan sterk.">
+  <meta property="og:description" content="’n Gratis Afrikaanse blokstapel-speletjie. Een Daaglikse Toring vir almal — hoe hoog kan jy bou?">
+  <meta property="og:url" content="https://anandregroenewald.github.io/Toring/">
+  <meta property="og:image" content="https://anandregroenewald.github.io/Toring/icons/icon-512.png">
+  <meta name="twitter:card" content="summary">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="game"></div>
+  <div id="ui"></div>
+
+  <div id="splash" role="status" aria-busy="true">
+    <h1 class="logo" aria-label="Stapel">
+      <span class="lb" aria-hidden="true"><span>S</span></span><span class="lb" aria-hidden="true"><span>T</span></span><span class="lb" aria-hidden="true"><span>A</span></span><span class="lb" aria-hidden="true"><span>P</span></span><span class="lb" aria-hidden="true"><span>E</span></span><span class="lb hang" aria-hidden="true"><span>L</span></span>
+    </h1>
+    <p class="splash-msg">Laai…</p>
+  </div>
+
+  <div id="rotate">
+    <div class="rot-phone emoji">📱</div>
+    <p>Draai jou foon regop om te speel.</p>
+  </div>
+
+  <noscript>
+    <div class="nojs">Stapel het JavaScript nodig. Skakel dit asseblief aan en laai die bladsy weer.</div>
+  </noscript>
+
+  <script src="lib/phaser.min.js" defer></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

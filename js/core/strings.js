@@ -56,6 +56,7 @@ export const S = {
   resume: 'Speel verder',
   quit: 'Hou op',
   quitWarnDaily: 'As jy nou ophou, tel hierdie poging as jou Daaglikse Toring.',
+  pause: 'Pouseer',
 
   // --- Uitslag (results) ---
   results: 'Uitslag',
@@ -97,11 +98,15 @@ export const S = {
     { icon: '🎯', text: 'Land dit reg in die middel vir ’n Perfek! Perfeks na mekaar bou ’n kombo vir ekstra punte — elke 5 gee jou ’n ekstra lewe.' },
     { icon: '🌦️', text: 'Die weer slaan toe terwyl jy bou: wind, reën, weerlig, hael, mis en meer.' },
     { icon: '🌊', text: 'Die water styg. Hou jou toring bo die vloedlyn!' },
-    { icon: '❤️', text: 'Jy het drie lewens. Elke blok wat val, kos een.' },
+    { icon: '❤️', text: 'Jy het drie lewens. Elke keer as blokke van die toring afval, kos dit een.' },
     { icon: '🧱', text: 'Onder in die toring stol die blokke soos sement — bo bly dit wankelrig.' },
     { icon: '📅', text: 'Elke dag is daar een Daaglikse Toring: dieselfde blokke en weer vir almal, en jy kry een poging. Oefen soveel as wat jy wil.' },
   ],
   howToGo: 'Kom ons bou!',
+
+  // --- Deel-teks (share text; core/share.js) ---
+  shareDailyHead: (n) => `Stapel #${n}`,
+  sharePracticeHead: 'Stapel (oefen)',
 };
 
 /** Weather display info. Keys match WEATHER_TYPES in config.js. */

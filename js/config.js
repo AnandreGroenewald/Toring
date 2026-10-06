@@ -40,8 +40,9 @@ export const PHYSICS = {
   fixedDtMs: 1000 / 60,
   maxStepsPerFrame: 4,
   positionIterations: 10,
-  velocityIterations: 8,
+  velocityIterations: 50,        // high: off-centre landings otherwise pick up fake spin (see blocks.js)
   constraintIterations: 2,
+  restingThresh: 30,             // Matter Resolver._restingThresh (px/step): impacts use the accumulated-impulse solver (set by blocks.js)
   enableSleeping: true,
   block: {
     friction: 0.9,
@@ -137,7 +138,7 @@ export const WEATHER_TYPES = ['wind', 'gust', 'rain', 'storm', 'hail', 'fog', 'h
 
 export const WEATHER_TUNING = {
   windAccel: 120,        // px/s^2 at strength 1 (applied to falling blocks + crane swing)
-  towerWindFactor: 0.5,  // fraction of wind applied to resting dynamic tower blocks
+  towerWindFactor: 0.25,  // fraction of wind applied to resting dynamic tower blocks
   gustFlipMs: 1200,
   gustMul: 1.6,
   rainFriction: 0.3,     // friction multiplier while it rains (slippery)

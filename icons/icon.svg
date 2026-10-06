@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4fb7f2"/>
+      <stop offset=".6" stop-color="#8fd3f4"/>
+      <stop offset="1" stop-color="#c8ecfb"/>
+    </linearGradient>
+    <clipPath id="baseclip"><rect x="104" y="445" width="304" height="19" rx="6"/></clipPath>
+    <clipPath id="round"><rect width="512" height="512" rx="112"/></clipPath>
+  </defs>
+  <g clip-path="url(#round)">
+    <rect width="512" height="512" fill="url(#sky)"/>
+    <g fill="#fff" opacity=".6">
+      <circle cx="400" cy="250" r="26"/><circle cx="430" cy="240" r="34"/><circle cx="462" cy="254" r="22"/>
+      <rect x="380" y="250" width="100" height="26" rx="13"/>
+    </g>
+    <g fill="#fff" opacity=".45">
+      <circle cx="70" cy="170" r="20"/><circle cx="96" cy="160" r="27"/><circle cx="122" cy="172" r="18"/>
+      <rect x="52" y="170" width="86" height="20" rx="10"/>
+    </g>
+    <g transform="translate(0 0.0)">
+    <path d="M-20 452 C 40 440, 80 464, 128 452 S 216 440, 256 452 S 344 464, 384 452 S 472 440, 532 452 V 700 H -20 Z" fill="#2f86d8"/>
+    <path d="M-20 452 C 40 440, 80 464, 128 452 S 216 440, 256 452 S 344 464, 384 452 S 472 440, 532 452" fill="none" stroke="#c8ecfb" stroke-width="7" stroke-linecap="round" opacity=".9"/>
+  </g>
+    <g>
+  <!-- base platform -->
+  <rect x="104" y="424" width="304" height="40" rx="10" fill="#5f6b7a"/>
+  <rect x="110" y="429" width="292" height="16" rx="6" fill="#aab4c0"/>
+  <g clip-path="url(#baseclip)">
+    <path d="M104 464 l26 -40 h16 l-26 40z M136 464 l26 -40 h16 l-26 40z M352 464 l26 -40 h16 l-26 40z M384 464 l26 -40 h16 l-26 40z" fill="#f5b800"/>
+  </g>
+  <!-- tower -->
+  <g transform="rotate(0 256 424)">
+    <rect x="116" y="364" width="280" height="60" rx="12" fill="#b83a5e"/>
+    <rect x="121" y="369" width="270" height="50" rx="8" fill="#f25c84"/>
+    <rect x="121" y="369" width="270" height="13" rx="7" fill="#ff9ab5"/>
+    <rect x="121" y="410" width="270" height="9" rx="3" fill="#b83a5e" opacity=".55"/>
+  </g>
+  <g transform="rotate(-2 238 364)">
+    <rect x="182" y="280" width="112" height="84" rx="12" fill="#b86d12"/>
+    <rect x="187" y="285" width="102" height="74" rx="8" fill="#f39a2b"/>
+    <rect x="187" y="285" width="102" height="13" rx="7" fill="#ffc56e"/>
+    <rect x="187" y="350" width="102" height="9" rx="3" fill="#b86d12" opacity=".55"/>
+  </g>
+  <g transform="rotate(2 262 280)">
+    <rect x="148" y="220" width="228" height="60" rx="12" fill="#c39a1c"/>
+    <rect x="153" y="225" width="218" height="50" rx="8" fill="#f7c948"/>
+    <rect x="153" y="225" width="218" height="13" rx="7" fill="#ffe38c"/>
+    <rect x="153" y="266" width="218" height="9" rx="3" fill="#c39a1c" opacity=".55"/>
+  </g>
+  <g transform="rotate(-3 274 220)">
+    <rect x="230" y="136" width="88" height="84" rx="12" fill="#3b8b3c"/>
+    <rect x="235" y="141" width="78" height="74" rx="8" fill="#5bbf5a"/>
+    <rect x="235" y="141" width="78" height="13" rx="7" fill="#92e08d"/>
+    <rect x="235" y="206" width="78" height="9" rx="3" fill="#3b8b3c" opacity=".55"/>
+  </g>
+  <!-- crane rope, hook and the next block on its way down -->
+  <rect x="236" y="-10" width="8" height="34" rx="4" fill="#2b2b2b"/>
+  <rect x="221" y="20" width="38" height="18" rx="6" fill="#f5b800" stroke="#2b2b2b" stroke-width="5"/>
+  <g transform="rotate(6 240 38)"><g transform="rotate(0 240 94)">
+    <rect x="156" y="38" width="168" height="56" rx="12" fill="#1d817d"/>
+    <rect x="161" y="43" width="158" height="46" rx="8" fill="#2fb5b0"/>
+    <rect x="161" y="43" width="158" height="13" rx="7" fill="#74ddd8"/>
+    <rect x="161" y="80" width="158" height="9" rx="3" fill="#1d817d" opacity=".55"/>
+  </g></g></g>
+  </g>
+</svg>
