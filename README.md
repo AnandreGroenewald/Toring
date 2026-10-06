@@ -41,6 +41,17 @@ The game is a static site with `index.html` at the repository root. There's no b
 
 All URLs are relative, so it also works from any other static host or sub-path. It installs as an app (PWA) and plays offline after the first visit.
 
+## Borge / Sponsorship
+
+Stapel stays free and is funded by monthly sponsorships, sold on `adverteer.html`:
+
+- **Jou naam op die blokke** (name on the blocks): the business name is printed on blocks in every tower, daily and practice. Sponsors take turns in a fixed order per tower, so each gets a fair share. Cubes never carry a name, and pillars only carry short ones.
+- **Die groot advertensiebord** (the billboard, R1 499 per month): one sponsor's name, tagline and web address on a sign on the island beside the tower. It is seen at the start of every game and in the zoomed-out tower view at the end.
+
+The menu also has a pinned card for the owner's own business, sportscard.co.za, labelled "Advertensie". Its text lives in `sponsors.json`, which can also hold sponsors arranged by hand. The WhatsApp share text never mentions sponsors.
+
+Sales are off until the backend is running. To switch them on, follow `server/README.md` (Paystack plans, then the Cloudflare Worker and D1 setup), then set `SPONSOR_API_URL` in `js/sponsorConfig.js`. That one value turns on the "Adverteer hier" link on the menu, the sign-up form and the "Jou advertensie hier!" text on an empty billboard. Until then the billboard shows the Stapel logo.
+
 ## Tech
 
 - **Phaser 3.90.0** with its built-in **Matter.js** physics, saved in `lib/phaser.min.js` (MIT; see `lib/LICENSE-phaser.md` and `lib/THIRD-PARTY-NOTICES.md`).

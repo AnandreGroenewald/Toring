@@ -3,7 +3,7 @@
 // body is built in those same local coordinates, so the image origin sits
 // exactly on the body's centroid (centre of mass) and image + body coincide.
 
-import { PHYSICS, PALETTE, DEPTH } from '../config.js';
+import { PHYSICS, PALETTE, DEPTH, FONT } from '../config.js';
 import { SHAPE_NAMES } from '../core/strings.js';
 
 const PAD = 3;             // transparent texture padding around the shape
@@ -630,7 +630,129 @@ DETAIL.L = DETAIL.tetro;
 DETAIL.J = DETAIL.tetro;
 DETAIL.T = DETAIL.tetro;
 
-function drawBlock(ctx, g, pal, key) {
+// ---------------------------------------------------------------------------
+// Sponsor names on blocks
+// ---------------------------------------------------------------------------
+
+const NAME_PAD_X = 7;
+const NAME_PAD_Y = 5;
+const NAME_MAX_PX = 24;
+const NAME_MIN_PX = 12;      // one line (also the pillar's vertical line)
+const NAME_MIN_PX_2 = 10;    // two lines
+const NAME_LINE_H = 1.08;
+const NAME_TEXT_H = 1.15;    // ascender to descender, in font sizes
+
+/** Short stable hash for texture keys (FNV-1a, base 36). */
+function nameHash(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return (h >>> 0).toString(36);
+}
+
+/** Cubes are too small for a name. */
+function canPrintName(spec) {
+  return getGeometry(spec).shape !== 'cube';
+}
+
+/** The block's main face for a name, in local px: the widest row of cells, the wedge's middle, the pillar's length. */
+function nameFace(g) {
+  if (g.shape === 'pillar') return { x: 0, y: 0, w: g.w, h: g.h, vertical: true };
+  if (g.poly) {
+    const inset = Math.round(g.w * 0.14);   // the slanted sides
+    return { x: inset, y: 0, w: g.w - 2 * inset, h: g.h };
+  }
+  let best = null;
+  const rows = new Map();
+  for (const c of g.cells) {
+    const k = `${c.y}|${c.h}`;
+    if (!rows.has(k)) rows.set(k, []);
+    rows.get(k).push(c);
+  }
+  for (const cells of rows.values()) {
+    cells.sort((a, b) => a.x - b.x);
+    let run = null;
+    for (const c of cells) {
+      if (run && c.x <= run.x + run.w + 1) run.w = c.x + c.w - run.x;
+      else run = { x: c.x, y: c.y, w: c.w, h: c.h };
+      if (!best || run.w > best.w || (run.w === best.w && run.h > best.h)) best = { ...run };
+    }
+  }
+  return best || { x: 0, y: 0, w: g.w, h: g.h };
+}
+
+function splitInTwo(text) {
+  const mid = text.length / 2;
+  let at = -1;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === ' ' && (at < 0 || Math.abs(i - mid) < Math.abs(at - mid))) at = i;
+  }
+  return at > 0 ? [text.slice(0, at), text.slice(at + 1)] : null;
+}
+
+/** Largest font size (whole px) from `max` down to `min` at which every line fits `width`; 0 if none. */
+function fitSize(ctx, lines, width, max, min) {
+  for (let px = Math.floor(max); px >= min; px--) {
+    ctx.font = `bold ${px}px ${FONT}`;
+    if (lines.every((l) => ctx.measureText(l).width <= width)) return px;
+  }
+  return 0;
+}
+
+/** Prints `name` centred on the main face: white bold, dark outline and a soft shadow, auto-fit. */
+function drawName(ctx, g, pal, name) {
+  const face = nameFace(g);
+  const along = face.vertical ? face.h : face.w;
+  const across = face.vertical ? face.w : face.h;
+  const width = along - 2 * NAME_PAD_X;
+  const room = across - 2 * NAME_PAD_Y;
+  if (width < 20 || room < NAME_MIN_PX_2) return false;
+
+  let lines = [name];
+  let px = fitSize(ctx, lines, width, Math.min(NAME_MAX_PX, room / NAME_TEXT_H), NAME_MIN_PX);
+  let squeeze = 1;
+  if (!face.vertical) {
+    const two = splitInTwo(name);
+    const px2 = two ? fitSize(ctx, two, width, Math.min(NAME_MAX_PX, room / (NAME_LINE_H + NAME_TEXT_H)), NAME_MIN_PX_2) : 0;
+    if (px2 && (!px || px2 >= px * 1.25)) {
+      lines = two;
+      px = px2;
+    }
+    if (!px) {
+      // a very long single word on a short face: squeeze it a little rather than lose the turn
+      px = NAME_MIN_PX;
+      ctx.font = `bold ${px}px ${FONT}`;
+      squeeze = Math.max(0.5, width / Math.max(1, ctx.measureText(name).width));
+    }
+  }
+  if (!px) return false;   // a pillar shows the name only if it fits
+
+  ctx.save();
+  ctx.translate(face.x + face.w / 2, face.y + face.h / 2);
+  if (face.vertical) ctx.rotate(-Math.PI / 2);   // reads bottom to top
+  ctx.scale(squeeze, 1);
+  ctx.font = `bold ${px}px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  const lh = px * NAME_LINE_H;
+  const y0 = -((lines.length - 1) * lh) / 2 + px * 0.04;
+  const shadow = Math.max(1, Math.round(px * 0.09));
+  const outline = rgba(mix(pal.dark, 0x000000, 0.45), 0.9);
+  lines.forEach((line, i) => {
+    const y = y0 + i * lh;
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.fillText(line, 0, y + shadow);
+    ctx.lineWidth = Math.max(2.5, px * 0.2);
+    ctx.strokeStyle = outline;
+    ctx.strokeText(line, 0, y);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(line, 0, y);
+  });
+  ctx.restore();
+  return true;
+}
+
+function drawBlock(ctx, g, pal, key, name = null) {
   const rnd = seededRand(key);
   const outlineCol = mix(pal.dark, 0x000000, 0.38);
   ctx.save();
@@ -649,6 +771,7 @@ function drawBlock(ctx, g, pal, key) {
   const detail = DETAIL[g.shape];
   if (detail) detail(ctx, g, pal, rnd);
   if (g.cells.length > 1) drawSeams(ctx, g.cells, rgba(outlineCol, 0.8));
+  if (name) drawName(ctx, g, pal, name);   // still clipped to the shape: the ghost silhouette is unchanged
   ctx.restore();
 
   roundedPolyPath(ctx, g.outline, CORNER_R);
@@ -659,34 +782,62 @@ function drawBlock(ctx, g, pal, key) {
   ctx.restore();
 }
 
-export function textureKeyFor(spec) {
+export function textureKeyFor(spec, name = null) {
   const g = getGeometry(spec);
   const color = PALETTE.indexOf(shapeColor(spec));
-  return `blk_${g.shape}_${Math.round(g.w)}x${Math.round(g.h)}_${color}`;
+  const key = `blk_${g.shape}_${Math.round(g.w)}x${Math.round(g.h)}_${color}`;
+  return name ? `${key}_n${nameHash(name)}` : key;
 }
 
-/** Draws the block texture once (cached by key) and returns the key. */
-export function ensureTexture(scene, spec) {
-  const key = textureKeyFor(spec);
+/**
+ * Draws the block texture once (cached by key) and returns the key. With a
+ * sponsor `name` the name is printed on the block's main face (its own texture;
+ * size and physics are those of the plain block).
+ */
+export function ensureTexture(scene, spec, name = null) {
+  const label = typeof name === 'string' && name.trim() && canPrintName(spec) ? name.trim() : null;
+  const key = textureKeyFor(spec, label);
   const textures = scene.textures;
   let info = texInfo.get(key);
   if (!textures.exists(key)) {
     const g = getGeometry(spec);
     const tex = textures.createCanvas(key, g.texW, g.texH);
     if (!tex) return key;
-    drawBlock(tex.getContext(), g, shapeColor(spec), key);
+    // the plain key seeds the details, so a named block is the same block plus its name
+    drawBlock(tex.getContext(), g, shapeColor(spec), textureKeyFor(spec), label);
     tex.refresh();
     if (!info) {
-      info = { blocks: new Set(), lastUse: 0 };
+      info = { blocks: new Set(), lastUse: 0, named: !!label };
       texInfo.set(key, info);
     }
   } else if (!info) {
-    info = { blocks: new Set(), lastUse: 0 };
+    info = { blocks: new Set(), lastUse: 0, named: !!label };
     texInfo.set(key, info);
   }
   info.lastUse = ++useClock;
   if (texInfo.size > TEX_CACHE_MAX) pruneTextures(textures);
   return key;
+}
+
+/**
+ * Drops the sponsor-name textures that no live block uses (call at game end or
+ * restart, so long sessions with many sponsors don't pile up textures).
+ * `keep` lists keys still shown elsewhere (e.g. the block on the crane).
+ */
+export function releaseNamedTextures(textures, keep = []) {
+  const spare = new Set(keep);
+  for (const [key, info] of texInfo) {
+    if (!info.named || spare.has(key) || textureInUse(info)) continue;
+    texInfo.delete(key);
+    if (textures && textures.exists(key)) textures.remove(key);
+  }
+}
+
+/** Number of cached sponsor-name textures (tests / debugging). */
+export function namedTextureCount() {
+  let n = 0;
+  for (const info of texInfo.values()) if (info.named) n++;
+  return n;
 }
 
 function textureInUse(info) {
@@ -719,7 +870,7 @@ function pruneTextures(textures) {
 // ---------------------------------------------------------------------------
 
 export class Block {
-  constructor(scene, spec, x, y, angle = 0) {
+  constructor(scene, spec, x, y, angle = 0, name = null) {
     this.scene = scene;
     this.spec = spec;
     this.index = spec.i;
@@ -734,7 +885,8 @@ export class Block {
     this.body.gameBlock = this;
     scene.matter.world.add(this.body);
 
-    this.textureKey = ensureTexture(scene, spec);
+    this.sponsorName = name || null;
+    this.textureKey = ensureTexture(scene, spec, name);
     const info = texInfo.get(this.textureKey);
     if (info) info.blocks.add(this);
     this.image = scene.add.image(x, y, this.textureKey)

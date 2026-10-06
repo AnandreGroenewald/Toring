@@ -122,6 +122,13 @@ export const S = {
   peek: 'Toring',
   peekBack: 'Uitslag',
   wobbleTitle: 'Wankel',
+
+  // --- Borge (sponsors) ---
+  adLabel: 'Advertensie',
+  adOpens: 'maak in ’n nuwe oortjie oop',
+  advertiseHere: 'Adverteer hier',
+  boardFree: 'Jou advertensie hier!',
+  boardFreeSub: 'Adverteer op Stapel',
 };
 
 /** Weather display info. Keys match WEATHER_TYPES in config.js. */

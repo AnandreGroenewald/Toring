@@ -8,6 +8,9 @@ import { createStore } from './core/storage.js';
 import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate } from './core/daily.js';
 import { createSequence } from './core/sequence.js';
 import { buildShareText } from './core/share.js';
+import { normalizeFeed, pickPremium } from './core/sponsors.js';
+import { loadSponsors } from './sponsorsFeed.js';
+import { SPONSOR_API_URL, salesEnabled } from './sponsorConfig.js';
 import { createUI } from './ui/dom.js';
 import { audio, haptics } from './audio.js';
 import { BgScene } from './scenes/BgScene.js';
@@ -122,6 +125,37 @@ const run = {
 let screen = 'menu';   // 'menu' | 'game' | 'pause' | 'results'
 const seqCache = new Map();
 
+// ---------------------------------------------------------------------------
+// Sponsors: the feed loads in the background and never holds up the game. Until
+// it arrives (or offline without a cache) the game simply runs without names.
+// ---------------------------------------------------------------------------
+let sponsorFeed = normalizeFeed(null, null);
+
+function billboardFor(dateKey) {
+  let premium = null;
+  try {
+    premium = pickPremium(sponsorFeed.premium, dateKey || todayKey());
+  } catch {
+    premium = null;
+  }
+  return { premium, salesOn: salesEnabled() };
+}
+
+function onSponsorFeed(feed) {
+  if (!feed || typeof feed !== 'object') return;
+  sponsorFeed = feed;
+  if (ui.setMenuAd) ui.setMenuAd(menuAd());
+  if (screen === 'menu') requestAnimationFrame(updateMenuAnchor);   // the card may have moved
+  const gs = gameScene();
+  if (gs && gs.idle && gs.setSponsors) gs.setSponsors(feed, billboardFor(todayKey()));
+}
+
+function menuAd() {
+  return { house: sponsorFeed.house?.menu || null, salesOn: salesEnabled() };
+}
+
+loadSponsors({ apiUrl: SPONSOR_API_URL, onUpdate: onSponsorFeed }).then(onSponsorFeed, () => {});
+
 function sequenceFor(dateKey) {
   if (!seqCache.has(dateKey)) {
     seqCache.clear();
@@ -141,6 +175,7 @@ function menuModel() {
     stats: store.getStats(dateKey),
     settings,
     nextDayAt: nextDayTimestamp(),
+    ad: menuAd(),
   };
 }
 
@@ -197,7 +232,13 @@ function startGame(data) {
     run.paused = false;
   }
   game.scene.stop('Hud');
-  game.scene.start('Game', { settings, autoplay: 0, ...data });
+  game.scene.start('Game', {
+    settings,
+    autoplay: 0,
+    sponsors: sponsorFeed,
+    billboard: billboardFor(data.dateKey),
+    ...data,
+  });
 }
 
 function resetRun(mode, dateKey = null) {

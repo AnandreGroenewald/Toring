@@ -1,4 +1,4 @@
-// Wordle-style share text + sharing via the Web Share API, WhatsApp or the
+// Daily-puzzle share text (emoji grid) + sharing via the Web Share API, WhatsApp or the
 // clipboard. Every browser API is looked up lazily and guarded, so this module
 // imports cleanly in node and never throws in odd WebViews.
 

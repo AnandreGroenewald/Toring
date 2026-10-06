@@ -2,7 +2,7 @@
 // the network first so a new version reaches players on their next visit.
 // Bump VERSION (and VERSION in js/config.js) when shipping; old caches are deleted on activate.
 
-const VERSION = 'stapel-v1.0.1';
+const VERSION = 'stapel-v1.1.0';
 
 const PRECACHE = [
   './',
@@ -12,6 +12,9 @@ const PRECACHE = [
   'lib/phaser.min.js',
   'js/main.js',
   'js/config.js',
+  'js/sponsorConfig.js',
+  'js/sponsorsFeed.js',
+  'sponsors.json',
   'js/audio.js',
   'js/core/bus.js',
   'js/core/format.js',
@@ -22,6 +25,8 @@ const PRECACHE = [
   'js/core/weatherplan.js',
   'js/core/storage.js',
   'js/core/share.js',
+  'js/core/nameRules.js',
+  'js/core/sponsors.js',
   'js/ui/dom.js',
   'js/game/blocks.js',
   'js/game/weather.js',
@@ -29,6 +34,7 @@ const PRECACHE = [
   'js/game/water.js',
   'js/game/effects.js',
   'js/game/island.js',
+  'js/game/billboard.js',
   'js/scenes/BgScene.js',
   'js/scenes/GameScene.js',
   'js/scenes/HudScene.js',
@@ -78,6 +84,8 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  // Other origins (the sponsor API among them) are never touched or cached here:
+  // js/sponsorsFeed.js keeps its own short-lived copy of the sponsor list.
   if (url.origin !== self.location.origin) return;
 
   if (req.mode === 'navigate') {

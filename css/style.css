@@ -634,6 +634,76 @@ svg.ic {
 
 .btn-practice .btn-txt { align-items: flex-start; }
 
+/* pinned house ad (sponsors.json) + "Adverteer hier": quieter than the play buttons */
+.menu-ad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(12 * var(--u));
+}
+.house-ad {
+  display: flex;
+  align-items: center;
+  gap: calc(16 * var(--u));
+  width: 100%;
+  padding: calc(14 * var(--u)) calc(16 * var(--u)) calc(14 * var(--u)) calc(26 * var(--u));
+  border-radius: calc(30 * var(--u));
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow:
+    0 calc(5 * var(--u)) 0 rgba(20, 52, 104, 0.12),
+    0 calc(12 * var(--u)) calc(24 * var(--u)) rgba(10, 34, 78, 0.18);
+  transition: transform 0.07s ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+.house-ad:active { transform: translateY(calc(3 * var(--u))); }
+.ad-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  text-align: left;
+}
+.ad-label {
+  font-size: calc(16 * var(--u));
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ad-title, .ad-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ad-title { font-size: calc(27 * var(--u)); font-weight: 900; line-height: 1.15; }
+.ad-text { font-size: calc(21 * var(--u)); font-weight: 700; color: var(--ink-soft); }
+.ad-go {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: calc(58 * var(--u));
+  height: calc(58 * var(--u));
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--hemel-d);
+  font-size: calc(28 * var(--u));
+}
+.advertise-link {
+  font-size: calc(21 * var(--u));
+  font-weight: 800;
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-shadow: 0 calc(2 * var(--u)) 0 rgba(29, 43, 69, 0.5), 0 0 calc(10 * var(--u)) rgba(29, 43, 69, 0.3);
+}
+#ui .house-ad:focus-visible, #ui .advertise-link:focus-visible {
+  outline: calc(5 * var(--u)) solid #fff;
+  outline-offset: calc(4 * var(--u));
+}
+
 /* ------------------------------------------------------------------------- */
 /* Sheets (how-to, stats)                                                    */
 /* ------------------------------------------------------------------------- */

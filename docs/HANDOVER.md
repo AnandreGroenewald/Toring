@@ -32,7 +32,7 @@ Later the owner added (decisions are final unless they say otherwise):
 | Sign-up and payment | **Fully automatic**, using **Paystack** (ZAR, monthly plans). The backend is a Cloudflare Worker + D1, because the site is static on GitHub Pages. |
 | WhatsApp share text | Stays **clean**: no sponsor mentions. |
 | Public contact email | The owner will create one and send it later. Until then `SPONSOR.contactEmail` stays `''` and the UI hides it. Do **not** publish the owner's personal Gmail. |
-| Brand names | Other games' names must not appear in the game or public docs. The README was already rewritten; the last code comments mentioning other games are task T5 below. |
+| Brand names | Other games' names must not appear in the game or public docs. The README and all game code are clean now (T5 reworded the last comments). Only the internal agent prompts in `docs/workflows/` and the owner's brief quoted above still name them. |
 | Legal | Third-party MIT notices are in `lib/THIRD-PARTY-NOTICES.md`. The owner was told to do a CIPC trademark search on "Stapel", fill in and lawyer-check the legal templates, register an Information Officer (POPIA), and ask an accountant about tax. |
 
 ## 2. Current state (at handover)
@@ -56,18 +56,12 @@ Later the owner added (decisions are final unless they say otherwise):
 - Tests at handover: **`npm test` 89/89 pass.**
 - Headless check at handover: a full daily at 412×915 with autoplay ran 1 min 50 s to 75,2 m and ended with zero console errors. Screenshots were taken of the how-to, Perfek ×4, rainbow, storm with lightning, the game-over reveal and results; all looked right.
 
-### Sponsorship system: about half built
-| Part | State |
-| --- | --- |
-| `server/` (Cloudflare Worker + D1 + Paystack) | **Built.** **`cd server && npm test` 92/92 pass** (includes a miniflare smoke test; `npm install` in `server/` first for that). Owner guide in `server/README.md`. **Not yet security-reviewed or payment-edge-case-reviewed.** |
-| `adverteer.html` + `js/pages/adverteer.js` + `css/pages.css` + `js/pages/common.js` | **Built, but currently 404s on its import of `js/core/sponsors.js`, which doesn't exist yet**, so the page doesn't run until T2 is done. |
-| `admin.html` + `js/pages/admin.js` | Built; loads with no console errors. Not reviewed. |
-| `js/sponsorConfig.js` | Built (`SPONSOR_API_URL = ''`, so sales are off). |
-| `js/core/sponsors.js`, `js/sponsorsFeed.js`, `sponsors.json`, `tests/sponsors.test.js` | **Not started** (the agent never got to run). |
-| `terme.html`, `privaatheid.html` (legal templates) | **Not started.** |
-| In-game integration (names on blocks, island billboard, sportscard.co.za menu card, "Adverteer hier" link) | **Not started.** |
-
-Nothing sponsor-related is linked from the game yet, so the live game is unaffected.
+### Sponsorship system: built, needs its review pass (T4)
+- **T2 done:** `js/core/sponsors.js` (pure logic), `js/sponsorsFeed.js` (feed loader with a 5-minute/7-day localStorage cache), `sponsors.json` (the sportscard.co.za house ad) and `tests/sponsors.test.js`. The name rules live in one shared file, `js/core/nameRules.js`, which the Worker (`server/src/moderation.js` re-exports it), the sign-up page and the game all use, so `wrangler deploy` must run from a full repo checkout. `adverteer.html` works now.
+- **T3 done:** `terme.html` and `privaatheid.html` are Afrikaans templates with `[[placeholders]]`, the template banner and "Nota vir die eienaar" notes. Both are version `2026-10-06`, matching `js/sponsorConfig.js`. The owner must check the Information Regulator's address and email, and a lawyer must confirm the ECT Act s44 cooling-off wording.
+- **T5 done:** in-game sponsorship. Sponsor names are drawn into the block textures; the cache is bounded and named textures are dropped at game end. The island billboard sits right of the base and floats up with the flood, so the reveal always shows it. The menu has the pinned sportscard.co.za card and, only when sales are on, an "Adverteer hier" link. The feed loads in the background and never delays startup. Everything new is precached, and the version is now `1.1.0`. The README has a sponsorship section.
+- Tests: **`npm test` 126/126** and **`cd server && npm test` 92/92** pass (run `npm install` in `server/` first for the miniflare smoke test). Headless checks at 412×915 had zero console errors, covering the menu, a practice game with a test feed (names and billboard), the reveal, no sponsors, and sales on with an empty billboard. The game payload is about 1.8 MB.
+- Not yet reviewed: the server (security, payment edge cases), `admin.html`, and the UX and legal wording (T4). The server does not auto-delete ended sponsors' contact data; the owner removes it on the admin page.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
@@ -81,23 +75,16 @@ Each step should end green (`npm test`, `cd server && npm test`, a headless play
   - Restart scenes 6+ times and check for leaks.
   - Test under a sub-path: serve `/home/user` and open `/Toring/`.
   - The prompt for this pass is the `qa` agent in `docs/workflows/2-review-fix-qa.js`.
-- **T2. Core sponsor logic:** `js/core/sponsors.js`, `js/sponsorsFeed.js`, `sponsors.json` (the sportscard.co.za house ad) and `tests/sponsors.test.js`, exactly per `docs/SPONSORS-SPEC.md`. The moderation rules must match `server/src/moderation.js`; ideally share one rules module. This also makes `adverteer.html` work. The prompt is `build:core` in `docs/workflows/3-sponsors-backend.js`.
-- **T3. Legal templates** `terme.html` and `privaatheid.html`, per the spec: Afrikaans, `[[placeholders]]` and a visible template banner. Their version strings must match `js/sponsorConfig.js`.
+  - Include the T5 sponsor features in those games: names on blocks, the billboard (it floats with the flood) and the menu card. A test feed can be injected with Playwright's `page.route('**/sponsors.json', ...)`.
+- ~~T2. Core sponsor logic~~ **Done** (see section 2).
+- ~~T3. Legal templates~~ **Done** (see section 2). The owner fills in the placeholders.
 - **T4. Sponsor reviews and fixes:**
   - security (forged or replayed webhooks, activating without paying, moderation bypass with unicode, admin token, XSS, CORS)
   - payment state machine (renewals when one email has several sponsorships, missed webhooks, refunds and chargebacks, premium-slot races, month arithmetic)
   - UX, Afrikaans and legal completeness
   - The prompts are in `docs/workflows/3-sponsors-backend.js` (Review and Fix phases).
-- **T5. In-game sponsor integration**, per the last section of `docs/SPONSORS-SPEC.md`:
-  - names drawn on block textures, keeping the texture cache bounded
-  - the island billboard for the R1 499 sponsor, reading "Jou advertensie hier!" when free and sales are on, or the Stapel logo when sales are off
-  - the pinned sportscard.co.za card labelled "Advertensie"
-  - the "Adverteer hier" link, shown only when `SPONSOR_API_URL` is set
-  - load the sponsor feed in `main.js`
-  - precache the new files in `sw.js` and bump `VERSION` and the SW cache name together
-  - keep the WhatsApp share text free of sponsors
-  - Also reword the three code comments that name other games: `js/core/share.js:1`, `js/core/daily.js:1`, and "Tower Bloxx style" in `js/scenes/GameScene.js`.
-- **T6. Final pass.** Full playtest plus screenshots. Confirm the **game payload** (what a player downloads: `index.html`, `lib/`, `js/` without `js/pages/`, `css/style.css`, `icons/`, `manifest`, `sw.js`) stays under 3 MB. It was about 1.9 MB at handover; the whole repo was 2.7 MB because `docs/`, `server/` and `tests/` are never loaded by the game. update `README.md` with a sponsorship section, then hand the owner the checklist in section 4.
+- ~~T5. In-game sponsor integration~~ **Done** (see section 2). It also reworded the code comments that named other games and added the README section.
+- **T6. Final pass.** Full playtest plus screenshots. Confirm the **game payload** (what a player downloads: `index.html`, `lib/`, `js/` without `js/pages/`, `css/style.css`, `icons/`, `manifest`, `sw.js`) stays under 3 MB. It was about 1.8 MB after T5 (that count includes `sponsors.json`); `docs/`, `server/` and `tests/` are never loaded by the game. Check the README's sponsorship section is still accurate, then hand the owner the checklist in section 4.
 
 **Prompt to give the next agent:** "Continue the Stapel project in this repo on branch `claude/trusting-hopper-26qcax`. Read `docs/HANDOVER.md` first and work through its remaining-work list T1–T6 in order, committing and pushing after each step."
 <!-- TODO-END -->

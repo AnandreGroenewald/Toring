@@ -9,7 +9,9 @@ import { S } from '../core/strings.js';
 import { fmtM } from '../core/format.js';
 import { createSequence } from '../core/sequence.js';
 import { audio, haptics } from '../audio.js';
-import { Block, ensureTexture, getGeometry } from '../game/blocks.js';
+import { Block, ensureTexture, getGeometry, releaseNamedTextures } from '../game/blocks.js';
+import { createBillboard, BILLBOARD_LEFT } from '../game/billboard.js';
+import { createBlockNamer } from '../core/sponsors.js';
 import { Weather } from '../game/weather.js';
 import { Crane } from '../game/crane.js';
 import { Water } from '../game/water.js';
@@ -257,6 +259,9 @@ export class GameScene extends Phaser.Scene {
     this.reducedMotion = !!this.settings.reducedMotion;
     this.autoplay = this.idle ? 0 : clamp(Number(d.autoplay) || 0, 0, 1);
     this.autoOn = this.idle || this.autoplay > 0;
+    // Sponsors (js/sponsorsFeed.js): names for the blocks, the day's premium sponsor for the billboard.
+    this.sponsorBlock = Array.isArray(d.sponsors?.block) ? d.sponsors.block : [];
+    this.billboardData = { premium: d.billboard?.premium || null, salesOn: !!d.billboard?.salesOn };
     this.resetRunState();
   }
 
@@ -265,6 +270,8 @@ export class GameScene extends Phaser.Scene {
     this.i = 0;
     this.curSpec = null;
     this.curGeom = null;
+    this.curName = null;
+    this.curKey = null;
     this.nextSpec = null;
     this.falling = null;
     this.active = [];          // non-frozen live blocks: falling, landed, settled, lost (need sync)
@@ -350,6 +357,7 @@ export class GameScene extends Phaser.Scene {
 
     // Practice seeds live in their own namespace: no practice run can replay a daily.
     this.sequence = createSequence(this.mode === 'practice' ? `oefen/${this.seed}` : this.seed);
+    this.namer = this.makeNamer();
 
     const mat = PHYSICS.block;
     this.baseBody = M.Bodies.rectangle(BASE_CX, BASE_CY, LAYOUT.baseWidth, LAYOUT.baseHeight, {
@@ -363,6 +371,8 @@ export class GameScene extends Phaser.Scene {
     world.add(this.baseBody);
 
     this.island = createIsland(this);
+    this.billboard = null;
+    safely(() => { this.billboard = createBillboard(this, this.billboardData); });
     this.water = new Water(this, { width: GAME_W });
     this.crane = new Crane(this, { top: this.st });
     this.effects = new Effects(this, { reducedMotion: this.reducedMotion });
@@ -491,8 +501,12 @@ export class GameScene extends Phaser.Scene {
     safely(() => this.water.destroy());
     safely(() => this.effects.destroy());
     safely(() => this.island.destroy());
+    if (this.billboard) safely(() => this.billboard.destroy());
     for (const b of this.active) safely(() => b.destroy());
     for (const b of this.tower) safely(() => b.destroy());
+    for (const b of this.frozen) safely(() => b.destroy());
+    // sponsor-name textures of this tower are no longer needed (keeps the cache bounded)
+    safely(() => releaseNamedTextures(this.textures));
     this.active = [];
     this.tower = [];
     this.dyn.length = 0;
@@ -577,16 +591,55 @@ export class GameScene extends Phaser.Scene {
     this.curSpec = spec;
     this.curGeom = getGeometry(spec);
     safely(() => this.weather.setBlockIndex(i));
-    const key = ensureTexture(this, spec);
+    // a sponsor's name is printed on the block (same texture on the crane, falling and in the
+    // tower); the ghost below tints it into a plain silhouette
+    this.curName = this.nameFor(spec);
+    const key = ensureTexture(this, spec, this.curName);
+    this.curKey = key;
     this.crane.setBlock(spec, key, this.curGeom);
     this.nextSpec = this.sequence.block(i + 1);
-    ensureTexture(this, this.nextSpec);
+    ensureTexture(this, this.nextSpec, this.nameFor(this.nextSpec));
     const geo = this.curGeom;
     this.ghostMiss = false;
     this.ghost.setTexture(key).setOrigin(geo.originX, geo.originY).setTintFill(0xffffff).setAlpha(GHOST_A);
     this.ghostEdge.setTexture(key).setOrigin(geo.originX, geo.originY).setTintFill(0x1d2b45)
       .setScale((geo.w + GHOST_PAD) / geo.w, (geo.h + GHOST_PAD) / geo.h);
     this.planAutoplay();
+  }
+
+  /** Deterministic sponsor names for this tower's blocks (same seed and order as the block sequence). */
+  makeNamer() {
+    if (!this.sponsorBlock.length) return null;
+    const seq = this.sequence;
+    try {
+      return createBlockNamer(this.sponsorBlock, seq.seed ?? this.seed, (i) => seq.block(i));
+    } catch {
+      return null;
+    }
+  }
+
+  /** The sponsor name for a block spec, or null (cubes, long names on pillars, no sponsors). */
+  nameFor(spec) {
+    if (!this.namer || !spec) return null;
+    try {
+      return this.namer(spec) || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * A newer sponsor feed arrived. Only the menu's attract tower picks it up live:
+   * a real game keeps the names and board it started with.
+   */
+  setSponsors(feed, billboard) {
+    if (!this.idle || !this.sys.isActive()) return;
+    this.sponsorBlock = Array.isArray(feed?.block) ? feed.block : [];
+    this.namer = this.makeNamer();
+    this.billboardData = { premium: billboard?.premium || null, salesOn: !!billboard?.salesOn };
+    if (this.billboard) safely(() => this.billboard.destroy());
+    this.billboard = null;
+    safely(() => { this.billboard = createBillboard(this, this.billboardData); });
   }
 
   /** Trolley swing for block i: a gentle first swing that widens to the full amplitude. */
@@ -609,7 +662,7 @@ export class GameScene extends Phaser.Scene {
     const g = 1000 * PHYSICS.gravityY;
     const vx = pose.vx * CRANE.carry;
     const vy = pose.vy * CRANE.carry;
-    const block = new Block(this, this.curSpec, pose.x - vx * d, pose.y + cam.scrollY - vy * d + 0.5 * g * d * d, pose.angle);
+    const block = new Block(this, this.curSpec, pose.x - vx * d, pose.y + cam.scrollY - vy * d + 0.5 * g * d * d, pose.angle, this.curName);
     block.setVelocityPxS(vx, vy - g * d);
     block.setFriction(this.weather.frictionMul);
     block.state = 'falling';
@@ -732,6 +785,7 @@ export class GameScene extends Phaser.Scene {
     // 3. Visuals that read the new physics state
     this.syncBlocks();
     this.water.update(dt);
+    if (this.billboard) this.billboard.float(this.water.displayY, this.now);
     const wc = this.wctx;
     wc.topBlock = this.topBlock;
     wc.towerTopY = this.towerTopY;
@@ -1420,7 +1474,9 @@ export class GameScene extends Phaser.Scene {
       line.setPosition(x0, y0).setRotation(Math.atan2(x0 - p.x, p.y - y0));
       line.setCrop(0, 0, 6, Math.min(len, line.height));
       if (this.ghostLabel && this.hintPending) {
-        this.ghostLabel.setPosition(clamp(p.x, 140, GAME_W - 140), p.y - (this.curGeom.h - this.curGeom.cy) - 14);
+        // (kept left of the island billboard, which stands right of the base)
+        const maxX = Math.max(140, Math.min(GAME_W - 140, BILLBOARD_LEFT - 6 - this.ghostLabel.width / 2));
+        this.ghostLabel.setPosition(clamp(p.x, 140, maxX), p.y - (this.curGeom.h - this.curGeom.cy) - 14);
         if (!this.ghostLabel.visible) this.ghostLabel.setVisible(true);
       }
     }
@@ -1748,6 +1804,7 @@ export class GameScene extends Phaser.Scene {
     const z = clamp(Math.min(1, this.H / span), 0.15, 1);
     cam.zoomTo(z, REVEAL_MS, 'Sine.easeInOut');
     cam.pan(GAME_W / 2, (top + bottom) / 2, REVEAL_MS, 'Sine.easeInOut');
+    if (this.billboard) safely(() => this.billboard.reveal(z, REVEAL_MS));
     safely(() => this.buildRuler(z, bestY));
   }
 
@@ -1786,11 +1843,14 @@ export class GameScene extends Phaser.Scene {
     for (const b of this.active) if (b.image && b.image.scene) imgs.push(b.image);
     for (const b of this.frozen) if (b.image && b.image.scene) imgs.push(b.image);
     const finish = () => {
+      const craneKey = this.crane && this.crane.block && this.crane.block.texture ? this.crane.block.texture.key : null;
       for (const b of this.active) b.destroy();
       for (const b of this.frozen) b.destroy();
       this.resetRunState();
       this.seed = `idle-${Math.floor(Math.random() * 1e9)}`;
       this.sequence = createSequence(this.seed);
+      this.namer = this.makeNamer();
+      releaseNamedTextures(this.textures, [craneKey]);   // the crane may still show its block
       this.stepCtx.dynamicBlocks = this.dyn;
       this.stepCtx.falling = null;
       this.spawnBlock(0);

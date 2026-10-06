@@ -1,4 +1,4 @@
-// The Daaglikse Toring calendar. Like Wordle, a day is the player's LOCAL
+// The Daaglikse Toring calendar. As in other daily puzzles, a day is the player's LOCAL
 // calendar day. Day arithmetic is done on the Y-M-D parts in UTC so daylight
 // saving changes can never make a day 23 or 25 "days" long.
 

@@ -43,6 +43,7 @@ const ICONS = {
   vibOff: `<rect ${STROKE} stroke-width="2.3" x="7.6" y="3.4" width="8.8" height="17.2" rx="2.2"/><path ${STROKE} stroke-width="2.4" d="M3.5 3.5l17 17"/>`,
   contrastOn: `<circle ${STROKE} stroke-width="2.4" cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 0 1 0 17.2z"/>`,
   contrastOff: `<circle ${STROKE} stroke-width="2.4" cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 0 1 0 17.2z" opacity=".35"/>`,
+  external: `<g ${STROKE} stroke-width="2.4"><path d="M13.5 4.5h6v6M19.3 4.7l-8.6 8.6"/><path d="M18 14.2v4.3c0 .8-.7 1.5-1.5 1.5H5.5c-.8 0-1.5-.7-1.5-1.5V7.5C4 6.7 4.7 6 5.5 6h4.3"/></g>`,
   eye: `<path ${STROKE} stroke-width="2.3" d="M2.5 12s3.6-6.4 9.5-6.4S21.5 12 21.5 12s-3.6 6.4-9.5 6.4S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3.2"/>`,
 };
 
@@ -111,6 +112,7 @@ export function createUI(bus) {
     model: null,
     settings: { sound: true, vibration: true, reducedMotion: prefersReducedMotion(), highContrast: false },
     nextDayAt: 0,
+    ad: null,            // { house: {title,text,url,label}|null, salesOn }
     rolledFor: 0,
     resultsDaily: false,
     ticker: 0,
@@ -525,8 +527,48 @@ export function createUI(bus) {
       toggleBtns());
 
 
+    const adSlot = h('div', { class: 'menu-ad' });
+    renderAd(adSlot, m.ad || st.ad);
+
     screens.menu.replaceChildren(brand, h('div', { class: 'spacer' }),
-      h('div', { class: 'menu-stack' }, card, practice, dock));
+      h('div', { class: 'menu-stack' }, card, practice, dock, adSlot));
+  }
+
+  /**
+   * The pinned house ad (sponsors.json "house.menu", always labelled as an ad) and,
+   * only while sponsorships are on sale, a small "Adverteer hier" link. Text goes in
+   * with textContent only; the URL was checked (https) by js/core/sponsors.js.
+   */
+  function renderAd(slot, ad) {
+    st.ad = ad || null;
+    const house = ad && ad.house;
+    const kids = [];
+    if (house && house.title && /^https:\/\//i.test(house.url || '')) {
+      const label = house.label || S.adLabel;
+      kids.push(h('a', {
+        class: 'house-ad',
+        href: house.url,
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        'aria-label': `${label}: ${house.title}${house.text ? ` — ${house.text}` : ''} (${S.adOpens})`,
+        onclick: () => audio.play('click'),
+      },
+      h('span', { class: 'ad-body' },
+        h('span', { class: 'ad-label', text: label }),
+        h('b', { class: 'ad-title', text: house.title }),
+        house.text && house.text !== house.title ? h('span', { class: 'ad-text', text: house.text }) : null),
+      h('span', { class: 'ad-go', 'aria-hidden': 'true' }, icon('external'))));
+    }
+    if (ad && ad.salesOn) kids.push(h('a', { class: 'advertise-link', href: 'adverteer.html', text: S.advertiseHere }));
+    slot.replaceChildren(...kids);
+    slot.hidden = !kids.length;
+  }
+
+  /** A newer sponsor feed: refresh only the ad slot (the menu itself stays put). */
+  function setMenuAd(ad) {
+    st.ad = ad || null;
+    const slot = screens.menu && screens.menu.querySelector('.menu-ad');
+    if (slot) renderAd(slot, st.ad);
   }
 
   function showMenu(model) {
@@ -861,6 +903,7 @@ export function createUI(bus) {
   return {
     layout,
     menuCardTop,
+    setMenuAd,
     showMenu,
     showHowTo,
     showStats,
