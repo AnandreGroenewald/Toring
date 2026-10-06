@@ -11,13 +11,13 @@ A free Afrikaans block-stacking phone game that runs in the browser.
 
 ## How it plays
 
-| Idea borrowed from | In Stapel |
+| | In Stapel |
 | --- | --- |
-| **Wordle** | One *Daaglikse Toring* per day, seeded from the date. Everyone gets the same blocks and weather and one scored try. There's a streak (*reeks*), a countdown to the next tower, and an emoji share line for WhatsApp. *Oefen* (practice) is unlimited and doesn't count. |
-| **Stack** | One-finger play: tap anywhere to drop. A dead-centre landing flashes **Perfek!** and snaps the block. Perfeks in a row build a combo with rising chimes and bonus points, and every 5 in a row restores a heart. |
-| **Tower Bloxx** | A yellow crane swings each block on a rope. The tower climbs past Table Mountain into the stratosphere, with height shown in metres. |
-| **Tricky Towers** | Weather hits while you build: 💨 wind, 🌪️ whirlwind, 🌧️ rain, ⛈️ lightning, 🌨️ hail, 🌫️ fog, ☀️ heatwave and 🌈 rainbow. The flood line (*vloedlyn*) keeps rising, and if the water passes the top of your tower, the game is over. |
-| **Jenga** | Real Matter.js physics. The top of the tower wobbles, creaks and can topple, while deeper blocks set like cement. |
+| **Daily tower** | One *Daaglikse Toring* per day, seeded from the date. Everyone gets the same blocks and weather and one scored try. There's a streak (*reeks*), a countdown to the next tower, and an emoji share line for WhatsApp. *Oefen* (practice) is unlimited and doesn't count. |
+| **One-tap stacking** | Tap anywhere to drop. A dead-centre landing flashes **Perfek!** and snaps the block. Perfeks in a row build a combo with rising chimes and bonus points, and every 5 in a row restores a heart. |
+| **The crane** | A yellow crane swings each block on a rope. The tower climbs past Table Mountain into the stratosphere, with height shown in metres. |
+| **Weather and the flood** | Weather hits while you build: 💨 wind, 🌪️ whirlwind, 🌧️ rain, ⛈️ lightning, 🌨️ hail, 🌫️ fog, ☀️ heatwave and 🌈 rainbow. The flood line (*vloedlyn*) keeps rising, and if the water passes the top of your tower, the game is over. |
+| **Wobble** | Real Matter.js physics. The top of the tower wobbles, creaks and can topple, while deeper blocks set like cement. |
 
 Share line example:
 
@@ -43,7 +43,7 @@ All URLs are relative, so it also works from any other static host or sub-path. 
 
 ## Tech
 
-- **Phaser 3.90.0** with its built-in **Matter.js** physics, saved in `lib/phaser.min.js` (MIT, see `lib/LICENSE-phaser.md`).
+- **Phaser 3.90.0** with its built-in **Matter.js** physics, saved in `lib/phaser.min.js` (MIT; see `lib/LICENSE-phaser.md` and `lib/THIRD-PARTY-NOTICES.md`).
 - Plain ES modules with no bundler and no runtime dependencies.
 - No image or sound assets. Blocks, crane, island, sea and sky are drawn in code, weather is shown with emoji, and every sound is a short WebAudio synth.
 - Physics runs at a fixed 60 Hz step, so behaviour is the same on 60/90/120 Hz screens. The drop distance is the same on every screen size, which keeps the daily fair.
