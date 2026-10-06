@@ -11,7 +11,15 @@ const MAX_SWING = 0.35;              // rad, hard limit from the spec
 // overshoots without becoming unplayable. Wind leans the rope (θ ≈ atan(a/g)).
 const TROLLEY_COUPLING = 0.055;
 const WIND_COUPLING = 0.6;
-const SUBSTEP = 1 / 120;
+// Fixed integration step (s): the swing is the same function of time at any refresh rate.
+const SUBSTEP = 1 / 240;
+const REEL_MS = 340;                 // a fresh block is lowered on the rope with a little overshoot
+const AMP_TAU = 0.3;                 // s: the swing widens smoothly when the amplitude changes
+const easeBackOut = (t) => {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2;
+};
 const JIB_TOP = LAYOUT.jibY - 42;    // screen y of the top chord
 const JIB_TEX_Y = JIB_TOP - 8;       // screen y of the jib texture's first row
 const JIB_W = GAME_W + 64;
@@ -222,7 +230,7 @@ export class Crane {
 
     this.phase = 0;
     this.windAccel = 0;
-    this.amplitude = CRANE.amplitude;
+    this.amplitude = CRANE.amplitudeStart ?? CRANE.amplitude;
     this.omega = CRANE.omega0;
     this.tx = GAME_W / 2;
     this.tv = 0;
@@ -231,6 +239,8 @@ export class Crane {
     this.dTop = 20;            // block centroid distance below its top edge
     this.ropeLen = LAYOUT.ropeLen;
     this.reel = 1;             // 0..1 lowering progress of a freshly attached block
+    this.reelT = REEL_MS;
+    this.acc = 0;              // s of frame time not yet integrated (less than one substep)
     this.spring = 0;           // rope recoil offset (px), spring-damped
     this.springV = 0;
     this._hasBlock = false;
@@ -260,10 +270,10 @@ export class Crane {
     this.spec = spec;
     this.block.setTexture(textureKey).setOrigin(ox, oy).setVisible(this.visible).setAlpha(0);
     this._hasBlock = true;
-    // lower it from just under the trolley: rope reels out with a little bounce
+    // lower it from just under the trolley: rope reels out with a little bounce (integrated in update())
     this._stopTweens();
     this.reel = 0;
-    this.tweens.push(this.scene.tweens.add({ targets: this, reel: 1, duration: 340, ease: 'Back.easeOut' }));
+    this.reelT = 0;
     this.tweens.push(this.scene.tweens.add({ targets: this.block, alpha: 1, duration: 140, ease: 'Quad.easeOut' }));
     this.thetaV += ((spec?.i ?? 0) % 2 ? 0.035 : -0.035);   // small deterministic jiggle as it is lowered
     this._layout();
@@ -290,7 +300,8 @@ export class Crane {
     let tv = this.tv;
     let theta = this.theta;
     let thetaV = this.thetaV;
-    const h = clamp(Number(aheadMs) || 0, -50, 50) / 1000;
+    // the integrated state is `acc` behind the last update; a tap is `aheadMs` after it
+    const h = this.acc + clamp(Number(aheadMs) || 0, -50, 50) / 1000;
     if (h !== 0) {
       const phase = this.phase + this.omega * h;
       const A = this.amplitude;
@@ -321,27 +332,35 @@ export class Crane {
     this.block.setVisible(false);
     this._stopTweens();
     this.reel = 1;
+    this.reelT = REEL_MS;
     // freed of the load the rope springs up; the hook keeps the swing
     this.springV -= 260;
     return pose;
   }
 
+  /** `amplitude` is a target: the swing eases towards it. */
   update(dtMs, { omega = this.omega, amplitude = CRANE.amplitude, windAccel = 0 } = {}) {
     if (this.destroyed) return;
     const dt = clamp(dtMs, 0, 100) / 1000;
     this.omega = omega;
-    this.amplitude = amplitude;
     this.windAccel = windAccel;
     this.time += dt;
-    const steps = Math.max(1, Math.ceil(dt / SUBSTEP));
-    const h = dt / steps;
-    const A = amplitude;
-    for (let i = 0; i < steps; i++) {
+    this.acc += dt;
+    const h = SUBSTEP;
+    const ampK = 1 - Math.exp(-h / AMP_TAU);
+    while (this.acc >= h - 1e-9) {
+      this.acc -= h;
+      this.amplitude += (amplitude - this.amplitude) * ampK;
+      const A = this.amplitude;
       this.phase += omega * h;
       const sp = Math.sin(this.phase);
       this.tx = GAME_W / 2 + A * sp;
       this.tv = A * omega * Math.cos(this.phase);
       const aT = -A * omega * omega * sp;
+      if (this.reelT < REEL_MS) {
+        this.reelT = Math.min(REEL_MS, this.reelT + h * 1000);
+        this.reel = easeBackOut(this.reelT / REEL_MS);
+      }
       const L = this._pendLen();
       const th = this.theta;
       const acc = -(G / L) * Math.sin(th)
@@ -356,6 +375,7 @@ export class Crane {
       this.springV += (-260 * this.spring - 14 * this.springV) * h;
       this.spring += this.springV * h;
     }
+    if (this.acc < 0) this.acc = 0;
     this._layout();
   }
 

@@ -6,8 +6,10 @@ import { seedFor, addDays } from '../js/core/daily.js';
 
 const SEEDS = Array.from({ length: 300 }, (_, k) => seedFor(addDays('2026-10-06', k)));
 const EASY = ['plank', 'slab', 'brick', 'crate'];
-const MID = ['cube', 'pillar', 'wedge', 'arch'];
-const LATE = ['L', 'J', 'T'];
+const WIDE_MID = ['wedge', 'arch'];          // from block 4
+const NARROW = ['cube', 'pillar'];           // from block 12
+const LATE = ['L', 'J', 'T'];                // from block 20
+const MID = [...WIDE_MID, ...NARROW];
 const AWKWARD = [...MID, ...LATE];
 
 const blocks = (seq, n) => Array.from({ length: n }, (_, i) => seq.block(i));
@@ -68,7 +70,8 @@ test('block rules: shapes allowed by index, plank start, no triple shapes, no do
       assert.ok(SHAPE_IDS.includes(b.shape), b.shape);
       assert.ok(Number.isInteger(b.color) && b.color >= 0 && b.color < PALETTE.length, `${b.color}`);
       if (i >= 1 && i <= 3) assert.ok(EASY.includes(b.shape), `${seed} i=${i} ${b.shape}`);
-      if (i <= 11) assert.ok(!LATE.includes(b.shape), `${seed} i=${i} ${b.shape}`);
+      if (i <= 11) assert.ok(!NARROW.includes(b.shape), `${seed} i=${i} ${b.shape}`);
+      if (i <= 19) assert.ok(!LATE.includes(b.shape), `${seed} i=${i} ${b.shape}`);
       if (i >= 2) {
         assert.ok(!(bs[i - 1].shape === b.shape && bs[i - 2].shape === b.shape), `${seed} triple ${b.shape} at ${i}`);
       }
@@ -120,10 +123,12 @@ test('shape distribution: every shape shows up; awkward shapes grow more common 
     return { c, n };
   };
   const early = freq(4, 11);
+  const mid = freq(12, 19);
   const late = freq(50, 90);
   const share = ({ c, n }, ids) => ids.reduce((s, id) => s + c[id], 0) / n;
   for (const id of SHAPE_IDS) assert.ok(late.c[id] > 0, `${id} never appears late`);
-  for (const id of [...EASY, ...MID]) assert.ok(early.c[id] > 0, `${id} never appears early`);
+  for (const id of [...EASY, ...WIDE_MID]) assert.ok(early.c[id] > 0, `${id} never appears early`);
+  for (const id of NARROW) assert.ok(mid.c[id] > 0, `${id} never appears in blocks 12-19`);
   assert.ok(share(early, EASY) > 0.6, `early easy share ${share(early, EASY)}`);
   assert.ok(share(late, AWKWARD) > share(early, AWKWARD) + 0.2, 'awkward should ramp up');
   assert.ok(share(late, LATE) > 0.1, `L/J/T late share ${share(late, LATE)}`);
@@ -252,8 +257,9 @@ test('block() tolerates odd indices', () => {
 });
 
 // Golden snapshot of Daaglikse Toring #1 (seed 'stapel-2026-10-06').
+// Updated deliberately in 1.0.1 (cube/pillar from block 12, L/J/T from 20): block 6 became an arch.
 const GOLDEN_BLOCKS = 'plank:1:0 slab:1.01:1 plank:1.1:6 plank:1.04:0 wedge:1.08:1 plank:0.94:7 '
-  + 'wedge:1:3 brick:1.06:1 arch:1:6 slab:0.93:5 slab:1.07:7 plank:0.96:6';
+  + 'arch:1:3 brick:1.06:1 arch:1:6 slab:0.93:5 slab:1.07:7 plank:0.96:6';
 const GOLDEN_EVENTS = [
   { type: 'rain', start: 5, end: 9, dir: 1, strength: 0.6 },
   { type: 'rainbow', start: 10, end: 13, dir: 1, strength: 0.79 },

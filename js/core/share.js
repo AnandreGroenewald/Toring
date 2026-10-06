@@ -2,7 +2,7 @@
 // clipboard. Every browser API is looked up lazily and guarded, so this module
 // imports cleanly in node and never throws in odd WebViews.
 
-import { RATING_EMOJI } from '../config.js';
+import { RATING_EMOJI, RATING_EMOJI_HC } from '../config.js';
 import { S, WEATHER_INFO } from './strings.js';
 import { fmtM, fmtInt } from './format.js';
 
@@ -10,10 +10,10 @@ const GRID_COLS = 10;
 const GRID_ROWS = 5;
 const END_EMOJI = { flood: '🌊', lives: '💥' };
 
-function gridLines(grid, reason) {
+function gridLines(grid, reason, set = RATING_EMOJI) {
   const cells = [];
   for (const ch of String(grid || '')) {
-    const e = RATING_EMOJI[ch];
+    const e = set[ch];
     if (e) cells.push(e);
   }
   const max = GRID_COLS * GRID_ROWS;
@@ -31,8 +31,11 @@ function gridLines(grid, reason) {
   return rows;
 }
 
-/** The emoji share text (see SPEC "share.js" for the exact format). */
-export function buildShareText(result, { url } = {}) {
+/**
+ * The emoji share text (see SPEC "share.js" for the exact format).
+ * `highContrast` swaps the grid to 🟦🟧⬜⬛, which colour-blind friends can tell apart.
+ */
+export function buildShareText(result, { url, highContrast = false } = {}) {
   const r = result || {};
   const lines = [];
   const height = fmtM(r.heightM || 0);
@@ -43,7 +46,7 @@ export function buildShareText(result, { url } = {}) {
   if ((r.maxCombo || 0) >= 2) stats.push(`🔥 ${fmtInt(r.maxCombo)}`);
   lines.push(stats.join(' · '));
 
-  lines.push(...gridLines(r.grid, r.reason));
+  lines.push(...gridLines(r.grid, r.reason, highContrast ? RATING_EMOJI_HC : RATING_EMOJI));
 
   const weather = (Array.isArray(r.weather) ? r.weather : [])
     .map((t) => WEATHER_INFO[t]?.emoji)

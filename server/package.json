@@ -1,0 +1,22 @@
+{
+  "name": "stapel-borge-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sponsorship API for the Stapel game: Cloudflare Worker + D1 + Paystack subscriptions.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "test": "node --test --test-reporter=spec \"test/*.test.js\"",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create stapel-borge",
+    "db:schema": "wrangler d1 execute stapel-borge --remote --file=./schema.sql",
+    "db:schema:local": "wrangler d1 execute stapel-borge --local --file=./schema.sql",
+    "logs": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.148.0"
+  }
+}

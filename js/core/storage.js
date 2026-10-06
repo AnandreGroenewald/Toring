@@ -7,7 +7,7 @@ import { STORAGE_KEY } from '../config.js';
 import { dateKeyFor, dayNumber, addDays, daysBetween, isDateKey } from './daily.js';
 
 const SCHEMA = 1;
-const SETTING_KEYS = ['sound', 'vibration', 'reducedMotion'];
+const SETTING_KEYS = ['sound', 'vibration', 'reducedMotion', 'highContrast'];
 const HISTORY_DAYS = 7;
 const KEEP_DAILY_DAYS = 90; // older finished entries are pruned (stats are aggregated separately) to keep writes cheap
 
@@ -123,6 +123,7 @@ function sanitize(raw) {
         result: normalizeResult(e.result, key),
         startedAt: num(e.startedAt, null),
         finishedAt: num(e.finishedAt, null),
+        ...(e.status === 'playing' ? { owner: typeof e.owner === 'string' ? e.owner : null, beatAt: num(e.beatAt, null) } : {}),
         ...(e.newBest && typeof e.newBest === 'object'
           ? { newBest: { height: e.newBest.height === true, score: e.newBest.score === true } }
           : {}),
@@ -159,15 +160,17 @@ const laterKey = (a, b) => (!a ? b : !b ? a : daysBetween(a, b) > 0 ? b : a);
 /**
  * @param backend Storage-like { getItem, setItem, removeItem } (may throw — that's fine).
  * @param opts.now () => epoch ms (injectable for tests).
+ * @param opts.key storage key (debug sessions use their own, so they never touch real stats).
  */
-export function createStore(backend = safeLocalStorage(), { now = () => Date.now() } = {}) {
+export function createStore(backend = safeLocalStorage(), { now = () => Date.now(), key = STORAGE_KEY } = {}) {
   const be = backend || memoryBackend();
+  const storeKey = key;
   let data = defaultData();
   let lastRaw = null;
 
   function readRaw() {
     try {
-      const raw = be.getItem(STORAGE_KEY);
+      const raw = be.getItem(storeKey);
       return typeof raw === 'string' ? raw : null;
     } catch {
       return undefined; // unreadable: keep what we have in memory
@@ -193,7 +196,7 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
   function persist() {
     const raw = JSON.stringify(data);
     try {
-      be.setItem(STORAGE_KEY, raw);
+      be.setItem(storeKey, raw);
       lastRaw = raw;
     } catch {
       // Quota / private mode: keep playing from memory.
@@ -234,6 +237,17 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     }
   }
 
+  /** Consecutive finished days ending at `key` (bounded by the kept history). */
+  function streakEndingAt(key) {
+    let n = 0;
+    let k = key;
+    while (data.daily[k] && data.daily[k].status === 'done' && n <= KEEP_DAILY_DAYS) {
+      n++;
+      k = addDays(k, -1);
+    }
+    return n;
+  }
+
   // Finalise one daily entry (no sync/persist; callers do that).
   function finishEntry(dateKey, result) {
     const existing = data.daily[dateKey];
@@ -253,11 +267,15 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     s.totalPerfects += merged.perfects;
     s.bestHeightM = Math.max(s.bestHeightM, merged.heightM);
     s.bestScore = Math.max(s.bestScore, merged.score);
-    if (!s.lastDateKey || daysBetween(s.lastDateKey, dateKey) >= 0) {
+    // A last day in the future (phone clock was ahead, or a trip east) must not
+    // freeze the streak once today's real date is played.
+    const realToday = today();
+    const bogusLast = !!s.lastDateKey && daysBetween(realToday, s.lastDateKey) > 1
+      && Math.abs(daysBetween(realToday, dateKey)) <= 1;
+    if (!bogusLast && (!s.lastDateKey || daysBetween(s.lastDateKey, dateKey) >= 0)) {
       s.streak = streakAfter(s.lastDateKey, s.streak, dateKey);
       s.lastDateKey = dateKey;
     }
-    s.maxStreak = Math.max(s.maxStreak, s.streak);
 
     data.daily[dateKey] = {
       status: 'done',
@@ -266,6 +284,11 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       finishedAt: now(),
       newBest: flags,
     };
+    if (bogusLast) {
+      s.lastDateKey = dateKey;
+      s.streak = streakEndingAt(dateKey);
+    }
+    s.maxStreak = Math.max(s.maxStreak, s.streak);
     return { applied: true, flags };
   }
 
@@ -274,7 +297,7 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
   const api = {
     getSettings() {
       sync();
-      return { sound: true, vibration: true, reducedMotion: prefersReducedMotion(), ...data.settings };
+      return { sound: true, vibration: true, reducedMotion: prefersReducedMotion(), highContrast: false, ...data.settings };
     },
 
     setSettings(partial) {
@@ -304,8 +327,11 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       return clone(data.daily[dateKey] || null);
     },
 
-    /** Called on the FIRST drop of a daily. No-op if an entry already exists. */
-    startDaily(dateKey, partialResult) {
+    /**
+     * Called on the FIRST drop of a daily. No-op if an entry already exists.
+     * `owner` (a per-tab id) and the heartbeat let another tab tell a live game from an abandoned one.
+     */
+    startDaily(dateKey, partialResult, { owner = null } = {}) {
       if (!isDateKey(dateKey)) return null;
       sync();
       if (!data.daily[dateKey]) {
@@ -314,6 +340,8 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
           result: normalizeResult({ ...(partialResult || {}), mode: 'daily' }, dateKey),
           startedAt: now(),
           finishedAt: null,
+          owner: typeof owner === 'string' ? owner : null,
+          beatAt: now(),
         };
         persist();
       }
@@ -330,14 +358,25 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       }
       if (e.status !== 'playing') return;
       e.result = normalizeResult({ ...e.result, ...(partialResult || {}), mode: 'daily' }, dateKey);
+      e.beatAt = now();
       persist();
     },
 
-    /** Marks the daily done and applies it to the stats exactly once. */
+    /** "Still playing": refreshes the heartbeat of a playing daily. */
+    touchDaily(dateKey) {
+      if (!isDateKey(dateKey)) return;
+      sync();
+      const e = data.daily[dateKey];
+      if (!e || e.status !== 'playing') return;
+      e.beatAt = now();
+      persist();
+    },
+
+    /** Marks the daily done and applies it to the stats exactly once (`applied` false if it already was). */
     finishDaily(dateKey, result) {
       sync();
       if (!isDateKey(dateKey)) {
-        return { ...statsFor(today()), isNewBestHeight: false, isNewBestScore: false };
+        return { ...statsFor(today()), isNewBestHeight: false, isNewBestScore: false, applied: false };
       }
       const { applied, flags } = finishEntry(dateKey, result);
       if (applied) {
@@ -348,14 +387,26 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
         ...statsFor(laterKey(dateKey, today())),
         isNewBestHeight: flags.height,
         isNewBestScore: flags.score,
+        applied,
       };
     },
 
-    /** Any daily still 'playing' (page closed mid-game) counts as finished with reason 'quit'. */
-    recoverUnfinished(todayKey = today()) {
+    /**
+     * Any daily still 'playing' (page closed mid-game) counts as finished with reason 'quit'.
+     * With `staleMs`, an entry whose heartbeat is newer than that is left alone (it is being
+     * played in another tab) unless it belongs to `owner` (this tab, reloaded).
+     */
+    recoverUnfinished(todayKey = today(), { staleMs = 0, owner = null } = {}) {
       sync();
+      const t = now();
       const keys = Object.keys(data.daily)
-        .filter((k) => data.daily[k].status === 'playing')
+        .filter((k) => {
+          const e = data.daily[k];
+          if (e.status !== 'playing') return false;
+          if (!(staleMs > 0) || !Number.isFinite(e.beatAt)) return true;
+          if (owner && e.owner === owner) return true;
+          return t - e.beatAt >= staleMs;
+        })
         .sort();
       const out = [];
       for (const key of keys) {

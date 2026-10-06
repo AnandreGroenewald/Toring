@@ -18,6 +18,8 @@ const REASONS = {
   quit: { emoji: '🏳️', title: S.overQuit, sub: S.overQuitSub },
 };
 const CLICK_GUARD_MS = 350;   // swallow double taps on navigation buttons
+// In-app grid cells: colour AND a symbol, so every kind of colour blindness can read them.
+const CELL_GLYPH = { P: '★', G: '•', S: '∼', X: '✕' };
 const MAX_TOASTS = 3;
 const SHORT_ASPECT = 1.72;    // canvases squatter than this (desktop, tablets) get the compact layout
 const STEP_COLORS = ['protea', 'karoo', 'sonneblom', 'bosveld', 'oseaan', 'jakaranda', 'hemel'];
@@ -39,6 +41,9 @@ const ICONS = {
   soundOff: `<path d="M3.5 9.3h3.3L11.6 5c.6-.5 1.4-.1 1.4.7v12.6c0 .8-.8 1.2-1.4.7l-4.8-4.3H3.5c-.6 0-1-.4-1-1V10.3c0-.6.4-1 1-1z"/><path ${STROKE} stroke-width="2.5" d="M16.3 9.4l5 5.2M21.3 9.4l-5 5.2"/>`,
   vibOn: `<rect ${STROKE} stroke-width="2.3" x="7.6" y="3.4" width="8.8" height="17.2" rx="2.2"/><path ${STROKE} stroke-width="2.2" d="M4 8.5v7M1.6 10.2v3.6M20 8.5v7M22.4 10.2v3.6"/>`,
   vibOff: `<rect ${STROKE} stroke-width="2.3" x="7.6" y="3.4" width="8.8" height="17.2" rx="2.2"/><path ${STROKE} stroke-width="2.4" d="M3.5 3.5l17 17"/>`,
+  contrastOn: `<circle ${STROKE} stroke-width="2.4" cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 0 1 0 17.2z"/>`,
+  contrastOff: `<circle ${STROKE} stroke-width="2.4" cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 0 1 0 17.2z" opacity=".35"/>`,
+  eye: `<path ${STROKE} stroke-width="2.3" d="M2.5 12s3.6-6.4 9.5-6.4S21.5 12 21.5 12s-3.6 6.4-9.5 6.4S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3.2"/>`,
 };
 
 // ---------------------------------------------------------------------------
@@ -104,7 +109,7 @@ export function createUI(bus) {
     screen: null,        // 'menu' | 'results' | 'pause' | 'game' | null
     modal: null,         // 'howto' | 'stats' | null
     model: null,
-    settings: { sound: true, vibration: true, reducedMotion: prefersReducedMotion() },
+    settings: { sound: true, vibration: true, reducedMotion: prefersReducedMotion(), highContrast: false },
     nextDayAt: 0,
     rolledFor: 0,
     resultsDaily: false,
@@ -302,6 +307,7 @@ export function createUI(bus) {
     style.setProperty('--s', s.toFixed(5));
     style.setProperty('--u', `${s.toFixed(5)}px`);
     root.classList.toggle('short', height / width < SHORT_ASPECT);
+    root.classList.toggle('compact', height / width < 1.9);
 
     const cs = getComputedStyle(probe);
     const vw = window.innerWidth;
@@ -366,7 +372,17 @@ export function createUI(bus) {
     if (left <= 0 && st.rolledFor !== st.nextDayAt) {
       st.rolledFor = st.nextDayAt;
       toast(S.newDay);
+      if (st.screen === 'results') newTowerButtons();
       bus.emit('ui:day-rollover');
+    }
+  }
+
+  /** On a daily result after midnight the countdown makes way for the new tower. */
+  function newTowerButtons() {
+    for (const el of screens.results.querySelectorAll('[data-countdown]')) {
+      const cell = el.closest('.foot-cell');
+      if (!cell) continue;
+      cell.replaceChildren(button('btn-big btn-new', [icon('play'), h('span', { text: S.newTowerGo })], () => bus.emit('ui:home')));
     }
   }
 
@@ -396,14 +412,19 @@ export function createUI(bus) {
     }, h('span', { class: 'dock-ic' }, icon(iconName)), h('span', { class: 'dock-label', text: label }));
   }
 
-  function toggleBtns() {
+  const LABELS = { sound: S.sound, vibration: S.vibration, highContrast: S.highContrast };
+
+  function toggleBtns({ contrast = false } = {}) {
     const list = [toggleBtn('sound')];
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') list.push(toggleBtn('vibration'));
+    // only phones buzz (desktop Chrome has navigator.vibrate too, but nothing happens)
+    const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    if (touch && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') list.push(toggleBtn('vibration'));
+    if (contrast) list.push(toggleBtn('highContrast'));
     return list;
   }
 
   function toggleBtn(key) {
-    const btn = dockBtn('soundOn', key === 'sound' ? S.sound : S.vibration, null, { 'data-setting': key });
+    const btn = dockBtn('soundOn', LABELS[key], null, { 'data-setting': key });
     btn.addEventListener('click', () => {
       const val = !st.settings[key];
       st.settings[key] = val;
@@ -414,6 +435,8 @@ export function createUI(bus) {
         audio.play('click');
       } else if (key === 'vibration' && val) {
         haptics.tap();
+      } else if (key === 'highContrast') {
+        root.classList.toggle('hc', val);
       }
     });
     paintToggle(btn);
@@ -423,11 +446,12 @@ export function createUI(bus) {
   function paintToggle(btn) {
     const key = btn.dataset.setting;
     const on = !!st.settings[key];
-    const name = key === 'sound' ? S.sound : S.vibration;
+    const name = LABELS[key];
     btn.setAttribute('aria-pressed', String(on));
     btn.setAttribute('aria-label', `${name}: ${on ? S.on : S.off}`);
     btn.title = `${name}: ${on ? S.on : S.off}`;
-    btn.querySelector('.dock-ic').replaceChildren(icon(key === 'sound' ? (on ? 'soundOn' : 'soundOff') : (on ? 'vibOn' : 'vibOff')));
+    const ic = { sound: ['soundOn', 'soundOff'], vibration: ['vibOn', 'vibOff'], highContrast: ['contrastOn', 'contrastOff'] }[key];
+    btn.querySelector('.dock-ic').replaceChildren(icon(on ? ic[0] : ic[1]));
   }
 
   function syncToggles() {
@@ -456,7 +480,7 @@ export function createUI(bus) {
     const entry = m.today || null;
     const done = !!entry && entry.status === 'done';
 
-    const brand = h('header', { class: 'brand' }, logo(), h('p', { class: 'tagline', text: S.tagline }));
+    const brand = h('header', { class: 'brand' }, logo(), h('p', { class: 'tagline' }, h('span', { text: S.tagline })));
 
     const head = h('div', { class: 'daily-head' },
       h('div', { class: 'daily-badge' }, emo('🏗️')),
@@ -464,7 +488,8 @@ export function createUI(bus) {
         h('h2', { class: 'daily-title', text: S.dailyN(m.dayNumber ?? '?') }),
         h('p', { class: 'daily-date', text: m.dateLabel || '' })));
 
-    const card = h('div', { class: 'card daily-card' }, streakChip(stats.currentStreak), head);
+    // a brand-new player sees no grey "🔥 0" before they have played
+    const card = h('div', { class: 'card daily-card' }, (stats.played | 0) > 0 ? streakChip(stats.currentStreak) : null, head);
     if (done) {
       const r = entry.result || {};
       card.append(
@@ -477,12 +502,12 @@ export function createUI(bus) {
           countdownEl()),
         button('btn-big btn-green', [icon('chart'), h('span', { text: S.seeResult })], () => bus.emit('ui:play-daily')));
     } else {
-      const fc = (m.forecast || []).slice(0, 5).map((t) => WEATHER_INFO[t]).filter(Boolean);
+      const fc = (m.forecast || []).slice(0, 4).filter((t) => WEATHER_INFO[t]).map((t) => ({ key: t, ...WEATHER_INFO[t] }));
       if (fc.length) {
         card.append(h('div', { class: 'forecast' },
           h('h3', { class: 'label', text: S.forecast }),
           h('ol', { class: 'fc-strip' }, fc.map((w) => h('li', { class: 'fc-item' },
-            h('span', { class: 'fc-emo' }, emo(w.emoji)),
+            h('span', { class: 'fc-emo', 'data-wx': w.key }, emo(w.emoji)),
             h('span', { class: 'fc-name', text: w.name }))))));
       }
       card.append(
@@ -499,6 +524,7 @@ export function createUI(bus) {
       dockBtn('chart', S.stats, () => { audio.play('click'); showStats(st.model?.stats); }),
       toggleBtns());
 
+
     screens.menu.replaceChildren(brand, h('div', { class: 'spacer' }),
       h('div', { class: 'menu-stack' }, card, practice, dock));
   }
@@ -510,6 +536,7 @@ export function createUI(bus) {
       st.settings = { ...st.settings, ...m.settings };
       applyMotionClass();
     }
+    root.classList.toggle('hc', !!st.settings.highContrast);
     st.nextDayAt = Number(m.nextDayAt) || 0;
     st.resultsDaily = false;
     renderMenu(m);
@@ -566,7 +593,7 @@ export function createUI(bus) {
         return h('div', {
           class: `bar${i === last ? ' today' : ''}${has ? '' : ' empty'}`,
           role: 'img',
-          'aria-label': `${dayAbbr(d?.dateKey)}: ${has ? fmtM(d.heightM) : '–'}`,
+          'aria-label': `${dayAbbr(d?.dateKey)}: ${has ? fmtM(d.heightM) : S.notPlayed}`,
         },
         h('span', { class: 'bar-val', text: has ? fmtM(d.heightM) : '–' }),
         h('span', { class: 'bar-fill', vars: { '--h': `${pct.toFixed(1)}%`, '--i': i } }),
@@ -581,7 +608,9 @@ export function createUI(bus) {
       h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); } }, icon('close')),
       h('div', { class: 'sheet-head' }, emo('📊'), h('h2', { id: 'stapel-stats-title', text: S.stats })),
       body,
-      h('div', { class: 'sheet-foot' }, button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false })));
+      h('div', { class: 'sheet-foot stats-foot' },
+        h('div', { class: 'dock' }, toggleBtns({ contrast: true })),
+        button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false })));
     modals.stats.replaceChildren(sheet);
     openModal('stats');
   }
@@ -589,15 +618,16 @@ export function createUI(bus) {
   // ---------------------------------------------------------------------------
   // Pause
   // ---------------------------------------------------------------------------
-  function showPause({ mode } = {}) {
+  function showPause({ mode, started = true } = {}) {
     if (st.modal) closeModal();
     const card = h('div', { class: 'card pause-card' },
       h('div', { class: 'pause-ic', 'aria-hidden': 'true' }, icon('pause')),
       h('h2', { text: S.paused }),
-      mode === 'daily' ? h('p', { class: 'warn' }, emo('⚠️'), h('span', { text: S.quitWarnDaily })) : null,
+      // before the first drop nothing counts yet, so no warning
+      mode === 'daily' && started ? h('p', { class: 'warn' }, emo('⚠️'), h('span', { text: S.quitWarnDaily })) : null,
       button('btn-big btn-green', [icon('play'), h('span', { text: S.resume })], () => bus.emit('ui:resume')),
       button('btn-white btn-quit', [icon('close'), h('span', { text: S.quit })], () => bus.emit('ui:quit')),
-      h('div', { class: 'dock' }, toggleBtns()));
+      h('div', { class: 'dock' }, toggleBtns({ contrast: true })));
     screens.pause.replaceChildren(card);
     showScreen('pause');
   }
@@ -610,7 +640,7 @@ export function createUI(bus) {
     const counts = { P: 0, G: 0, S: 0, X: 0 };
     for (const ch of String(grid || '')) {
       if (!RATING_EMOJI[ch]) continue;
-      cells.push(RATING_EMOJI[ch]);
+      cells.push(ch);
       counts[ch]++;
     }
     const max = GRID_COLS * GRID_ROWS;
@@ -619,7 +649,7 @@ export function createUI(bus) {
     let n = 0;
     for (let k = 0; k < shown.length; k += GRID_COLS) {
       rows.push(h('div', { class: 'grid-row' },
-        shown.slice(k, k + GRID_COLS).map((e) => h('span', { class: 'emoji', vars: { '--i': n++ }, text: e }))));
+        shown.slice(k, k + GRID_COLS).map((c) => h('span', { class: `cell cell-${c}`, vars: { '--i': n++ }, text: CELL_GLYPH[c] }))));
     }
     const end = END_EMOJI[reason];
     const extra = cells.length - max;
@@ -633,18 +663,23 @@ export function createUI(bus) {
         end ? h('span', { class: 'emoji', vars: { '--i': n++ }, text: end }) : null));
     }
     if (!rows.length) return null;
-    const label = `${S.perfects} ${counts.P}, ${S.good} ${counts.G}, ${S.skew} ${counts.S}, ${S.lost} ${counts.X}`;
+    const label = `${S.perfects} ${counts.P}, ${S.good} ${counts.G}, ${S.skew} ${counts.S}, ${S.lostCount} ${counts.X}`;
     return h('div', { class: 'grid', role: 'img', 'aria-label': label }, rows);
   }
 
+  /** One chip per kind of weather (×n when it came back), so a long day still fits on one line. */
   function weatherEl(types) {
-    const list = (Array.isArray(types) ? types : []).map((t) => WEATHER_INFO[t]).filter(Boolean);
-    if (!list.length) return null;
-    const named = list.length <= 3;
+    const counts = new Map();
+    for (const t of Array.isArray(types) ? types : []) if (WEATHER_INFO[t]) counts.set(t, (counts.get(t) || 0) + 1);
+    if (!counts.size) return null;
+    const named = counts.size <= 3;
     return h('div', { class: 'wx' },
       h('span', { class: 'label', text: S.weatherToday }),
-      list.map((w) => h('span', { class: named ? 'wx-chip' : 'wx-chip solo', title: w.name, 'aria-label': w.name },
-        emo(w.emoji), named ? h('span', { text: w.name }) : null)));
+      [...counts].map(([t, n]) => {
+        const w = WEATHER_INFO[t];
+        return h('span', { class: named ? 'wx-chip' : 'wx-chip solo', 'data-wx': t, title: w.name, 'aria-label': n > 1 ? `${w.name} ×${n}` : w.name },
+          emo(w.emoji), named ? h('span', { text: w.name }) : null, n > 1 ? h('sup', { class: 'wx-n', text: `×${n}` }) : null);
+      }));
   }
 
   function countUp(el, to, fmt, delay = 260, ms = 900) {
@@ -703,15 +738,16 @@ export function createUI(bus) {
     st.resultsDaily = daily;
     st.nextDayAt = Number(nextDayAt) || st.nextDayAt;
 
+    // a new record is the headline, whatever ended the run
     const head = h('div', { class: 'res-head' },
       h('div', { class: 'chip' }, emo(daily ? '🏗️' : '🧱'), h('span', { text: daily ? S.dailyN(r.dayNumber ?? '?') : S.practiceLabel })),
-      h('h2', { class: 'res-title' }, emo(why.emoji), h('span', { text: why.title })),
-      h('p', { class: 'res-sub', text: why.sub }));
+      h('h2', { class: 'res-title' }, emo(isNewBest ? '🏆' : why.emoji), h('span', { text: isNewBest ? S.newRecord : why.title })),
+      h('p', { class: 'res-sub', text: isNewBest ? `${why.emoji} ${why.title}` : why.sub }));
+    const empty = !(r.blocksDropped > 0);
 
     const bigM = h('div', { class: 'big-m', text: fmtM(r.heightM || 0) });
     const scoreB = h('b', { text: fmtInt(r.score || 0) });
-    const card = h('div', { class: `card res-card${isNewBest ? ' has-record' : ''}` },
-      isNewBest ? h('div', { class: 'record' }, emo('🏆'), h('span', { text: S.newRecord })) : null,
+    const card = h('div', { class: 'card res-card' },
       h('div', { class: 'res-height' },
         h('div', { class: 'label' }, emo('🏗️'), h('span', { text: S.height })),
         bigM,
@@ -721,14 +757,16 @@ export function createUI(bus) {
         tile(fmtInt(r.blocksPlaced || 0), S.blocks),
         tile(fmtInt(r.perfects || 0), S.perfects),
         tile(fmtInt(r.maxCombo || 0), S.bestCombo)),
-      gridEl(r.grid, r.reason),
-      weatherEl(r.weather),
-      h('div', { class: 'share-row' },
-        button('btn-wa', [icon('chat'), h('span', { text: S.shareWhatsApp })], () => doShare(shareText, 'whatsapp'), { nav: false }),
-        typeof navigator !== 'undefined' && typeof navigator.share === 'function'
-          ? button('btn-purple btn-mini', [icon('share'), h('span', { text: S.share })], () => doShare(shareText, 'native'), { nav: false })
-          : null,
-        button('btn-blue btn-mini', [icon('copy'), h('span', { text: S.copy })], () => doShare(shareText, 'copy'), { nav: false })));
+      empty ? null : gridEl(r.grid, r.reason),
+      empty ? null : weatherEl(r.weather),
+      empty
+        ? h('p', { class: 'empty-note', text: S.nothingToShare })
+        : h('div', { class: 'share-row' },
+          button('btn-wa', [icon('chat'), h('span', { text: S.shareWhatsApp })], () => doShare(shareText, 'whatsapp'), { nav: false }),
+          typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+            ? button('btn-purple btn-mini', [icon('share'), h('span', { text: S.share })], () => doShare(shareText, 'native'), { nav: false })
+            : null,
+          button('btn-blue btn-mini', [icon('copy'), h('span', { text: S.copy })], () => doShare(shareText, 'copy'), { nav: false })));
 
     const wrap = h('div', { class: 'res-wrap' }, head, card);
     if (daily) {
@@ -739,15 +777,33 @@ export function createUI(bus) {
           h('span', { text: S.currentStreak })),
         st.nextDayAt ? h('div', { class: 'foot-cell' },
           h('b', { 'data-countdown': '', text: fmtClock(st.nextDayAt - Date.now()) }),
-          h('span', { text: S.nextTower })) : null));
+          h('span', { text: S.nextTowerCaption })) : null));
     }
     wrap.append(h('div', { class: 'btn-row' },
       button('btn-teal', [icon('again'), h('span', { text: daily ? S.practice : S.practiceAgain })], () => bus.emit('ui:play-practice')),
       button('btn-white', [icon('home'), h('span', { text: S.home })], () => bus.emit('ui:home'))));
 
-    screens.results.replaceChildren(wrap);
+    // peek: hide the card to look at (and screenshot) the whole tower
+    const peek = h('button', {
+      type: 'button', class: 'peek-btn', 'aria-pressed': 'false', 'aria-label': S.peek, title: S.peek,
+      onclick: () => {
+        const on = !screens.results.classList.contains('peek');
+        screens.results.classList.toggle('peek', on);
+        peek.setAttribute('aria-pressed', String(on));
+        peek.querySelector('.peek-lbl').textContent = on ? S.peekBack : S.peek;
+        audio.play('click');
+      },
+    }, icon('eye'), h('span', { class: 'peek-lbl', text: S.peek }));
+
+    screens.results.classList.remove('peek');
+    screens.results.replaceChildren(peek, wrap);
     if (isNewBest && !reducedMotion()) screens.results.append(confetti());
     showScreen('results');
+    // a daily finished after midnight: the next tower is already open
+    if (daily && st.nextDayAt && st.nextDayAt <= Date.now()) {
+      st.rolledFor = st.nextDayAt;
+      newTowerButtons();
+    }
     countUp(bigM, r.heightM || 0, fmtM);
     countUp(scoreB, r.score || 0, fmtInt);
   }
@@ -793,8 +849,18 @@ export function createUI(bus) {
     }
   }
 
+  /** Top of the daily card (CSS px) while the menu shows, for the attract tower above it. */
+  function menuCardTop() {
+    if (st.screen !== 'menu') return null;
+    const card = screens.menu.querySelector('.daily-card');
+    if (!card) return null;
+    const r = card.getBoundingClientRect();
+    return r.height > 0 ? r.top : null;
+  }
+
   return {
     layout,
+    menuCardTop,
     showMenu,
     showHowTo,
     showStats,

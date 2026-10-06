@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="af">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Adverteer op Stapel — Jou besigheid op elke toring</title>
+  <meta name="description" content="Sit jou besigheid se naam op die blokke in Stapel, die gratis Afrikaanse blokstapel-speletjie, of kry die groot advertensiebord op die eiland. Maandeliks via Paystack, kanselleer enige tyd.">
+  <meta name="theme-color" content="#5ec1f5">
+  <meta name="color-scheme" content="light">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; form-action 'none'; base-uri 'none'; object-src 'none'; frame-src 'none'">
+
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="af_ZA">
+  <meta property="og:site_name" content="Stapel">
+  <meta property="og:title" content="Adverteer op Stapel — Jou besigheid op elke toring">
+  <meta property="og:description" content="Jou besigheid se naam op die blokke van die gratis Afrikaanse blokstapel-speletjie, of die groot advertensiebord op die eiland.">
+  <meta property="og:image" content="https://anandregroenewald.github.io/Toring/icons/icon-512.png">
+
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <script type="module" src="js/pages/adverteer.js"></script>
+</head>
+<body class="page page-adverteer">
+  <a class="skip" href="#hoof">Slaan oor na die inhoud</a>
+
+  <header class="wrap topbar">
+    <a class="pill" href="./">
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Speel Stapel
+    </a>
+  </header>
+
+  <main id="hoof" class="wrap" tabindex="-1">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="logo" aria-hidden="true">
+        <span class="lb"><span>S</span></span><span class="lb"><span>T</span></span><span class="lb"><span>A</span></span><span class="lb"><span>P</span></span><span class="lb"><span>E</span></span><span class="lb hang"><span>L</span></span>
+      </div>
+      <h1 id="hero-title">Adverteer op Stapel</h1>
+      <p class="hero-sub">Jou besigheid op elke toring</p>
+      <p class="hero-lead" id="hero-lead">Stapel is ’n gratis Afrikaanse blokstapel-speletjie. Elke dag bou spelers dieselfde Daaglikse Toring — en jou besigheid se naam kan reg daar op die blokke wees.</p>
+      <div class="hero-cta" id="hero-cta">
+        <a class="btn btn-big" href="#pakkette">Kies jou pakket</a>
+      </div>
+    </section>
+
+    <noscript>
+      <p class="nojs-note">Hierdie bladsy het JavaScript nodig om in te teken. Skakel dit asseblief aan en laai die bladsy weer.</p>
+    </noscript>
+
+    <!-- Shown after Paystack sends the sponsor back (?sponsor=…&reference=…) -->
+    <section id="status-view" class="card status-card section-gap" aria-labelledby="st-title" hidden>
+      <div class="status-ic" id="st-ic" aria-hidden="true"></div>
+      <h2 id="st-title" tabindex="-1"></h2>
+      <div id="st-live" role="status" aria-live="polite">
+        <p class="status-msg" id="st-msg"></p>
+        <p class="status-msg" id="st-msg2" hidden></p>
+      </div>
+      <div class="stacker" id="st-busy" aria-hidden="true" hidden><i></i><i></i><i></i></div>
+      <figure class="preview" id="st-preview" hidden>
+        <div class="preview-head"><span class="tier-kicker">So lyk dit in die spel</span></div>
+        <canvas class="preview-canvas" id="st-canvas" role="img" aria-label="Voorskou van jou advertensie in die spel"></canvas>
+      </figure>
+      <div class="status-actions" id="st-actions"></div>
+      <p class="status-hint" id="st-hint" hidden></p>
+    </section>
+
+    <div id="sales">
+      <section class="card section-gap" aria-labelledby="why-title">
+        <div class="sec-head">
+          <span class="blk k-oseaan" aria-hidden="true"><span class="emoji">💡</span></span>
+          <h2 id="why-title">Hoekom Stapel?</h2>
+        </div>
+        <ul class="why-list">
+          <li class="why-item">
+            <span class="blk" aria-hidden="true"><span class="emoji">🗓️</span></span>
+            <div>
+              <h3>Elke dag ’n nuwe toring</h3>
+              <p>Spelers kom elke dag terug vir die Daaglikse Toring, en oefen tussendeur soveel hulle wil.</p>
+            </div>
+          </li>
+          <li class="why-item">
+            <span class="blk k-karoo" aria-hidden="true"><span class="emoji">🧱</span></span>
+            <div>
+              <h3>Jou naam in die spel self</h3>
+              <p>Nie ’n opspring-advertensie wat mense wegklik nie: jou naam staan op die blokke wat hulle self stapel.</p>
+            </div>
+          </li>
+          <li class="why-item">
+            <span class="blk k-bosveld" aria-hidden="true"><span class="emoji">💬</span></span>
+            <div>
+              <h3>Gesien en gedeel</h3>
+              <p>Spelers deel hul torings met vriende en familie op WhatsApp. Aan die einde van elke spel wys die kamera die hele toring en eiland — die oomblik vir ’n skermskoot.</p>
+            </div>
+          </li>
+          <li class="why-item">
+            <span class="blk k-jakaranda" aria-hidden="true"><span class="emoji">💚</span></span>
+            <div>
+              <h3>Hou Stapel gratis</h3>
+              <p>Borge maak dit moontlik om Stapel gratis en sonder lastige advertensies te hou. Dankie!</p>
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <section id="pakkette" aria-labelledby="tiers-title">
+        <h2 class="tiers-title" id="tiers-title">Kies jou pakket</h2>
+        <div class="tiers">
+          <article class="card tier tier-block" aria-labelledby="tier-block-title">
+            <div class="tier-head">
+              <span class="blk k-hemel" aria-hidden="true"><span class="emoji">🧱</span></span>
+              <div>
+                <p class="tier-kicker">Maandelikse borgskap</p>
+                <h3 id="tier-block-title">Jou naam op die blokke</h3>
+              </div>
+            </div>
+            <div class="price-box">
+              <p class="price price-quiet">Maandeliks via Paystack</p>
+              <p class="price-note">Die prys word by betaling gewys</p>
+            </div>
+            <ul class="ticks">
+              <li>Jou besigheid se naam op die blokke wat spelers stapel</li>
+              <li>In die Daaglikse Toring én in oefenrondtes</li>
+              <li>Borge deel die blokke — die name wissel van blok tot blok</li>
+              <li>Kanselleer enige tyd</li>
+            </ul>
+            <div class="tier-foot">
+              <p class="avail" data-avail="block" data-state="loading">Kyk tans…</p>
+              <button type="button" class="btn btn-blue" data-choose="block"><span class="btn-label">Kies die blokke</span></button>
+            </div>
+          </article>
+
+          <article class="card tier tier-premium" aria-labelledby="tier-premium-title">
+            <span class="ribbon">Eksklusief</span>
+            <div class="tier-head">
+              <span class="blk k-sonneblom" aria-hidden="true"><span class="emoji">📣</span></span>
+              <div>
+                <p class="tier-kicker">Net een adverteerder</p>
+                <h3 id="tier-premium-title">Die groot advertensiebord</h3>
+              </div>
+            </div>
+            <div class="price-box">
+              <p class="price" data-premium-price>R1 499 per maand</p>
+              <p class="price-note">Maandeliks via Paystack</p>
+            </div>
+            <ul class="ticks">
+              <li>’n Groot advertensiebord op die eiland, reg langs die toring</li>
+              <li>Jou naam, ’n kort slagspreuk en jou webwerf</li>
+              <li>Sigbaar aan die begin van elke spel, en weer aan die einde wanneer die kamera die hele toring wys</li>
+              <li>Net een adverteerder op ’n slag</li>
+              <li>Kanselleer enige tyd</li>
+            </ul>
+            <div class="tier-foot">
+              <p class="avail" data-avail="premium" data-state="loading">Kyk tans…</p>
+              <button type="button" class="btn" data-choose="premium"><span class="btn-label">Kies die advertensiebord</span></button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="teken-in" class="card form-card section-gap" aria-labelledby="form-title">
+        <div class="sec-head">
+          <span class="blk k-bosveld" aria-hidden="true"><span class="emoji">✍️</span></span>
+          <div>
+            <h2 id="form-title">Teken in</h2>
+            <p id="form-intro">Dit neem net ’n minuut. Jy betaal veilig by Paystack.</p>
+          </div>
+        </div>
+
+        <div class="notice" id="soon" hidden>
+          <span class="blk k-karoo" aria-hidden="true"><span class="emoji">🏗️</span></span>
+          <div>
+            <h3>Kom binnekort!</h3>
+            <p>Aanlyn inskrywings maak binnekort oop. Intussen kan jy hier onder kyk hoe jou besigheid se naam in die spel sal lyk.</p>
+            <p data-contact hidden>Wil jy nie wag nie? Stuur vir ons ’n e-pos na <a data-contact-link data-contact-text></a>.</p>
+          </div>
+        </div>
+
+        <form id="signup" novalidate hidden>
+          <div class="alert" id="form-alert" role="alert" tabindex="-1" hidden></div>
+
+          <fieldset class="tier-pick" id="tier-pick">
+            <legend>Watter pakket wil jy hê?</legend>
+            <label class="pick">
+              <input type="radio" name="tier" value="block" id="tier-block">
+              <span class="pick-body">
+                <b>Jou naam op die blokke</b>
+                <span class="pick-sub">Prys by betaling gewys</span>
+                <span class="pick-flag" data-pick-flag="block" hidden></span>
+              </span>
+            </label>
+            <label class="pick">
+              <input type="radio" name="tier" value="premium" id="tier-premium">
+              <span class="pick-body">
+                <b>Die groot advertensiebord</b>
+                <span class="pick-sub" data-premium-price>R1 499 per maand</span>
+                <span class="pick-flag" data-pick-flag="premium" hidden></span>
+              </span>
+            </label>
+          </fieldset>
+
+          <div class="field">
+            <label for="f-name">Besigheidsnaam</label>
+            <p class="hint" id="f-name-hint">Só verskyn dit in die spel. 2–22 karakters: letters, syfers, spasies en &amp; . - ’ !</p>
+            <input class="input" id="f-name" name="name" type="text" maxlength="22" autocomplete="organization" autocapitalize="words" spellcheck="false" required aria-describedby="f-name-hint f-name-count">
+            <div class="field-foot">
+              <p class="field-error" id="f-name-err" hidden></p>
+              <span class="counter" id="f-name-count" aria-live="off">0/22</span>
+            </div>
+          </div>
+
+          <div id="premium-fields" hidden>
+            <div class="field">
+              <label for="f-tagline">Slagspreuk <span class="opt">(opsioneel)</span></label>
+              <p class="hint" id="f-tagline-hint">’n Kort sinnetjie onder jou naam op die bord, bv. “Vars brood elke oggend”.</p>
+              <input class="input" id="f-tagline" name="tagline" type="text" maxlength="40" autocomplete="off" aria-describedby="f-tagline-hint f-tagline-count">
+              <div class="field-foot">
+                <p class="field-error" id="f-tagline-err" hidden></p>
+                <span class="counter" id="f-tagline-count" aria-live="off">0/40</span>
+              </div>
+            </div>
+            <div class="field">
+              <label for="f-url">Webwerf <span class="opt">(opsioneel)</span></label>
+              <p class="hint" id="f-url-hint">Word as teks op die bord gewys (spelers kan nie daarop klik nie).</p>
+              <input class="input" id="f-url" name="url" type="url" inputmode="url" maxlength="200" autocomplete="url" autocapitalize="none" spellcheck="false" placeholder="jouwebwerf.co.za" aria-describedby="f-url-hint">
+              <p class="field-error" id="f-url-err" hidden></p>
+            </div>
+          </div>
+
+          <figure class="preview" id="preview" aria-labelledby="pv-title">
+            <div class="preview-head">
+              <span class="tier-kicker" id="pv-title">Voorskou</span>
+              <button type="button" class="mini-btn" id="pv-shuffle">
+                <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3a9 9 0 0 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.8-1.7h2.1A4.3 4.3 0 0 0 21 11c0-4.4-4-8-9-8zm-5 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm4 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
+                <span id="pv-shuffle-label">Ander blok</span>
+              </button>
+            </div>
+            <canvas class="preview-canvas" id="pv-close" role="img" aria-label="Voorskou van jou naam"></canvas>
+            <canvas class="preview-canvas" id="pv-scene" role="img" aria-label="Voorskou van die eiland in die spel"></canvas>
+            <figcaption class="preview-cap" id="pv-cap">Borge deel die blokke, so jou naam verskyn op ’n deel van die blokke in elke toring.</figcaption>
+          </figure>
+
+          <div id="sale-fields">
+            <h3 class="form-sub">Jou kontakbesonderhede</h3>
+            <p class="hint">Net vir ons en Paystack — dit word nooit in die spel of aanlyn gewys nie.</p>
+
+            <div class="field">
+              <label for="f-contact">Kontakpersoon</label>
+              <input class="input" id="f-contact" name="contactName" type="text" maxlength="60" autocomplete="name" autocapitalize="words" required>
+              <p class="field-error" id="f-contact-err" hidden></p>
+            </div>
+            <div class="field">
+              <label for="f-email">E-posadres</label>
+              <p class="hint" id="f-email-hint">Paystack stuur jou kwitansies en die skakel om jou intekening te bestuur hierheen.</p>
+              <input class="input" id="f-email" name="email" type="email" inputmode="email" maxlength="254" autocomplete="email" autocapitalize="none" spellcheck="false" required aria-describedby="f-email-hint">
+              <p class="field-error" id="f-email-err" hidden></p>
+            </div>
+            <div class="field">
+              <label for="f-phone">Selfoonnommer <span class="opt">(opsioneel)</span></label>
+              <input class="input" id="f-phone" name="phone" type="tel" inputmode="tel" maxlength="20" autocomplete="tel" placeholder="082 123 4567">
+              <p class="field-error" id="f-phone-err" hidden></p>
+            </div>
+
+            <!-- Honeypot: people never see or fill this; simple bots do. -->
+            <div class="hp" aria-hidden="true">
+              <label for="f-hp">Los hierdie veld leeg</label>
+              <input id="f-hp" name="hp-veld" type="text" tabindex="-1" autocomplete="off">
+            </div>
+
+            <p class="rules"><b>Wat mag op Stapel?</b> Stapel word deur mense van alle ouderdomme gespeel, ook kinders. Daarom aanvaar ons nie advertensies vir alkohol, tabak of vapes, dobbelary, volwasse inhoud, onwettige goedere of dienste, politieke of godsdienstige veldtogte, of enigiets haatliks of misleidends nie.</p>
+
+            <label class="check">
+              <input type="checkbox" id="f-terms" name="acceptTerms" aria-describedby="f-terms-err">
+              <span>Ek aanvaar die <a href="terme.html" target="_blank" rel="noopener">Borgskap-voorwaardes</a> <span class="sr-only">(maak in ’n nuwe oortjie oop)</span></span>
+            </label>
+            <p class="field-error check-error" id="f-terms-err" hidden></p>
+            <label class="check">
+              <input type="checkbox" id="f-privacy" name="acceptPrivacy" aria-describedby="f-privacy-err">
+              <span>Ek het die <a href="privaatheid.html" target="_blank" rel="noopener">Privaatheidsbeleid</a> gelees en stem in dat my inligting so verwerk word <span class="sr-only">(maak in ’n nuwe oortjie oop)</span></span>
+            </label>
+            <p class="field-error check-error" id="f-privacy-err" hidden></p>
+
+            <dl class="summary" id="summary">
+              <div class="summary-row"><dt>Pakket</dt><dd id="sum-tier">—</dd></div>
+              <div class="summary-row"><dt>Prys</dt><dd id="sum-price">—</dd></div>
+              <div class="summary-row"><dt>Betaling</dt><dd>Maandeliks · kanselleer enige tyd</dd></div>
+            </dl>
+
+            <button type="submit" class="btn btn-green btn-big" id="pay-btn">
+              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 10V7.5a5 5 0 0 1 10 0V10h.8c1 0 1.7.8 1.7 1.7v7.6c0 1-.8 1.7-1.7 1.7H6.2c-1 0-1.7-.8-1.7-1.7v-7.6c0-1 .8-1.7 1.7-1.7H7zm2.6 0h4.8V7.5a2.4 2.4 0 0 0-4.8 0V10z"/></svg>
+              <span class="btn-label">Gaan voort na betaling</span>
+            </button>
+            <p class="secure">
+              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2.5 4.5 5.6v5.6c0 4.6 3.2 8.8 7.5 10.3 4.3-1.5 7.5-5.7 7.5-10.3V5.6L12 2.5zm-1.3 13.6-3.6-3.6 1.6-1.6 2 2 4.6-4.6 1.6 1.6-6.2 6.2z"/></svg>
+              Veilige betaling deur Paystack. Ons sien of stoor nooit jou kaartbesonderhede nie.
+            </p>
+          </div>
+        </form>
+      </section>
+
+      <section id="vrae" class="card section-gap" aria-labelledby="faq-title">
+        <div class="sec-head">
+          <span class="blk k-jakaranda" aria-hidden="true"><span class="emoji">❓</span></span>
+          <h2 id="faq-title">Gereelde vrae</h2>
+        </div>
+        <div class="faq">
+          <details>
+            <summary>Hoe gou verskyn my naam in die spel?</summary>
+            <div class="faq-a">
+              <p>Sodra Paystack jou betaling bevestig, verskyn jou naam gewoonlik binne 5 minute. Spelers sien dit wanneer hulle die volgende keer ’n spel begin.</p>
+              <p>Soms moet ons ’n naam eers met die hand nagaan. Dan verskyn dit sodra dit goedgekeur is.</p>
+            </div>
+          </details>
+          <details>
+            <summary>Wat kos dit?</summary>
+            <div class="faq-a">
+              <p>Die groot advertensiebord kos <span data-premium-price>R1 499 per maand</span>.</p>
+              <p>Die prys vir jou naam op die blokke word op Paystack se betaalblad gewys voordat jy betaal. Jy betaal niks voordat jy die bedrag gesien en bevestig het nie.</p>
+            </div>
+          </details>
+          <details>
+            <summary>Hoe werk die betaling?</summary>
+            <div class="faq-a">
+              <p>Jy betaal maandeliks met jou bankkaart via Paystack. Die eerste betaling gaan af wanneer jy inteken, en daarna elke maand op dieselfde datum. Paystack stuur vir jou ná elke betaling ’n kwitansie per e-pos.</p>
+            </div>
+          </details>
+          <details>
+            <summary>Hoe kanselleer ek?</summary>
+            <div class="faq-a">
+              <p>Enige tyd. Klik op <b>“Manage subscription”</b> in die e-pos wat Paystack vir jou stuur wanneer jou intekening begin. Dieselfde knoppie is ook in Paystack se herinnering voor elke betaling.</p>
+              <p>Jou naam bly in die spel tot aan die einde van die maand waarvoor jy reeds betaal het. Daarna word jy nie weer gedebiteer nie.</p>
+              <p data-contact hidden>Sukkel jy? Stuur vir ons ’n e-pos na <a data-contact-link data-contact-text></a>, dan help ons jou.</p>
+            </div>
+          </details>
+          <details>
+            <summary>Hoe werk die name op die blokke?</summary>
+            <div class="faq-a">
+              <p>Al die borge deel die blokke, en die name wissel van blok tot blok. In die Daaglikse Toring sien almal op ’n dag dieselfde blokke — en dus dieselfde name. In oefenrondtes kom die name in ’n ander volgorde.</p>
+            </div>
+          </details>
+          <details>
+            <summary>Hoeveel mense sien my advertensie?</summary>
+            <div class="faq-a">
+              <p>Ons waarborg nie ’n spesifieke aantal spelers of vertonings nie. Hoe meer mense Stapel speel, hoe meer mense sien jou naam — en elke spel wat gedeel word, bring nuwe spelers.</p>
+            </div>
+          </details>
+          <details>
+            <summary>Wat mag ek adverteer?</summary>
+            <div class="faq-a">
+              <p>Gebruik jou eie besigheids- of handelsnaam. Omdat Stapel deur mense van alle ouderdomme gespeel word, aanvaar ons nie advertensies vir alkohol, tabak of vapes, dobbelary, volwasse inhoud, onwettige goedere of dienste, politieke of godsdienstige veldtogte, of enigiets haatliks of misleidends nie.</p>
+              <p>Ons kan ’n naam weier voordat jy betaal, en ’n advertensie verwyder wat nie aan die <a href="terme.html">Borgskap-voorwaardes</a> voldoen nie.</p>
+            </div>
+          </details>
+          <details data-contact hidden>
+            <summary>Kan ek my naam later verander?</summary>
+            <div class="faq-a">
+              <p>Ja. Stuur vir ons ’n e-pos na <a data-contact-link data-contact-text></a> met die nuwe naam, dan sit ons dit om.</p>
+            </div>
+          </details>
+          <details>
+            <summary>Is my betaling veilig?</summary>
+            <div class="faq-a">
+              <p>Ja. Jy betaal op Paystack se eie beveiligde betaalblad. Ons sien of stoor nooit jou kaartbesonderhede nie. Lees meer in ons <a href="privaatheid.html">Privaatheidsbeleid</a>.</p>
+            </div>
+          </details>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-foot on-dark">
+    <div class="wrap">
+      <nav aria-label="Skakels">
+        <ul class="foot-nav">
+          <li><a href="./">Speel Stapel</a></li>
+          <li><a href="terme.html">Borgskap-voorwaardes</a></li>
+          <li><a href="privaatheid.html">Privaatheidsbeleid</a></li>
+          <li data-contact hidden><a data-contact-link>Kontak ons</a></li>
+        </ul>
+      </nav>
+      <p class="foot-tag">Stapel hoog. Staan sterk.</p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -14,10 +14,10 @@ A free Afrikaans block-stacking phone game that runs in the browser.
 | | In Stapel |
 | --- | --- |
 | **Daily tower** | One *Daaglikse Toring* per day, seeded from the date. Everyone gets the same blocks and weather and one scored try. There's a streak (*reeks*), a countdown to the next tower, and an emoji share line for WhatsApp. *Oefen* (practice) is unlimited and doesn't count. |
-| **One-tap stacking** | Tap anywhere to drop. A dead-centre landing flashes **Perfek!** and snaps the block. Perfeks in a row build a combo with rising chimes and bonus points, and every 5 in a row restores a heart. |
+| **One-tap stacking** | Tap anywhere to drop; a white outline shows where the block will land (red when it would fall). A dead-centre landing flashes **Perfek!**, snaps the block and sets everything under it like cement. Perfeks in a row build a combo with rising chimes and bonus points. You have four hearts, and every third Perfek wins a lost one back. |
 | **The crane** | A yellow crane swings each block on a rope. The tower climbs past Table Mountain into the stratosphere, with height shown in metres. |
 | **Weather and the flood** | Weather hits while you build: 💨 wind, 🌪️ whirlwind, 🌧️ rain, ⛈️ lightning, 🌨️ hail, 🌫️ fog, ☀️ heatwave and 🌈 rainbow. The flood line (*vloedlyn*) keeps rising, and if the water passes the top of your tower, the game is over. |
-| **Wobble** | Real Matter.js physics. The top of the tower wobbles, creaks and can topple, while deeper blocks set like cement. |
+| **Wobble** | Real Matter.js physics. The top of the tower wobbles, creaks and can topple, while deeper blocks set like cement. A collapse costs one heart, and the crane waits for the tower to settle before the next block. |
 
 Share line example:
 
@@ -46,7 +46,7 @@ All URLs are relative, so it also works from any other static host or sub-path. 
 - **Phaser 3.90.0** with its built-in **Matter.js** physics, saved in `lib/phaser.min.js` (MIT; see `lib/LICENSE-phaser.md` and `lib/THIRD-PARTY-NOTICES.md`).
 - Plain ES modules with no bundler and no runtime dependencies.
 - No image or sound assets. Blocks, crane, island, sea and sky are drawn in code, weather is shown with emoji, and every sound is a short WebAudio synth.
-- Physics runs at a fixed 60 Hz step, so behaviour is the same on 60/90/120 Hz screens. The drop distance is the same on every screen size, which keeps the daily fair.
+- Physics runs at a fixed 60 Hz step, so behaviour is the same on 30/60/90/120 Hz screens. Everything random that weather does to the tower (gust strength, lightning, hail) comes from seeded per-event streams (`js/core/weatherplan.js`) and runs on that step, and a tap releases the block where it was at the moment of the tap, not at the last frame. The drop distance is the same on every screen size. Together that keeps the daily fair.
 - Portrait layout, 720 logical px wide, scaled to fit any phone. Under 2 MB in total, about 1.2 MB of which is Phaser.
 
 ```
@@ -75,9 +75,10 @@ Useful query parameters:
 
 | Parameter | Effect |
 | --- | --- |
-| `?debug=1` | Shows an FPS meter. Combined with `?date=YYYY-MM-DD`, it previews another day's tower without saving stats. |
+| `?debug=1` | Shows an FPS meter and turns on the test parameters below. A debug session keeps its own storage (`stapel.v1.debug`), so it never touches the real daily, streak or stats. |
+| `?date=YYYY-MM-DD` | With `?debug=1`: play another day's tower. |
+| `?auto=0.2` | With `?debug=1`: autoplay with a 20% aim-error rate. |
+| `?seed=abc` | With `?debug=1`: fixed seed for practice (practice seeds live in their own namespace, so they never replay a daily). |
 | `?nosw=1` | Skips the service worker. |
-| `?auto=0.2` | Autoplay with a 20% aim-error rate, for testing. |
-| `?seed=abc` | Fixed seed for practice. |
 
-When you release a change, bump `VERSION` in `js/config.js` and the cache name in `sw.js`.
+When you release a change, bump `VERSION` in `js/config.js` and the cache name in `sw.js` (a unit test checks they agree, and that every module is precached and preloaded). Changes to `js/core/sequence.js`, `js/core/weatherplan.js` or the physics change every daily tower: ship them before local midnight so a day never has two versions.

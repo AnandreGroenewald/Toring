@@ -673,6 +673,7 @@ const Ctor = typeof window !== 'undefined' ? (window.AudioContext || window.webk
 const LOW_PRIORITY = new Set(['hail', 'creak', 'wind', 'rain', 'warning', 'freeze', 'click', 'drop', 'land', 'fog', 'heat']);
 const HOLD_GRACE_MS = 500;   // taps this soon after suspend() (the pause tap itself) don't undo it
 const STALL_MS = 1000;       // context still not running this long after an unlock => drop sounds
+const IDLE_SUSPEND_MS = 12000; // no sound for this long (menu, results): let the audio thread sleep
 let ctx = null;
 let master = null;
 let enabled = true;
@@ -680,6 +681,8 @@ let held = false;            // suspended on purpose by suspend() (pause / tab h
 let heldAt = 0;
 let unlockAt = 0;
 let listening = false;
+let idleTimer = 0;
+let idleAsleep = false;      // suspended by the idle timer (not by the player or the browser)
 const voices = [];
 const lastStart = Object.create(null);
 const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -829,12 +832,26 @@ export const audio = {
 
   resume() {
     held = false;
+    idleAsleep = false;
     if (enabled && !isHidden()) safeResume();
   },
 
   play(name, opts = {}) {
     if (!enabled || held || !ctx || !master || !SOUNDS[name] || isHidden()) return;
     const ms = nowMs();
+    // asleep after a quiet spell: wake it (the sound plays as soon as it runs again)
+    if (idleAsleep) {
+      idleAsleep = false;
+      safeResume();
+    }
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      if (held || !ctx || ctx.state !== 'running') return;
+      prune(ctx.currentTime);
+      if (voices.length) return;
+      idleAsleep = true;
+      safeSuspend();
+    }, IDLE_SUSPEND_MS);
     // Don't pile sounds up in a context that refuses to start (they'd burst out later).
     if (ctx.state !== 'running' && ms - unlockAt > STALL_MS) return;
     const gap = THROTTLE[name];

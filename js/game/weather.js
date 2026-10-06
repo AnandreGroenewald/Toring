@@ -6,7 +6,7 @@
 
 import { WEATHER_TUNING as WT, DEPTH, GAME_W, LAYOUT, PHYSICS, accelToForce } from '../config.js';
 import { WEATHER_INFO } from '../core/strings.js';
-import { createRng } from '../core/rng.js';
+import { eventRng, gustMul, strikePlan, hailPlan } from '../core/weatherplan.js';
 
 const Mt = () => Phaser.Physics.Matter.Matter;
 
@@ -256,7 +256,7 @@ export class Weather {
     this.seen = [];
     this.destroyed = false;
 
-    this._rng = createRng(`${sequence && sequence.seed != null ? sequence.seed : 'wx'}/weather-fx`);
+    this._seed = sequence && sequence.seed != null ? String(sequence.seed) : 'wx';
     this._evRng = null;
     this._active = null;
     this._i = 0;
@@ -331,7 +331,7 @@ export class Weather {
     const g = this._gust;
     if (n <= 0) return 1;
     if (n <= g.muls.length) return g.muls[n - 1];
-    return this._evRng ? this._evRng.fork(`gust${n}`).float(0.75, 1.25) : 1;
+    return this._evRng ? gustMul(this._evRng, n) : 1;
   }
 
   // --- event lifecycle ------------------------------------------------------
@@ -357,7 +357,7 @@ export class Weather {
     this._active = ev;
     this._t = 0;
     this._sfxTimer = 0;
-    this._evRng = this._rng.fork(`${ev.type}@${ev.start}`);
+    this._evRng = eventRng(this._seed, ev);
     this.seen.push(ev.type);
 
     const info = WEATHER_INFO[ev.type];
@@ -378,7 +378,7 @@ export class Weather {
       g.flips = 0;
       g.mul = 1;
       g.muls = [];
-      for (let n = 1; n <= GUST_PRE; n++) g.muls.push(this._evRng.fork(`gust${n}`).float(0.75, 1.25));
+      for (let n = 1; n <= GUST_PRE; n++) g.muls.push(gustMul(this._evRng, n));
     }
     if (ev.type === 'storm') {
       const s = this._storm;
@@ -1001,18 +1001,17 @@ export class Weather {
     if (target) {
       const M = Mt();
       const body = target.body;
-      const r = (this._evRng || this._rng).fork(`strike${s.strikes}`);
+      const p = strikePlan(this._evRng || eventRng(this._seed, { type: 'storm', start: -1 }), s.strikes, WT.strikeKick);
       const strength = ev ? ev.strength : 1;
-      const dir = ev && ev.dir ? ev.dir : r.chance(0.5) ? -1 : 1;
-      const kick = WT.strikeKick || [1.5, 2.5];
+      const dir = ev && ev.dir ? ev.dir : p.dirIfNone;
       // a Perfek block is "grounded": it takes half the jolt
       const grounded = target.rating === 'P' ? 0.5 : 1;
       M.Sleeping.set(body, false);
       M.Body.setVelocity(body, {
-        x: body.velocity.x + dir * r.float(kick[0], kick[1]) * strength * grounded,
+        x: body.velocity.x + dir * p.kick * strength * grounded,
         y: body.velocity.y - 1.5 * grounded,
       });
-      M.Body.setAngularVelocity(body, body.angularVelocity + (r.chance(0.5) ? -1 : 1) * 0.04 * grounded);
+      M.Body.setAngularVelocity(body, body.angularVelocity + p.spin * 0.04 * grounded);
     }
   }
 
@@ -1088,25 +1087,9 @@ export class Weather {
 
   /** The whole hail shower is drawn from the event's seeded stream when it starts. */
   _planHail(ev) {
-    const n = Math.max(1, Math.round(WT.hailCount * ev.strength));
-    const r = (this._evRng || this._rng).fork('hail');
-    const plan = this._hailPlan;
-    plan.length = 0;
-    for (let k = 0; k < n; k++) {
-      const u = (k + r.float(0, 0.8)) / n;
-      plan.push({
-        at: HAIL_SPAWN_FROM + u * (HAIL_SPAWN_TO - HAIL_SPAWN_FROM),
-        near: r.chance(0.55),
-        dx: r.float(-170, 170),
-        x: r.float(30, GAME_W - 30),
-        dy: r.float(30, 90),
-        r: r.float(HAIL_R[0], HAIL_R[1]),
-        vx: r.float(-0.6, 0.6),
-        vy: r.float(5, 7),
-        av: r.float(-0.2, 0.2),
-      });
-    }
-    plan.sort((a, b) => b.at - a.at); // pop() takes the earliest
+    this._hailPlan = hailPlan(this._evRng || eventRng(this._seed, ev), ev, {
+      count: WT.hailCount, from: HAIL_SPAWN_FROM, to: HAIL_SPAWN_TO, width: GAME_W, radius: HAIL_R,
+    });
   }
 
   _stepHail(ctx) {

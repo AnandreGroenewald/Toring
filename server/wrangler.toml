@@ -1,0 +1,46 @@
+# Cloudflare Worker for Stapel sponsorships ("Borge").
+# This file is safe to commit: it holds NO secrets. Secrets are set with
+#   npx wrangler secret put PAYSTACK_SECRET_KEY
+#   npx wrangler secret put ADMIN_TOKEN
+# See README.md for the full step-by-step setup.
+
+name = "stapel-borge"
+main = "src/worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+# Daily housekeeping at 03:17 UTC (05:17 in South Africa): abandon unpaid checkouts,
+# remove old contact details, end cancelled sponsorships, prune webhook logs.
+[triggers]
+crons = ["17 3 * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "stapel-borge"
+# Paste the database_id printed by `npx wrangler d1 create stapel-borge`:
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[observability]
+enabled = true
+
+[vars]
+# Paystack plan codes (Dashboard -> Plans). Test-mode and live-mode plans have different codes.
+PLAN_BLOCK = "PLN_REPLACE_ME_BLOCK"
+PLAN_PREMIUM = "PLN_REPLACE_ME_PREMIUM"
+# R1 499 in cents. Must match the premium plan's amount in Paystack (charges below it are refused).
+PREMIUM_PRICE_CENTS = "149900"
+# Optional: the block plan's amount in cents. Leave empty to read it from Paystack.
+BLOCK_PRICE_CENTS = ""
+# The game's public address, with the trailing slash.
+SITE_URL = "https://anandregroenewald.github.io/Toring/"
+# Web pages allowed to call the sign-up and admin API (comma separated, no paths).
+ALLOWED_ORIGINS = "https://anandregroenewald.github.io, http://localhost:*, http://127.0.0.1:*"
+# How many sponsors each tier can have at once.
+PREMIUM_MAX = "1"
+BLOCK_MAX = "60"
+# "true": clean names go live straight after payment. "false": you approve each one first.
+AUTO_APPROVE = "true"
+# Extra days a sponsor stays visible after the paid month, so a late renewal doesn't blink them out.
+GRACE_DAYS = "3"
+# Set to "true" to also require webhooks to come from Paystack's published IP addresses.
+PAYSTACK_IP_ALLOWLIST = "false"

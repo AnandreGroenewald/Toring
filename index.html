@@ -27,6 +27,29 @@
   <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="css/style.css">
+  <!-- every module up front instead of a 4-deep import waterfall (keep in sync with PRECACHE in sw.js) -->
+  <link rel="modulepreload" href="js/main.js">
+  <link rel="modulepreload" href="js/config.js">
+  <link rel="modulepreload" href="js/audio.js">
+  <link rel="modulepreload" href="js/core/bus.js">
+  <link rel="modulepreload" href="js/core/format.js">
+  <link rel="modulepreload" href="js/core/strings.js">
+  <link rel="modulepreload" href="js/core/rng.js">
+  <link rel="modulepreload" href="js/core/daily.js">
+  <link rel="modulepreload" href="js/core/sequence.js">
+  <link rel="modulepreload" href="js/core/weatherplan.js">
+  <link rel="modulepreload" href="js/core/storage.js">
+  <link rel="modulepreload" href="js/core/share.js">
+  <link rel="modulepreload" href="js/ui/dom.js">
+  <link rel="modulepreload" href="js/game/blocks.js">
+  <link rel="modulepreload" href="js/game/weather.js">
+  <link rel="modulepreload" href="js/game/crane.js">
+  <link rel="modulepreload" href="js/game/water.js">
+  <link rel="modulepreload" href="js/game/effects.js">
+  <link rel="modulepreload" href="js/game/island.js">
+  <link rel="modulepreload" href="js/scenes/BgScene.js">
+  <link rel="modulepreload" href="js/scenes/GameScene.js">
+  <link rel="modulepreload" href="js/scenes/HudScene.js">
 </head>
 <body>
   <div id="game"></div>
@@ -47,6 +70,37 @@
   <noscript>
     <div class="nojs">Stapel het JavaScript nodig. Skakel dit asseblief aan en laai die bladsy weer.</div>
   </noscript>
+
+  <script>
+    // Boot watchdog: if the game hasn't started after 20 s (or a file failed to load),
+    // offer a clean reload that clears the offline copy, so a half-updated cache can't trap anyone.
+    (function () {
+      var shown = false;
+      function booted() { return !!(window.__stapel && window.__stapel.booted); }
+      function show() {
+        if (shown || booted()) return;
+        shown = true;
+        var box = document.createElement('div');
+        box.className = 'nojs';
+        box.innerHTML = '<div><p style="margin:0 0 18px">Stapel wil nie laai nie.</p>'
+          + '<button type="button" style="font:900 20px/1 inherit;padding:14px 28px;border:0;border-radius:999px;background:#1d2b45;color:#fff">Herlaai</button></div>';
+        box.querySelector('button').onclick = function () {
+          var done = function () { location.reload(); };
+          var jobs = [];
+          try { if (window.caches) jobs.push(caches.keys().then(function (k) { return Promise.all(k.map(function (c) { return caches.delete(c); })); })); } catch (e) {}
+          try { if (navigator.serviceWorker) jobs.push(navigator.serviceWorker.getRegistrations().then(function (r) { return Promise.all(r.map(function (x) { return x.unregister(); })); })); } catch (e) {}
+          Promise.all(jobs).then(done, done);
+        };
+        document.body.appendChild(box);
+      }
+      addEventListener('error', function (e) {
+        var t = e && e.target;
+        if (t && t.tagName === 'SCRIPT') show();   // a module or Phaser failed to load
+        else if (!booted()) setTimeout(show, 1500); // a crash while starting up
+      }, true);
+      setTimeout(show, 20000);
+    })();
+  </script>
 
   <script src="lib/phaser.min.js" defer></script>
   <script type="module" src="js/main.js"></script>

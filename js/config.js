@@ -76,8 +76,8 @@ export const CRANE = {
   amplitudeStart: 110,   // block 0 swings gently (any first tap lands on the base)...
   amplitudePerBlock: 30, // ...and the swing widens by this much per block
   omega0: 1.55,          // rad/s of the trolley sine at block 0
-  omegaPerBlock: 0.02,   // added per block index
-  omegaMax: 3.2,
+  omegaPerBlock: 0.015,  // added per block index
+  omegaMax: 3.0,
   carry: 0.3,            // fraction of the hanging block's velocity kept on release
   pendulumDamping: 1.6,  // visual rope swing damping (1/s)
   respawnDelayMs: 350,   // after a landing/loss, wait this long before the next block appears
@@ -100,14 +100,16 @@ export const SCORING = {
   perfectBonus: 15,      // x combo (combo 1 => 15, 2 => 30, ...)
   goodBonus: 5,
   comboCap: 10,
-  heartEvery: 4,         // every 4th Perfek (not necessarily in a row) while a heart is missing brings it back
+  heartEvery: 3,         // every 3rd Perfek (not necessarily in a row) while a heart is missing brings it back
 };
-export const LIVES = 3;
+export const LIVES = 4;
 export const FREEZE_DEPTH = 8;   // all but the newest 8 settled blocks set like cement (become static)
 
 // Rating codes used in the result grid
 export const RATING = { PERFECT: 'P', GOOD: 'G', SKEW: 'S', LOST: 'X' };
 export const RATING_EMOJI = { P: '🟩', G: '🟨', S: '🟧', X: '🟥' };
+// High-contrast set (settings.highContrast): distinct for every kind of colour blindness.
+export const RATING_EMOJI_HC = { P: '🟦', G: '🟧', S: '⬜', X: '⬛' };
 
 // ---------------------------------------------------------------------------
 // Rising flood line (vloedlyn)
@@ -115,8 +117,8 @@ export const RATING_EMOJI = { P: '🟩', G: '🟨', S: '🟧', X: '🟥' };
 export const WATER = {
   startOffsetPx: 40,     // water surface starts this far below the base top
   startAfterBlocks: 3,   // starts rising once this many blocks have landed
-  v0: 6,                 // px/s when rising starts
-  accel: 0.14,           // px/s^2
+  v0: 5,                 // px/s when rising starts
+  accel: 0.11,           // px/s^2 (catches a typical builder after about two minutes)
   vMax: 60,              // px/s
   warnPx: 140,           // HUD warning when tower top is this close to the water
   rainbowDropPx: 40,     // a rainbow event makes the water recede this much

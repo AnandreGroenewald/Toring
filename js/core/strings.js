@@ -99,7 +99,7 @@ export const S = {
     { icon: '🧱', text: 'Onder in die toring word die blokke hard soos sement — bo bly die toring wankelrig. ’n Perfek laat die blokke daaronder dadelik vassit.' },
     { icon: '🌦️', text: 'Die weer slaan toe terwyl jy bou: wind, reën, weerlig, hael, mis en meer.' },
     { icon: '🌊', text: 'Die water styg. Hou jou toring bo die vloedlyn!' },
-    { icon: '❤️', text: 'Jy het drie lewens. Elke keer as blokke in die see beland, kos dit jou een. Elke vierde Perfek bring ’n verlore lewe terug.' },
+    { icon: '❤️', text: 'Jy het vier lewens. Elke keer as blokke in die see beland, kos dit jou een. Elke derde Perfek bring ’n verlore lewe terug.' },
     { icon: '🗓️', text: 'Elke dag is daar een Daaglikse Toring: dieselfde blokke en weer vir almal, en jy kry een poging. Oefen soveel jy wil.' },
   ],
   howToGo: 'Kom ons bou!',

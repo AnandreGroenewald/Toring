@@ -7,11 +7,13 @@ import { SHAPE_IDS, PALETTE } from '../config.js';
 
 // --- Blocks -----------------------------------------------------------------
 
-// First block index at which each shape may appear.
+// First block index at which each shape may appear. Narrow shapes (cube, pillar)
+// and the awkward L/J/T come later, so the first minute is about learning to aim.
 const SHAPE_UNLOCK = {
   plank: 0, slab: 1, brick: 1, crate: 1,
-  cube: 4, pillar: 4, wedge: 4, arch: 4,
-  L: 12, J: 12, T: 12,
+  wedge: 4, arch: 4,
+  cube: 12, pillar: 12,
+  L: 20, J: 20, T: 20,
 };
 
 // [weight early, weight late]: easy shapes dominate early, awkward ones grow later.
@@ -20,8 +22,8 @@ const SHAPE_WEIGHTS = {
   slab: [5, 2.5],
   brick: [4, 2.5],
   crate: [2.5, 2],
-  cube: [1.5, 2],
-  pillar: [1, 1.6],
+  cube: [0.6, 2],
+  pillar: [0.5, 1.6],
   wedge: [1, 1.8],
   arch: [1.2, 2],
   L: [0.8, 1.6],

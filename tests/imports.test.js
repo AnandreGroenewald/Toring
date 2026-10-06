@@ -12,6 +12,7 @@ const MODULES = {
     'dateKeyFor', 'dayNumber', 'seedFor', 'addDays', 'daysBetween', 'msUntilNextDay', 'nextDayTimestamp', 'parseDebugDate',
   ],
   '../js/core/sequence.js': ['createSequence'],
+  '../js/core/weatherplan.js': ['eventRng', 'gustMul', 'strikePlan', 'hailPlan'],
   '../js/core/storage.js': ['createStore', 'streakAfter'],
   '../js/core/share.js': ['buildShareText', 'shareResult', 'whatsappUrl'],
 };

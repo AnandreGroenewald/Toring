@@ -37,8 +37,9 @@ const COLLAPSE_MS = 1500;        // tower blocks lost this soon after another lo
 const SET_AFTER_MS = 1500;       // a deep block still stirred by wind sets this long after landing...
 const SET_MAX_SPEED = 0.3;       // ...if it moves slower than this (px/step)
 const SET_MAX_SPIN = 0.01;       // ...and turns slower than this (rad/step)
-const LOCK_MAX_SPEED = 1;        // a Perfek sets the blocks under it if they are at rest (px/step)...
-const LOCK_MAX_SPIN = 0.02;      // ...(rad/step)
+const LOCK_MAX_SPEED = 0.35;     // a Perfek sets the blocks under it if they are at rest (px/step)...
+const LOCK_MAX_SPIN = 0.006;     // ...(rad/step)
+const FOOT_MARGIN = 4;           // px: a snapped block must rest on its support on both sides of its centre
 const CALM_SPEED = 1.2;          // px/step: the next block waits while a tower block moves faster than this
 const PRUNE_KEEP = 12;           // the newest cement blocks always keep their bodies
 const MAX_TAP_LAG_MS = 1000 / 24; // taps are released where the block was at that moment, up to this far from the frame
@@ -130,6 +131,52 @@ function topCenterLocal(geom) {
   c = { x: (x0 + x1) / 2 - geom.cx, y: minY - geom.cy, span: x1 - x0 };
   topCache.set(geom, c);
   return c;
+}
+
+/** x-ranges (relative to the centroid) of the parts a shape stands on: an arch stands on two legs, a T on its foot. */
+const footCache = new WeakMap();
+function footSpans(geom) {
+  let f = footCache.get(geom);
+  if (f) return f;
+  f = [];
+  if (geom.poly) {
+    let maxY = -Infinity;
+    for (const p of geom.poly) maxY = Math.max(maxY, p.y);
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    for (const p of geom.poly) {
+      if (maxY - p.y < 0.5) {
+        x0 = Math.min(x0, p.x);
+        x1 = Math.max(x1, p.x);
+      }
+    }
+    f.push([x0 - geom.cx, x1 - geom.cx]);
+  } else {
+    const parts = geom.parts && geom.parts.length ? geom.parts : [{ x: 0, y: 0, w: geom.w, h: geom.h }];
+    for (const r of parts) if (geom.h - (r.y + r.h) < 0.5) f.push([r.x - geom.cx, r.x + r.w - geom.cx]);
+  }
+  footCache.set(geom, f);
+  return f;
+}
+
+/**
+ * Would `geom`, centred (by its centroid) on a support face `face` px wide, actually
+ * rest on it? Its feet must touch the face on both sides of its centre of mass.
+ * (An arch dropped dead centre on the single top cell of an L would straddle it.)
+ */
+function restsOn(geom, face) {
+  const h = face / 2;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const [a, b] of footSpans(geom)) {
+    const l = Math.max(a, -h);
+    const r = Math.min(b, h);
+    if (r - l > 2) {
+      lo = Math.min(lo, l);
+      hi = Math.max(hi, r);
+    }
+  }
+  return lo <= -FOOT_MARGIN && hi >= FOOT_MARGIN;
 }
 
 /** A single rectangle (plank, slab, brick, crate, cube, pillar): any side can be the top. */
@@ -383,6 +430,7 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown', this.cleanup, this);
 
     const reg = this.registry;
+    reg.set('dropOffset', this.st);
     if (this.idle) {
       reg.set('skyDark', 0);
       reg.set('wind', 0);
@@ -393,7 +441,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.idle) this.scene.launch('Hud');
 
     this.spawnBlock(0);
-    if (this.hintPending) bus.emit('hud:hint', { text: S.tapToDrop });
+    if (this.hintPending) bus.emit('hud:hint', { text: this.hintText() });
 
     if (typeof window !== 'undefined') {
       window.__stapel = window.__stapel || {};
@@ -504,7 +552,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   onHudReady() {
-    if (this.hintPending && !this.over) bus.emit('hud:hint', { text: S.tapToDrop });
+    if (this.hintPending && !this.over) bus.emit('hud:hint', { text: this.hintText() });
+  }
+
+  hintText() {
+    const fine = typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches;
+    return fine ? S.clickToDrop : S.tapToDrop;
   }
 
   onRainbow() {
@@ -549,8 +602,15 @@ export class GameScene extends Phaser.Scene {
 
     const pose = this.crane.release(lagMs);
     const cam = this.cameras.main;
-    const block = new Block(this, this.curSpec, pose.x, pose.y + cam.scrollY, pose.angle);
-    block.setVelocityPxS(pose.vx * CRANE.carry, pose.vy * CRANE.carry);
+    // The block was released at the tap; the physics clock (which runs `acc` behind the
+    // last frame) next steps from an earlier instant. Start it from the ballistic state at
+    // that instant, so its fall (and the wind on it) is the same at every refresh rate.
+    const d = clamp((this.acc + lagMs) / 1000, -0.1, 0.1);
+    const g = 1000 * PHYSICS.gravityY;
+    const vx = pose.vx * CRANE.carry;
+    const vy = pose.vy * CRANE.carry;
+    const block = new Block(this, this.curSpec, pose.x - vx * d, pose.y + cam.scrollY - vy * d + 0.5 * g * d * d, pose.angle);
+    block.setVelocityPxS(vx, vy - g * d);
     block.setFriction(this.weather.frictionMul);
     block.state = 'falling';
     block.droppedAt = this.now;
@@ -577,7 +637,7 @@ export class GameScene extends Phaser.Scene {
         this.hintPending = false;
         if (this.ghostLabel) this.ghostLabel.setVisible(false);
         bus.emit('hud:hint', { text: null });
-        if (this.mode === 'daily') bus.emit('game:started', this.buildResult('quit'));
+        bus.emit('game:started', this.buildResult('quit'));
       }
     }
     return true;
@@ -598,7 +658,7 @@ export class GameScene extends Phaser.Scene {
     this.calmCap = this.spawnDue + CRANE.calmWaitMaxMs;
   }
 
-  /** Tower Bloxx style: after a collapse the crane waits until the tower has stopped moving. */
+  /** After a collapse the crane waits until the tower has stopped moving (the player reads it first). */
   towerCalm() {
     const dyn = this.dyn;
     for (let k = 0; k < dyn.length; k++) {
@@ -651,12 +711,11 @@ export class GameScene extends Phaser.Scene {
     this.frameTime = time;
     if (this.over) this.updateSlowMo(dt);
 
-    // 1. Crane (the swing widens over the first blocks; eased so the trolley never jumps)
+    // 1. Crane (the swing widens over the first blocks; the crane eases it so the trolley never jumps)
     const w = this.weather;
     const opts = this.craneOpts;
     opts.omega = Math.min(CRANE.omegaMax, CRANE.omega0 + CRANE.omegaPerBlock * this.i) * w.craneSpeedMul;
-    const ampTarget = this.amplitudeFor(this.i);
-    opts.amplitude += (ampTarget - opts.amplitude) * (1 - Math.exp(-dt / 300));
+    opts.amplitude = this.amplitudeFor(this.i);
     opts.windAccel = w.windAccel;
     this.crane.update(dt, opts);
 
@@ -852,10 +911,12 @@ export class GameScene extends Phaser.Scene {
       // Narrow supports (a pillar, the single top cell of an L, a T on its foot) get narrower windows.
       const pTol = Math.min(SCORING.perfectTolPx, SCORING.perfectTolFrac * t.w);
       const gTol = Math.min(SCORING.goodTolPx, SCORING.goodTolFrac * t.w);
-      if (adx <= pTol && t.flat) {
+      // A block that can't stand centred on this support (an arch over a single cell) is never "good".
+      const fits = restsOn(f.geom, t.face);
+      if (adx <= pTol && t.flat && fits) {
         this.snapPerfect(f, t);
         rating = 'P';
-      } else if (adx <= gTol) {
+      } else if (adx <= gTol && fits) {
         rating = 'G';
         if (SCORING.goodEase > 0) {
           const n = Math.max(1, Math.round(SCORING.goodEaseMs / FIXED));
@@ -887,12 +948,13 @@ export class GameScene extends Phaser.Scene {
    * A rectangle may lie on any side; other shapes must be upright.
    */
   supportTop(sup) {
-    const out = this.topPt || (this.topPt = { x: BASE_CX, y: LAYOUT.baseTopY, angle: 0, w: LAYOUT.baseWidth, flat: true });
+    const out = this.topPt || (this.topPt = { x: BASE_CX, y: LAYOUT.baseTopY, angle: 0, w: LAYOUT.baseWidth, face: LAYOUT.baseWidth, flat: true });
     if (!sup) {
       out.x = BASE_CX;
       out.y = LAYOUT.baseTopY;
       out.angle = 0;
       out.w = LAYOUT.baseWidth;
+      out.face = LAYOUT.baseWidth;
       out.flat = true;
       return out;
     }
@@ -908,6 +970,7 @@ export class GameScene extends Phaser.Scene {
       out.y = b.position.y - d * Math.cos(r);
       out.angle = r;
       out.w = upright ? g.w : g.h;
+      out.face = out.w;
       out.flat = Math.abs(r) <= SCORING.perfectMaxTilt;
       return out;
     }
@@ -919,11 +982,13 @@ export class GameScene extends Phaser.Scene {
       out.x = b.position.x + c.x * cos - c.y * sin;
       out.y = b.position.y + c.x * sin + c.y * cos;
       out.w = loadWidth(g);
+      out.face = c.span;
     } else {
       // tipped over: aim at the middle of whatever is on top now, no snap
       out.x = (sup.left + sup.right) / 2;
       out.y = sup.top;
       out.w = (sup.right - sup.left) / 2;
+      out.face = out.w;
     }
     out.angle = r;
     out.flat = Math.abs(r) <= SCORING.perfectMaxTilt;
@@ -1067,6 +1132,24 @@ export class GameScene extends Phaser.Scene {
     return false;
   }
 
+  /** Is there still part of the tower (a lower ledge) under this falling block that it could land on? */
+  ledgeBelow(b) {
+    const x0 = b.left;
+    const x1 = b.right;
+    const y = b.bottom - 2;
+    const dyn = this.dyn;
+    for (let k = 0; k < dyn.length; k++) {
+      const o = dyn[k];
+      if (o !== b && o.left < x1 && o.right > x0 && o.top >= y) return true;
+    }
+    const fz = this.frozen;
+    for (let k = fz.length - 1, m = 0; k >= 0 && m < GHOST_FROZEN_SCAN; k--, m++) {
+      const o = fz[k];
+      if (o.left < x1 && o.right > x0 && o.top >= y) return true;
+    }
+    return false;
+  }
+
   // -------------------------------------------------------------------------
   // Per-step bookkeeping
   // -------------------------------------------------------------------------
@@ -1094,7 +1177,7 @@ export class GameScene extends Phaser.Scene {
         const top = b.top;
         if (top > LAYOUT.baseTopY + 4 || Math.abs(b.centerX - BASE_CX) > GAME_W
           || (top > surf + 20 && vy > LOST_FALL_VY)
-          || (top > floor && vy > LOST_FALL_VY)) {
+          || (top > floor && vy > LOST_FALL_VY && !this.ledgeBelow(b))) {
           this.markLost(b);
         }
       }
@@ -1417,11 +1500,16 @@ export class GameScene extends Phaser.Scene {
       }
       s = this.surfaceAt(x + minX, x + maxX);
     }
-    out.miss = !s.found;
-    const landTop = s.found ? s.top : this.towerTopY + GHOST_MISS_DROP;
+    // Red when it will fall: nothing under it, only something far down the tower (or the base
+    // under a tall tower), or its centre of mass is past the edge of what it lands on.
+    const deep = s.found && s.top > this.towerTopY + 2 * GHOST_MISS_DROP;
+    const over = s.block ? x < s.block.left || x > s.block.right : Math.abs(x - BASE_CX) > BASE_HALF_W;
+    const hit = s.found && !deep;
+    out.miss = !hit || over;
+    const landTop = hit ? s.top : this.towerTopY + GHOST_MISS_DROP;
     out.x = x;
     out.y = landTop - (g.h - g.cy);
-    out.targetX = this.supportTop(s.found ? s.block : this.topBlock).x;
+    out.targetX = this.supportTop(hit ? s.block : this.topBlock).x;
     return out;
   }
 

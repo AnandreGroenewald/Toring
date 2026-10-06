@@ -1,8 +1,8 @@
 // Stapel service worker: precache the whole app for offline play, but always try
 // the network first so a new version reaches players on their next visit.
-// Bump VERSION when shipping; old caches are deleted on activate.
+// Bump VERSION (and VERSION in js/config.js) when shipping; old caches are deleted on activate.
 
-const VERSION = 'stapel-v1.0.0';
+const VERSION = 'stapel-v1.0.1';
 
 const PRECACHE = [
   './',
@@ -19,6 +19,7 @@ const PRECACHE = [
   'js/core/rng.js',
   'js/core/daily.js',
   'js/core/sequence.js',
+  'js/core/weatherplan.js',
   'js/core/storage.js',
   'js/core/share.js',
   'js/ui/dom.js',
@@ -33,22 +34,27 @@ const PRECACHE = [
   'js/scenes/HudScene.js',
   'icons/icon.svg',
   'icons/icon-192.png',
-  'icons/icon-512.png',
-  'icons/icon-maskable-512.png',
   'icons/apple-touch-icon.png',
+  // the 512 px icons are only for installing; the browser fetches them itself
 ];
 
-// On a flaky connection, don't make the player stare at a blank screen:
-// fall back to the cached copy if the network is this slow.
+// On a flaky connection, don't make the player stare at a blank screen: if the
+// page itself is this slow, open the cached copy instead.
 const NETWORK_TIMEOUT_MS = 4000;
+
+// Pages (clients) that were opened from the cache. All of their files come from
+// the same cache too, so one page load never mixes two releases (a new main.js
+// with an old config.js would not even start).
+const offlineClients = new Set();
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(VERSION);
-    // One by one, so a single missing file can never break the install.
+    // One by one, so a single missing file can never break the install. 'no-cache'
+    // revalidates with the server: files the page just loaded come back as cheap 304s.
     await Promise.all(PRECACHE.map(async (path) => {
       try {
-        const res = await fetch(new Request(path, { cache: 'reload' }));
+        const res = await fetch(new Request(path, { cache: 'no-cache' }));
         if (res.ok) await cache.put(path, res);
       } catch {
         // offline or 404: the network-first handler will fill it in later
@@ -74,18 +80,33 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  let saved = Promise.resolve();
-  const network = fetch(req).then((res) => {
+  if (req.mode === 'navigate') {
+    event.respondWith(navigate(event));
+    return;
+  }
+  if (event.clientId && offlineClients.has(event.clientId)) {
+    event.respondWith(fromCache(req).then((hit) => hit || fetchAndStore(req, event)));
+    return;
+  }
+  // Same release for the whole page: the network (revalidated), the cache only if the network fails.
+  event.respondWith(fetchAndStore(req, event).catch(async () => {
+    const hit = await fromCache(req);
+    return hit || new Response('', { status: 504, statusText: 'Offline' });
+  }));
+});
+
+/** Network (revalidating past the HTTP cache, so a deploy shows up), storing a fresh copy. */
+function fetchAndStore(req, event) {
+  // (a navigation Request can't take an init object; the browser revalidates pages anyway)
+  const net = (req.mode === 'navigate' ? fetch(req) : fetch(req, { cache: 'no-cache' })).then((res) => {
     if (res && res.ok && res.status === 200 && res.type === 'basic') {
       const copy = res.clone();
-      saved = caches.open(VERSION).then((cache) => cache.put(req, copy)).catch(() => {});
+      event.waitUntil(caches.open(VERSION).then((cache) => cache.put(req, copy)).catch(() => {}));
     }
     return res;
   });
-  event.respondWith(networkFirst(req, network));
-  // Keep the worker alive until the fresh copy is stored.
-  event.waitUntil(network.then(() => saved, () => {}));
-});
+  return net;
+}
 
 async function fromCache(req) {
   const cache = await caches.open(VERSION);
@@ -97,19 +118,30 @@ async function fromCache(req) {
   return undefined;
 }
 
-async function networkFirst(req, network) {
+/** The page: network first, but a slow network (or none) opens the cached copy. */
+async function navigate(event) {
+  const req = event.request;
+  const net = fetchAndStore(req, event);
+  net.catch(() => {});   // handled below; don't report it twice
   let timer = 0;
   const slow = new Promise((resolve) => {
-    timer = setTimeout(() => resolve(fromCache(req)), NETWORK_TIMEOUT_MS);
+    timer = setTimeout(resolve, NETWORK_TIMEOUT_MS, 'slow');
   });
+  const useCache = async () => {
+    const hit = await fromCache(req);
+    if (hit && event.resultingClientId) offlineClients.add(event.resultingClientId);
+    return hit;
+  };
   try {
-    // The network wins unless it is slow and we have a cached copy to show instead.
-    const res = await Promise.race([network, slow.then((hit) => hit || network)]);
-    clearTimeout(timer);
-    return res;
+    const first = await Promise.race([net, slow]);
+    if (first !== 'slow') {
+      clearTimeout(timer);
+      return first;
+    }
+    return (await useCache()) || (await net);
   } catch {
     clearTimeout(timer);
-    const hit = await fromCache(req);
+    const hit = await useCache();
     return hit || new Response('', { status: 504, statusText: 'Offline' });
   }
 }

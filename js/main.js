@@ -1,6 +1,6 @@
 // Stapel — boot + wiring: Phaser game, storage, DOM UI, audio, bus events,
 // pause/visibility, settings, service worker and debug hooks.
-import { GAME_W, computeGameHeight, SITE_URL_FALLBACK } from './config.js';
+import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY } from './config.js';
 import { bus } from './core/bus.js';
 import { S } from './core/strings.js';
 import { fmtDateKey } from './core/format.js';
@@ -15,27 +15,56 @@ import { GameScene } from './scenes/GameScene.js';
 import { HudScene } from './scenes/HudScene.js';
 
 // ---------------------------------------------------------------------------
-// Query params
+// Query params. The test helpers (?date, ?seed, ?auto) only work together with
+// ?debug=1, and a debug session keeps its own storage: it can never touch the
+// real daily, streak or stats, and nobody can autoplay a daily they share.
 // ---------------------------------------------------------------------------
 const params = new URLSearchParams(location.search);
 const DEBUG = params.get('debug') === '1';
 const NO_SW = params.has('nosw') || DEBUG;
 const DEBUG_DATE = DEBUG ? parseDebugDate(location.search) : null;
-const SEED_OVERRIDE = params.get('seed');
-const AUTO = params.has('auto') ? Math.min(1, Math.max(0.0001, Number(params.get('auto')) || 0)) : 0;
+const SEED_OVERRIDE = DEBUG ? params.get('seed') : null;
+const AUTO = DEBUG && params.has('auto') ? Math.min(1, Math.max(0.0001, Number(params.get('auto')) || 0)) : 0;
+
+const HEARTBEAT_MS = 4000;     // a running daily says "still here" this often...
+const STALE_MS = 15000;        // ...and another tab takes it over only after this long
+const RESULTS_SLEEP_MS = 1500; // results/pause: stop rendering the (static) game behind the card
+const MENU_SLEEP_MS = 45000;   // menu left alone: let the attract tower rest
 
 const randomSeed = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
 const todayKey = () => DEBUG_DATE || dateKeyFor();
+
+/** Per-tab id (survives a reload of this tab, not a new tab): tells "my game" from another tab's. */
+const TAB_ID = (() => {
+  const make = () => Math.random().toString(36).slice(2, 10);
+  try {
+    let id = sessionStorage.getItem('stapel.tab');
+    if (!id) {
+      id = make();
+      sessionStorage.setItem('stapel.tab', id);
+    }
+    return id;
+  } catch {
+    return make();
+  }
+})();
 
 function siteUrl() {
   if (location.protocol === 'file:') return SITE_URL_FALLBACK;
   return location.origin + location.pathname.replace(/index\.html$/, '');
 }
 
+/** The local midnight that ends `dateKey` (the attempt's day, not "today": games can cross midnight). */
+function nextDayFor(dateKey) {
+  const [y, m, d] = String(dateKey || '').split('-').map(Number);
+  if (!y || !m || !d) return nextDayTimestamp();
+  return nextDayTimestamp(new Date(y, m - 1, d, 12));
+}
+
 // ---------------------------------------------------------------------------
 // Store, settings, UI
 // ---------------------------------------------------------------------------
-const store = createStore();
+const store = createStore(undefined, DEBUG ? { key: `${STORAGE_KEY}.debug` } : {});
 let settings = store.getSettings();
 audio.setEnabled(settings.sound);
 haptics.setEnabled(settings.vibration);
@@ -50,16 +79,29 @@ window.addEventListener('keydown', unlock, { capture: true, passive: true });
 // ---------------------------------------------------------------------------
 // Phaser
 // ---------------------------------------------------------------------------
+// A phone opened sideways still gets a portrait game (the rotate overlay shows meanwhile).
+const coarse = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+const gameHeight = coarse
+  ? computeGameHeight(Math.min(innerWidth, innerHeight), Math.max(innerWidth, innerHeight))
+  : computeGameHeight();
+
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
   width: GAME_W,
-  height: computeGameHeight(),
+  height: gameHeight,
   backgroundColor: '#8fd3f4',
   banner: false,
   disableContextMenu: true,
   input: { activePointers: 2 },
-  render: { antialias: true, powerPreference: 'high-performance' },
+  // No MSAA (sprites only need texture filtering) and no FX pipelines (unused):
+  // that is ~200 MB of GPU memory a phone never has to find.
+  render: { antialias: true, antialiasGL: false, powerPreference: 'default' },
+  disablePreFX: true,
+  disablePostFX: true,
+  // Raw frame times: Phaser's smoothing would run the game in slow motion for
+  // seconds after every app switch on a 30 Hz phone. GameScene clamps big steps itself.
+  fps: { smoothStep: false },
   audio: { noAudio: true },   // all sound is js/audio.js; Phaser's own manager would open a 2nd AudioContext
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   scene: [BgScene, GameScene, HudScene],
@@ -74,6 +116,8 @@ const run = {
   dayNumber: null,
   over: false,
   paused: false,
+  started: false,     // first block dropped
+  final: null,        // { result, stats, isNewBest, aborted } once the game has ended
 };
 let screen = 'menu';   // 'menu' | 'game' | 'pause' | 'results'
 const seqCache = new Map();
@@ -92,7 +136,7 @@ function menuModel() {
     dateKey,
     dayNumber: dayNumber(dateKey),
     dateLabel: fmtDateKey(dateKey),
-    forecast: sequenceFor(dateKey).forecast(5),
+    forecast: sequenceFor(dateKey).forecast(4),   // about as many as a typical tower meets
     today: store.getDaily(dateKey),
     stats: store.getStats(dateKey),
     settings,
@@ -105,9 +149,49 @@ function gameScene() {
 }
 
 // ---------------------------------------------------------------------------
+// Render loop: nothing moves behind the pause card, the finished results or a
+// menu left alone, so the loop sleeps there (battery, heat).
+// ---------------------------------------------------------------------------
+let loopAsleep = false;
+let sleepTimer = 0;
+
+function sleepLoop(afterMs = 0) {
+  clearTimeout(sleepTimer);
+  sleepTimer = setTimeout(() => {
+    if (loopAsleep || !game.loop || !game.loop.running) return;
+    loopAsleep = true;
+    game.loop.sleep();
+  }, afterMs);
+}
+
+function wakeLoop() {
+  clearTimeout(sleepTimer);
+  sleepTimer = 0;
+  if (!loopAsleep) return;
+  loopAsleep = false;
+  game.loop.wake();
+  game.loop.resetDelta();
+  const gs = gameScene();
+  if (gs && gs.resetClock) gs.resetClock();
+}
+
+function armMenuSleep() {
+  if (screen === 'menu') sleepLoop(MENU_SLEEP_MS);
+}
+
+for (const type of ['pointerdown', 'keydown']) {
+  window.addEventListener(type, () => {
+    if (screen !== 'menu') return;
+    wakeLoop();
+    armMenuSleep();
+  }, { capture: true, passive: true });
+}
+
+// ---------------------------------------------------------------------------
 // Scene control
 // ---------------------------------------------------------------------------
 function startGame(data) {
+  wakeLoop();
   if (run.paused) {
     audio.resume();
     run.paused = false;
@@ -116,24 +200,53 @@ function startGame(data) {
   game.scene.start('Game', { settings, autoplay: 0, ...data });
 }
 
-function startIdle() {
-  run.mode = 'idle';
-  run.dateKey = null;
-  run.dayNumber = null;
+function resetRun(mode, dateKey = null) {
+  run.mode = mode;
+  run.dateKey = dateKey;
+  run.dayNumber = dateKey ? dayNumber(dateKey) : null;
   run.over = false;
+  run.started = false;
+  run.final = null;
+}
+
+function startIdle() {
+  resetRun('idle');
   startGame({ mode: 'idle', seed: randomSeed('idle') });
 }
 
 function showMenu() {
   screen = 'menu';
   ui.showMenu(menuModel());
+  wakeLoop();
+  armMenuSleep();
+  requestAnimationFrame(updateMenuAnchor);
+}
+
+/** Tells the attract tower where the menu card starts (game px), so it stays in view above it. */
+function updateMenuAnchor() {
+  const canvas = game.canvas;
+  const top = ui.menuCardTop ? ui.menuCardTop() : null;
+  if (!canvas || top == null || screen !== 'menu') return;
+  const rect = canvas.getBoundingClientRect();
+  if (!(rect.width > 0)) return;
+  game.registry.set('menuTopGame', ((top - rect.top) * GAME_W) / rect.width);
+}
+
+/** Today's daily is being played in another tab right now (fresh heartbeat). */
+function liveElsewhere(dateKey) {
+  const e = store.getDaily(dateKey);
+  return !!e && e.status === 'playing' && e.owner !== TAB_ID && Number.isFinite(e.beatAt) && Date.now() - e.beatAt < STALE_MS;
 }
 
 function playDaily() {
   const dateKey = todayKey();
   let entry = store.getDaily(dateKey);
   if (entry && entry.status === 'playing' && !(run.mode === 'daily' && run.dateKey === dateKey && !run.over)) {
-    // Started in another tab or a crashed session: it counts (one try per day).
+    if (liveElsewhere(dateKey)) {
+      ui.toast(S.otherTab, 3000);
+      return;
+    }
+    // Started in a tab that is gone, or a crashed session: it counts (one try per day).
     store.recoverUnfinished(dateKey);
     entry = store.getDaily(dateKey);
   }
@@ -141,20 +254,14 @@ function playDaily() {
     showDoneResults(dateKey, entry.result);
     return;
   }
-  run.mode = 'daily';
-  run.dateKey = dateKey;
-  run.dayNumber = dayNumber(dateKey);
-  run.over = false;
+  resetRun('daily', dateKey);
   startGame({ mode: 'daily', seed: seedFor(dateKey), dayNumber: run.dayNumber, dateKey, autoplay: AUTO });
   screen = 'game';
   ui.showInGame();
 }
 
 function playPractice() {
-  run.mode = 'practice';
-  run.dateKey = null;
-  run.dayNumber = null;
-  run.over = false;
+  resetRun('practice');
   const seed = SEED_OVERRIDE || randomSeed('oefen');
   startGame({ mode: 'practice', seed, autoplay: AUTO });
   screen = 'game';
@@ -163,14 +270,25 @@ function playPractice() {
 
 function showDoneResults(dateKey, result) {
   screen = 'results';
+  // the attract tower keeps still (and its crane out of the title) behind a revisited result
+  const gs = gameScene();
+  if (gs && gs.idle) {
+    gs.inputLocked = true;
+    if (gs.crane) gs.crane.setVisible(false);
+  }
   ui.showResults({
     result,
     stats: store.getStats(dateKey),
     isNewBest: false,
-    shareText: buildShareText(result, { url: siteUrl() }),
-    nextDayAt: nextDayTimestamp(),
+    shareText: shareTextFor(result),
+    nextDayAt: nextDayFor(dateKey),
     mode: 'daily',
   });
+  sleepLoop(RESULTS_SLEEP_MS);
+}
+
+function shareTextFor(result) {
+  return buildShareText(result, { url: siteUrl(), highContrast: !!settings.highContrast });
 }
 
 function canPause() {
@@ -186,12 +304,15 @@ function pauseGame() {
   game.scene.pause('Game');
   if (game.scene.isActive('Hud')) game.scene.pause('Hud');
   audio.suspend();
+  saveProgressNow();
   screen = 'pause';
-  ui.showPause({ mode: run.mode });
+  ui.showPause({ mode: run.mode, started: run.started });
+  sleepLoop(120);
 }
 
 function resumeScenes() {
   if (!run.paused) return;
+  wakeLoop();
   run.paused = false;
   if (game.scene.isPaused('Game')) game.scene.resume('Game');
   if (game.scene.isPaused('Hud')) game.scene.resume('Hud');
@@ -200,10 +321,87 @@ function resumeScenes() {
 
 function resumeGame() {
   if (!run.paused) return;
+  if (landscape()) return;   // still sideways: stay on the pause card
   resumeScenes();
   screen = 'game';
   ui.showInGame();
 }
+
+/** Snapshot of a running daily straight into storage (tab hidden, page closing). */
+function saveProgressNow() {
+  if (run.mode !== 'daily' || run.over || !run.started || !run.dateKey) return;
+  const gs = gameScene();
+  if (!gs || !gs.buildResult || gs.over) return;
+  try {
+    store.saveDailyProgress(run.dateKey, gs.buildResult('quit'));
+  } catch {
+    // best effort
+  }
+}
+
+// ---------------------------------------------------------------------------
+// One try per day: heartbeat, other tabs, the Back button
+// ---------------------------------------------------------------------------
+let beatTimer = 0;
+
+function startHeartbeat() {
+  clearInterval(beatTimer);
+  beatTimer = setInterval(() => {
+    if (run.mode === 'daily' && run.started && !run.over && run.dateKey) store.touchDaily(run.dateKey);
+    else stopHeartbeat();
+  }, HEARTBEAT_MS);
+}
+
+function stopHeartbeat() {
+  clearInterval(beatTimer);
+  beatTimer = 0;
+}
+
+// The finished (or recovered) daily was written by another tab: end this one and show what counts.
+window.addEventListener('storage', () => {
+  if (run.mode !== 'daily' || run.over || !run.started || !run.dateKey) return;
+  const e = store.getDaily(run.dateKey);
+  if (e && e.status === 'done') {
+    if (run.paused) resumeScenes();
+    screen = 'game';
+    bus.emit('game:quit');
+  }
+});
+
+// Android Back during a daily pauses instead of leaving the app (which would end the try).
+let backGuard = false;
+let ignorePop = false;
+
+function armBackGuard() {
+  if (backGuard || !history.pushState) return;
+  try {
+    history.pushState({ stapel: 'play' }, '');
+    backGuard = true;
+  } catch {
+    // sandboxed frames
+  }
+}
+
+function releaseBackGuard() {
+  if (!backGuard) return;
+  backGuard = false;
+  if (history.state && history.state.stapel === 'play') {
+    ignorePop = true;
+    history.back();
+  }
+}
+
+window.addEventListener('popstate', () => {
+  if (ignorePop) {
+    ignorePop = false;
+    return;
+  }
+  backGuard = false;
+  if (run.mode === 'daily' && run.started && !run.over) {
+    pauseGame();
+    armBackGuard();
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Bus wiring
@@ -220,7 +418,15 @@ bus.on('ui:quit', () => {
   bus.emit('game:quit');
 });
 bus.on('ui:home', () => {
-  if (run.mode !== 'idle' || run.paused) startIdle();
+  if (run.mode !== 'idle' || run.paused) {
+    startIdle();
+  } else {
+    const gs = gameScene();
+    if (gs && gs.idle) {
+      gs.inputLocked = false;
+      if (gs.crane) gs.crane.setVisible(true);
+    }
+  }
   showMenu();
 });
 bus.on('ui:settings', (partial) => {
@@ -239,45 +445,99 @@ bus.on('hud:hide', () => {
 });
 
 bus.on('game:started', (partial) => {
-  if (run.mode === 'daily' && partial && partial.dateKey) store.startDaily(partial.dateKey, partial);
+  if (run.mode === 'idle') return;
+  run.started = true;
+  if (run.mode === 'daily' && partial && partial.dateKey) {
+    store.startDaily(partial.dateKey, partial, { owner: TAB_ID });
+    startHeartbeat();
+    armBackGuard();
+  }
 });
 bus.on('game:progress', (partial) => {
   if (run.mode === 'daily' && partial && partial.dateKey && !run.over) store.saveDailyProgress(partial.dateKey, partial);
 });
-bus.on('game:over', (result) => {
-  if (!result || run.mode === 'idle' || run.over) return;
+
+/** The result is saved the moment the game ends (the results screen comes a few seconds later). */
+function finalize(result) {
+  if (run.final) return run.final;
   run.over = true;
+  stopHeartbeat();
+  releaseBackGuard();
+  let shown = result;
   let stats = null;
   let isNewBest = false;
+  let aborted = false;
   if (result.mode === 'daily' && result.dateKey) {
-    stats = store.finishDaily(result.dateKey, result);
-    isNewBest = !!(stats.isNewBestHeight || stats.isNewBestScore);
+    if (result.blocksDropped === 0 && !store.getDaily(result.dateKey)) {
+      aborted = true;   // left before the first drop: nothing was played, the try is still there
+    } else {
+      stats = store.finishDaily(result.dateKey, result);
+      isNewBest = !!(stats.applied && (stats.isNewBestHeight || stats.isNewBestScore));
+      if (!stats.applied) {
+        // finished (or taken over) elsewhere: show and share what actually counts
+        const e = store.getDaily(result.dateKey);
+        if (e && e.result) shown = e.result;
+      }
+    }
   } else {
     const rec = store.recordPractice(result);
     isNewBest = !!rec.isNewBest;
   }
-  if (run.paused) resumeScenes();
-  if (isNewBest) audio.play('record');
-  screen = 'results';
-  ui.showResults({
-    result,
-    stats,
-    isNewBest,
-    shareText: buildShareText(result, { url: siteUrl() }),
-    nextDayAt: nextDayTimestamp(),
-    mode: result.mode,
-  });
+  run.final = { result: shown, stats, isNewBest, aborted };
+  return run.final;
+}
+
+bus.on('game:final', (result) => {
+  if (!result || run.mode === 'idle') return;
+  finalize(result);
 });
 
-// Tab hidden / app switched away mid-tower: pause like the button does.
+bus.on('game:over', (result) => {
+  if (!result || run.mode === 'idle' || screen === 'results' || screen === 'menu') return;
+  const f = finalize(result);
+  if (run.paused) resumeScenes();
+  if (f.aborted) {
+    startIdle();
+    showMenu();
+    return;
+  }
+  if (f.isNewBest) audio.play('record');
+  screen = 'results';
+  const r = f.result;
+  ui.showResults({
+    result: r,
+    stats: f.stats,
+    isNewBest: f.isNewBest,
+    shareText: shareTextFor(r),
+    nextDayAt: r.mode === 'daily' ? nextDayFor(r.dateKey) : 0,
+    mode: r.mode,
+  });
+  sleepLoop(RESULTS_SLEEP_MS);
+});
+
+// Tab hidden / app switched away mid-tower: pause like the button does, and save.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
+    saveProgressNow();
     if (canPause()) pauseGame();
     else audio.suspend();
   } else if (!run.paused) {
     audio.resume();
   }
 });
+window.addEventListener('pagehide', saveProgressNow);
+
+// Sideways phone: the rotate overlay covers the game, so pause it.
+const landscapeMq = window.matchMedia ? matchMedia('(orientation: landscape) and (max-height: 540px) and (pointer: coarse)') : null;
+const landscape = () => !!(landscapeMq && landscapeMq.matches);
+function onOrientation() {
+  if (landscape() && canPause()) pauseGame();
+  scheduleLayout();
+}
+if (landscapeMq) {
+  if (landscapeMq.addEventListener) landscapeMq.addEventListener('change', onOrientation);
+  else if (landscapeMq.addListener) landscapeMq.addListener(onOrientation);
+}
 
 // ---------------------------------------------------------------------------
 // Layout: keep the DOM overlay exactly over the canvas; expose safe-area insets
@@ -289,11 +549,22 @@ insetProbe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibil
   + 'padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);';
 document.body.appendChild(insetProbe);
 
+let refitGuard = 0;
 function relayout() {
   const canvas = game.canvas;
   if (!canvas) return;
   const rect = canvas.getBoundingClientRect();
   if (!(rect.width > 0 && rect.height > 0)) return;
+  // A fitted canvas fills its parent in one direction. If it doesn't, Phaser re-fitted
+  // with a stale size (its orientation handler can run after the resize): fit again.
+  const parent = document.getElementById('game');
+  const pr = parent ? parent.getBoundingClientRect() : null;
+  if (pr && Math.abs(rect.width - pr.width) > 2 && Math.abs(rect.height - pr.height) > 2 && refitGuard < 3) {
+    refitGuard++;
+    refit();
+    return;
+  }
+  refitGuard = 0;
   ui.layout(rect);
   const cs = getComputedStyle(insetProbe);
   const k = GAME_W / rect.width;
@@ -301,34 +572,78 @@ function relayout() {
   const bottom = Math.max(0, (parseFloat(cs.paddingBottom) || 0) - Math.max(0, window.innerHeight - rect.bottom)) * k;
   game.registry.set('safeTop', Math.round(top));
   game.registry.set('safeBottom', Math.round(bottom));
+  updateMenuAnchor();
+}
+
+/**
+ * Re-fit the canvas, then the DOM. Phaser re-fits on its own orientation event
+ * while the old parent size is still cached (and then never again), so after a
+ * rotation the canvas could stay sized for the other orientation.
+ */
+function refit() {
+  try {
+    game.scale.getParentBounds();
+    game.scale.refresh();   // emits 'resize' -> scheduleRelayout
+  } catch {
+    // not booted yet
+  }
 }
 
 let layoutRaf = 0;
+let layoutTimer = 0;
+/** Window resized or rotated: re-fit Phaser (which fires its own 'resize'), then the DOM. */
 function scheduleLayout() {
   cancelAnimationFrame(layoutRaf);
+  clearTimeout(layoutTimer);
   layoutRaf = requestAnimationFrame(() => {
+    refit();
     relayout();
-    setTimeout(relayout, 120);   // the browser settles bars/rotation a beat later
+    layoutTimer = setTimeout(() => { refit(); relayout(); }, 120);   // the browser settles bars/rotation a beat later
   });
+}
+/** Phaser re-fitted the canvas: only the DOM follows (re-fitting again here would loop). */
+function scheduleRelayout() {
+  cancelAnimationFrame(layoutRaf);
+  layoutRaf = requestAnimationFrame(relayout);
 }
 window.addEventListener('resize', scheduleLayout);
 window.addEventListener('orientationchange', scheduleLayout);
+if (window.screen && window.screen.orientation && window.screen.orientation.addEventListener) {
+  window.screen.orientation.addEventListener('change', scheduleLayout);
+}
 if (window.visualViewport) window.visualViewport.addEventListener('resize', scheduleLayout);
 
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 function onReady() {
-  game.scale.on('resize', scheduleLayout);
+  game.scale.on('resize', scheduleRelayout);
   relayout();
+  watchContextLoss();
 
-  const recovered = store.recoverUnfinished(todayKey());
+  const recovered = store.recoverUnfinished(todayKey(), { staleMs: STALE_MS, owner: TAB_ID });
   startIdle();
   showMenu();
   ui.setLoading(false);
   if (recovered.length) ui.toast(S.unfinished, 3200);
+  else if (liveElsewhere(todayKey())) ui.toast(S.otherTab, 3000);
   if (!store.tutorialSeen()) ui.showHowTo(true);
   if (DEBUG) startFpsMeter();
+  window.__stapel.booted = true;
+}
+
+/** A GPU reset mid-tower: pause (the water must not rise unseen) and say so if it doesn't come back. */
+function watchContextLoss() {
+  const r = game.renderer;
+  const ev = Phaser.Renderer && Phaser.Renderer.Events;
+  if (!r || !r.on || !ev || !ev.LOSE_WEBGL) return;
+  let lostTimer = 0;
+  r.on(ev.LOSE_WEBGL, () => {
+    if (canPause()) pauseGame();
+    clearTimeout(lostTimer);
+    lostTimer = setTimeout(() => ui.toast(S.reloadNeeded, 6000), 3000);
+  });
+  r.on(ev.RESTORE_WEBGL, () => clearTimeout(lostTimer));
 }
 
 if (game.isBooted) onReady();

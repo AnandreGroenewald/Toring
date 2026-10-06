@@ -10,7 +10,7 @@
 
   --ink: #1d2b45;
   --ink-soft: #3c4d6e;
-  --muted: #6f7f9c;
+  --muted: #56668a;      /* 5.2:1 on --panel, 5.7:1 on white */
   --line: #e3ebf5;
   --panel: #eef5fc;
   --card: #ffffff;
@@ -214,10 +214,11 @@ svg.ic {
 /* ------------------------------------------------------------------------- */
 /* Buttons — chunky, rounded, with a real pressed state                       */
 /* ------------------------------------------------------------------------- */
+/* Button fills are a shade darker than the block palette so white labels reach 3.3–4.3:1. */
 .btn {
-  --bg: var(--karoo);
-  --bg-l: var(--karoo-l);
-  --bg-d: var(--karoo-d);
+  --bg: #d9700a;
+  --bg-l: #f39a2b;
+  --bg-d: #a65400;
   --fg: #fff;
   --depth: calc(10 * var(--u));
   position: relative;
@@ -231,14 +232,15 @@ svg.ic {
   padding: calc(14 * var(--u)) calc(30 * var(--u));
   border: 0;
   border-radius: calc(32 * var(--u));
-  background: linear-gradient(180deg, var(--bg-l) 0%, var(--bg) 42%, var(--bg) 100%);
+  background: linear-gradient(180deg, var(--bg-l) 0%, var(--bg) 22%, var(--bg) 100%);
   color: var(--fg);
   font-size: calc(38 * var(--u));
   font-weight: 900;
   line-height: 1.1;
   letter-spacing: 0.01em;
   text-align: center;
-  text-shadow: 0 calc(3 * var(--u)) 0 rgba(0, 0, 0, 0.18);
+  /* outlined label: readable on every fill */
+  text-shadow: 0 calc(3 * var(--u)) 0 var(--bg-d), 0 0 calc(2 * var(--u)) var(--bg-d), 0 0 calc(1 * var(--u)) var(--bg-d);
   box-shadow:
     0 var(--depth) 0 var(--bg-d),
     0 calc(var(--depth) + 10 * var(--u)) calc(22 * var(--u)) rgba(10, 34, 78, 0.28),
@@ -292,11 +294,11 @@ svg.ic {
 .card .btn-white { --bg: var(--panel); --bg-l: var(--panel); --bg-d: #cfdcee; }
 .btn-quit { --fg: var(--klei-d); }
 .btn-white .ic { filter: none; }
-.btn-green  { --bg: var(--bosveld);   --bg-l: var(--bosveld-l);   --bg-d: var(--bosveld-d); }
-.btn-teal   { --bg: var(--oseaan);    --bg-l: var(--oseaan-l);    --bg-d: var(--oseaan-d); }
+.btn-green  { --bg: #3f9a3e; --bg-l: #5bbf5a; --bg-d: #2b6e2b; }
+.btn-teal   { --bg: #1d8f8a; --bg-l: #2fb5b0; --bg-d: #146a66; }
 .btn-purple { --bg: var(--jakaranda); --bg-l: var(--jakaranda-l); --bg-d: var(--jakaranda-d); }
-.btn-blue   { --bg: var(--hemel);     --bg-l: var(--hemel-l);     --bg-d: var(--hemel-d); }
-.btn-wa     { --bg: var(--wa);        --bg-l: var(--wa-l);        --bg-d: var(--wa-d); }
+.btn-blue   { --bg: #2f74cf; --bg-l: var(--hemel); --bg-d: var(--hemel-d); }
+.btn-wa     { --bg: #128c4a; --bg-l: #25d366; --bg-d: #0c6434; }
 
 .btn-row { display: flex; gap: calc(18 * var(--u)); }
 .btn-row > .btn { flex: 1 1 0; min-width: 0; padding-left: calc(18 * var(--u)); padding-right: calc(18 * var(--u)); white-space: nowrap; }
@@ -332,7 +334,7 @@ svg.ic {
   justify-content: center;
   align-items: flex-end;
   gap: calc(7 * var(--u));
-  padding-top: calc(70 * var(--u));
+  padding-top: calc(120 * var(--u));   /* the letters sit on the crane jib (LAYOUT.jibY) */
   font-size: calc(70 * var(--u));
 }
 
@@ -425,6 +427,14 @@ svg.ic {
     0 0 calc(18 * var(--u)) rgba(29, 43, 69, 0.25);
 }
 
+/* a soft navy pill behind the tagline keeps it readable over clouds and sky (≥ 6:1) */
+.tagline > span {
+  display: inline-block;
+  padding: calc(6 * var(--u)) calc(22 * var(--u));
+  border-radius: 999px;
+  background: rgba(29, 43, 69, 0.38);
+}
+
 /* ------------------------------------------------------------------------- */
 /* Menu                                                                      */
 /* ------------------------------------------------------------------------- */
@@ -484,6 +494,9 @@ svg.ic {
 .card .dock-btn:active .dock-ic { box-shadow: 0 calc(1 * var(--u)) 0 #d5e2f2; }
 #ui .dock-btn:focus-visible { outline: none; box-shadow: none; }
 #ui .dock-btn:focus-visible .dock-ic { outline: calc(5 * var(--u)) solid #fff; outline-offset: calc(4 * var(--u)); }
+/* inside white cards a white ring is invisible */
+#ui .card .dock-btn:focus-visible .dock-ic { outline-color: var(--hemel-d); }
+#ui .card .btn:focus-visible { outline: calc(5 * var(--u)) solid var(--hemel-d); outline-offset: calc(4 * var(--u)); }
 
 .chip {
   display: inline-flex;
@@ -1066,7 +1079,7 @@ svg.ic {
   transition: opacity 0.35s ease, visibility 0s linear 0.35s;
 }
 #splash.done { opacity: 0; visibility: hidden; pointer-events: none; }
-#splash .logo { padding-top: calc(70 * var(--u)); }
+#splash .logo { padding-top: calc(120 * var(--u)); }
 #splash .lb { animation: lb-drop 0.6s cubic-bezier(0.3, 1.5, 0.5, 1) both, lb-wobble var(--dur, 3s) ease-in-out 0.6s infinite; }
 #splash .lb:nth-child(1) { animation-delay: 0.05s, 0.65s; }
 #splash .lb:nth-child(2) { animation-delay: 0.14s, 0.74s; }
@@ -1171,7 +1184,7 @@ svg.ic {
 /* Short canvases (aspect < 1.72, e.g. desktop/tablet): tighten the menu       */
 /* ------------------------------------------------------------------------- */
 #ui.short .screen { padding-top: calc(var(--sat) + 14 * var(--u)); padding-bottom: calc(var(--sab) + 20 * var(--u)); }
-#ui.short .screen-menu .logo { padding-top: calc(56 * var(--u)); font-size: calc(64 * var(--u)); }
+#ui.short .screen-menu .logo { padding-top: calc(106 * var(--u)); font-size: calc(64 * var(--u)); }
 #ui.short .screen-menu .lb { width: calc(90 * var(--u)); height: calc(90 * var(--u)); }
 #ui.short .screen-menu .lb.hang { --y: calc(-38 * var(--u)); }
 #ui.short .tagline { margin-top: calc(16 * var(--u)); font-size: calc(31 * var(--u)); }
@@ -1192,3 +1205,100 @@ svg.ic {
 #ui.short .grid-row { min-height: calc(42 * var(--u)); }
 #ui.short .grid-row .emoji { width: calc(42 * var(--u)); }
 #ui.short .share-row { margin-top: calc(18 * var(--u)); }
+
+/* ------------------------------------------------------------------------- */
+/* 1.0.1: readability floors, colour-blind grid, results reveal and peek      */
+/* ------------------------------------------------------------------------- */
+/* never smaller than 12 CSS px, whatever the phone */
+.fc-name { font-size: max(11px, calc(20 * var(--u))); letter-spacing: -0.02em; }
+.res-stats .tile span { font-size: max(12px, calc(18 * var(--u))); }
+.tile span { font-size: max(12px, calc(20 * var(--u))); }
+.bar-val { font-size: max(12px, calc(19 * var(--u))); }
+.bar-day, .foot-cell span { font-size: max(12px, calc(20 * var(--u))); }
+.label { font-size: max(12px, calc(21 * var(--u))); }
+.wx-chip, .dock-btn { font-size: max(12px, calc(21 * var(--u))); }
+.note { font-size: max(12px, calc(24 * var(--u))); }
+
+/* fog's emoji is a pale square on Android: give it a darker backing */
+.fc-emo[data-wx="fog"], .wx-chip[data-wx="fog"] .emoji { background: #c9d7ea; border-radius: 50%; }
+.wx-chip[data-wx="fog"] .emoji { padding: calc(2 * var(--u)); }
+.wx-n { margin-left: calc(2 * var(--u)); font-size: max(11px, calc(16 * var(--u))); font-weight: 900; color: var(--ink-soft); }
+
+/* grid cells: colour + symbol (★ Perfek, • Goed, ∼ Skeef, ✕ verlore) */
+.grid-row .cell {
+  display: inline-grid;
+  place-items: center;
+  width: calc(42 * var(--u));
+  height: calc(42 * var(--u));
+  margin: calc(2 * var(--u));
+  border-radius: calc(9 * var(--u));
+  font: 900 calc(24 * var(--u)) / 1 var(--font);
+  box-shadow: inset 0 calc(-4 * var(--u)) 0 rgba(0, 0, 0, 0.16);
+  animation: cell-in 0.32s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+  animation-delay: calc(0.2s + var(--i, 0) * 28ms);
+}
+.cell-P { background: #3f9a3e; color: #fff; }
+.cell-G { background: #f7c948; color: var(--ink); }
+.cell-S { background: #f39a2b; color: var(--ink); }
+.cell-X { background: #31373d; color: #fff; }
+/* high contrast (matches the 🟦🟧⬜⬛ share grid) */
+#ui.hc .cell-P { background: #2563b0; color: #fff; }
+#ui.hc .cell-G { background: #f39a2b; color: var(--ink); }
+#ui.hc .cell-S { background: #eef2f7; color: var(--ink); box-shadow: inset 0 0 0 calc(2 * var(--u)) #c3d1e4; }
+#ui.hc .cell-X { background: #1d2b45; color: #fff; }
+
+/* results arrive from below, the title gets a backing, the buttons stay reachable */
+.screen-results.on .res-wrap { animation: res-up 0.45s cubic-bezier(0.2, 1.2, 0.4, 1) both; }
+@keyframes res-up { from { transform: translateY(40%); opacity: 0; } to { transform: none; opacity: 1; } }
+.res-head {
+  align-self: center;
+  padding: calc(14 * var(--u)) calc(24 * var(--u));
+  border-radius: calc(36 * var(--u));
+  background: rgba(12, 32, 66, 0.55);
+}
+.screen-results .btn-row {
+  position: sticky;
+  bottom: calc(10 * var(--u));
+  z-index: 1;
+}
+.foot-cell .btn-new { min-height: calc(80 * var(--u)); font-size: calc(26 * var(--u)); padding: calc(8 * var(--u)) calc(14 * var(--u)); }
+.empty-note { margin: calc(24 * var(--u)) 0 calc(4 * var(--u)); }
+
+/* "Toring" peek: hide the card and scrim to look at the whole tower */
+.peek-btn {
+  position: absolute;
+  top: calc(var(--sat) + 14 * var(--u));
+  left: calc(var(--sal) + 14 * var(--u));
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  height: calc(64 * var(--u));
+  min-height: 44px;
+  padding: 0 calc(22 * var(--u)) 0 calc(16 * var(--u));
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  font: 900 max(13px, calc(24 * var(--u))) / 1 var(--font);
+  box-shadow: 0 calc(6 * var(--u)) 0 rgba(29, 43, 69, 0.22);
+  pointer-events: auto;
+}
+.peek-btn .ic { width: 1.3em; height: 1.3em; }
+.screen-results.peek { background: transparent; }
+.screen-results.peek .res-wrap, .screen-results.peek .confetti { visibility: hidden; }
+
+/* stats sheet: the settings that affect sharing */
+.stats-foot { display: flex; flex-direction: column; gap: calc(16 * var(--u)); }
+.stats-foot .dock { margin: 0; }
+
+/* phones around 16:9 (360×640): a long daily must still fit with its buttons */
+#ui.compact .big-m { font-size: calc(96 * var(--u)); }
+#ui.compact .res-stats .tile { min-height: calc(92 * var(--u)); }
+#ui.compact .res-wrap { gap: calc(14 * var(--u)); }
+#ui.compact .grid-row .cell { width: calc(38 * var(--u)); height: calc(38 * var(--u)); }
+#ui.compact .grid-row { min-height: calc(42 * var(--u)); }
+#ui.compact .res-card { padding: calc(22 * var(--u)) calc(26 * var(--u)) calc(26 * var(--u)); }
+#ui.compact .share-row { margin-top: calc(16 * var(--u)); }
+#ui.compact .res-foot { padding: calc(8 * var(--u)) calc(10 * var(--u)); }
+#ui.compact .foot-cell b { font-size: calc(34 * var(--u)); }

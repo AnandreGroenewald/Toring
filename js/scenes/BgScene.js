@@ -432,8 +432,8 @@ export class BgScene extends Phaser.Scene {
     const moonA = smooth(220, 320, alt) * (1 - dark * 0.8);
     this.moon.setAlpha(moonA).setVisible(moonA > 0.01);
 
-    // far scenery slides down as we climb
-    const horizon = HORIZON0 + altPx * SCENERY_PARALLAX;
+    // far scenery slides down as we climb (and sits as much lower as the game's drop line on notched phones)
+    const horizon = HORIZON0 + (Number(this.registry.get('dropOffset')) || 0) + altPx * SCENERY_PARALLAX;
 
     // rainbow (its legs go down behind the mountains and the bay)
     const rb = this.rain * 0.72 * (1 - dark * 0.5);
@@ -446,6 +446,12 @@ export class BgScene extends Phaser.Scene {
     const seaH = H - horizon + 4;
     this.sea.setVisible(seaH > 0);
     this.glint.setVisible(seaH > 0);
+    // the sea covers the sky below the horizon: don't fill those pixels twice
+    const skyRows = Math.max(8, Math.min(250, Math.ceil((250 * (horizon + 8)) / H)));
+    if (skyRows !== this.skyRows) {
+      this.skyRows = skyRows;
+      this.sky.setCrop(0, 0, 3, skyRows);
+    }
     if (seaH > 0) {
       this.sea.y = horizon;
       this.sea.setDisplaySize(W, Math.max(seaH, 64));

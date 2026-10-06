@@ -77,11 +77,11 @@ test('displayStreak is 0 once a day is missed', () => {
 test('settings defaults and updates persist', () => {
   const be = memoryBackend();
   const store = createStore(be, { now });
-  assert.deepEqual(store.getSettings(), { sound: true, vibration: true, reducedMotion: false });
-  assert.deepEqual(store.setSettings({ sound: false }), { sound: false, vibration: true, reducedMotion: false });
+  assert.deepEqual(store.getSettings(), { sound: true, vibration: true, reducedMotion: false, highContrast: false });
+  assert.deepEqual(store.setSettings({ sound: false }), { sound: false, vibration: true, reducedMotion: false, highContrast: false });
   store.setSettings({ vibration: 0, bogus: 1 });
   const again = createStore(be, { now });
-  assert.deepEqual(again.getSettings(), { sound: false, vibration: false, reducedMotion: false });
+  assert.deepEqual(again.getSettings(), { sound: false, vibration: false, reducedMotion: false, highContrast: false });
   assert.ok(JSON.parse(be.getItem(STORAGE_KEY)).settings);
   // Methods work unbound too (e.g. passed around as callbacks).
   const { setSettings } = again;
@@ -160,7 +160,9 @@ test('startDaily / saveDailyProgress / finishDaily lifecycle and idempotency', (
 
   // Idempotent: second finish, progress after done and a new start change nothing.
   const again = s.finishDaily(D1, result({ score: 99999, heightM: 999, perfects: 50 }));
-  assert.deepEqual(again, stats);
+  assert.equal(stats.applied, true);
+  assert.equal(again.applied, false);   // already done elsewhere: callers show the stored result
+  assert.deepEqual({ ...again, applied: true }, stats);
   s.saveDailyProgress(D1, { score: 1 });
   s.startDaily(D1, { score: 2 });
   assert.equal(s.getDaily(D1).result.score, 900);
@@ -402,7 +404,7 @@ test('corrupt or hostile stored data falls back safely', () => {
     stats: { played: 2, streak: 4, maxStreak: 1, bestScore: 'x', lastDateKey: '2026-10-05' },
   }));
   const s = createStore(be, { now });
-  assert.deepEqual(s.getSettings(), { sound: true, vibration: false, reducedMotion: false });
+  assert.deepEqual(s.getSettings(), { sound: true, vibration: false, reducedMotion: false, highContrast: false });
   assert.equal(s.getDaily('not-a-date'), null);
   assert.equal(s.getDaily('2026-10-06'), null);
   const r = s.getDaily('2026-10-05').result;
@@ -491,4 +493,55 @@ test('safeLocalStorage works without window.localStorage and with a throwing one
     delete globalThis.localStorage;
     if (had) Object.defineProperty(globalThis, 'localStorage', had);
   }
+});
+
+test('a daily being played in another tab is not recovered; an abandoned or own one is', () => {
+  const be = memoryBackend();
+  const a = createStore(be, { now });
+  a.startDaily(D1, { dateKey: D1, score: 10 }, { owner: 'tab-a' });
+  // another tab opens 3 s later: tab A is alive (fresh heartbeat), leave its game alone
+  clock += 3000;
+  const b = createStore(be, { now });
+  assert.deepEqual(b.recoverUnfinished(D1, { staleMs: 15000, owner: 'tab-b' }), []);
+  assert.equal(b.getDaily(D1).status, 'playing');
+  // tab A keeps beating
+  clock += 10000;
+  a.touchDaily(D1);
+  clock += 10000;
+  assert.deepEqual(b.recoverUnfinished(D1, { staleMs: 15000, owner: 'tab-b' }), []);
+  // tab A itself reloads: its own game counts as finished (one try per day)
+  const a2 = createStore(be, { now });
+  assert.equal(a2.recoverUnfinished(D1, { staleMs: 15000, owner: 'tab-a' }).length, 1);
+  assert.equal(a2.getDaily(D1).status, 'done');
+  assert.equal(a2.getDaily(D1).result.reason, 'quit');
+
+  // a game whose heartbeat stopped long ago is recovered from any tab
+  const c = createStore(memoryBackend(), { now });
+  c.startDaily(D1, { dateKey: D1 }, { owner: 'tab-x' });
+  clock += 16000;
+  assert.equal(c.recoverUnfinished(D1, { staleMs: 15000, owner: 'tab-y' }).length, 1);
+});
+
+test('a separate storage key keeps debug sessions away from real stats', () => {
+  const be = memoryBackend();
+  const real = createStore(be, { now });
+  const debug = createStore(be, { now, key: STORAGE_KEY + '.debug' });
+  playDay(debug, '2026-10-20');
+  assert.equal(debug.getStats('2026-10-20').played, 1);
+  assert.equal(real.getStats(D1).played, 0);
+  assert.equal(real.getDaily('2026-10-20'), null);
+});
+
+test('a future last day (clock was ahead) does not freeze the streak', () => {
+  const s = createStore(memoryBackend(), { now });   // real today is 2026-10-06
+  playDay(s, '2026-10-04');
+  playDay(s, '2026-10-05');
+  playDay(s, '2026-10-20');                          // played with the phone clock set ahead
+  let st = playDay(s, D1);                           // today, for real
+  assert.equal(st.lastDateKey, D1);
+  assert.equal(st.currentStreak, 3);                 // 04, 05, 06
+  clock += 86400000;
+  st = playDay(s, '2026-10-07');
+  assert.equal(st.currentStreak, 4);
+  clock -= 86400000;
 });
