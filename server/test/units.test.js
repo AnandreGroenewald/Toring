@@ -149,11 +149,11 @@ test('Paystack client: auth header, error mapping, timeout, retry only for reads
     }
     return new Response(JSON.stringify({ status: true, data: { link: 'https://paystack.com/m', status: 'success' } }), { status: 200 });
   };
-  const ps = createPaystack({ secretKey: 'sk_test_secret', fetch, timeoutMs: 50 });
+  const ps = createPaystack({ secretKey: 'fake-paystack-key', fetch, timeoutMs: 50 });
 
   assert.equal((await ps.verify('ref/../x')).status, 'success');
   assert.equal(calls[0].url, 'https://api.paystack.co/transaction/verify/ref%2F..%2Fx', 'path segments are encoded');
-  assert.equal(calls[0].init.headers.Authorization, 'Bearer sk_test_secret');
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer fake-paystack-key');
 
   mode = 'down';
   calls.length = 0;
@@ -164,7 +164,7 @@ test('Paystack client: auth header, error mapping, timeout, retry only for reads
   assert.equal(calls.length, 1, 'initialize never retried');
 
   mode = 'auth';
-  await assert.rejects(ps.getPlan('PLN_x'), (e) => e.code === 'auth' && !e.message.includes('sk_test_secret'));
+  await assert.rejects(ps.getPlan('PLN_x'), (e) => e.code === 'auth' && !e.message.includes('fake-paystack-key'));
   mode = 'html';
   await assert.rejects(ps.manageLink('SUB_x'), (e) => e.code === 'bad_response');
   mode = 'hang';

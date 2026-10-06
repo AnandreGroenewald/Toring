@@ -34,17 +34,29 @@ function methodNotAllowed(allow) {
  */
 export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a) => fetch(...a), log = defaultLog } = {}) {
   // Per-isolate caches. The feed is read on every game start, so a short memory cache keeps
-  // D1 reads low; writes in this isolate clear it, other isolates catch up within the TTL.
+  // D1 reads low; writes in this isolate mark it stale, other isolates catch up within the TTL.
   const feedCache = new Map();
   const planCache = new Map();
-  const invalidate = () => feedCache.clear();
+  // Mark stale rather than delete, so a stale copy is still there if D1 fails right after.
+  const invalidate = () => {
+    for (const entry of feedCache.values()) entry.at = -Infinity;
+  };
 
   async function cachedFeed(path, ctx, build) {
     const hit = feedCache.get(path);
     if (hit && ctx.now - hit.at < FEED_TTL_MS[path]) return hit.body;
-    const body = await build(ctx);
-    feedCache.set(path, { at: ctx.now, body });
-    return body;
+    try {
+      const body = await build(ctx);
+      feedCache.set(path, { at: ctx.now, body });
+      return body;
+    } catch (err) {
+      // D1 hiccup or free-tier limit reached: a slightly stale list beats an error for players.
+      if (hit) {
+        log('warn', 'feed_stale', { path, message: String(err?.message || err).slice(0, 200) });
+        return hit.body;
+      }
+      throw err;
+    }
   }
 
   async function route(request, url, ctx) {

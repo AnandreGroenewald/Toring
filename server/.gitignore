@@ -1,0 +1,6 @@
+# Local-only files (never commit)
+node_modules/
+.wrangler/
+.dev.vars
+.dev.vars.*
+.env

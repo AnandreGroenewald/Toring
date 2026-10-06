@@ -27,10 +27,14 @@ export function findBySubscription(db, code) {
 const STATUS_PRIORITY = `CASE status WHEN 'active' THEN 0 WHEN 'cancelling' THEN 1 WHEN 'pending' THEN 2
   WHEN 'ended' THEN 3 ELSE 4 END`;
 
-/** Renewal without our metadata: same Paystack customer on the same plan. */
-export function findByCustomerPlan(db, customerCode, planCode) {
+/**
+ * Renewal without our metadata: same Paystack customer on the same plan.
+ * `unlinkedOnly` skips sponsorships already tied to a (different) known subscription.
+ */
+export function findByCustomerPlan(db, customerCode, planCode, { unlinkedOnly = false } = {}) {
   return db.prepare(`SELECT * FROM sponsors
       WHERE paystack_customer = ?1 AND plan_code = ?2 AND status <> 'abandoned'
+        ${unlinkedOnly ? 'AND paystack_subscription IS NULL' : ''}
       ORDER BY ${STATUS_PRIORITY}, COALESCE(paid_until, 0) ASC, created_at ASC LIMIT 1`)
     .bind(customerCode, planCode).first();
 }

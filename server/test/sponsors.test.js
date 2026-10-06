@@ -98,3 +98,19 @@ test('missing D1 binding -> 503 not_configured instead of a crash', async () => 
   const res = await h.worker.fetch(new Request('https://api.test/sponsors'), { ...h.env, DB: undefined });
   assert.equal(res.status, 503);
 });
+
+test('/sponsors serves the last good list when D1 fails', async () => {
+  const h = createHarness();
+  await paidSponsor(h, signupBody());
+  assert.equal((await h.request('GET', '/sponsors')).json.block.length, 1);
+  const realPrepare = h.db.prepare.bind(h.db);
+  h.db.prepare = () => {
+    throw new Error('D1_ERROR: daily read limit exceeded');
+  };
+  h.clock.now += 120_000;
+  const res = await h.request('GET', '/sponsors');
+  assert.equal(res.status, 200);
+  assert.equal(res.json.block.length, 1);
+  assert.ok(h.logs.some((l) => l.event === 'feed_stale'));
+  h.db.prepare = realPrepare;
+});

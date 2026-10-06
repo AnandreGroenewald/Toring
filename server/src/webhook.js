@@ -34,8 +34,10 @@ export function redactPayload(evt) {
   delete d.log;
   delete d.fees_split;
   delete d.source;
+  delete d.ip_address;
   if (d.customer) {
     delete d.customer.phone;
+    delete d.customer.international_format_phone;
     delete d.customer.metadata;
   }
   if (d.subscription && typeof d.subscription === 'object') delete d.subscription.authorization;
@@ -102,8 +104,9 @@ async function findSubscriptionSponsor(ctx, data) {
   }
   const { customerCode } = customerOf(data);
   const planCode = planCodeOf(data);
-  if (customerCode && planCode) return db.findByCustomerPlan(ctx.db, customerCode, planCode);
-  return null;
+  if (!customerCode || !planCode) return null;
+  // An unknown subscription code must never cancel a sibling that has its own known subscription.
+  return db.findByCustomerPlan(ctx.db, customerCode, planCode, { unlinkedOnly: Boolean(code) });
 }
 
 async function onSubscriptionCreate(ctx, data) {

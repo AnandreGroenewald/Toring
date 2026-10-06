@@ -1121,9 +1121,13 @@ function setupForm(preview, { sales }) {
       }
       if (radio) radio.disabled = a === false;
       if (choose) {
-        choose.disabled = a === false;
+        // a booked billboard turns its button into a way to the blocks instead
+        const fallback = t === 'premium' && a === false && avail.block !== false;
+        choose.hidden = a === false && !fallback;
+        choose.dataset.target = fallback ? 'block' : t;
+        choose.classList.toggle('btn-blue', fallback);
         const label = choose.querySelector('.btn-label');
-        if (label) label.textContent = a === false ? (t === 'premium' ? 'Tans bespreek' : 'Tans vol') : TIERS[t].chooseLabel;
+        if (label) label.textContent = fallback ? 'Kies eerder die blokke' : TIERS[t].chooseLabel;
       }
     }
     const t = tier();
@@ -1377,7 +1381,7 @@ function setupForm(preview, { sales }) {
   });
   f.shuffle.addEventListener('click', () => preview.nextLook());
   for (const btn of $$('[data-choose]')) {
-    btn.addEventListener('click', () => selectTier(btn.dataset.choose, { focus: true, scroll: true }));
+    btn.addEventListener('click', () => selectTier(btn.dataset.target || btn.dataset.choose, { focus: true, scroll: true }));
   }
   form.addEventListener('submit', onSubmit);
 

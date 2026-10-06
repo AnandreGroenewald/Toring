@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createHarness, signupBody, premiumBody, chargeSuccess, subscriptionCreate, subscriptionEvent, invoiceEvent,
-  PLAN_BLOCK, PLAN_PREMIUM, T0, DAY,
+  PLAN_BLOCK, PLAN_PREMIUM, SECRET, T0, DAY,
 } from './support/harness.js';
 import { addMonthsUTC } from '../src/entitlement.js';
 
@@ -27,7 +27,7 @@ test('bad or missing signature -> 401 and nothing changes', async () => {
   const { sponsorId, reference } = await signup(h);
   const evt = chargeSuccess({ reference, paidAt: T0, metadata: { sponsorId } });
 
-  let res = await h.webhook(evt, { secret: 'sk_test_wrong' });
+  let res = await h.webhook(evt, { secret: 'fake-wrong-secret' });
   assert.equal(res.status, 401);
   assert.equal(res.json.error, 'invalid_signature');
   res = await h.webhook(evt, { signature: '' });
@@ -37,7 +37,7 @@ test('bad or missing signature -> 401 and nothing changes', async () => {
 
   // Valid signature for a different body (tampered amount).
   const { createHmac } = await import('node:crypto');
-  const sig = createHmac('sha512', 'sk_test_0123456789abcdef0123456789abcdef').update(JSON.stringify(evt)).digest('hex');
+  const sig = createHmac('sha512', SECRET).update(JSON.stringify(evt)).digest('hex');
   const tampered = JSON.stringify({ ...evt, data: { ...evt.data, amount: 1 } });
   res = await h.request('POST', '/paystack/webhook', {
     rawBody: tampered, origin: null, headers: { 'Content-Type': 'application/json', 'x-paystack-signature': sig },
@@ -315,7 +315,7 @@ test('optional Paystack IP allowlist', async () => {
   const evt = { event: 'transfer.success', data: {} };
   const { createHmac } = await import('node:crypto');
   const raw = JSON.stringify(evt);
-  const sig = createHmac('sha512', 'sk_test_0123456789abcdef0123456789abcdef').update(raw).digest('hex');
+  const sig = createHmac('sha512', SECRET).update(raw).digest('hex');
   const send = (ip) => h.request('POST', '/paystack/webhook', {
     rawBody: raw, ip, origin: null, headers: { 'Content-Type': 'application/json', 'x-paystack-signature': sig },
   });
@@ -354,4 +354,15 @@ test('two sponsorships on one customer + plan: the invoice\'s subscription code 
   assert.equal(h.db.q("SELECT sponsor_id FROM payments WHERE reference = 'T_B2'")[0].sponsor_id, b.sponsorId);
   assert.equal(sponsor(h, a.sponsorId).paid_until, aUntil);
   assert.equal(sponsor(h, b.sponsorId).paid_until, addMonthsUTC(T0 + 10 * DAY, 2) + GRACE);
+});
+
+test('a disable for an unknown subscription never ends a sibling that has its own subscription', async () => {
+  const h = createHarness();
+  const { sponsorId, reference } = await signup(h);
+  await h.webhook(chargeSuccess({ reference, paidAt: T0, metadata: { sponsorId } }));
+  await h.webhook(subscriptionCreate({ code: 'SUB_known' }));
+  const res = await h.webhook(subscriptionEvent('subscription.disable', { code: 'SUB_unknown' }));
+  assert.equal(res.status, 200);
+  assert.equal(sponsor(h, sponsorId).status, 'active');
+  assert.equal(h.db.q("SELECT note FROM webhook_events WHERE type = 'subscription.disable'")[0].note, 'unmatched');
 });

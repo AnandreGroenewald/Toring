@@ -5,10 +5,10 @@
   "description": "Sponsorship API for the Stapel game: Cloudflare Worker + D1 + Paystack subscriptions.",
   "type": "module",
   "engines": {
-    "node": ">=22.5"
+    "node": ">=22.13"
   },
   "scripts": {
-    "test": "node --test --test-reporter=spec \"test/*.test.js\"",
+    "test": "node --disable-warning=ExperimentalWarning --test --test-reporter=spec \"test/*.test.js\"",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:create": "wrangler d1 create stapel-borge",

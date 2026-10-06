@@ -105,7 +105,7 @@ export async function applyCharge(ctx, sponsor, charge) {
     customerCode: charge.customerCode || null,
   });
 
-  if (!updated.paystack_subscription) await adoptMisassignedSubscription(ctx, updated);
+  if (updated && !updated.paystack_subscription) await adoptMisassignedSubscription(ctx, updated);
   return { sponsorId: sponsor.id, note, sponsor: updated };
 }
 
@@ -136,7 +136,7 @@ export async function matchCharge(ctx, data) {
     if (s) return { sponsor: s, matchedBy: 'subscription', planCode, customerCode };
   }
   if (customerCode && planCode) {
-    const s = await db.findByCustomerPlan(ctx.db, customerCode, planCode);
+    const s = await db.findByCustomerPlan(ctx.db, customerCode, planCode, { unlinkedOnly: Boolean(subCode) });
     if (s) return { sponsor: s, matchedBy: 'customer', planCode, customerCode };
   }
   const related = Boolean(meta.sponsorId) || isOurPlan(ctx.cfg, planCode);

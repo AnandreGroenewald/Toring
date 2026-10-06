@@ -38,13 +38,68 @@ Later the owner added (decisions are final unless they say otherwise):
 ## 2. Current state (at handover)
 
 <!-- STATUS-START -->
-_Filled in at handover time: see below._
+### Base game: playable and polished, needs its final QA pass
+- Everything in the original brief is built: daily tower, practice, crane, physics, Perfek/combo, 8 weather types, rising flood line, cement freeze, wobble, results, streak, countdown, share text, PWA/offline, WebAudio, Afrikaans UI.
+- History: 6 parallel module agents → integration agent (zero console errors) → **six-lens review (74 findings, see `docs/review-findings.md`)** → a fixer agent applied the fixes.
+- **The fixer was in its final end-to-end check when the container restarted, so its per-finding report was lost.** Its code changes are all committed. Notable ones:
+  - seeded per-event weather (`js/core/weatherplan.js`), so every player gets identical gusts, lightning and hail
+  - taps release the block at the exact tap moment
+  - 4 hearts, and every 3rd Perfek restores one
+  - a Perfek sets everything under it like cement
+  - landing outline turns red when the block would fall
+  - flood tuning
+  - HUD re-layout, with weather chip and hearts at the top and a wobble meter
+  - colour-blind-safe results grid (★ • ~ ✕), plus metre markers and a "Toring" view on results
+  - a debug session uses separate storage (`stapel.v1.debug`)
+  - modulepreload and a boot watchdog in `index.html`
+  - SW precache test (`tests/precache.test.js`)
+- Tests at handover: **`npm test` 89/89 pass.**
+- Headless check at handover: a full daily at 412×915 with autoplay ran 1 min 50 s to 75,2 m and ended with zero console errors. Screenshots were taken of the how-to, Perfek ×4, rainbow, storm with lightning, the game-over reveal and results; all looked right.
+
+### Sponsorship system: about half built
+| Part | State |
+| --- | --- |
+| `server/` (Cloudflare Worker + D1 + Paystack) | **Built.** **`cd server && npm test` 92/92 pass** (includes a miniflare smoke test; `npm install` in `server/` first for that). Owner guide in `server/README.md`. **Not yet security-reviewed or payment-edge-case-reviewed.** |
+| `adverteer.html` + `js/pages/adverteer.js` + `css/pages.css` + `js/pages/common.js` | **Built, but currently 404s on its import of `js/core/sponsors.js`, which doesn't exist yet**, so the page doesn't run until T2 is done. |
+| `admin.html` + `js/pages/admin.js` | Built; loads with no console errors. Not reviewed. |
+| `js/sponsorConfig.js` | Built (`SPONSOR_API_URL = ''`, so sales are off). |
+| `js/core/sponsors.js`, `js/sponsorsFeed.js`, `sponsors.json`, `tests/sponsors.test.js` | **Not started** (the agent never got to run). |
+| `terme.html`, `privaatheid.html` (legal templates) | **Not started.** |
+| In-game integration (names on blocks, island billboard, sportscard.co.za menu card, "Adverteer hier" link) | **Not started.** |
+
+Nothing sponsor-related is linked from the game yet, so the live game is unaffected.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
 
 <!-- TODO-START -->
-_Filled in at handover time._
+Each step should end green (`npm test`, `cd server && npm test`, a headless playthrough with zero console errors) and be committed and pushed.
+
+- **T1. Base-game QA pass.** Treat `docs/review-findings.md` as a checklist: for every finding, check in the code and the browser whether it's fixed now, and fix anything still open (all critical/high first). The fixer's lost report means none are confirmed yet. Also:
+  - Play full games at 412×915 and 360×640.
+  - Verify the daily is deterministic: same scripted taps should give identical weather effects.
+  - Restart scenes 6+ times and check for leaks.
+  - Test under a sub-path: serve `/home/user` and open `/Toring/`.
+  - The prompt for this pass is the `qa` agent in `docs/workflows/2-review-fix-qa.js`.
+- **T2. Core sponsor logic:** `js/core/sponsors.js`, `js/sponsorsFeed.js`, `sponsors.json` (the sportscard.co.za house ad) and `tests/sponsors.test.js`, exactly per `docs/SPONSORS-SPEC.md`. The moderation rules must match `server/src/moderation.js`; ideally share one rules module. This also makes `adverteer.html` work. The prompt is `build:core` in `docs/workflows/3-sponsors-backend.js`.
+- **T3. Legal templates** `terme.html` and `privaatheid.html`, per the spec: Afrikaans, `[[placeholders]]` and a visible template banner. Their version strings must match `js/sponsorConfig.js`.
+- **T4. Sponsor reviews and fixes:**
+  - security (forged or replayed webhooks, activating without paying, moderation bypass with unicode, admin token, XSS, CORS)
+  - payment state machine (renewals when one email has several sponsorships, missed webhooks, refunds and chargebacks, premium-slot races, month arithmetic)
+  - UX, Afrikaans and legal completeness
+  - The prompts are in `docs/workflows/3-sponsors-backend.js` (Review and Fix phases).
+- **T5. In-game sponsor integration**, per the last section of `docs/SPONSORS-SPEC.md`:
+  - names drawn on block textures, keeping the texture cache bounded
+  - the island billboard for the R1 499 sponsor, reading "Jou advertensie hier!" when free and sales are on, or the Stapel logo when sales are off
+  - the pinned sportscard.co.za card labelled "Advertensie"
+  - the "Adverteer hier" link, shown only when `SPONSOR_API_URL` is set
+  - load the sponsor feed in `main.js`
+  - precache the new files in `sw.js` and bump `VERSION` and the SW cache name together
+  - keep the WhatsApp share text free of sponsors
+  - Also reword the three code comments that name other games: `js/core/share.js:1`, `js/core/daily.js:1`, and "Tower Bloxx style" in `js/scenes/GameScene.js`.
+- **T6. Final pass.** Full playtest plus screenshots. Confirm the **game payload** (what a player downloads: `index.html`, `lib/`, `js/` without `js/pages/`, `css/style.css`, `icons/`, `manifest`, `sw.js`) stays under 3 MB. It was about 1.9 MB at handover; the whole repo was 2.7 MB because `docs/`, `server/` and `tests/` are never loaded by the game. update `README.md` with a sponsorship section, then hand the owner the checklist in section 4.
+
+**Prompt to give the next agent:** "Continue the Stapel project in this repo on branch `claude/trusting-hopper-26qcax`. Read `docs/HANDOVER.md` first and work through its remaining-work list T1–T6 in order, committing and pushing after each step."
 <!-- TODO-END -->
 
 ## 4. Things only the owner can do

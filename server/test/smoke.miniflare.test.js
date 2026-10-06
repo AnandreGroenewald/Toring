@@ -4,7 +4,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { fakePaystack, baseEnv, signupBody, chargeSuccess, SECRET, ADMIN, ORIGIN } from './support/harness.js';
@@ -27,9 +27,10 @@ test('smoke: real worker in workerd + local D1', { skip: Miniflare ? false : 'mi
   const { DB: _unused, ...vars } = baseEnv(null);
   let mf;
   try {
+    // List the modules explicitly (entry first); not every Miniflare version follows imports itself.
+    const files = readdirSync(`${root}src`).filter((f) => f.endsWith('.js')).sort((a, b) => (a === 'worker.js' ? -1 : b === 'worker.js' ? 1 : 0));
     mf = new Miniflare(toOptions({
-      modules: true,
-      scriptPath: `${root}src/worker.js`,
+      modules: files.map((f) => ({ type: 'ESModule', path: `${root}src/${f}` })),
       modulesRoot: root,
       compatibilityDate: '2026-09-01',
       d1Databases: { DB: 'stapel-smoke' },
@@ -47,7 +48,8 @@ test('smoke: real worker in workerd + local D1', { skip: Miniflare ? false : 'mi
     }));
     await mf.ready;
   } catch (err) {
-    t.skip(`workerd could not start here: ${err.message}`);
+    await mf?.dispose().catch(() => {});
+    t.skip(`workerd could not start here: ${err.message.split('\n')[0]}`);
     return;
   }
 

@@ -4,7 +4,7 @@ import { createHmac } from 'node:crypto';
 import { createWorker } from '../../src/worker.js';
 import { createTestDb } from './d1.js';
 
-export const SECRET = 'sk_test_0123456789abcdef0123456789abcdef';
+export const SECRET = 'fake-paystack-secret-for-tests';
 export const ADMIN = 'adm_' + 'x'.repeat(40);
 export const PLAN_BLOCK = 'PLN_block123';
 export const PLAN_PREMIUM = 'PLN_premium456';

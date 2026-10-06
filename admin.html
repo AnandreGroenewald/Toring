@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="af">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Borge-admin — Stapel</title>
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#5ec1f5">
+  <meta name="color-scheme" content="light">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; form-action 'none'; base-uri 'none'; object-src 'none'; frame-src 'none'">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <script type="module" src="js/pages/admin.js"></script>
+</head>
+<body class="page page-admin">
+  <a class="skip" href="#hoof">Slaan oor na die inhoud</a>
+
+  <header class="wrap topbar">
+    <a class="pill" href="./">
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Stapel
+    </a>
+    <div class="tools" id="tools" hidden>
+      <button type="button" class="pill" id="refresh">Herlaai</button>
+      <button type="button" class="pill" id="logout">Teken uit</button>
+    </div>
+  </header>
+
+  <main id="hoof" class="wrap" tabindex="-1">
+    <div class="admin-head">
+      <h1>Borge-admin</h1>
+    </div>
+
+    <noscript><p class="nojs-note">Die admin-bladsy het JavaScript nodig.</p></noscript>
+
+    <section id="no-api" class="card login-card" aria-labelledby="no-api-title" hidden>
+      <h2 id="no-api-title" class="panel-title">Die API is nog nie opgestel nie</h2>
+      <p>Stel eers <b>SPONSOR_API_URL</b> in <b>js/sponsorConfig.js</b> na die adres van jou Cloudflare Worker. Die stappe staan in <b>server/README.md</b>.</p>
+    </section>
+
+    <section id="login" class="card login-card" aria-labelledby="login-title" hidden>
+      <h2 id="login-title" class="panel-title">Teken in</h2>
+      <form id="login-form" novalidate>
+        <div class="alert" id="login-alert" role="alert" tabindex="-1" hidden></div>
+        <div class="field">
+          <label for="token">Admin-sleutel</label>
+          <p class="hint" id="token-hint">Die <b>ADMIN_TOKEN</b> wat jy met <code>wrangler secret put</code> gestel het. Dit bly net in hierdie blaaieroortjie en word vergeet sodra jy die oortjie toemaak.</p>
+          <input class="input" id="token" name="token" type="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" required aria-describedby="token-hint">
+        </div>
+        <button type="submit" class="btn btn-green" id="login-btn"><span class="btn-label">Teken in</span></button>
+      </form>
+    </section>
+
+    <div id="app" hidden>
+      <div class="kpis" id="kpis" aria-label="Opsomming"></div>
+
+      <div class="tabs" role="tablist" aria-label="Afdelings">
+        <button type="button" class="tab" role="tab" id="t-sponsors" aria-controls="p-sponsors" aria-selected="true">Borge</button>
+        <button type="button" class="tab" role="tab" id="t-add" aria-controls="p-add" aria-selected="false" tabindex="-1">Voeg by</button>
+        <button type="button" class="tab" role="tab" id="t-payments" aria-controls="p-payments" aria-selected="false" tabindex="-1">Betalings</button>
+        <button type="button" class="tab" role="tab" id="t-events" aria-controls="p-events" aria-selected="false" tabindex="-1">Webhook-gebeure</button>
+      </div>
+
+      <section class="card panel-card" role="tabpanel" id="p-sponsors" aria-labelledby="t-sponsors" tabindex="-1">
+        <div class="filters" id="filters">
+          <input class="input" id="search" type="search" placeholder="Soek naam of e-pos" aria-label="Soek borge" autocomplete="off" spellcheck="false">
+        </div>
+        <div id="sponsors-box"></div>
+      </section>
+
+      <section class="card panel-card" role="tabpanel" id="p-add" aria-labelledby="t-add" tabindex="-1" hidden>
+        <div class="panel-title"><h2>Voeg ’n borg met die hand by</h2></div>
+        <p class="hint">Vir ooreenkomste buite Paystack (kwotasie of EFT). Die borg is lewendig tot en met die einddatum (Suid-Afrikaanse tyd).</p>
+        <form id="add-form" class="section-gap" novalidate>
+          <div class="alert" id="add-alert" role="alert" tabindex="-1" hidden></div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="a-tier">Pakket</label>
+              <select class="input" id="a-tier" name="tier">
+                <option value="block">Jou naam op die blokke</option>
+                <option value="premium">Die groot advertensiebord</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="a-until">Lewendig tot en met</label>
+              <input class="input" id="a-until" name="paid_until" type="date" required>
+            </div>
+          </div>
+          <div class="field">
+            <label for="a-name">Naam in die spel</label>
+            <input class="input" id="a-name" name="name" type="text" maxlength="22" required autocomplete="off">
+          </div>
+          <div class="grid-2" id="a-premium" hidden>
+            <div class="field">
+              <label for="a-tagline">Slagspreuk <span class="opt">(opsioneel)</span></label>
+              <input class="input" id="a-tagline" name="tagline" type="text" maxlength="40" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="a-url">Webwerf <span class="opt">(opsioneel)</span></label>
+              <input class="input" id="a-url" name="url" type="url" maxlength="200" autocomplete="off" placeholder="voorbeeld.co.za">
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="a-contact">Kontakpersoon <span class="opt">(opsioneel)</span></label>
+              <input class="input" id="a-contact" name="contact_name" type="text" maxlength="60" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="a-email">E-pos <span class="opt">(opsioneel)</span></label>
+              <input class="input" id="a-email" name="email" type="email" maxlength="254" autocomplete="off">
+            </div>
+          </div>
+          <div class="field">
+            <label for="a-notes">Notas <span class="opt">(net vir jou)</span></label>
+            <textarea class="input" id="a-notes" name="notes" maxlength="2000"></textarea>
+          </div>
+          <label class="check"><input type="checkbox" id="a-approved" checked> <span>Goedgekeur (wys in die spel)</span></label>
+          <button type="submit" class="btn btn-green" id="add-btn"><span class="btn-label">Voeg borg by</span></button>
+        </form>
+      </section>
+
+      <section class="card panel-card" role="tabpanel" id="p-payments" aria-labelledby="t-payments" tabindex="-1" hidden>
+        <div class="panel-title"><h2>Betalings</h2></div>
+        <div id="payments-box"></div>
+      </section>
+
+      <section class="card panel-card" role="tabpanel" id="p-events" aria-labelledby="t-events" tabindex="-1" hidden>
+        <div class="panel-title"><h2>Onlangse webhook-gebeure</h2></div>
+        <div id="events-box"></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Edit a sponsor -->
+  <dialog class="dlg" id="dlg-edit" aria-labelledby="edit-title">
+    <form class="dlg-body" id="edit-form" novalidate>
+      <h2 id="edit-title">Wysig borg</h2>
+      <p class="hint" id="edit-sub"></p>
+      <div class="alert" id="edit-alert" role="alert" tabindex="-1" hidden></div>
+      <div class="field">
+        <label for="e-name">Naam in die spel</label>
+        <input class="input" id="e-name" type="text" maxlength="22" autocomplete="off">
+      </div>
+      <div class="grid-2" id="e-premium">
+        <div class="field">
+          <label for="e-tagline">Slagspreuk</label>
+          <input class="input" id="e-tagline" type="text" maxlength="40" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="e-url">Webwerf</label>
+          <input class="input" id="e-url" type="url" maxlength="200" autocomplete="off">
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="e-contact">Kontakpersoon</label>
+          <input class="input" id="e-contact" type="text" maxlength="60" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="e-email">E-pos</label>
+          <input class="input" id="e-email" type="email" maxlength="254" autocomplete="off">
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="e-phone">Selfoon</label>
+          <input class="input" id="e-phone" type="tel" maxlength="20" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="e-status">Status</label>
+          <select class="input" id="e-status">
+            <option value="pending">Wag vir betaling</option>
+            <option value="active">Aktief</option>
+            <option value="cancelling">Gekanselleer (loop tot einddatum)</option>
+            <option value="ended">Geëindig</option>
+            <option value="abandoned">Laat vaar</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="e-until">Minimum einddatum <span class="opt">(opsioneel)</span></label>
+        <p class="hint" id="e-until-hint">Hou die borg lewendig tot ten minste hierdie dag — bv. vir ’n handmatige ooreenkoms of ’n welwillendheidsverlenging. Betaalde maande tel steeds bo-op.</p>
+        <div class="copy-row">
+          <input class="input" id="e-until" type="date" aria-describedby="e-until-hint">
+          <button type="button" class="btn btn-white btn-small" id="e-until-clear">Maak skoon</button>
+        </div>
+      </div>
+      <div class="toggle-row">
+        <label class="check"><input type="checkbox" id="e-approved"> <span>Goedgekeur</span></label>
+        <label class="check"><input type="checkbox" id="e-hidden"> <span>Versteek</span></label>
+      </div>
+      <div class="field">
+        <label for="e-notes">Notas</label>
+        <textarea class="input" id="e-notes" maxlength="2000"></textarea>
+      </div>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-white" id="edit-cancel"><span class="btn-label">Kanselleer</span></button>
+        <button type="submit" class="btn btn-green" id="edit-save"><span class="btn-label">Stoor</span></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Confirmation for destructive actions -->
+  <dialog class="dlg" id="dlg-confirm" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+    <div class="dlg-body">
+      <h2 id="confirm-title"></h2>
+      <div id="confirm-body"></div>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-white" id="confirm-no"><span class="btn-label">Nee, los dit</span></button>
+        <button type="button" class="btn btn-red" id="confirm-yes"><span class="btn-label">Ja</span></button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Paystack manage link -->
+  <dialog class="dlg" id="dlg-link" aria-labelledby="link-title">
+    <div class="dlg-body">
+      <h2 id="link-title">Bestuurskakel</h2>
+      <p id="link-intro">Stuur hierdie skakel vir die borg. Daar kan hulle hul kaart opdateer of die intekening kanselleer.</p>
+      <div class="copy-row section-gap">
+        <input class="input" id="link-url" type="text" readonly aria-label="Bestuurskakel">
+        <button type="button" class="btn btn-blue btn-small" id="link-copy"><span class="btn-label">Kopieer</span></button>
+      </div>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-white" id="link-close"><span class="btn-label">Maak toe</span></button>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="toast-box" id="toasts" role="status" aria-live="polite"></div>
+</body>
+</html>
