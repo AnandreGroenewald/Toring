@@ -1,0 +1,87 @@
+# STAPEL — Sponsorship ("Borge") spec
+
+The owner monetises Stapel with **monthly sponsorships sold fully automatically**:
+
+| Tier id | Afrikaans name | What the sponsor gets | Price |
+| --- | --- | --- | --- |
+| `block` | **Jou naam op die blokke** | The business name is printed on blocks in the tower (daily + practice). Many sponsors share the blocks, rotating deterministically. | Set by the owner as a Paystack plan; **NOT shown anywhere in the game or on the sign-up page** — it only appears on Paystack's checkout page. |
+| `premium` | **Die groot advertensiebord** | Exclusive large **billboard on the island** next to the tower base (seen at the start of every game and in the end-of-game zoom-out reveal players screenshot), with name + short tagline. | **R1 499 per maand** (shown on the sign-up page). Exclusive by default (`PREMIUM_MAX = 1`); if the slot is taken, the page shows it as booked ("Tans bespreek") and the premium option is disabled. |
+
+Also:
+- **House ad (owner's own business): `sportscard.co.za`** is permanently pinned as a card on the menu (not part of paid sponsorship; lives in the static `sponsors.json`). Label it as an advertisement ("Advertensie") per ad-code norms. We could not fetch the site (blocked egress), so use neutral copy: title `sportscard.co.za`, text `Besoek sportscard.co.za`, url `https://sportscard.co.za` — all editable in `sponsors.json`.
+- The WhatsApp share text stays clean — **no sponsor mentions**.
+- The owner will provide a public contact email later → `contactEmail: ''` placeholder; anything that would show it must hide gracefully while it's empty.
+- Payment provider: **Paystack** (South African merchant, ZAR). Backend: **Cloudflare Worker + D1** (free tier), because the game is a static GitHub Pages site.
+- The whole sales flow (menu "Adverteer hier" link, sign-up page form, "Jou advertensie hier" billboard text) is only **enabled once the backend is configured**: `SPONSOR_API_URL` in `js/sponsorConfig.js` is non-empty. Until then the game shows only the house ad and any manual entries in `sponsors.json`, and `adverteer.html` shows a friendly "kom binnekort" (coming soon) state instead of the form.
+
+Repo: `/home/user/Toring` (static site root; GitHub Pages under `/Toring/` → all URLs relative). Read `<SCRATCH>/SPEC.md` for the game architecture and conventions (Afrikaans copy, `js/core/format.js` decimal comma, `js/config.js` constants, ES modules, no bundler, no runtime npm deps on the site).
+
+---------------------------------------------------------------------------
+## Paystack facts (verify with WebSearch where unsure; docs site is blocked from this container but WebSearch works)
+- API base `https://api.paystack.co`, header `Authorization: Bearer <SECRET_KEY>`, JSON.
+- Plans (created by the owner in the dashboard or via `POST /plan` with `interval: 'monthly'`, `currency: 'ZAR'`, amount in cents). Two plan codes: `PLN_...` for `block`, `PLN_...` for `premium` (R1 499 = 149900 cents).
+- Start a subscription: `POST /transaction/initialize` `{ email, amount, plan, currency: 'ZAR', callback_url, metadata: { sponsorId, tier } }` → `data.authorization_url`, `data.reference`. When `plan` is given, the plan's amount is used (still send `amount` = plan amount to be safe). After the first successful charge Paystack creates the subscription automatically.
+- Verify: `GET /transaction/verify/:reference` → `data.status === 'success'`, `data.customer.customer_code`, `data.plan` / `data.plan_object`, `data.metadata`.
+- Webhooks: `POST` to our URL with header `x-paystack-signature` = hex HMAC-SHA512 of the **raw body** keyed with the secret key. Respond 200 quickly. Events to handle: `charge.success` (initial + renewals; renewals may lack our metadata → match by customer code + plan code), `subscription.create` (store `subscription_code`, `email_token`, `next_payment_date`), `invoice.update` / `invoice.create` (renewal; `paid`), `invoice.payment_failed`, `subscription.not_renew` (cancelled; stays active until period end), `subscription.disable` (ended). Webhooks may arrive out of order and more than once → **idempotent** (dedupe by transaction reference / event id) and robust.
+- Cancel: `POST /subscription/disable { code, token }` (token = email_token). Card/cancel self-service: `GET /subscription/:code/manage/link` → `data.link`.
+- Optional extra check: Paystack webhook source IPs are published (52.31.139.75, 52.49.173.169, 52.214.14.220) — signature check is the primary control.
+
+## Entitlement rule (single source of truth)
+A sponsor is **live** (public) iff `status IN ('active','cancelling')` AND `approved = 1` AND `hidden = 0` AND `paid_until > now`.
+Each successful charge sets `paid_until = max(paid_until, charge_time) + 1 calendar month + GRACE_DAYS (3)`. Cancellation (`not_renew`) → status `cancelling` (still live until `paid_until`). `subscription.disable` → status `ended` (not live). Payment failed → no extension; it lapses naturally at `paid_until`. This makes the system safe even if a webhook is missed.
+Admin can also create **manual** sponsors (deals by quote/EFT) with an explicit `paid_until`.
+
+---------------------------------------------------------------------------
+## Backend: `server/` (Cloudflare Worker, ES module syntax)
+Files: `server/src/worker.js` (router/entry), `server/src/*.js` (modules: paystack.js, db.js, moderation.js, validate.js, http.js…), `server/schema.sql` (D1 schema), `server/wrangler.toml` (template; **no secrets**; placeholders for D1 database id), `server/package.json` (devDeps allowed here, e.g. wrangler/miniflare, but tests must also run without them), `server/test/*.test.js` (node --test), `server/README.md` (owner setup guide, in English with Afrikaans terms where helpful — step by step: Paystack account & business verification, create two monthly ZAR plans, copy keys; Cloudflare account, `npx wrangler login`, `wrangler d1 create`, apply schema, `wrangler secret put PAYSTACK_SECRET_KEY` and `ADMIN_TOKEN`, set vars, deploy; set webhook URL in Paystack to `https://<worker>/paystack/webhook`; set `SPONSOR_API_URL` in `js/sponsorConfig.js`; test with Paystack test keys and test cards first; go live).
+Env (wrangler vars/secrets): `PAYSTACK_SECRET_KEY` (secret), `ADMIN_TOKEN` (secret, long random), `PLAN_BLOCK`, `PLAN_PREMIUM`, `PREMIUM_PRICE_CENTS` (149900), `SITE_URL` (e.g. https://anandregroenewald.github.io/Toring/), `ALLOWED_ORIGINS` (comma list; site origin + http://localhost:*), `PREMIUM_MAX` (1), `BLOCK_MAX` (60), `AUTO_APPROVE` ('true'), `GRACE_DAYS` (3). Binding `DB` (D1).
+
+### D1 schema (`server/schema.sql`)
+```sql
+sponsors(id TEXT PK, tier TEXT CHECK(tier IN ('block','premium')), name TEXT NOT NULL, tagline TEXT, url TEXT,
+         contact_name TEXT, email TEXT NOT NULL, phone TEXT,
+         status TEXT NOT NULL,          -- 'pending' (awaiting first payment) | 'active' | 'cancelling' | 'ended' | 'abandoned'
+         approved INTEGER NOT NULL, hidden INTEGER NOT NULL DEFAULT 0, manual INTEGER NOT NULL DEFAULT 0,
+         paystack_customer TEXT, paystack_subscription TEXT, paystack_email_token TEXT, plan_code TEXT, init_reference TEXT,
+         paid_until INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, notes TEXT)
+payments(reference TEXT PK, sponsor_id TEXT, amount INTEGER, currency TEXT, paid_at INTEGER, source TEXT)
+webhook_events(id TEXT PK /* hash of event+data.id/reference */, type TEXT, received_at INTEGER, handled INTEGER, payload TEXT)
+consents(sponsor_id TEXT, terms_version TEXT, privacy_version TEXT, accepted_at INTEGER, ip_hash TEXT)
+```
+Indexes on email, paystack_customer, paystack_subscription, status. Retention: delete `pending` older than 7 days → `abandoned` and scrub contact data after 30 days; prune `webhook_events` payloads older than 90 days (cron trigger `scheduled()` daily). Keep `payments` (accounting).
+
+### HTTP API (JSON; CORS: `GET /sponsors` and `GET /availability` → `*`; everything else → `ALLOWED_ORIGINS` only; OPTIONS preflight)
+- `GET /sponsors` → `{ updatedAt, block: [{ id, name }], premium: [{ id, name, tagline, url }] }` — live sponsors only, minimal public fields (never emails). `Cache-Control: public, max-age=300`.
+- `GET /availability` → `{ premium: { available: bool }, block: { available: bool } }`.
+- `POST /subscribe` body `{ tier, name, tagline?, url?, contactName, email, phone?, acceptTerms: true, acceptPrivacy: true, termsVersion, privacyVersion, website /* honeypot, must be empty */ }` → validate + moderate → if premium and slot full → 409 `{ error: 'premium_taken' }` → insert `pending` sponsor + consent → Paystack initialize (plan by tier, callback_url = `${SITE_URL}adverteer.html?sponsor=<id>`) → `{ url: authorization_url, reference, sponsorId }`. Errors use stable codes (`invalid_name`, `name_rejected`, `invalid_email`, `premium_taken`, `block_full`, `rate_limited`, `payment_init_failed`, `terms_required`) which the page maps to Afrikaans messages. Rate-limit by hashed IP and by email (e.g. ≤ 5 pending per hour).
+- `GET /status?sponsor=<id>&reference=<ref>` → verifies with Paystack (`/transaction/verify/:reference`) if still pending (idempotently activates) → `{ status: 'active'|'pending'|'failed', tier, name, liveFrom? , needsApproval: bool }`. Only returns non-sensitive fields.
+- `POST /paystack/webhook` → verify signature (constant-time compare of hex HMAC-SHA512 via WebCrypto), dedupe, handle events per "Entitlement rule", always 200 for valid signatures (even if unmatched; log), 401 for bad signature.
+- Admin (header `Authorization: Bearer <ADMIN_TOKEN>`, constant-time compare, 401 otherwise):
+  - `GET /admin/sponsors` (all, incl. contact + paystack fields), `POST /admin/sponsors` (manual add: tier, name, tagline, url, email, paid_until, notes), `PATCH /admin/sponsors/:id` (name, tagline, url, approved, hidden, paid_until, notes, status), `DELETE /admin/sponsors/:id`, `POST /admin/sponsors/:id/cancel` (Paystack `/subscription/disable`), `POST /admin/sponsors/:id/manage-link` (returns Paystack manage link to send to the sponsor), `GET /admin/payments`, `GET /admin/events?limit=`.
+- `scheduled()` cron: retention + mark lapsed.
+
+### Moderation (`server/src/moderation.js`, mirrored client-side for instant feedback)
+- `name`: trimmed, collapsed spaces, 2–22 chars, letters (incl. Afrikaans diacritics ê ë ô ï etc.), digits, space and `& . - ' ’ !`; no URLs/emails/phone numbers; not ALL symbols; a modest English + Afrikaans profanity/slur list with simple leetspeak normalisation; reserved words ("Stapel", "admin", "Paystack", "test" alone, etc.).
+- `tagline` (premium only): ≤ 40 chars, same rules, may be empty. `url` (premium only, optional): https URL, hostname shown as text on the billboard (it is not clickable in-game).
+- `AUTO_APPROVE=true` → clean names auto-approved; a name that only trips a soft rule (e.g. all caps) can be auto-fixed; hard rule → reject with `name_rejected` before payment (never take money for a name we won't show). Admin can still hide anything later.
+- Prohibited sponsor categories (enforced by terms + admin, not code): illegal goods/services, unlawful gambling, alcohol/tobacco/vaping (game may be played by minors), adult content, political/religious campaigning, hateful or misleading content.
+
+---------------------------------------------------------------------------
+## Site files (static, served by GitHub Pages)
+- `sponsors.json` (repo root): `{ "version": 1, "house": { "menu": { "title": "sportscard.co.za", "text": "Besoek sportscard.co.za", "url": "https://sportscard.co.za", "label": "Advertensie" } }, "block": [], "premium": [] }` — manual entries allowed in `block`/`premium` with optional `"until": "YYYY-MM-DD"`.
+- `js/core/sponsors.js` (pure, node-testable): 
+  - `normalizeFeed(staticJson, apiJson|null, todayKey) -> { house, block: [{id,name}], premium: [{id,name,tagline,url}] }` (API lists override static paid lists when API is available; static `until` respected; sanitise everything with `sanitizeName`).
+  - `sanitizeName(s, max = 22)`, `isNameAllowed(s)` (shared rules — keep in sync with server moderation; the server is authoritative).
+  - `pickPremium(premium, dateKey) -> sponsor|null` (deterministic daily rotation if more than one: sort by id, index by day number).
+  - `createBlockNamer(block, seed) -> (blockSpec) => name|null` — deterministic per seed: seeded shuffle of sponsors (rng fork 'sponsors'), cycle through them on name-capable shapes only (`plank, slab, brick, crate, wedge, arch, L, J, T` — pillar gets vertical text only if it fits, cube none). Independent of call order (memoise by index). Returns null when no sponsors.
+- `js/sponsorsFeed.js` (browser): `loadSponsors({ apiUrl, staticUrl = 'sponsors.json', timeoutMs = 2500 }) -> Promise<feed>`; never throws; caches the last good API response in localStorage (`stapel.sponsors.v1`) for offline/slow starts; refreshes in the background.
+- `adverteer.html` + `js/pages/adverteer.js` + `css/pages.css`: Afrikaans sign-up page in the game's visual style (logo blocks, sky gradient, chunky buttons). Sections: hero ("Adverteer op Stapel" / "Jou besigheid op elke toring"), why (daily players, WhatsApp sharing), the two tiers (premium with **R1 499 per maand** and live availability; block tier with NO price, "Die prys word by betaling gewys", "Kanselleer enige tyd"), a **live preview** (canvas) of the typed name on a coloured block and on the billboard, the form (fields per `/subscribe`, honeypot, checkboxes for terms + privacy with links), submit → redirect to Paystack; callback state (`?sponsor=&reference=` → poll `/status` → "Dankie! Jou naam verskyn binne 5 minute in die spel." or failure/retry), "kom binnekort" state when `SPONSOR_API_URL` is empty, FAQ (how long, how to cancel, what's allowed), footer with links to `terme.html`, `privaatheid.html`, and contact (hidden while `contactEmail` is empty).
+- `admin.html` + `js/pages/admin.js` (+ styles in `css/pages.css`): `<meta name="robots" content="noindex,nofollow">`; token entry (kept in sessionStorage only), sponsors table (filters: live / pending / ended), per-row actions (approve/hide/edit/cancel subscription/manage link/delete with confirm), manual add form, payments list, recent webhook events; Afrikaans or plain English labels are both fine for the admin (owner-facing; prefer Afrikaans).
+- `terme.html` (Borgskap-voorwaardes) and `privaatheid.html` (Privaatheidsbeleid, POPIA) — Afrikaans **templates** with clearly marked placeholders `[[...]]` for the owner's legal name/business name, registration no., physical address, email, Information Officer. Include: ECT Act s43 supplier disclosures, what is sold, monthly billing via Paystack, cancel any time (effective at end of paid month; CPA-friendly), no guaranteed impressions, content rules/prohibited categories, right to refuse/remove (refund of unused period if we remove for reasons other than a breach), liability limits, governing law South Africa; POPIA: responsible party, what we collect (players: nothing leaves the device except anonymous requests for the sponsor list; local storage only; sponsors: business name, contact name, email, phone, consent records; payment card data handled only by Paystack), purposes, operators & cross-border transfers (Paystack, Cloudflare, GitHub), retention, data-subject rights, Information Officer, complaints to the Information Regulator. Version strings (e.g. `2026-10-06`) referenced by the form. A visible banner on both pages: "Sjabloon — moet deur die eienaar voltooi en nagegaan word" until the placeholders are filled (the owner deletes the banner).
+- `js/sponsorConfig.js` (NEW file — the single place the owner edits; do NOT put these in js/config.js, which another agent is editing): `export const SPONSOR_API_URL = '';` and `export const SPONSOR = { contactEmail: '', termsVersion: '2026-10-06', privacyVersion: '2026-10-06', premiumPriceLabel: 'R1 499 per maand', blockShare: 1, maxNameLen: 22, maxTaglineLen: 40 };` plus `export const salesEnabled = () => !!SPONSOR_API_URL;`.
+
+## In-game integration (later phase, after the review/QA of the base game)
+- Block textures carry the sponsor name (white bold text with dark outline/shadow, auto-fit font size, vertical on pillars when it fits) drawn into the cached texture (key includes a hash of the name). Same texture on the crane, falling and in the tower; ghost stays a plain white silhouette. Texture cache must stay bounded across long sessions (evict sponsor-name textures not used by live blocks at game end).
+- Island billboard (world space, beside the base on the rocks, never overlapping the base or the drop column; no physics body): "ADVERTENSIE" label + premium name (big) + tagline + hostname; empty state: if sales enabled → "Jou advertensie hier!" / "Adverteer op Stapel"; if not → Stapel logo + tagline. Visible at game start and in the zoom-out reveal; looks good at zoom 0.15–1.
+- Menu: pinned house-ad card for sportscard.co.za (label "Advertensie", opens in a new tab with `rel="noopener"`), and — only when sales are enabled — a small "Adverteer hier" link to `adverteer.html`.
+- `sw.js`: precache new site files (`sponsors.json` network-first is fine), bump cache version. Never cache API responses in the SW (the feed module handles its own cache).
