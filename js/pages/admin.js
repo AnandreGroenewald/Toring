@@ -2,6 +2,8 @@
 // endpoints with the ADMIN_TOKEN as a Bearer token. The token lives only in
 // sessionStorage (this tab). Everything from the API is rendered as text.
 
+import { buildMonthlyReport, lastDaysRange, periodLabel, previousMonthRange, thisMonthRange } from './statsReport.js';
+import { fmtInt } from '../core/format.js';
 import { $, $$, h, apiRequest, apiBase, focusEl, setBusy, safeStore, fmtDate, fmtDateTime, fmtRand, toMs, toDateInput, displayHost, isEmail } from './common.js';
 
 const TOKEN_KEY = 'stapel.admin.token';
@@ -49,6 +51,7 @@ const ERRORS = {
   rate_limited: 'Te veel versoeke. Wag ’n bietjie en probeer weer.',
   server_error: 'Die bediener het ’n fout gehad. Kyk na die logs met: npx wrangler tail',
   bad_response: 'Onverwagte antwoord van die API.',
+  invalid_range: 'Kies ’n geldige tydperk: “van” voor “tot”, hoogstens 400 dae.',
 };
 const FIELD_LABELS = {
   name: 'naam', tagline: 'slagspreuk', url: 'webwerf', email: 'e-pos', contact_name: 'kontakpersoon',
@@ -77,6 +80,7 @@ const st = {
   payments: [],
   events: [],
   eventsLoaded: false,
+  stats: { from: '', to: '', data: null, busy: false },
   filter: 'all',
   query: '',
   tab: 'sponsors',
@@ -210,8 +214,9 @@ function logout(message = '') {
   st.payments = [];
   st.events = [];
   st.eventsLoaded = false;
+  st.stats = { from: '', to: '', data: null, busy: false };
   // drop rendered contact details from the DOM too
-  for (const box of [els.sponsorsBox, els.paymentsBox, els.eventsBox, els.kpis]) box.replaceChildren();
+  for (const box of [els.sponsorsBox, els.paymentsBox, els.eventsBox, els.kpis, els.statsBox]) box.replaceChildren();
   for (const d of $$('dialog[open]')) d.close();
   els.token.value = '';
   showOnly('login');
@@ -258,7 +263,7 @@ async function refresh() {
   }
 }
 
-const TABS = ['sponsors', 'add', 'payments', 'events'];
+const TABS = ['sponsors', 'add', 'payments', 'stats', 'events'];
 
 function selectTab(name, { focus = true } = {}) {
   st.tab = name;
@@ -271,6 +276,7 @@ function selectTab(name, { focus = true } = {}) {
     panel.hidden = !on;
   }
   if (focus) $(`#t-${name}`).focus();
+  if (name === 'stats' && !st.stats.data && !st.stats.busy) applyPreset('last30');
   if (name === 'events' && !st.eventsLoaded) {
     els.eventsBox.replaceChildren(h('p', { class: 'loading-line', text: 'Laai gebeure…' }));
     loadEvents().then(renderEvents, (err) => {
@@ -533,6 +539,220 @@ function renderEvents() {
     h('thead', null, h('tr', null, ['Tyd', 'Tipe', 'Hanteer', 'Borg', 'Nota', 'Data'].map((t) => h('th', { scope: 'col', text: t })))),
     h('tbody', null, rows),
   ));
+}
+
+// ===========================================================================
+// Statistiek: anonymous audience counts (GET /admin/stats) and the monthly report
+// ===========================================================================
+
+const PRESETS = [
+  { id: 'last30', label: 'Laaste 30 dae', range: (today) => lastDaysRange(today, 30) },
+  { id: 'month', label: 'Hierdie maand', range: (today) => thisMonthRange(today) },
+  { id: 'prev', label: 'Vorige maand', range: (today) => previousMonthRange(today) },
+];
+
+const num = (v) => Math.max(0, Math.round(Number(v) || 0));
+
+function normStats(data) {
+  if (!data || typeof data !== 'object' || !data.totals) throw Object.assign(new Error('bad_response'), { code: 'bad_response' });
+  const day = (d) => ({
+    dateKey: str(d.dateKey),
+    games: num(d.games),
+    gamesDaily: num(d.gamesDaily),
+    gamesPractice: num(d.gamesPractice),
+    blockShows: num(d.blockShows),
+    billboardGames: num(d.billboardGames),
+    menuViews: num(d.menuViews),
+  });
+  return {
+    from: str(data.from),
+    to: str(data.to),
+    totals: day(data.totals),
+    days: (Array.isArray(data.days) ? data.days : []).map(day),
+    sponsors: (Array.isArray(data.sponsors) ? data.sponsors : []).map((s) => ({
+      id: str(s.id),
+      name: s.name == null ? '' : str(s.name),
+      tier: str(s.tier),
+      blockShows: num(s.blockShows),
+      billboardGames: num(s.billboardGames),
+      blockDays: num(s.blockDays),
+      billboardDays: num(s.billboardDays),
+    })),
+  };
+}
+
+async function loadStats(from, to) {
+  st.stats.busy = true;
+  setBusy(els.statsGo, true, 'Laai…');
+  setAlert(els.statsAlert, '');
+  try {
+    const data = normStats(await call('admin/stats', { query: { from, to } }));
+    st.stats.from = from;
+    st.stats.to = to;
+    st.stats.data = data;
+    renderStats();
+  } catch (err) {
+    if (st.token) {
+      setAlert(els.statsAlert, errorText(err));
+      els.statsBox.replaceChildren();
+    }
+  } finally {
+    st.stats.busy = false;
+    setBusy(els.statsGo, false);
+  }
+}
+
+function applyPreset(id) {
+  const preset = PRESETS.find((p) => p.id === id);
+  if (!preset) return;
+  const { from, to } = preset.range(toDateInput(Date.now()));
+  els.statsFrom.value = from;
+  els.statsTo.value = to;
+  st.stats.preset = id;
+  renderPresets();
+  loadStats(from, to);
+}
+
+function renderPresets() {
+  els.statsPresets.replaceChildren(...PRESETS.map((p) => h('button', {
+    type: 'button',
+    class: 'chipbtn',
+    'aria-pressed': String(st.stats.preset === p.id),
+    onclick: () => applyPreset(p.id),
+  }, p.label)));
+}
+
+function submitRange(e) {
+  e.preventDefault();
+  const from = els.statsFrom.value;
+  const to = els.statsTo.value;
+  if (!from || !to || from > to) {
+    setAlert(els.statsAlert, ERRORS.invalid_range);
+    return;
+  }
+  st.stats.preset = '';
+  renderPresets();
+  loadStats(from, to);
+}
+
+/** Copies text; falls back to the old execCommand route. Resolves false when neither worked. */
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = h('textarea', { 'aria-hidden': 'true', tabindex: '-1', readonly: true });
+    ta.value = text;
+    document.body.append(ta);
+    ta.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch {
+      ok = false;
+    }
+    ta.remove();
+    return ok;
+  }
+}
+
+async function copyReport(s, button) {
+  const { data } = st.stats;
+  if (!data) return;
+  const text = buildMonthlyReport({
+    name: s.name || 'borg',
+    tier: s.tier,
+    from: data.from,
+    to: data.to,
+    games: data.totals.games,
+    blockShows: s.blockShows,
+    billboardGames: s.billboardGames,
+    billboardDays: s.billboardDays,
+  });
+  // the report is also shown below the table, so it can be read, edited and copied by hand
+  const preview = $('#stats-report');
+  if (preview) {
+    preview.value = text;
+    $('#stats-report-for').textContent = `Verslag vir ${s.name || 'borg'}`;
+    $('#stats-report-box').hidden = false;
+  }
+  const label = button.querySelector('.btn-label') || button;
+  const ok = await copyText(text);
+  const old = label.textContent;
+  label.textContent = ok ? 'Gekopieer!' : 'Kopieer self';
+  toast(ok ? 'Maandverslag gekopieer. Plak dit in ’n e-pos of WhatsApp.' : 'Kon nie outomaties kopieer nie. Kopieer die teks onder die tabelle self.', { error: !ok });
+  setTimeout(() => { label.textContent = old; }, 2000);
+}
+
+function renderStats() {
+  const { data } = st.stats;
+  if (!data) {
+    els.statsBox.replaceChildren();
+    return;
+  }
+  const t = data.totals;
+  const kpi = (value, label) => h('div', { class: 'kpi' }, h('b', { text: value, title: value }), h('span', { text: label }));
+  const kpis = h('div', { class: 'kpis' },
+    kpi(fmtInt(t.games), `Speletjies klaargespeel (${fmtInt(t.gamesDaily)} daagliks, ${fmtInt(t.gamesPractice)} oefen)`),
+    kpi(fmtInt(t.blockShows), 'Name op blokke gewys'),
+    kpi(fmtInt(t.billboardGames), 'Speletjies met ’n advertensiebord'),
+    kpi(fmtInt(t.menuViews), 'Spyskaart-advertensie gesien'),
+  );
+  const td = (label, content, cls) => h('td', { 'data-label': label, class: cls || null }, content);
+  const numCell = (label, n, cls = '') => td(label, fmtInt(n), `num ${cls}`.trim());
+
+  const period = h('p', { class: 'hint stats-period', text: `Tydperk: ${periodLabel(data.from, data.to)}` });
+
+  const perDay = data.days.length
+    ? h('table', { class: 'dtable' },
+      h('caption', { class: 'stats-caption', text: 'Per dag' }),
+      h('thead', null, h('tr', null, ['Datum', 'Speletjies', 'Daagliks', 'Oefen', 'Name gewys', 'Advertensiebord', 'Spyskaart'].map((c) => h('th', { scope: 'col', text: c })))),
+      h('tbody', null,
+        data.days.map((d) => h('tr', null,
+          td('Datum', d.dateKey, 'strong'),
+          numCell('Speletjies', d.games, 'strong'),
+          numCell('Daagliks', d.gamesDaily),
+          numCell('Oefen', d.gamesPractice),
+          numCell('Name gewys', d.blockShows),
+          numCell('Advertensiebord', d.billboardGames),
+          numCell('Spyskaart', d.menuViews),
+        ))),
+      h('tfoot', null, h('tr', null,
+        td('Datum', 'Totaal', 'strong'),
+        numCell('Speletjies', t.games, 'strong'),
+        numCell('Daagliks', t.gamesDaily),
+        numCell('Oefen', t.gamesPractice),
+        numCell('Name gewys', t.blockShows),
+        numCell('Advertensiebord', t.billboardGames),
+        numCell('Spyskaart', t.menuViews),
+      )))
+    : h('p', { class: 'empty', text: 'Geen speletjies getel in hierdie tydperk nie.' });
+
+  const perSponsor = data.sponsors.length
+    ? h('table', { class: 'dtable' },
+      h('caption', { class: 'stats-caption', text: 'Per borg' }),
+      h('thead', null, h('tr', null, ['Borg', 'Pakket', 'Name gewys', 'Dae met name', 'Bord: speletjies', 'Bord: dae', 'Verslag'].map((c) => h('th', { scope: 'col', text: c })))),
+      h('tbody', null, data.sponsors.map((s) => h('tr', null,
+        td('Borg', s.name || 'Geskrap', s.name ? 'strong' : 'muted'),
+        td('Pakket', TIER_LABELS[s.tier] || '—', 'muted'),
+        numCell('Name gewys', s.blockShows),
+        numCell('Dae met name', s.blockDays),
+        numCell('Bord: speletjies', s.billboardGames),
+        numCell('Bord: dae', s.billboardDays),
+        td('Verslag', h('div', { class: 'row-actions' }, h('button', {
+          type: 'button',
+          class: 'report-btn',
+          onclick: (ev) => copyReport(s, ev.currentTarget),
+        }, h('span', { class: 'btn-label', text: 'Kopieer maandverslag' })))),
+      ))))
+    : h('p', { class: 'empty', text: 'Geen borg se naam of advertensiebord is in hierdie tydperk getel nie.' });
+
+  const report = h('div', { class: 'report-box', id: 'stats-report-box', hidden: true },
+    h('h3', { id: 'stats-report-for', class: 'stats-caption' }),
+    h('textarea', { class: 'input report-text', id: 'stats-report', rows: '12', 'aria-labelledby': 'stats-report-for' }),
+    h('p', { class: 'hint', text: 'Jy kan die teks hier nog wysig voordat jy dit stuur. Die getalle is net voltooide speletjies; ’n speler wat die blad toemaak voor die einde, tel nie.' }));
+
+  els.statsBox.replaceChildren(period, kpis, perDay, perSponsor, report);
 }
 
 // ===========================================================================
@@ -903,6 +1123,12 @@ function init() {
     sponsorsBox: $('#sponsors-box'),
     paymentsBox: $('#payments-box'),
     eventsBox: $('#events-box'),
+    statsBox: $('#stats-box'),
+    statsPresets: $('#stats-presets'),
+    statsFrom: $('#s-from'),
+    statsTo: $('#s-to'),
+    statsGo: $('#stats-go'),
+    statsAlert: $('#stats-alert'),
     panelSponsors: $('#p-sponsors'),
     toasts: $('#toasts'),
     dlgEdit: $('#dlg-edit'),
@@ -916,6 +1142,8 @@ function init() {
   }
 
   wireTabs();
+  renderPresets();
+  $('#stats-form').addEventListener('submit', submitRange);
   for (const d of [els.dlgEdit, els.dlgConfirm, els.dlgLink]) wireDialog(d);
   $('#login-form').addEventListener('submit', (e) => {
     e.preventDefault();

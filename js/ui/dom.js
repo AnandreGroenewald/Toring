@@ -778,6 +778,7 @@ export function createUI(bus) {
     const daily = m === 'daily';
     const why = REASONS[r.reason] || REASONS.quit;
     st.resultsDaily = daily;
+    st.resultsDateKey = daily ? (r.dateKey || null) : null;
     st.nextDayAt = Number(nextDayAt) || st.nextDayAt;
 
     // a new record is the headline, whatever ended the run
@@ -850,6 +851,18 @@ export function createUI(bus) {
     countUp(scoreB, r.score || 0, fmtInt);
   }
 
+  /**
+   * "Jy het beter gedoen as 72% van spelers vandag" under the height, once the answer from the
+   * server is in. Does nothing if another screen (or another day's result) is showing by then.
+   */
+  function setResultsPercentile(dateKey, text) {
+    if (!text || st.screen !== 'results' || !st.resultsDaily || st.resultsDateKey !== dateKey) return;
+    const box = screens.results.querySelector('.res-height');
+    if (!box) return;
+    box.querySelector('.res-pct')?.remove();
+    box.append(h('div', { class: 'res-pct', role: 'status' }, emo('📊'), h('span', { text })));
+  }
+
   // ---------------------------------------------------------------------------
   // In game / hide / toast / loading
   // ---------------------------------------------------------------------------
@@ -909,6 +922,7 @@ export function createUI(bus) {
     showStats,
     showPause,
     showResults,
+    setResultsPercentile,
     showInGame,
     hideAll,
     toast,

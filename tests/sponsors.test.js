@@ -473,6 +473,95 @@ test('createBlockNamer: every sponsor gets the same number of names, give or tak
   }
 });
 
+function runShare(sponsors, seed, count, share) {
+  const seq = createSequence(seed);
+  const namer = createBlockNamer(sponsors, seed, (i) => seq.block(i), share);
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const spec = seq.block(i);
+    out.push({ spec, name: namer(spec), id: namer.idAt(i) });
+  }
+  return out;
+}
+
+test('createBlockNamer: share 0.4 names about every 2nd-3rd name-capable block, evenly spread', () => {
+  // names longer than a pillar can carry, so exactly the NAME_CAPABLE_SHAPES are name-capable
+  const LONG = [S('l1', 'Bakkery Bos'), S('l2', 'Kafee Kom Ruskamp'), S('l3', 'Smit & Seuns Beperk'), S('l4', 'Optiek Oos')];
+  for (const seed of [SEED, 'stapel-2026-12-25', 'oefen-42', 'oefen-7']) {
+    const tower = runShare(LONG, seed, 400, 0.4);
+    // gaps are counted in name-capable blocks
+    const gaps = [];
+    let sinceLast = 0;
+    for (const { spec, name } of tower) {
+      if (!NAME_CAPABLE_SHAPES.includes(spec.shape)) {
+        assert.equal(name, null);
+        continue;
+      }
+      sinceLast++;
+      if (name) {
+        gaps.push(sinceLast);
+        sinceLast = 0;
+      }
+    }
+    assert.ok(gaps.length > 20);
+    for (const g of gaps.slice(1)) assert.ok(g === 2 || g === 3, `gap ${g} is not 2 or 3 (${seed})`);
+    const capable = tower.filter((b) => NAME_CAPABLE_SHAPES.includes(b.spec.shape)).length;
+    const named = tower.filter((b) => b.name).length;
+    assert.ok(Math.abs(named / capable - 0.4) < 0.03, `${named}/${capable} is not about 40% (${seed})`);
+  }
+});
+
+test('createBlockNamer: the share is deterministic per seed, and the seed moves the starting phase', () => {
+  const a = runShare(SIX, SEED, 120, 0.4).map((b) => b.name);
+  assert.deepEqual(runShare(SIX, SEED, 120, 0.4).map((b) => b.name), a);
+  const patterns = new Set();
+  for (let n = 0; n < 12; n++) patterns.add(runShare(SIX, `oefen-${n}`, 6, 0.4).map((b) => (b.name ? 1 : 0)).join(''));
+  assert.ok(patterns.size > 2, 'different seeds should not all start the same way');
+  // asking out of order gives the same answers
+  const seq = createSequence(SEED);
+  const namer = createBlockNamer(SIX, SEED, (i) => seq.block(i), 0.4);
+  for (const i of [60, 3, 119, 0, 3]) assert.equal(namer(seq.block(i)), a[i]);
+});
+
+test('createBlockNamer: with a share, sponsors are still treated fairly (equal names, give or take one)', () => {
+  const mixes = [SIX, [S('a', 'Een')], [S('a', 'Een'), S('b', 'Twee')], [...SIX, S('s7', 'Langenaam Wynkelder')]];
+  for (const sponsors of mixes) {
+    for (const seed of [SEED, 'oefen-42', 'oefen-9']) {
+      const counts = new Map(sponsors.map((s) => [s.id, 0]));
+      let named = 0;
+      for (const { name, id } of runShare(sponsors, seed, 600, 0.4)) {
+        if (!name) {
+          assert.equal(id, null);
+          continue;
+        }
+        assert.ok(counts.has(id), 'idAt names a known sponsor');
+        assert.equal(sponsors.find((s) => s.id === id).name, name);
+        counts.set(id, counts.get(id) + 1);
+        named++;
+        const v = [...counts.values()];
+        assert.ok(Math.max(...v) - Math.min(...v) <= 1, `unfair after ${named} names`);
+      }
+      assert.ok(named > 80);
+    }
+  }
+});
+
+test('createBlockNamer: share 0 names nothing, junk share counts as 1, default is every capable block', () => {
+  assert.equal(runShare(SIX, SEED, 80, 0).filter((b) => b.name).length, 0);
+  const all = run(SIX, SEED, 80).map((b) => b.name);
+  assert.deepEqual(runShare(SIX, SEED, 80, undefined).map((b) => b.name), all);
+  assert.deepEqual(runShare(SIX, SEED, 80, Number.NaN).map((b) => b.name), all);
+  assert.deepEqual(runShare(SIX, SEED, 80, 7).map((b) => b.name), all);
+  assert.equal(createBlockNamer([], SEED, null, 0.4).idAt(3), null);
+});
+
+test('the game uses the configured block share', async () => {
+  const { SPONSOR } = await import('../js/sponsorConfig.js');
+  assert.equal(SPONSOR.blockShare, 0.4);
+  const scene = (await import('node:fs')).readFileSync(new URL('../js/scenes/GameScene.js', import.meta.url), 'utf8');
+  assert.match(scene, /SPONSOR\.blockShare/);
+});
+
 test('createBlockNamer: messy sponsors are cleaned and a missing index counts up', () => {
   const namer = createBlockNamer([{ id: 'a', name: '  Netjies  ' }, { id: 'a', name: 'Dubbel' }, { id: 'b', name: 'Tweede' }, null], 7);
   const got = [0, 1, 2, 3].map((i) => namer({ i, shape: 'plank' }));

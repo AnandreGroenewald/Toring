@@ -29,7 +29,7 @@ You need about an hour. Do everything in **test mode** first; nothing real is ch
 5. [Switch the game on](#5-switch-the-game-on)
 6. [Test everything with Paystack test cards](#6-test-everything-with-paystack-test-cards)
 7. [Go live](#7-go-live)
-8. [Everyday tasks](#8-everyday-tasks): add, hide, edit, cancel, refund, the card link
+8. [Everyday tasks](#8-everyday-tasks): add, hide, edit, cancel, refund, the card link, audience counts and the monthly report
 9. [How billing works](#9-how-billing-works)
 10. [Costs](#10-costs)
 11. [Security and privacy](#11-security-and-privacy)
@@ -116,6 +116,8 @@ npx wrangler d1 execute stapel-borge --remote --file=./schema.sql
 
 It's safe to run this again later; it only creates what is missing.
 
+> **Migration note (anonymous audience counts).** If your database already exists from before the audience counts were added, run the very same command again. Because every statement is `CREATE TABLE IF NOT EXISTS`, it only adds the two new tables `stats_daily` and `daily_scores` and leaves everything else untouched. Then `wrangler deploy` the new Worker. Until the tables exist, `POST /stats` and `/score` answer `500` and the game silently ignores that; nothing else is affected.
+
 ### 3.2 Settings (`wrangler.toml` → `[vars]`)
 
 Open `wrangler.toml` and fill in:
@@ -131,6 +133,7 @@ Open `wrangler.toml` and fill in:
 | `PREMIUM_MAX` / `BLOCK_MAX` | How many sponsors at once: `1` billboard and `60` block names |
 | `AUTO_APPROVE` | `true`: clean names go live straight after payment. `false`: you approve each one first on the admin page. |
 | `GRACE_DAYS` | `3`: extra days a sponsor stays visible after the paid month, so a renewal that's a day late doesn't make them disappear. |
+| `RATE_LIMIT_STATS_PER_HOUR` / `RATE_LIMIT_SCORE_PER_HOUR` | Optional. How many anonymous counts (`POST /stats`) and daily-percentile requests (`/score`) one network address may send per hour: `120` and `60` by default. Generous on purpose, because a school or a mobile network can put many players behind one address. |
 | `PAYSTACK_IP_ALLOWLIST` | `false` by default. `true` also checks that webhooks come from Paystack's published IP addresses. The signature check is the main protection either way. |
 
 ### 3.3 Secrets (never in files)
@@ -289,6 +292,27 @@ curl -H "Authorization: Bearer $TOKEN" "$API/admin/events?limit=50"
 
 **Backups:** `npx wrangler d1 export stapel-borge --remote --output=borge-backup.sql`. The file contains sponsors' contact details, so store it safely.
 
+### Audience counts and the monthly report
+
+The game counts, anonymously, how often a sponsor was seen (see section 11 for exactly what and how). Open **`admin.html` → Statistiek**:
+
+1. Pick a period with the quick buttons (**Laaste 30 dae**, **Hierdie maand**, **Vorige maand**) or choose your own dates and press **Wys**.
+2. You get the totals (games finished, names shown on blocks, games with a billboard, menu card views), a table **per day** and a table **per sponsor**.
+3. At the start of a month, press **Vorige maand**, then **Kopieer maandverslag** next to a sponsor. A friendly Afrikaans message is copied (and shown below the tables so you can adjust it): games played, how many times their name was on a block, and for the billboard how many days and games it was on the island. Paste it into an e-mail or WhatsApp.
+
+Good to know:
+
+- Only games that were **finished** are counted; someone who closes the page halfway isn't. The numbers are a good indication, not an audit. Say so to sponsors (the report text already does).
+- Only sponsors the Worker knows (paid sign-ups and manual deals added on the admin page) are counted. The `sportscard.co.za` house ad in `sponsors.json` has no sponsor record, so only its menu views are counted (**Spyskaart**).
+- Someone can send fake counts straight to the API with a script. The Worker limits each address, caps every number and only accepts known sponsors, so the damage is bounded, but treat the numbers as indicative.
+- Counts are kept for about 13 months (400 days) and then deleted by the daily clean-up.
+
+Terminal equivalent:
+
+```sh
+curl -s -H "Authorization: Bearer $TOKEN" "$API/admin/stats?from=2026-10-01&to=2026-10-31"
+```
+
 ## 9. How billing works
 
 - **Sign-up.** The page sends the form to `POST /subscribe`. The Worker checks the name, reserves the slot, stores a *pending* sponsor and the consent record, and asks Paystack for a checkout page. The sponsor pays on Paystack's page, and Paystack turns the plan into a **monthly subscription** on their card.
@@ -314,7 +338,7 @@ curl -H "Authorization: Bearer $TOKEN" "$API/admin/events?limit=50"
 Check current prices on the providers' pages. They change.
 
 - **Cloudflare Workers, free plan:** 100 000 requests per day. Each game start fetches the sponsor list once, and the game also keeps its own 5-minute cache. If Stapel gets more than roughly 100 000 game starts a day, the list request starts failing (the game then falls back to its cached copy and `sponsors.json`). At that point, move to Workers Paid, currently from **US$5 per month**.
-- **Cloudflare D1, free plan:** 5 million rows read and 100 000 rows written per day, and 5 GB of storage. Since September 2026, queries fail once a free daily limit is reached. The Worker keeps the sponsor list in memory for 30 seconds and serves the last good copy if the database is unavailable, so normal use stays far below these limits.
+- **Cloudflare D1, free plan:** 5 million rows read and 100 000 rows written per day, and 5 GB of storage. Every finished game writes about 3 to 6 small counter rows (a Daaglikse Toring result one more), so the free plan covers roughly 15 000 to 30 000 finished games a day. Beyond that the counts start failing quietly (the game ignores it) until the next day. Since September 2026, queries fail once a free daily limit is reached. The Worker keeps the sponsor list in memory for 30 seconds and serves the last good copy if the database is unavailable, so normal use stays far below these limits.
 - **Paystack:** no monthly fee. A fee per successful payment, at the time of writing about **2.9% + R1 per local card payment** (more for international cards), **plus VAT**. Check <https://paystack.com/za/pricing>. On R1 499 that's roughly R44 + VAT per month. Refunds and chargebacks can have their own fees. Payouts go to your bank account.
 
 ## 11. Security and privacy
@@ -326,6 +350,7 @@ Check current prices on the providers' pages. They change.
 - **Public data:** `GET /sponsors` returns only names, taglines and website addresses of live sponsors. It never returns e-mails, phone numbers or Paystack details.
 - **Card details** never touch this server. Paystack's checkout handles them. Stored webhook copies have card and IP details removed.
 - **POPIA:** the server stores the business name, contact name, e-mail, phone number and a consent record. The consent record holds the terms and privacy versions, the time, and a keyed hash of the IP address, never the IP itself. Retention is described in section 9. Mention Cloudflare (hosting) and Paystack (payments) as operators in `privaatheid.html`.
+- **Anonymous audience counts (`POST /stats`, `POST /score`).** When a game ends, the game sends one small message: the date, daily or practice, how many times each sponsor's name was on a block the player dropped, which sponsor's billboard stood on the island, and whether the menu card was shown. The Worker validates and clamps it (known live sponsor ids only, at most 60 per sponsor, 4 KB, date within a day of today) and only **adds to totals** in `stats_daily` (per day, metric and sponsor). A Daaglikse Toring result adds one to a 0,5 m bucket in `daily_scores`, which is how the "beter as 72% van spelers" line is worked out. No IP address, name, device id, cookie, timestamp or per-player row is stored anywhere. To limit abuse, an address is hashed with your secret and the **date** (so the hash changes every day and can't be followed across days), held only in the Worker's memory for at most an hour and never written to the database or the logs. Counts older than about 13 months are deleted.
 - **Names are checked before payment.** The filter blocks swear words and slurs (English and Afrikaans, including tricks like `sh1t` or look-alike letters), web addresses, e-mail addresses, phone numbers, and names that pretend to be Stapel, admin or Paystack. Nobody pays for a name that won't be shown. You can still hide anything later.
 - **Content rules** come from the terms, not the code: no illegal goods, unlawful gambling, alcohol, tobacco or vaping (minors play the game), adult content, political or religious campaigning, or hateful or misleading content. Check new sponsors on the admin page, or set `AUTO_APPROVE` to `false` to approve each one yourself.
 
@@ -350,6 +375,9 @@ All endpoints answer JSON. Errors look like `{ "error": "<code>", "field"?: "<fi
 | `GET /availability` | anyone (CORS `*`) | `{ premium: { available }, block: { available } }` |
 | `POST /subscribe` | site origins | Body: `{ tier, name, tagline?, url?, contactName, email, phone?, acceptTerms: true, acceptPrivacy: true, termsVersion, privacyVersion, website: "" }`. Returns `{ url, reference, sponsorId, name, needsApproval }`, where `name` is the cleaned name. |
 | `GET /status?sponsor=&reference=` | site origins | `{ status: "active" \| "pending" \| "failed" \| "ended", tier, name, needsApproval, liveFrom, paidUntil }`. `trxref` is accepted instead of `reference`. |
+| `POST /stats` | site origins | One finished game, anonymous: `{ dateKey, mode: "daily" \| "practice", blocks: { <sponsorId>: n }, billboard: <sponsorId> \| null, menu: bool }`. Body at most 4 KB, `application/json` or `text/plain` (that is what `sendBeacon` sends). Unknown sponsor ids are ignored, `n` is capped at 60, `dateKey` must be within a day of the server's date. Returns `{ ok: true }`. Rate limit: `RATE_LIMIT_STATS_PER_HOUR` per network address (`429`). |
+| `POST /score` | site origins | A Daaglikse Toring result: `{ dateKey, dayNumber, heightM }` (`dayNumber` must match `dateKey`; `heightM` is clamped to 0 to 1000). Returns `{ percentile, players }`: the share (rounded) of the *other* players' results that are strictly below yours, ties counting half; `percentile` is `null` when you are the only one. Rate limit: `RATE_LIMIT_SCORE_PER_HOUR`. |
+| `GET /score?dateKey=&heightM=` | site origins | The same answer without adding anything (for revisiting the results). |
 | `POST /paystack/webhook` | Paystack only | Needs a valid `x-paystack-signature`. |
 | `GET /admin/sponsors` | admin | `{ sponsors: [ {…all columns, live} ], now }` |
 | `POST /admin/sponsors` | admin | `{ tier, name, paid_until, tagline?, url?, email?, contact_name?, phone?, notes?, approved?, hidden? }` returns `201 { sponsor }` |
@@ -358,6 +386,7 @@ All endpoints answer JSON. Errors look like `{ "error": "<code>", "field"?: "<fi
 | `POST /admin/sponsors/:id/cancel` | admin | Optional body `{ immediate: true }`. Returns `{ ok, sponsor }`. |
 | `POST /admin/sponsors/:id/manage-link` | admin | `{ link }`, or `409 no_subscription` |
 | `GET /admin/payments?limit=` | admin | `{ payments: [{ reference, sponsor_id, amount, currency, paid_at, source, sponsor_name, sponsor_tier }] }` |
+| `GET /admin/stats?from=&to=` | admin | `YYYY-MM-DD`, default the last 30 days, at most 400 days. `{ from, to, totals: { gamesDaily, gamesPractice, games, blockShows, billboardGames, menuViews }, days: [{ dateKey, …same }], sponsors: [{ id, name, tier, blockShows, billboardGames, blockDays, billboardDays }] }`. `400 invalid_range` for a bad period. |
 | `GET /admin/events?limit=` | admin | `{ events: [{ id, type, received_at, handled, sponsor_id, note, payload }] }` |
 
 Dates are Unix milliseconds. `paid_until` in admin requests may also be `"YYYY-MM-DD"`, meaning the end of that day in South African time.
@@ -376,7 +405,8 @@ Dates are Unix milliseconds. `paid_until` in admin requests may also be `"YYYY-M
 | `forbidden_origin` | Request from a website not in `ALLOWED_ORIGINS` |
 | `premium_taken` | The billboard is booked (409) |
 | `block_full` | All block slots are taken (409) |
-| `rate_limited` | Too many sign-ups from this e-mail address or network, or in total, in the last hour (429) |
+| `rate_limited` | Too many sign-ups from this e-mail address or network, or in total, in the last hour (429). Also for too many `/stats` or `/score` requests from one network address. |
+| `invalid_range` | `GET /admin/stats` got a bad or too long period (400) |
 | `payment_init_failed` | Paystack couldn't start the checkout (502). Nothing was charged. |
 | `sales_disabled` | That package isn't set up on the server (503) |
 | `not_found` | Unknown sponsor/reference, or unknown path (404) |
@@ -412,9 +442,10 @@ Code map:
 | `src/billing.js` | Applying a payment to a sponsor (shared by the webhook and `/status`) |
 | `src/entitlement.js` | The "who is live" rule and the paid-until calculation |
 | `src/admin.js` | Owner endpoints |
+| `src/stats.js` | Anonymous audience counts (`/stats`), the daily percentile (`/score`), the in-memory rate limiter and `GET /admin/stats`. It imports `js/core/daily.js` for the date rules, so deploy from a full checkout. |
 | `src/moderation.js` | Name, tagline and website rules. It re-exports `js/core/nameRules.js` (one copy, shared with the sign-up page and the game; `wrangler deploy` bundles it into the Worker, so always deploy from a full checkout of the repository) |
 | `src/validate.js` | Request validation |
 | `src/paystack.js` | Paystack API client |
 | `src/db.js` | All SQL |
 | `src/retention.js` | Daily clean-up |
-| `schema.sql` | D1 tables and indexes |
+| `schema.sql` | D1 tables and indexes (run it again after an update; see the migration note in 3.1) |

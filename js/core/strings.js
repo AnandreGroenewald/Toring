@@ -129,6 +129,8 @@ export const S = {
   advertiseHere: 'Adverteer hier',
   boardFree: 'Jou advertensie hier!',
   boardFreeSub: 'Adverteer op Stapel',
+  // results card: how today's tower compares with the other players (never in the WhatsApp text)
+  percentileBetter: (n) => `Jy het beter gedoen as ${n}% van spelers vandag`,
 };
 
 /** Weather display info. Keys match WEATHER_TYPES in config.js. */

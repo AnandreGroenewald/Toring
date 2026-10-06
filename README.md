@@ -45,10 +45,12 @@ All URLs are relative, so it also works from any other static host or sub-path. 
 
 Stapel stays free and is funded by monthly sponsorships, sold on `adverteer.html`:
 
-- **Jou naam op die blokke** (name on the blocks): the business name is printed on blocks in every tower, daily and practice. Sponsors take turns in a fixed order per tower, so each gets a fair share. Cubes never carry a name, and pillars only carry short ones.
+- **Jou naam op die blokke** (name on the blocks): the business name is printed on blocks in every tower, daily and practice. About every 2nd or 3rd name-capable block carries a name (`SPONSOR.blockShare`, 0.4); sponsors take turns in a fixed order per tower, so each gets a fair share. Cubes never carry a name, and pillars only carry short ones.
 - **Die groot advertensiebord** (the billboard, R1 499 per month): one sponsor's name, tagline and web address on a sign on the island beside the tower. It is seen at the start of every game and in the zoomed-out tower view at the end.
 
 The menu also has a pinned card for the owner's own business, sportscard.co.za, labelled "Advertensie". Its text lives in `sponsors.json`, which can also hold sponsors arranged by hand. The WhatsApp share text never mentions sponsors.
+
+With the backend on, the game also sends **anonymous counts** when a game ends (how often each sponsor's name was on a block, whose billboard stood on the island, daily or practice; never anything about the player) so sponsors can get a monthly report from `admin.html` (Statistiek tab), and the daily results card says how the player did against everyone else that day. See `server/README.md` and `privaatheid.html`. Nothing is sent while `SPONSOR_API_URL` is empty.
 
 Sales are off until the backend is running. To switch them on, follow `server/README.md` (Paystack plans, then the Cloudflare Worker and D1 setup), then set `SPONSOR_API_URL` in `js/sponsorConfig.js`. That one value turns on the "Adverteer hier" link on the menu, the sign-up form and the "Jou advertensie hier!" text on an empty billboard. Until then the billboard shows the Stapel logo.
 
@@ -70,6 +72,7 @@ js/core/              pure logic: seeded RNG, daily date/seed, block & weather s
                       storage/streaks, share text, Afrikaans strings, formatting, event bus
 js/game/              blocks, crane, water, island, weather, effects
 js/scenes/            BgScene (sky, Tafelberg, clouds), GameScene (core loop), HudScene
+js/audience.js        anonymous counts + daily percentile (network side; only with SPONSOR_API_URL)
 js/ui/dom.js          menu, how-to, stats, pause and results overlays
 sw.js, manifest.webmanifest, icons/   offline support and home-screen install
 tests/                node unit tests for the core logic

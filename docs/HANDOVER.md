@@ -59,9 +59,17 @@ Later the owner added (decisions are final unless they say otherwise):
 ### Sponsorship system: built, needs its review pass (T4)
 - **T2 done:** `js/core/sponsors.js` (pure logic), `js/sponsorsFeed.js` (feed loader with a 5-minute/7-day localStorage cache), `sponsors.json` (the sportscard.co.za house ad) and `tests/sponsors.test.js`. The name rules live in one shared file, `js/core/nameRules.js`, which the Worker (`server/src/moderation.js` re-exports it), the sign-up page and the game all use, so `wrangler deploy` must run from a full repo checkout. `adverteer.html` works now.
 - **T3 done:** `terme.html` and `privaatheid.html` are Afrikaans templates with `[[placeholders]]`, the template banner and "Nota vir die eienaar" notes. Both are version `2026-10-06`, matching `js/sponsorConfig.js`. The owner must check the Information Regulator's address and email, and a lawyer must confirm the ECT Act s44 cooling-off wording.
-- **T5 done:** in-game sponsorship. Sponsor names are drawn into the block textures; the cache is bounded and named textures are dropped at game end. The island billboard sits right of the base and floats up with the flood, so the reveal always shows it. The menu has the pinned sportscard.co.za card and, only when sales are on, an "Adverteer hier" link. The feed loads in the background and never delays startup. Everything new is precached, and the version is now `1.1.0`. The README has a sponsorship section.
-- Tests: **`npm test` 126/126** and **`cd server && npm test` 92/92** pass (run `npm install` in `server/` first for the miniflare smoke test). Headless checks at 412×915 had zero console errors, covering the menu, a practice game with a test feed (names and billboard), the reveal, no sponsors, and sales on with an empty billboard. The game payload is about 1.8 MB.
-- Not yet reviewed: the server (security, payment edge cases), `admin.html`, and the UX and legal wording (T4). The server does not auto-delete ended sponsors' contact data; the owner removes it on the admin page.
+- **T5 done:** in-game sponsorship. Sponsor names are drawn into the block textures; the cache is bounded and named textures are dropped at game end. The island billboard sits right of the base and floats up with the flood, so the reveal always shows it. The menu has the pinned sportscard.co.za card and, only when sales are on, an "Adverteer hier" link. The feed loads in the background and never delays startup. Everything new is precached. The README has a sponsorship section.
+- Tests (before the audience stats below): **`npm test` 126/126** and **`cd server && npm test` 92/92** pass (run `npm install` in `server/` first for the miniflare smoke test). Headless checks at 412×915 had zero console errors, covering the menu, a practice game with a test feed (names and billboard), the reveal, no sponsors, and sales on with an empty billboard. The game payload is about 1.8 MB.
+- **Audience stats and percentile (done, version `1.2.0`):**
+  - Fewer sponsor names: `SPONSOR.blockShare` is now `0.4`; `createBlockNamer(..., share)` names every 2nd or 3rd name-capable block (even spread, seed-dependent start, sponsors still equal give or take one) and has `idAt(i)`.
+  - `js/core/audience.js` (tally, batch builder, percentile line, needs 10+ players) and `js/audience.js` (sendBeacon with fetch keepalive fallback, one POST /score per day per device with a `<storage key>.score` flag, GET on revisits). Nothing happens without `SPONSOR_API_URL`; debug sessions only send with `?audience=1`.
+  - GameScene counts names on dropped blocks and emits `game:audience` at game end; main.js sends one batch per finished game (the menu card is reported with the first game of a visit); the results card shows "Jy het beter gedoen as 72% van spelers vandag" (hidden for 0% and under 10 players, never in the WhatsApp text).
+  - Worker (`server/src/stats.js`): `POST /stats`, `POST /score`, `GET /score`, `GET /admin/stats`; tables `stats_daily` and `daily_scores` (re-run `schema.sql`, see the migration note in `server/README.md`); the per-address rate limit is in memory only (hash with a daily-rotating salt, no IP stored); counts older than 400 days are deleted by the cron.
+  - `admin.html` has a **Statistiek** tab (period presets or dates, totals, per day, per sponsor) and "Kopieer maandverslag" per sponsor (`js/pages/statsReport.js`).
+  - `privaatheid.html` (new subsection "Anonieme tellings", retention 13 months) and `adverteer.html` (monthly report promise, names on about every 2nd-3rd block) updated. The privacy version date was deliberately **not** bumped because sales are still off, so no sponsor has accepted it yet; bump `privacyVersion` (config and page) together if any sponsor has signed up by the time you change the text again.
+  - Tests: root **153/153**, server **115 pass + 1 skipped** (the workerd smoke test can't start in this container). Headless check with a mocked API: percentile line on results (412×915 and 360×640), revisit uses GET, one `/stats` beacon with the right tally, admin Statistiek with mock data, zero console errors.
+- Not yet reviewed: the server (security, payment edge cases), `admin.html` (incl. the Statistiek tab), the new `/stats` and `/score` endpoints (abuse, D1 write cost) and the UX and legal wording (T4). The server does not auto-delete ended sponsors' contact data; the owner removes it on the admin page.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
@@ -75,12 +83,14 @@ Each step should end green (`npm test`, `cd server && npm test`, a headless play
   - Restart scenes 6+ times and check for leaks.
   - Test under a sub-path: serve `/home/user` and open `/Toring/`.
   - The prompt for this pass is the `qa` agent in `docs/workflows/2-review-fix-qa.js`.
+  - With a mocked API (`page.route` on `js/sponsorConfig.js` and the API host), also check the daily percentile line on the results card and that a revisit uses GET.
   - Include the T5 sponsor features in those games: names on blocks, the billboard (it floats with the flood) and the menu card. A test feed can be injected with Playwright's `page.route('**/sponsors.json', ...)`.
 - ~~T2. Core sponsor logic~~ **Done** (see section 2).
 - ~~T3. Legal templates~~ **Done** (see section 2). The owner fills in the placeholders.
 - **T4. Sponsor reviews and fixes:**
   - security (forged or replayed webhooks, activating without paying, moderation bypass with unicode, admin token, XSS, CORS)
   - payment state machine (renewals when one email has several sponsorships, missed webhooks, refunds and chargebacks, premium-slot races, month arithmetic)
+  - the new anonymous `/stats` and `/score` endpoints: counter inflation by scripts, rate-limit behaviour behind shared addresses, D1 write usage, and that the privacy wording matches what is really stored
   - UX, Afrikaans and legal completeness
   - The prompts are in `docs/workflows/3-sponsors-backend.js` (Review and Fix phases).
 - ~~T5. In-game sponsor integration~~ **Done** (see section 2). It also reworded the code comments that named other games and added the README section.

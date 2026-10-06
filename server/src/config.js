@@ -71,6 +71,10 @@ export function loadConfig(env) {
       emailPerHour: int(e.RATE_LIMIT_EMAIL_PER_HOUR, 5, 1),
       ipPerHour: int(e.RATE_LIMIT_IP_PER_HOUR, 10, 1),
       globalPerHour: int(e.RATE_LIMIT_GLOBAL_PER_HOUR, 200, 1),
+      // Anonymous audience counts, per hashed address and hour. Generous: a school or a mobile
+      // network can put many players behind one address.
+      statsPerHour: int(e.RATE_LIMIT_STATS_PER_HOUR, 120, 1),
+      scorePerHour: int(e.RATE_LIMIT_SCORE_PER_HOUR, 60, 1),
     },
     ipSalt: str(e.IP_HASH_SALT) || adminToken || 'stapel',
   };

@@ -61,6 +61,7 @@
         <button type="button" class="tab" role="tab" id="t-sponsors" aria-controls="p-sponsors" aria-selected="true">Borge</button>
         <button type="button" class="tab" role="tab" id="t-add" aria-controls="p-add" aria-selected="false" tabindex="-1">Voeg by</button>
         <button type="button" class="tab" role="tab" id="t-payments" aria-controls="p-payments" aria-selected="false" tabindex="-1">Betalings</button>
+        <button type="button" class="tab" role="tab" id="t-stats" aria-controls="p-stats" aria-selected="false" tabindex="-1">Statistiek</button>
         <button type="button" class="tab" role="tab" id="t-events" aria-controls="p-events" aria-selected="false" tabindex="-1">Webhook-gebeure</button>
       </div>
 
@@ -125,6 +126,25 @@
       <section class="card panel-card" role="tabpanel" id="p-payments" aria-labelledby="t-payments" tabindex="-1" hidden>
         <div class="panel-title"><h2>Betalings</h2></div>
         <div id="payments-box"></div>
+      </section>
+
+      <section class="card panel-card" role="tabpanel" id="p-stats" aria-labelledby="t-stats" tabindex="-1" hidden>
+        <div class="panel-title"><h2>Statistiek</h2></div>
+        <p class="hint">Anonieme tellings van speletjies wat klaargespeel is: net totale, niks oor individuele spelers nie. Gebruik dit vir die maandverslag aan jou borge.</p>
+        <div class="filters stats-presets" id="stats-presets" aria-label="Vinnige tydperke"></div>
+        <form class="stats-range" id="stats-form" novalidate>
+          <div class="field">
+            <label for="s-from">Van</label>
+            <input class="input" id="s-from" name="from" type="date" required>
+          </div>
+          <div class="field">
+            <label for="s-to">Tot</label>
+            <input class="input" id="s-to" name="to" type="date" required>
+          </div>
+          <button type="submit" class="btn btn-green btn-small" id="stats-go"><span class="btn-label">Wys</span></button>
+        </form>
+        <div class="alert" id="stats-alert" role="alert" tabindex="-1" hidden></div>
+        <div id="stats-box"></div>
       </section>
 
       <section class="card panel-card" role="tabpanel" id="p-events" aria-labelledby="t-events" tabindex="-1" hidden>

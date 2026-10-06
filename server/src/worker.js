@@ -6,6 +6,7 @@ import { HttpError, corsHeaders, errorResponse, json, preflight, withHeaders } f
 import { createPaystack } from './paystack.js';
 import { getAvailability, getSponsorsFeed, status, subscribe } from './public.js';
 import { runRetention } from './retention.js';
+import * as stats from './stats.js';
 import { handleWebhook } from './webhook.js';
 
 const FEED_TTL_MS = { '/sponsors': 30_000, '/availability': 15_000 };
@@ -37,6 +38,8 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
   // D1 reads low; writes in this isolate mark it stale, other isolates catch up within the TTL.
   const feedCache = new Map();
   const planCache = new Map();
+  // Rate limits for the anonymous counts live in memory only (see stats.js).
+  const rate = stats.createRateLimiter();
   // Mark stale rather than delete, so a stale copy is still there if D1 fails right after.
   const invalidate = () => {
     for (const entry of feedCache.values()) entry.at = -Infinity;
@@ -69,6 +72,15 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
       const body = await cachedFeed(path, ctx, path === '/sponsors' ? getSponsorsFeed : getAvailability);
       return json(200, body, { 'Cache-Control': BROWSER_CACHE[path] });
     }
+    if (path === '/stats') {
+      if (method !== 'POST') return methodNotAllowed('POST');
+      const feed = await cachedFeed('/sponsors', ctx, getSponsorsFeed);
+      return stats.postStats(request, ctx, new Set([...feed.block, ...feed.premium].map((s) => s.id)));
+    }
+    if (path === '/score') {
+      if (method === 'POST') return stats.postScore(request, ctx);
+      return method === 'GET' ? stats.getScore(request, url, ctx) : methodNotAllowed('GET, POST');
+    }
     if (path === '/subscribe') return method === 'POST' ? subscribe(request, ctx) : methodNotAllowed('POST');
     if (path === '/status') return method === 'GET' ? status(url, ctx) : methodNotAllowed('GET');
     if (path === '/paystack/webhook') return method === 'POST' ? handleWebhook(request, ctx) : methodNotAllowed('POST');
@@ -86,6 +98,7 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
       return methodNotAllowed('GET, POST');
     }
     if (path === '/admin/payments') return method === 'GET' ? admin.listPayments(url, ctx) : methodNotAllowed('GET');
+    if (path === '/admin/stats') return method === 'GET' ? stats.adminStats(url, ctx) : methodNotAllowed('GET');
     if (path === '/admin/events') return method === 'GET' ? admin.listEvents(url, ctx) : methodNotAllowed('GET');
     const m = /^\/admin\/sponsors\/([^/]+)(?:\/(cancel|manage-link))?$/.exec(path);
     if (m) {
@@ -121,6 +134,7 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
         log,
         invalidate,
         planCache,
+        rate,
         paystack: createPaystack({
           secretKey: cfg.paystackSecret,
           fetch: fetchImpl,

@@ -22,7 +22,7 @@ export const SPONSOR = {
   // Shown on adverteer.html. Must match the Paystack plan for the premium tier.
   // (The block tier's price is deliberately never shown on the site.)
   premiumPriceLabel: 'R1 499 per maand',
-  blockShare: 1,
+  blockShare: 0.4,
   maxNameLen: 22,
   maxTaglineLen: 40,
 };

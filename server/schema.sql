@@ -78,3 +78,24 @@ CREATE TABLE IF NOT EXISTS consents (
 
 CREATE INDEX IF NOT EXISTS idx_consents_sponsor ON consents (sponsor_id);
 CREATE INDEX IF NOT EXISTS idx_consents_ip ON consents (ip_hash, accepted_at);
+
+-- Anonymous audience counts (POST /stats). One row per day, metric and sponsor; only totals,
+-- never anything about a person or a device. sponsor_id is '' for metrics that belong to nobody.
+-- metric: games_daily | games_practice | block_shows | billboard_games | menu_views
+-- Rows older than 13 months are deleted by the daily housekeeping.
+CREATE TABLE IF NOT EXISTS stats_daily (
+  date_key TEXT NOT NULL,
+  metric TEXT NOT NULL,
+  sponsor_id TEXT NOT NULL DEFAULT '',
+  count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (date_key, metric, sponsor_id)
+);
+
+-- Histogram of the Daaglikse Toring results (POST /score): one counter per day and 0.5 m bucket.
+-- No player, device or time of day is stored, only "this many results landed in this bucket".
+CREATE TABLE IF NOT EXISTS daily_scores (
+  date_key TEXT NOT NULL,
+  bucket INTEGER NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (date_key, bucket)
+);

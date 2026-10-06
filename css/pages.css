@@ -1124,6 +1124,18 @@ body.page-admin { --page-max: 1180px; }
 
 .empty { padding: 26px 10px; text-align: center; color: var(--muted); font-weight: 800; }
 
+/* Statistiek tab */
+.stats-range { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; margin-bottom: 16px; }
+.stats-range .field { margin-bottom: 0; flex: 1 1 150px; }
+.stats-range .btn { flex: 0 0 auto; min-width: 120px; margin-bottom: 2px; }
+.stats-presets { margin-top: 10px; }
+.stats-period { margin-bottom: 12px; }
+.stats-caption { margin: 22px 0 8px; font-size: 18px; font-weight: 900; text-align: left; caption-side: top; }
+.dtable tfoot td { border-top: 3px solid var(--line); font-weight: 800; }
+.report-btn { white-space: nowrap; }
+.report-box { margin-top: 24px; }
+.report-text { width: 100%; min-height: 220px; font-family: inherit; font-size: 15px; line-height: 1.5; resize: vertical; }
+
 /* responsive data table: rows become cards on phones */
 .dtable { width: 100%; border-collapse: collapse; font-size: 15px; }
 .dtable th {

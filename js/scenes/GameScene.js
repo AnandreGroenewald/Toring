@@ -12,6 +12,8 @@ import { audio, haptics } from '../audio.js';
 import { Block, ensureTexture, getGeometry, releaseNamedTextures } from '../game/blocks.js';
 import { createBillboard, BILLBOARD_LEFT } from '../game/billboard.js';
 import { createBlockNamer } from '../core/sponsors.js';
+import { createTally, tallyShow } from '../core/audience.js';
+import { SPONSOR } from '../sponsorConfig.js';
 import { Weather } from '../game/weather.js';
 import { Crane } from '../game/crane.js';
 import { Water } from '../game/water.js';
@@ -271,6 +273,8 @@ export class GameScene extends Phaser.Scene {
     this.curSpec = null;
     this.curGeom = null;
     this.curName = null;
+    this.curNameId = null;
+    this.tally = createTally();   // names shown on dropped blocks, per sponsor (sent once at game end)
     this.curKey = null;
     this.nextSpec = null;
     this.falling = null;
@@ -594,6 +598,7 @@ export class GameScene extends Phaser.Scene {
     // a sponsor's name is printed on the block (same texture on the crane, falling and in the
     // tower); the ghost below tints it into a plain silhouette
     this.curName = this.nameFor(spec);
+    this.curNameId = this.curName ? (this.namer?.idAt?.(spec.i) ?? null) : null;
     const key = ensureTexture(this, spec, this.curName);
     this.curKey = key;
     this.crane.setBlock(spec, key, this.curGeom);
@@ -612,7 +617,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.sponsorBlock.length) return null;
     const seq = this.sequence;
     try {
-      return createBlockNamer(this.sponsorBlock, seq.seed ?? this.seed, (i) => seq.block(i));
+      return createBlockNamer(this.sponsorBlock, seq.seed ?? this.seed, (i) => seq.block(i), SPONSOR.blockShare);
     } catch {
       return null;
     }
@@ -678,6 +683,8 @@ export class GameScene extends Phaser.Scene {
     this.stepCtx.falling = block;
     this.active.push(block);
     this.blocksDropped++;
+    // audience count: a name that was really on a block the player let go of (js/core/audience.js)
+    if (!this.idle && this.curNameId) tallyShow(this.tally, this.curNameId);
     this.setGhostVisible(false);
 
     if (!this.idle) {
@@ -1760,6 +1767,13 @@ export class GameScene extends Phaser.Scene {
     bus.emit('hud:hint', { text: null });
     const result = this.buildResult(reason);
     this.result = result;
+    bus.emit('game:audience', {
+      mode: this.mode,
+      dateKey: this.dateKey,
+      tally: this.tally,
+      billboardId: this.billboardData?.premium?.id ?? null,
+      blocksDropped: result.blocksDropped,
+    });
     // Saved right away; the delayed 'game:over' only brings up the results screen.
     bus.emit('game:final', result);
     bus.emit('hud:hide', { heightM: result.heightM, reason });

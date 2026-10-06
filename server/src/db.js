@@ -244,7 +244,54 @@ export function deleteSponsor(db, id) {
 
 // ---------------------------------------------------------------- retention
 
-export async function runRetentionQueries(db, { now, pendingBefore, scrubBefore, payloadBefore, eventsBefore }) {
+// ---------------------------------------------------------------- anonymous audience counts
+
+/** Adds to the daily counters. `items`: [{ dateKey, metric, sponsorId, n }]. One atomic batch. */
+export async function addStats(db, items) {
+  if (!items.length) return;
+  const stmt = db.prepare(`INSERT INTO stats_daily (date_key, metric, sponsor_id, count) VALUES (?1, ?2, ?3, ?4)
+      ON CONFLICT (date_key, metric, sponsor_id) DO UPDATE SET count = count + excluded.count`);
+  await db.batch(items.map((i) => stmt.bind(i.dateKey, i.metric, i.sponsorId || '', i.n)));
+}
+
+/** Rows of stats_daily for the days from..to (inclusive), oldest first. */
+export function statsBetween(db, from, to) {
+  return rows(db.prepare(`SELECT date_key, metric, sponsor_id, count FROM stats_daily
+      WHERE date_key >= ?1 AND date_key <= ?2 ORDER BY date_key, metric, sponsor_id`).bind(from, to));
+}
+
+/** Names of sponsors by id (ended ones too, so old reports still say who it was). */
+export async function sponsorNames(db, ids) {
+  if (!ids.length) return [];
+  const marks = ids.map((_, i) => `?${i + 1}`).join(',');
+  return rows(db.prepare(`SELECT id, name, tier FROM sponsors WHERE id IN (${marks})`).bind(...ids));
+}
+
+const SCORE_SUMMARY = `SELECT COALESCE(SUM(count), 0) AS players,
+    COALESCE(SUM(CASE WHEN bucket < ?2 THEN count ELSE 0 END), 0) AS below,
+    COALESCE(SUM(CASE WHEN bucket = ?2 THEN count ELSE 0 END), 0) AS same
+  FROM daily_scores WHERE date_key = ?1`;
+
+/** Adds one result to the histogram and reads the summary in the same atomic batch. */
+export async function addScore(db, dateKey, bucket) {
+  const out = await db.batch([
+    db.prepare(`INSERT INTO daily_scores (date_key, bucket, count) VALUES (?1, ?2, 1)
+        ON CONFLICT (date_key, bucket) DO UPDATE SET count = count + 1`).bind(dateKey, bucket),
+    db.prepare(SCORE_SUMMARY).bind(dateKey, bucket),
+  ]);
+  return summary(out[1]?.results?.[0]);
+}
+
+/** { players, below, same } for a bucket without adding anything. */
+export async function scoreSummary(db, dateKey, bucket) {
+  return summary(await db.prepare(SCORE_SUMMARY).bind(dateKey, bucket).first());
+}
+
+function summary(row) {
+  return { players: Number(row?.players) || 0, below: Number(row?.below) || 0, same: Number(row?.same) || 0 };
+}
+
+export async function runRetentionQueries(db, { now, pendingBefore, scrubBefore, payloadBefore, eventsBefore, statsBefore }) {
   const results = await db.batch([
     db.prepare(`UPDATE sponsors SET status = 'abandoned', updated_at = ?1
         WHERE status = 'pending' AND created_at < ?2`).bind(now, pendingBefore),
@@ -261,6 +308,8 @@ export async function runRetentionQueries(db, { now, pendingBefore, scrubBefore,
     db.prepare('UPDATE webhook_events SET payload = NULL WHERE payload IS NOT NULL AND received_at < ?1')
       .bind(payloadBefore),
     db.prepare('DELETE FROM webhook_events WHERE received_at < ?1').bind(eventsBefore),
+    db.prepare('DELETE FROM stats_daily WHERE date_key < ?1').bind(statsBefore),
+    db.prepare('DELETE FROM daily_scores WHERE date_key < ?1').bind(statsBefore),
   ]);
   const changes = results.map((r) => Number(r?.meta?.changes ?? 0));
   return {
@@ -269,5 +318,6 @@ export async function runRetentionQueries(db, { now, pendingBefore, scrubBefore,
     ended: changes[3],
     payloadsPruned: changes[4],
     eventsDeleted: changes[5],
+    statsDeleted: changes[6] + changes[7],
   };
 }

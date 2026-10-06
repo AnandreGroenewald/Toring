@@ -8,6 +8,7 @@ export const RETENTION = {
   scrubDays: 30, // abandoned -> contact details removed
   payloadDays: 90, // webhook payload copies removed
   eventDays: 400, // webhook log rows removed (payments are kept for accounting)
+  statsDays: 400, // anonymous audience counts and score histograms (about 13 months)
 };
 
 export function runRetention(database, now) {
@@ -17,5 +18,6 @@ export function runRetention(database, now) {
     scrubBefore: now - RETENTION.scrubDays * DAY_MS,
     payloadBefore: now - RETENTION.payloadDays * DAY_MS,
     eventsBefore: now - RETENTION.eventDays * DAY_MS,
+    statsBefore: new Date(now - RETENTION.statsDays * DAY_MS).toISOString().slice(0, 10),
   });
 }

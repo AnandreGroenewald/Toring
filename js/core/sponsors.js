@@ -231,6 +231,12 @@ export function canNameShape(shape, name) {
  * them in turn: over any prefix of the tower every sponsor has been given the same number of
  * names, give or take one. A pillar takes the next name only if it is short enough to fit.
  *
+ * `share` (0 to 1, default 1; the game passes SPONSOR.blockShare) is the fraction of the name-capable
+ * blocks that actually get a name, spread evenly (0.4 = about every 2nd or 3rd one). The starting
+ * phase comes from the seed, so towers differ, but the pattern is identical for every player of
+ * the same tower, and the turn-taking above is unchanged: names are handed out only to the blocks
+ * that carry one, so the sponsors still get the same number of names, give or take one.
+ *
  * The answer for a block never depends on which blocks were asked about before it (it is memoised
  * by block number), provided the namer can see the shapes of the blocks before it:
  *   - pass `blockAt` (e.g. `(i) => sequence.block(i)`), or
@@ -240,9 +246,11 @@ export function canNameShape(shape, name) {
  * @param {{id: string, name: string}[]} block  the live block sponsors
  * @param {string|number} seed                   the tower's seed (the same one the sequence uses)
  * @param {(i: number) => {shape: string}} [blockAt]
- * @returns {(spec: {i: number, shape: string}) => string|null}  null: no name on this block
+ * @param {number} [share]                       fraction of name-capable blocks that carry a name
+ * @returns {((spec: {i: number, shape: string}) => string|null) & {idAt: (i: number) => string|null}}
+ *          null: no name on this block; `idAt(i)` is the sponsor behind the name on block i (null: none)
  */
-export function createBlockNamer(block, seed, blockAt = null) {
+export function createBlockNamer(block, seed, blockAt = null, share = 1) {
   const seen = new Set();
   const list = asList(block)
     .map(cleanBlock)
@@ -252,17 +260,23 @@ export function createBlockNamer(block, seed, blockAt = null) {
       return true;
     })
     .sort(byId);
-  if (!list.length) return () => null;
+  if (!list.length) return Object.assign(() => null, { idAt: () => null });
 
+  const rate = Number.isFinite(share) ? Math.min(1, Math.max(0, share)) : 1;
   const rng = createRng(seed).fork('sponsors');
   for (let k = list.length - 1; k > 0; k--) {
     const j = Math.floor(rng.next() * (k + 1));
     [list[k], list[j]] = [list[j], list[k]];
   }
   const names = list.map((s) => s.name);
+  const ids = list.map((s) => s.id);
+  // Evenly spread picks: every name-capable block adds `rate` to a running sum and takes a name
+  // whenever it reaches 1. The seed only decides where in the cycle the tower starts.
+  let phase = rate < 1 ? createRng(seed).fork('sponsors-share').next() : 0;
 
   const shapes = []; // shape per block number, as far as it has been seen
   const named = []; // memo: name or null per block number, always filled as a prefix
+  const namedId = []; // the sponsor behind each name
   let turn = 0; // whose turn it is
   let nextAuto = 0;
 
@@ -282,16 +296,21 @@ export function createBlockNamer(block, seed, blockAt = null) {
     while (named.length <= i) {
       const shape = shapeOf(named.length);
       const name = names[turn % names.length];
+      let take = false;
       if (canNameShape(shape, name)) {
-        named.push(name);
-        turn++;
-      } else {
-        named.push(null);
+        phase += rate;
+        if (phase >= 1 - 1e-9) {
+          phase -= 1;
+          take = true;
+        }
       }
+      named.push(take ? name : null);
+      namedId.push(take ? ids[turn % ids.length] : null);
+      if (take) turn++;
     }
   }
 
-  return (spec) => {
+  const namer = (spec) => {
     if (!isObj(spec)) return null;
     const given = spec.i ?? spec.index;
     const i = Number.isInteger(given) && given >= 0 ? given : nextAuto;
@@ -300,4 +319,6 @@ export function createBlockNamer(block, seed, blockAt = null) {
     fillUpTo(i);
     return named[i];
   };
+  namer.idAt = (i) => (Number.isInteger(i) && i >= 0 && i < namedId.length ? namedId[i] : null);
+  return namer;
 }

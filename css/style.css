@@ -947,6 +947,25 @@ svg.ic {
   text-shadow: 0 calc(6 * var(--u)) 0 #e3ecf7;
 }
 .res-time { margin-top: calc(12 * var(--u)); font-size: calc(22 * var(--u)); font-weight: 800; color: var(--muted); }
+/* how today's tower compares with the other players; arrives a moment after the card */
+.res-pct {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  max-width: 100%;
+  margin-top: calc(14 * var(--u));
+  padding: calc(7 * var(--u)) calc(18 * var(--u)) calc(7 * var(--u)) calc(14 * var(--u));
+  border-radius: 999px;
+  background: #e4f6f5;
+  color: var(--oseaan-d);
+  font-size: calc(20 * var(--u));
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  animation: pop-in 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+.res-pct .emoji { flex: none; font-size: calc(24 * var(--u)); }
+#ui.compact .res-pct { margin-top: calc(8 * var(--u)); padding: calc(4 * var(--u)) calc(14 * var(--u)) calc(4 * var(--u)) calc(10 * var(--u)); font-size: calc(19 * var(--u)); }
 
 .res-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: calc(10 * var(--u)); margin-top: calc(20 * var(--u)); }
 .res-stats .tile { min-height: calc(112 * var(--u)); padding: calc(10 * var(--u)) calc(4 * var(--u)); border-radius: calc(22 * var(--u)); }

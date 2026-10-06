@@ -9,7 +9,9 @@ import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate } from
 import { createSequence } from './core/sequence.js';
 import { buildShareText } from './core/share.js';
 import { normalizeFeed, pickPremium } from './core/sponsors.js';
+import { buildStatsBatch, percentileLine } from './core/audience.js';
 import { loadSponsors } from './sponsorsFeed.js';
+import { sendStats, dailyPercentile } from './audience.js';
 import { SPONSOR_API_URL, salesEnabled } from './sponsorConfig.js';
 import { createUI } from './ui/dom.js';
 import { audio, haptics } from './audio.js';
@@ -148,6 +150,39 @@ function onSponsorFeed(feed) {
   if (screen === 'menu') requestAnimationFrame(updateMenuAnchor);   // the card may have moved
   const gs = gameScene();
   if (gs && gs.idle && gs.setSponsors) gs.setSponsors(feed, billboardFor(todayKey()));
+}
+
+// ---------------------------------------------------------------------------
+// Anonymous audience counts and the daily percentile (js/audience.js). Only with a sales backend
+// (SPONSOR_API_URL); a debug session stays out of the real numbers unless ?audience=1.
+// ---------------------------------------------------------------------------
+const AUDIENCE_ON = !!SPONSOR_API_URL && (!DEBUG || params.get('audience') === '1');
+let menuCounted = false;   // the menu card is reported with the first game of a visit only
+
+bus.on('game:audience', (a) => {
+  if (!AUDIENCE_ON || !a || !(a.blocksDropped > 0)) return;
+  try {
+    const batch = buildStatsBatch({
+      dateKey: a.dateKey || todayKey(),
+      mode: a.mode,
+      tally: a.tally,
+      billboardId: a.billboardId,
+      menu: !menuCounted && !!sponsorFeed.house?.menu,
+    });
+    if (batch && sendStats(SPONSOR_API_URL, batch) && batch.menu) menuCounted = true;
+  } catch {
+    /* counting never gets in the way of the game */
+  }
+});
+
+/** The results card learns how the player did against everyone else today, when (if) the server answers. */
+function showPercentile(result) {
+  if (!AUDIENCE_ON || !result || result.mode !== 'daily') return;
+  dailyPercentile(result, { apiUrl: SPONSOR_API_URL, storageKey: DEBUG ? `${STORAGE_KEY}.debug` : STORAGE_KEY })
+    .then((answer) => {
+      const line = percentileLine(answer);
+      if (line && screen === 'results') ui.setResultsPercentile(result.dateKey, line);
+    }, () => {});
 }
 
 function menuAd() {
@@ -325,6 +360,7 @@ function showDoneResults(dateKey, result) {
     nextDayAt: nextDayFor(dateKey),
     mode: 'daily',
   });
+  showPercentile(result);
   sleepLoop(RESULTS_SLEEP_MS);
 }
 
@@ -553,6 +589,7 @@ bus.on('game:over', (result) => {
     nextDayAt: r.mode === 'daily' ? nextDayFor(r.dateKey) : 0,
     mode: r.mode,
   });
+  showPercentile(r);
   sleepLoop(RESULTS_SLEEP_MS);
 });
 
