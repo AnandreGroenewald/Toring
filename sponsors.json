@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "house": {
+    "menu": {
+      "title": "sportscard.co.za",
+      "text": "Besoek sportscard.co.za",
+      "url": "https://sportscard.co.za",
+      "label": "Advertensie"
+    }
+  },
+  "block": [],
+  "premium": []
+}

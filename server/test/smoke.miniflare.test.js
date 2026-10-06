@@ -28,10 +28,13 @@ test('smoke: real worker in workerd + local D1', { skip: Miniflare ? false : 'mi
   let mf;
   try {
     // List the modules explicitly (entry first); not every Miniflare version follows imports itself.
+    // The moderation rules are shared with the site (js/core/nameRules.js), so the module root is the
+    // repository root and that file is listed too (wrangler's bundler follows the import by itself).
     const files = readdirSync(`${root}src`).filter((f) => f.endsWith('.js')).sort((a, b) => (a === 'worker.js' ? -1 : b === 'worker.js' ? 1 : 0));
+    const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
     mf = new Miniflare(toOptions({
-      modules: files.map((f) => ({ type: 'ESModule', path: `${root}src/${f}` })),
-      modulesRoot: root,
+      modules: [...files.map((f) => `${root}src/${f}`), `${repoRoot}js/core/nameRules.js`].map((path) => ({ type: 'ESModule', path })),
+      modulesRoot: repoRoot,
       compatibilityDate: '2026-09-01',
       d1Databases: { DB: 'stapel-smoke' },
       bindings: vars,

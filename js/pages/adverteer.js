@@ -120,9 +120,10 @@ function normalizeText(s) {
 }
 const alnumCount = (s) => (s.match(ALNUM_RE) || []).length;
 
-function sanitize(s, max = NAME_MAX) {
+function sanitize(s, max = NAME_MAX, kind = 'name') {
   try {
-    if (typeof moderation.sanitizeName === 'function') return String(moderation.sanitizeName(s, max) ?? '');
+    const fn = kind === 'tagline' ? moderation.sanitizeTagline : moderation.sanitizeName;
+    if (typeof fn === 'function') return String(fn(s, max) ?? '');
   } catch {
     /* fall through to the plain clean-up */
   }
@@ -1079,7 +1080,7 @@ function setupForm(preview, { sales }) {
   function updatePreviewText() {
     const name = sanitize(f.name.value, NAME_MAX);
     const premium = tier() === 'premium';
-    const tagline = premium ? sanitize(f.tagline.value, TAGLINE_MAX) : '';
+    const tagline = premium ? sanitize(f.tagline.value, TAGLINE_MAX, 'tagline') : '';
     const url = premium ? normaliseUrl(f.url.value) : '';
     preview.set({ name: name.length >= 1 ? name : '', tagline, host: url ? displayHost(url) : '' });
   }
@@ -1526,7 +1527,7 @@ function render(v, state, st = null, actions = {}) {
       pv.set({
         tier,
         name,
-        tagline: fromDraft ? sanitize(draft.tagline || '', TAGLINE_MAX) : '',
+        tagline: fromDraft ? sanitize(draft.tagline || '', TAGLINE_MAX, 'tagline') : '',
         host: url ? displayHost(url) : '',
       });
     }

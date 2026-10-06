@@ -412,7 +412,7 @@ Code map:
 | `src/billing.js` | Applying a payment to a sponsor (shared by the webhook and `/status`) |
 | `src/entitlement.js` | The "who is live" rule and the paid-until calculation |
 | `src/admin.js` | Owner endpoints |
-| `src/moderation.js` | Name, tagline and website rules (mirrored in the sign-up page) |
+| `src/moderation.js` | Name, tagline and website rules. It re-exports `js/core/nameRules.js` (one copy, shared with the sign-up page and the game; `wrangler deploy` bundles it into the Worker, so always deploy from a full checkout of the repository) |
 | `src/validate.js` | Request validation |
 | `src/paystack.js` | Paystack API client |
 | `src/db.js` | All SQL |

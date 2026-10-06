@@ -964,7 +964,7 @@ select.input {
   border-radius: var(--r-box);
   background: var(--panel);
 }
-.toc h2 { margin: 0 0 6px; padding: 0; border: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.legal .toc h2 { margin: 0 0 6px; padding: 0; border: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .toc ol { margin: 0; padding-left: 22px; columns: 1; }
 @media (min-width: 640px) { .toc ol { columns: 2; column-gap: 32px; } }
 .toc li { margin: 3px 0; break-inside: avoid; }
