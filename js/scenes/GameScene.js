@@ -6,6 +6,7 @@ import {
 } from '../config.js';
 import { bus } from '../core/bus.js';
 import { S } from '../core/strings.js';
+import { fmtM } from '../core/format.js';
 import { createSequence } from '../core/sequence.js';
 import { audio, haptics } from '../audio.js';
 import { Block, ensureTexture, getGeometry } from '../game/blocks.js';
@@ -336,6 +337,17 @@ export class GameScene extends Phaser.Scene {
       }).setOrigin(0.5, 1).setDepth(DEPTH.ghost + 0.5).setVisible(false);
     }
 
+    // Distance tag on the flood line itself, so the line and the HUD pill read as one thing.
+    this.floodTag = null;
+    this.floodTagStr = '';
+    this.floodTagAt = -1e9;
+    if (!this.idle) {
+      this.floodTag = this.add.text(GAME_W - 18, 0, '', {
+        fontFamily: FONT, fontSize: '24px', fontStyle: 'bold', color: '#ffffff',
+        stroke: '#0f3f73', strokeThickness: 6, resolution: 1,
+      }).setOrigin(1, 1).setDepth(DEPTH.water + 1).setVisible(false);
+    }
+
     const cam = this.cameras.main;
     cam.setZoom(1).setRotation(0).setScroll(0, LAYOUT.baseTopY - this.dropLineY);
 
@@ -414,6 +426,9 @@ export class GameScene extends Phaser.Scene {
     this.offs.length = 0;
     for (const t of this.timers) t.remove(false);
     this.timers.length = 0;
+    this.stepTimers.length = 0;
+    this.eases.length = 0;
+    this.spawnDue = null;
     this.game.events.off('visible', this.resetClock, this);
     this.events.off('resume', this.resetClock, this);
     this.input.off('pointerdown', this.onPointerDown, this);
@@ -447,6 +462,7 @@ export class GameScene extends Phaser.Scene {
   resetClock() {
     this.acc = 0;
     this.skipFrame = true;
+    this.frameTime = 0;
   }
 
   delay(ms, fn) {
@@ -666,10 +682,30 @@ export class GameScene extends Phaser.Scene {
       this.weatherFailed(err);
     }
     this.updateCamera(dtS);
+    this.updateFloodTag(time);
     this.updateGhostAndAutoplay();
     this.updateWobble(dtS);
     this.emitHud();
     this.writeRegistry();
+  }
+
+  updateFloodTag(time) {
+    const tag = this.floodTag;
+    if (!tag) return;
+    const water = this.water;
+    const cam = this.cameras.main;
+    const y = water.surfaceY - 22;
+    const show = water.rising && !this.over && y > cam.worldView.y + 80 && y < cam.worldView.bottom - 120;
+    if (show !== tag.visible) tag.setVisible(show);
+    if (!show) return;
+    tag.y = y;
+    if (time - this.floodTagAt < 250) return;
+    this.floodTagAt = time;
+    const str = `🌊 ${fmtM(Math.max(0, (water.surfaceY - this.towerTopY) / PX_PER_M))}`;
+    if (str !== this.floodTagStr) {
+      this.floodTagStr = str;
+      tag.setText(str);
+    }
   }
 
   physicsStep() {
@@ -1235,6 +1271,7 @@ export class GameScene extends Phaser.Scene {
       audio.play('warning');
       bus.emit('hud:toast', { text: S.waterRising, color: '#bfe6ff' });
     }
+    this.effects.danger(dist < WATER.warnPx && near);
     if (dist < WATER.warnPx && near) {
       if (this.now - this.lastWarn > 1000) {
         this.lastWarn = this.now;
@@ -1475,11 +1512,11 @@ export class GameScene extends Phaser.Scene {
     const rate = w > this.wobble ? 10 : 2.5;
     this.wobble += (w - this.wobble) * (1 - Math.exp(-dtS * rate));
     if (this.idle || this.over) return;
-    if (this.wobble > 0.35 && this.now - this.lastCreak > 450) {
+    if (this.wobble > CREAK_AT && this.now - this.lastCreak > 450) {
       this.lastCreak = this.now;
       audio.play('creak', { intensity: Math.min(1, this.wobble) });
     }
-    if (this.wobble > 0.6 && this.now - this.lastWobbleShake > 380) {
+    if (this.wobble > SHAKE_AT && this.now - this.lastWobbleShake > 380) {
       this.lastWobbleShake = this.now;
       this.effects.shake(0.0022, 140);
     }
@@ -1491,6 +1528,7 @@ export class GameScene extends Phaser.Scene {
     s.heightM = round1(Math.max(0, LAYOUT.baseTopY - this.towerTopY) / PX_PER_M);
     s.score = this.score;
     s.lives = this.lives;
+    s.heartProgress = this.lives < LIVES ? this.heartPerfects : 0;
     s.combo = this.combo;
     s.next = this.nextSpec;
     const act = this.weather.active;
@@ -1567,18 +1605,20 @@ export class GameScene extends Phaser.Scene {
     this.overReason = reason;
     this.inputLocked = true;
     this.hintPending = false;
-    for (const b of this.active) {
-      this.cancel(b.waitTimer);
-      b.waitTimer = null;
-    }
-    for (const t of this.timers) t.remove(false);   // pending next-block spawns
+    for (const b of this.active) b.waitTimer = null;
+    this.stepTimers.length = 0;   // pending next-block spawns
+    this.spawnDue = null;
+    for (const t of this.timers) t.remove(false);
     this.timers.length = 0;
     this.crane.setVisible(false);
     this.setGhostVisible(false);
+    this.effects.danger(false);
     bus.emit('hud:hint', { text: null });
-    bus.emit('hud:hide');
     const result = this.buildResult(reason);
     this.result = result;
+    // Saved right away; the delayed 'game:over' only brings up the results screen.
+    bus.emit('game:final', result);
+    bus.emit('hud:hide', { heightM: result.heightM, reason });
 
     if (reason === 'quit') {
       bus.emit('game:over', result);
@@ -1588,8 +1628,14 @@ export class GameScene extends Phaser.Scene {
     this.slowT = 0;
     audio.play('gameover');
     haptics.heavy();
-    if (reason === 'lives') this.effects.flash(0xff6b6b, 0.22, 320);
-    else this.effects.flash(0x7cc4f2, 0.3, 360);
+    if (reason === 'lives') {
+      this.effects.flash(0xff3b3b, 0.35, 450);
+      this.effects.shake(0.012, 350);
+      this.effects.vignette(0xd8231b, 0.55, 900);
+    } else {
+      this.effects.flash(0x7cc4f2, 0.3, 360);
+      this.effects.vignette(0x1f6fb2, 0.6, 1100);
+    }
     this.delay(REVEAL_DELAY_MS, () => this.reveal());
     this.delay(OVER_EMIT_MS, () => bus.emit('game:over', result));
   }
@@ -1601,17 +1647,45 @@ export class GameScene extends Phaser.Scene {
     else this.timeScale = Math.min(1, SLOWMO_SCALE + ((this.slowT - SLOWMO_MS) / SLOWMO_RAMP_MS) * (1 - SLOWMO_SCALE));
   }
 
-  /** Zoom out to show the whole tower from just above its top down to the island. */
+  /** Zoom out to show the whole tower from just above its top down to the island, with a height ruler. */
   reveal() {
     const cam = this.cameras.main;
     this.revealing = true;
     cam.setRotation(0);
-    const top = this.towerTopY - 120;
+    for (const b of this.frozen) if (b.image && !b.destroyed) b.image.setVisible(true);
+    const bestY = LAYOUT.baseTopY - this.maxHeightM * PX_PER_M;
+    const top = Math.min(this.towerTopY, bestY) - 160;
     const bottom = LAYOUT.baseTopY + 200;
     const span = Math.max(1, bottom - top);
     const z = clamp(Math.min(1, this.H / span), 0.15, 1);
     cam.zoomTo(z, REVEAL_MS, 'Sine.easeInOut');
     cam.pan(GAME_W / 2, (top + bottom) / 2, REVEAL_MS, 'Sine.easeInOut');
+    safely(() => this.buildRuler(z, bestY));
+  }
+
+  /** World-space height marks (every 10 or 20 m) and a flag at the best height, sized for the zoom. */
+  buildRuler(z, bestY) {
+    if (this.maxHeightM < 2) return;
+    const step = this.maxHeightM > 100 ? 20 : this.maxHeightM > 12 ? 10 : 5;
+    const px = Math.round(24 / z);
+    const x0 = GAME_W / 2 - 340 / z;
+    const g = this.add.graphics().setDepth(DEPTH.fxWorld + 3);
+    g.lineStyle(3 / z, 0xffffff, 0.85);
+    const style = {
+      fontFamily: FONT, fontSize: `${px}px`, fontStyle: 'bold', color: '#ffffff',
+      stroke: '#1d2b45', strokeThickness: Math.max(3, Math.round(px * 0.18)), resolution: 1,
+    };
+    for (let m = step; m <= this.maxHeightM; m += step) {
+      const y = LAYOUT.baseTopY - m * PX_PER_M;
+      g.lineBetween(x0, y, x0 + 26 / z, y);
+      this.add.text(x0 + 32 / z, y, fmtM(m).replace(',0', ''), style).setOrigin(0, 0.5).setDepth(DEPTH.fxWorld + 3);
+    }
+    // dashed line at the best height, flag on the right
+    g.lineStyle(4 / z, 0xffe38c, 0.95);
+    const dash = 22 / z;
+    for (let x = x0; x < GAME_W / 2 + 300 / z; x += dash * 2) g.lineBetween(x, bestY, x + dash, bestY);
+    this.add.text(GAME_W / 2 + 300 / z, bestY, '🏁', { fontSize: `${Math.round(40 / z)}px`, resolution: 1 })
+      .setOrigin(0.5, 1).setDepth(DEPTH.fxWorld + 3);
   }
 
   // -------------------------------------------------------------------------

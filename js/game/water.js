@@ -202,14 +202,20 @@ export class Water {
     this._rising = true;
   }
 
-  update(dtMs, speedMul = 1) {
+  /** Advance the flood level (called on the fixed physics step, so it is the same at any refresh rate). */
+  advance(dtMs, speedMul = 1) {
+    if (this.destroyed || !this._rising) return;
+    const dt = clamp(dtMs, 0, 100) / 1000;
+    this.tRising += dt;
+    const v = Math.min(WATER.vMax, WATER.v0 + WATER.accel * this.tRising) * speedMul;
+    this._surfaceY -= v * dt;
+  }
+
+  /** Per frame: animate the water. With `speedMul` it also advances the level (one call does both). */
+  update(dtMs, speedMul = null) {
     if (this.destroyed) return;
     const dt = clamp(dtMs, 0, 100) / 1000;
-    if (this._rising) {
-      this.tRising += dt;
-      const v = Math.min(WATER.vMax, WATER.v0 + WATER.accel * this.tRising) * speedMul;
-      this._surfaceY -= v * dt;
-    }
+    if (speedMul !== null) this.advance(dtMs, speedMul);
     // The visual level eases down when the water recedes; it never lags behind a rise.
     if (this.displayY < this._surfaceY - 0.25) {
       this.displayY += (this._surfaceY - this.displayY) * (1 - Math.exp(-dt * 2.2));

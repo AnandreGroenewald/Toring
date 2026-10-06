@@ -117,6 +117,36 @@ export function ensureFxTextures(scene) {
     ctx.arc(8, 8, 2, 0, Math.PI * 2);
     ctx.fill();
   });
+  // Rounded outline for the Perfek burst, stretched as a nine-slice (no per-frame tessellation).
+  canvasTexture(scene, 'fx_ring9', 64, 64, (ctx) => {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 6;
+    const r = 16;
+    const x = 3;
+    const y = 3;
+    const w = 58;
+    const h = 58;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    ctx.stroke();
+  });
+  // Screen-edge vignette (game over, flood danger); tinted per use.
+  canvasTexture(scene, 'fx_vignette', 128, 256, (ctx, w, h) => {
+    ctx.save();
+    ctx.scale(1, h / w);
+    const g = ctx.createRadialGradient(w / 2, w / 2, w * 0.22, w / 2, w / 2, w * 0.72);
+    g.addColorStop(0, 'rgba(255,255,255,0)');
+    g.addColorStop(0.55, 'rgba(255,255,255,0.35)');
+    g.addColorStop(1, 'rgba(255,255,255,1)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, w);
+    ctx.restore();
+  });
   canvasTexture(scene, 'fx_ring', 128, 128, (ctx) => {
     ctx.strokeStyle = 'rgba(255,255,255,0.95)';
     ctx.lineWidth = 7;
@@ -178,7 +208,7 @@ export class Effects {
       color: '#ffffff',
       stroke: cssColor(COLORS.textStroke),
       strokeThickness: stroke,
-      resolution: 2,
+      resolution: 1.25,
       align: 'center',
     });
     const makeText = (px, stroke, shadowY) => {
@@ -190,8 +220,12 @@ export class Effects {
     this.big = Array.from({ length: BIG_POOL }, () => makeText(BIG_FONT_PX, 11, 6));
     this.small = Array.from({ length: SMALL_POOL }, () => makeText(SMALL_FONT_PX, 8, 4));
 
+    // WebGL draws the burst as a nine-slice; the Canvas renderer can't, so it redraws a Graphics.
+    this.nine = !!(scene.add.nineslice && scene.sys.game.renderer && scene.sys.game.renderer.type === Phaser.WEBGL);
     this.outlines = Array.from({ length: OUTLINE_POOL }, () => ({
-      g: scene.add.graphics().setDepth(DEPTH.fxWorld + 1).setVisible(false),
+      g: this.nine
+        ? scene.add.nineslice(0, 0, 'fx_ring9', undefined, 64, 64, 22, 22, 22, 22).setDepth(DEPTH.fxWorld + 1).setVisible(false)
+        : scene.add.graphics().setDepth(DEPTH.fxWorld + 1).setVisible(false),
       tween: null,
       used: 0,
     }));
@@ -247,6 +281,11 @@ export class Effects {
     this.flashImg = scene.add.image(0, 0, 'fx_px')
       .setScrollFactor(0).setDepth(DEPTH.fxScreen).setVisible(false);
     this.flashTween = null;
+    this.vigImg = scene.add.image(0, 0, 'fx_vignette')
+      .setScrollFactor(0).setDepth(DEPTH.fxScreen - 1).setVisible(false);
+    this.vigTween = null;
+    this.dangerOn = false;
+    this.zoomTween = null;
     this.shakeUntil = 0;
     this.shakeIntensity = 0;
     this.prewarmQueue = [];
@@ -282,7 +321,14 @@ export class Effects {
   }
 
   _tick(time) {
-    if (this.destroyed || !this.prewarmQueue.length || time - this.lastPrewarm < 120) return;
+    if (this.destroyed) return;
+    if (this.dangerOn && !this.vigTween) {
+      // flood close: a slow red pulse at the screen edges
+      const peak = this.reducedMotion ? 0.15 : 0.3;
+      this._placeVignette();
+      this.vigImg.setAlpha(peak * (0.5 - 0.5 * Math.cos((time / 1000) * Math.PI * 2 * 0.8)));
+    }
+    if (!this.prewarmQueue.length || time - this.lastPrewarm < 120) return;
     this.lastPrewarm = time;
     const str = this.prewarmQueue.shift();
     if (this.big.some((it) => it.obj.text === str)) return;
@@ -334,8 +380,11 @@ export class Effects {
     return t;
   }
 
-  /** Big rating pop: overshoot scale-in, hold, then drift up and fade. */
-  _pop(x, y, str, tint, scaleMul, { wiggle = false, tilt = 0 } = {}) {
+  /**
+   * Big rating pop: overshoot scale-in, hold, then drift up and fade. `rise` > 0
+   * makes it climb out of the landing zone quickly (Perfek: the next ghost appears there).
+   */
+  _pop(x, y, str, tint, scaleMul, { wiggle = false, tilt = 0, rise = 0 } = {}) {
     const item = this._take(this.big, str);
     const t = this._setText(item, str, tint, scaleMul);
     const halfW = (t.width * scaleMul) / 2;
@@ -343,16 +392,17 @@ export class Effects {
     const py = this._visibleY(y);
     t.setPosition(px, py).setScale(0.2 * scaleMul);
     const dur = 1150;
+    const fadeFrom = rise ? 0.45 : 0.6;
     this._animate(item, dur, (p) => {
       let s;
       let a = 1;
       let dy = 0;
       if (p < 0.16) s = lerp(0.2, 1.0, easeOutBack(p / 0.16));
       else s = 1;
-      if (p > 0.16) dy = -10 * ((p - 0.16) / 0.84);
-      if (p > 0.6) {
-        const q = (p - 0.6) / 0.4;
-        dy -= 46 * easeOutCubic(q);
+      if (p > 0.16) dy = rise ? -rise * easeOutCubic((p - 0.16) / 0.84) : -10 * ((p - 0.16) / 0.84);
+      if (p > fadeFrom) {
+        const q = (p - fadeFrom) / (1 - fadeFrom);
+        if (!rise) dy -= 46 * easeOutCubic(q);
         a = 1 - q * q;
         s *= 1 - 0.08 * q;
       }
@@ -417,8 +467,22 @@ export class Effects {
       if (this.destroyed) return;
       const item = this._take(this.outlines);
       const g = item.g;
-      g.setPosition(px, py).setRotation(rot).setVisible(true);
       const grow = 34 * strength;
+      if (this.nine) {
+        // centre of the block's box in world space (the image origin is its centroid)
+        const cx = x0 + w / 2;
+        const cy = y0 + h / 2;
+        const c = Math.cos(rot);
+        const s = Math.sin(rot);
+        g.setPosition(px + cx * c - cy * s, py + cx * s + cy * c).setRotation(rot).setVisible(true);
+        this._animate(item, 420, (p) => {
+          const gr = 2 + grow * easeOutCubic(p);
+          g.setSize(Math.max(48, w + gr * 2), Math.max(48, h + gr * 2));
+          g.setAlpha(1 - p);
+        }, () => g.setVisible(false));
+        return;
+      }
+      g.setPosition(px, py).setRotation(rot).setVisible(true);
       this._animate(item, 420, (p) => {
         const e = easeOutCubic(p);
         const gr = 2 + grow * e;
@@ -441,30 +505,34 @@ export class Effects {
     if (!b) return;
     const x = b.cx;
     const yTop = b.top;
+    // attract mode behind the menu: bursts and sparkles, but no words over the menu
+    const quiet = !!this.scene.idle;
     switch (rating) {
       case 'P': {
         const n = Math.max(1, combo | 0);
         const str = n >= 2 ? S.perfectCombo(n) : S.perfect;
         const tint = COMBO_TINTS[Math.min(n - 1, COMBO_TINTS.length - 1)];
-        this._pop(x, yTop - 64, str, tint, 0.92 + Math.min(n, 6) * 0.045);
+        if (!quiet) this._pop(x, yTop - 72, str, tint, 0.92 + Math.min(n, 6) * 0.045, { rise: 110 });
         this._blockFlash(block);
         this._outline(block, 0, 1);
         if (n >= 2) this._outline(block, 120, 1.5);
         if (n >= 4) this._outline(block, 240, 2);
         this.sparkle(x, yTop, 10 + Math.min(n, 8) * 2);
-        if (n >= 3) this.flash(0xffffff, 0.16, 150);
+        if (quiet) break;
+        if (n >= 3) this.flash(lerpColor(0xffffff, tint, 0.5), 0.26, 170);
+        this.zoomPunch();
         this._prewarm([S.perfectCombo(n + 1)]);
         break;
       }
       case 'G':
-        this._pop(x, yTop - 54, S.good, COLORS.good, 0.62);
+        if (!quiet) this._pop(x, yTop - 54, S.good, COLORS.good, 0.62);
         this.sparkle(x, yTop, 5);
         break;
       case 'S':
-        this._pop(x, yTop - 54, S.skew, COLORS.skew, 0.6, { tilt: -8 });
+        if (!quiet) this._pop(x, yTop - 54, S.skew, COLORS.skew, 0.6, { tilt: -8 });
         break;
       case 'X':
-        this._pop(x, yTop - 40, S.lost, COLORS.lost, 0.78, { wiggle: true });
+        if (!quiet) this._pop(x, yTop - 40, S.lost, COLORS.lost, 0.78, { wiggle: true });
         break;
       default:
         break;
@@ -540,6 +608,66 @@ export class Effects {
     });
   }
 
+  _placeVignette() {
+    const cam = this.scene.cameras.main;
+    const z = cam.zoom || 1;
+    const W = this.scene.scale.width;
+    const H = this.scene.scale.height;
+    this.vigImg.setPosition(W / 2, H / 2).setDisplaySize((W / z) * 1.04, (H / z) * 1.04).setVisible(true);
+  }
+
+  /** Screen edges glow in `color` and fade (game over). */
+  vignette(color = 0xd8231b, alpha = 0.5, ms = 900) {
+    if (this.destroyed) return;
+    if (this.vigTween) this.vigTween.stop();
+    const img = this.vigImg;
+    this._placeVignette();
+    img.setTint(color).setAlpha(0);
+    const peak = this.reducedMotion ? alpha * 0.6 : alpha;
+    this.vigTween = this.scene.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: ms,
+      onUpdate: (tw) => {
+        const p = tw.getValue();
+        img.setAlpha(peak * (p < 0.3 ? p / 0.3 : 1 - (p - 0.3) / 0.7));
+      },
+      onComplete: () => {
+        this.vigTween = null;
+        img.setVisible(false);
+      },
+    });
+  }
+
+  /** Flood close: keep a slow red pulse at the screen edges on/off. */
+  danger(on) {
+    if (this.destroyed || this.dangerOn === !!on) return;
+    this.dangerOn = !!on;
+    if (this.dangerOn) {
+      if (!this.vigTween) this.vigImg.setTint(0xe5483b);
+    } else if (!this.vigTween) {
+      this.vigImg.setVisible(false);
+    }
+  }
+
+  /** Tiny zoom pulse on a Perfek (skipped with reduced motion). */
+  zoomPunch() {
+    if (this.destroyed || this.reducedMotion) return;
+    const cam = this.scene.cameras.main;
+    if (this.zoomTween || cam.zoom !== 1) return;
+    this.zoomTween = this.scene.tweens.add({
+      targets: cam,
+      zoom: 1.015,
+      duration: 60,
+      yoyo: true,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.zoomTween = null;
+        if (!this.scene.revealing) cam.setZoom(1);
+      },
+    });
+  }
+
   shake(intensity = 0.006, ms = 200) {
     if (this.destroyed || this.reducedMotion) return;
     const now = this.scene.time.now;
@@ -564,8 +692,10 @@ export class Effects {
       (item.obj || item.g).destroy();
     }
     if (this.flashTween) this.flashTween.stop();
+    if (this.vigTween) this.vigTween.stop();
+    if (this.zoomTween) this.zoomTween.stop();
     this.scene.events.off('postupdate', this._tick, this);
     this.scene.events.off('shutdown', this.destroy, this);
-    for (const o of [this.sparks, this.dustL, this.dustR, this.drops, this.flashImg]) o.destroy();
+    for (const o of [this.sparks, this.dustL, this.dustR, this.drops, this.flashImg, this.vigImg]) o.destroy();
   }
 }
