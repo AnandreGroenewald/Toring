@@ -32,5 +32,5 @@ test('share strings exist for every weather type and rating', async () => {
   for (const r of Object.values(RATING)) assert.ok(RATING_EMOJI[r], r);
   assert.equal(S.tagline, 'Stapel hoog. Staan sterk.');
   assert.equal(S.shareDailyHead(3), 'Stapel #3');
-  assert.equal(S.sharePracticeHead, 'Stapel (oefen)');
+  assert.equal(S.sharePracticeHead, 'Stapel (oefenrondte)');
 });

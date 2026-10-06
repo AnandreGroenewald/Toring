@@ -43,7 +43,7 @@ test('daily share text: exact format from the spec', () => {
 
 test('practice header', () => {
   const t = buildShareText(result({ mode: 'practice', dateKey: null, dayNumber: null }), { url: URL });
-  assert.equal(t.split('\n')[0], `Stapel (oefen) 🏗️ 37,5${NB}m`);
+  assert.equal(t.split('\n')[0], `Stapel (oefenrondte) 🏗️ 37,5${NB}m`);
 });
 
 test('decimal comma and rounding', () => {
