@@ -203,13 +203,15 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 export class Crane {
-  constructor(scene) {
+  /** `top`: screen offset (safe-area inset) applied to the whole crane, so the drop height never changes. */
+  constructor(scene, { top = 0 } = {}) {
     this.scene = scene;
+    this.top = Math.max(0, Number(top) || 0);
     ensureCraneTextures(scene);
     const d = DEPTH.crane;
     const add = (obj, dz) => obj.setScrollFactor(0).setDepth(d + dz);
 
-    this.jib = add(scene.add.image(GAME_W / 2, JIB_TEX_Y, 'crane_jib').setOrigin(0.5, 0), 0.5);
+    this.jib = add(scene.add.image(GAME_W / 2, JIB_TEX_Y + this.top, 'crane_jib').setOrigin(0.5, 0), 0.5);
     this.rope = add(scene.add.image(0, 0, 'crane_rope').setOrigin(0.5, 0), 0.1);
     this.trolley = add(scene.add.image(0, 0, 'crane_trolley').setOrigin(0.5, 0), 0.6);
     this.wheels = [add(scene.add.image(0, 0, 'crane_wheel'), 0.7), add(scene.add.image(0, 0, 'crane_wheel'), 0.7)];
@@ -219,6 +221,7 @@ export class Crane {
     this.parts = [this.jib, this.rope, this.trolley, ...this.wheels, this.light, this.block, this.hook];
 
     this.phase = 0;
+    this.windAccel = 0;
     this.amplitude = CRANE.amplitude;
     this.omega = CRANE.omega0;
     this.tx = GAME_W / 2;
@@ -276,23 +279,43 @@ export class Crane {
     return Math.max(12, this.ropeLen - (1 - this.reel) * 70 + this.spring);
   }
 
-  getBlockPose() {
+  /**
+   * Screen-space pose of the hanging block. `aheadMs` extrapolates from the
+   * last update without changing state, so a tap between two frames releases
+   * the block where it really was at that moment (no 30 Hz landing grid).
+   */
+  getBlockPose(aheadMs = 0) {
     const L = this._pendLen();
-    const s = Math.sin(this.theta);
-    const c = Math.cos(this.theta);
-    const px = this.tx;
-    const py = LAYOUT.jibY + LAYOUT.trolleyH + this.spring * 0.25;
+    let tx = this.tx;
+    let tv = this.tv;
+    let theta = this.theta;
+    let thetaV = this.thetaV;
+    const h = clamp(Number(aheadMs) || 0, -50, 50) / 1000;
+    if (h !== 0) {
+      const phase = this.phase + this.omega * h;
+      const A = this.amplitude;
+      tx = GAME_W / 2 + A * Math.sin(phase);
+      tv = A * this.omega * Math.cos(phase);
+      const aT = -A * this.omega * this.omega * Math.sin(this.phase);
+      const acc = -(G / L) * Math.sin(theta) - ((aT * TROLLEY_COUPLING) / L) * Math.cos(theta)
+        + (this.windAccel * WIND_COUPLING) / L - CRANE.pendulumDamping * thetaV;
+      theta = clamp(theta + thetaV * h + 0.5 * acc * h * h, -MAX_SWING, MAX_SWING);
+      thetaV += acc * h;
+    }
+    const s = Math.sin(theta);
+    const c = Math.cos(theta);
+    const py = LAYOUT.jibY + this.top + LAYOUT.trolleyH + this.spring * 0.25;
     return {
-      x: px + L * s,
+      x: tx + L * s,
       y: py + L * c,
-      angle: -this.theta,
-      vx: this.tv + L * c * this.thetaV,
-      vy: -L * s * this.thetaV,
+      angle: -theta,
+      vx: tv + L * c * thetaV,
+      vy: -L * s * thetaV,
     };
   }
 
-  release() {
-    const pose = this.getBlockPose();
+  release(aheadMs = 0) {
+    const pose = this.getBlockPose(aheadMs);
     if (!this._hasBlock) return pose;
     this._hasBlock = false;
     this.block.setVisible(false);
@@ -308,6 +331,7 @@ export class Crane {
     const dt = clamp(dtMs, 0, 100) / 1000;
     this.omega = omega;
     this.amplitude = amplitude;
+    this.windAccel = windAccel;
     this.time += dt;
     const steps = Math.max(1, Math.ceil(dt / SUBSTEP));
     const h = dt / steps;
@@ -337,7 +361,7 @@ export class Crane {
 
   _layout() {
     const tx = this.tx;
-    const jy = LAYOUT.jibY;
+    const jy = LAYOUT.jibY + this.top;
     const bob = this.spring * 0.25;
     this.trolley.setPosition(tx, jy + bob);
     const roll = this.tx / 7;

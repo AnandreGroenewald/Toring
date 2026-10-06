@@ -2,7 +2,7 @@
 // (Perfek snap + combo), lives, settle + cement freeze, rising flood, weather,
 // camera follow, landing ghost, wobble, idle attract mode and the game-over reveal.
 import {
-  GAME_W, LAYOUT, PX_PER_M, PHYSICS, CRANE, SCORING, LIVES, FREEZE_DEPTH, WATER, DEPTH,
+  GAME_W, LAYOUT, PX_PER_M, PHYSICS, CRANE, SCORING, LIVES, FREEZE_DEPTH, WATER, DEPTH, FONT,
 } from '../config.js';
 import { bus } from '../core/bus.js';
 import { S } from '../core/strings.js';
@@ -20,19 +20,33 @@ const MAX_FRAME_MS = 100;
 const SETTLE = PHYSICS.settle;
 const TOP_HIT_TOL = 18;          // px: falling block bottom this far below a support's top still counts as "on top"
 const PENDING = '·';             // grid placeholder until a dropped block's fate is known
-const LOST_FALL_VY = 4;          // px/step: a block sinking through the flood this fast is gone
+const LOST_FALL_VY = 4;          // px/step: a block sinking through the flood (or past the cement) this fast is gone
 const KILL_Y = 1500;
-const WOBBLE_GRACE_MS = 550;     // after a landing the stack settles before motion counts as wobble
+const WOBBLE_GRACE_MS = 900;     // after a landing the stack settles before motion counts as wobble
+const CREAK_AT = 0.6;            // wobble levels for the creak warning and the small shake
+const SHAKE_AT = 0.9;
 const SPLASH_VY = 2;             // px/step
 const BASE_CX = GAME_W / 2;
 const BASE_CY = LAYOUT.baseTopY + LAYOUT.baseHeight / 2;
 const BASE_HALF_W = LAYOUT.baseWidth / 2;
 const GHOST_FROZEN_SCAN = 12;    // frozen blocks near the top that can still be a landing surface
 const GHOST_WIND_STEPS = 240;    // wind forecast horizon for the landing ghost (4 s of fall)
+const GHOST_MISS_DROP = 120;     // a ghost for a drop that misses the tower is shown this far below the top, in red
 const COLLAPSE_MS = 1500;        // tower blocks lost this soon after another loss are the same collapse: one life
 const SET_AFTER_MS = 1500;       // a deep block still stirred by wind sets this long after landing...
 const SET_MAX_SPEED = 0.3;       // ...if it moves slower than this (px/step)
 const SET_MAX_SPIN = 0.01;       // ...and turns slower than this (rad/step)
+const LOCK_MAX_SPEED = 1;        // a Perfek sets the blocks under it if they are at rest (px/step)...
+const LOCK_MAX_SPIN = 0.02;      // ...(rad/step)
+const CALM_SPEED = 1.2;          // px/step: the next block waits while a tower block moves faster than this
+const PRUNE_KEEP = 12;           // the newest cement blocks always keep their bodies
+const MAX_TAP_LAG_MS = 1000 / 24; // taps are released where the block was at that moment, up to this far from the frame
+const GHOST_A = 0.5;
+const GHOST_EDGE_A = 0.6;
+const GHOST_PAD = 8;
+const GHOST_MISS_TINT = 0xff6b6b;
+const HALF_PI = Math.PI / 2;
+const TWO_PI = Math.PI * 2;
 
 // Autoplay / idle attract mode
 const AUTO_WAIT_MS = 420;
@@ -47,10 +61,17 @@ const SLOWMO_MS = 1000;
 const SLOWMO_RAMP_MS = 350;
 const REVEAL_DELAY_MS = 380;
 const REVEAL_MS = 1400;
-const OVER_EMIT_MS = 2200;
+const OVER_EMIT_MS = 3000;
+
+// Idle attract tower: keep it in the gap above the menu card (when there is room).
+const IDLE_TOP_GAP = 70;
+const IDLE_BASE_GAP = 10;
+const IDLE_MIN_BASE = 600;
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 const round1 = (v) => Math.round(v * 10) / 10;
+/** Angle wrapped to (-period/2, period/2]. */
+const wrapAngle = (a, period) => a - period * Math.round(a / period);
 
 /** Stand-in for Weather in idle mode (and if the real one fails to build). */
 function calmWeather() {
@@ -105,9 +126,45 @@ function topCenterLocal(geom) {
     x1 = geom.w;
     minY = 0;
   }
-  c = { x: (x0 + x1) / 2 - geom.cx, y: minY - geom.cy };
+  c = { x: (x0 + x1) / 2 - geom.cx, y: minY - geom.cy, span: x1 - x0 };
   topCache.set(geom, c);
   return c;
+}
+
+/** A single rectangle (plank, slab, brick, crate, cube, pillar): any side can be the top. */
+const isRect = (geom) => !geom.poly && (!geom.parts || geom.parts.length === 1);
+
+/**
+ * Width that carries a load placed on the shape (sets how forgiving Perfek/Goed are):
+ * the top face, except a T, which stands on its narrow foot.
+ */
+function loadWidth(geom) {
+  if (geom.shape === 'T' && geom.parts) {
+    let w = Infinity;
+    for (const r of geom.parts) w = Math.min(w, r.w);
+    return w;
+  }
+  return topCenterLocal(geom).span;
+}
+
+/** Dotted guide line texture (drawn once; cropped to length per frame). */
+function ensureAimTexture(scene) {
+  if (scene.textures.exists('aim_dots')) return;
+  const h = 1600;
+  const tex = scene.textures.createCanvas('aim_dots', 6, h);
+  if (!tex) return;
+  const ctx = tex.getContext();
+  for (let y = 0; y < h; y += 18) {
+    ctx.fillStyle = 'rgba(29,43,69,0.55)';
+    ctx.beginPath();
+    ctx.arc(3, y + 4, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(3, y + 4, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  tex.refresh();
 }
 
 function safely(fn) {
@@ -181,6 +238,7 @@ export class GameScene extends Phaser.Scene {
     this.perfects = 0;
     this.blocksDropped = 0;
     this.landedCount = 0;
+    this.heartPerfects = 0;    // Perfeks towards the next heart (only counted while a heart is missing)
     this.grid = [];
     this.gridBlocks = [];
     this.started = false;
@@ -197,6 +255,12 @@ export class GameScene extends Phaser.Scene {
     this.lastWobbleShake = -1e9;
     this.lastWarn = -1e9;
     this.collapseUntil = -1e9;
+    this.lastTowerLossAt = -1e9;
+    this.spawnDue = null;      // sim time the next block may appear (waits for a calm tower after a collapse)
+    this.calmCap = 0;
+    this.stepTimers = [];
+    this.eases = [];
+    this.risingShown = false;
     this.dangerShown = false;
     this.lastFrictionMul = 1;
     this.autoOffset = 0;
@@ -204,6 +268,8 @@ export class GameScene extends Phaser.Scene {
     this.autoReadyAt = 0;
     this.idleResetting = false;
     this.hintPending = !this.idle;
+    this.hideIdx = 0;
+    this.progressHeight = 0;
   }
 
   create() {
@@ -211,9 +277,14 @@ export class GameScene extends Phaser.Scene {
     this.M = M;
     this.W = this.scale.width;
     this.H = this.scale.height;
-    this.now = 0;
+    // Notches push the HUD down; the crane and the drop line move with it so every
+    // device keeps exactly the same drop height (fair daily).
+    this.st = this.idle ? 0 : Math.max(0, Math.round(Number(this.registry.get('safeTop')) || 0));
+    this.dropLineY = LAYOUT.dropLineY + this.st;
+    this.now = 0;              // simulated ms (advances with the fixed physics step)
     this.acc = 0;
     this.skipFrame = true;
+    this.frameTime = 0;        // rAF time of the last frame (taps between frames are extrapolated from it)
     this.timers = [];
     this.offs = [];
     this.colQueue = [];
@@ -229,7 +300,8 @@ export class GameScene extends Phaser.Scene {
     eng.gravity.x = 0;
     eng.gravity.y = PHYSICS.gravityY;
 
-    this.sequence = createSequence(this.seed);
+    // Practice seeds live in their own namespace: no practice run can replay a daily.
+    this.sequence = createSequence(this.mode === 'practice' ? `oefen/${this.seed}` : this.seed);
 
     const mat = PHYSICS.block;
     this.baseBody = M.Bodies.rectangle(BASE_CX, BASE_CY, LAYOUT.baseWidth, LAYOUT.baseHeight, {
@@ -244,25 +316,37 @@ export class GameScene extends Phaser.Scene {
 
     this.island = createIsland(this);
     this.water = new Water(this, { width: GAME_W });
-    this.crane = new Crane(this);
+    this.crane = new Crane(this, { top: this.st });
     this.effects = new Effects(this, { reducedMotion: this.reducedMotion });
     this.weather = this.idle ? calmWeather() : this.buildWeather();
 
-    // Landing ghost: white silhouette plus a faint dark rim so it reads against a pale sky.
-    this.ghostEdge = this.add.image(0, 0, '__WHITE').setDepth(DEPTH.ghost - 0.1).setAlpha(0.2).setVisible(false);
-    this.ghost = this.add.image(0, 0, '__WHITE').setDepth(DEPTH.ghost).setAlpha(0.28).setVisible(false);
+    // Landing ghost: white silhouette with a navy rim so it reads against a pale sky,
+    // a dotted line from the hanging block to it, and (until the first drop) a label.
+    this.ghostEdge = this.add.image(0, 0, '__WHITE').setDepth(DEPTH.ghost - 0.1).setAlpha(GHOST_EDGE_A).setVisible(false);
+    this.ghost = this.add.image(0, 0, '__WHITE').setDepth(DEPTH.ghost).setAlpha(GHOST_A).setVisible(false);
+    this.ghostMiss = false;
+    ensureAimTexture(this);
+    this.aimLine = this.add.image(0, 0, 'aim_dots').setOrigin(0.5, 0).setDepth(DEPTH.ghost - 0.2)
+      .setAlpha(0.32).setVisible(false);
+    this.ghostLabel = null;
+    if (!this.idle) {
+      this.ghostLabel = this.add.text(0, 0, `↓ ${S.ghostHint}`, {
+        fontFamily: FONT, fontSize: '26px', fontStyle: 'bold', color: '#ffffff',
+        stroke: '#1d2b45', strokeThickness: 6, resolution: 1,
+      }).setOrigin(0.5, 1).setDepth(DEPTH.ghost + 0.5).setVisible(false);
+    }
 
     const cam = this.cameras.main;
-    cam.setZoom(1).setRotation(0).setScroll(0, LAYOUT.baseTopY - LAYOUT.dropLineY);
+    cam.setZoom(1).setRotation(0).setScroll(0, LAYOUT.baseTopY - this.dropLineY);
 
     // Reused per-step / per-frame context objects (no allocations in the hot loop).
-    this.stepCtx = { dynamicBlocks: this.dyn, falling: null };
-    this.wctx = { topBlock: null, towerTopY: 0, camera: cam, W: this.W, H: this.H };
-    this.craneOpts = { omega: CRANE.omega0, amplitude: CRANE.amplitude, windAccel: 0 };
+    this.stepCtx = { dynamicBlocks: this.dyn, falling: null, towerTopY: LAYOUT.baseTopY };
+    this.wctx = { topBlock: null, towerTopY: 0, camera: cam, W: this.W, H: this.H, craneTop: this.st };
+    this.craneOpts = { omega: CRANE.omega0, amplitude: CRANE.amplitudeStart, windAccel: 0 };
     this.hudWeather = { type: null, blocksLeft: null };
     this.hudState = {
       heightM: 0, score: 0, lives: LIVES, maxLives: LIVES, combo: 0, next: null, weather: null,
-      waterDistM: null, wobble: 0, mode: this.mode, dayNumber: this.dayNumber,
+      waterDistM: null, wobble: 0, mode: this.mode, dayNumber: this.dayNumber, heartProgress: 0,
     };
     this.surf = { top: 0, block: null, found: false };
 
@@ -385,13 +469,22 @@ export class GameScene extends Phaser.Scene {
   // -------------------------------------------------------------------------
   // Input
   // -------------------------------------------------------------------------
-  onPointerDown() {
-    this.tryDrop(false);
+  onPointerDown(pointer) {
+    this.tryDrop(false, this.tapLag(pointer && pointer.event));
   }
 
   onKeyDrop(e) {
     if (e && e.repeat) return;
-    this.tryDrop(false);
+    this.tryDrop(false, this.tapLag(e));
+  }
+
+  /** ms between the last rendered frame and the input event (DOM events run between frames). */
+  tapLag(ev) {
+    const now = typeof performance !== 'undefined' ? performance.now() : 0;
+    let t = ev && Number.isFinite(ev.timeStamp) ? ev.timeStamp : now;
+    if (Math.abs(t - now) > 1000) t = now;   // an engine with epoch-based event timestamps
+    if (!this.frameTime) return 0;
+    return clamp(t - this.frameTime, -MAX_TAP_LAG_MS, MAX_TAP_LAG_MS);
   }
 
   onHudReady() {
@@ -420,19 +513,25 @@ export class GameScene extends Phaser.Scene {
     this.nextSpec = this.sequence.block(i + 1);
     ensureTexture(this, this.nextSpec);
     const geo = this.curGeom;
-    this.ghost.setTexture(key).setOrigin(geo.originX, geo.originY).setTintFill(0xffffff);
+    this.ghostMiss = false;
+    this.ghost.setTexture(key).setOrigin(geo.originX, geo.originY).setTintFill(0xffffff).setAlpha(GHOST_A);
     this.ghostEdge.setTexture(key).setOrigin(geo.originX, geo.originY).setTintFill(0x1d2b45)
-      .setScale((geo.w + 6) / geo.w, (geo.h + 6) / geo.h);
+      .setScale((geo.w + GHOST_PAD) / geo.w, (geo.h + GHOST_PAD) / geo.h);
     this.planAutoplay();
   }
 
-  tryDrop(fromAuto = false) {
+  /** Trolley swing for block i: a gentle first swing that widens to the full amplitude. */
+  amplitudeFor(i) {
+    return Math.min(CRANE.amplitude, CRANE.amplitudeStart + CRANE.amplitudePerBlock * i);
+  }
+
+  tryDrop(fromAuto = false, lagMs = 0) {
     if (this.over || this.inputLocked || this.idleResetting) return false;
     if (this.idle && !fromAuto) return false;
     if (!this.crane.hasBlock() || !this.curSpec) return false;
     if (!this.sys.isActive()) return false;
 
-    const pose = this.crane.release();
+    const pose = this.crane.release(lagMs);
     const cam = this.cameras.main;
     const block = new Block(this, this.curSpec, pose.x, pose.y + cam.scrollY, pose.angle);
     block.setVelocityPxS(pose.vx * CRANE.carry, pose.vy * CRANE.carry);
@@ -444,7 +543,7 @@ export class GameScene extends Phaser.Scene {
     block.lostMarked = false;
     block.splashed = false;
     block.pendingRate = false;
-    block.waitTimer = this.delay(CRANE.maxWaitMs, () => this.advance(block));
+    block.waitTimer = this.stepDelay(CRANE.maxWaitMs, () => this.advance(block));
 
     this.falling = block;
     this.stepCtx.falling = block;
@@ -460,6 +559,7 @@ export class GameScene extends Phaser.Scene {
       if (!this.started) {
         this.started = true;
         this.hintPending = false;
+        if (this.ghostLabel) this.ghostLabel.setVisible(false);
         bus.emit('hud:hint', { text: null });
         if (this.mode === 'daily') bus.emit('game:started', this.buildResult('quit'));
       }
@@ -471,14 +571,56 @@ export class GameScene extends Phaser.Scene {
   advance(block) {
     if (block.advanced) return;
     block.advanced = true;
-    this.cancel(block.waitTimer);
+    this.cancelStep(block.waitTimer);
     block.waitTimer = null;
     if (this.over) return;
     if (this.idle && this.blocksDropped >= IDLE_BLOCKS) {
-      this.delay(IDLE_RESET_DELAY_MS, () => this.idleReset());
+      this.stepDelay(IDLE_RESET_DELAY_MS, () => this.idleReset());
       return;
     }
-    this.delay(CRANE.respawnDelayMs, () => this.spawnBlock(this.i + 1));
+    this.spawnDue = this.now + CRANE.respawnDelayMs;
+    this.calmCap = this.spawnDue + CRANE.calmWaitMaxMs;
+  }
+
+  /** Tower Bloxx style: after a collapse the crane waits until the tower has stopped moving. */
+  towerCalm() {
+    const dyn = this.dyn;
+    for (let k = 0; k < dyn.length; k++) {
+      const b = dyn[k];
+      if (b.body.speed > CALM_SPEED && this.now - b.landedAt > 250) return false;
+    }
+    return true;
+  }
+
+  /** Timers on the simulated clock (fixed physics steps): same timing at every refresh rate. */
+  stepDelay(ms, fn) {
+    const t = { at: this.now + ms, fn };
+    this.stepTimers.push(t);
+    return t;
+  }
+
+  cancelStep(t) {
+    if (!t) return;
+    const k = this.stepTimers.indexOf(t);
+    if (k >= 0) this.stepTimers.splice(k, 1);
+  }
+
+  runStepTimers() {
+    const list = this.stepTimers;
+    for (let k = 0; k < list.length; k++) {
+      const t = list[k];
+      if (this.now >= t.at) {
+        list.splice(k, 1);
+        k--;
+        t.fn();
+      }
+    }
+    if (this.spawnDue !== null && this.now >= this.spawnDue && !this.over) {
+      if (this.now >= this.calmCap || this.towerCalm()) {
+        this.spawnDue = null;
+        this.spawnBlock(this.i + 1);
+      }
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -490,18 +632,19 @@ export class GameScene extends Phaser.Scene {
     if (!(dt > 0)) dt = FIXED;
     dt = Math.min(dt, MAX_FRAME_MS);
     const dtS = dt / 1000;
-    this.now += dt;
-    if (this.started && !this.over) this.playMs += dt;
+    this.frameTime = time;
     if (this.over) this.updateSlowMo(dt);
 
-    // 1. Crane
+    // 1. Crane (the swing widens over the first blocks; eased so the trolley never jumps)
     const w = this.weather;
     const opts = this.craneOpts;
     opts.omega = Math.min(CRANE.omegaMax, CRANE.omega0 + CRANE.omegaPerBlock * this.i) * w.craneSpeedMul;
+    const ampTarget = this.amplitudeFor(this.i);
+    opts.amplitude += (ampTarget - opts.amplitude) * (1 - Math.exp(-dt / 300));
     opts.windAccel = w.windAccel;
     this.crane.update(dt, opts);
 
-    // 2. Fixed-step physics; collisions are handled after each step
+    // 2. Fixed-step physics; everything that can change the outcome runs per step
     this.acc += dt;
     let steps = 0;
     while (this.acc >= FIXED && steps < PHYSICS.maxStepsPerFrame) {
@@ -511,17 +654,14 @@ export class GameScene extends Phaser.Scene {
     }
     if (steps >= PHYSICS.maxStepsPerFrame && this.acc > FIXED) this.acc = FIXED;
 
-    // 3. Everything that reads the new physics state
-    this.updateBlocks();
-    this.updateSettleAndFreeze();
-    this.updateTowerHeight();
-    this.updateFriction();
-    this.updateWater(dt);
+    // 3. Visuals that read the new physics state
+    this.syncBlocks();
+    this.water.update(dt);
     const wc = this.wctx;
     wc.topBlock = this.topBlock;
     wc.towerTopY = this.towerTopY;
     try {
-      w.update(dt, wc);
+      this.weather.update(dt, wc);
     } catch (err) {
       this.weatherFailed(err);
     }
@@ -534,9 +674,12 @@ export class GameScene extends Phaser.Scene {
 
   physicsStep() {
     if (this.dynDirty) this.rebuildDyn();
-    this.stepCtx.falling = this.falling;
+    const ctx = this.stepCtx;
+    ctx.falling = this.falling;
+    ctx.towerTopY = this.towerTopY;
+    if (this.eases.length) this.stepEases();
     try {
-      this.weather.beforeStep(this.stepCtx);
+      this.weather.beforeStep(ctx);
     } catch (err) {
       this.weatherFailed(err);
     }
@@ -549,6 +692,32 @@ export class GameScene extends Phaser.Scene {
       else b.quietSteps = 0;
     }
     this.processCollisions();
+    this.now += FIXED;
+    if (this.started && !this.over) this.playMs += FIXED;
+    this.checkBlocks();
+    this.updateSettleAndFreeze();
+    this.updateTowerHeight();
+    this.updateFriction();
+    this.updateWater(FIXED * (this.over ? this.timeScale : 1));
+    this.runStepTimers();
+  }
+
+  /** Goed landings slide part of the way to the centre (a few px per step, no velocity added). */
+  stepEases() {
+    const M = this.M;
+    const list = this.eases;
+    for (let k = list.length - 1; k >= 0; k--) {
+      const e = list[k];
+      const b = e.block;
+      if (b.destroyed || (b.state !== 'landed' && b.state !== 'settled') || e.left <= 0) {
+        list.splice(k, 1);
+        continue;
+      }
+      const body = b.body;
+      M.Sleeping.set(body, false);
+      M.Body.setPosition(body, { x: body.position.x + e.dx, y: body.position.y });
+      e.left--;
+    }
   }
 
   rebuildDyn() {
@@ -641,12 +810,23 @@ export class GameScene extends Phaser.Scene {
     const sup = supportBody === this.baseBody ? null : supportBody.gameBlock;
     let rating = null;
     if (topHit && !this.over) {
-      const adx = Math.abs(f.centerX - this.supportTop(sup).x);
-      if (adx <= SCORING.perfectTolPx) {
-        this.snapPerfect(f, sup);
+      const t = this.supportTop(sup);
+      const dx = t.x - f.centerX;
+      const adx = Math.abs(dx);
+      // Narrow supports (a pillar, the single top cell of an L, a T on its foot) get narrower windows.
+      const pTol = Math.min(SCORING.perfectTolPx, SCORING.perfectTolFrac * t.w);
+      const gTol = Math.min(SCORING.goodTolPx, SCORING.goodTolFrac * t.w);
+      if (adx <= pTol && t.flat) {
+        this.snapPerfect(f, t);
         rating = 'P';
+      } else if (adx <= gTol) {
+        rating = 'G';
+        if (SCORING.goodEase > 0) {
+          const n = Math.max(1, Math.round(SCORING.goodEaseMs / FIXED));
+          this.eases.push({ block: f, dx: (dx * SCORING.goodEase) / n, left: n });
+        }
       } else {
-        rating = adx <= SCORING.goodTolPx ? 'G' : 'S';
+        rating = 'S';
       }
     } else if (!topHit) {
       f.pendingRate = true;   // hit a side: rated 'S' once it settles somewhere (or 'X' if it falls)
@@ -658,39 +838,65 @@ export class GameScene extends Phaser.Scene {
       const intensity = clamp(q.speed / 16, 0.15, 1);
       const size = clamp((width * (f.bottom - f.top)) / (200 * 48), 0.25, 1);
       audio.play('land', { intensity, size });
-      if (this.landedCount >= WATER.startAfterBlocks && !this.water.rising && !this.over) {
-        this.water.start();
-        audio.play('warning');
-        bus.emit('hud:toast', { text: S.waterRising, color: '#bfe6ff' });
-      }
+      // the flood starts quietly; the toast comes once it is actually getting close (updateWater)
+      if (this.landedCount >= WATER.startAfterBlocks && !this.water.rising && !this.over) this.water.start();
     }
     if (rating) this.applyRating(f, rating);
     this.emitProgress();
   }
 
-  /** World position of the centre of a support's top surface (null support = the base). */
+  /**
+   * Centre of a support's top surface in world space (null support = the base),
+   * its load-bearing width, and whether it is level enough for a Perfek snap.
+   * A rectangle may lie on any side; other shapes must be upright.
+   */
   supportTop(sup) {
-    const out = this.topPt || (this.topPt = { x: BASE_CX, y: LAYOUT.baseTopY, angle: 0 });
+    const out = this.topPt || (this.topPt = { x: BASE_CX, y: LAYOUT.baseTopY, angle: 0, w: LAYOUT.baseWidth, flat: true });
     if (!sup) {
       out.x = BASE_CX;
       out.y = LAYOUT.baseTopY;
       out.angle = 0;
+      out.w = LAYOUT.baseWidth;
+      out.flat = true;
       return out;
     }
-    const c = topCenterLocal(sup.geom);
+    const g = sup.geom;
     const b = sup.body;
-    const sin = Math.sin(b.angle);
-    const cos = Math.cos(b.angle);
-    out.x = b.position.x + c.x * cos - c.y * sin;
-    out.y = b.position.y + c.x * sin + c.y * cos;
-    out.angle = b.angle;
+    const a = b.angle;
+    if (isRect(g)) {
+      const k = Math.round(a / HALF_PI);
+      const r = a - k * HALF_PI;
+      const upright = (k & 1) === 0;
+      const d = upright ? g.h / 2 : g.w / 2;
+      out.x = b.position.x + d * Math.sin(r);
+      out.y = b.position.y - d * Math.cos(r);
+      out.angle = r;
+      out.w = upright ? g.w : g.h;
+      out.flat = Math.abs(r) <= SCORING.perfectMaxTilt;
+      return out;
+    }
+    const r = wrapAngle(a, TWO_PI);
+    if (Math.abs(r) <= 0.35) {
+      const c = topCenterLocal(g);
+      const sin = Math.sin(r);
+      const cos = Math.cos(r);
+      out.x = b.position.x + c.x * cos - c.y * sin;
+      out.y = b.position.y + c.x * sin + c.y * cos;
+      out.w = loadWidth(g);
+    } else {
+      // tipped over: aim at the middle of whatever is on top now, no snap
+      out.x = (sup.left + sup.right) / 2;
+      out.y = sup.top;
+      out.w = (sup.right - sup.left) / 2;
+    }
+    out.angle = r;
+    out.flat = Math.abs(r) <= SCORING.perfectMaxTilt;
     return out;
   }
 
-  /** Perfek: put the block dead centre on its support, flat on its top surface, at rest. */
-  snapPerfect(f, sup) {
+  /** Perfek: put the block dead centre on its support, flush on its top surface, at rest. */
+  snapPerfect(f, t) {
     const M = this.M;
-    const t = this.supportTop(sup);
     const ang = t.angle;
     const d = f.geom.h - f.geom.cy;
     const sin = Math.sin(ang);
@@ -708,6 +914,7 @@ export class GameScene extends Phaser.Scene {
     block.rating = r;
     block.pendingRate = false;
     if (this.over) return;   // blocks still tumbling during the reveal don't score
+    if (r === 'P') this.lockBelow(block);
     if (this.idle) {
       this.combo = r === 'P' ? this.combo + 1 : 0;
       this.effects.rating(block, r, this.combo);
@@ -721,7 +928,9 @@ export class GameScene extends Phaser.Scene {
       this.perfects++;
       this.maxCombo = Math.max(this.maxCombo, this.combo);
       pts += Math.round(SCORING.perfectBonus * Math.min(this.combo, SCORING.comboCap) * this.weather.perfectMul);
-      if (this.combo % SCORING.heartEvery === 0 && this.lives < LIVES) {
+      // every few Perfeks (in a row or not) win back a lost heart
+      if (this.lives < LIVES && ++this.heartPerfects >= SCORING.heartEvery) {
+        this.heartPerfects = 0;
         this.lives = Math.min(LIVES, this.lives + 1);
         heart = true;
       }
@@ -751,6 +960,26 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * "Perfek sets the cement": the blocks under a Perfek landing turn to cement at
+   * once (if they are at rest), so a Perfek can never be the root of a later collapse.
+   */
+  lockBelow(block) {
+    let n = 0;
+    const tower = this.tower;
+    for (let k = 0; k < tower.length; k++) {
+      const o = tower[k];
+      if (o === block || o.state === 'frozen' || o.state === 'lost' || o.destroyed) continue;
+      if (o.index > block.index || o.centerY <= block.centerY) continue;
+      const body = o.body;
+      if (body.speed > LOCK_MAX_SPEED || body.angularSpeed > LOCK_MAX_SPIN) continue;
+      if (o.pendingRate && !o.rating) this.applyRating(o, 'S');
+      if (o.state === 'landed') o.state = 'settled';
+      this.freezeBlock(o, n > 0);
+      n++;
+    }
+  }
+
   markLost(block) {
     if (block.lostMarked) return;   // never lose the same block twice
     block.lostMarked = true;
@@ -770,11 +999,20 @@ export class GameScene extends Phaser.Scene {
     this.advance(block);            // a block that never touched the tower still brings the next one
     if (this.idle || this.over) return;
 
-    // A collapse (tower blocks falling together) costs one life, not one per block;
-    // a dropped block that misses the tower always costs its own.
-    const sameCollapse = !wasFalling && this.now < this.collapseUntil;
-    this.collapseUntil = this.now + COLLAPSE_MS;
-    if (!sameCollapse) this.lives = Math.max(0, this.lives - 1);
+    // A collapse (tower blocks falling together) costs one life, not one per block.
+    // A dropped block that misses costs its own, unless the tower was coming down
+    // around it (it was aimed at a top that fell away).
+    let free;
+    if (wasFalling) {
+      free = this.now - this.lastTowerLossAt < COLLAPSE_MS || this.towerFalling();
+      if (!free) this.collapseUntil = this.now + COLLAPSE_MS;
+    } else {
+      free = this.now < this.collapseUntil;
+      this.collapseUntil = this.now + COLLAPSE_MS;
+      this.lastTowerLossAt = this.now;
+    }
+    if (!free) this.lives = Math.max(0, this.lives - 1);
+    if (this.lives >= LIVES) this.heartPerfects = 0;
     this.grid[block.index] = 'X';
     this.combo = 0;
     this.effects.rating(block, 'X', 0);
@@ -784,23 +1022,43 @@ export class GameScene extends Phaser.Scene {
     if (this.lives <= 0) this.endGame('lives');
   }
 
+  /** A tower block is dropping off right now (a collapse that hasn't reached the sea yet). */
+  towerFalling() {
+    const dyn = this.dyn;
+    for (let k = 0; k < dyn.length; k++) {
+      if (dyn[k].body.velocity.y > LOST_FALL_VY && this.now - dyn[k].landedAt > 250) return true;
+    }
+    return false;
+  }
+
   // -------------------------------------------------------------------------
-  // Per-frame bookkeeping
+  // Per-step bookkeeping
   // -------------------------------------------------------------------------
-  updateBlocks() {
+  syncBlocks() {
+    const act = this.active;
+    for (let k = 0; k < act.length; k++) {
+      const b = act[k];
+      if (!b.destroyed && b.state !== 'frozen') b.sync();
+    }
+  }
+
+  checkBlocks() {
     const surf = this.water.surfaceY;
+    // Nothing that is still moving can rest below the top of the cement: a block
+    // dropping fast past it has missed (no need to wait until it reaches the sea).
+    const floor = Math.min(this.frozenTopY, LAYOUT.baseTopY) + 40;
     const act = this.active;
     let n = 0;
     for (let k = 0; k < act.length; k++) {
       const b = act[k];
       if (b.destroyed) continue;
       if (b.state === 'frozen') continue;   // moved to the frozen list
-      b.sync();
       const vy = b.body.velocity.y;
       if (b.state !== 'lost') {
         const top = b.top;
         if (top > LAYOUT.baseTopY + 4 || Math.abs(b.centerX - BASE_CX) > GAME_W
-          || (top > surf + 20 && vy > LOST_FALL_VY)) {
+          || (top > surf + 20 && vy > LOST_FALL_VY)
+          || (top > floor && vy > LOST_FALL_VY)) {
           this.markLost(b);
         }
       }
@@ -870,7 +1128,7 @@ export class GameScene extends Phaser.Scene {
     return this.now - b.landedAt >= SET_AFTER_MS && body.speed < SET_MAX_SPEED && body.angularSpeed < SET_MAX_SPIN;
   }
 
-  freezeBlock(b) {
+  freezeBlock(b, quiet = false) {
     b.freeze();
     b.sync();
     this.dynDirty = true;
@@ -882,20 +1140,40 @@ export class GameScene extends Phaser.Scene {
       this.frozenTopY = top;
       this.frozenTopBlock = b;
     }
-    if (!this.idle && !this.over) audio.play('freeze');
+    if (!quiet && !this.idle && !this.over) audio.play('freeze');
   }
 
+  /**
+   * Deep, drowned cement no longer needs a physics body, and cement far below
+   * anything the camera can show again needn't be drawn (one draw call per block
+   * on phones). Never touches a body that something still moving could rest on.
+   */
   pruneFrozenBodies() {
-    const limit = Math.min(this.water.surfaceY + 160, this.towerTopY + 2600);
+    const fz = this.frozen;
+    let lowest = -Infinity;
+    for (let k = 0; k < this.dyn.length; k++) lowest = Math.max(lowest, this.dyn[k].bottom);
+    if (this.falling) lowest = Math.max(lowest, this.falling.bottom);
+    let limit = Math.min(this.water.surfaceY + 160, this.towerTopY + 2600);
+    if (lowest > -Infinity) limit = Math.min(limit, lowest + 200);
     const world = this.matter.world;
-    while (this.pruneIdx < this.frozen.length) {
-      const b = this.frozen[this.pruneIdx];
+    const keepFrom = fz.length - PRUNE_KEEP;
+    while (this.pruneIdx < keepFrom) {
+      const b = fz[this.pruneIdx];
       if (b.top <= limit) break;
       if (!b.bodyRemoved) {
         world.remove(b.body);
         b.bodyRemoved = true;
       }
       this.pruneIdx++;
+    }
+    // The camera never goes lower than the cement top at the drop line, so this is final.
+    if (this.revealing || this.idle) return;
+    const viewBottom = Math.min(this.frozenTopY, LAYOUT.baseTopY) - this.dropLineY + this.H + 80;
+    while (this.hideIdx < this.pruneIdx) {
+      const b = fz[this.hideIdx];
+      if (b.top <= viewBottom) break;
+      if (b.image && b.image.visible) b.image.setVisible(false);
+      this.hideIdx++;
     }
   }
 
@@ -917,7 +1195,14 @@ export class GameScene extends Phaser.Scene {
     this.topBlock = topBlock;
     if (settledTop !== Infinity) {
       const h = Math.max(0, LAYOUT.baseTopY - settledTop) / PX_PER_M;
-      if (h > this.maxHeightM && !this.over) this.maxHeightM = h;
+      if (h > this.maxHeightM && !this.over) {
+        this.maxHeightM = h;
+        // keep the saved daily up to date with every new best height (a reload must not lose a block)
+        if (h - this.progressHeight >= 0.5) {
+          this.progressHeight = h;
+          this.emitProgress();
+        }
+      }
     }
   }
 
@@ -929,10 +1214,11 @@ export class GameScene extends Phaser.Scene {
     if (this.falling) this.falling.setFriction(fm);
   }
 
+  /** Flood level and the flood check run on the physics step; the water is drawn per frame. */
   updateWater(dt) {
     const water = this.water;
     const frozenLevel = this.over && this.slowT > OVER_EMIT_MS;
-    water.update(dt, frozenLevel ? 0 : this.weather.waterSpeedMul);
+    water.advance(dt, frozenLevel ? 0 : this.weather.waterSpeedMul);
     if (this.idle || this.over || !water.rising) return;
     const dist = water.surfaceY - this.towerTopY;
     if (dist < 0) {
@@ -941,8 +1227,15 @@ export class GameScene extends Phaser.Scene {
       this.endGame('flood');
       return;
     }
+    // The flood starts quietly; say so once it is getting close, nag only when it is close.
     // No nagging while the water is still below the base platform (a short tower is always "close").
-    if (dist < WATER.warnPx && water.surfaceY < LAYOUT.baseTopY) {
+    const near = water.surfaceY < LAYOUT.baseTopY;
+    if (!this.risingShown && near && dist < WATER.warnPx * 2) {
+      this.risingShown = true;
+      audio.play('warning');
+      bus.emit('hud:toast', { text: S.waterRising, color: '#bfe6ff' });
+    }
+    if (dist < WATER.warnPx && near) {
       if (this.now - this.lastWarn > 1000) {
         this.lastWarn = this.now;
         audio.play('warning');
@@ -959,7 +1252,14 @@ export class GameScene extends Phaser.Scene {
   updateCamera(dtS) {
     if (this.revealing) return;
     const cam = this.cameras.main;
-    const target = Math.min(this.towerTopY - LAYOUT.dropLineY, LAYOUT.baseTopY - LAYOUT.dropLineY);
+    let target = Math.min(this.towerTopY - this.dropLineY, LAYOUT.baseTopY - this.dropLineY);
+    if (this.idle) {
+      // Attract mode: keep the little tower in the gap above the menu card when there is room.
+      const mt = Number(this.registry.get('menuTopGame'));
+      if (Number.isFinite(mt) && mt - IDLE_BASE_GAP >= IDLE_MIN_BASE) {
+        target = Math.min(this.towerTopY - (mt - IDLE_TOP_GAP), LAYOUT.baseTopY - (mt - IDLE_BASE_GAP));
+      }
+    }
     cam.scrollY += (target - cam.scrollY) * (1 - Math.exp(-dtS * 3.5));
     cam.scrollX = 0;
     const hM = (LAYOUT.baseTopY - this.towerTopY) / PX_PER_M;
@@ -982,17 +1282,38 @@ export class GameScene extends Phaser.Scene {
     const p = this.predictLanding();
     const showGhost = !this.idle && this.weather.fogAlpha <= 0.5;
     if (showGhost) {
+      // A drop that would miss the tower shows a red ghost dropping past it.
+      if (p.miss !== this.ghostMiss) {
+        this.ghostMiss = p.miss;
+        if (p.miss) this.ghost.setTintFill(GHOST_MISS_TINT).setAlpha(0.45);
+        else this.ghost.setTintFill(0xffffff).setAlpha(GHOST_A);
+      }
       this.ghost.setPosition(p.x, p.y);
       this.ghostEdge.setPosition(p.x, p.y);
+      // dotted guide from the hanging block to its landing spot
+      const pose = this.crane.getBlockPose();
+      const cam = this.cameras.main;
+      const x0 = pose.x;
+      const y0 = pose.y + cam.scrollY;
+      const len = Math.max(0, Math.hypot(p.x - x0, p.y - y0) - 24);
+      const line = this.aimLine;
+      line.setPosition(x0, y0).setRotation(Math.atan2(x0 - p.x, p.y - y0));
+      line.setCrop(0, 0, 6, Math.min(len, line.height));
+      if (this.ghostLabel && this.hintPending) {
+        this.ghostLabel.setPosition(clamp(p.x, 140, GAME_W - 140), p.y - (this.curGeom.h - this.curGeom.cy) - 14);
+        if (!this.ghostLabel.visible) this.ghostLabel.setVisible(true);
+      }
     }
     this.setGhostVisible(showGhost);
     if (this.autoOn) this.autoCheck(p.x, p.targetX);
   }
 
   setGhostVisible(on) {
+    if (!on && this.ghostLabel && this.ghostLabel.visible) this.ghostLabel.setVisible(false);
     if (this.ghost.visible === on) return;
     this.ghost.setVisible(on);
     this.ghostEdge.setVisible(on);
+    this.aimLine.setVisible(on);
   }
 
   /**
@@ -1059,7 +1380,8 @@ export class GameScene extends Phaser.Scene {
       }
       s = this.surfaceAt(x + minX, x + maxX);
     }
-    const landTop = s.found ? s.top : this.towerTopY;
+    out.miss = !s.found;
+    const landTop = s.found ? s.top : this.towerTopY + GHOST_MISS_DROP;
     out.x = x;
     out.y = landTop - (g.h - g.cy);
     out.targetX = this.supportTop(s.found ? s.block : this.topBlock).x;

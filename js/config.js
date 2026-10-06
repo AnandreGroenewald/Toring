@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.0.0';
+export const VERSION = '1.0.1';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -17,9 +17,9 @@ export function computeGameHeight(w = globalThis.innerWidth || 720, h = globalTh
 }
 
 export const LAYOUT = {
-  jibY: 150,            // screen y of the crane jib (beam across the top)
+  jibY: 200,            // screen y of the crane jib (beam across the top); the HUD has the band above it
   trolleyH: 26,         // trolley box height under the jib
-  ropeLen: 100,         // rope length from trolley to the hook
+  ropeLen: 80,          // rope length from trolley to the hook
   hookH: 14,            // hook graphic height; the block's top hangs at hook bottom
   dropLineY: 760,       // screen y where the tower top is kept by the camera (same on every device => same fall distance)
   baseWidth: 300,       // width of the concrete base platform (fondament)
@@ -72,27 +72,35 @@ export const stepToPxPerSec = (v) => v * 60;
 // Crane (hyskraan)
 // ---------------------------------------------------------------------------
 export const CRANE = {
-  amplitude: 230,        // trolley travel either side of centre (px)
+  amplitude: 230,        // trolley travel either side of centre (px), reached at block 4
+  amplitudeStart: 110,   // block 0 swings gently (any first tap lands on the base)...
+  amplitudePerBlock: 30, // ...and the swing widens by this much per block
   omega0: 1.55,          // rad/s of the trolley sine at block 0
-  omegaPerBlock: 0.03,   // added per block index
-  omegaMax: 4.0,
+  omegaPerBlock: 0.02,   // added per block index
+  omegaMax: 3.2,
   carry: 0.3,            // fraction of the hanging block's velocity kept on release
   pendulumDamping: 1.6,  // visual rope swing damping (1/s)
   respawnDelayMs: 350,   // after a landing/loss, wait this long before the next block appears
   maxWaitMs: 2500,       // ...or at most this long after a drop
+  calmWaitMaxMs: 2000,   // after a tower block falls, the next block waits (up to this long) for the tower to stop moving
 };
 
 // ---------------------------------------------------------------------------
 // Scoring (punte), lives and the "cement sets" freeze rule
 // ---------------------------------------------------------------------------
 export const SCORING = {
-  perfectTolPx: 8,       // |dx| <= this  => Perfek! (block snaps dead centre)
-  goodTolPx: 24,         // |dx| <= this  => Goed
+  perfectTolPx: 8,       // |dx| <= this  => Perfek! (block snaps dead centre)...
+  goodTolPx: 24,         // |dx| <= this  => Goed (eased towards the centre)
+  perfectTolFrac: 0.15,  // ...but never more than this fraction of the support's load-bearing width
+  goodTolFrac: 0.3,
+  perfectMaxTilt: 0.05,  // rad: a support leaning more than this can't give a Perfek (no snap onto a tipped block)
+  goodEase: 0.6,         // a Goed landing is slid this fraction of the way to the centre
+  goodEaseMs: 120,
   base: 10,              // every landed block
   perfectBonus: 15,      // x combo (combo 1 => 15, 2 => 30, ...)
   goodBonus: 5,
   comboCap: 10,
-  heartEvery: 5,         // every 5th consecutive Perfek restores a heart
+  heartEvery: 4,         // every 4th Perfek (not necessarily in a row) while a heart is missing brings it back
 };
 export const LIVES = 3;
 export const FREEZE_DEPTH = 8;   // all but the newest 8 settled blocks set like cement (become static)
@@ -107,8 +115,8 @@ export const RATING_EMOJI = { P: '🟩', G: '🟨', S: '🟧', X: '🟥' };
 export const WATER = {
   startOffsetPx: 40,     // water surface starts this far below the base top
   startAfterBlocks: 3,   // starts rising once this many blocks have landed
-  v0: 4,                 // px/s when rising starts
-  accel: 0.12,           // px/s^2
+  v0: 6,                 // px/s when rising starts
+  accel: 0.14,           // px/s^2
   vMax: 60,              // px/s
   warnPx: 140,           // HUD warning when tower top is this close to the water
   rainbowDropPx: 40,     // a rainbow event makes the water recede this much
@@ -147,6 +155,7 @@ export const WEATHER_TUNING = {
   rainbowScoreMul: 2,    // Perfek bonus multiplier during a rainbow
   stormWarnMs: 2000,
   hailCount: 10,         // hailstones per hail event at strength 1
+  strikeKick: [1.5, 2.5], // lightning: sideways kick (px/step) x strength
 };
 
 // ---------------------------------------------------------------------------

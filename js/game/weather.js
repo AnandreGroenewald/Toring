@@ -4,8 +4,9 @@
 // Screen-space objects live in two containers that cancel the camera zoom, so
 // overlays keep covering the screen during the game-over zoom-out.
 
-import { WEATHER_TUNING as WT, DEPTH, GAME_W, LAYOUT, accelToForce } from '../config.js';
+import { WEATHER_TUNING as WT, DEPTH, GAME_W, LAYOUT, PHYSICS, accelToForce } from '../config.js';
 import { WEATHER_INFO } from '../core/strings.js';
+import { createRng } from '../core/rng.js';
 
 const Mt = () => Phaser.Physics.Matter.Matter;
 
@@ -25,7 +26,7 @@ const TOWER_BUFFET_MS = 1400;     // period of the wind's rocking push on the re
 const STRIKE_FIRST_MS = 700;      // first warning starts this long after the banner
 const STRIKE_SECOND_MS = 6000;    // ...the second one at the latest this long after the first
 const BOLT_MS = 260;
-const CLOUD_Y = 78;
+const CLOUD_DY = 44;              // storm cloud centre below the jib (screen px)
 
 const HAIL_SPAWN_FROM = 500;
 const HAIL_SPAWN_TO = 5000;
@@ -33,6 +34,15 @@ const HAIL_LIFE = 6000;
 const HAIL_FADE = 450;
 const HAIL_AIR = 0.02;            // caps the fall speed (~15 px/step) so stones nudge rather than smash
 const HAIL_GROUP = -7;
+const HAIL_R = [8, 10];           // bigger stones read better; density keeps the old mass (r 6-8 at 0.004)
+const HAIL_DENSITY = 0.0024;
+const GUST_PRE = 64;              // gust strengths drawn ahead per event (one per flip)
+
+// Everything that can change the tower (wind strength, gust flips, lightning,
+// hail) runs on the fixed physics step and draws from per-event random streams
+// derived from the daily seed, so the Daaglikse Toring plays out the same for
+// everyone at any refresh rate. Math.random is only used for looks and sounds.
+const STEP_MS = PHYSICS.fixedDtMs;
 
 const TYPE_SOUND = {
   wind: (ev) => ['wind', { strength: ev.strength }],
@@ -45,7 +55,7 @@ const TYPE_SOUND = {
   rainbow: () => ['rainbow', {}],
 };
 
-const rand = (a, b) => a + Math.random() * (b - a);
+const rand = (a, b) => a + Math.random() * (b - a);   // visuals and sounds only
 const strikeable = (b) => !!b && !b.destroyed && !!b.body && !b.body.isStatic && b.state !== 'lost' && b.state !== 'falling';
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
@@ -215,17 +225,17 @@ function makeTextures(scene) {
     ctx.fillRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'source-over';
   });
-  canvasTexture(scene, 'wx_hail', 20, 20, (ctx) => {
-    ctx.fillStyle = radial(ctx, 7, 7, 11, [[0, '#ffffff'], [0.55, '#eef7ff'], [1, '#b9d6f2']]);
+  canvasTexture(scene, 'wx_hail', 24, 24, (ctx) => {
+    ctx.fillStyle = radial(ctx, 9, 9, 13, [[0, '#ffffff'], [0.55, '#eef7ff'], [1, '#b9d6f2']]);
     ctx.beginPath();
-    ctx.arc(10, 10, 8, 0, Math.PI * 2);
+    ctx.arc(12, 12, 9.6, 0, Math.PI * 2);
     ctx.fill();
-    ctx.lineWidth = 1.3;
-    ctx.strokeStyle = 'rgba(110,150,195,0.9)';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(29,43,69,0.7)';   // dark rim: reads against a pale sky
     ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,0.95)';
     ctx.beginPath();
-    ctx.ellipse(7.2, 6.6, 2.6, 1.7, -0.6, 0, Math.PI * 2);
+    ctx.ellipse(8.6, 7.9, 3.1, 2, -0.6, 0, Math.PI * 2);
     ctx.fill();
   });
 }
@@ -246,17 +256,20 @@ export class Weather {
     this.seen = [];
     this.destroyed = false;
 
+    this._rng = createRng(`${sequence && sequence.seed != null ? sequence.seed : 'wx'}/weather-fx`);
+    this._evRng = null;
     this._active = null;
     this._i = 0;
-    this._t = 0;                 // ms since the active event started
-    this._time = 0;              // ms since construction (visual phases)
+    this._t = 0;                 // simulated ms since the active event started (physics steps)
+    this._simTime = 0;           // simulated ms since construction (wind breathing phase)
+    this._time = 0;              // frame ms since construction (visual phases only)
     this._lvl = { wind: 0, gust: 0, rain: 0, storm: 0, hail: 0, fog: 0, heat: 0, rainbow: 0 };
     this._wind = 0;              // current accel px/s^2 (smoothed, includes fade)
     this._windMean = 0;
     this._windBase = 0;
     this._rainDir = 1;
     this._buffet = 0;
-    this._gust = { dir: 1, timer: 0, mul: 1 };
+    this._gust = { dir: 1, timer: 0, flips: 0, mul: 1, muls: [] };
     this._sfxTimer = 0;
     this._dyn = [];
     this._force = { x: 0, y: 0 };
@@ -264,8 +277,12 @@ export class Weather {
     this._W = GAME_W;
     this._H = scene.scale ? scene.scale.height : 1280;
     this._zoom = 1;
+    this._top = 0;               // screen y offset of the crane (safe-area inset)
 
-    this._storm = { phase: 'idle', t: 0, strikes: 0, nextAt: null, x: GAME_W / 2, topY: 0, flicker: 0, zapped: false, ev: null };
+    this._storm = {
+      phase: 'idle', simT: 0, t: 0, strikes: 0, nextAt: null, x: GAME_W / 2, topY: 0, flicker: 0, zapped: false,
+      ev: null, bolt: null, boltT: -1, target: null,
+    };
     this._hail = [];
     this._hailPlan = [];
     this._lastHailSfx = 0;
@@ -309,6 +326,14 @@ export class Weather {
     return !!this._active && this._active.type === type;
   }
 
+  /** Gust strength multiplier for flip `n` of the active event (seeded: same for every player). */
+  _gustMul(n) {
+    const g = this._gust;
+    if (n <= 0) return 1;
+    if (n <= g.muls.length) return g.muls[n - 1];
+    return this._evRng ? this._evRng.fork(`gust${n}`).float(0.75, 1.25) : 1;
+  }
+
   // --- event lifecycle ------------------------------------------------------
 
   /** Called when block i is attached to the crane. */
@@ -332,11 +357,12 @@ export class Weather {
     this._active = ev;
     this._t = 0;
     this._sfxTimer = 0;
+    this._evRng = this._rng.fork(`${ev.type}@${ev.start}`);
     this.seen.push(ev.type);
 
     const info = WEATHER_INFO[ev.type];
     if (info && this.bus) {
-      this.bus.emit('hud:banner', { emoji: info.emoji, title: info.name, subtitle: info.desc(ev.dir) });
+      this.bus.emit('hud:banner', { emoji: info.emoji, title: info.name, subtitle: info.desc(ev.dir), type: ev.type });
     }
     this._play('banner');
     const snd = TYPE_SOUND[ev.type];
@@ -346,9 +372,13 @@ export class Weather {
     }
 
     if (ev.type === 'gust') {
-      this._gust.dir = ev.dir || 1;
-      this._gust.timer = 0;
-      this._gust.mul = 1;
+      const g = this._gust;
+      g.dir = ev.dir || 1;
+      g.timer = 0;
+      g.flips = 0;
+      g.mul = 1;
+      g.muls = [];
+      for (let n = 1; n <= GUST_PRE; n++) g.muls.push(this._evRng.fork(`gust${n}`).float(0.75, 1.25));
     }
     if (ev.type === 'storm') {
       const s = this._storm;
@@ -370,31 +400,37 @@ export class Weather {
     if (this.audio && this.audio.play) this.audio.play(name, opts || {});
   }
 
-  // --- physics --------------------------------------------------------------
+  // --- physics (fixed step) -------------------------------------------------
 
-  /** Before every fixed physics step: wind on the falling block, the tower and hail. */
+  /**
+   * Before every fixed physics step: wind on the falling block, the tower and
+   * hail, then advance the weather clock by one step (gusts, lightning, hail).
+   * ctx = { dynamicBlocks, falling, towerTopY }.
+   */
   beforeStep(ctx = {}) {
     if (this.destroyed) return;
     const dyn = ctx.dynamicBlocks || this._dyn;
     this._dyn = dyn;
     const a = this._wind;
-    if (Math.abs(a) < 0.5) return;
     const falling = ctx.falling;
-    if (falling && !falling.destroyed && falling.body && !falling.body.isStatic) this._push(falling.body, a);
-    // Resting blocks get the wind as buffeting (zero mean): Matter integrates a
-    // steady force before it solves friction, so a constant sideways push makes
-    // a resting stack creep ~a*dt^2 every step (~30 px per wind event). An
-    // oscillating push rocks the tower, can still blow an overhanging block off,
-    // but nothing walks.
-    this._buffet = (this._buffet + (Math.PI * 2 * (1000 / 60)) / TOWER_BUFFET_MS) % (Math.PI * 2);
-    const tower = Math.abs(a) * WT.towerWindFactor * Math.sin(this._buffet);
-    for (let k = 0; k < dyn.length; k++) {
-      const b = dyn[k];
-      if (!b || b === falling || b.destroyed || !b.body || b.body.isStatic) continue;
-      // forces wake sleeping bodies by themselves (Matter's Sleeping.update)
-      this._push(b.body, b.state === 'lost' || b.state === 'falling' ? a : tower);
+    if (Math.abs(a) >= 0.5) {
+      if (falling && !falling.destroyed && falling.body && !falling.body.isStatic) this._push(falling.body, a);
+      // Resting blocks get the wind as buffeting (zero mean): Matter integrates a
+      // steady force before it solves friction, so a constant sideways push makes
+      // a resting stack creep ~a*dt^2 every step (~30 px per wind event). An
+      // oscillating push rocks the tower, can still blow an overhanging block off,
+      // but nothing walks.
+      this._buffet = (this._buffet + (Math.PI * 2 * STEP_MS) / TOWER_BUFFET_MS) % (Math.PI * 2);
+      const tower = Math.abs(a) * WT.towerWindFactor * Math.sin(this._buffet);
+      for (let k = 0; k < dyn.length; k++) {
+        const b = dyn[k];
+        if (!b || b === falling || b.destroyed || !b.body || b.body.isStatic) continue;
+        // forces wake sleeping bodies by themselves (Matter's Sleeping.update)
+        this._push(b.body, b.state === 'lost' || b.state === 'falling' ? a : tower);
+      }
+      for (let k = 0; k < this._hail.length; k++) this._push(this._hail[k].body, a);
     }
-    for (let k = 0; k < this._hail.length; k++) this._push(this._hail[k].body, a);
+    this._stepClock(ctx);
   }
 
   _push(body, accel) {
@@ -404,7 +440,17 @@ export class Weather {
     Mt().Body.applyForce(body, body.position, f);
   }
 
-  // --- per frame ------------------------------------------------------------
+  /** One fixed step of everything that affects the tower. */
+  _stepClock(ctx) {
+    this._simTime += STEP_MS;
+    if (this._active) this._t += STEP_MS;
+    this._updateLevels(STEP_MS);
+    this._updateWind(STEP_MS);
+    this._stepStorm(ctx);
+    this._stepHail(ctx);
+  }
+
+  // --- per frame (visuals) --------------------------------------------------
 
   update(dtMs, ctx = {}) {
     if (this.destroyed) return;
@@ -412,11 +458,9 @@ export class Weather {
     const cam = ctx.camera || this.scene.cameras.main;
     this._W = ctx.W || GAME_W;
     this._H = ctx.H || (this.scene.scale ? this.scene.scale.height : 1280);
+    if (Number.isFinite(ctx.craneTop)) this._top = ctx.craneTop;
     this._time += dt;
-    if (this._active) this._t += dt;
 
-    this._updateLevels(dt);
-    this._updateWind(dt);
     this._updateAmbient(dt);
     this._syncLayers(cam);
     this._updateRain(dt);
@@ -425,7 +469,7 @@ export class Weather {
     this._updateHeat(dt);
     this._updateGloom();
     this._updateStorm(dt, ctx, cam);
-    this._updateHail(dt, ctx, cam);
+    this._updateHail(dt);
     this._writeRegistry();
   }
 
@@ -441,7 +485,7 @@ export class Weather {
 
   _updateWind(dt) {
     const ev = this._active;
-    const t = this._time / 1000;
+    const t = this._simTime / 1000;
     let target = 0;
     let mean = 0;
     if (ev && ev.type === 'wind') {
@@ -456,7 +500,8 @@ export class Weather {
       if (g.timer >= WT.gustFlipMs) {
         g.timer -= WT.gustFlipMs;
         g.dir = -g.dir;
-        g.mul = rand(0.75, 1.25);
+        g.flips++;
+        g.mul = this._gustMul(g.flips);
         this._play('wind', { strength: ev.strength * WT.gustMul * g.mul });
       }
       const base = g.dir * WT.windAccel * ev.strength * WT.gustMul;
@@ -475,26 +520,26 @@ export class Weather {
   }
 
   /**
-   * Wind (px/s^2) expected on each of the next `n` physics steps, one step per
-   * 60 Hz frame, replaying _updateLevels/_updateWind without touching state.
-   * Gust flips are on a fixed timer, so the landing ghost can foresee them; only
-   * the random strength of future gust segments is unknown (taken as 1).
+   * Wind (px/s^2) on each of the next `n` physics steps, replaying the step
+   * clock without touching state. Gust flips and their (seeded) strengths are
+   * known in advance, so the landing ghost foresees them exactly.
    */
-  forecastWind(n, out, frameMs = 1000 / 60) {
+  forecastWind(n, out) {
     const ev = this._active;
     const type = ev ? ev.type : null;
-    const fade = frameMs / FADE_MS;
-    const k = 1 - Math.exp(-frameMs / 150);
+    const fade = STEP_MS / FADE_MS;
+    const k = 1 - Math.exp(-STEP_MS / 150);
     let w = this._wind;
-    let time = this._time;
+    let time = this._simTime;
     let lw = this._lvl.wind;
     let lg = this._lvl.gust;
     let gTimer = this._gust.timer;
     let gDir = this._gust.dir;
+    let gFlips = this._gust.flips;
     let gMul = this._gust.mul;
     for (let s = 0; s < n; s++) {
       out[s] = Math.abs(w) < 0.5 ? 0 : w;   // beforeStep() skips tiny winds
-      time += frameMs;
+      time += STEP_MS;
       lw = type === 'wind' ? Math.min(1, lw + fade) : Math.max(0, lw - fade);
       lg = type === 'gust' ? Math.min(1, lg + fade) : Math.max(0, lg - fade);
       const t = time / 1000;
@@ -503,11 +548,12 @@ export class Weather {
         const base = (ev.dir || 1) * WT.windAccel * ev.strength;
         target = base * (1 + 0.05 * Math.sin(t * 1.3) + 0.03 * Math.sin(t * 3.7)) * lw;
       } else if (type === 'gust') {
-        gTimer += frameMs;
+        gTimer += STEP_MS;
         if (gTimer >= WT.gustFlipMs) {
           gTimer -= WT.gustFlipMs;
           gDir = -gDir;
-          gMul = 1;
+          gFlips++;
+          gMul = this._gustMul(gFlips);
         }
         target = gDir * WT.windAccel * ev.strength * WT.gustMul * gMul * (0.85 + 0.15 * Math.sin(t * 7)) * lg;
       } else {
@@ -683,7 +729,7 @@ export class Weather {
         this.layer.add(img);
         return { img, a };
       };
-      const drop = LAYOUT.dropLineY;
+      const drop = LAYOUT.dropLineY + this._top;
       const bands = [band(drop - 30, 620, 0.86), band(drop - 330, 420, 0.42), band(drop + 260, 460, 0.5)];
       const puffs = [];
       for (let k = 0; k < FOG_PUFFS; k++) {
@@ -785,14 +831,19 @@ export class Weather {
 
   // --- storm / lightning ----------------------------------------------------
 
+  _cloudY() {
+    return LAYOUT.jibY + this._top + CLOUD_DY;
+  }
+
   _ensureStormVisuals() {
     if (this._cloud) return;
     const sc = this.scene;
-    const cloud = sc.add.image(GAME_W / 2, CLOUD_Y, 'wx_cloud').setScrollFactor(0).setAlpha(0).setVisible(false);
-    const glow = sc.add.image(GAME_W / 2, CLOUD_Y + 10, 'wx_glow').setScrollFactor(0).setAlpha(0).setScale(1.6, 1.1);
-    const beam = sc.add.image(GAME_W / 2, CLOUD_Y + 40, 'wx_beam').setScrollFactor(0).setOrigin(0.5, 0).setAlpha(0);
-    const icon = sc.add.text(GAME_W / 2, CLOUD_Y + 8, '⚡', {
-      fontFamily: 'sans-serif', fontSize: '52px', resolution: 2,
+    const cy = this._cloudY();
+    const cloud = sc.add.image(GAME_W / 2, cy, 'wx_cloud').setScrollFactor(0).setAlpha(0).setVisible(false);
+    const glow = sc.add.image(GAME_W / 2, cy + 10, 'wx_glow').setScrollFactor(0).setAlpha(0).setScale(1.6, 1.1);
+    const beam = sc.add.image(GAME_W / 2, cy + 40, 'wx_beam').setScrollFactor(0).setOrigin(0.5, 0).setAlpha(0);
+    const icon = sc.add.text(GAME_W / 2, cy + 8, '⚡', {
+      fontFamily: 'sans-serif', fontSize: '52px', resolution: 1,
       shadow: { offsetX: 0, offsetY: 3, color: 'rgba(20,30,60,0.5)', blur: 6, fill: true },
     }).setOrigin(0.5).setScrollFactor(0).setAlpha(0);
     this.layer.add([beam, cloud, glow, icon]);
@@ -803,43 +854,68 @@ export class Weather {
     this._bolt = { g: bolt, glow: flashGlow, pts: [], branches: [], x0: 0, y0: 0, x1: 0, y1: 0, redrawn: false };
   }
 
+  /** Lightning timing and the kick itself run on the physics step (same for every player). */
+  _stepStorm(ctx) {
+    const s = this._storm;
+    if (s.phase === 'idle') {
+      if (s.nextAt !== null && this._is('storm') && this._t >= s.nextAt) this._beginWarning(ctx);
+      return;
+    }
+    s.simT += STEP_MS;
+    const target = this._pickTarget();
+    s.target = target;
+    if (s.simT >= WT.stormWarnMs) this._strike(ctx, target);
+  }
+
   _updateStorm(dt, ctx, cam) {
     const s = this._storm;
-    if (s.phase === 'idle' && s.nextAt !== null && this._is('storm') && this._t >= s.nextAt) {
-      this._beginWarning(ctx);
-    }
     if (!this._cloud) return;
     const c = this._cloud;
+    if (s.bolt) {
+      // a strike happened on the last physics step: draw it
+      const b = s.bolt;
+      s.bolt = null;
+      const bx = this._screenX(b.x, cam);
+      this._buildBolt(bx, this._cloudY() + 30, bx, this._screenY(b.y, cam));
+      s.boltT = 0;
+      this._animateBolt(0);
+      const fx = this.effects;
+      if (fx) {
+        if (fx.flash) fx.flash(0xffffff, this.reducedMotion ? 0.3 : 0.6, 200);
+        if (fx.shake) fx.shake(0.009, 260);
+        if (fx.sparkle) fx.sparkle(b.x, b.y, 18);
+      }
+      this._play('thunder', { intensity: 0.9 });
+      if (this.haptics && this.haptics.heavy) this.haptics.heavy();
+    } else if (s.boltT >= 0) {
+      s.boltT += dt;
+      this._animateBolt(s.boltT);
+      if (s.boltT >= BOLT_MS) {
+        s.boltT = -1;
+        this._bolt.g.clear();
+        this._bolt.glow.alpha = 0;
+      }
+    }
     if (s.phase === 'warn') {
       s.t += dt;
-      const target = this._pickTarget(ctx.topBlock) || ctx.topBlock;
-      const tx = target ? target.centerX : GAME_W / 2;
+      const target = s.target;
+      const tx = target && !target.destroyed ? target.centerX : GAME_W / 2;
       s.x += (tx - s.x) * (1 - Math.exp(-dt / 220));
-      s.topY = target ? target.top : ctx.towerTopY !== undefined ? ctx.towerTopY : 0;
+      s.topY = target && !target.destroyed ? target.top : ctx.towerTopY !== undefined ? ctx.towerTopY : 0;
       // crackle again half-way through the warning
-      if (!s.zapped && s.t > WT.stormWarnMs * 0.55) {
+      if (!s.zapped && s.simT > WT.stormWarnMs * 0.55) {
         s.zapped = true;
         this._play('zap');
       }
       s.flicker -= dt;
       if (s.flicker <= 0) {
-        s.flicker = rand(110, 300) * (1 - 0.5 * (s.t / WT.stormWarnMs));
+        s.flicker = rand(110, 300) * (1 - 0.5 * Math.min(1, s.simT / WT.stormWarnMs));
         c.glow.alpha = rand(0.45, 0.95);
       } else {
         c.glow.alpha *= Math.exp(-dt / 70);
       }
-      if (s.t >= WT.stormWarnMs) this._strike(ctx, cam);
-    } else if (s.phase === 'bolt') {
-      s.t += dt;
-      this._animateBolt(s.t);
-      if (s.t >= BOLT_MS) {
-        s.phase = 'idle';
-        s.t = 0;
-        this._bolt.g.clear();
-        this._bolt.glow.alpha = 0;
-      }
     }
-    const want = s.phase === 'idle' ? 0 : 1;
+    const want = s.phase === 'warn' || s.boltT >= 0 ? 1 : 0;
     c.alpha += (want - c.alpha) * (1 - Math.exp(-dt / (want ? 140 : 380)));
     const vis = c.alpha > 0.01;
     if (vis !== c.shown) {
@@ -849,14 +925,15 @@ export class Weather {
     if (!vis) return;
     const t = this._time / 1000;
     const wob = Math.sin(t * 9) * 3;
+    const cy = this._cloudY();
     const cx = this._screenX(s.x, cam) + wob;
-    c.cloud.setPosition(cx, CLOUD_Y + Math.sin(t * 2) * 2).setAlpha(c.alpha);
+    c.cloud.setPosition(cx, cy + Math.sin(t * 2) * 2).setAlpha(c.alpha);
     c.cloud.setScale(1.08 + 0.03 * Math.sin(t * 5));
-    c.glow.setPosition(cx, CLOUD_Y + 12);
+    c.glow.setPosition(cx, cy + 12);
     if (s.phase !== 'warn') c.glow.alpha *= Math.exp(-dt / 90);
     const warnPulse = s.phase === 'warn' ? 0.55 + 0.45 * Math.abs(Math.sin(t * 7)) : 0;
     // telegraph: a column from the cloud down to the target and a blinking bolt icon above it
-    const yTop = CLOUD_Y + 50;
+    const yTop = cy + 50;
     const yEnd = this._screenY(s.topY, cam);
     const sx = this._screenX(s.x, cam);
     c.icon.setPosition(sx, yEnd - 58).setAlpha(c.alpha * warnPulse).setScale(0.9 + 0.2 * warnPulse);
@@ -867,20 +944,21 @@ export class Weather {
     this._ensureStormVisuals();
     const s = this._storm;
     s.phase = 'warn';
+    s.simT = 0;
     s.t = 0;
     s.flicker = 0;
     s.zapped = false;
     s.nextAt = null;
     s.ev = this._active;
-    const target = this._pickTarget(ctx.topBlock) || ctx.topBlock;
+    const target = this._pickTarget();
+    s.target = target;
     s.x = target ? target.centerX : GAME_W / 2;
     s.topY = target ? target.top : ctx.towerTopY !== undefined ? ctx.towerTopY : 0;
     this._play('zap');
   }
 
-  /** The block lightning hits: the top block if it can move, else the highest dynamic one. */
-  _pickTarget(topBlock) {
-    if (strikeable(topBlock)) return topBlock;
+  /** The block lightning hits: the highest block that can still move (the top block, unless it has set). */
+  _pickTarget() {
     let best = null;
     for (let k = 0; k < this._dyn.length; k++) {
       const b = this._dyn[k];
@@ -903,44 +981,38 @@ export class Weather {
     return cx + (worldX - cam.scrollX - cx) * z;
   }
 
-  _strike(ctx, cam) {
+  /** Physics side of a strike (fixed step); the bolt is drawn on the next frame. */
+  _strike(ctx, target) {
     const s = this._storm;
     const ev = s.ev || this._active;
-    s.phase = 'bolt';
-    s.t = 0;
+    s.phase = 'idle';
+    s.simT = 0;
+    s.target = null;
     s.strikes++;
     if (this._is('storm') && s.strikes < 2) s.nextAt = this._t + STRIKE_SECOND_MS;
 
-    const target = this._pickTarget(ctx.topBlock);
-    const hit = target || ctx.topBlock || null;
+    const hit = target || null;
     const wx = hit ? hit.centerX : GAME_W / 2;
-    const wy = hit ? hit.top : ctx.towerTopY !== undefined ? ctx.towerTopY : 0;
+    const wy = hit ? hit.top : Number.isFinite(ctx.towerTopY) ? ctx.towerTopY : 0;
     s.x = wx;
     s.topY = wy;
-    const bx = this._screenX(wx, cam);
-    this._buildBolt(bx, CLOUD_Y + 30, bx, this._screenY(wy, cam));
-    this._animateBolt(0);
-
-    const fx = this.effects;
-    if (fx) {
-      if (fx.flash) fx.flash(0xffffff, this.reducedMotion ? 0.3 : 0.6, 200);
-      if (fx.shake) fx.shake(0.009, 260);
-      if (fx.sparkle) fx.sparkle(wx, wy, 18);
-    }
-    this._play('thunder', { intensity: 0.9 });
-    if (this.haptics && this.haptics.heavy) this.haptics.heavy();
+    s.bolt = { x: wx, y: wy };
 
     if (target) {
       const M = Mt();
       const body = target.body;
+      const r = (this._evRng || this._rng).fork(`strike${s.strikes}`);
       const strength = ev ? ev.strength : 1;
-      const dir = ev && ev.dir ? ev.dir : Math.random() < 0.5 ? -1 : 1;
+      const dir = ev && ev.dir ? ev.dir : r.chance(0.5) ? -1 : 1;
+      const kick = WT.strikeKick || [1.5, 2.5];
+      // a Perfek block is "grounded": it takes half the jolt
+      const grounded = target.rating === 'P' ? 0.5 : 1;
       M.Sleeping.set(body, false);
       M.Body.setVelocity(body, {
-        x: body.velocity.x + dir * rand(2, 4) * strength,
-        y: body.velocity.y - 1.5,
+        x: body.velocity.x + dir * r.float(kick[0], kick[1]) * strength * grounded,
+        y: body.velocity.y - 1.5 * grounded,
       });
-      M.Body.setAngularVelocity(body, body.angularVelocity + (Math.random() < 0.5 ? -1 : 1) * 0.04);
+      M.Body.setAngularVelocity(body, body.angularVelocity + (r.chance(0.5) ? -1 : 1) * 0.04 * grounded);
     }
   }
 
@@ -1014,36 +1086,52 @@ export class Weather {
 
   // --- hail -----------------------------------------------------------------
 
+  /** The whole hail shower is drawn from the event's seeded stream when it starts. */
   _planHail(ev) {
     const n = Math.max(1, Math.round(WT.hailCount * ev.strength));
-    this._hailPlan.length = 0;
+    const r = (this._evRng || this._rng).fork('hail');
+    const plan = this._hailPlan;
+    plan.length = 0;
     for (let k = 0; k < n; k++) {
-      const u = (k + Math.random() * 0.8) / n;
-      this._hailPlan.push(HAIL_SPAWN_FROM + u * (HAIL_SPAWN_TO - HAIL_SPAWN_FROM));
+      const u = (k + r.float(0, 0.8)) / n;
+      plan.push({
+        at: HAIL_SPAWN_FROM + u * (HAIL_SPAWN_TO - HAIL_SPAWN_FROM),
+        near: r.chance(0.55),
+        dx: r.float(-170, 170),
+        x: r.float(30, GAME_W - 30),
+        dy: r.float(30, 90),
+        r: r.float(HAIL_R[0], HAIL_R[1]),
+        vx: r.float(-0.6, 0.6),
+        vy: r.float(5, 7),
+        av: r.float(-0.2, 0.2),
+      });
     }
-    this._hailPlan.sort((a, b) => b - a); // pop() takes the earliest
+    plan.sort((a, b) => b.at - a.at); // pop() takes the earliest
   }
 
-  _updateHail(dt, ctx, cam) {
+  _stepHail(ctx) {
     if (this._is('hail')) {
-      while (this._hailPlan.length && this._hailPlan[this._hailPlan.length - 1] <= this._t) {
-        this._hailPlan.pop();
-        this._spawnHail(ctx, cam);
-      }
+      const plan = this._hailPlan;
+      while (plan.length && plan[plan.length - 1].at <= this._t) this._spawnHail(plan.pop(), ctx);
     }
     const hail = this._hail;
     for (let k = hail.length - 1; k >= 0; k--) {
       const h = hail[k];
-      h.age += dt;
+      h.age += STEP_MS;
       const p = h.body.position;
-      if (h.age > HAIL_LIFE || p.y > 200 || Math.abs(p.x - GAME_W / 2) > 1500) {
-        this._removeHail(k);
-        continue;
-      }
+      if (h.age > HAIL_LIFE || p.y > 200 || Math.abs(p.x - GAME_W / 2) > 1500) this._removeHail(k);
+    }
+  }
+
+  _updateHail() {
+    const hail = this._hail;
+    for (let k = 0; k < hail.length; k++) {
+      const h = hail[k];
+      const p = h.body.position;
       h.img.setPosition(p.x, p.y);
       h.img.rotation = h.body.angle;
       const left = HAIL_LIFE - h.age;
-      const a = left < HAIL_FADE ? left / HAIL_FADE : 1;
+      const a = left < HAIL_FADE ? Math.max(0, left / HAIL_FADE) : 1;
       h.img.alpha = a;
       // motion streak behind fast stones
       const v = h.body.velocity;
@@ -1059,20 +1147,20 @@ export class Weather {
     }
   }
 
-  _spawnHail(ctx, cam) {
+  _spawnHail(st, ctx) {
     const M = Mt();
     const world = this.scene.matter && this.scene.matter.world;
     if (!world) return;
-    const W = this._W;
-    const top = ctx.topBlock;
-    const cx = top && !top.destroyed ? top.centerX : GAME_W / 2;
-    const x = Math.random() < 0.55 ? clamp(cx + rand(-170, 170), 20, W - 20) : rand(30, W - 30);
-    const scrollY = cam ? cam.scrollY : 0;
-    const y = scrollY - rand(30, 90);
-    const r = rand(6, 8);
+    // aim near the highest block that can still move (or the tower top), in world terms only
+    const top = this._pickTarget();
+    const towerTopY = Number.isFinite(ctx.towerTopY) ? ctx.towerTopY : LAYOUT.baseTopY;
+    const cx = top ? top.centerX : GAME_W / 2;
+    const x = st.near ? clamp(cx + st.dx, 20, GAME_W - 20) : st.x;
+    const y = Math.min(towerTopY, LAYOUT.baseTopY) - LAYOUT.dropLineY - st.dy;
+    const r = st.r;
     const body = M.Bodies.circle(x, y, r, {
       label: 'hail',
-      density: 0.004,
+      density: HAIL_DENSITY,
       restitution: 0.45,
       friction: 0.1,
       frictionAir: HAIL_AIR,
@@ -1080,11 +1168,11 @@ export class Weather {
       collisionFilter: { group: HAIL_GROUP, category: 0x0001, mask: 0xffffffff },
     });
     body.sleepThreshold = 0;   // never sleeps: keeps bouncing and gets cleaned up
-    M.Body.setVelocity(body, { x: (this._wind / WT.windAccel) * 1.5 + rand(-0.6, 0.6), y: rand(5, 7) });
-    M.Body.setAngularVelocity(body, rand(-0.2, 0.2));
+    M.Body.setVelocity(body, { x: (this._wind / WT.windAccel) * 1.5 + st.vx, y: st.vy });
+    M.Body.setAngularVelocity(body, st.av);
     world.add(body);
     const tail = this.scene.add.image(x, y, 'wx_drop').setDepth(DEPTH.hail - 0.5).setOrigin(0.5, 1);
-    const img = this.scene.add.image(x, y, 'wx_hail').setDepth(DEPTH.hail).setScale(r / 8);
+    const img = this.scene.add.image(x, y, 'wx_hail').setDepth(DEPTH.hail).setScale(r / 10.6);
     this._hail.push({ body, img, tail, r, age: 0, hit: false });
   }
 
