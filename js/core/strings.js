@@ -108,6 +108,14 @@ export const S = {
   shareDailyHead: (n) => `Stapel #${n}`,
   sharePracticeHead: 'Stapel (oefenrondte)',
 
+  // --- Eerste speletjie: leidrade tydens die spel (js/core/coach.js) ---
+  firstNudge: 'Nuut? Tik net en speel — ons wys jou hoe.',
+  coachTap: 'Tik om te laat val 👆',
+  coachMiddle: 'Mik vir die middel — die wit vorm wys waar dit land',
+  coachPerfect: 'Perfek! Doen dit weer 🎯',
+  coachWater: 'Die water styg — bou vinniger as die vloedlyn 🌊',
+  coachLost: '’n Blok in die see kos ’n hartjie ❤️',
+
   // --- Bygevoeg in 1.0.1 ---
   ghostHint: 'Hier land jou blok',
   clickToDrop: 'Klik of druk spasie om te laat val',

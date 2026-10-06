@@ -172,7 +172,7 @@ export function createUI(bus) {
 
   applyMotionClass();
   fallbackLayout();
-  renderHowTo(false);
+  renderHowTo();
 
   // --- Global listeners ----------------------------------------------------
   root.addEventListener('pointerdown', () => {
@@ -243,7 +243,6 @@ export function createUI(bus) {
     if (scr) setOn(scr, true);
     if (st.keyboard && st.modalReturn?.isConnected) focusQuietly(st.modalReturn);
     st.modalReturn = null;
-    if (name === 'howto') bus.emit('ui:howto-closed');
   }
 
   function markScrollable(el) {
@@ -514,6 +513,8 @@ export function createUI(bus) {
       }
       card.append(
         h('p', { class: 'note', text: S.sameForAll }),
+        // first visit: no pop-up, just a friendly line (the game itself coaches the first tower)
+        m.newPlayer ? h('p', { class: 'note nudge', text: S.firstNudge }) : null,
         button('btn-big', [icon('play'), h('span', { text: S.playToday })], () => bus.emit('ui:play-daily')));
     }
 
@@ -522,7 +523,7 @@ export function createUI(bus) {
       () => bus.emit('ui:play-practice'));
 
     const dock = h('div', { class: 'dock' },
-      dockBtn('help', S.howTo, () => { audio.play('click'); showHowTo(false); }),
+      dockBtn('help', S.howTo, () => { audio.play('click'); showHowTo(); }),
       dockBtn('chart', S.stats, () => { audio.play('click'); showStats(st.model?.stats); }),
       toggleBtns());
 
@@ -588,7 +589,7 @@ export function createUI(bus) {
   // ---------------------------------------------------------------------------
   // How to play
   // ---------------------------------------------------------------------------
-  function renderHowTo(firstTime) {
+  function renderHowTo() {
     const steps = S.howToSteps.map((s, i) => {
       const c = STEP_COLORS[i % STEP_COLORS.length];
       return h('li', { class: 'step' },
@@ -600,12 +601,12 @@ export function createUI(bus) {
       h('div', { class: 'sheet-head' }, emo('🏗️'), h('h2', { id: 'stapel-howto-title', text: S.howToTitle })),
       h('div', { class: 'sheet-body' }, h('ol', { class: 'steps' }, steps)),
       h('div', { class: 'sheet-foot' },
-        button(firstTime ? 'btn-big' : 'btn-big btn-green', [icon('play'), h('span', { text: S.howToGo })], () => closeModal(), { nav: false })));
+        button('btn-big btn-green', [icon('play'), h('span', { text: S.howToGo })], () => closeModal(), { nav: false })));
     modals.howto.replaceChildren(sheet);
   }
 
-  function showHowTo(firstTime = false) {
-    renderHowTo(!!firstTime);
+  function showHowTo() {
+    renderHowTo();
     openModal('howto');
   }
 

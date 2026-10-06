@@ -1,7 +1,7 @@
 // In-game HUD (screen space): height + points, next block, hearts, weather chip,
 // combo badge, flood distance, wobble meter, event banners, toasts and the tap hint.
 // Driven entirely by bus events from GameScene; texts re-render only on change.
-import { LAYOUT, LIVES, FONT, COLORS, WATER, PX_PER_M, SCORING } from '../config.js';
+import { LAYOUT, LIVES, FONT, COLORS, WATER, PX_PER_M, SCORING, COACH } from '../config.js';
 import { bus } from '../core/bus.js';
 import { S, WEATHER_INFO } from '../core/strings.js';
 import { fmtM, fmtInt } from '../core/format.js';
@@ -30,6 +30,8 @@ const BANNER_H = 150;
 const BANNER_HOLD_MS = 1400;
 const TOAST_HOLD_MS = 1500;
 const WOBBLE_W = 18;
+const COACH_W = 620;        // widest first-game hint pill
+const COACH_BELOW_TOP = 250; // hint centre: this far below the tower-top line (clear of the landing spot)
 
 const rgba = (c, a) => `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${a})`;
 
@@ -268,8 +270,23 @@ export class HudScene extends Phaser.Scene {
     this.drawWobble(0);
 
     // --- Hint (over the sea below the base, clear of the landing spot) ---------
-    this.hint = add(text(this, W / 2, LAYOUT.dropLineY + st + 160, '', 40, { strokeMul: 0.14 }).setOrigin(0.5).setVisible(false));
+    this.hint = add(text(this, W / 2, LAYOUT.dropLineY + st + 160, '', 40, { strokeMul: 0.14, emoji: true }).setOrigin(0.5).setVisible(false));
     this.hintTween = null;
+
+    // --- Coach (first game only): a roomy pill over the sea, well below the landing spot ---------
+    const game = this.scene.get('Game');
+    this.reduced = !!(game && game.reducedMotion);
+    this.coach = this.add.container(W / 2, LAYOUT.dropLineY + st + COACH_BELOW_TOP).setVisible(false);
+    this.coachBg = this.add.image(0, 0, '__WHITE');
+    this.coachTxt = text(this, 0, -1, '', 34, { strokeMul: 0.14, emoji: true, align: 'center' }).setOrigin(0.5);
+    this.coachTxt.setWordWrapWidth(COACH_W - 72, true);
+    this.coach.add([this.coachBg, this.coachTxt]);
+    this.root.add(this.coach);
+    this.coachTween = null;
+    this.coachTimer = null;
+    this.coachDelay = null;
+    this.coachCur = null;       // the hint on show (or waiting), so a banner can pause and resume it
+    this.pendingCoach = null;
 
     // --- Banner (weather events): compact, above the flood pill, then flies into the chip
     this.banner = this.add.container(W / 2, this.bannerY()).setVisible(false);
@@ -299,6 +316,7 @@ export class HudScene extends Phaser.Scene {
       bus.on('hud:banner', (b) => this.showBanner(b)),
       bus.on('hud:toast', (t) => this.showToast(t)),
       bus.on('hud:hint', (h) => this.showHint(h)),
+      bus.on('hud:coach', (c) => this.showCoach(c)),
       bus.on('hud:hide', (o) => this.hideAll(o)),
       // the results card takes over from the big height
       bus.on('game:over', () => this.tweens.add({ targets: this.heightTxt, alpha: 0, duration: 250 })),
@@ -325,9 +343,14 @@ export class HudScene extends Phaser.Scene {
     this.offs.length = 0;
     if (this.bannerTimer) this.bannerTimer.remove(false);
     if (this.toastTimer) this.toastTimer.remove(false);
+    if (this.coachTimer) this.coachTimer.remove(false);
+    if (this.coachDelay) this.coachDelay.remove(false);
     this.bannerTimer = null;
     this.toastTimer = null;
+    this.coachTimer = null;
+    this.coachDelay = null;
     this.pendingToast = null;
+    this.pendingCoach = null;
     this.state = null;
   }
 
@@ -601,6 +624,11 @@ export class HudScene extends Phaser.Scene {
     if (this.bannerTimer) this.bannerTimer.remove(false);
     const c = this.banner;
     const y0 = this.bannerY();
+    // A weather banner explains itself: a coach hint never sits on it (it comes back afterwards).
+    if (this.coachCur && this.coachNear(y0)) {
+      this.pendingCoach = this.coachCur;
+      this.hideCoach(true);
+    }
     c.setVisible(true).setAlpha(0).setScale(0.6);
     c.setPosition(this.W / 2, y0);
     this.bannerEmoji.setScale(0.4).setAngle(-14);
@@ -618,6 +646,9 @@ export class HudScene extends Phaser.Scene {
           const t = this.pendingToast;
           this.pendingToast = null;
           if (t) this.showToast(t);
+          const k = this.pendingCoach;
+          this.pendingCoach = null;
+          if (k) this.showCoach({ ...k, delay: 0 });
         },
       });
     });
@@ -672,10 +703,85 @@ export class HudScene extends Phaser.Scene {
     });
   }
 
+  /** Is the coach pill (on show, or about to be) within reach of something centred at y? */
+  coachNear(y, half = BANNER_H / 2) {
+    return Math.abs(this.coachY(this.coachH || 120) - y) < half + (this.coachH || 120) / 2 + 12;
+  }
+
+  /** Hint centre: below the landing spot, and above the bottom toast on short screens. */
+  coachY(h) {
+    const toastTop = this.H - this.sb - 150 - 31;
+    return Math.round(Math.min(LAYOUT.dropLineY + this.st + COACH_BELOW_TOP, toastTop - 18 - h / 2));
+  }
+
+  /**
+   * A first-game hint (text only; the game keeps running). It fades on its own, the newest hint
+   * replaces an older one, and it steps aside for a weather banner. Reduced motion: a plain fade.
+   */
+  showCoach(c) {
+    if (!c || !c.text || this.hidden) return;
+    if (c.delay > 0) {
+      if (this.coachDelay) this.coachDelay.remove(false);
+      this.coachDelay = this.time.delayedCall(c.delay, () => {
+        this.coachDelay = null;
+        this.showCoach({ ...c, delay: 0 });
+      });
+      return;
+    }
+    if (this.coachDelay) {
+      this.coachDelay.remove(false);
+      this.coachDelay = null;
+    }
+    this.coachTxt.setText(c.text);
+    const pw = Math.min(COACH_W, Math.ceil((this.coachTxt.width + 64) / 16) * 16);
+    const ph = Math.ceil((this.coachTxt.height + 40) / 8) * 8;
+    this.coachBg.setTexture(panelTexture(this, pw, ph, NAVY, 0.9, { radius: Math.min(36, ph / 2), rim: 0.3 }));
+    this.coachH = ph;
+    this.coachCur = c;
+    if (this.banner.visible && this.coachNear(this.banner.y)) {
+      this.pendingCoach = c;
+      return;
+    }
+    if (this.coachTween) this.coachTween.stop();
+    if (this.coachTimer) this.coachTimer.remove(false);
+    const box = this.coach;
+    const y0 = this.coachY(ph);
+    box.setVisible(true).setAlpha(0).setPosition(this.W / 2, y0);
+    if (this.reduced) {
+      box.setScale(1);
+      this.coachTween = this.tweens.add({ targets: box, alpha: 1, duration: 200 });
+    } else {
+      box.setScale(0.9).y = y0 + 18;
+      this.coachTween = this.tweens.add({ targets: box, alpha: 1, scale: 1, y: y0, duration: 280, ease: 'Back.easeOut' });
+    }
+    this.coachTimer = this.time.delayedCall(Math.max(1500, c.ms || COACH.holdMs), () => {
+      this.coachTimer = null;
+      this.hideCoach(false);
+    });
+  }
+
+  hideCoach(fast) {
+    if (this.coachTimer) {
+      this.coachTimer.remove(false);
+      this.coachTimer = null;
+    }
+    if (this.coachTween) this.coachTween.stop();
+    const box = this.coach;
+    if (!fast) this.coachCur = null;
+    if (!box.visible) return;
+    this.coachTween = this.tweens.add({
+      targets: box, alpha: 0, duration: fast ? 120 : 420, ease: 'Quad.easeOut',
+      onComplete: () => { box.setVisible(false); this.coachTween = null; },
+    });
+  }
+
   /** Game over: everything fades except the height, which moves to centre stage. */
   hideAll(o) {
     if (this.hidden) return;
     this.hidden = true;
+    if (this.coachDelay) this.coachDelay.remove(false);
+    this.coachDelay = null;
+    this.pendingCoach = null;
     if (this.hintTween) this.hintTween.stop();
     if (this.waterPulse) this.waterPulse.stop();
     if (this.beat) this.beat.stop();

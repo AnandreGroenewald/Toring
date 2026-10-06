@@ -171,7 +171,7 @@ Mechanisms seen in tower traces (tr1.json, tr2.json):
 
 Even the 0.0001 autoplay (91% Perfek) loses 41% of its lives to collapses that start at a Perfek block.
 - **Proposed fix:** Fix package, tested in-page (scratchpad harness.js `exp` hooks):
-- (a) P-lock: on a 'P' in applyRating, freeze every non-frozen tower block below the new block (call freezeBlock). Perfek then means 'set solid' and the Jenga tension stays with 'Goed'/'Skeef' blocks.
+- (a) P-lock: on a 'P' in applyRating, freeze every non-frozen tower block below the new block (call freezeBlock). Perfek then means 'set solid' and the wobble tension stays with 'Goed'/'Skeef' blocks.
 - (b) Ease 'Goed' landings onto the support's top centre. Tested at 100%; apply it as a short corrective velocity over about 100 ms rather than a teleport. At 50% it already adds about 17 s to the good player's median.
 - (c) The collapse forgiveness in finding 'double-charge'.
 - (d) Heart every 4th Perfek (finding 'hearts').
@@ -220,7 +220,7 @@ Keep the snap over the L/J top cell. Also scale the rating windows to the suppor
 
 On an L top or a T foot (W = 44): P ≤ 6.6 px, G ≤ 13 px. A 22–24 px landing there shows 'Skeef', not 'Goed'.
 
-I don't recommend 'rate after settling': it kills the instant Stack flash.
+I don't recommend 'rate after settling': it kills the instant Perfek flash.
 
 ### [high] `double-charge-collapse` — A collapse charges two lives: one for the tower, one for the block already falling
 - **File:** `js/scenes/GameScene.js`
@@ -229,7 +229,7 @@ I don't recommend 'rate after settling': it kills the instant Stack flash.
 - 42 of 43 autoplay blocks that missed the tower entirely did so during or just after a tower collapse (dropped within 3 s of it or collapsing mid-fall). Each cost a separate life. Example from r_a.json, oefen-s2: block 21 dropped at 57.5 s, blocks 20 and 19 fell at 58.5–58.6 s, block 21 was lost at 59.3 s for another life.
 - With collapse forgiveness alone (experiment B) the expert median rises from 69 s to 70 s and p90 from 80 s to 108 s; the perfect bot rises from 96 s to 105 s.
 - **Proposed fix:** 1. In markLost, treat a falling block that is lost while now < collapseUntil, or that was dropped within COLLAPSE_MS before a tower loss, as part of the same collapse (no extra life).
-2. After any tower loss, delay spawnBlock until no dynamic block moves faster than about 1 px/step, capped at about 2 s. This is Tower Bloxx style: the crane waits, and the player reads the collapse before aiming again.
+2. After any tower loss, delay spawnBlock until no dynamic block moves faster than about 1 px/step, capped at about 2 s. The crane waits, and the player reads the collapse before aiming again.
 3. Low priority: lost detection waits until a block is entirely below the base top (GameScene.js:802). A block falling off a 50 m tower takes about 1.5 s to get there, so 'Oeps!' and the heart loss arrive late and are clamped off-screen. Consider also marking a block lost when it is falling (vy > 4 px/step) more than about 150 px below its landing y.
 
 ### [high] `first-tap-loses-life` — The first natural tap usually costs a heart: 59% of possible first-tap moments lose block 0
@@ -293,7 +293,7 @@ So the 'Goed' window (SCORING.goodTolPx 24, config.js:90) is not width-aware.
 - With a heart every 4th Perfek counted in total, not in a row (experiment heartTotal, ry_R1.json): σ20 29 hearts in 24 games (19 games with at least one), σ35 19 (15 games), σ50 17 (13 games). Few are wasted at full lives (13 / 5 / 3).
 - **Proposed fix:** - Add SCORING.heartEveryPerfects: 4. It counts every Perfek since the last heart (not necessarily in a row) and resets when a heart is granted; Perfeks at full lives don't fill it.
 - Show the progress as 4 small pips under the hearts.
-- Keep the 5-in-a-row heart, or replace it with a score bonus, for the Stack-style chain fantasy.
+- Keep the 5-in-a-row heart, or replace it with a score bonus, for the chain-combo fantasy.
 - Consider making a combo of 3 or more pay a visible bonus (+50) so chains stay meaningful for humans.
 
 ### [medium] `weather-harsh-unseen` — Late weather is harsh (storm/hail/gust cost 3–4× calm) yet most players never reach it; the 5-event forecast over-promises
@@ -353,7 +353,7 @@ Fairness test (rfair.json), same daily and identical player inputs, only Math.ra
 - The metric is speed·6 + angularSpeed·150, so 0.06 px/step (3.6 px/s) of post-landing settling already passes 0.35.
 - With the stability fixes creaks fall to 15–21 per minute for humans and 7 per minute for the bot, still frequent.
 - **Proposed fix:** - Creak threshold 0.35 → 0.6, shake threshold 0.6 → 0.9, WOBBLE_GRACE_MS 550 → 900.
-- Better: drive creaks from the top section's tilt relative to the tower axis (CoM offset vs. the narrowest support's half-width) rather than speed. Creaks then predict real danger, which is the Jenga cue.
+- Better: drive creaks from the top section's tilt relative to the tower axis (CoM offset vs. the narrowest support's half-width) rather than speed. Creaks then predict real danger, which is the tower-wobble cue.
 - The left-edge wobble meter could show that same balance value.
 
 ### [low] `first-30s-overlays` — In the first 30 s the tap hint and the weather banners cover the landing zone while the player is aiming
@@ -627,7 +627,7 @@ Per-frame cost is healthy; the serious problems are in platform handling and Pha
 
 ### [medium] `render-loop-behind-overlays` — Full 60 fps rendering and simulation continue behind the pause, results and menu screens (battery and heat)
 - **File:** `js/main.js`
-- **Evidence:** Script t9_orient.mjs: 40 frames rendered in 3 s on the pause screen, which is the full headless rate (13.7 fps). Nothing throttles the loop. On the results screen the scene keeps re-rendering the zoomed tower under a dark scrim. The menu runs the full idle game (physics, crane, about 3× screen overdraw) behind a card that hides most of it (integration/03-menu-idle.png). Wordle-style players often leave the menu or results open with the countdown running. The AudioContext also stays 'running' on menu and results; it is only suspended on pause or hidden.
+- **Evidence:** Script t9_orient.mjs: 40 frames rendered in 3 s on the pause screen, which is the full headless rate (13.7 fps). Nothing throttles the loop. On the results screen the scene keeps re-rendering the zoomed tower under a dark scrim. The menu runs the full idle game (physics, crane, about 3× screen overdraw) behind a card that hides most of it (integration/03-menu-idle.png). Daily-puzzle players often leave the menu or results open with the countdown running. The AudioContext also stays 'running' on menu and results; it is only suspended on pause or hidden.
 - **Proposed fix:** Pause screen: in pauseGame(), after one frame `requestAnimationFrame(() => game.loop.sleep())`; in resumeScenes(), call `game.loop.wake()` (needs the smoothStep/panicMax fix, or wake() triggers slow motion). Results: sleep the loop once the reveal has finished (on 'game:over') and wake it on 'ui:home' or practice. Menu: let the attract tower run for about 20 s after the last interaction, then sleep the loop (wake it on pointerdown), and sleep while the how-to or stats modal covers it. Audio: call ctx.suspend() after about 10 s with no sound and let play() resume it.
 
 ### [medium] `weather-random-frame-coupling` — Gameplay-affecting weather uses Math.random, so dailies are not identical; seed it per event, not per frame

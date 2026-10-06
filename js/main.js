@@ -10,6 +10,7 @@ import { createSequence } from './core/sequence.js';
 import { buildShareText } from './core/share.js';
 import { normalizeFeed, pickPremium } from './core/sponsors.js';
 import { buildStatsBatch, percentileLine } from './core/audience.js';
+import { tutorialDone } from './core/coach.js';
 import { loadSponsors } from './sponsorsFeed.js';
 import { sendStats, dailyPercentile } from './audience.js';
 import { SPONSOR_API_URL, salesEnabled } from './sponsorConfig.js';
@@ -211,6 +212,7 @@ function menuModel() {
     settings,
     nextDayAt: nextDayTimestamp(),
     ad: menuAd(),
+    newPlayer: !store.tutorialSeen(),   // first visit: a one-line nudge instead of the old how-to pop-up
   };
 }
 
@@ -272,6 +274,8 @@ function startGame(data) {
     autoplay: 0,
     sponsors: sponsorFeed,
     billboard: billboardFor(data.dateKey),
+    // a brand-new player gets short HUD hints during the first game (text only; js/core/coach.js)
+    coach: data.mode !== 'idle' && !store.tutorialSeen(),
     ...data,
   });
 }
@@ -511,7 +515,6 @@ bus.on('ui:settings', (partial) => {
   audio.setEnabled(settings.sound);
   haptics.setEnabled(settings.vibration);
 });
-bus.on('ui:howto-closed', () => store.markTutorialSeen());
 bus.on('ui:day-rollover', () => {
   if (screen === 'menu') showMenu();
 });
@@ -567,6 +570,8 @@ function finalize(result) {
 bus.on('game:final', (result) => {
   if (!result || run.mode === 'idle') return;
   finalize(result);
+  // the first real game is the tutorial: once it got somewhere, the hints and the menu nudge are done
+  if (tutorialDone(result.blocksDropped)) store.markTutorialSeen();
 });
 
 bus.on('game:over', (result) => {
@@ -705,7 +710,6 @@ function onReady() {
   ui.setLoading(false);
   if (recovered.length) ui.toast(S.unfinished, 3200);
   else if (liveElsewhere(todayKey())) ui.toast(S.otherTab, 3000);
-  if (!store.tutorialSeen()) ui.showHowTo(true);
   if (DEBUG) startFpsMeter();
   window.__stapel.booted = true;
 }

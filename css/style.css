@@ -600,6 +600,8 @@ svg.ic {
   color: var(--muted);
 }
 
+.note.nudge { margin-top: calc(-8 * var(--u)); color: var(--ink-soft); font-weight: 800; }
+
 .done-box {
   display: flex;
   flex-direction: column;

@@ -1,4 +1,4 @@
-// Juicy feedback: rating pops ("Perfek!"), Stack-style outline flash, sparkles,
+// Juicy feedback: rating pops ("Perfek!"), outline flash, sparkles,
 // dust, splashes, screen flash and camera shake. Everything is pooled and the
 // textures are generated once per game (they survive scene restarts).
 import { DEPTH, FONT, COLORS, GAME_W } from '../config.js';
@@ -433,7 +433,7 @@ export class Effects {
     }, () => o.setVisible(false));
   }
 
-  /** Stack-style white rectangle that grows out of the block and fades. */
+  /** White rectangle that grows out of the block and fades. */
   _outline(block, delay = 0, strength = 1) {
     const img = block?.image;
     let x0;

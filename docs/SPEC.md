@@ -4,11 +4,11 @@
 Tagline: **"Stapel hoog. Staan sterk."**  Repo root: `/home/user/Toring`.
 
 It blends:
-- **Wordle**: one *Daaglikse Toring* per day (same blocks and weather for everyone, from a date seed), one scored try, a streak, a countdown to the next tower, an emoji share line for WhatsApp.
-- **Stack (Ketchapp)**: instant one-finger play (tap anywhere = drop), a bright "Perfek!" flash plus a combo bonus when a block lands dead centre; rising chime pitch per combo.
-- **Tower Bloxx**: a yellow crane jib across the top of the screen; the block swings on a rope; the tower grows tall, height shown in metres; the camera climbs.
-- **Tricky Towers**: weather events hit the tower while you build, and a rising flood line (water) you must stay above.
-- **Jenga**: wobble and tension — real Matter.js physics; top blocks wobble and can topple; creaks; gentle camera sway on tall towers.
+- **A famous daily word game**: one *Daaglikse Toring* per day (same blocks and weather for everyone, from a date seed), one scored try, a streak, a countdown to the next tower, an emoji share line for WhatsApp.
+- **A one-tap stacking game**: instant one-finger play (tap anywhere = drop), a bright "Perfek!" flash plus a combo bonus when a block lands dead centre; rising chime pitch per combo.
+- **A crane-and-tower builder**: a yellow crane jib across the top of the screen; the block swings on a rope; the tower grows tall, height shown in metres; the camera climbs.
+- **A physics block puzzler with events**: weather events hit the tower while you build, and a rising flood line (water) you must stay above.
+- **A wobbly tabletop block tower**: wobble and tension — real Matter.js physics; top blocks wobble and can topple; creaks; gentle camera sway on tall towers.
 
 ## Hard technical rules
 - **Phaser 3.90.0** is vendored at `lib/phaser.min.js` and loaded with a classic `<script>` tag, so `Phaser` is a **global**. Use only Phaser's built-in Matter: `const M = Phaser.Physics.Matter.Matter;` (Body, Bodies, Composite, Sleeping, Vertices, ...). Matter is version 0.19/0.20 (Verlet; `Body.setVelocity` units are px per 16.67 ms step).
@@ -89,7 +89,7 @@ export function createRng(seed /* string|number */) -> Rng
 ```
 
 ### js/core/daily.js (core agent)
-Local calendar day (like Wordle: resets at the player's local midnight).
+Local calendar day (like a daily word game: resets at the player's local midnight).
 ```js
 export function dateKeyFor(date = new Date()) -> 'YYYY-MM-DD' (local date)
 export function dayNumber(dateKey) -> int  // EPOCH_DATE_KEY ('2026-10-06') => 1, next day => 2. Use Date.UTC on the Y-M-D parts (DST-proof).
@@ -218,7 +218,7 @@ export class Block {
 }
 export function shapeColor(spec) -> PALETTE entry
 ```
-Texture art: Stack-like flat bright colours. Per part: rounded rect (r≈6) fill, lighter top band, darker bottom band, thin darker outline; seams between cells of compound shapes; subtle shape-specific detail (plank wood-grain lines, brick mortar, crate diagonal brace, pillar flutes, cube small inner square). Pad the texture by 3 px. Centroid: create the body at (0,0) unrotated, then `originX = (-body.bounds.min.x + pad) / texW`, `originY = (-body.bounds.min.y + pad) / texH` — exact for any shape. Image depth `DEPTH.tower`.
+Texture art: flat bright colours. Per part: rounded rect (r≈6) fill, lighter top band, darker bottom band, thin darker outline; seams between cells of compound shapes; subtle shape-specific detail (plank wood-grain lines, brick mortar, crate diagonal brace, pillar flutes, cube small inner square). Pad the texture by 3 px. Centroid: create the body at (0,0) unrotated, then `originX = (-body.bounds.min.x + pad) / texW`, `originY = (-body.bounds.min.y + pad) / texH` — exact for any shape. Image depth `DEPTH.tower`.
 
 ### js/game/weather.js (blocks+weather agent)
 Drives weather events (block-indexed from the sequence) and their effects. Visuals in screen space (scrollFactor 0) at `DEPTH.weather`/`DEPTH.fxScreen`; hail bodies in world.
@@ -297,7 +297,7 @@ export function createIsland(scene)  // world-space visuals under the base: rock
 ```js
 export class Effects {
   constructor(scene, { reducedMotion })
-  rating(block, rating, combo)  // world-space feedback at the block: 'P' => big "Perfek!"/"Perfek ×n!" text pop (S.perfect / S.perfectCombo), white outline flash expanding from the block's bounds (Stack style), sparkle burst; combo >= 3 adds a light screen flash. 'G' => smaller "Goed"; 'S' => "Skeef"; 'X' => red "Oeps!"
+  rating(block, rating, combo)  // world-space feedback at the block: 'P' => big "Perfek!"/"Perfek ×n!" text pop (S.perfect / S.perfectCombo), white outline flash expanding from the block's bounds, sparkle burst; combo >= 3 adds a light screen flash. 'G' => smaller "Goed"; 'S' => "Skeef"; 'X' => red "Oeps!"
   floatText(x, y, text, { color = '#fff', size = 34 } = {})   // rises & fades (world space)
   dust(x, y, width)             // landing puffs
   splash(x, y)                  // water droplets
@@ -376,7 +376,7 @@ Update texts only when values change.
 - `recoverUnfinished(today)` at boot → if any, `ui.toast(S.unfinished)`.
 - Show the menu over the idle scene: `game.scene.start('Game', { mode: 'idle', seed: random })` then `ui.showMenu(menuModel())`.
 - `menuModel()` = `{ dateKey, dayNumber, dateLabel: fmtDateKey(dateKey), forecast: sequence.forecast(5), today: store.getDaily(dateKey), stats: store.getStats(dateKey), settings, nextDayAt: nextDayTimestamp() }`.
-- First visit (`!store.tutorialSeen()`): `ui.showHowTo(true)`; on `'ui:howto-closed'` mark seen.
+- First visit (`!store.tutorialSeen()`): straight to the menu (a one-line nudge, `S.firstNudge`) and no pop-up. The player's first game is coached by short HUD hints (`js/core/coach.js`, `hud:coach` → `HudScene.showCoach`); the flag is set when that game ends with `COACH.minBlocks`+ drops. The how-to stays one tap away (`Hoe speel ek?`).
 - Bus wiring:
   - `'ui:play-daily'` → if today's entry exists & done → show results; else start Game `{ mode: 'daily', seed: seedFor(today), dayNumber, dateKey: today, settings }`, `ui.showInGame()`.
   - `'ui:play-practice'` → start Game `{ mode: 'practice', seed: 'oefen-' + random, … }`, `ui.showInGame()`.
@@ -399,7 +399,7 @@ DOM overlay for menus/results (crisp text, real share buttons). `index.html` con
 export function createUI(bus) -> {
   layout(rect),                 // position #ui exactly over the canvas; set CSS var --s = rect.width / 720 (all UI sizes scale with it)
   showMenu(model),              // model from main.js (see above)
-  showHowTo(firstTime),         // emits 'ui:howto-closed' when closed
+  showHowTo(),                  // the "Hoe speel ek?" sheet (menu dock button)
   showStats(stats),
   showPause({ mode }),          // daily: show S.quitWarnDaily
   showResults({ result, stats, isNewBest, shareText, nextDayAt, mode }),
@@ -408,7 +408,7 @@ export function createUI(bus) -> {
   toast(text, ms = 2200),
   setLoading(bool),
 }
-// emits: 'ui:play-daily', 'ui:play-practice', 'ui:pause', 'ui:resume', 'ui:quit', 'ui:home', 'ui:settings' ({sound}|{vibration}), 'ui:howto-closed', 'ui:day-rollover'
+// emits: 'ui:play-daily', 'ui:play-practice', 'ui:pause', 'ui:resume', 'ui:quit', 'ui:home', 'ui:settings' ({sound}|{vibration}), 'ui:day-rollover'
 ```
 - **Menu**: logo "STAPEL" as letters on coloured blocks stacked slightly askew (CSS), tagline, the daily card (`S.dailyN(n)`, date label, forecast emoji strip with `S.forecast`, `S.sameForAll`), primary button `S.playToday` — or if today is done: ✅ `S.doneToday` with height/points, live countdown `S.nextTower` HH:MM:SS, `S.seeResult` button; secondary `S.practice` (+ `S.practiceSub`), `S.howTo`, `S.stats`; small sound 🔊/🔇 and vibration 📳 toggles; streak chip 🔥 n.
 - **Results**: title by reason (`S.overLives`/`S.overFlood`/`S.overQuit` + sub), huge height `fmtM`, stats row (punte, blokke, perfek, beste kombo), `S.newRecord` badge if isNewBest, the emoji grid, weather emoji row, share buttons: `S.shareWhatsApp` (green), `S.share` (native, only shown when `navigator.share` exists), `S.copy`; (use `shareResult` from core/share.js; toast `S.copied`/`S.shared`); daily: streak + `S.nextTower` live countdown; buttons `S.practice`/`S.practiceAgain` and `S.home`. When the countdown hits 0 emit 'ui:day-rollover'.
@@ -416,7 +416,7 @@ export function createUI(bus) -> {
 - **How-to**: `S.howToSteps` list with icons, button `S.howToGo`.
 - **Pause**: `S.paused`, `S.resume`, `S.quit` (+ warning in daily).
 - Toasts; `audio.play('click')` on buttons; call `audio.unlock()` on first pointerdown.
-- Style: bright, rounded, chunky, playful (Stack/Wordle clean). Cards with soft shadows over the sky; big touch targets (≥ 48 CSS px); safe-area insets; `touch-action: manipulation`; no text selection; `prefers-reduced-motion` respected. Everything sized via `--s`. System font stack (`FONT` in config). When a screen is shown the overlay captures pointer events; during play `#ui` has `pointer-events: none` except the pause button so taps reach the canvas.
+- Style: bright, rounded, chunky, playful (clean and simple). Cards with soft shadows over the sky; big touch targets (≥ 48 CSS px); safe-area insets; `touch-action: manipulation`; no text selection; `prefers-reduced-motion` respected. Everything sized via `--s`. System font stack (`FONT` in config). When a screen is shown the overlay captures pointer events; during play `#ui` has `pointer-events: none` except the pause button so taps reach the canvas.
 - `manifest.webmanifest`: name "Stapel", short_name "Stapel", lang "af", description = tagline, start_url "./", scope "./", display "standalone", orientation "portrait", theme/background colours, icons (192, 512, maskable 512, svg).
 - `sw.js`: versioned cache (`stapel-v1.0.0`), precache all app files (index.html, css, every js file, lib/phaser.min.js, manifest, icons); **network-first** for same-origin GET with cache fallback (so updates arrive immediately, offline still works); skipWaiting + clients.claim; delete old caches.
 - Icons: generate `icons/icon.svg` (stacked coloured blocks on a sky-blue rounded square), and PNGs `icons/icon-192.png`, `icons/icon-512.png`, `icons/icon-maskable-512.png`, `icons/apple-touch-icon.png` (180) by rendering the SVG in headless Chromium via Playwright (see "Testing").

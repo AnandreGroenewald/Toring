@@ -1,5 +1,7 @@
 # Stapel — handover for the next agent
 
+*Other games' names were removed from this repo on purpose (the owner's brief below describes them generically).*
+
 **Read this first, then `docs/SPEC.md` (game architecture) and `docs/SPONSORS-SPEC.md` (sponsorship system).**
 Branch: `claude/trusting-hopper-26qcax` (develop and push here; don't open a pull request unless the owner asks).
 Repo: `AnandreGroenewald/Toring`. Owner: Anandré Groenewald.
@@ -9,11 +11,11 @@ Repo: `AnandreGroenewald/Toring`. Owner: Anandré Groenewald.
 > Build "Stapel", a free Afrikaans block-stacking phone game that runs in the browser. Tagline: "Stapel hoog. Staan sterk."
 >
 > THE FEEL (borrow from proven hits)
-> - Wordle: one Daaglikse Toring a day, the same blocks and weather for everyone, one scored try, a streak, a countdown to the next tower, and an emoji share line for WhatsApp.
-> - Stack (Ketchapp): instant one-finger play, a bright "Perfek!" flash and combo bonus when a block lands dead centre.
-> - Tower Bloxx: a crane up top, the tower growing tall, height shown in metres.
-> - Tricky Towers: events hit your tower while you build, and a line you must stay above.
-> - Jenga: the wobble and tension of a tall tower.
+> - A famous daily word game: one Daaglikse Toring a day, the same blocks and weather for everyone, one scored try, a streak, a countdown to the next tower, and an emoji share line for WhatsApp.
+> - A one-tap stacking game: instant one-finger play, a bright "Perfek!" flash and combo bonus when a block lands dead centre.
+> - A crane-and-tower builder: a crane up top, the tower growing tall, height shown in metres.
+> - A physics block puzzler with events: events hit your tower while you build, and a line you must stay above.
+> - A wobbly tabletop block tower: the wobble and tension of a tall tower.
 >
 > TECH
 > - Phaser 3 with its built-in Matter.js physics, saved into this repository.
@@ -32,7 +34,7 @@ Later the owner added (decisions are final unless they say otherwise):
 | Sign-up and payment | **Fully automatic**, using **Paystack** (ZAR, monthly plans). The backend is a Cloudflare Worker + D1, because the site is static on GitHub Pages. |
 | WhatsApp share text | Stays **clean**: no sponsor mentions. |
 | Public contact email | The owner will create one and send it later. Until then `SPONSOR.contactEmail` stays `''` and the UI hides it. Do **not** publish the owner's personal Gmail. |
-| Brand names | Other games' names must not appear in the game or public docs. The README and all game code are clean now (T5 reworded the last comments). Only the internal agent prompts in `docs/workflows/` and the owner's brief quoted above still name them. |
+| Brand names | Other games' names must not appear anywhere in the repo (game, public pages, docs, agent prompts in `docs/workflows/`, the brief quoted above). Everything was reworded generically; keep it that way (only the Phaser licence files may mention third parties). |
 | Legal | Third-party MIT notices are in `lib/THIRD-PARTY-NOTICES.md`. The owner was told to do a CIPC trademark search on "Stapel", fill in and lawyer-check the legal templates, register an Information Officer (POPIA), and ask an accountant about tax. |
 
 ## 2. Current state (at handover)
@@ -69,6 +71,14 @@ Later the owner added (decisions are final unless they say otherwise):
   - `admin.html` has a **Statistiek** tab (period presets or dates, totals, per day, per sponsor) and "Kopieer maandverslag" per sponsor (`js/pages/statsReport.js`).
   - `privaatheid.html` (new subsection "Anonieme tellings", retention 13 months) and `adverteer.html` (monthly report promise, names on about every 2nd-3rd block) updated. The privacy version date was deliberately **not** bumped because sales are still off, so no sponsor has accepted it yet; bump `privacyVersion` (config and page) together if any sponsor has signed up by the time you change the text again.
   - Tests: root **153/153**, server **115 pass + 1 skipped** (the workerd smoke test can't start in this container). Headless check with a mocked API: percentile line on results (412×915 and 360×640), revisit uses GET, one `/stats` beacon with the right tally, admin Statistiek with mock data, zero console errors.
+- **First-play coaching (done, version `1.3.0`):** a new player learns by doing; nothing pops up on the first visit.
+  - The automatic 7-step how-to is gone: the first visit goes straight to the menu, which carries one nudge line (`S.firstNudge`: "Nuut? Tik net en speel — ons wys jou hoe."). The "Hoe speel ek?" dock button and sheet work exactly as before.
+  - `js/core/coach.js` (pure, tested in `tests/coach.test.js`) decides which hint belongs to which real moment; `COACH` in `js/config.js` holds the numbers (`minBlocks` 4, `holdMs` 3800, `landingDelayMs` 450).
+  - GameScene says what happened (`coachSay` → `hud:coach`); HudScene `showCoach` draws a roomy pill over the sea, 250 game px below the tower-top line, so it never covers the landing outline, the drop column or the falling block. It fades by itself, the newest hint replaces an older one, it steps aside for a weather banner (and comes back after) and never pauses anything. Reduced motion: plain fade, no slide or scale.
+  - Hints (once each, first game only, daily or practice): before the first drop "Tik om te laat val 👆" (plus the existing "Hier land jou blok" label); after the first landing "Mik vir die middel — die wit vorm wys waar dit land" or, after a Perfek, "Perfek! Doen dit weer 🎯"; when the water starts to rise "Die water styg — bou vinniger as die vloedlyn 🌊"; the first block that really costs a heart "’n Blok in die see kos ’n hartjie ❤️". The first weather event needs no hint: its banner explains it.
+  - Text only: no gameplay, RNG or physics change, so the first daily is exactly as fair as any other. The flag `store.tutorialSeen()` is now set when a first game ends with at least 4 drops (a quick quit keeps the hints for next time); closing the how-to sheet no longer sets it. Existing players who already closed the old how-to stay "seen".
+  - Other games' names were removed from the whole repo (`docs/workflows/*.js`, `docs/SPEC.md`, `docs/review-findings.md`, this file's quote of the brief, two code comments); keep it that way (a case-insensitive grep over the repo for those games' names must stay empty).
+  - Tests: root **161/161**, server **115 pass + 1 skipped**. Headless check at 412×915 with a fresh profile (real first tap, then autoplay): hints at tap, landing and water; a second game shows none and the menu nudge is gone; quick-quit keeps the flag unset; 360×640 and a short 800×500 viewport checked numerically; zero console errors.
 - Not yet reviewed: the server (security, payment edge cases), `admin.html` (incl. the Statistiek tab), the new `/stats` and `/score` endpoints (abuse, D1 write cost) and the UX and legal wording (T4). The server does not auto-delete ended sponsors' contact data; the owner removes it on the admin page.
 <!-- STATUS-END -->
 
@@ -84,6 +94,7 @@ Each step should end green (`npm test`, `cd server && npm test`, a headless play
   - Test under a sub-path: serve `/home/user` and open `/Toring/`.
   - The prompt for this pass is the `qa` agent in `docs/workflows/2-review-fix-qa.js`.
   - With a mocked API (`page.route` on `js/sponsorConfig.js` and the API host), also check the daily percentile line on the results card and that a revisit uses GET.
+  - Play a first game on a fresh profile (cleared storage, no `debug=1`) and check the coach hints (see section 2); a second game must show none.
   - Include the T5 sponsor features in those games: names on blocks, the billboard (it floats with the flood) and the menu card. A test feed can be injected with Playwright's `page.route('**/sponsors.json', ...)`.
 - ~~T2. Core sponsor logic~~ **Done** (see section 2).
 - ~~T3. Legal templates~~ **Done** (see section 2). The owner fills in the placeholders.

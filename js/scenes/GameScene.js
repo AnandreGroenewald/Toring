@@ -2,7 +2,7 @@
 // (Perfek snap + combo), lives, settle + cement freeze, rising flood, weather,
 // camera follow, landing ghost, wobble, idle attract mode and the game-over reveal.
 import {
-  GAME_W, LAYOUT, PX_PER_M, PHYSICS, CRANE, SCORING, LIVES, FREEZE_DEPTH, WATER, DEPTH, FONT,
+  GAME_W, LAYOUT, PX_PER_M, PHYSICS, CRANE, SCORING, LIVES, FREEZE_DEPTH, WATER, DEPTH, FONT, COACH,
 } from '../config.js';
 import { bus } from '../core/bus.js';
 import { S } from '../core/strings.js';
@@ -13,6 +13,7 @@ import { Block, ensureTexture, getGeometry, releaseNamedTextures } from '../game
 import { createBillboard, BILLBOARD_LEFT } from '../game/billboard.js';
 import { createBlockNamer } from '../core/sponsors.js';
 import { createTally, tallyShow } from '../core/audience.js';
+import { createCoach } from '../core/coach.js';
 import { SPONSOR } from '../sponsorConfig.js';
 import { Weather } from '../game/weather.js';
 import { Crane } from '../game/crane.js';
@@ -261,6 +262,8 @@ export class GameScene extends Phaser.Scene {
     this.reducedMotion = !!this.settings.reducedMotion;
     this.autoplay = this.idle ? 0 : clamp(Number(d.autoplay) || 0, 0, 1);
     this.autoOn = this.idle || this.autoplay > 0;
+    // First-ever game: short HUD hints at the real moments (text only; see js/core/coach.js).
+    this.coach = createCoach(!this.idle && d.coach === true);
     // Sponsors (js/sponsorsFeed.js): names for the blocks, the day's premium sponsor for the billboard.
     this.sponsorBlock = Array.isArray(d.sponsors?.block) ? d.sponsors.block : [];
     this.billboardData = { premium: d.billboard?.premium || null, salesOn: !!d.billboard?.salesOn };
@@ -575,7 +578,13 @@ export class GameScene extends Phaser.Scene {
 
   hintText() {
     const fine = typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches;
-    return fine ? S.clickToDrop : S.tapToDrop;
+    return this.coach.tap(fine);
+  }
+
+  /** A first-game coach hint for the HUD (null = nothing to say). Never pauses or changes the game. */
+  coachSay(h, delayMs = 0) {
+    if (!h || this.over || this.idle) return;
+    bus.emit('hud:coach', { id: h.id, text: h.text, ms: COACH.holdMs, delay: delayMs });
   }
 
   onRainbow() {
@@ -997,7 +1006,10 @@ export class GameScene extends Phaser.Scene {
       const size = clamp((width * (f.bottom - f.top)) / (200 * 48), 0.25, 1);
       audio.play('land', { intensity, size });
       // the flood starts quietly; the toast comes once it is actually getting close (updateWater)
-      if (this.landedCount >= WATER.startAfterBlocks && !this.water.rising && !this.over) this.water.start();
+      if (this.landedCount >= WATER.startAfterBlocks && !this.water.rising && !this.over) {
+        this.water.start();
+        this.coachSay(this.coach.water(), COACH.landingDelayMs);
+      }
     }
     if (rating) this.applyRating(f, rating);
     this.emitProgress();
@@ -1102,6 +1114,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.score += pts;
 
+    this.coachSay(this.coach.landing(r), COACH.landingDelayMs);
     this.effects.rating(block, r, this.combo);
     // beside the block, rising from below its bottom so it never runs into the rating pop above it
     const x = block.right + 64;
@@ -1175,6 +1188,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!free) this.lives = Math.max(0, this.lives - 1);
     if (this.lives >= LIVES) this.heartPerfects = 0;
+    if (!free && this.lives > 0) this.coachSay(this.coach.lost());
     this.grid[block.index] = 'X';
     this.combo = 0;
     this.effects.rating(block, 'X', 0);

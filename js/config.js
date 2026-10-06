@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.3.0';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -122,6 +122,15 @@ export const WATER = {
   vMax: 60,              // px/s
   warnPx: 140,           // HUD warning when tower top is this close to the water
   rainbowDropPx: 40,     // a rainbow event makes the water recede this much
+};
+
+// ---------------------------------------------------------------------------
+// First-game coach hints (js/core/coach.js, HudScene): text only, never any gameplay change
+// ---------------------------------------------------------------------------
+export const COACH = {
+  minBlocks: 4,          // a first game with this many drops counts as learned (no hints from then on)
+  holdMs: 3800,          // how long a hint stays before it fades on its own
+  landingDelayMs: 450,   // after the first landing: let the rating pop finish first
 };
 
 // ---------------------------------------------------------------------------
