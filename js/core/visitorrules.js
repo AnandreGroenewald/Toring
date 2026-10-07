@@ -24,12 +24,13 @@ export function thiefLoot(blocks, max = VISITOR.thiefMax) {
 /**
  * Does a visitor take the blame for this lost block (so it costs no heart, the combo is
  * kept and its grid cell stays as it was)? Yes for the clown's gift, for a block that was
- * in the air when a visitor changed the tower under it (`shielded`), and for any tower
- * block lost while a visitor's push is still settling (sim ms before `graceUntil`).
+ * in the air when a visitor changed the tower under it (`shielded`), for a block the monkey
+ * knocked loose that hasn't come to rest since (sim ms before its `knockedUntil`), and for
+ * any tower block lost while a visitor's push is still settling (sim ms before `graceUntil`).
  */
 export function visitorFree(block, { now = 0, graceUntil = -Infinity, wasFalling = false } = {}) {
   if (!block) return false;
-  if (block.gift || block.shielded) return true;
+  if (block.gift || block.shielded || now < (block.knockedUntil || 0)) return true;
   return !wasFalling && now < graceUntil;
 }
 
@@ -56,7 +57,7 @@ export function gridWithGifts(cells, gifts = []) {
 // How a visit ended: 'came' = the tower ended while the visitor was still there.
 const OUTCOMES = {
   monkey: ['came', 'shooed', 'shoved'],   // n = blocks it knocked into the sea
-  clown: ['came', 'gift'],
+  clown: ['came', 'gift'],                // n = blocks he brought
   thief: ['came', 'caught', 'stole'],     // n = blocks he took
 };
 const MAX_VISITS = 40;
@@ -103,6 +104,7 @@ export function visitorResultLine(visits) {
   if (knocked > 0) return S.resMonkeyKnocked(knocked);
   if (monkeys.some((v) => v.outcome === 'shoved')) return S.resMonkeyStood;
   if (monkeys.some((v) => v.outcome === 'shooed')) return S.resMonkeyShooed;
-  if (list.some((v) => v.type === 'clown' && v.outcome === 'gift')) return S.resClownGift;
+  const gifts = list.filter((v) => v.type === 'clown' && v.outcome === 'gift');
+  if (gifts.length) return S.resClownGift(gifts.reduce((sum, v) => sum + Math.max(1, v.n), 0));
   return '';
 }

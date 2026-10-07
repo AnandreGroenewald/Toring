@@ -122,8 +122,9 @@ test('each visit draws from its own stream: same values for everyone, independen
   assert.deepEqual(clownPlan(visitRng('x', c), c), clownPlan(visitRng('x', c), c));
 });
 
-test('plan ranges: a 1-2 block shove, a crooked steady gift, a ~2 s climb', () => {
+test('plan ranges: a hurled top block and a 1-2 block stamp, 1-4 steady gift blocks, a ~2 s climb', () => {
   let twos = 0;
+  const gifts = new Set();
   for (const seed of DAYS.slice(0, 120)) {
     for (const v of createSequence(seed).visitors.slice(0, 6)) {
       const r = visitRng(seed, v);
@@ -133,23 +134,27 @@ test('plan ranges: a 1-2 block shove, a crooked steady gift, a ~2 s climb', () =
         if (p.count === 2) twos++;
         assert.ok(p.kick >= VISITOR.monkeyKick[0] * 0.6 - 1e-9 && p.kick <= VISITOR.monkeyKick[1] * 1.1 + 1e-9, `kick ${p.kick}`);
         assert.ok(p.spin > 0 && p.spin <= VISITOR.monkeySpin);
+        assert.ok(p.hurl >= VISITOR.monkeyHurl[0] - 0.01 && p.hurl <= VISITOR.monkeyHurl[1] + 0.01, `hurl ${p.hurl}`);
+        assert.ok(p.hurlSpin >= VISITOR.monkeyHurlSpin[0] - 0.001 && p.hurlSpin <= VISITOR.monkeyHurlSpin[1] + 0.001, `hurlSpin ${p.hurlSpin}`);
+        assert.ok(p.hurl > p.kick * 1.4, 'the top block goes much faster than the stamped ones: it lands in the sea');
       } else if (v.type === 'clown') {
         const p = clownPlan(r, v);
-        assert.ok(VISITOR_RULES.GIFT_SHAPES.includes(p.spec.shape) && SHAPE_IDS.includes(p.spec.shape));
-        assert.ok(p.spec.scale >= 0.85 && p.spec.scale <= 0.95);
-        assert.ok(Number.isInteger(p.spec.color) && p.spec.color >= 0 && p.spec.color < PALETTE.length);
-        const off = Math.abs(p.dx);
-        assert.ok(off >= VISITOR.giftOffsetPx[0] - 0.01 && off <= VISITOR.giftOffsetPx[1] + 0.01, `dx ${p.dx}`);
-        assert.equal(Math.sign(p.dx), -v.side, 'the gift lands a little past the middle, away from the clown');
-        const tilt = Math.abs(p.tilt);
-        assert.ok(tilt >= VISITOR.giftTilt[0] - 0.001 && tilt <= VISITOR.giftTilt[1] + 0.001, `tilt ${p.tilt}`);
+        assert.ok(p.specs.length >= 1 && p.specs.length <= VISITOR.giftMax, `${p.specs.length} gifts`);
+        gifts.add(p.specs.length);
+        for (const spec of p.specs) {
+          assert.ok(VISITOR_RULES.GIFT_SHAPES.includes(spec.shape) && SHAPE_IDS.includes(spec.shape));
+          assert.ok(spec.scale >= 0.85 && spec.scale <= 0.95);
+          assert.ok(Number.isInteger(spec.color) && spec.color >= 0 && spec.color < PALETTE.length);
+        }
       } else {
         const p = thiefPlan(r, v);
         assert.ok(p.climbMs >= 1700 && p.climbMs <= 2300, `climb ${p.climbMs}`);
       }
     }
   }
-  assert.ok(twos > 10, 'the monkey sometimes shoves two blocks');
+  assert.ok(twos > 10, 'the monkey sometimes stamps on two blocks');
+  assert.deepEqual([...gifts].sort(), [1, 2, 3, 4], 'the clown brings 1, 2, 3 or 4 blocks');
+  assert.equal(VISITOR.giftMax, 4);
 });
 
 // ---------------------------------------------------------------------------------- tower rules
@@ -203,6 +208,11 @@ test('no hearts lost to visitors: who gets the blame for a block in the sea', ()
   assert.equal(visitorFree(blk(-100, 'falling', { shielded: true }), { ...grace, wasFalling: true }), true);
   // a block dropped after the push is aimed at the tower as it is now: the player's
   assert.equal(visitorFree(blk(-100, 'falling'), { ...grace, wasFalling: true }), false);
+  // a block the monkey knocked loose is his doing until it comes to rest (knockedUntil is cleared then)
+  const knocked = blk(-100, 'landed', { knockedUntil: now + 8000 });
+  assert.equal(visitorFree(knocked, { now: now + 3500, graceUntil: now + 2500, wasFalling: false }), true, 'after the grace window too');
+  assert.equal(visitorFree(knocked, { now: now + 8000, wasFalling: false }), false, 'but not for ever');
+  assert.equal(visitorFree(blk(-100, 'landed', { knockedUntil: 0 }), { now: now + 3500, wasFalling: false }), false, 'it came to rest');
   assert.equal(visitorFree(null, grace), false);
 });
 
@@ -237,7 +247,11 @@ test('results line: the most memorable visit (thief, then monkey, then clown)', 
   assert.equal(line({ type: 'monkey', outcome: 'shoved', n: 1 }, { type: 'monkey', outcome: 'shoved', n: 1 }), S.resMonkeyKnocked(2));
   assert.equal(line({ type: 'monkey', outcome: 'shoved', n: 0 }), S.resMonkeyStood);
   assert.equal(line({ type: 'monkey', outcome: 'shooed' }, { type: 'clown', outcome: 'gift' }), S.resMonkeyShooed);
-  assert.equal(line({ type: 'clown', outcome: 'gift' }), S.resClownGift);
+  assert.equal(line({ type: 'clown', outcome: 'gift' }), S.resClownGift(1));
+  assert.equal(line({ type: 'clown', outcome: 'gift', n: 3 }), S.resClownGift(3));
+  assert.equal(line({ type: 'clown', outcome: 'gift', n: 3 }, { type: 'clown', outcome: 'gift', n: 1 }), S.resClownGift(4));
+  assert.match(S.resClownGift(3), /3 blokke/);
+  assert.equal(line({ type: 'clown', outcome: 'came' }), '');
   assert.equal(line({ type: 'thief', outcome: 'came' }, { type: 'clown', outcome: 'came' }), '', 'nothing happened yet');
   assert.equal(visitorResultLine([]), '');
 });

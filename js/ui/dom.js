@@ -4,7 +4,7 @@
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
 import { GAME_W, PALETTE, RATING_EMOJI, computeGameHeight } from '../config.js';
-import { S, WEATHER_INFO, VISITOR_INFO } from '../core/strings.js';
+import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO } from '../core/strings.js';
 import { fmtM, fmtInt, fmtClock, fmtDuration, DAYS_AF } from '../core/format.js';
 import { shareResult } from '../core/share.js';
 import { visitorResultLine } from '../core/visitorrules.js';
@@ -151,8 +151,10 @@ export function createUI(bus) {
     },
   }, h('span', null, icon('pause')));
   const toastBox = h('div', { class: 'toasts', role: 'status', 'aria-live': 'polite' });
+  // Uitdagersreeks: choose a punishment for the other tower (the game keeps running underneath)
+  const punishBar = h('div', { class: 'punish', role: 'group', 'aria-label': S.duelChooseLabel, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, pauseBtn, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, pauseBtn, punishBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // Measures env(safe-area-inset-*) so layout() can work out how much of each
@@ -223,6 +225,7 @@ export function createUI(bus) {
       if (k === name && st.modal) el.inert = true;   // stays visible under an open sheet
     }
     pauseBtn.hidden = name !== 'game';
+    if (name !== 'game') hidePunish();
     if (name && screens[name]) {
       screens[name].scrollTop = 0;
       if (st.keyboard && !st.modal) focusQuietly(screens[name]);
@@ -1188,6 +1191,31 @@ export function createUI(bus) {
     showScreen(null);
   }
 
+  /** "Eerste by 20 m! Kies ’n straf vir Anna:" and the four punishments; DUEL.chooseMs to pick one. */
+  function showPunish({ m, opp, options = [], ms = 5000 } = {}) {
+    if (st.screen !== 'game') return;
+    const btns = options.filter((k) => PUNISH_INFO[k]).map((k) => {
+      const info = PUNISH_INFO[k];
+      return h('button', {
+        type: 'button', class: 'punish-btn',
+        onclick: () => {
+          audio.play('click');
+          bus.emit('ui:duel-punish', { m, kind: k });
+        },
+      }, emo(info.emoji), h('b', { text: info.name }), h('small', { text: info.what }));
+    });
+    punishBar.replaceChildren(
+      h('p', { class: 'punish-title', text: S.duelChoose(m, opp || S.duelSomeone) }),
+      h('div', { class: 'punish-btns' }, btns),
+      h('div', { class: 'punish-time', vars: { '--ms': `${ms}ms` } }));
+    punishBar.hidden = false;
+  }
+
+  function hidePunish() {
+    punishBar.hidden = true;
+    punishBar.replaceChildren();
+  }
+
   function toast(text, ms = 2200) {
     if (!text) return;
     const el = h('div', { class: 'toast', text });
@@ -1240,6 +1268,8 @@ export function createUI(bus) {
     setResultsPercentile,
     showInGame,
     hideAll,
+    showPunish,
+    hidePunish,
     toast,
     setLoading,
   };

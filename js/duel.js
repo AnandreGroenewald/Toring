@@ -1,18 +1,20 @@
 // Uitdagersreeks on the device (docs/CHALLENGE-SPEC.md): finds an opponent (live through the Worker,
 // a recording of a real match, or the computer), runs the match against it and tells the game what
-// happens: attacks ('duel:attack'), the result ('duel:end') and the race track ('hud:duel'). The rules
+// happens: attacks ('duel:attack'), the result ('duel:end') and the race track ('hud:duel'). The first
+// to a height mark chooses the punishment ('duel:choose' -> 'ui:duel-punish' -> 'duel:chosen'). The rules
 // are js/core/duel.js; for a live match the server runs the same referee (server/src/match.js).
 
 import { DUEL } from './config.js';
-import { S, VISITOR_INFO } from './core/strings.js';
+import { S, PUNISH_INFO } from './core/strings.js';
 import {
   createReferee, createRecorder, createGhost, botRun, newMatchSeed, isMatchSeed, decodeChallenge,
-  encodeChallenge, isRoomCode, cleanNickname,
+  encodeChallenge, isRoomCode, cleanNickname, attackFor, PUNISHMENTS, isPunishment, botPunishment,
 } from './core/duel.js';
 
 const YOU = 0;
 const THEM = 1;
 const RESULT_WAIT_MS = 2500;   // live: after our tower fell, wait this long for the server's verdict
+const PROTOCOL = 2;            // 2: the first to a height mark chooses the punishment ('choose' / 'punish')
 const round1 = (v) => Math.round(v * 10) / 10;
 const num = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(DUEL.maxHeightM, Number(v))) : 0);
 
@@ -70,6 +72,7 @@ export function createDuel({
 
   // ------------------------------------------------------------------------------- a match
   function newMatch({ kind, seed, oppName, run = null, ws = null, you = YOU }) {
+    if (match) dropChoice(match);
     match = {
       kind, seed, ws, you,
       oppName: oppName || S.duelSomeone,
@@ -78,6 +81,8 @@ export function createDuel({
       ghost: run ? createGhost(run) : null,
       recorder: createRecorder(),
       claimed: {},
+      choice: null,       // { mark, def, timer } while the player chooses a punishment
+      choiceQueue: [],
       youH: 0, youBest: 0, oppH: 0, oppBest: 0,
       outcome: null, reason: null,
       over: false, overAt: 0, lostConn: false,
@@ -93,6 +98,7 @@ export function createDuel({
   function decide(outcome, reason) {
     const m = match;
     if (!m || m.outcome) return;
+    dropChoice(m);
     m.outcome = outcome;
     m.reason = reason;
     if (!m.recorder.ended) m.recorder.finish(m.lastT, m.youBest >= DUEL.goalM ? 'goal' : 'stop');
@@ -101,27 +107,88 @@ export function createDuel({
     if (m.kind === 'live') setTimer(() => { if (match === m) close(m.ws); }, 1500);
   }
 
-  /** Referee / server events, in one shape for both. */
+  /** Referee events (a recording or the computer) and the live result, in one shape. */
   function handle(events) {
     const m = match;
     if (!m) return;
     for (const e of events) {
       if (e.type === 'attack') {
+        // someone reached a height mark first: we choose, or Robot Rikus / the recording does
         const mine = e.from === m.you;
-        m.claimed[e.m] = mine ? 'you' : 'them';
-        const info = VISITOR_INFO[e.kind];
-        if (!info) continue;
-        if (mine) {
-          if (m.ghost) m.ghost.hit(e.kind);
-          bus.emit('hud:toast', { text: S.duelAttackOut(info.name, m.oppName, info.emoji), color: '#ffe38c', visitor: true });
-        } else if (!m.over) {
-          bus.emit('duel:attack', { kind: e.kind, from: m.oppName });
-        }
+        if (!claim(m, e.m, mine)) continue;
+        if (mine) askChoice(m, e.m);
+        else punishIn(m, botPunishment(m.seed, e.m));
       } else if (e.type === 'result') {
         decide(e.winner === m.you ? 'won' : 'lost', e.reason);
       }
     }
   }
+
+  /** A height mark taken: the race track colours it. False when it was already taken. */
+  function claim(m, mark, mine) {
+    if (m.claimed[mark]) return false;
+    m.claimed[mark] = mine ? 'you' : 'them';
+    return true;
+  }
+
+  /** The other tower sent us a punishment. */
+  function punishIn(m, kind) {
+    if (!isPunishment(kind) || m.over) return;
+    bus.emit('duel:attack', { kind, from: m.oppName });
+  }
+
+  /** Our punishment reached the other tower: a recording loses height, and the player hears about it. */
+  function punishOut(m, kind) {
+    const info = PUNISH_INFO[kind];
+    if (!info) return;
+    if (m.ghost) m.ghost.hit(kind);
+    bus.emit('hud:toast', { text: S.duelAttackOut(info.name, m.oppName, info.emoji), color: '#ffe38c', visitor: true });
+  }
+
+  // ------------------------------------------------------------------------- choosing a punishment
+  /** We were first to height mark `mark`: the player chooses, or gets the default after DUEL.chooseMs. */
+  function askChoice(m, mark) {
+    if (m.choice) {
+      m.choiceQueue.push(mark);
+      return;
+    }
+    const def = attackFor(mark) || PUNISHMENTS[0];
+    const timer = setTimer(() => choose(mark, def), DUEL.chooseMs);
+    m.choice = { mark, def, timer };
+    bus.emit('duel:choose', { m: mark, opp: m.oppName, def, options: [...PUNISHMENTS], ms: DUEL.chooseMs });
+  }
+
+  /** The player's pick (or the default): to the server, or straight onto the recording. */
+  function choose(mark, kind) {
+    const m = match;
+    const c = m && m.choice;
+    if (!c || c.mark !== mark) return;
+    clearTimer(c.timer);
+    m.choice = null;
+    const k = isPunishment(kind) ? kind : c.def;
+    bus.emit('duel:chosen', { m: mark, kind: k });
+    if (!m.outcome) {
+      if (m.kind === 'live') send(m.ws, { t: 'punish', m: mark, kind: k });
+      else punishOut(m, k);
+    }
+    nextChoice(m);
+  }
+
+  function nextChoice(m) {
+    const next = m.choiceQueue.shift();
+    if (next !== undefined && !m.outcome) askChoice(m, next);
+  }
+
+  /** The match ended (or a new one began) while the player was choosing: nothing is sent. */
+  function dropChoice(m) {
+    if (!m || !m.choice) return;
+    clearTimer(m.choice.timer);
+    bus.emit('duel:chosen', { m: m.choice.mark, kind: null });
+    m.choice = null;
+    m.choiceQueue.length = 0;
+  }
+
+  bus.on('ui:duel-punish', (p) => choose(Number(p && p.m), p && p.kind));
 
   // The scene's height, every frame (sim ms since the tower started; tower top and best height in m).
   bus.on('duel:self', (s) => {
@@ -180,11 +247,26 @@ export function createDuel({
         m.oppH = num(msg.h);
         m.oppBest = Math.max(m.oppBest, num(msg.best));
         break;
-      case 'attack':
-        if (DUEL.attackFor[msg.m] === msg.kind) handle([{ type: 'attack', from: 1 - m.you, to: m.you, m: msg.m, kind: msg.kind }]);
+      case 'choose':   // we were first to a height mark: the player chooses what to send
+        if (DUEL.marks.includes(msg.m) && claim(m, msg.m, true)) askChoice(m, msg.m);
         break;
-      case 'sent':
-        if (DUEL.attackFor[msg.m] === msg.kind) handle([{ type: 'attack', from: m.you, to: 1 - m.you, m: msg.m, kind: msg.kind }]);
+      case 'attack':   // the other player's punishment
+        if (DUEL.marks.includes(msg.m) && isPunishment(msg.kind)) {
+          claim(m, msg.m, false);
+          punishIn(m, msg.kind);
+        }
+        break;
+      case 'sent':     // the server passed ours on (or sent the default: we were too slow, or an old server)
+        if (DUEL.marks.includes(msg.m) && isPunishment(msg.kind)) {
+          claim(m, msg.m, true);
+          if (m.choice && m.choice.mark === msg.m) {
+            clearTimer(m.choice.timer);
+            m.choice = null;
+            bus.emit('duel:chosen', { m: msg.m, kind: msg.kind });
+            nextChoice(m);
+          }
+          punishOut(m, msg.kind);
+        }
         break;
       case 'result':
         if (Array.isArray(msg.best)) m.oppBest = Math.max(m.oppBest, num(msg.best[1 - m.you]));
@@ -210,7 +292,7 @@ export function createDuel({
       return;
     }
     pending = { ws, timer: null };
-    ws.onopen = () => send(ws, { t: 'hello', v: 1, name: nickname() || '' });
+    ws.onopen = () => send(ws, { t: 'hello', v: PROTOCOL, name: nickname() || '' });
     ws.onmessage = (e) => {
       const msg = parse(e.data);
       if (!msg) return;
@@ -264,7 +346,7 @@ export function createDuel({
       fallback(onFallback);
     }, DUEL.searchMs);
     pending = { ws, timer };
-    ws.onopen = () => send(ws, { t: 'hello', v: 1, name: nickname() || '' });
+    ws.onopen = () => send(ws, { t: 'hello', v: PROTOCOL, name: nickname() || '' });
     ws.onmessage = (e) => {
       const msg = parse(e.data);
       if (!msg || msg.t !== 'match' || !isRoomCode(msg.room) || pending?.ws !== ws) return;
@@ -368,6 +450,7 @@ export function createDuel({
     /** Leave the current match (home button, new game): closes a live room. */
     leave() {
       stopPending();
+      dropChoice(match);
       if (match?.ws) close(match.ws);
       match = null;
     },

@@ -6,7 +6,7 @@ import {
   VISITOR, VISITOR_TYPES, RATING, DUEL, WEATHER_TUNING,
 } from '../config.js';
 import { bus } from '../core/bus.js';
-import { S, VISITOR_INFO } from '../core/strings.js';
+import { S, VISITOR_INFO, WEATHER_INFO } from '../core/strings.js';
 import { fmtM } from '../core/format.js';
 import { createSequence } from '../core/sequence.js';
 import { audio, haptics } from '../audio.js';
@@ -49,6 +49,8 @@ const SET_MAX_SPEED = 0.3;       // ...if it moves slower than this (px/step)
 const SET_MAX_SPIN = 0.01;       // ...and turns slower than this (rad/step)
 const LOCK_MAX_SPEED = 0.35;     // a Perfek sets the blocks under it if they are at rest (px/step)...
 const LOCK_MAX_SPIN = 0.006;     // ...(rad/step)
+const CEMENT_MAX_SPEED = 3;      // Hanswors's cement: a block moving faster than this (px/step) is on its way down
+const TIPPED = 0.35;             // rad: an odd shape tipped further than this has no top surface to sit flush on
 const FOOT_MARGIN = 4;           // px: a snapped block must rest on its support on both sides of its centre
 const SKID_SLOW = 0.9;           // rain skid: each step slides this fraction of the step before...
 const SKID_EDGE = 8;             // ...and it stops this far before its middle passes the edge below it (px)
@@ -103,6 +105,7 @@ function calmWeather() {
     blocksLeft: null,
     setBlockIndex() { return null; },
     rainSkid() { return null; },
+    force() { return false; },
     beforeStep() {},
     update() {},
     isHail() { return false; },
@@ -500,8 +503,18 @@ export class GameScene extends Phaser.Scene {
       // Uitdagersreeks: the other player sent a visitor / the match was decided
       bus.on('duel:attack', (a) => {
         if (!this.duel || this.over) return;
+        const from = a?.from || this.duel.name;
+        // Mis and Hittegolf come as weather for a few blocks; Blouaap and Skelm Sakkie as visitors
+        if (a?.kind === 'fog' || a?.kind === 'heat') {
+          try {
+            this.weather.force(a.kind, DUEL.weatherAttackBlocks, S.duelAttackIn(from, WEATHER_INFO[a.kind].name));
+          } catch (err) {
+            this.weatherFailed(err);
+          }
+          return;
+        }
         try {
-          this.visitors.attack(a?.kind, a?.from || this.duel.name);
+          this.visitors.attack(a?.kind, from);
         } catch (err) {
           this.visitorsFailed(err);
         }
@@ -562,9 +575,11 @@ export class GameScene extends Phaser.Scene {
   visitorActions() {
     return {
       top: () => this.visitorTop(),
-      busy: () => !!this.falling,
+      busy: () => !!this.falling || this.eases.length > 0,
       shove: (plan, dir) => this.visitorShove(plan, dir),
-      gift: (plan) => this.visitorGift(plan),
+      giftAt: (spec) => this.giftPose(spec, this.topBlock),
+      gift: (spec) => this.visitorGift(spec),
+      found: (gifts) => this.visitorFoundation(gifts),
       steal: (max) => this.visitorSteal(max),
       // first game: the first visitor of each kind explains itself (shown in its arrival banner)
       coach: (type) => {
@@ -913,7 +928,7 @@ export class GameScene extends Phaser.Scene {
     // 1. Crane (the swing widens over the first blocks; the crane eases it so the trolley never jumps)
     const w = this.weather;
     const opts = this.craneOpts;
-    opts.omega = Math.min(CRANE.omegaMax, CRANE.omega0 + CRANE.omegaPerBlock * this.i) * w.craneSpeedMul;
+    opts.omega = Math.min(CRANE.omegaTop, Math.min(CRANE.omegaMax, CRANE.omega0 + CRANE.omegaPerBlock * this.i) * w.craneSpeedMul);
     opts.amplitude = this.amplitudeFor(this.i);
     opts.windAccel = w.windAccel;
     opts.heat = w.heatLevel;
@@ -1462,39 +1477,73 @@ export class GameScene extends Phaser.Scene {
     if (this.falling) this.falling.shielded = true;   // it was aimed at the tower as it stood
   }
 
-  /** Blouaap's shove: the top 1-2 movable blocks get a sideways kick (a Perfek block is "grounded": half). */
+  /**
+   * Blouaap's strike: he hurls the top movable block into the sea and stamps on the next 1-2
+   * (a Perfek block is "grounded": half the stamp). Cement never moves.
+   */
   visitorShove(plan, dir) {
     if (this.over) return 0;
     const M = this.M;
-    const targets = topMovable(this.tower, plan.count);
-    for (const b of targets) {
+    const targets = topMovable(this.tower, 1 + plan.count);
+    targets.forEach((b, k) => {
       const body = b.body;
-      const grounded = b.rating === RATING.PERFECT ? 0.5 : 1;
       M.Sleeping.set(body, false);
-      M.Body.setVelocity(body, { x: body.velocity.x + dir * plan.kick * grounded, y: body.velocity.y - 0.8 * grounded });
+      b.knockedUntil = this.now + VISITOR.knockMaxMs;   // whenever it falls, it's his doing (until it rests)
+      if (k === 0) {
+        M.Body.setVelocity(body, { x: dir * plan.hurl, y: -VISITOR.monkeyHurlUp });
+        M.Body.setAngularVelocity(body, dir * plan.hurlSpin);
+        return;
+      }
+      const grounded = b.rating === RATING.PERFECT ? 0.5 : 1;
+      M.Body.setVelocity(body, { x: body.velocity.x + dir * plan.kick * grounded, y: body.velocity.y - 1.2 * grounded });
       M.Body.setAngularVelocity(body, body.angularVelocity + dir * plan.spin * grounded);
-    }
+    });
     if (targets.length) {
       const b = targets[0];
-      this.effects.dust(b.centerX, b.top + 6, b.right - b.left);
-      this.effects.shake(0.003, 140);
+      this.effects.dust(b.centerX, b.bottom, b.right - b.left);
+      this.effects.floatText(b.centerX, b.top - 30, '💥', { size: 72 });
+      this.effects.shake(0.01, 300);
+      audio.play('land', { intensity: 1, size: 1 });
+      haptics.heavy();
     }
     this.openVisitorGrace('monkey');
     return targets.length;
   }
 
-  /** Hanswors's gift: a striped bonus block let go just above the tower top, a little crooked. */
-  visitorGift(plan) {
-    if (this.over) return null;
-    const spec = { ...plan.spec, i: -1, gift: true };
-    const geom = getGeometry(spec);
-    const tb = this.topBlock && !this.topBlock.destroyed ? this.topBlock : null;
-    const x = clamp(this.supportTop(tb).x + plan.dx, 40, GAME_W - 40);
-    const y = this.towerTopY - VISITOR.giftDropPx - (geom.h - geom.cy);
-    const b = new Block(this, spec, x, y, plan.tilt, null);
+  /**
+   * Where one of Hanswors's blocks sits: in the middle of the support's top surface, flush on it
+   * (the way a Perfek lands). On a tipped-over odd shape: level, on its highest point.
+   */
+  giftPose(gspec, support) {
+    const out = this.giftPoseOut || (this.giftPoseOut = { x: 0, y: 0, angle: 0 });
+    const g = getGeometry(gspec);
+    const sup = support && !support.destroyed ? support : null;
+    const t = this.supportTop(sup);
+    const level = !!sup && !isRect(sup.geom) && Math.abs(t.angle) > TIPPED;
+    const ang = level ? 0 : t.angle;
+    const d = g.h - g.cy;
+    out.x = t.x + d * Math.sin(ang);
+    out.y = (level ? sup.top : t.y) - d * Math.cos(ang);
+    out.angle = ang;
+    return out;
+  }
+
+  /**
+   * One of Hanswors's gift blocks. Everything on the tower that isn't on its way down sets as
+   * cement first, where it stands; then his striped block goes flush on top and sets too, so it
+   * can never slide off: the tower's new foundation.
+   */
+  visitorGift(gspec) {
+    if (this.over || !gspec) return null;
+    this.cementTower();
+    this.updateTowerHeight();
+    const sup = this.frozenTopBlock && !this.frozenTopBlock.destroyed ? this.frozenTopBlock : null;
+    const spec = { ...gspec, i: -1, gift: true };
+    const at = this.giftPose(spec, sup);
+    const b = new Block(this, spec, at.x, at.y, at.angle, null);
     b.gift = true;
     b.rating = RATING.GIFT;
-    b.state = 'landed';
+    b.state = 'settled';
     b.droppedAt = this.now;
     b.landedAt = this.now;
     b.advanced = true;        // it brings no crane block of its own
@@ -1502,18 +1551,42 @@ export class GameScene extends Phaser.Scene {
     b.splashed = false;
     b.pendingRate = false;
     b.shielded = false;
-    b.setFriction(this.weather.frictionMul);
     this.tower.push(b);
-    this.active.push(b);
-    this.dynDirty = true;
-    this.lastLandAt = this.now;   // the wobble meter lets it settle first
+    this.freezeBlock(b);
+    this.updateTowerHeight();
+    this.lastLandAt = this.now;
     this.gifts.push(this.blocksDropped);
     this.score += VISITOR.giftPoints;
     this.effects.floatText(b.right + 64, b.bottom + 24, `+${VISITOR.giftPoints} 🎁`, { color: '#fff27a', size: 36 });
-    this.effects.sparkle(x, b.top, 14);
-    audio.play('land', { intensity: 0.35, size: 0.6 });
+    this.effects.dust(b.centerX, b.bottom, b.right - b.left);
+    audio.play('land', { intensity: 0.5, size: 0.7 });
     this.emitProgress();
     return b;
+  }
+
+  /** Hanswors's cement: every tower block that isn't on its way down sets at once, where it is. */
+  cementTower() {
+    let n = 0;
+    for (const o of this.tower) {
+      if (o.state === 'frozen' || o.state === 'lost' || o.destroyed) continue;
+      if (o.body.speed > CEMENT_MAX_SPEED) continue;
+      if (o.pendingRate && !o.rating) this.applyRating(o, 'S');
+      if (o.state === 'landed') o.state = 'settled';
+      this.freezeBlock(o, true);
+      n++;
+    }
+    return n;
+  }
+
+  /** Hanswors is done: his blocks (cement already) are the tower's new foundation. */
+  visitorFoundation(gifts) {
+    const set = (gifts || []).filter((g) => g && !g.destroyed && g.state === 'frozen');
+    if (this.over || !set.length) return 0;
+    const top = set.reduce((a, b) => (b.top < a.top ? b : a));
+    this.effects.sparkle(top.centerX, top.top, 24);
+    audio.play('freeze');
+    bus.emit('hud:toast', { text: S.clownFoundation, color: '#fff27a', visitor: true });
+    return set.length;
   }
 
   /** Skelm Sakkie's theft: the top movable blocks (never cement) leave the tower; their pictures go into his bag. */
@@ -1616,6 +1689,7 @@ export class GameScene extends Phaser.Scene {
     for (let k = 0; k < dyn.length; k++) {
       const b = dyn[k];
       const quiet = b.quietSteps >= SETTLE.steps || b.body.isSleeping;
+      if (quiet && b.knockedUntil) b.knockedUntil = 0;   // knocked loose, but it came to rest: the player's again
       if (b.state === 'landed') {
         if (quiet) {
           b.state = 'settled';

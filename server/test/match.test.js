@@ -83,8 +83,8 @@ function clock(t = T0) {
   return c;
 }
 
-/** A room with two players who said hello; returns { room, a, b, clk, state }. */
-async function startedRoom({ env = {}, names = ['Anna', 'Bennie'] } = {}) {
+/** A room with two players who said hello (games of protocol `v`, 1 when left out); returns { room, a, b, clk, state }. */
+async function startedRoom({ env = {}, names = ['Anna', 'Bennie'], v = [undefined, undefined] } = {}) {
   const clk = clock();
   const state = fakeState();
   const room = new MatchRoom(state, env, { now: clk.now, upgrade });
@@ -93,8 +93,8 @@ async function startedRoom({ env = {}, names = ['Anna', 'Bennie'] } = {}) {
   const b = fakeSocket();
   await room.join(a);
   await room.join(b);
-  await room.onMessage(a, JSON.stringify({ t: 'hello', name: names[0] }));
-  await room.onMessage(b, JSON.stringify({ t: 'hello', name: names[1] }));
+  await room.onMessage(a, JSON.stringify({ t: 'hello', name: names[0], v: v[0] }));
+  await room.onMessage(b, JSON.stringify({ t: 'hello', name: names[1], v: v[1] }));
   clk.tick(DUEL.countdownMs);
   return { room, a, b, clk, state };
 }
@@ -135,7 +135,7 @@ test('room: an unknown code is "gone"', async () => {
   assert.equal(a.closed, true);
 });
 
-test('room: heights are relayed; the first to a mark sends its visitor (once)', async () => {
+test('room: heights are relayed; with older games (protocol 1) the first to a mark sends its default visitor at once', async () => {
   const { room, a, b, clk } = await startedRoom();
   clk.tick(5000);
   await say(room, a, { t: 'state', h: 6, best: 6 });
@@ -149,6 +149,81 @@ test('room: heights are relayed; the first to a mark sends its visitor (once)', 
   clk.tick(4000);
   await say(room, b, { t: 'state', h: 21, best: 21 });
   assert.deepEqual(a.last('attack'), { t: 'attack', m: 20, kind: 'thief' });
+});
+
+test('room: the first to a mark chooses the punishment (protocol 2); it goes once, and only theirs', async () => {
+  const { room, a, b, clk } = await startedRoom({ v: [2, 2] });
+  clk.tick(6000);
+  await say(room, a, { t: 'state', h: 10.4, best: 10.4 });
+  assert.deepEqual(a.last('choose'), { t: 'choose', m: 10, def: 'monkey' });
+  assert.equal(b.of('attack').length, 0, 'nothing goes before Anna chooses');
+  assert.equal(a.of('sent').length, 0);
+  await say(room, b, { t: 'punish', m: 10, kind: 'fog' });   // not Bennie's to choose
+  await say(room, a, { t: 'punish', m: 20, kind: 'fog' });   // no such choice
+  await say(room, a, { t: 'punish', m: 10, kind: 'bomb' });  // no such punishment
+  assert.equal(b.of('attack').length, 0);
+  await say(room, a, { t: 'punish', m: 10, kind: 'fog' });
+  assert.deepEqual(b.last('attack'), { t: 'attack', m: 10, kind: 'fog' });
+  assert.deepEqual(a.last('sent'), { t: 'sent', m: 10, kind: 'fog' });
+  await say(room, a, { t: 'punish', m: 10, kind: 'heat' });  // once only
+  assert.equal(b.of('attack').length, 1);
+  // Bennie takes 20 m and sends the heat wave
+  clk.tick(8000);
+  await say(room, b, { t: 'state', h: 20.5, best: 20.5 });
+  assert.deepEqual(b.last('choose'), { t: 'choose', m: 20, def: 'thief' });
+  await say(room, b, { t: 'punish', m: 20, kind: 'heat' });
+  assert.deepEqual(a.last('attack'), { t: 'attack', m: 20, kind: 'heat' });
+});
+
+test('room: a choice not made in time gets the mark\'s default (also after hibernation)', async () => {
+  const { room, a, b, clk, state } = await startedRoom({ v: [2, 2] });
+  clk.tick(6000);
+  await say(room, a, { t: 'state', h: 10.4, best: 10.4 });
+  assert.equal(a.of('choose').length, 1);
+  clk.tick(DUEL.chooseMs);
+  await say(room, b, { t: 'state', h: 4, best: 4 });
+  assert.equal(b.of('attack').length, 0, 'the server waits a little longer than the game');
+  // the room sleeps; the next message wakes a fresh object from storage
+  const again = new MatchRoom(state, {}, { now: clk.now, upgrade });
+  clk.tick(1600);
+  await say(again, b, { t: 'state', h: 4.2, best: 4.2 });
+  assert.deepEqual(b.last('attack'), { t: 'attack', m: 10, kind: 'monkey' });
+  assert.deepEqual(a.last('sent'), { t: 'sent', m: 10, kind: 'monkey' });
+  await say(again, a, { t: 'punish', m: 10, kind: 'fog' });   // too late
+  assert.equal(b.of('attack').length, 1);
+  assert.equal(a.of('sent').length, 1);
+  assert.ok(room, 'the first object is simply gone');
+});
+
+test('room: an older game gets only the default punishment, and the chooser hears what went', async () => {
+  const { room, a, b, clk } = await startedRoom({ v: [2, 1] });
+  clk.tick(6000);
+  await say(room, a, { t: 'state', h: 10.4, best: 10.4 });
+  await say(room, a, { t: 'punish', m: 10, kind: 'heat' });
+  assert.deepEqual(b.last('attack'), { t: 'attack', m: 10, kind: 'monkey' }, '1.7.5 can only show the default');
+  assert.deepEqual(a.last('sent'), { t: 'sent', m: 10, kind: 'monkey' });
+  clk.tick(6000);
+  await say(room, a, { t: 'state', h: 20.4, best: 20.4 });
+  await say(room, a, { t: 'punish', m: 20, kind: 'thief' });   // the default itself goes as chosen
+  assert.deepEqual(b.last('attack'), { t: 'attack', m: 20, kind: 'thief' });
+  // the older game reaches a mark first: it never asks, so the default goes at once
+  clk.tick(30000);
+  await say(room, b, { t: 'state', h: 30.4, best: 30.4 });
+  assert.equal(b.of('choose').length, 0);
+  assert.deepEqual(a.last('attack'), { t: 'attack', m: 30, kind: 'monkey' });
+  assert.deepEqual(b.last('sent'), { t: 'sent', m: 30, kind: 'monkey' });
+});
+
+test('room: when the match ends, open choices are dropped', async () => {
+  const { room, a, b, clk } = await startedRoom({ v: [2, 2] });
+  clk.tick(6000);
+  await say(room, a, { t: 'state', h: 10.4, best: 10.4 });
+  await say(room, b, { t: 'over', reason: 'lives', best: 3 });
+  assert.equal(a.last('result').winner, 0);
+  await say(room, a, { t: 'punish', m: 10, kind: 'fog' });
+  clk.tick(10000);
+  await say(room, a, { t: 'state', h: 12, best: 12 });
+  assert.equal(b.of('attack').length, 0);
 });
 
 test('room: the first to 50 m wins; after the result nothing changes', async () => {

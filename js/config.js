@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.7.5';
+export const VERSION = '1.7.6';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -76,8 +76,9 @@ export const CRANE = {
   amplitudeStart: 110,   // block 0 swings gently (any first tap lands on the base)...
   amplitudePerBlock: 30, // ...and the swing widens by this much per block
   omega0: 1.55,          // rad/s of the trolley sine at block 0
-  omegaPerBlock: 0.015,  // added per block index
-  omegaMax: 3.0,
+  omegaPerBlock: 0.045,  // added per block index: the higher the tower, the faster the crane
+  omegaMax: 3.6,         // reached at block 46
+  omegaTop: 4.6,         // never faster than this, also with a heat wave on top
   carry: 0.3,            // fraction of the hanging block's velocity kept on release
   pendulumDamping: 1.6,  // visual rope swing damping (1/s)
   respawnDelayMs: 350,   // after a landing/loss, wait this long before the next block appears
@@ -183,22 +184,25 @@ export const VISITOR = {
   sideX: 92,               // the monkey and the clown wait this far from the screen edge (clear of the aim)
   monkeyRunUpMs: 1500,     // tap window: the monkey swings on its rope before it jumps
   monkeyLeapMs: 380,
-  monkeyBounceMs: 560,     // two bounces on the tower top, then the shove
+  monkeyBounceMs: 560,     // two bounces on the tower top, then he strikes:
   monkeyLeaveMs: 650,
-  monkeyKick: [1.6, 2.6],  // sideways shove of each pushed block (px/step, x strength)
-  monkeySpin: 0.035,       // rad/step
+  monkeyHurl: [7, 9],      // the top block is hurled into the sea, this fast sideways (px/step)...
+  monkeyHurlUp: 5.5,       // ...and up (px/step), so it clears the block under it...
+  monkeyHurlSpin: [0.07, 0.11], // ...tumbling (rad/step)
+  monkeyKick: [3.2, 4.4],  // and the next 1-2 blocks are stamped sideways (px/step, x strength)
+  monkeySpin: 0.05,        // rad/step
   clownArriveMs: 1200,     // floats in, honking (tapping him only makes him honk and juggle)
-  clownTossMs: 420,        // the gift flies to the tower top...
+  clownTossMs: 420,        // each gift block flies onto the tower top and sets there as cement
   clownLeaveMs: 1100,
-  giftDropPx: 22,          // ...and is let go this far above it
-  giftOffsetPx: [4, 12],   // crooked: this far off-centre...
-  giftTilt: [0.02, 0.06],  // ...and tilted this much (rad)
+  giftMax: 4,              // he brings 1-4 blocks: a new foundation (the tower under them sets too)
+  giftGapMs: 300,          // between two of his blocks
   giftPoints: 25,
   thiefClimbMs: 2000,      // tap window: he sneaks up the side of the tower
   thiefGrabMs: 450,
   thiefLeaveMs: 950,
   thiefMax: 4,             // blocks he can carry (never cement)
-  graceMs: 2500,           // tower blocks lost this soon after a visitor's push cost no heart
+  graceMs: 2500,           // tower blocks lost this soon after a visitor's push cost no heart...
+  knockMaxMs: 8000,        // ...and so does a block the monkey moved, until it comes to rest (at most this long)
 };
 
 // ---------------------------------------------------------------------------
@@ -206,9 +210,12 @@ export const VISITOR = {
 // ---------------------------------------------------------------------------
 export const DUEL = {
   goalM: 50,               // the first to 50 m wins
-  marks: [10, 20, 30, 40], // whoever reaches a mark first sends a visitor to the other tower
-  attackFor: { 10: 'monkey', 20: 'thief', 30: 'monkey', 40: 'thief' },
-  ghostPenaltyM: { monkey: 2, thief: 4 }, // what an attack takes off a recording's tower
+  marks: [10, 20, 30, 40], // whoever reaches a mark first chooses a punishment for the other tower
+  punishments: ['monkey', 'thief', 'fog', 'heat'], // Blouaap, Skelm Sakkie, Mis, Hittegolf
+  attackFor: { 10: 'monkey', 20: 'thief', 30: 'monkey', 40: 'thief' }, // sent when nobody chooses in time
+  chooseMs: 5000,          // time to choose (the server waits a little longer, then sends the default)
+  weatherAttackBlocks: 3,  // Mis / Hittegolf last this many blocks
+  ghostPenaltyM: { monkey: 3, thief: 4, fog: 2, heat: 2 }, // what a punishment takes off a recording's tower
   sampleMs: 1000,          // a recording keeps the height once a second
   maxRunMs: 15 * 60 * 1000,
   maxHeightM: 2000,

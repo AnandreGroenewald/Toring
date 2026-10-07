@@ -694,6 +694,9 @@ function searchOpponent() {
 }
 
 bus.on('ui:duel', showDuelScreen);
+// first to a height mark: choose the punishment (js/duel.js times it out with the default)
+bus.on('duel:choose', (c) => ui.showPunish(c));
+bus.on('duel:chosen', () => ui.hidePunish());
 bus.on('ui:duel-name', (text) => ui.setDuelName(store.setDuelName(text)));
 bus.on('ui:duel-bot', () => versus(duel.startBot()));
 bus.on('ui:duel-random', searchOpponent);

@@ -166,16 +166,21 @@ test('a recording plays back without a head start: marks within half a second, t
   assert.ok(Math.abs(mean) < 120, `on average ${Math.round(mean)} ms early or late`);
 });
 
-test('ghost: attacks take 2 m (Blouaap) or 4 m (Skelm Sakkie) off its tower from then on', () => {
+test('ghost: punishments take height off its tower from then on (Blouaap 3 m, Skelm Sakkie 4 m, Mis and Hittegolf 2 m)', () => {
+  assert.deepEqual(DUEL.ghostPenaltyM, { monkey: 3, thief: 4, fog: 2, heat: 2 });
   const g = createGhost({ samples: [0, 100, 200, 300], endT: 3000, end: 'stop' });
   assert.deepEqual(g.step(1500), { h: 10, best: 10, over: null });
   g.hit('monkey');
-  assert.equal(g.step(1500).h, 8);
+  assert.equal(g.step(1500).h, 7);
   assert.equal(g.step(1500).best, 10, 'its best height so far stays');
   g.hit('thief');
-  assert.equal(g.step(2500).h, 14);
-  assert.equal(g.step(3000).h, 24);
-  assert.equal(g.penalty, 6);
+  assert.equal(g.step(2500).h, 13);
+  g.hit('fog');
+  g.hit('heat');
+  assert.equal(g.step(3000).h, 19);
+  assert.equal(g.penalty, 11);
+  g.hit('bomb');
+  assert.equal(g.penalty, 11, 'an unknown punishment takes nothing');
   assert.equal(g.step(9000).over, null, 'a run that simply stopped never falls');
   const fell = createGhost({ samples: [0, 50], endT: 1500, end: 'lives' });
   assert.equal(fell.step(1400).over, null);

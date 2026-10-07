@@ -5,7 +5,7 @@
 // step), with its randomness drawn from the visit's own seeded stream: a visit plays out the
 // same at any refresh rate and for every player. The sprites are big emoji (cheap, friendly
 // on every phone) moved in update(); the rope, balloons, swag bag and juggling balls are
-// drawn in code. GameScene does the physics through `actions` (shove, gift, steal).
+// drawn in code. GameScene does the physics through `actions` (shove, gift, found, steal).
 
 import { VISITOR, VISITOR_TYPES, DEPTH, GAME_W, LAYOUT, FONT, PHYSICS } from '../config.js';
 import { S, VISITOR_INFO } from '../core/strings.js';
@@ -32,6 +32,8 @@ const FADE_MS = 260;
 const ATTRACT_CHANCE = 0.35;    // menu: the clown floats past above some attract towers (looks only)
 const ATTRACT_MS = 7000;
 const FORCE_FROM = 3;           // a forced (debug) visitor waits until there is a little tower to visit
+const CALL_MS = 240;            // the monkey's call comes just after the alarm
+const ITCH_MS = 600;            // ...and he fidgets for this long before he jumps
 
 const outCubic = (t) => 1 - (1 - t) ** 3;
 const inCubic = (t) => t * t * t;
@@ -144,8 +146,8 @@ export class Visitors {
    * @param {object} sequence     createSequence(): visitorAt(i), seed
    * @param {object} opts         { audio, bus, attract, scheduled, reducedMotion, actions }
    *   scheduled: false in a head-to-head match (visitors then only come as attacks, see attack())
-   *   actions: { top() -> {x,y,left,right}, busy() -> bool, shove(plan, dir) -> n, gift(plan) -> Block|null,
-   *              steal(max) -> Image[], coach(type), toast(text, color), free() }
+   *   actions: { top() -> {x,y,left,right}, busy() -> bool, shove(plan, dir) -> n, giftAt(spec) -> {x,y,angle},
+   *              gift(spec) -> Block|null, found(blocks) -> n, steal(max) -> Image[], coach(type), toast(text, color) }
    */
   constructor(scene, sequence, { audio = null, bus = null, attract = false, scheduled = true, reducedMotion = false, actions = {} } = {}) {
     this.scene = scene;
@@ -269,6 +271,8 @@ export class Visitors {
       c.objs.push(c.rope);
     } else if (c.type === 'clown') {
       if (!attract) c.side = this._clearSide(c.side, VISITOR.sideX + 10);
+      c.k = 0;          // the next gift block to toss
+      c.placed = [];    // the gift blocks on the tower
       c.balloons = scene.add.image(0, 0, 'vis_balloons').setOrigin(0.5, 1).setDepth(DEPTH.visitor - 0.1).setVisible(false);
       c.objs.push(c.balloons);
       c.puffs = [emojiText(scene, '💨', 34), emojiText(scene, '💨', 30)];
@@ -298,7 +302,8 @@ export class Visitors {
         ms: coach ? 2600 : 0,
       });
     }
-    this._play(c.type === 'monkey' ? 'monkey' : c.type === 'clown' ? 'clown' : 'thief');
+    // the monkey comes with an alarm (his call follows in step()): he is trouble
+    this._play(c.type === 'monkey' ? 'warning' : c.type === 'clown' ? 'clown' : 'thief');
     if (c.type === 'clown') this._honk(c);
   }
 
@@ -333,6 +338,10 @@ export class Visitors {
     }
     const since = c.t - c.at;
     if (c.type === 'monkey') {
+      if (c.phase === 'swing' && !c.called && since >= CALL_MS) {
+        c.called = true;
+        this._play('monkey');
+      }
       if (c.phase === 'swing' && since >= VISITOR.monkeyRunUpMs) this._phase(c, 'leap');
       else if (c.phase === 'leap' && since >= VISITOR.monkeyLeapMs) this._phase(c, 'bounce');
       else if (c.phase === 'bounce' && since >= VISITOR.monkeyBounceMs) {
@@ -343,16 +352,30 @@ export class Visitors {
         this._leave(c, 'leave');
       }
     } else if (c.type === 'clown') {
+      // He stacks his blocks one at a time, each set in cement where it lands (with the tower under
+      // it): a new foundation. Each waits until no block of the player's is in the air or still
+      // sliding into place (it must not land on one, nor appear where one is passing).
       if (c.phase === 'arrive' && since >= VISITOR.clownArriveMs) this._phase(c, 'wait');
-      // the gift waits until no block of the player's is falling (it must not land on one in the air)
       if (c.phase === 'wait') {
-        if (!(this.actions.busy && this.actions.busy())) this._toss(c);
-      } else if (c.phase === 'toss' && c.t - c.at >= VISITOR.clownTossMs) {
+        if (!this._busy()) this._toss(c);
+      } else if (c.phase === 'toss' && since >= VISITOR.clownTossMs && !this._busy()) {
         if (c.gift) kill(c.gift);
         c.gift = null;
-        const block = this.actions.gift ? this.actions.gift(c.plan) : null;
-        if (block) c.rec.outcome = 'gift';
-        this._leave(c, 'leave');
+        const block = this.actions.gift ? this.actions.gift(c.plan.specs[c.k]) : null;
+        c.k = block ? c.k + 1 : c.plan.specs.length;   // no block: the tower is over, he stops
+        if (block) {
+          c.placed.push(block);
+          c.rec.outcome = 'gift';
+          c.rec.n = c.placed.length;
+        }
+        if (c.k < c.plan.specs.length) {
+          this._phase(c, 'gap');
+        } else {
+          if (c.placed.length && this.actions.found) this.actions.found(c.placed);
+          this._leave(c, 'leave');
+        }
+      } else if (c.phase === 'gap' && since >= VISITOR.giftGapMs) {
+        this._phase(c, 'wait');
       }
     } else if (c.phase === 'climb' && since >= c.plan.climbMs) {
       const loot = this.actions.steal ? this.actions.steal(VISITOR.thiefMax) : [];
@@ -397,9 +420,13 @@ export class Visitors {
     this.cur = null;
   }
 
+  _busy() {
+    return !!(this.actions.busy && this.actions.busy());
+  }
+
   _toss(c) {
     this._phase(c, 'toss');
-    const spec = { ...c.plan.spec, i: -1, gift: true };
+    const spec = { ...c.plan.specs[c.k], i: -1, gift: true };
     const g = getGeometry(spec);
     c.giftGeom = g;
     c.gift = this.scene.add.image(c.x, c.y + 30, ensureTexture(this.scene, spec)).setOrigin(g.originX, g.originY)
@@ -525,6 +552,14 @@ export class Visitors {
         y = sy(ay + len * Math.cos(th));
         rot = -th * 0.7;
         ropeTo = { x, y: y - HALF + 6 };
+        // the last moments before he jumps: he crouches and fidgets (tap him now!)
+        const itch = (tv - (VISITOR.monkeyRunUpMs - ITCH_MS)) / ITCH_MS;
+        if (itch > 0 && !this.reduced) {
+          const k = 0.09 * Math.min(1, itch * 2) * Math.sin(tv / 35);
+          sx = 1 + k;
+          syl = 1 - k;
+          rot += 0.08 * Math.sin(tv / 23);
+        }
       } else if (c.phase === 'leap') {
         const p = clamp(since / VISITOR.monkeyLeapMs, 0, 1);
         const tx = top.x;
@@ -588,7 +623,7 @@ export class Visitors {
         x = lerp(s < 0 ? -90 : GAME_W + 90, hx, e);
         y = hy + 60 * (1 - e) + bob;
         rot = walk;
-      } else if (c.phase === 'wait' || c.phase === 'toss') {
+      } else if (c.phase === 'wait' || c.phase === 'toss' || c.phase === 'gap') {
         x = hx;
         y = hy + bob;
         rot = walk * 0.5;
@@ -602,10 +637,12 @@ export class Visitors {
       if (c.phase === 'toss' && alive(c.gift)) {
         const g = c.giftGeom;
         const p = clamp(since / VISITOR.clownTossMs, 0, 1);
-        const tx = clamp(top.x + c.plan.dx, 40, GAME_W - 40);
-        const ty = top.y - VISITOR.giftDropPx - (g.h - g.cy);
+        // it flies to the very spot where it will set (flush on the tower top)
+        const at = this.actions.giftAt ? this.actions.giftAt(c.plan.specs[c.k]) : null;
+        const tx = at ? at.x : top.x;
+        const ty = at ? at.y : top.y - (g.h - g.cy);
         c.gift.setPosition(lerp(x, tx, p), lerp(y + 34, ty, p) - (this.reduced ? 0 : 120 * hump(p)))
-          .setRotation(lerp(0, c.plan.tilt, p) + (this.reduced ? 0 : s * 0.5 * hump(p))).setScale(lerp(0.6, 1, p));
+          .setRotation(lerp(0, at ? at.angle : 0, p) + (this.reduced ? 0 : s * 0.5 * hump(p))).setScale(lerp(0.6, 1, p));
       }
       if (alive(c.balloons)) c.balloons.setVisible(true).setPosition(x + 2, y - HALF + 10).setRotation(rot * 0.4).setAlpha(alpha);
       if (alive(c.sprite)) c.sprite.setFlipX(s > 0);

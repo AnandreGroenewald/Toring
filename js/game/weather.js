@@ -349,7 +349,8 @@ export class Weather {
     this._i = i;
     if (this._active && i >= this._active.end) this._endEvent();
     const ev = this.sequence && this.sequence.eventAt ? this.sequence.eventAt(i) : null;
-    if (ev && ev.start === i && (!this._active || this._active.start !== ev.start)) this._startEvent(ev);
+    // (a punishment from the other player in the Uitdagersreeks runs its course first)
+    if (ev && ev.start === i && !(this._active && this._active.forced) && (!this._active || this._active.start !== ev.start)) this._startEvent(ev);
     // storm: second strike once the event is half-way through (by blocks)
     const s = this._storm;
     if (this._is('storm') && s.strikes === 1 && s.phase === 'idle' && s.nextAt !== null) {
@@ -359,7 +360,17 @@ export class Weather {
     return this._active;
   }
 
-  _startEvent(ev) {
+  /**
+   * Uitdagersreeks: the other player sent this weather (Mis or Hittegolf) for the next `blocks` blocks.
+   * `title` names who sent it ("Anna stuur Mis!"). False if this weather can't be sent.
+   */
+  force(type, blocks, title) {
+    if (this.destroyed || !WEATHER_INFO[type]) return false;
+    this._startEvent({ type, start: this._i, end: this._i + Math.max(1, blocks | 0), dir: 1, strength: 1, forced: true }, title);
+    return true;
+  }
+
+  _startEvent(ev, title = null) {
     if (this._active) this._endEvent();
     this._active = ev;
     this._t = 0;
@@ -369,7 +380,7 @@ export class Weather {
 
     const info = WEATHER_INFO[ev.type];
     if (info && this.bus) {
-      this.bus.emit('hud:banner', { emoji: info.emoji, title: info.name, subtitle: info.desc(ev.dir), type: ev.type });
+      this.bus.emit('hud:banner', { emoji: info.emoji, title: title || info.name, subtitle: info.desc(ev.dir), type: ev.type });
     }
     this._play('banner');
     const snd = TYPE_SOUND[ev.type];

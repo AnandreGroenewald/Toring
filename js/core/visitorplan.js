@@ -15,7 +15,7 @@ const GAP = [10, 20];         // blocks from one visitor to the next (mean 15)
 const THIEF_FROM = 14;        // the thief needs a tower worth robbing
 const TYPE_WEIGHTS = { monkey: 4, clown: 3.5, thief: 2.5 };
 const FORECAST_BLOCKS = 45;   // the menu and the teaser name the visitors of about one tower
-const GIFT_SHAPES = ['crate', 'slab', 'brick'];   // steady shapes: a gift should wobble, not wreck
+const GIFT_SHAPES = ['crate', 'slab', 'brick'];   // steady shapes: they stack straight
 
 const round2 = (x) => Math.round(x * 100) / 100;
 
@@ -75,7 +75,10 @@ export function visitRng(seed, v) {
   return createRng(`${seed}/visitor-fx`).fork(`${v.type}@${v.at}`);
 }
 
-/** Blouaap: how many of the top blocks it shoves (1 or 2), how hard and with how much spin. */
+/**
+ * Blouaap: he hurls the top block into the sea (how fast it goes, how it tumbles) and stamps
+ * on the next 1 or 2 (how many, how hard and with how much spin).
+ */
 export function monkeyPlan(r, v) {
   const s = Number.isFinite(v?.strength) ? v.strength : 1;
   const count = r.chance(0.3 + 0.4 * Math.min(1, Math.max(0, (s - 0.6) / 0.6))) ? 2 : 1;
@@ -83,18 +86,21 @@ export function monkeyPlan(r, v) {
     count,
     kick: round2(r.float(VISITOR.monkeyKick[0], VISITOR.monkeyKick[1]) * s),
     spin: round2(r.float(0.5, 1) * VISITOR.monkeySpin * 1000) / 1000,
+    hurl: round2(r.float(VISITOR.monkeyHurl[0], VISITOR.monkeyHurl[1])),
+    hurlSpin: round2(r.float(VISITOR.monkeyHurlSpin[0], VISITOR.monkeyHurlSpin[1]) * 1000) / 1000,
   };
 }
 
-/** Hanswors: the gift block (a steady shape) and how crooked it is placed. */
-export function clownPlan(r, v) {
-  const side = v?.side === -1 ? -1 : 1;
-  const shape = r.pick(GIFT_SHAPES);
-  return {
-    spec: { shape: SHAPE_IDS.includes(shape) ? shape : 'crate', scale: round2(r.float(0.85, 0.95)), color: r.int(0, PALETTE.length - 1) },
-    dx: round2(-side * r.float(VISITOR.giftOffsetPx[0], VISITOR.giftOffsetPx[1])),
-    tilt: round2((r.chance(0.5) ? -1 : 1) * r.float(VISITOR.giftTilt[0], VISITOR.giftTilt[1]) * 1000) / 1000,
+/** Hanswors: 1-4 gift blocks (steady shapes) that he stacks on the tower, where they set as a new foundation. */
+export function clownPlan(r) {
+  const gift = () => {
+    const shape = r.pick(GIFT_SHAPES);
+    return { shape: SHAPE_IDS.includes(shape) ? shape : 'crate', scale: round2(r.float(0.85, 0.95)), color: r.int(0, PALETTE.length - 1) };
   };
+  const specs = [gift()];
+  const n = r.int(1, VISITOR.giftMax);
+  while (specs.length < n) specs.push(gift());
+  return { specs };
 }
 
 /** Skelm Sakkie: how long the climb (the tap window) takes; a little quicker on later visits. */

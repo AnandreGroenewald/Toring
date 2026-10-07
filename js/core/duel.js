@@ -35,6 +35,13 @@ export function newMatchSeed(rand = Math.random) {
 /** The visitor a height mark sends ('monkey' | 'thief'), or null. */
 export const attackFor = (m) => DUEL.attackFor[m] || null;
 
+/** What the first to a height mark may send: Blouaap, Skelm Sakkie, Mis or Hittegolf (they choose). */
+export const PUNISHMENTS = Object.freeze([...DUEL.punishments]);
+export const isPunishment = (k) => PUNISHMENTS.includes(k);
+
+/** Robot Rikus's (or a recording's) choice at height mark m: seeded, so a rematch on that tower is the same. */
+export const botPunishment = (seed, m) => createRng(`${seed}/punish/${m}`).pick(PUNISHMENTS);
+
 // ---------------------------------------------------------------------------------- referee
 /**
  * Decides, in the order the reports arrive, who reached each height mark first (that player's
@@ -139,8 +146,8 @@ export function heightAt(run, tMs) {
 }
 
 /**
- * A recording played as an opponent. An attack on it takes DUEL.ghostPenaltyM off its tower from
- * then on (Blouaap 2 m, Skelm Sakkie 4 m). step(t) -> { h: its tower now, best: its best height so
+ * A recording played as an opponent. A punishment takes DUEL.ghostPenaltyM off its tower from
+ * then on (Blouaap 3 m, Skelm Sakkie 4 m, Mis and Hittegolf 2 m). step(t) -> { h: its tower now, best: its best height so
  * far, over: why it fell, or null }. A run that reached the goal or simply stopped never "falls".
  */
 export function createGhost(run) {

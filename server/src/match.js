@@ -10,6 +10,7 @@
 import { DUEL } from '../../js/config.js';
 import {
   createReferee, cleanNickname, cleanReport, decodeChallenge, encodeChallenge, heightDm, isMatchSeed, newMatchSeed, newRoomCode,
+  isPunishment,
 } from '../../js/core/duel.js';
 
 const MSG_MAX = 512;                   // characters per message
@@ -22,6 +23,10 @@ const RUNS_MAX = 60;
 const RUN_DAYS = 7;
 const SLACK_M = 5;                     // a report may run this far ahead of the climb limit (lag, bursts)
 const DEFAULT_NAME = 'Bouer';
+// The first to a height mark chooses the punishment ('choose' -> 'punish'). A player who doesn't answer
+// in time (or a game older than protocol 2, which never asks) gets the mark's default punishment.
+const CHOOSE_WAIT_MS = DUEL.chooseMs + 1500;
+const PROTOCOL_CHOOSE = 2;
 
 export const rand32 = () => crypto.getRandomValues(new Uint32Array(1))[0];
 const randFloat = () => rand32() / 4294967296;
@@ -53,7 +58,7 @@ function parseMsg(data) {
   }
 }
 
-/** What a socket carries through hibernation: { seat, hello, name } in a room, { at, hello } in the lobby. */
+/** What a socket carries through hibernation: { seat, hello, name, v } in a room, { at, hello } in the lobby. */
 function att(ws) {
   try {
     return ws.deserializeAttachment() || {};
@@ -66,6 +71,9 @@ function seatOf(ws) {
   const a = att(ws);
   return a.seat === 0 || a.seat === 1 ? a.seat : -1;
 }
+
+/** The game's protocol from its hello (1: games before the punishment choice). */
+const version = (ws) => att(ws).v || 1;
 
 /** Messages per socket per second (kept in memory; approximate across hibernation, which is fine). */
 function makeLimiter() {
@@ -201,12 +209,23 @@ export class MatchRoom {
 
     if (msg.t === 'hello') {
       if (m.started) return;
-      ws.serializeAttachment({ seat, hello: true, name: cleanNickname(msg.name) || DEFAULT_NAME });
+      const v = Math.max(1, Math.min(99, Math.floor(Number(msg.v)) || 1));
+      ws.serializeAttachment({ seat, hello: true, name: cleanNickname(msg.name) || DEFAULT_NAME, v });
       const both = [this.socketFor(0), this.socketFor(1)];
       if (both.every((s) => s && att(s).hello)) await this.start(now);
       return;
     }
     if (!m.started || m.result) return;
+    // a choice nobody made in time gets the default (checked whenever either player says anything)
+    if (await this.expireChoices(now)) await this.save();
+    if (msg.t === 'punish') {
+      const c = (m.pending || []).find((p) => p.m === msg.m && p.seat === seat);
+      if (c && isPunishment(msg.kind)) {
+        this.punish(c, msg.kind);
+        await this.save();
+      }
+      return;
+    }
     if (msg.t !== 'state' && msg.t !== 'over') return;
 
     const r = cleanReport(msg.t === 'over' ? { h: msg.best, best: msg.best, over: msg.reason ?? 'quit' } : msg);
@@ -226,11 +245,16 @@ export class MatchRoom {
     let important = false;
     for (const e of events) {
       if (e.type === 'attack') {
+        // first to a height mark: they choose what the other tower gets (e.kind is the default)
         important = true;
-        const to = this.socketFor(e.to);
+        const c = { m: e.m, seat: e.from, def: e.kind, at: now };
         const from = this.socketFor(e.from);
-        if (to) sendJson(to, { t: 'attack', m: e.m, kind: e.kind });
-        if (from) sendJson(from, { t: 'sent', m: e.m, kind: e.kind });
+        if (from && version(from) >= PROTOCOL_CHOOSE) {
+          (m.pending ||= []).push(c);
+          sendJson(from, { t: 'choose', m: e.m, def: e.kind });
+        } else {
+          this.punish(c, e.kind);   // an older game never asks: the default goes at once
+        }
       } else if (e.type === 'result') {
         important = true;
         const loser = 1 - e.winner;
@@ -240,6 +264,25 @@ export class MatchRoom {
       }
     }
     if (important || now - this.savedAt >= SAVE_EVERY_MS) await this.save();
+  }
+
+  /** The chooser's punishment goes to the other player ('attack'), and back to them as 'sent'. */
+  punish(c, kind) {
+    const m = this.m;
+    m.pending = (m.pending || []).filter((p) => p !== c);
+    const to = this.socketFor(1 - c.seat);
+    const from = this.socketFor(c.seat);
+    // a game older than protocol 2 only takes the mark's default (and the chooser hears what went)
+    const k = !to || kind === c.def || version(to) >= PROTOCOL_CHOOSE ? kind : c.def;
+    if (to) sendJson(to, { t: 'attack', m: c.m, kind: k });
+    if (from) sendJson(from, { t: 'sent', m: c.m, kind: k });
+  }
+
+  /** Choices older than CHOOSE_WAIT_MS get their default. True when something changed. */
+  async expireChoices(now) {
+    const late = (this.m.pending || []).filter((p) => now - p.at >= CHOOSE_WAIT_MS);
+    for (const c of late) this.punish(c, c.def);
+    return late.length > 0;
   }
 
   async onClose(ws) {
@@ -282,6 +325,7 @@ export class MatchRoom {
   async decided(ref, e, now) {
     const m = this.m;
     m.result = { winner: e.winner, reason: e.reason };
+    m.pending = [];   // the match is over: no more punishments
     m.done = true;
     for (const s of this.sockets()) sendJson(s, { t: 'result', winner: e.winner, reason: e.reason, best: [round1(ref.best(0)), round1(ref.best(1))] });
     const dur = Math.max(0, now - m.startAt);

@@ -6,8 +6,8 @@ The owner asked for a "challenger series": you are put against someone random, y
 
 | | Rule |
 | --- | --- |
-| **Same tower** | Both players get the same blocks and weather: a fresh seed per match in its own namespace (`duel/<seed>`). The scheduled visitors are off in a match: a visitor only ever comes as an attack, so you always know who sent it. |
-| **Height marks** | 10, 20, 30 and 40 m. Whoever reaches a mark first sends a visitor to the other tower: 10 m Blouaap 🐒, 20 m Skelm Sakkie 🦹, 30 m Blouaap, 40 m Skelm Sakkie. The defender can tap it away as usual. A visitor never costs a heart (visitor rules). Height means the best settled height so far, the same number as the results. |
+| **Same tower** | Both players get the same blocks and weather: a fresh seed per match in its own namespace (`duel/<seed>`). The scheduled visitors are off in a match: a visitor only ever comes as a punishment, so you always know who sent it. |
+| **Height marks** | 10, 20, 30 and 40 m. Whoever reaches a mark first **chooses a punishment** for the other tower: Blouaap 🐒 (throws the top block into the sea and stamps on the next ones), Skelm Sakkie 🦹 (steals up to 4 top blocks), Mis 🌫️ (3 blocks of fog) or Hittegolf ☀️ (3 blocks of a racing crane). They have 5 s; otherwise the mark's default goes: 10 m Blouaap, 20 m Skelm Sakkie, 30 m Blouaap, 40 m Skelm Sakkie. The defender can tap a visitor away as usual. A punishment never costs a heart (visitor rules). Height means the best settled height so far, the same number as the results. |
 | **Winning** | The first to **50 m** wins. If your tower falls first (hearts gone or the flood), the other player wins. Quitting counts as a loss. The referee takes reports in the order they arrive, so there are no draws. |
 | **Pausing** | Your own tower pauses as usual, but the other player keeps building. |
 
@@ -24,8 +24,9 @@ Live play needs the Worker (`SPONSOR_API_URL`, see `server/README.md`). Without 
 
 A recording is the best height over time (the number the results show, so a block still in the air never counts), sampled every second, plus how it ended (`goal`, `lives`, `flood` or `quit`). The opponent's height is read from it at the match clock, with no head start: each second's height counts from the middle of that second, and the last one from the moment the run ended. Attacks still work both ways:
 
-- When the recording reached a mark first, its visitor comes to your tower (a real visitor, which you can stop).
-- When you reach a mark first, the recording's tower gets shorter: Blouaap −2 m, Skelm Sakkie −4 m, from then on. That is about what those visitors do to a real tower.
+- When the recording reached a mark first, it "chooses" by the match seed (`botPunishment`: the same for everyone on that tower), and the punishment comes to your tower (a real visitor, which you can stop, or the weather).
+- When you reach a mark first, you choose, and the recording's tower gets shorter from then on: Blouaap −3 m, Skelm Sakkie −4 m, Mis or Hittegolf −2 m. That is about what each does to a real tower.
+- Robot Rikus works the same way.
 - If the recording fell, its tower stops at that moment.
 
 The computer's run comes from the match seed: it climbs at about 0,30–0,42 m/s with pauses and small falls, and about one game in four it falls before 50 m.
@@ -43,6 +44,7 @@ The computer's run comes from the match seed: it climbs at about 0,30–0,42 m/s
 - `MatchLobby` (one instance) pairs players who are looking and keeps the pool of recent recordings.
 - `MatchRoom` (one per match) relays heights, decides height marks and the result, and hands both runs to the lobby when the match ends.
 - Routes: `GET /match/lobby` (WebSocket), `POST /match/room` (new friend room, returns the code), `GET /match/room/<CODE>` (WebSocket), `GET /match/ghost` (a recent recording).
+- The punishment choice (protocol 2, from 1.7.6): the room asks the first player to a mark (`{t:'choose', m, def}`), the game answers `{t:'punish', m, kind}`, and the room sends `{t:'attack', m, kind}` to the other player and `{t:'sent', m, kind}` back. Without an answer within 6,5 s (the game's own timer is 5 s) the default goes. The game says its protocol in its hello (`v`). A game older than 1.7.6 (protocol 1) is never asked, and only ever receives the mark's default, so old and new versions can still play each other.
 - Both classes are SQLite-backed (`new_sqlite_classes`), which the Workers Free plan allows, and use WebSocket hibernation, so an idle match costs nothing. The free tier is 100 000 requests a day, and incoming WebSocket messages count 20:1, so a 2-minute match costs about 20.
 
 ## Screens and text
@@ -50,7 +52,7 @@ The computer's run comes from the match seed: it climbs at about 0,30–0,42 m/s
 - **Menu**: an `⚔️ Uitdagersreeks` button beside `Oefen`.
 - **Uitdagersreeks screen**: a one-line explanation, the nickname, the three ways to play, and wins and losses.
 - **Searching screen**: "Soek ’n teenstander…" with a countdown and a cancel button. On a match: "Teen <naam>!", then a 3-2-1 count and play.
-- **In the game**: a race track on the right edge (0–50 m, with the marks), you and your opponent as two markers, and their name and height. Attacks come with the visitor banner ("Rikus stuur Blouaap!"). An attack you send shows a toast ("Jy stuur Skelm Sakkie na Rikus! 🦹").
+- **In the game**: a race track on the right edge (0–50 m, with the marks), you and your opponent as two markers, and their name and height. When you reach a mark first, a bar slides up over the bottom of the screen ("Eerste by 10 m! Kies ’n straf vir Rikus:") with the four punishments and a 5-second timer; the tower keeps going underneath. Punishments come with the visitor or weather banner ("Rikus stuur Mis!"). One you send shows a toast ("Jy stuur Skelm Sakkie na Rikus! 🦹").
 - **Results**: "Jy het gewen! 🏆" or "Jy het verloor", and why. Both heights, then the buttons `Nog ’n wedstryd`, `Daag ’n vriend uit` (your run as a link) and `Tuis`. The WhatsApp text says who won and includes the challenge link.
 - All Afrikaans text goes in `js/core/strings.js`.
 

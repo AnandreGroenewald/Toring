@@ -182,7 +182,7 @@ Later the owner added (decisions are final unless they say otherwise):
 - **Server extras switched on (version `1.7.4`)**, at the owner's request ("I want those extras"). The owner's conditions: everything stays **free**, the server goes in the **Lekker Local** Cloudflare account, and sponsor sales will use **PayFast**, which the owner already uses (the payment code is still Paystack; switching it is step 2).
   - **Deployed:**
     - the Worker `stapel-borge` at `https://stapel-borge.bonkers-bunch-online.workers.dev`, in the Lekker Local account (`account_id` b67acf87… pinned in `wrangler.toml`; free plan);
-    - Bonkers Bunch's online Worker lives in the same account, and they share the free daily limits;
+    - another of the owner's Workers lives in the same account, and they share the free daily limits;
     - the D1 database `stapel-borge` (WEUR), with `schema.sql` applied; its id stays out of the repo (`~/.config/stapel/cloudflare.env`), so deploy with `server/wr.sh deploy`;
     - the Durable Objects for matches, created on the first deploy;
     - secrets `ADMIN_TOKEN` (also in the Mac's Keychain as "Stapel admin token", for `admin.html`) and `IP_HASH_SALT`. There is no Paystack key, so sales stay inactive.
@@ -203,6 +203,26 @@ Later the owner added (decisions are final unless they say otherwise):
     - root tests **223/223**, server **152 pass + 1 skipped**.
   - **App 1.7.4** (versionCode 10704) rebuilt with the server address. The Desktop folder and "Google Play steps.txt" are updated: data safety now declares the optional nickname and the game results/anonymous counts; the content rating says users interact (nicknames only, no chat).
   - **Open:** the owner's privacy details; the owner's OK to push 1.7.4; PayFast for sponsor sales (step 2).
+- **Privacy link and Google Play (version `1.7.5`, live 7 Oct 2026):** a "Privaatheidsbeleid" link in the "Hoe speel ek?" sheet; app ID `com.lekkerlocal.stapel`; the app is on Play **internal testing** (the owner's family list), and the store listing and app content forms are done except the content rating (it waits for the owner's OK to accept IARC's terms). Production waits for the privacy page's business details.
+- **Choose the punishment, a meaner Blouaap, Hanswors's foundation, a faster crane (version `1.7.6`)**, at the owner's request before letting friends and family test ("in challenge mode the challenger should choose the punishment to make it more interactive, also it needs to be more quick when you build it higher"; "the monkey doesn't feel like it's doing damage ... people need to think OH NO"; "the clown can add 1-4 blocks but then it lands it on a new foundation"):
+  - **Uitdagersreeks:**
+    - the first to a height mark chooses Blouaap, Skelm Sakkie, Mis or Hittegolf, with 5 s to choose; otherwise the mark's default goes. The bar is `showPunish()` in `js/ui/dom.js`; the flow is `askChoice` and `choose` in `js/duel.js` (`duel:choose` → `ui:duel-punish` → `duel:chosen`);
+    - Mis and Hittegolf as punishments force 3 blocks of that weather (`Weather.force`), and the banner names the sender;
+    - recordings and Robot Rikus choose by the seed (`botPunishment`). Penalties on a recording: Blouaap 3 m, Skelm Sakkie 4 m, Mis or Hittegolf 2 m;
+    - server protocol 2: `choose`, `punish`, `attack`, `sent`, and the default after 6,5 s. A game older than 1.7.6 is never asked and only receives the default, so old and new versions can still play each other (`docs/CHALLENGE-SPEC.md`).
+  - **Crane:** it speeds up three times as fast with height: `CRANE.omegaPerBlock` 0,045, `omegaMax` 3,6 (block 46), `omegaTop` 4,6 (with a heat wave on top).
+  - **Blouaap:**
+    - an alarm on arrival, and he fidgets just before he jumps;
+    - then he hurls the top block into the sea (`monkeyHurl`) and stamps on the next 1–2 (`monkeyKick` 3,2–4,4), with 💥 and a big shake;
+    - a block he moved is his doing until it comes to rest (`knockedUntil`, at most `knockMaxMs` 8 s), so a late fall never costs a heart;
+    - cement never moves. On bot-built towers he cost 0–3 blocks a visit, usually 1, and never a heart.
+  - **Hanswors:**
+    - 1–4 striped blocks (`clownPlan().specs`);
+    - before each one, everything on the tower that isn't on its way down sets as cement where it stands (`cementTower`). His block then goes flush on top (`giftPose`, the way a Perfek lands) and sets too, so it can't slide off. Then the toast "Nuwe fondament!";
+    - an earlier try that dropped them loose lost blocks off tilted tops; with cement, 3 sets of 8 visits lost none.
+  - The daily visitor schedule is unchanged (golden test). What each monkey and clown does is new.
+  - Help text, README, `docs/CHARACTERS-SPEC.md` and the store texts (`app/store/`) describe the new monkey and clown.
+  - Tests: root **228/228** (new `tests/duelchoice.test.js`), server **156 pass + 1 skipped**. Headless at 412×915 and 360×640, zero console errors: the monkey, the clown, the choice bar (tapped and timed out) against Robot Rikus, incoming Mis and Hittegolf.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

@@ -5,7 +5,7 @@
 # See README.md for the full step-by-step setup.
 
 name = "stapel-borge"
-# The Lekker Local Cloudflare account (free plan; Bonkers Bunch's Worker lives in it too). Not a secret.
+# The Lekker Local Cloudflare account (free plan; another of the owner's Workers lives in it too). Not a secret.
 account_id = "b67acf87327958aa6d5e92c6079de43d"
 main = "src/worker.js"
 compatibility_date = "2026-09-01"

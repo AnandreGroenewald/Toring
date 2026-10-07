@@ -1251,8 +1251,59 @@ svg.ic {
 @keyframes cell-in { from { transform: scale(0); opacity: 0; } to { transform: none; opacity: 1; } }
 
 /* ------------------------------------------------------------------------- */
+/* Uitdagersreeks: choose a punishment (the tower keeps going underneath)     */
+/* ------------------------------------------------------------------------- */
+.punish {
+  position: absolute;
+  left: calc(var(--sal) + 22 * var(--u));
+  right: calc(var(--sar) + 22 * var(--u));
+  bottom: calc(var(--sab) + 120 * var(--u));
+  z-index: 5;
+  padding: calc(16 * var(--u)) calc(16 * var(--u)) calc(14 * var(--u));
+  border-radius: calc(30 * var(--u));
+  background: rgba(12, 32, 66, 0.88);
+  box-shadow: 0 calc(10 * var(--u)) calc(24 * var(--u)) rgba(5, 15, 35, 0.35);
+  color: #fff;
+  pointer-events: auto;
+  animation: punish-in 0.25s ease-out both;
+}
+.punish[hidden] { display: none; }
+.punish-title { margin: 0 0 calc(12 * var(--u)); text-align: center; font-weight: 900; font-size: max(14px, calc(28 * var(--u))); }
+.punish-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: calc(10 * var(--u)); }
+.punish-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  min-width: 0;
+  min-height: 44px;
+  padding: calc(12 * var(--u)) calc(4 * var(--u)) calc(10 * var(--u));
+  border: 0;
+  border-radius: calc(20 * var(--u));
+  background: #fff;
+  color: var(--ink);
+  font: 900 max(11px, calc(21 * var(--u))) / 1.1 var(--font);
+  box-shadow: 0 calc(5 * var(--u)) 0 #c9d7ea;
+}
+.punish-btn .emoji { font-size: calc(50 * var(--u)); line-height: 1; }
+.punish-btn small { font-weight: 700; font-size: max(10px, calc(17 * var(--u))); color: var(--muted); }
+.punish-btn:active { transform: translateY(calc(4 * var(--u))); box-shadow: 0 calc(1 * var(--u)) 0 #c9d7ea; }
+.punish-time {
+  height: calc(8 * var(--u));
+  margin-top: calc(12 * var(--u));
+  border-radius: 999px;
+  background: #ffd23f;
+  transform-origin: left center;
+  animation: punish-time var(--ms, 5s) linear both;
+}
+@keyframes punish-time { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes punish-in { from { transform: translateY(calc(30 * var(--u))); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .punish { animation: none; } }
+
+/* ------------------------------------------------------------------------- */
 /* In-game pause button (top-right corner, 96×96 hit area kept free by HUD)  */
 /* ------------------------------------------------------------------------- */
+
 .pause-btn {
   position: absolute;
   top: calc(var(--sat) + 6 * var(--u));

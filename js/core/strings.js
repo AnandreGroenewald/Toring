@@ -100,7 +100,7 @@ export const S = {
     { icon: '🌦️', text: 'Die weer slaan toe terwyl jy bou: wind, reën, weerlig, hael, mis en meer.' },
     { icon: '🌊', text: 'Die water styg. Hou jou toring bo die vloedlyn!' },
     { icon: '❤️', text: 'Jy het vier lewens. Elke keer as blokke in die see beland, kos dit jou een. Elke derde Perfek bring ’n verlore lewe terug.' },
-    { icon: '🐒', text: 'Soms kom kuier iemand: Blouaap stamp blokke af, Skelm Sakkie steel blokke en Hanswors bring ’n geskenkie. Tik die aap of die skelm om hulle te keer. Besoekers kos jou nooit ’n hartjie nie.' },
+    { icon: '🐒', text: 'Soms kom kuier iemand: Blouaap gooi blokke in die see, Skelm Sakkie steel blokke en Hanswors bou vir jou ’n nuwe fondament. Tik die aap of die skelm om hulle te keer. Besoekers kos jou nooit ’n hartjie nie.' },
     { icon: '🗓️', text: 'Elke dag is daar een Daaglikse Toring: dieselfde blokke, weer en besoekers vir almal, en jy kry een poging. Oefen soveel jy wil.' },
   ],
   howToGo: 'Kom ons bou!',
@@ -175,12 +175,13 @@ export const S = {
   resThiefStole: (n) => (n === 1 ? 'Skelm Sakkie het 1 blok gesteel 🦹' : `Skelm Sakkie het ${n} blokke gesteel 🦹`),
   resThiefEmpty: 'Skelm Sakkie het met leë hande weggesluip 🦹',
   resMonkeyShooed: 'Jy het Blouaap weggejaag! 🐒',
-  resMonkeyKnocked: (n) => (n === 1 ? 'Blouaap het 1 blok van jou toring afgestamp 🐒' : `Blouaap het ${n} blokke van jou toring afgestamp 🐒`),
+  resMonkeyKnocked: (n) => (n === 1 ? 'Blouaap het 1 blok van jou toring afgegooi 🐒' : `Blouaap het ${n} blokke van jou toring afgegooi 🐒`),
   resMonkeyStood: 'Blouaap het gestamp, maar jou toring het bly staan! 🐒',
-  resClownGift: 'Hanswors het vir jou ’n geskenkie gebring 🎁',
+  resClownGift: (n) => (n > 1 ? `Hanswors het vir jou ${n} blokke gebring 🎁` : 'Hanswors het vir jou ’n geskenkie gebring 🎁'),
+  clownFoundation: 'Nuwe fondament! 🧱 Alles daaronder staan vas',   // Hanswors's blocks set as cement
   // first game only: the first visitor of each kind explains itself in its arrival banner (js/core/coach.js)
-  coachMonkey: 'Tik die aap voor hy spring, anders stamp hy jou blokke af!',
-  coachClown: 'Hanswors bring vir jou ’n ekstra blok — verniet!',
+  coachMonkey: 'Tik die aap voor hy spring, anders gooi hy jou boonste blok in die see!',
+  coachClown: 'Hanswors stapel ekstra blokke op jou toring en sement hulle vas!',
   coachThief: 'Tik vinnig op Skelm Sakkie, anders steel hy jou boonste blokke!',
 
   // --- Uitdagersreeks (head-to-head; docs/CHALLENGE-SPEC.md) ---
@@ -188,7 +189,7 @@ export const S = {
   duelSub: 'Kop-aan-kop teen ’n ander speler',
   duelSubShort: 'Kop-aan-kop',            // under the menu button (beside Oefen)
   practiceSubShort: 'Dit tel nie',
-  duelIntro: 'Julle bou kop-aan-kop met dieselfde blokke en weer. Wie eerste by ’n 10 m-merk kom, stuur ’n besoeker na die ander se toring. Eerste tot 50 m wen!',
+  duelIntro: 'Julle bou kop-aan-kop met dieselfde blokke en weer. Wie eerste by ’n 10 m-merk kom, kies ’n straf vir die ander se toring. Eerste tot 50 m wen!',
   duelNick: 'Jou bynaam',
   duelNickHint: 'Wys vir jou teenstander (hoogstens 16 letters)',
   duelNickBad: 'Daardie naam gaan nie werk nie. Probeer ’n ander een.',
@@ -218,6 +219,8 @@ export const S = {
   duelSomeone: '’n Vriend',
   duelAttackIn: (name, visitor) => `${name} stuur ${visitor}!`,
   duelAttackOut: (visitor, name, emoji) => `Jy stuur ${visitor} na ${name}! ${emoji}`,
+  duelChoose: (m, name) => `Eerste by ${m} m! Kies ’n straf vir ${name}:`,
+  duelChooseLabel: 'Kies ’n straf',
   duelGhostHit: (name, m) => `${name} se toring is ${m} m korter!`,
   duelYou: 'Jy',
   duelLeft: (name) => `${name} het die wedstryd verlaat.`,
@@ -256,9 +259,17 @@ export const WEATHER_INFO = {
 
 /** Visitor display info (banner, share line, menu). Keys match VISITOR_TYPES in config.js. */
 export const VISITOR_INFO = {
-  monkey: { emoji: '🐒', name: 'Blouaap', hint: 'Tik hom om hom weg te jaag!' },
-  clown: { emoji: '🤡', name: 'Hanswors', hint: '’n Geskenkie!' },
+  monkey: { emoji: '🐒', name: 'Blouaap', hint: 'Tik hom gou, anders gooi hy blokke af!' },
+  clown: { emoji: '🤡', name: 'Hanswors', hint: 'Geskenk: ’n nuwe fondament!' },
   thief: { emoji: '🦹', name: 'Skelm Sakkie', hint: 'Vang hom!' },
+};
+
+/** Uitdagersreeks punishments (the first to a height mark chooses one). Keys match DUEL.punishments. */
+export const PUNISH_INFO = {
+  monkey: { emoji: '🐒', name: 'Blouaap', what: 'Gooi blokke af' },
+  thief: { emoji: '🦹', name: 'Skelm Sakkie', what: 'Steel blokke' },
+  fog: { emoji: '🌫️', name: 'Mis', what: '3 blokke blind' },
+  heat: { emoji: '☀️', name: 'Hittegolf', what: 'Hyskraan jaag' },
 };
 /** Added after 🦹 in the share line when the player caught the thief. */
 export const CAUGHT_EMOJI = '✋';
