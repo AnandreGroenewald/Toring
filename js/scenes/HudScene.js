@@ -29,6 +29,9 @@ const BANNER_W = 640;
 const BANNER_H = 150;
 const BANNER_HOLD_MS = 1400;
 const TOAST_HOLD_MS = 1500;
+const SAYING_HOLD_MS = 2800;   // a saying toast stays a little longer: it is meant to be read
+const SAYING_RETRY_MS = 500;   // how often a waiting saying checks whether banner, hint and toast are clear
+const SAYING_MAX_WAIT_MS = 9000; // then it is skipped: the tower has moved on
 const WOBBLE_W = 18;
 const COACH_W = 620;        // widest first-game hint pill
 const COACH_BELOW_TOP = 250; // hint centre: this far below the tower-top line (clear of the landing spot)
@@ -309,12 +312,15 @@ export class HudScene extends Phaser.Scene {
     this.toastTween = null;
     this.toastTimer = null;
     this.pendingToast = null;
+    this.pendingSaying = null;   // a milestone saying waiting for a clear screen
+    this.sayingTimer = null;
 
     // --- Bus ---------------------------------------------------------------------
     this.offs.push(
       bus.on('hud:state', (s) => { this.state = s; }),
       bus.on('hud:banner', (b) => this.showBanner(b)),
       bus.on('hud:toast', (t) => this.showToast(t)),
+      bus.on('hud:saying', (t) => this.showSaying(t)),
       bus.on('hud:hint', (h) => this.showHint(h)),
       bus.on('hud:coach', (c) => this.showCoach(c)),
       bus.on('hud:hide', (o) => this.hideAll(o)),
@@ -343,6 +349,9 @@ export class HudScene extends Phaser.Scene {
     this.offs.length = 0;
     if (this.bannerTimer) this.bannerTimer.remove(false);
     if (this.toastTimer) this.toastTimer.remove(false);
+    if (this.sayingTimer) this.sayingTimer.remove(false);
+    this.sayingTimer = null;
+    this.pendingSaying = null;
     if (this.coachTimer) this.coachTimer.remove(false);
     if (this.coachDelay) this.coachDelay.remove(false);
     this.bannerTimer = null;
@@ -662,23 +671,65 @@ export class HudScene extends Phaser.Scene {
       this.pendingToast = t;
       return;
     }
+    this.toastTxt.setFontSize(t.size || 30);
+    this.toastTxt.setWordWrapWidth(this.W - 130, true);   // a long saying wraps instead of leaving the screen
+    this.toastTxt.setAlign('center');
     this.toastTxt.setText(t.text);
     this.toastTxt.setColor(t.color || '#ffffff');
-    const pw = Math.ceil((this.toastTxt.width + 56) / 16) * 16;
-    this.toastBg.setTexture(panelTexture(this, pw, 62, NAVY, 0.85, { rim: 0.25 }));
+    const pw = Math.min(this.W - 48, Math.ceil((this.toastTxt.width + 56) / 16) * 16);
+    const ph = Math.max(62, Math.ceil((this.toastTxt.height + 24) / 8) * 8);
+    this.toastBg.setTexture(panelTexture(this, pw, ph, NAVY, 0.85, { rim: 0.25 }));
     if (this.toastTween) this.toastTween.stop();
     if (this.toastTimer) this.toastTimer.remove(false);
     const c = this.toast;
     c.setVisible(true).setAlpha(0).setScale(0.8);
     c.y = y0 + 30;
     this.toastTween = this.tweens.add({ targets: c, alpha: 1, scale: 1, y: y0, duration: 260, ease: 'Back.easeOut' });
-    this.toastTimer = this.time.delayedCall(TOAST_HOLD_MS, () => {
+    this.toastTimer = this.time.delayedCall(t.ms || TOAST_HOLD_MS, () => {
       this.toastTimer = null;
       this.toastTween = this.tweens.add({
         targets: c, alpha: 0, y: y0 - 30, duration: 300, ease: 'Quad.easeIn',
         onComplete: () => { c.setVisible(false); this.toastTween = null; },
       });
     });
+  }
+
+  /**
+   * A milestone saying (25 m, 50 m, ...). It is only ever shown on a clear screen: never over an event
+   * banner, a first-game coach hint or another toast. It waits a little for the screen to clear and
+   * is skipped after SAYING_MAX_WAIT_MS. A newer milestone replaces a waiting older one.
+   */
+  showSaying(t) {
+    if (!t || !t.text || this.hidden) return;
+    this.pendingSaying = { text: t.text, until: this.time.now + SAYING_MAX_WAIT_MS };
+    this.pumpSaying();
+  }
+
+  pumpSaying() {
+    if (this.sayingTimer) {
+      this.sayingTimer.remove(false);
+      this.sayingTimer = null;
+    }
+    const t = this.pendingSaying;
+    if (!t || this.hidden) {
+      this.pendingSaying = null;
+      return;
+    }
+    const busy = this.banner.visible || this.pendingToast || this.toast.visible
+      || this.coachCur || this.coachDelay || this.pendingCoach;
+    if (busy) {
+      if (this.time.now >= t.until) {
+        this.pendingSaying = null;
+        return;
+      }
+      this.sayingTimer = this.time.delayedCall(SAYING_RETRY_MS, () => {
+        this.sayingTimer = null;
+        this.pumpSaying();
+      });
+      return;
+    }
+    this.pendingSaying = null;
+    this.showToast({ text: t.text, color: '#ffe38c', size: 26, ms: SAYING_HOLD_MS });
   }
 
   showHint(h) {
@@ -779,6 +830,9 @@ export class HudScene extends Phaser.Scene {
   hideAll(o) {
     if (this.hidden) return;
     this.hidden = true;
+    this.pendingSaying = null;
+    if (this.sayingTimer) this.sayingTimer.remove(false);
+    this.sayingTimer = null;
     if (this.coachDelay) this.coachDelay.remove(false);
     this.coachDelay = null;
     this.pendingCoach = null;

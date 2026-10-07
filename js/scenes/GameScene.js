@@ -14,6 +14,7 @@ import { createBillboard, BILLBOARD_LEFT } from '../game/billboard.js';
 import { createBlockNamer } from '../core/sponsors.js';
 import { createTally, tallyShow } from '../core/audience.js';
 import { createCoach } from '../core/coach.js';
+import { milestoneSaying, MILESTONE_STEP_M } from '../core/sayings.js';
 import { SPONSOR } from '../sponsorConfig.js';
 import { Weather } from '../game/weather.js';
 import { Crane } from '../game/crane.js';
@@ -294,6 +295,7 @@ export class GameScene extends Phaser.Scene {
     this.towerTopY = LAYOUT.baseTopY;
     this.topBlock = null;
     this.maxHeightM = 0;
+    this.nextMilestoneM = MILESTONE_STEP_M;   // the next height (m) that earns a saying toast
     this.score = 0;
     this.lives = LIVES;
     this.combo = 0;
@@ -1392,6 +1394,7 @@ export class GameScene extends Phaser.Scene {
       const h = Math.max(0, LAYOUT.baseTopY - settledTop) / PX_PER_M;
       if (h > this.maxHeightM && !this.over) {
         this.maxHeightM = h;
+        this.checkMilestone();
         // keep the saved daily up to date with every new best height (a reload must not lose a block)
         if (h - this.progressHeight >= 0.5) {
           this.progressHeight = h;
@@ -1399,6 +1402,17 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
+  }
+
+  /** The first time the tower passes 25 m, 50 m, 75 m, ...: one saying toast (the HUD queues or skips it). */
+  checkMilestone() {
+    if (this.idle || this.over) return;
+    let hit = 0;
+    while (this.maxHeightM >= this.nextMilestoneM) {
+      hit = this.nextMilestoneM;
+      this.nextMilestoneM += MILESTONE_STEP_M;
+    }
+    if (hit) bus.emit('hud:saying', { text: `${hit}\u00a0m — ${milestoneSaying(this.seed, hit)}` });
   }
 
   updateFriction() {

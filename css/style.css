@@ -602,6 +602,68 @@ svg.ic {
 
 .note.nudge { margin-top: calc(-8 * var(--u)); color: var(--ink-soft); font-weight: 800; }
 
+/* Afrikaanse spreekwoorde: "Spreekwoord van die dag" (menu), one line on results and pause.
+   The menu one is absolutely placed in the spacer gap, so it never adds height (dom.js fitSaying()
+   hides it with .is-off when the gap is too small). */
+.spacer.has-saying { position: relative; }
+.saying-day {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(36 * var(--u));
+  text-align: center;
+  color: #fff;
+  pointer-events: none;
+}
+.saying-day.is-off { visibility: hidden; }
+.saying-inner { display: flex; flex-direction: column; align-items: center; gap: calc(6 * var(--u)); max-width: 100%; }
+.saying-label {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(14 * var(--u));
+  font-size: calc(19 * var(--u));
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.88;
+  text-shadow: 0 calc(2 * var(--u)) 0 rgba(29, 43, 69, 0.45);
+}
+.saying-label::before, .saying-label::after {
+  content: '';
+  width: calc(34 * var(--u));
+  height: calc(2 * var(--u));
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.6;
+}
+.saying-text {
+  margin: 0;
+  font-size: calc(30 * var(--u));
+  font-style: italic;
+  font-weight: 800;
+  line-height: 1.22;
+  text-wrap: balance;
+  text-shadow: 0 calc(3 * var(--u)) 0 rgba(29, 43, 69, 0.42), 0 0 calc(16 * var(--u)) rgba(29, 43, 69, 0.28);
+}
+.saying-line {
+  margin: 0;
+  font-size: calc(26 * var(--u));
+  font-style: italic;
+  font-weight: 800;
+  line-height: 1.25;
+  text-wrap: balance;
+  color: var(--ink-soft);
+}
+.res-saying {
+  margin-top: calc(8 * var(--u));
+  padding: 0 calc(24 * var(--u));
+  color: #fff;
+  opacity: 0.95;
+  text-shadow: 0 calc(2 * var(--u)) 0 rgba(10, 30, 60, 0.4);
+}
+
 .done-box {
   display: flex;
   flex-direction: column;

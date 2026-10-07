@@ -18,6 +18,7 @@ A free Afrikaans block-stacking phone game that runs in the browser.
 | **The crane** | A yellow crane swings each block on a rope. The tower climbs past Table Mountain into the stratosphere, with height shown in metres. |
 | **Weather and the flood** | Weather hits while you build: 💨 wind, 🌪️ whirlwind, 🌧️ rain, ⛈️ lightning, 🌨️ hail, 🌫️ fog, ☀️ heatwave and 🌈 rainbow. The flood line (*vloedlyn*) keeps rising, and if the water passes the top of your tower, the game is over. |
 | **Wobble** | Real Matter.js physics. The top of the tower wobbles, creaks and can topple, while deeper blocks set like cement. A collapse costs one heart, and the crane waits for the tower to settle before the next block. |
+| **Afrikaanse spreekwoorde** | Genuine Afrikaans sayings "in between": a *Spreekwoord van die dag* on the menu (the same for everyone), a gentle toast with the height at 25 m, 50 m, 75 m, ..., one line on the results card that fits the outcome, and one on the pause screen. Curated in `js/core/sayings.js`; never part of the WhatsApp share text. |
 
 Share line example:
 
