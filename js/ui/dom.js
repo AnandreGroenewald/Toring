@@ -743,7 +743,9 @@ export function createUI(bus) {
       h('div', { class: 'sheet-head' }, emo('🏗️'), h('h2', { id: 'stapel-howto-title', text: S.howToTitle })),
       h('div', { class: 'sheet-body' }, h('ol', { class: 'steps' }, steps)),
       h('div', { class: 'sheet-foot' },
-        button('btn-big btn-green', [icon('play'), h('span', { text: S.howToGo })], () => closeModal(), { nav: false })));
+        button('btn-big btn-green', [icon('play'), h('span', { text: S.howToGo })], () => closeModal(), { nav: false }),
+        // the privacy policy, linked from inside the game too (Google Play asks for that)
+        h('a', { class: 'sheet-link', href: 'privaatheid.html', target: '_blank', rel: 'noopener', text: S.privacyPolicy })));
     modals.howto.replaceChildren(sheet);
   }
 

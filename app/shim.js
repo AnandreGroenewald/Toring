@@ -3,7 +3,7 @@
 // - The Deel button gets Android's share sheet (the WebView has no navigator.share).
 // - The back button takes one step back in the game (js/ui/dom.js goBack) and closes the app on
 //   the start screen.
-// - The sponsor page opens on the website, in the browser.
+// - The sponsor, privacy and terms pages open on the website, in the browser (always the current text).
 (function () {
   var cap = window.Capacitor;
   if (!cap || !cap.isNativePlatform || !cap.isNativePlatform()) return;
@@ -31,7 +31,7 @@
   document.addEventListener('click', function (e) {
     var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
     var href = a ? a.getAttribute('href') || '' : '';
-    if (/^adverteer\.html/.test(href)) {
+    if (/^(adverteer|privaatheid|terme)\.html/.test(href)) {
       e.preventDefault();
       window.location.href = SITE + href;
     }

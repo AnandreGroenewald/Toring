@@ -104,6 +104,7 @@ export const S = {
     { icon: '🗓️', text: 'Elke dag is daar een Daaglikse Toring: dieselfde blokke, weer en besoekers vir almal, en jy kry een poging. Oefen soveel jy wil.' },
   ],
   howToGo: 'Kom ons bou!',
+  privacyPolicy: 'Privaatheidsbeleid',
 
   // --- Deel-teks (share text; core/share.js) ---
   shareDailyHead: (n) => `Stapel #${n}`,

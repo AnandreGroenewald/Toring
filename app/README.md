@@ -36,7 +36,7 @@ The app runs the same files as the website, so the game itself has only small ap
 - `shim.js` (copied to `www/app-shim.js` and loaded before the game) talks to Capacitor's bridge directly:
   - the Deel button gets Android's share sheet (`@capacitor/share`);
   - the back button takes one step back (`stapel:back` event, `goBack()` in `js/ui/dom.js`, the same as Escape) and closes the app on the start screen (`@capacitor/app`);
-  - the sponsor page (`adverteer.html`, not shipped) opens on the website.
+  - the sponsor, privacy and terms pages open on the website, in the browser (the in-game "Privaatheidsbeleid" link sits in the "Hoe speel ek?" sheet).
 - `js/main.js` `IN_APP`: no service worker, and share links point at the website rather than `https://localhost`.
 - `js/core/install.js`: the app counts as installed (no install tip).
 - The safe-area probes in `main.js` and `dom.js` also read Capacitor's `--safe-area-inset-*` variables. SystemBars `insetsHandling` is `native`, so on old WebViews Capacitor pads the view itself.
