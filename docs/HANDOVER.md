@@ -105,6 +105,7 @@ Later the owner added (decisions are final unless they say otherwise):
   - Sub-path: serving `/home/user` and opening `/Toring/index.html` loads everything with no 404 (manifest, all icons, `sponsors.json`); without `?nosw=1` the service worker registers (scope `/Toring/`) and precaches 41 files.
   - Tests: root **161/161**, server **135 pass + 1 skipped**. Game payload (`index.html`, `lib/`, `js/` minus `js/pages/`, `css/style.css`, `icons/`, manifest, `sw.js`, `sponsors.json`) is about **1.85 MB**, under the 3 MB limit. The README's sponsorship section was re-read and is accurate.
   - Not checked here (needs the real services or a real phone): Paystack and Cloudflare end to end, GitHub Pages itself, real-device frame rate and sound. Headless fps is only 5-40 because rendering is in software.
+- **Beach ambience (done, version `1.3.3`):** `audio.setAmbience(0..1)` in `js/audio.js` plays a quiet synthesised surf bed (slow LFO swell) and a distant 2-4 note seagull call every 8-20 s (`'gull'` also renders offline); `GameScene.syncAmbience` sets it from altitude (1 at sea level, 0 by about 60 m, 0.8 on the menu) and it follows the sound toggle and pause/hidden. Not checked on a real phone: how it sounds.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

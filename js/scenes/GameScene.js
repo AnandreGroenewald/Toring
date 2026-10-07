@@ -255,6 +255,7 @@ export class GameScene extends Phaser.Scene {
     const d = data || {};
     this.mode = d.mode === 'daily' || d.mode === 'practice' ? d.mode : 'idle';
     this.idle = this.mode === 'idle';
+    this.ambQ = -1;
     this.seed = String(d.seed ?? `idle-${Math.floor(Math.random() * 1e9)}`);
     this.dayNumber = Number.isFinite(d.dayNumber) ? d.dayNumber : null;
     this.dateKey = typeof d.dateKey === 'string' ? d.dateKey : null;
@@ -1716,6 +1717,17 @@ export class GameScene extends Phaser.Scene {
     // scrollY + H/2 is the view centre at any zoom, so this also works during the reveal
     const alt = Math.max(0, -(cam.scrollY + LAYOUT.dropLineY - LAYOUT.baseTopY)) / PX_PER_M;
     reg.set('altitudeM', alt);
+    this.syncAmbience(alt);
+  }
+
+  /** Beach ambience: full at sea level, gone by ~60 m (the visual gulls fade out over 15-50 m); calm on the menu. */
+  syncAmbience(alt) {
+    if (this.over) return;   // the game-over reveal keeps whatever level it had
+    const t = clamp((alt - 15) / 45, 0, 1);
+    const q = this.idle ? 0.8 : Math.round((1 - t * t * (3 - 2 * t)) * 20) / 20;
+    if (q === this.ambQ) return;
+    this.ambQ = q;
+    audio.setAmbience(q);
   }
 
   emitProgress() {

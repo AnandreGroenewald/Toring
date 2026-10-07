@@ -58,7 +58,7 @@ Sales are off until the backend is running. To switch them on, follow `server/RE
 
 - **Phaser 3.90.0** with its built-in **Matter.js** physics, saved in `lib/phaser.min.js` (MIT; see `lib/LICENSE-phaser.md` and `lib/THIRD-PARTY-NOTICES.md`).
 - Plain ES modules with no bundler and no runtime dependencies.
-- No image or sound assets. Blocks, crane, island, sea and sky are drawn in code, weather is shown with emoji, and every sound is a short WebAudio synth.
+- No image or sound assets. Blocks, crane, island, sea and sky are drawn in code, weather is shown with emoji, and every sound is a short WebAudio synth, including a soft beach ambience (rolling surf and distant seagulls) that fades out as the tower climbs.
 - Physics runs at a fixed 60 Hz step, so behaviour is the same on 30/60/90/120 Hz screens. Everything random that weather does to the tower (gust strength, lightning, hail) comes from seeded per-event streams (`js/core/weatherplan.js`) and runs on that step, and a tap releases the block where it was at the moment of the tap, not at the last frame. The drop distance is the same on every screen size. Together that keeps the daily fair.
 - Portrait layout, 720 logical px wide, scaled to fit any phone. Under 2 MB in total, about 1.2 MB of which is Phaser.
 

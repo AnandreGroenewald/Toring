@@ -14,13 +14,13 @@ const DEFAULT_LIMIT = 2;
 // Simultaneous voices allowed per sound name.
 const LIMIT = {
   hail: 4, land: 3, creak: 1, click: 3, perfect: 3, warning: 1, rain: 1,
-  zap: 1, wind: 2, freeze: 2, fog: 1, heat: 1, thunder: 2, splash: 3,
+  zap: 1, wind: 2, freeze: 2, fog: 1, heat: 1, thunder: 2, splash: 3, gull: 1,
 };
 // Minimum ms between two starts of the same sound.
 const THROTTLE = {
   creak: 400, hail: 45, warning: 600, wind: 250, rain: 300, zap: 250,
   freeze: 90, land: 35, splash: 70, click: 35, drop: 60, thunder: 200,
-  banner: 250, heart: 200, record: 400, gameover: 400, fog: 400, heat: 400,
+  banner: 250, heart: 200, record: 400, gameover: 400, fog: 400, heat: 400, gull: 2000,
 };
 // At the per-name limit these steal the oldest voice; all others skip the new one.
 const STEAL = new Set([
@@ -32,7 +32,7 @@ const LEVEL = {
   click: 1.0, drop: 0.63, land: 1.05, perfect: 1.6, good: 1.0, skew: 0.73,
   lost: 0.22, splash: 0.99, creak: 0.85, heart: 0.72, wind: 0.9, rain: 0.41,
   thunder: 1.0, zap: 0.39, hail: 0.44, heat: 0.27, rainbow: 0.7, fog: 0.143,
-  warning: 0.22, gameover: 0.75, record: 0.62, banner: 0.4, freeze: 0.6,
+  warning: 0.22, gameover: 0.75, record: 0.62, banner: 0.4, freeze: 0.6, gull: 0.14,
 };
 
 const PENTA = [0, 2, 4, 7, 9];   // major pentatonic (semitones)
@@ -595,6 +595,63 @@ const SOUNDS = {
     const lp = v.filter('lowpass', 900, 0.7, v.env(v.out, t, 0.25, 0.001, 0.025));
     v.noise(B.white, t, 0.05, lp);
   },
+
+  gull(v, t, o, B) {
+    // Distant seagull: a burst of 2-4 "kee-ow" calls, each one a buzzy carrier that lifts
+    // quickly and then slides down (~1.8 -> 1.1 kHz) with a little vibrato. A gliding
+    // formant gives the "ee" -> "ow" colour; a gentle lowpass keeps it soft and far away.
+    const n = clamp(Math.round(num(o.calls, 2 + Math.floor(Math.random() * 3))), 1, 4);
+    const f0 = 1800 * clamp(num(o.pitch, rand(0.88, 1.12)), 0.6, 1.5);
+    const vol = clamp(num(o.vol, rand(0.55, 1)), 0, 1);
+    const pan0 = clamp(num(o.pan, rand(-0.7, 0.7)), -1, 1);
+    const calls = [];
+    let at = 0;
+    for (let i = 0; i < n; i++) {
+      const d = (0.34 - 0.045 * i) * rand(0.92, 1.08);       // later calls are shorter, a touch lower
+      calls.push({ at, d, f: f0 * (1 - 0.035 * i) * rand(0.97, 1.03), a: vol * (1 - 0.12 * i) });
+      at += d + rand(0.07, 0.13);
+    }
+    const total = at + 0.1;
+    let dest = v.out;
+    try {   // the bird drifts a little across the stereo field
+      const pan = v.ctx.createStereoPanner();
+      pan.pan.setValueAtTime(pan0, t);
+      pan.pan.linearRampToValueAtTime(clamp(pan0 + rand(-0.25, 0.25), -1, 1), t + total);
+      pan.connect(dest);
+      v.nodes.push(pan);
+      dest = pan;
+    } catch (e) { /* no StereoPannerNode: centred */ }
+    const lp = v.filter('lowpass', 3200, 0.5, dest);
+    const form = v.filter('bandpass', f0 * 1.3, 2.5, v.gain(1.2, lp));
+    const dry = v.gain(0.45, lp);
+    const amp = v.gain(0, null);
+    amp.connect(form);
+    amp.connect(dry);
+    const saw = v.osc('sawtooth', f0, t, total, amp);
+    v.lfo(rand(5.5, 7.5), f0 * 0.012, saw.frequency, t, total);          // vibrato
+    v.noise(B.white, t, total, v.filter('bandpass', f0 * 1.4, 1.5, v.gain(0.06, amp)));   // breath
+    const fr = saw.frequency;
+    const ff = form.frequency;
+    const ag = amp.gain;
+    ag.setValueAtTime(0, t);
+    fr.setValueAtTime(f0, t);
+    ff.setValueAtTime(f0 * 1.3, t);
+    for (const c of calls) {
+      const s = t + c.at;
+      const e = s + c.d;
+      fr.setValueAtTime(c.f * 0.93, s);
+      fr.linearRampToValueAtTime(c.f * 1.06, s + c.d * 0.2);              // "kee": quick lift ...
+      fr.exponentialRampToValueAtTime(c.f * 0.6, e);                       // ... "ow": long slide down
+      ff.setValueAtTime(c.f * 1.2, s);
+      ff.linearRampToValueAtTime(c.f * 1.5, s + c.d * 0.2);
+      ff.exponentialRampToValueAtTime(c.f * 0.85, e);
+      ag.setValueAtTime(0, s);
+      ag.linearRampToValueAtTime(c.a, s + 0.03);
+      ag.setValueAtTime(c.a, s + c.d * 0.5);
+      ag.exponentialRampToValueAtTime(c.a * 0.12, e);   // the slide stays audible ...
+      ag.linearRampToValueAtTime(0, e + 0.05);          // ... then the call lets go
+    }
+  },
 };
 
 export const SOUND_NAMES = Object.keys(SOUNDS);
@@ -666,11 +723,106 @@ export function renderSound(ctx, name, opts = {}, dest = ctx.destination, when =
 }
 
 // ---------------------------------------------------------------------------
+// Beach ambience: a soft surf bed (looping filtered noise swelled by slow LFOs, so
+// there is no per-frame JS) and, in the live engine, an occasional distant gull.
+// ---------------------------------------------------------------------------
+const SURF_LEVEL = 0.1;
+
+/**
+ * Surf bed on any context (also OfflineAudioContext, for tests): two deep decorrelated
+ * noise layers (left/right) and a faint foam hiss, all swelling with two slow sine LFOs
+ * (~7,6 s and ~11,3 s, so the waves never repeat evenly). Runs for `dur` seconds, or
+ * until stop(at) when `dur` is omitted. Returns { out, stop(at), dispose() }.
+ */
+export function renderSurf(ctx, dest = ctx.destination, when = ctx.currentTime, dur = Infinity) {
+  const B = buffersFor(ctx);
+  const nodes = [];
+  const sources = [];
+  const end = when + dur;
+  const add = (n) => { nodes.push(n); return n; };
+  const begin = (src, offset = 0) => {
+    src.start(when, offset);
+    if (Number.isFinite(dur)) src.stop(end);
+    sources.push(src);
+    return add(src);
+  };
+  const gain = (value, to) => {
+    const g = add(ctx.createGain());
+    g.gain.value = value;
+    g.connect(to);
+    return g;
+  };
+  const filter = (type, freq, q, to) => {
+    const f = add(ctx.createBiquadFilter());
+    f.type = type;
+    f.frequency.value = freq;
+    f.Q.value = q;
+    f.connect(to);
+    return f;
+  };
+  const panTo = (p, to) => {
+    try {
+      const n = add(ctx.createStereoPanner());
+      n.pan.value = p;
+      n.connect(to);
+      return n;
+    } catch (e) { return to; }
+  };
+  const lfo = (period) => {
+    const o = ctx.createOscillator();
+    o.frequency.value = 1 / period;
+    return begin(o);
+  };
+  const mod = (o, depth, param) => o.connect(gain(depth, param));
+  const noise = (buf, to) => {
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.connect(to);
+    return begin(src, Math.random() * Math.max(0, buf.duration - 0.1));
+  };
+
+  const out = gain(SURF_LEVEL, dest);
+  const swell = lfo(7.6);
+  const drift = lfo(11.3);
+  const foam = lfo(6.7);
+  for (const side of [-1, 1]) {
+    const g = gain(0.32, panTo(side * 0.55, out));
+    const lp = filter('lowpass', 480, 0.7, g);
+    noise(B.pink, lp);
+    mod(swell, 0.2, g.gain);          // louder ...
+    mod(drift, 0.07, g.gain);
+    mod(swell, 260, lp.frequency);    // ... and brighter on the crest
+    mod(drift, 80, lp.frequency);
+  }
+  const fg = gain(0.07, out);
+  noise(B.white, filter('lowpass', 4500, 0.5, filter('highpass', 1400, 0.5, fg)));
+  mod(foam, 0.055, fg.gain);
+
+  let dead = false;
+  const dispose = () => {
+    if (dead) return;
+    dead = true;
+    for (const n of nodes) { try { n.disconnect(); } catch (e) { /* ignore */ } }
+    for (const src of sources) src.onended = null;
+    nodes.length = 0;
+    sources.length = 0;
+  };
+  let left = sources.length;
+  for (const src of sources) src.onended = () => { if (--left <= 0) dispose(); };
+  return {
+    out,
+    stop(at) { for (const src of sources) { try { src.stop(at); } catch (e) { /* already stopped */ } } },
+    dispose,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Live engine
 // ---------------------------------------------------------------------------
 const Ctor = typeof window !== 'undefined' ? (window.AudioContext || window.webkitAudioContext) : null;
 // Sounds that may be cut first when the global voice cap is reached.
-const LOW_PRIORITY = new Set(['hail', 'creak', 'wind', 'rain', 'warning', 'freeze', 'click', 'drop', 'land', 'fog', 'heat']);
+const LOW_PRIORITY = new Set(['gull', 'hail', 'creak', 'wind', 'rain', 'warning', 'freeze', 'click', 'drop', 'land', 'fog', 'heat']);
 const HOLD_GRACE_MS = 500;   // taps this soon after suspend() (the pause tap itself) don't undo it
 const STALL_MS = 1000;       // context still not running this long after an unlock => drop sounds
 const IDLE_SUSPEND_MS = 12000; // no sound for this long (menu, results): let the audio thread sleep
@@ -683,6 +835,14 @@ let unlockAt = 0;
 let listening = false;
 let idleTimer = 0;
 let idleAsleep = false;      // suspended by the idle timer (not by the player or the browser)
+const AMB_TC = 0.35;         // ambience level smoothing (time constant, s): settles in about a second
+const GULL_MIN_LEVEL = 0.2;  // no gulls once the beach has mostly faded away
+let ambTarget = 0;           // requested ambience level 0..1 (kept even before the first tap)
+let ambHold = false;         // silenced by suspend() until resume(): a tap on the pause card must not bring the surf back
+let amb = null;              // { bus, surf }: built lazily, only while there is something to play
+let ambLevel = 0;            // level last sent to the bus
+let gullTimer = 0;
+let ambStopTimer = 0;
 const voices = [];
 const lastStart = Object.create(null);
 const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -722,6 +882,10 @@ function ensureContext() {
   if (ctx && ctx.state === 'closed') {
     ctx = null;
     master = null;
+    amb = null;
+    ambLevel = 0;
+    clearTimeout(gullTimer);
+    gullTimer = 0;
     voices.length = 0;
   }
   if (ctx || !Ctor) return ctx;
@@ -752,6 +916,108 @@ function playSilentBuffer() {
   s.connect(ctx.destination);
   s.onended = () => { try { s.disconnect(); } catch (e) { /* ignore */ } };
   s.start(0);
+}
+
+/** Let the audio thread sleep after a quiet spell (never while the beach is playing). */
+function armIdle() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    if (held || !ctx || ctx.state !== 'running') return;
+    if (enabled && ambTarget > 0) return;
+    prune(ctx.currentTime);
+    if (voices.length) return;
+    idleAsleep = true;
+    safeSuspend();
+  }, IDLE_SUSPEND_MS);
+}
+
+function buildAmbience() {
+  const bus = ctx.createGain();
+  bus.gain.value = 0;
+  bus.connect(master);
+  return { bus, surf: renderSurf(ctx, bus) };
+}
+
+function dropAmbience() {
+  ambStopTimer = 0;
+  clearTimeout(gullTimer);
+  gullTimer = 0;
+  if (!amb || ambTarget > 0) return;
+  const a = amb;
+  amb = null;
+  ambLevel = 0;
+  try {
+    const t = ctx.currentTime;
+    const g = a.bus.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.linearRampToValueAtTime(0, t + 0.05);
+    a.surf.stop(t + 0.06);
+    setTimeout(() => { try { a.bus.disconnect(); } catch (e) { /* ignore */ } }, 400);
+  } catch (e) { /* ignore */ }
+  armIdle();
+}
+
+/** Bring the surf bed to the level the current state allows (sound on, not paused, level > 0). Idempotent. */
+function syncAmbience() {
+  if (!ctx || !master) return;
+  try {
+    const want = enabled && !ambHold ? ambTarget : 0;
+    if (!amb) {
+      if (want <= 0) return;
+      amb = buildAmbience();
+      ambLevel = 0;
+    }
+    clearTimeout(ambStopTimer);
+    ambStopTimer = 0;
+    if (want !== ambLevel) {
+      const g = amb.bus.gain;
+      const t = ctx.currentTime;
+      g.cancelScheduledValues(t);
+      if (ambHold) {
+        g.setValueAtTime(0, t);   // paused: gone from the first sample, even if a later tap restarts the context
+      } else {
+        g.setValueAtTime(g.value, t);
+        g.setTargetAtTime(want, t, enabled ? AMB_TC : 0.015);
+      }
+      ambLevel = want;
+      if (want > 0 && idleAsleep && !held) {
+        idleAsleep = false;
+        safeResume();
+      }
+    }
+    if (ambTarget > 0) {
+      if (!gullTimer) scheduleGull(true);
+    } else {
+      clearTimeout(gullTimer);
+      gullTimer = 0;
+      ambStopTimer = setTimeout(dropAmbience, 1800);
+    }
+  } catch (e) { /* ambience is optional */ }
+}
+
+function scheduleGull(first = false) {
+  clearTimeout(gullTimer);
+  gullTimer = setTimeout(gullTick, first ? rand(3000, 7000) : rand(8000, 20000));
+}
+
+function gullTick() {
+  gullTimer = 0;
+  if (!amb || ambTarget <= 0) return;   // syncAmbience() re-arms when the beach comes back
+  const audible = enabled && !ambHold && !held && !isHidden() && ctx && ctx.state === 'running' && ambTarget >= GULL_MIN_LEVEL;
+  if (!audible) {
+    gullTimer = setTimeout(gullTick, 3000);
+    return;
+  }
+  try {
+    const t = ctx.currentTime;
+    prune(t);
+    if (voices.length < MAX_VOICES - 2 && !voices.some((v) => v.name === 'gull')) {
+      const v = renderSound(ctx, 'gull', {}, amb.bus, t + 0.02);
+      if (v) voices.push(v);
+    }
+  } catch (e) { /* a gull must never break the game */ }
+  scheduleGull();
 }
 
 function prune(t) {
@@ -791,7 +1057,9 @@ export const audio = {
       held = false;   // a later tap (e.g. on the pause or results screen) brings sound back
     }
     try {
-      if (!ensureContext() || ctx.state === 'running') return;
+      if (!ensureContext()) return;
+      syncAmbience();
+      if (ctx.state === 'running') return;
       safeResume();
       playSilentBuffer();
     } catch (e) { /* audio is optional */ }
@@ -816,6 +1084,7 @@ export const audio = {
         stopAll();
         setTimeout(() => { if (!enabled) safeSuspend(); }, 120);
       }
+      syncAmbience();
     } catch (e) { /* ignore */ }
   },
 
@@ -827,13 +1096,30 @@ export const audio = {
   suspend() {
     held = true;
     heldAt = nowMs();
+    ambHold = true;
+    syncAmbience();
     safeSuspend();
   },
 
   resume() {
     held = false;
     idleAsleep = false;
+    ambHold = false;
     if (enabled && !isHidden()) safeResume();
+    syncAmbience();
+  },
+
+  /**
+   * Beach ambience (soft surf + distant gulls): target level 0..1, eased in over ~1 s.
+   * 0 stops the gulls and fades the surf out. Follows the sound toggle and suspend()/resume().
+   */
+  setAmbience(level) {
+    ambTarget = clamp(num(level, 0), 0, 1);
+    syncAmbience();
+  },
+
+  get ambience() {
+    return ambTarget;
   },
 
   play(name, opts = {}) {
@@ -844,14 +1130,7 @@ export const audio = {
       idleAsleep = false;
       safeResume();
     }
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => {
-      if (held || !ctx || ctx.state !== 'running') return;
-      prune(ctx.currentTime);
-      if (voices.length) return;
-      idleAsleep = true;
-      safeSuspend();
-    }, IDLE_SUSPEND_MS);
+    armIdle();
     // Don't pile sounds up in a context that refuses to start (they'd burst out later).
     if (ctx.state !== 'running' && ms - unlockAt > STALL_MS) return;
     const gap = THROTTLE[name];
