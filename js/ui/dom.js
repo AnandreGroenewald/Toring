@@ -124,6 +124,8 @@ export function createUI(bus) {
     confettiTimer: 0,
     modalReturn: null,
     sayingRO: null,      // watches the menu gap that holds the saying of the day
+    city: null,          // the Stapelstad skyline model (js/core/skyline.js) of the latest menu/results
+    cityIO: null,        // starts the 'rise' animation when the strip scrolls into view
   };
 
   // --- Static structure ----------------------------------------------------
@@ -479,10 +481,82 @@ export function createUI(bus) {
   // ---------------------------------------------------------------------------
   // Menu
   // ---------------------------------------------------------------------------
+  // --- Jou Stapelstad: the last 30 days as a strip of small stacked buildings -----------------
+  function cityBlock(city, { animate = false, streak = 0, compact = false } = {}) {
+    const days = city && Array.isArray(city.days) ? city.days : [];
+    if (!days.length) return null;
+    const bestIdx = city.best ? city.best.index : -1;
+    const max = Math.max(1, city.best ? city.best.heightM : 1);
+    const last = days.length - 1;
+    const cols = days.map((d, i) => {
+      const built = d.heightM != null;
+      const pct = built ? Math.max(12, Math.round((d.heightM / max) * 100)) : 0;
+      return h('span', {
+        class: `city-col${built ? '' : ' plot'}${i === bestIdx ? ' best' : ''}${animate && built && i === last ? ' rise' : ''}`,
+        vars: { '--h': `${pct}%`, '--c': hex(d.color) },
+      }, i === bestIdx ? h('i', { class: 'city-flag', 'aria-hidden': 'true', text: '🚩' }) : null);
+    });
+    const strip = h('div', { class: 'city-strip', role: 'img', 'aria-label': S.cityAria(city.count | 0, days.length) }, cols);
+    const sub = S.cityStreak(streak | 0);
+    const line = (city.count | 0) > 0 ? S.cityLine(city.count | 0) : S.cityEmpty;
+    const box = h('div', { class: `city${compact ? ' city-sm' : ''}` },
+      h('div', { class: 'city-head' },
+        h('h3', { class: 'label city-title' }, emo('🏙️'), h('span', { text: S.cityTitle })),
+        sub ? h('span', { class: 'city-streak' }, emo('🔥'), h('span', { text: sub })) : null),
+      strip,
+      h('p', { class: 'city-line', role: 'status', text: line }));
+    if (animate && strip.querySelector('.rise')) watchRise(strip);
+    return box;
+  }
+
+  /** The new tower rises when the strip is actually on screen (the results can scroll); at once without IntersectionObserver. */
+  function watchRise(strip) {
+    st.cityIO?.disconnect();
+    st.cityIO = null;
+    if (typeof IntersectionObserver !== 'function' || reducedMotion()) {
+      strip.classList.add('go');
+      return;
+    }
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        strip.classList.add('go');
+        io.disconnect();
+      }
+    }, { threshold: 0.6 });
+    st.cityIO = io;
+    io.observe(strip);
+    setTimeout(() => strip.classList.add('go'), 6000);   // never leave the new tower hidden
+  }
+
+  /** The "Sit Stapel op jou tuisskerm" button (Android/Chrome) or the iOS Share-sheet tip; null when nothing to offer. */
+  function installRow(mode) {
+    if (mode !== 'prompt' && mode !== 'ios') return null;
+    const x = h('button', {
+      type: 'button', class: 'install-x', 'aria-label': S.installDismiss, title: S.installDismiss,
+      onclick: () => { audio.play('click'); bus.emit('ui:install-dismiss'); },
+    }, icon('close'));
+    return h('div', { class: `install-row ${mode}` },
+      mode === 'prompt'
+        ? button('btn-blue install-btn', h('span', { text: S.installBtn }), () => bus.emit('ui:install'), { nav: false })
+        : h('p', { class: 'install-tip', text: S.installTipIos }),
+      x);
+  }
+
+  /** Called when the install offer changes (the browser's prompt arrived, was used or was dismissed). */
+  function setInstall(mode) {
+    if (st.screen !== 'results' || !st.resultsDaily) return;
+    const wrap = screens.results.querySelector('.res-wrap');
+    if (!wrap) return;
+    wrap.querySelector('.install-row')?.remove();
+    const row = installRow(mode);
+    if (row) wrap.insertBefore(row, wrap.querySelector('.btn-row'));
+  }
+
   function renderMenu(m) {
     const stats = m.stats || {};
     const entry = m.today || null;
     const done = !!entry && entry.status === 'done';
+    st.city = m.city || st.city;
 
     const brand = h('header', { class: 'brand' }, logo(), h('p', { class: 'tagline' }, h('span', { text: S.tagline })));
 
@@ -514,6 +588,8 @@ export function createUI(bus) {
             h('span', { class: 'fc-emo', 'data-wx': w.key }, emo(w.emoji)),
             h('span', { class: 'fc-name', text: w.name }))))));
       }
+      // a friend's challenge (from a shared link, today's date only): text only, never markup
+      if (m.challenge && m.challenge.text) card.append(h('p', { class: 'challenge-chip', role: 'status', text: m.challenge.text }));
       card.append(
         h('p', { class: 'note', text: S.sameForAll }),
         // first visit: no pop-up, just a friendly line (the game itself coaches the first tower)
@@ -677,6 +753,8 @@ export function createUI(bus) {
       body.append(h('p', { class: 'empty-note', text: S.noGamesYet }));
     }
 
+    body.append(cityBlock(st.city, { streak: s.currentStreak | 0, compact: true }));
+
     const sheet = h('div', { class: 'card sheet' },
       h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); } }, icon('close')),
       h('div', { class: 'sheet-head' }, emo('📊'), h('h2', { id: 'stapel-stats-title', text: S.stats })),
@@ -803,7 +881,7 @@ export function createUI(bus) {
     else if (res === 'failed') toast(S.copyFailed);
   }
 
-  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode } = {}) {
+  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null } = {}) {
     if (st.modal) closeModal();
     const r = result || {};
     const m = mode || r.mode || 'practice';
@@ -848,13 +926,20 @@ export function createUI(bus) {
     const wrap = h('div', { class: 'res-wrap' }, head, card);
     if (daily) {
       const streak = Math.max(0, (stats?.currentStreak ?? 0) | 0);
+      st.city = city || st.city;
+      // today's tower joins the player's own skyline and rises into place
+      const cityEl = cityBlock(city, { animate: !empty, streak });
+      if (cityEl) wrap.append(h('div', { class: 'card res-city' }, cityEl));
       wrap.append(h('div', { class: 'card res-foot' },
         h('div', { class: `foot-cell streak-cell${streak ? '' : ' is-zero'}` },
           h('b', null, emo('🔥'), fmtInt(streak)),
           h('span', { text: S.currentStreak })),
         st.nextDayAt ? h('div', { class: 'foot-cell' },
           h('b', { 'data-countdown': '', text: fmtClock(st.nextDayAt - Date.now()) }),
-          h('span', { text: S.nextTowerCaption })) : null));
+          h('span', { text: S.nextTowerCaption })) : null),
+        teaser && teaser.text ? h('p', { class: 'res-teaser', text: teaser.text }) : null);
+      const inst = empty ? null : installRow(install);
+      if (inst) wrap.append(inst);
     }
     wrap.append(h('div', { class: 'btn-row' },
       button('btn-teal', [icon('again'), h('span', { text: daily ? S.practice : S.practiceAgain })], () => bus.emit('ui:play-practice')),
@@ -956,6 +1041,7 @@ export function createUI(bus) {
     showStats,
     showPause,
     showResults,
+    setInstall,
     setResultsPercentile,
     showInGame,
     hideAll,

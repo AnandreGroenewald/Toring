@@ -327,6 +327,19 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       return clone(data.daily[dateKey] || null);
     },
 
+    /** dateKey -> height (m) of every finished daily in the last `days` days up to `todayKey` (for the Stapelstad skyline). */
+    getDailyHeights(todayKey = today(), days = 30) {
+      sync();
+      const out = {};
+      const ref = isDateKey(todayKey) ? todayKey : today();
+      for (let k = 0; k < days; k++) {
+        const key = addDays(ref, -k);
+        const e = data.daily[key];
+        if (e && e.status === 'done' && e.result && e.result.heightM > 0) out[key] = e.result.heightM;
+      }
+      return out;
+    },
+
     /**
      * Called on the FIRST drop of a daily. No-op if an entry already exists.
      * `owner` (a per-tab id) and the heartbeat let another tab tell a live game from an abandoned one.

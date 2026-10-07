@@ -1455,3 +1455,93 @@ svg.ic {
 #ui.compact .share-row { margin-top: calc(16 * var(--u)); }
 #ui.compact .res-foot { padding: calc(8 * var(--u)) calc(10 * var(--u)); }
 #ui.compact .foot-cell b { font-size: calc(34 * var(--u)); }
+
+/* ------------------------------------------------------------------------- */
+/* Jou Stapelstad (the player's own skyline), friend challenge, teaser, install */
+/* ------------------------------------------------------------------------- */
+.res-city { padding: calc(18 * var(--u)) calc(22 * var(--u)) calc(16 * var(--u)); border-radius: calc(32 * var(--u)); }
+.city-head { display: flex; align-items: center; justify-content: space-between; gap: calc(10 * var(--u)); }
+.city-title { display: flex; align-items: center; gap: calc(8 * var(--u)); margin: 0; }
+.city-title .emoji { font-size: calc(26 * var(--u)); }
+.city-streak {
+  display: inline-flex; align-items: center; gap: calc(4 * var(--u));
+  font-size: max(12px, calc(21 * var(--u))); font-weight: 800; color: var(--karoo-d);
+}
+.city-streak .emoji { font-size: calc(24 * var(--u)); }
+.city-strip {
+  display: grid;
+  grid-template-columns: repeat(30, minmax(0, 1fr));
+  gap: calc(3 * var(--u));
+  align-items: end;
+  height: calc(150 * var(--u));
+  margin: calc(10 * var(--u)) 0 calc(8 * var(--u));
+  padding: calc(34 * var(--u)) 0 0;
+  border-bottom: calc(4 * var(--u)) solid #b7c8dd;
+  background: linear-gradient(to top, rgba(160, 200, 235, 0.25), rgba(160, 200, 235, 0) 75%);
+  border-radius: calc(12 * var(--u)) calc(12 * var(--u)) 0 0;
+}
+.city-col {
+  position: relative;
+  display: block;
+  height: var(--h);
+  min-height: calc(10 * var(--u));
+  background: repeating-linear-gradient(to top, var(--c) 0 calc(10 * var(--u)), rgba(255, 255, 255, 0.45) calc(10 * var(--u)) calc(12 * var(--u)));
+  border-radius: calc(3 * var(--u)) calc(3 * var(--u)) 0 0;
+  box-shadow: inset calc(-3 * var(--u)) 0 0 rgba(10, 30, 70, 0.14);
+  transform-origin: 50% 100%;
+}
+.city-col.plot {
+  height: calc(8 * var(--u));
+  background: transparent;
+  box-shadow: none;
+  border: calc(2 * var(--u)) dashed #b2c4da;
+  border-bottom: 0;
+}
+.city-flag {
+  position: absolute; left: 35%; bottom: 100%;
+  font-style: normal; font-size: calc(26 * var(--u)); line-height: 1;
+  pointer-events: none;
+}
+.city-col.rise { transform: scaleY(0); }
+.city-strip.go .city-col.rise {
+  animation: city-rise 0.9s cubic-bezier(0.2, 1.25, 0.4, 1) 0.15s both, city-glow 1.4s ease-out 1.05s 1;
+}
+@keyframes city-rise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes city-glow {
+  0% { box-shadow: inset calc(-3 * var(--u)) 0 0 rgba(10, 30, 70, 0.14), 0 0 0 0 var(--c); }
+  40% { box-shadow: inset calc(-3 * var(--u)) 0 0 rgba(10, 30, 70, 0.14), 0 0 calc(22 * var(--u)) calc(8 * var(--u)) var(--c); }
+  100% { box-shadow: inset calc(-3 * var(--u)) 0 0 rgba(10, 30, 70, 0.14), 0 0 0 0 transparent; }
+}
+.city-line {
+  margin: 0; text-align: center; font-weight: 800; color: var(--ink-soft);
+  font-size: max(12px, calc(26 * var(--u)));
+}
+.city-sm { margin-top: calc(22 * var(--u)); }
+.city-sm .city-strip { height: calc(120 * var(--u)); padding-top: calc(30 * var(--u)); }
+.res-teaser, .install-tip {
+  margin: 0; align-self: center; text-align: center; font-weight: 800; color: #fff;
+  font-size: max(13px, calc(26 * var(--u)));
+  padding: calc(10 * var(--u)) calc(22 * var(--u));
+  border-radius: calc(30 * var(--u));
+  background: rgba(12, 32, 66, 0.55);
+}
+.install-row { display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u)); margin-bottom: calc(8 * var(--u)); }
+.install-btn { flex: 1 1 auto; min-height: calc(76 * var(--u)); font-size: max(13px, calc(26 * var(--u))); padding: calc(8 * var(--u)) calc(16 * var(--u)); }
+.install-row .install-tip { flex: 1 1 auto; }
+.install-x {
+  flex: 0 0 auto; width: max(40px, calc(64 * var(--u))); height: max(40px, calc(64 * var(--u)));
+  display: grid; place-items: center; border: 0; border-radius: 50%; cursor: pointer;
+  color: #fff; background: rgba(12, 32, 66, 0.55);
+}
+.install-x .ic { width: 55%; height: 55%; }
+.challenge-chip {
+  margin: calc(12 * var(--u)) 0 0; padding: calc(10 * var(--u)) calc(18 * var(--u));
+  text-align: center; font-weight: 800; font-size: max(13px, calc(25 * var(--u)));
+  color: #a3262c; background: #fff1f1; border: calc(3 * var(--u)) solid #ffc9cc; border-radius: calc(26 * var(--u));
+}
+#ui.compact .city-strip { height: calc(124 * var(--u)); padding-top: calc(30 * var(--u)); margin: calc(6 * var(--u)) 0; }
+#ui.compact .res-city { padding: calc(12 * var(--u)) calc(18 * var(--u)) calc(10 * var(--u)); }
+#ui.compact .res-wrap { gap: calc(12 * var(--u)); }
+#ui.compact .city-sm { margin-top: calc(10 * var(--u)); }
+#ui.compact .city-sm .city-strip { height: calc(92 * var(--u)); padding-top: calc(26 * var(--u)); }
+#ui.compact .city-sm .city-line { font-size: max(12px, calc(22 * var(--u))); }

@@ -140,6 +140,24 @@ export const S = {
   boardFreeSub: 'Adverteer op Stapel',
   // results card: how today's tower compares with the other players (never in the WhatsApp text)
   percentileBetter: (n) => `Jy het beter gedoen as ${n}% van spelers vandag`,
+  // "Jou Stapelstad": every finished Daaglikse Toring becomes a building in the player's own skyline
+  cityTitle: 'Jou Stapelstad',
+  cityLine: (n) => (n === 1 ? 'Jou stad se eerste toring staan!' : `Jou stad het nou ${n} torings!`),
+  cityStreak: (n) => (n >= 2 ? `${n} dae in ’n ry` : ''),
+  cityBest: 'Beste toring',
+  cityEmpty: 'Voltooi ’n Daaglikse Toring om jou stad te begin bou.',
+  cityAria: (n, days) => `Jou Stapelstad: ${n} torings in die laaste ${days} dae`,
+  // friend challenge (?klop=<dm>&d=<date>)
+  challengeMenu: (m) => `’n Vriend daag jou uit: klop ${m}! 🚩`,
+  challengeLine: (m) => `Klop dié: ${m}`,
+  challengeWon: 'Jy het jou vriend geklop! 🎉',
+  // tomorrow teaser on the daily results
+  tomorrow: 'Môre',
+  tomorrowLine: (emoji) => `Môre: ${emoji} — kom terug!`,
+  // add to home screen
+  installBtn: '📲 Sit Stapel op jou tuisskerm',
+  installTipIos: 'Tik Deel ⬆️ en dan “Voeg by tuisskerm”',
+  installDismiss: 'Nie nou nie',
 };
 
 /** Weather display info. Keys match WEATHER_TYPES in config.js. */

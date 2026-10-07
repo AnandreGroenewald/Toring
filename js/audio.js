@@ -32,7 +32,7 @@ const LEVEL = {
   click: 1.0, drop: 0.63, land: 1.05, perfect: 1.6, good: 1.0, skew: 0.73,
   lost: 0.22, splash: 0.99, creak: 0.85, heart: 0.72, wind: 0.9, rain: 0.41,
   thunder: 1.0, zap: 0.39, hail: 0.44, heat: 0.27, rainbow: 0.7, fog: 0.143,
-  warning: 0.22, gameover: 0.75, record: 0.62, banner: 0.4, freeze: 0.6, gull: 0.14,
+  warning: 0.22, gameover: 0.75, record: 0.62, banner: 0.4, freeze: 0.6, gull: 0.1,
 };
 
 const PENTA = [0, 2, 4, 7, 9];   // major pentatonic (semitones)
@@ -597,59 +597,67 @@ const SOUNDS = {
   },
 
   gull(v, t, o, B) {
-    // Distant seagull: a burst of 2-4 "kee-ow" calls, each one a buzzy carrier that lifts
-    // quickly and then slides down (~1.8 -> 1.1 kHz) with a little vibrato. A gliding
-    // formant gives the "ee" -> "ow" colour; a gentle lowpass keeps it soft and far away.
-    const n = clamp(Math.round(num(o.calls, 2 + Math.floor(Math.random() * 3))), 1, 4);
-    const f0 = 1800 * clamp(num(o.pitch, rand(0.88, 1.12)), 0.6, 1.5);
-    const vol = clamp(num(o.vol, rand(0.55, 1)), 0, 1);
+    // A soft, distant gull: 1-2 round "mew" calls. A sine carrier (with only a light 2nd
+    // harmonic, no buzz) glides ~900 -> 1400 -> 800 Hz while a small, fast FM wobble (~30 Hz)
+    // gives the gentle gull "yodel". Bandpass ~1,2 kHz, then lowpass ~2,4 kHz, and a faint
+    // echo over the water (two delay taps at ~180 / 260 ms with low feedback).
+    const n = clamp(Math.round(num(o.calls, 1 + Math.floor(Math.random() * 2))), 1, 2);
+    const k = clamp(num(o.pitch, rand(0.93, 1.07)), 0.6, 1.5);
+    const vol = clamp(num(o.vol, rand(0.6, 1)), 0, 1);
     const pan0 = clamp(num(o.pan, rand(-0.7, 0.7)), -1, 1);
     const calls = [];
     let at = 0;
     for (let i = 0; i < n; i++) {
-      const d = (0.34 - 0.045 * i) * rand(0.92, 1.08);       // later calls are shorter, a touch lower
-      calls.push({ at, d, f: f0 * (1 - 0.035 * i) * rand(0.97, 1.03), a: vol * (1 - 0.12 * i) });
-      at += d + rand(0.07, 0.13);
+      const d = rand(0.62, 0.78);
+      calls.push({ at, d, k: k * (1 - 0.06 * i) * rand(0.98, 1.02), a: vol * (1 - 0.25 * i) });
+      at += d + rand(0.22, 0.34);
     }
-    const total = at + 0.1;
+    const total = at;
+    const run = total + 1.1;   // the carrier idles silently while the echoes ring out
     let dest = v.out;
     try {   // the bird drifts a little across the stereo field
       const pan = v.ctx.createStereoPanner();
       pan.pan.setValueAtTime(pan0, t);
-      pan.pan.linearRampToValueAtTime(clamp(pan0 + rand(-0.25, 0.25), -1, 1), t + total);
+      pan.pan.linearRampToValueAtTime(clamp(pan0 + rand(-0.2, 0.2), -1, 1), t + total);
       pan.connect(dest);
       v.nodes.push(pan);
       dest = pan;
     } catch (e) { /* no StereoPannerNode: centred */ }
-    const lp = v.filter('lowpass', 3200, 0.5, dest);
-    const form = v.filter('bandpass', f0 * 1.3, 2.5, v.gain(1.2, lp));
-    const dry = v.gain(0.45, lp);
-    const amp = v.gain(0, null);
-    amp.connect(form);
-    amp.connect(dry);
-    const saw = v.osc('sawtooth', f0, t, total, amp);
-    v.lfo(rand(5.5, 7.5), f0 * 0.012, saw.frequency, t, total);          // vibrato
-    v.noise(B.white, t, total, v.filter('bandpass', f0 * 1.4, 1.5, v.gain(0.06, amp)));   // breath
-    const fr = saw.frequency;
-    const ff = form.frequency;
+    // dry path: amp -> bandpass -> lowpass -> out; the echo taps hang off the lowpass
+    const lp = v.filter('lowpass', 2400, 0.6, dest);
+    const bp = v.filter('bandpass', 1200, 1.5, v.gain(0.55, lp));
+    const amp = v.gain(0, bp);
+    for (const [time, level] of [[0.18, 0.26], [0.26, 0.17]]) {
+      const dl = v.ctx.createDelay(1);
+      dl.delayTime.value = time;
+      const fb = v.gain(0.22, dl);                 // low feedback
+      const damp = v.filter('lowpass', 1800, 0.5, fb);
+      dl.connect(damp);
+      lp.connect(dl);
+      dl.connect(v.gain(level, dest));             // small wet
+      v.nodes.push(dl);
+    }
+    const car = v.osc('sine', 900 * k, t, run, amp);
+    const harm = v.gain(0.14, amp);                // a light 2nd harmonic
+    const car2 = v.osc('sine', 1800 * k, t, run, harm);
+    v.lfo(rand(25, 35), 26 * k, car.frequency, t, run);     // the soft yodel (small, fast FM)
+    v.lfo(rand(25, 35), 52 * k, car2.frequency, t, run);
     const ag = amp.gain;
     ag.setValueAtTime(0, t);
-    fr.setValueAtTime(f0, t);
-    ff.setValueAtTime(f0 * 1.3, t);
     for (const c of calls) {
       const s = t + c.at;
       const e = s + c.d;
-      fr.setValueAtTime(c.f * 0.93, s);
-      fr.linearRampToValueAtTime(c.f * 1.06, s + c.d * 0.2);              // "kee": quick lift ...
-      fr.exponentialRampToValueAtTime(c.f * 0.6, e);                       // ... "ow": long slide down
-      ff.setValueAtTime(c.f * 1.2, s);
-      ff.linearRampToValueAtTime(c.f * 1.5, s + c.d * 0.2);
-      ff.exponentialRampToValueAtTime(c.f * 0.85, e);
+      for (const [osc, mul] of [[car, 1], [car2, 2]]) {
+        const fr = osc.frequency;
+        fr.setValueAtTime(900 * c.k * mul, s);
+        fr.linearRampToValueAtTime(1400 * c.k * mul, s + c.d * 0.38);      // rise ...
+        fr.linearRampToValueAtTime(800 * c.k * mul, e);                     // ... and sigh back down
+      }
       ag.setValueAtTime(0, s);
-      ag.linearRampToValueAtTime(c.a, s + 0.03);
-      ag.setValueAtTime(c.a, s + c.d * 0.5);
-      ag.exponentialRampToValueAtTime(c.a * 0.12, e);   // the slide stays audible ...
-      ag.linearRampToValueAtTime(0, e + 0.05);          // ... then the call lets go
+      ag.linearRampToValueAtTime(c.a, s + 0.12);                            // soft attack
+      ag.setValueAtTime(c.a, s + c.d * 0.45);
+      ag.exponentialRampToValueAtTime(c.a * 0.05, e);
+      ag.linearRampToValueAtTime(0, e + 0.04);
     }
   },
 };
@@ -998,7 +1006,7 @@ function syncAmbience() {
 
 function scheduleGull(first = false) {
   clearTimeout(gullTimer);
-  gullTimer = setTimeout(gullTick, first ? rand(3000, 7000) : rand(8000, 20000));
+  gullTimer = setTimeout(gullTick, first ? rand(3000, 7000) : rand(15000, 30000));
 }
 
 function gullTick() {

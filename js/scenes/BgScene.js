@@ -221,6 +221,70 @@ function drawCloud(ctx, w, h, blobs) {
   ctx.restore();
 }
 
+// "Jou Stapelstad": the player's last 30 Daaglikse Torings as small stacked-block buildings on the
+// shore, left (oldest) to right (today). Drawn once into a texture whenever the data changes: no
+// per-frame drawing. Heights are to scale (capped), the best tower carries a tiny flag and
+// missed days are low empty plots. Hazy on purpose, so it never competes with the game.
+const SKY_H = 110;           // skyline texture height; its bottom row sits on the horizon
+const SKY_SLOT = 21;         // px per day (30 days across)
+const SKY_BLDG_W = 14;
+const SKY_ROW = 6;           // one stacked block
+const SKY_CAP_PX = 90;       // tallest building
+const SKY_HAZE = 0xcfe0f0;
+
+const hex6 = (n) => `#${(n >>> 0).toString(16).padStart(6, '0')}`;
+const mixHaze = (c, t) => hex6(lerpColor(c, SKY_HAZE, t));
+
+function drawSkyline(ctx, w, h, sky) {
+  ctx.clearRect(0, 0, w, h);
+  const days = sky && Array.isArray(sky.days) ? sky.days : [];
+  if (!days.length) return;
+  const x0 = Math.round((w - days.length * SKY_SLOT) / 2 + (SKY_SLOT - SKY_BLDG_W) / 2);
+  const bestIdx = sky.best ? sky.best.index : -1;
+  for (let i = 0; i < days.length; i++) {
+    const d = days[i];
+    const x = x0 + i * SKY_SLOT;
+    if (d.heightM == null) {   // a plot nobody built on: a faint kerb and two corner posts
+      ctx.fillStyle = mixHaze(0x6c86a8, 0.35);
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(x, h - 2, SKY_BLDG_W, 2);
+      ctx.fillRect(x, h - 5, 2, 3);
+      ctx.fillRect(x + SKY_BLDG_W - 2, h - 5, 2, 3);
+      ctx.globalAlpha = 1;
+      continue;
+    }
+    const px = Math.min(SKY_CAP_PX, Math.round(SKY_ROW + d.heightM * 1.1));
+    const rows = Math.max(1, Math.floor(px / SKY_ROW));
+    const body = mixHaze(d.color, 0.36);
+    const edge = mixHaze(d.color, 0.16);
+    ctx.globalAlpha = 0.92;
+    for (let r = 0; r < rows; r++) {
+      const wob = ((i * 7 + r * 13) % 3) - 1;                 // tiny deterministic sideways offset: stacked, not extruded
+      const rw = r > 1 && r % 3 === 2 ? SKY_BLDG_W - 2 : SKY_BLDG_W;
+      const rx = x + (SKY_BLDG_W - rw) / 2 + (r === 0 ? 0 : wob);
+      const ry = h - (r + 1) * SKY_ROW;
+      ctx.fillStyle = edge;
+      ctx.fillRect(rx, ry, rw, SKY_ROW);
+      ctx.fillStyle = body;
+      ctx.fillRect(rx, ry + 1, rw, SKY_ROW - 1);
+    }
+    ctx.globalAlpha = 1;
+    if (i === bestIdx) {   // the best tower flies a tiny flag
+      const top = h - rows * SKY_ROW;
+      const cx = x + SKY_BLDG_W / 2;
+      ctx.fillStyle = '#6b7a90';
+      ctx.fillRect(cx, top - 10, 1, 10);
+      ctx.fillStyle = '#ff5a5f';
+      ctx.beginPath();
+      ctx.moveTo(cx + 1, top - 10);
+      ctx.lineTo(cx + 7, top - 7.5);
+      ctx.lineTo(cx + 1, top - 5);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+}
+
 function ensureBgTextures(scene) {
   canvasTexture(scene, 'bg_mountains', MTN_W, MTN_H, drawMountains);
   canvasTexture(scene, 'bg_tablecloth', 216, 100, drawTablecloth);
@@ -371,6 +435,14 @@ export class BgScene extends Phaser.Scene {
       if (c.L !== CLOUD_LAYERS[0]) c.img.setDepth(1);
     }
     this.mountains.setDepth(0.5);
+    // Jou Stapelstad on the shore in front of the mountains (a texture painted when the data changes)
+    this.skylineTex = this.textures.exists('bg_skyline') ? this.textures.get('bg_skyline') : this.textures.createCanvas('bg_skyline', GAME_W, SKY_H);
+    this.skyline = this.add.image(0, HORIZON0, 'bg_skyline').setOrigin(0, 1).setDepth(0.55).setVisible(false);
+    this.skylineKey = null;
+    this.paintSkyline(this.registry.get('skyline'));
+    const onSky = (_parent, value) => this.paintSkyline(value);
+    this.registry.events.on('changedata-skyline', onSky);
+    this.events.once('shutdown', () => this.registry.events.off('changedata-skyline', onSky));
     this.tablecloth.setDepth(0.6);
     this.sea = this.add.image(0, HORIZON0, 'bg_sea').setOrigin(0, 0).setDepth(2);
     this.glint = this.add.tileSprite(0, HORIZON0, W, 64, 'bg_glint').setOrigin(0, 0).setDepth(2.1).setAlpha(0.6);
@@ -442,6 +514,8 @@ export class BgScene extends Phaser.Scene {
     const sceneryOn = horizon - MTN_H < H;
     this.mountains.setVisible(sceneryOn).y = horizon;
     this.tablecloth.setVisible(sceneryOn).y = horizon - PLATEAU_H - 28 + Math.sin(this.t * 0.4) * 1.5;
+    this.skyline.setVisible(sceneryOn && this.skylineOn).y = horizon;
+    this.skyline.alpha = 0.9 * (1 - smooth(60, 200, alt)) * (1 - dark * 0.3);
     this.tablecloth.alpha = 0.9 - dark * 0.3;
     const seaH = H - horizon + 4;
     this.sea.setVisible(seaH > 0);
@@ -467,6 +541,7 @@ export class BgScene extends Phaser.Scene {
       this.lastTint = tintKey;
       const scen = lerpColor(lerpColor(0xffffff, 0x8f97c8, night), 0x7a8290, dark);
       this.mountains.setTint(scen);
+      this.skyline.setTint(scen);
       this.tablecloth.setTint(scen);
       this.sea.setTint(scen);
       const cloud = lerpColor(lerpColor(0xffffff, 0xa6acd8, night), 0x8c95a3, dark);
@@ -499,6 +574,20 @@ export class BgScene extends Phaser.Scene {
       g.img.scaleY = g.img.scaleX * (0.45 + 0.55 * Math.abs(Math.sin(this.t * 5 + g.phase)));
       g.img.alpha = gullA;
     }
+  }
+
+  /** Redraws the skyline texture, only when the days or heights actually changed. */
+  paintSkyline(sky) {
+    const key = sky && Array.isArray(sky.days) ? sky.days.map((d) => `${d.dateKey}:${d.heightM ?? '-'}`).join('|') : '';
+    if (key === this.skylineKey) return;
+    this.skylineKey = key;
+    try {
+      drawSkyline(this.skylineTex.getContext(), GAME_W, SKY_H, sky);
+      this.skylineTex.refresh();
+    } catch {
+      // decoration only
+    }
+    this.skylineOn = !!key;
   }
 
   _updateSky(alt, dark) {

@@ -269,6 +269,9 @@ export class GameScene extends Phaser.Scene {
     // Sponsors (js/sponsorsFeed.js): names for the blocks, the day's premium sponsor for the billboard.
     this.sponsorBlock = Array.isArray(d.sponsors?.block) ? d.sponsors.block : [];
     this.billboardData = { premium: d.billboard?.premium || null, salesOn: !!d.billboard?.salesOn };
+    // A friend's challenge (daily only, already validated in js/core/challenge.js): the height to beat, in metres.
+    this.challengeM = this.mode === 'daily' && Number.isFinite(d.challenge) && d.challenge > 0 && d.challenge <= 2000 ? d.challenge : 0;
+    this.challengeWon = false;
     this.resetRunState();
   }
 
@@ -413,6 +416,19 @@ export class GameScene extends Phaser.Scene {
         fontFamily: FONT, fontSize: '24px', fontStyle: 'bold', color: '#ffffff',
         stroke: '#0f3f73', strokeThickness: 6, resolution: 1,
       }).setOrigin(1, 1).setDepth(DEPTH.water + 1).setVisible(false);
+    }
+
+    // Friend challenge: one thin line across the world at the height to beat, with a flag label (cheap, world space).
+    this.challengeLine = null;
+    this.challengeTag = null;
+    if (this.challengeM > 0) {
+      const cy = LAYOUT.baseTopY - this.challengeM * PX_PER_M;
+      this.challengeLine = this.add.image(GAME_W / 2, cy, '__WHITE').setDisplaySize(GAME_W, 5)
+        .setTintFill(0xff5a5f).setAlpha(0.85).setDepth(DEPTH.fxWorld + 1);
+      this.challengeTag = this.add.text(GAME_W - 14, cy - 5, `🚩 ${S.challengeLine(fmtM(this.challengeM))}`, {
+        fontFamily: FONT, fontSize: '26px', fontStyle: 'bold', color: '#ffffff',
+        stroke: '#a3262c', strokeThickness: 6, resolution: 1,
+      }).setOrigin(1, 1).setDepth(DEPTH.fxWorld + 2);
     }
 
     const cam = this.cameras.main;
@@ -1395,6 +1411,7 @@ export class GameScene extends Phaser.Scene {
       if (h > this.maxHeightM && !this.over) {
         this.maxHeightM = h;
         this.checkMilestone();
+        this.checkChallenge();
         // keep the saved daily up to date with every new best height (a reload must not lose a block)
         if (h - this.progressHeight >= 0.5) {
           this.progressHeight = h;
@@ -1402,6 +1419,18 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
+  }
+
+  /** Passing the friend's height: one toast, the Perfek jingle and a sparkle; the line turns green. */
+  checkChallenge() {
+    if (!this.challengeM || this.challengeWon || this.idle || this.over) return;
+    if (this.maxHeightM < this.challengeM) return;
+    this.challengeWon = true;
+    bus.emit('hud:toast', { text: S.challengeWon, color: '#ffe27a' });
+    audio.play('perfect', { combo: 5 });
+    this.effects.sparkle(this.topBlock?.centerX ?? GAME_W / 2, this.towerTopY, 26);
+    if (this.challengeLine) this.challengeLine.setTintFill(0x4fd66a);
+    if (this.challengeTag) this.challengeTag.setText(`✅ ${S.challengeLine(fmtM(this.challengeM))}`).setStyle({ stroke: '#1f7a35' });
   }
 
   /** The first time the tower passes 25 m, 50 m, 75 m, ...: one saying toast (the HUD queues or skips it). */

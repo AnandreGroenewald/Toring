@@ -58,6 +58,9 @@ Later the owner added (decisions are final unless they say otherwise):
 - Tests at handover: **`npm test` 89/89 pass.**
 - Headless check at handover: a full daily at 412×915 with autoplay ran 1 min 50 s to 75,2 m and ended with zero console errors. Screenshots were taken of the how-to, Perfek ×4, rainbow, storm with lightning, the game-over reveal and results; all looked right.
 
+### Come-back hooks (version `1.5.0`)
+- *Jou Stapelstad* skyline (`js/core/skyline.js`, drawn once into a texture by `BgScene`, and a strip on results and Statistiek), friend challenge links `?klop=<dm>&d=<today>` (`js/core/challenge.js`, sessionStorage only, line drawn by `GameScene`), tomorrow's weather teaser (`js/core/teaser.js`), the install button / iOS tip (`js/core/install.js`) and a softer, quieter seagull (`gull` in `js/audio.js`, every 15-30 s). Tests: `tests/hooks.test.js`.
+
 ### Sponsorship system: built, needs its review pass (T4)
 - **T2 done:** `js/core/sponsors.js` (pure logic), `js/sponsorsFeed.js` (feed loader with a 5-minute/7-day localStorage cache), `sponsors.json` (the sportscard.co.za house ad) and `tests/sponsors.test.js`. The name rules live in one shared file, `js/core/nameRules.js`, which the Worker (`server/src/moderation.js` re-exports it), the sign-up page and the game all use, so `wrangler deploy` must run from a full repo checkout. `adverteer.html` works now.
 - **T3 done:** `terme.html` and `privaatheid.html` are Afrikaans templates with `[[placeholders]]`, the template banner and "Nota vir die eienaar" notes. Both are version `2026-10-06`, matching `js/sponsorConfig.js`. The owner must check the Information Regulator's address and email, and a lawyer must confirm the ECT Act s44 cooling-off wording.

@@ -3,11 +3,15 @@
 import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY } from './config.js';
 import { bus } from './core/bus.js';
 import { S } from './core/strings.js';
-import { fmtDateKey } from './core/format.js';
+import { fmtDateKey, fmtM } from './core/format.js';
 import { createStore } from './core/storage.js';
 import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate } from './core/daily.js';
 import { createSequence } from './core/sequence.js';
 import { buildShareText } from './core/share.js';
+import { loadChallenge, shareUrlFor } from './core/challenge.js';
+import { buildSkyline, SKYLINE_DAYS } from './core/skyline.js';
+import { tomorrowTeaser } from './core/teaser.js';
+import { initInstall, installMode, promptInstall, dismissInstall, onInstallChange } from './core/install.js';
 import { normalizeFeed, pickPremium } from './core/sponsors.js';
 import { buildStatsBatch, percentileLine } from './core/audience.js';
 import { tutorialDone } from './core/coach.js';
@@ -39,6 +43,14 @@ const MENU_SLEEP_MS = 45000;   // menu left alone: let the attract tower rest
 
 const randomSeed = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
 const todayKey = () => DEBUG_DATE || dateKeyFor();
+
+// Friend challenge from a shared link (?klop=<dm>&d=<date>): only valid for today's date; kept for this tab in sessionStorage.
+const challengeRaw = loadChallenge(location.search, todayKey());
+/** The friend's challenge while it is still today's date (it lapses at midnight), else null. */
+const activeChallenge = () => (challengeRaw && challengeRaw.dateKey === todayKey() ? challengeRaw : null);
+
+// "Sit Stapel op jou tuisskerm": keep the browser's install prompt for the results screen.
+initInstall();
 
 /** Per-tab id (survives a reload of this tab, not a new tab): tells "my game" from another tab's. */
 const TAB_ID = (() => {
@@ -114,6 +126,17 @@ const game = new Phaser.Game({
 });
 
 window.__stapel = Object.assign(window.__stapel || {}, { game, bus, store, ui, audio });
+
+/** Jou Stapelstad: the last 30 days of finished dailies (the background draws it once into a texture). */
+const skylineFor = (dateKey) => buildSkyline(dateKey, store.getDailyHeights(dateKey, SKYLINE_DAYS), SKYLINE_DAYS);
+function pushSkyline(dateKey = todayKey()) {
+  try {
+    game.registry.set('skyline', skylineFor(dateKey));
+  } catch {
+    // the skyline is decoration only
+  }
+}
+pushSkyline();
 
 // What the player is doing right now.
 const run = {
@@ -213,6 +236,8 @@ function menuModel() {
     nextDayAt: nextDayTimestamp(),
     ad: menuAd(),
     newPlayer: !store.tutorialSeen(),   // first visit: a one-line nudge instead of the old how-to pop-up
+    challenge: activeChallenge() ? { text: S.challengeMenu(fmtM(activeChallenge().heightM)) } : null,
+    city: skylineFor(dateKey),
   };
 }
 
@@ -296,6 +321,7 @@ function startIdle() {
 
 function showMenu() {
   screen = 'menu';
+  pushSkyline();
   ui.showMenu(menuModel());
   wakeLoop();
   armMenuSleep();
@@ -335,7 +361,10 @@ function playDaily() {
     return;
   }
   resetRun('daily', dateKey);
-  startGame({ mode: 'daily', seed: seedFor(dateKey), dayNumber: run.dayNumber, dateKey, autoplay: AUTO });
+  startGame({
+    mode: 'daily', seed: seedFor(dateKey), dayNumber: run.dayNumber, dateKey, autoplay: AUTO,
+    challenge: activeChallenge() ? activeChallenge().heightM : 0,
+  });
   screen = 'game';
   ui.showInGame();
 }
@@ -363,13 +392,20 @@ function showDoneResults(dateKey, result) {
     shareText: shareTextFor(result),
     nextDayAt: nextDayFor(dateKey),
     mode: 'daily',
+    ...resultsExtras(result),
   });
   showPercentile(result);
   sleepLoop(RESULTS_SLEEP_MS);
 }
 
 function shareTextFor(result) {
-  return buildShareText(result, { url: siteUrl(), highContrast: !!settings.highContrast });
+  return buildShareText(result, { url: shareUrlFor(siteUrl(), result), highContrast: !!settings.highContrast });
+}
+
+/** What the daily results add beyond the result itself: the skyline, tomorrow's teaser and the install offer. */
+function resultsExtras(r) {
+  if (!r || r.mode !== 'daily' || !r.dateKey) return {};
+  return { city: skylineFor(r.dateKey), teaser: tomorrowTeaser(r.dateKey), install: installMode() };
 }
 
 function canPause() {
@@ -488,6 +524,15 @@ window.addEventListener('popstate', () => {
 // Bus wiring
 // ---------------------------------------------------------------------------
 bus.on('ui:play-daily', playDaily);
+bus.on('ui:install', async () => {
+  await promptInstall();
+  ui.setInstall(installMode());
+});
+bus.on('ui:install-dismiss', () => {
+  dismissInstall();
+  ui.setInstall(installMode());
+});
+onInstallChange(() => ui.setInstall(installMode()));
 bus.on('ui:play-practice', playPractice);
 bus.on('ui:pause', pauseGame);
 bus.on('ui:resume', resumeGame);
@@ -552,6 +597,7 @@ function finalize(result) {
       aborted = true;   // left before the first drop: nothing was played, the try is still there
     } else {
       stats = store.finishDaily(result.dateKey, result);
+      pushSkyline();   // today's tower joins the skyline behind the results
       isNewBest = !!(stats.applied && (stats.isNewBestHeight || stats.isNewBestScore));
       if (!stats.applied) {
         // finished (or taken over) elsewhere: show and share what actually counts
@@ -593,6 +639,7 @@ bus.on('game:over', (result) => {
     shareText: shareTextFor(r),
     nextDayAt: r.mode === 'daily' ? nextDayFor(r.dateKey) : 0,
     mode: r.mode,
+    ...resultsExtras(r),
   });
   showPercentile(r);
   sleepLoop(RESULTS_SLEEP_MS);
