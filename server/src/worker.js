@@ -169,6 +169,11 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
     if (path === '/admin/payments') return method === 'GET' ? admin.listPayments(url, ctx) : methodNotAllowed('GET');
     if (path === '/admin/stats') return method === 'GET' ? stats.adminStats(url, ctx) : methodNotAllowed('GET');
     if (path === '/admin/events') return method === 'GET' ? admin.listEvents(url, ctx) : methodNotAllowed('GET');
+    if (path === '/admin/runs') {
+      if (method === 'GET') return admin.listRuns(ctx);
+      if (method === 'POST') return admin.forgetRuns(request, ctx);
+      return methodNotAllowed('GET, POST');
+    }
     const a = /^\/admin\/alerts\/([^/]+)\/resolve$/.exec(path);
     if (a) return method === 'POST' ? admin.resolveAlert(ctx, pathParam(a[1])) : methodNotAllowed('POST');
     const m = /^\/admin\/sponsors\/([^/]+)(?:\/(cancel|manage-link))?$/.exec(path);
@@ -213,6 +218,7 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
         db: env.DB,
         cfg,
         now: now(),
+        lobby: env.MATCH_LOBBY ? () => env.MATCH_LOBBY.get(env.MATCH_LOBBY.idFromName('lobby')) : null,
         log,
         invalidate,
         planCache,

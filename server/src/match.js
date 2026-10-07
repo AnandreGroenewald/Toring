@@ -369,6 +369,9 @@ export class MatchLobby {
   async fetch(request) {
     const url = new URL(request.url);
     if (url.pathname === '/runs' && request.method === 'POST') return this.addRuns(request);
+    // owner only (the Worker's /admin/runs): what recordings there are, and forgetting some
+    if (url.pathname === '/runs/list' && request.method === 'GET') return this.listRuns();
+    if (url.pathname === '/runs/forget' && request.method === 'POST') return this.forgetRuns(request);
     if (url.pathname === '/ghost' || url.pathname === '/match/ghost') return this.ghost();
     if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') return json(426, { error: 'websocket_expected' });
     const [response, server] = this.upgrade();
@@ -438,6 +441,34 @@ export class MatchLobby {
     for (const payload of fresh) runs.push({ payload, at: now });
     await this.state.storage.put('runs', runs.slice(-RUNS_MAX));
     return json(200, { ok: true, kept: fresh.length });
+  }
+
+  /** The recordings kept now, newest last: who, which tower, how high, how it ended, when. */
+  async listRuns() {
+    const now = this.now();
+    const runs = ((await this.state.storage.get('runs')) || []).filter((r) => now - r.at < RUN_DAYS * 864e5);
+    const list = runs.map((r) => {
+      const c = decodeChallenge(r.payload);
+      const s = c ? c.run.samples : [];
+      return { name: c?.name || '', seed: c?.seed || '', best: s.length ? Math.max(...s) / 10 : 0, end: c?.run.end || '', at: r.at };
+    });
+    return json(200, { runs: list });
+  }
+
+  /** Forget every recording by one of these nicknames ({ names: [...] }), e.g. a test match or a rude name. */
+  async forgetRuns(request) {
+    let body = null;
+    try {
+      body = await request.json();
+    } catch {
+      body = null;
+    }
+    const names = new Set((Array.isArray(body?.names) ? body.names : []).filter((n) => typeof n === 'string' && n).slice(0, 20));
+    if (!names.size) return json(400, { error: 'names_expected' });
+    const runs = (await this.state.storage.get('runs')) || [];
+    const keep = runs.filter((r) => !names.has(decodeChallenge(r.payload)?.name || ''));
+    if (keep.length !== runs.length) await this.state.storage.put('runs', keep);
+    return json(200, { ok: true, removed: runs.length - keep.length, left: keep.length });
   }
 
   /** A recent recording for a player nobody is around to play (404 when there is none). */

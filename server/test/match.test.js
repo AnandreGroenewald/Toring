@@ -7,7 +7,7 @@ import { MatchRoom, MatchLobby } from '../src/match.js';
 import { createWorker } from '../src/worker.js';
 import { decodeChallenge, encodeChallenge, isRoomCode } from '../../js/core/duel.js';
 import { DUEL } from '../../js/config.js';
-import { ORIGIN, T0 } from './support/harness.js';
+import { ORIGIN, T0, ADMIN, createHarness } from './support/harness.js';
 
 // ---------------------------------------------------------------- fakes
 function fakeSocket() {
@@ -412,6 +412,43 @@ test('lobby: recordings are validated, capped and expire after a week; a ghost i
   assert.equal((await lobby.state.storage.get('runs')).length, 60);
   clk.tick(8 * 864e5);
   assert.equal((await lobby.ghost()).status, 404, 'a week later they are gone');
+});
+
+test('lobby: the owner can list the recordings and forget them by nickname (a test match, a rude name)', async () => {
+  const { lobby } = lobbyWith();
+  const run = (name, end = 'goal') => encodeChallenge({ seed: 'seedabc123', name, run: { samples: [0, 10, 25, 40], endT: 4000, end } });
+  const post = (payloads) => lobby.fetch(new Request('https://lobby/runs', { method: 'POST', body: JSON.stringify({ payloads }) }));
+  await post([run('Anna'), run('Toets A', 'quit')]);
+  await post([run('Bennie'), run('Toets B', 'quit')]);
+  const list = await (await lobby.fetch(new Request('https://lobby/runs/list'))).json();
+  assert.deepEqual(list.runs.map((r) => [r.name, r.best, r.end]), [['Anna', 4, 'goal'], ['Toets A', 4, 'quit'], ['Bennie', 4, 'goal'], ['Toets B', 4, 'quit']]);
+  const forget = (body) => lobby.fetch(new Request('https://lobby/runs/forget', { method: 'POST', body: JSON.stringify(body) }));
+  assert.equal((await forget({})).status, 400);
+  assert.equal((await forget({ names: [] })).status, 400);
+  const res = await (await forget({ names: ['Toets A', 'Toets B', 'Nobody'] })).json();
+  assert.deepEqual(res, { ok: true, removed: 2, left: 2 });
+  const names = (await lobby.state.storage.get('runs')).map((r) => decodeChallenge(r.payload).name);
+  assert.deepEqual(names, ['Anna', 'Bennie']);
+});
+
+test('admin routes: /admin/runs lists and forgets recordings, only with the owner\'s token', async () => {
+  const { lobby } = lobbyWith();
+  await lobby.fetch(new Request('https://lobby/runs', {
+    method: 'POST', body: JSON.stringify({ payloads: [encodeChallenge({ seed: 'seedabc123', name: 'Toets Oud', run: { samples: [0, 100], endT: 1500, end: 'quit' } })] }),
+  }));
+  const h = createHarness({ MATCH_LOBBY: { idFromName: (n) => n, get: () => lobby }, MATCH_ROOM: { idFromName: (n) => n, get: () => ({ fetch: async () => new Response('{}') }) } });
+  assert.equal((await h.admin('GET', '/admin/runs', undefined, null)).status, 401);
+  assert.equal((await h.admin('POST', '/admin/runs', { names: ['Toets Oud'] }, `${ADMIN}x`)).status, 401);
+  const list = await h.admin('GET', '/admin/runs');
+  assert.equal(list.status, 200);
+  assert.deepEqual(list.json.runs.map((r) => r.name), ['Toets Oud']);
+  const res = await h.admin('POST', '/admin/runs', { names: ['Toets Oud'] });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.removed, 1);
+  assert.equal((await h.admin('GET', '/admin/runs')).json.runs.length, 0);
+  assert.equal((await h.admin('DELETE', '/admin/runs')).status, 405);
+  // the public ghost route can't reach the owner's actions
+  assert.equal((await h.request('POST', '/match/runs/forget', { body: { names: ['x'] } })).status, 404);
 });
 
 // ---------------------------------------------------------------- routes

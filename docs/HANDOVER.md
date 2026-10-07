@@ -222,7 +222,13 @@ Later the owner added (decisions are final unless they say otherwise):
     - an earlier try that dropped them loose lost blocks off tilted tops; with cement, 3 sets of 8 visits lost none.
   - The daily visitor schedule is unchanged (golden test). What each monkey and clown does is new.
   - Help text, README, `docs/CHARACTERS-SPEC.md` and the store texts (`app/store/`) describe the new monkey and clown.
-  - Tests: root **228/228** (new `tests/duelchoice.test.js`), server **156 pass + 1 skipped**. Headless at 412×915 and 360×640, zero console errors: the monkey, the clown, the choice bar (tapped and timed out) against Robot Rikus, incoming Mis and Hittegolf.
+  - Tests: root **228/228** (new `tests/duelchoice.test.js`), server **158 pass + 1 skipped**. Headless at 412×915 and 360×640, zero console errors: the monkey, the clown, the choice bar (tapped and timed out) against Robot Rikus, incoming Mis and Hittegolf.
+  - **Live (deployed Worker + the live site):**
+    - a script player and a real browser in a friend room: each chose a punishment for the other (Hittegolf arrived with "Toets Robot stuur Hittegolf!" and forced heat; the browser's Mis reached the script player);
+    - a 1.7.6 game against a 1.7.5-style game: the old game got only the defaults, and the chooser heard what really went.
+  - **Owner tool:** `GET /admin/runs` lists the recordings that lonely players get as opponents, and `POST /admin/runs {names}` forgets them (`server/README.md`). It was used once to remove two test matches that ran over 20 s. Live test matches must end within 20 s, or they are kept.
+  - Fix: the default nickname "Bouer 455" failed the name rules (455 reads as a rude word), so it was refused. `defaultNickname()` now skips any number the rules refuse, and a test checks all 900.
+  - Real players were already in the recordings on 7 Oct 2026 (QueenB, Klippie, Bouer 621).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

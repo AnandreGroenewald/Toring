@@ -290,6 +290,11 @@ test('seeds, nicknames and live reports', () => {
   assert.equal(cleanNickname('kak'), null);
   assert.equal(cleanNickname(7), null);
   assert.match(defaultNickname(() => 0), /^Bouer 100$/);
+  assert.equal(defaultNickname(() => 355.5 / 900), 'Bouer 456', '455 reads as a rude word to the name rules: the next number');
+  for (let n = 100; n < 1000; n++) {
+    const d = defaultNickname(() => (n - 100 + 0.5) / 900);
+    assert.equal(cleanNickname(d), d, `every default name passes the name rules (${d})`);
+  }
   for (let k = 0; k < 20; k++) {
     const d = defaultNickname();
     assert.equal(cleanNickname(d), d, 'the default names pass the name rules');

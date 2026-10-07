@@ -298,6 +298,13 @@ curl -H "Authorization: Bearer $TOKEN" $API/admin/payments
 curl -H "Authorization: Bearer $TOKEN" "$API/admin/events?limit=50"
 ```
 
+**Uitdagersreeks recordings** (what lonely players get as an opponent). List them, or forget every recording by some nicknames (a test match, a rude name):
+
+```sh
+curl -H "Authorization: Bearer $TOKEN" $API/admin/runs
+curl -X POST $API/admin/runs -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"names":["Toets A"]}'
+```
+
 **Live server logs:** `npx wrangler tail`. Logs never contain e-mail addresses or card details.
 
 **Backups:** `npx wrangler d1 export stapel-borge --remote --output=borge-backup.sql`. The file contains sponsors' contact details, so store it safely.
@@ -408,6 +415,8 @@ All endpoints answer JSON. Errors look like `{ "error": "<code>", "field"?: "<fi
 | `GET /admin/payments?limit=` | admin | `{ payments: [{ reference, sponsor_id, amount, currency, paid_at, source, sponsor_name, sponsor_tier }] }` |
 | `GET /admin/stats?from=&to=` | admin | `YYYY-MM-DD`, default the last 30 days, at most 400 days. `{ from, to, totals: { gamesDaily, gamesPractice, games, blockShows, billboardGames, menuViews }, days: [{ dateKey, …same }], sponsors: [{ id, name, tier, blockShows, billboardGames, blockDays, billboardDays }] }`. `400 invalid_range` for a bad period. |
 | `GET /admin/events?limit=` | admin | `{ events: [{ id, type, received_at, handled, sponsor_id, note, payload }] }` |
+| `GET /admin/runs` | admin | The Uitdagersreeks recordings kept for lonely players: `{ runs: [{ name, seed, best, end, at }] }` |
+| `POST /admin/runs` | admin | `{ names: [...] }` (at most 20): forget every recording by these nicknames. `{ ok, removed, left }` |
 
 Dates are Unix milliseconds. `paid_until` in admin requests may also be `"YYYY-MM-DD"`, meaning the end of that day in South African time.
 

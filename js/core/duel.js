@@ -214,8 +214,16 @@ export function cleanNickname(raw) {
   return c.ok ? c.value : null;
 }
 
-/** The default nickname: "Bouer 123". */
-export const defaultNickname = (rand = Math.random) => `Bouer ${100 + Math.floor(rand() * 900)}`;
+/** The default nickname: "Bouer 123". A number the name rules refuse (455 reads as a rude word) gives way to the next. */
+export function defaultNickname(rand = Math.random) {
+  let n = 100 + Math.floor(rand() * 900);
+  for (let k = 0; k < 900; k++) {
+    const name = `Bouer ${n}`;
+    if (cleanNickname(name) === name) return name;
+    n = n >= 999 ? 100 : n + 1;
+  }
+  return 'Bouer';
+}
 
 // ---------------------------------------------------------------------------------- challenge links
 // "?teen=<payload>": a whole run in the link, so a friend can play against it later without any

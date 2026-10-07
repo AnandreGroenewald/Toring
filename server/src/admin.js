@@ -178,3 +178,22 @@ export async function listEvents(url, ctx) {
   });
   return json(200, { events });
 }
+
+/**
+ * GET /admin/runs: the Uitdagersreeks recordings the lobby keeps for lonely players.
+ * POST /admin/runs { names: [...] }: forget every recording by these nicknames.
+ */
+export async function listRuns(ctx) {
+  if (!ctx.lobby) throw new HttpError(503, 'not_configured');
+  const res = await ctx.lobby().fetch(new Request('https://lobby/runs/list'));
+  return json(res.status, await res.json());
+}
+
+export async function forgetRuns(request, ctx) {
+  if (!ctx.lobby) throw new HttpError(503, 'not_configured');
+  const body = await readJsonObject(request);
+  const res = await ctx.lobby().fetch(new Request('https://lobby/runs/forget', { method: 'POST', body: JSON.stringify({ names: body.names }) }));
+  const out = await res.json();
+  if (res.ok) ctx.log('info', 'admin_forget_runs', { removed: out.removed });
+  return json(res.status, out);
+}
