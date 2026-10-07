@@ -183,7 +183,7 @@ Later the owner added (decisions are final unless they say otherwise):
   - **Deployed:**
     - the Worker `stapel-borge` at `https://stapel-borge.bonkers-bunch-online.workers.dev`, in the Lekker Local account (`account_id` b67acf87… pinned in `wrangler.toml`; free plan);
     - Bonkers Bunch's online Worker lives in the same account, and they share the free daily limits;
-    - the D1 database `stapel-borge` (WEUR), with `schema.sql` applied;
+    - the D1 database `stapel-borge` (WEUR), with `schema.sql` applied; its id stays out of the repo (`~/.config/stapel/cloudflare.env`), so deploy with `server/wr.sh deploy`;
     - the Durable Objects for matches, created on the first deploy;
     - secrets `ADMIN_TOKEN` (also in the Mac's Keychain as "Stapel admin token", for `admin.html`) and `IP_HASH_SALT`. There is no Paystack key, so sales stay inactive.
   - **Game:**

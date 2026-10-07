@@ -19,8 +19,9 @@ crons = ["17 3 * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "stapel-borge"
-# Paste the database_id printed by `npx wrangler d1 create stapel-borge`:
-database_id = "1ad6d34e-515e-49f3-b76b-995a5138f388"
+# The real id stays out of the repo: ./wr.sh puts it in from ~/.config/stapel/cloudflare.env
+# (D1_DATABASE_ID=...). Or paste the id printed by `npx wrangler d1 create stapel-borge` locally:
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
 
 # Uitdagersreeks (live head-to-head matches): two Durable Objects. SQLite-backed classes are
 # included in the Workers Free plan (100 000 requests and 100 000 storage writes a day).

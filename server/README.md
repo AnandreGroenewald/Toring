@@ -18,7 +18,7 @@ Everything runs on free tiers. The server is a **Cloudflare Worker** with a **D1
 
 You need about an hour. Do everything in **test mode** first; nothing real is charged there.
 
-> **Live since 7 Oct 2026:** `https://stapel-borge.bonkers-bunch-online.workers.dev`, in the owner's **Lekker Local** Cloudflare account (free plan; `account_id` pinned in `wrangler.toml`; Bonkers Bunch's online Worker shares the account). D1, the match Durable Objects, `ADMIN_TOKEN` (in the owner's Mac Keychain as "Stapel admin token") and `IP_HASH_SALT` are set up. The game uses it through `MATCH_API_URL` (live matches and the anonymous counts). Sponsorship sales are **not** on. The owner wants **PayFast** instead of Paystack, so the payment code below still has to be switched before sections 2, 4 and 6–7 apply.
+> **Live since 7 Oct 2026:** `https://stapel-borge.bonkers-bunch-online.workers.dev`, in the owner's **Lekker Local** Cloudflare account (free plan; `account_id` pinned in `wrangler.toml`; Bonkers Bunch's online Worker shares the account). D1, the match Durable Objects, `ADMIN_TOKEN` (in the owner's Mac Keychain as "Stapel admin token") and `IP_HASH_SALT` are set up. The real D1 `database_id` stays out of the repo (the security test refuses a committed one): it lives in `~/.config/stapel/cloudflare.env` (`D1_DATABASE_ID=...`), and `./wr.sh deploy` (or `./wr.sh d1 execute …`) runs wrangler with it filled in. The game uses it through `MATCH_API_URL` (live matches and the anonymous counts). Sponsorship sales are **not** on. The owner wants **PayFast** instead of Paystack, so the payment code below still has to be switched before sections 2, 4 and 6–7 apply.
 
 ---
 
