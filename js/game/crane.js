@@ -210,6 +210,18 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+const HOT_TINT = 0xff6a2a;   // heat wave: the crane glows orange-red
+
+/** a..b by t (0..1), per colour channel. */
+function mixColor(a, b, t) {
+  const k = t < 0 ? 0 : t > 1 ? 1 : t;
+  const ch = (s) => {
+    const x = (a >> s) & 255;
+    return Math.round(x + (((b >> s) & 255) - x) * k);
+  };
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}
+
 export class Crane {
   /** `top`: screen offset (safe-area inset) applied to the whole crane, so the drop height never changes. */
   constructor(scene, { top = 0 } = {}) {
@@ -339,7 +351,7 @@ export class Crane {
   }
 
   /** `amplitude` is a target: the swing eases towards it. */
-  update(dtMs, { omega = this.omega, amplitude = CRANE.amplitude, windAccel = 0 } = {}) {
+  update(dtMs, { omega = this.omega, amplitude = CRANE.amplitude, windAccel = 0, heat = 0 } = {}) {
     if (this.destroyed) return;
     const dt = clamp(dtMs, 0, 100) / 1000;
     this.omega = omega;
@@ -377,6 +389,19 @@ export class Crane {
     }
     if (this.acc < 0) this.acc = 0;
     this._layout();
+    this._glow(heat);
+  }
+
+  /** Heat wave (heat 0..1, eased in and out with the weather): the steel glows hot, pulsing. */
+  _glow(heat) {
+    const hot = heat > 0.01;
+    if (!hot && !this._hot) return;
+    this._hot = hot;
+    const tint = hot ? mixColor(0xffffff, HOT_TINT, heat * (0.75 + 0.25 * Math.sin(this.time * 6))) : 0;
+    for (const p of [this.jib, this.trolley, this.hook, ...this.wheels]) {
+      if (hot) p.setTint(tint);
+      else p.clearTint();
+    }
   }
 
   _layout() {

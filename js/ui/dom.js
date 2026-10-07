@@ -295,6 +295,8 @@ export function createUI(bus) {
         if (guard()) bus.emit('ui:resume');
       } else if (st.screen === 'game') {
         if (guard()) bus.emit('ui:pause');
+      } else if (st.screen === 'results') {
+        if (guard()) bus.emit('ui:home');
       }
     } else if ((key === 'p' || key === 'P') && !e.repeat && !st.modal) {
       if (st.screen === 'game' && guard()) bus.emit('ui:pause');
@@ -1079,7 +1081,16 @@ export function createUI(bus) {
           typeof navigator !== 'undefined' && typeof navigator.share === 'function'
             ? button('btn-purple btn-mini', [icon('share'), h('span', { text: S.share })], () => doShare(shareText, 'native'), { nav: false })
             : null,
-          button('btn-blue btn-mini', [icon('copy'), h('span', { text: S.copy })], () => doShare(shareText, 'copy'), { nav: false })));
+          button('btn-blue btn-mini', [icon('copy'), h('span', { text: S.copy })], () => doShare(shareText, 'copy'), { nav: false })),
+      // ✕ in the corner: back to the start screen (instead of a Tuis button under the card)
+      h('button', {
+        type: 'button', class: 'icon-btn close res-close', 'aria-label': S.close, title: S.close,
+        onclick: () => {
+          if (!guard()) return;
+          audio.play('click');
+          bus.emit('ui:home');
+        },
+      }, icon('close')));
 
     const wrap = h('div', { class: 'res-wrap' }, head, card);
     if (daily) {
@@ -1102,8 +1113,7 @@ export function createUI(bus) {
     wrap.append(h('div', { class: 'btn-row' },
       duel
         ? button('btn-purple btn-duel-again', h('span', { text: S.duelAgain }), () => bus.emit('ui:duel-again'))
-        : button('btn-teal', [icon('again'), h('span', { text: daily ? S.practice : S.practiceAgain })], () => bus.emit('ui:play-practice')),
-      button('btn-white', [icon('home'), h('span', { text: S.home })], () => bus.emit('ui:home'))));
+        : button('btn-teal', [icon('again'), h('span', { text: daily ? S.practice : S.practiceAgain })], () => bus.emit('ui:play-practice'))));
 
     // peek: hide the card to look at (and screenshot) the whole tower
     const peek = h('button', {

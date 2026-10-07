@@ -233,7 +233,9 @@ export class Weather {
   get meanWindAccel() -> number  // the steady part (for the landing ghost prediction)
   get frictionMul() -> number    // rain => WEATHER_TUNING.rainFriction else 1
   get waterSpeedMul() -> number  // rain => rainWaterMul else 1
-  get craneSpeedMul() -> number  // heat => heatCraneMul else 1
+  get craneSpeedMul() -> number  // 1 + (heatCraneMul - 1) × heat level: eased in and out with the heat
+  get heatLevel() -> 0..1        // the heat's fade level (the crane glows with it)
+  rainSkid() -> { dir, px }|null // rain: which way and how far a landing that isn't a Perfek skids
   get fogAlpha() -> 0..1         // > 0.5 means hide the landing ghost
   get perfectMul() -> number     // rainbow => rainbowScoreMul else 1
   get blocksLeft() -> int|null   // remaining blocks in active event (for HUD chip)
@@ -245,11 +247,11 @@ export class Weather {
 Effects per type:
 - **wind**: steady accel = dir × windAccel × strength; wind streak particles (screen space, short white lines) drifting with the wind; occasional `audio.play('wind')` gusts every ~2 s.
 - **gust** (Warrelwind): like wind but the direction flips every `gustFlipMs` with strength × `gustMul` and random variation; more streaks; also adds sway to crane via windAccel.
-- **rain**: rain particles (screen space, ~80 alive, slanted by wind), `frictionMul` 0.3 → GameScene applies to the falling block on drop and to dynamic blocks while raining; `waterSpeedMul` 2; skyDark 0.25.
+- **rain**: rain particles (screen space, ~80 alive, slanted by wind), `frictionMul` 0.3 → GameScene applies to the falling block on drop and to dynamic blocks while raining; a landing that isn't a Perfek skids with the rain (`dir`), up to `rainSkidPx` × strength over `rainSkidMs`, slowing down, with a spray of drops, but stops before its middle passes the edge of the block below (the Goed ease to the middle is skipped in the rain; a Perfek still snaps); the banner says which way blocks slide; `waterSpeedMul` 2; skyDark 0.25.
 - **storm** (Donderstorm): skyDark 0.55, a little rain; lightning strike at event start + one more ~half-way (by blocks or ~6 s later). Each strike: dark cloud marker + `zap` crackle for `stormWarnMs` above the target column, then a jagged bolt (screen-space Graphics, redrawn only during the strike ~250 ms) from the top of screen to `topBlock`, white screen flash (effects.flash), `thunder`, haptics.heavy(), and an impulse on topBlock (if dynamic): sideways velocity ≈ dir × (2..4) px/step × strength, upward −1.5, angular ±0.04. If the top block is frozen, strike the highest dynamic block instead; if none, strike harmlessly (still show bolt).
 - **hail**: spawn `hailCount × strength` small circle bodies (r 6–8, density 0.004, restitution 0.45, friction 0.1, label 'hail', collisionFilter group −7 so they don't collide with each other) at random x above the screen top over the event's first ~5 s; white-ish texture; `audio.play('hail')` on their collisions (throttled). Remove when below world y 200 or after 6 s.
 - **fog**: screen-space fog overlay (soft white bands + slowly drifting puffs) with fogAlpha ramping to ~0.8 around the drop zone; the ghost is hidden.
-- **heat**: craneSpeedMul 1.3, warm translucent orange overlay with gentle alpha pulse (heat shimmer).
+- **heat**: craneSpeedMul up to 1.5, eased in and out with the heat level (~600 ms); the crane's steel (jib, trolley, wheels, hook) glows orange-red, pulsing; warm translucent orange overlay with gentle alpha pulse (heat shimmer).
 - **rainbow**: perfectMul 2, registry 'rainbow' → 1 (BgScene draws an arc), bus.emit('weather:rainbow') at start (GameScene lowers the water by WATER.rainbowDropPx and shows S.waterRecede).
 Fade overlays in/out over ~600 ms. `destroy()` removes everything (called on scene shutdown).
 
@@ -262,7 +264,7 @@ export class Crane {
   hasBlock() -> bool
   getBlockPose() -> { x, y, angle, vx, vy }   // screen-space centroid position (px), angle (rad), velocity (px/s)
   release() -> pose                  // same as getBlockPose(), then hides the hanging block; plays a small trolley "bounce"
-  update(dtMs, { omega, amplitude = CRANE.amplitude, windAccel = 0 })
+  update(dtMs, { omega, amplitude = CRANE.amplitude, windAccel = 0, heat = 0 })   // heat 0..1: the steel glows hot
      // trolley x = GAME_W/2 + amplitude * sin(phase); phase += omega*dt. Rope pendulum angle θ driven by trolley acceleration & wind:
      // θ'' = -(g/L) sinθ - (a_trolley/L) cosθ + windAccel/L - damping θ'   (g ≈ 1000*PHYSICS.gravityY px/s², L = rope+half block)
      // clamp |θ| <= 0.35 rad. Block hangs at trolley + rope along θ, rotated by θ.

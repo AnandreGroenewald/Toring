@@ -312,10 +312,17 @@ export class Weather {
   get meanWindAccel() { return this._windMean; }
   get frictionMul() { return this._is('rain') ? WT.rainFriction : 1; }
   get waterSpeedMul() { return this._is('rain') ? WT.rainWaterMul : 1; }
-  get craneSpeedMul() { return this._is('heat') ? WT.heatCraneMul : 1; }
+  get craneSpeedMul() { return 1 + (WT.heatCraneMul - 1) * this._lvl.heat; }
+  get heatLevel() { return this._lvl.heat; }
   get fogAlpha() { return FOG_MAX * this._lvl.fog; }
   get perfectMul() { return this._is('rainbow') ? WT.rainbowScoreMul : 1; }
   get blocksLeft() { return this._active ? Math.max(0, this._active.end - this._i) : null; }
+
+  /** Rain: which way a landing block skids (with the rain) and how far, or null when it isn't raining. */
+  rainSkid() {
+    if (!this._is('rain')) return null;
+    return { dir: this._active.dir || 1, px: WT.rainSkidPx * (this._active.strength || 1) };
+  }
 
   isHail(body) {
     if (!body) return false;

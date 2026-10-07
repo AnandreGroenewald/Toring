@@ -1048,6 +1048,19 @@ svg.ic {
 .res-sub { margin-top: calc(6 * var(--u)); font-size: calc(27 * var(--u)); font-weight: 800; opacity: 0.95; text-shadow: 0 calc(2 * var(--u)) 0 rgba(10, 30, 60, 0.4); }
 
 .res-card { padding-top: calc(26 * var(--u)); }
+/* ✕ in the results card's corner: back to the start screen */
+.res-card .res-close {
+  position: absolute;
+  top: calc(20 * var(--u));
+  right: calc(20 * var(--u));
+  width: calc(72 * var(--u));
+  height: calc(72 * var(--u));
+  min-width: 44px;
+  min-height: 44px;
+  font-size: calc(32 * var(--u));
+  background: var(--panel);
+  box-shadow: 0 calc(5 * var(--u)) 0 #d5e2f2;
+}
 
 .res-card.has-record { margin-top: calc(24 * var(--u)); }
 .record {

@@ -3,7 +3,7 @@
 // camera follow, landing ghost, wobble, idle attract mode and the game-over reveal.
 import {
   GAME_W, LAYOUT, PX_PER_M, PHYSICS, CRANE, SCORING, LIVES, FREEZE_DEPTH, WATER, DEPTH, FONT, COACH,
-  VISITOR, VISITOR_TYPES, RATING, DUEL,
+  VISITOR, VISITOR_TYPES, RATING, DUEL, WEATHER_TUNING,
 } from '../config.js';
 import { bus } from '../core/bus.js';
 import { S, VISITOR_INFO } from '../core/strings.js';
@@ -50,6 +50,8 @@ const SET_MAX_SPIN = 0.01;       // ...and turns slower than this (rad/step)
 const LOCK_MAX_SPEED = 0.35;     // a Perfek sets the blocks under it if they are at rest (px/step)...
 const LOCK_MAX_SPIN = 0.006;     // ...(rad/step)
 const FOOT_MARGIN = 4;           // px: a snapped block must rest on its support on both sides of its centre
+const SKID_SLOW = 0.9;           // rain skid: each step slides this fraction of the step before...
+const SKID_EDGE = 8;             // ...and it stops this far before its middle passes the edge below it (px)
 const CALM_SPEED = 1.2;          // px/step: the next block waits while a tower block moves faster than this
 const PRUNE_KEEP = 12;           // the newest cement blocks always keep their bodies
 const MAX_TAP_LAG_MS = 1000 / 24; // taps are released where the block was at that moment, up to this far from the frame
@@ -95,10 +97,12 @@ function calmWeather() {
     frictionMul: 1,
     waterSpeedMul: 1,
     craneSpeedMul: 1,
+    heatLevel: 0,
     fogAlpha: 0,
     perfectMul: 1,
     blocksLeft: null,
     setBlockIndex() { return null; },
+    rainSkid() { return null; },
     beforeStep() {},
     update() {},
     isHail() { return false; },
@@ -912,6 +916,7 @@ export class GameScene extends Phaser.Scene {
     opts.omega = Math.min(CRANE.omegaMax, CRANE.omega0 + CRANE.omegaPerBlock * this.i) * w.craneSpeedMul;
     opts.amplitude = this.amplitudeFor(this.i);
     opts.windAccel = w.windAccel;
+    opts.heat = w.heatLevel;
     this.crane.update(dt, opts);
 
     // 2. Fixed-step physics; everything that can change the outcome runs per step
@@ -1039,6 +1044,7 @@ export class GameScene extends Phaser.Scene {
       const body = b.body;
       M.Sleeping.set(body, false);
       M.Body.setPosition(body, { x: body.position.x + e.dx, y: body.position.y });
+      if (e.mul) e.dx *= e.mul;
       e.left--;
     }
   }
@@ -1142,17 +1148,22 @@ export class GameScene extends Phaser.Scene {
       const gTol = Math.min(SCORING.goodTolPx, SCORING.goodTolFrac * t.w);
       // A block that can't stand centred on this support (an arch over a single cell) is never "good".
       const fits = restsOn(f.geom, t.face);
+      // in the rain anything but a Perfek skids with the rain instead of easing to the middle
+      const skid = this.weather.rainSkid();
       if (adx <= pTol && t.flat && fits) {
         this.snapPerfect(f, t);
         rating = 'P';
       } else if (adx <= gTol && fits) {
         rating = 'G';
-        if (SCORING.goodEase > 0) {
+        if (skid) {
+          this.skidBlock(f, skid, t.x, t.w);
+        } else if (SCORING.goodEase > 0) {
           const n = Math.max(1, Math.round(SCORING.goodEaseMs / FIXED));
           this.eases.push({ block: f, dx: (dx * SCORING.goodEase) / n, left: n });
         }
       } else {
         rating = 'S';
+        if (skid) this.skidBlock(f, skid, t.x, t.w);
       }
     } else if (!topHit) {
       f.pendingRate = true;   // hit a side: rated 'S' once it settles somewhere (or 'X' if it falls)
@@ -1240,6 +1251,23 @@ export class GameScene extends Phaser.Scene {
     M.Body.setVelocity(f.body, { x: 0, y: 0 });
     M.Body.setAngularVelocity(f.body, 0);
     f.sync();
+  }
+
+  /**
+   * Rain: the block slides up to `px` with the rain (dir), quick at first, then slower, spraying water.
+   * It stops before its middle passes the edge of what it landed on (support middle supX, width supW):
+   * the rain makes a tower crooked, it never throws a good landing off by itself.
+   */
+  skidBlock(f, { dir, px }, supX, supW) {
+    const lim = Math.max(0, supW / 2 - SKID_EDGE);
+    const off = f.centerX - supX;
+    const to = Math.max(-lim, Math.min(lim, off + dir * px));
+    const d = (to - off) * dir;   // how far it can still go with the rain
+    if (d < 1) return;
+    const n = Math.max(1, Math.round(WEATHER_TUNING.rainSkidMs / FIXED));
+    const r = SKID_SLOW;
+    this.eases.push({ block: f, dx: (dir * d * (1 - r)) / (1 - r ** n), left: n, mul: r });
+    this.effects.spray(f.centerX + (dir * (f.right - f.left)) / 2, f.bottom);
   }
 
   applyRating(block, r) {

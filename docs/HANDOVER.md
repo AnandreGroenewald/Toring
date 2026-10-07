@@ -150,6 +150,21 @@ Later the owner added (decisions are final unless they say otherwise):
   - heights round to 0,1 m but never up onto a mark or the goal (`heightDm`: 9,97 m stays 9,9).
   - Tests: root **223/223** (new: the rounding, and a recorded run played back directly and through a link: marks within half a second, the goal on time, no head start on average; this test fails on the old playback), server **152 pass + 1 skipped** (a room records the best height while a block is in the air).
   - Headless, **zero console errors**: a normal visit (1.7.1 precached, 49 files), a match against Robot Rikus at 360×640, its challenge link played at 412×915 (the link screen's 50,4 m equals the sender's results), and quitting with a block in the air (results 12,6 m, recording 12,6 m).
+- **Results ✕, rain and heat (version `1.7.2`)**, at the owner's request after playing 1.7.1 ("way too busy, please make a cross that exit that menu"; "the rain and the sunny doesn't seem like it's doing anything"). The owner chose to keep all three share buttons, and "sunny" meant ☀️ Hittegolf.
+  - **Results:** a ✕ in the card's top corner goes to the start screen (Escape too). The Tuis button under the card is gone, so one button stays there (Oefen weer / Oefen / Nog ’n wedstryd). The share row (WhatsApp, Deel, Kopieer) is unchanged.
+  - **Reën:** before, rain only lowered friction, which a flat landing never feels. Now a landing that isn't a Perfek skids with the rain: up to 26 px × strength over 0,45 s, slowing down, with a spray of drops. It stops before its middle passes the edge of the block below, so rain makes a tower crooked but never throws a Goed landing off by itself. In the rain a Goed landing no longer eases to the middle; a Perfek still snaps. The banner says which way ("Glibberig! Blokke gly na regs →"). The flood still rises twice as fast.
+  - **Hittegolf:** the crane races at 1,5× (was 1,3×), eased in and out over 0,6 s with the heat, and its steel glows orange-red, pulsing.
+  - **Code:** `WEATHER_TUNING.rainSkidPx` / `rainSkidMs` / `heatCraneMul` (config.js); `Weather.rainSkid()`, `heatLevel`, `craneSpeedMul` (weather.js); `GameScene.skidBlock` (eases can now slow down: `mul`); `Crane._glow`; `Effects.spray`; the rain banner text (strings.js); the results ✕ (dom.js, `.res-close` in style.css). `docs/SPEC.md` updated.
+  - Today's daily plays a little differently for anyone who played it before this update (only in rain and heat); everyone after the update gets the same tower.
+  - Tests: root **223/223**, server **152 pass + 1 skipped**.
+  - Headless, **zero console errors**:
+    - forced rain at 412×915 and 360×640: Goed landings slid 22–33 px with the rain, Perfeks stayed put, and skews past the edge fell as before;
+    - dry, for comparison: no skid, and the Goed ease as before;
+    - forced heat: the crane went from 1× to 1,5× over 0,6 s while glowing, and back to normal speed and colour afterwards;
+    - the results ✕ and Escape at both sizes;
+    - a daily (74,3 m) and a match against Robot Rikus;
+    - the daily determinism run: identical, including a rain skid;
+    - a normal visit (1.7.2 precached, 49 files).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

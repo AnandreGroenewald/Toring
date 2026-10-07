@@ -582,6 +582,11 @@ export class Effects {
     }, () => r.setVisible(false));
   }
 
+  spray(x, y, n = 6) {
+    if (this.destroyed) return;
+    this.drops.explode(n, x, y);
+  }
+
   flash(color = 0xffffff, alpha = 0.35, ms = 160) {
     if (this.destroyed) return;
     const cam = this.scene.cameras.main;

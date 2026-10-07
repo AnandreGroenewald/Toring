@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.7.1';
+export const VERSION = '1.7.2';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -161,8 +161,10 @@ export const WEATHER_TUNING = {
   gustFlipMs: 1200,
   gustMul: 1.6,
   rainFriction: 0.3,     // friction multiplier while it rains (slippery)
+  rainSkidPx: 26,        // rain: a landing that isn't a Perfek skids this far with the rain (x strength)
+  rainSkidMs: 450,
   rainWaterMul: 2,
-  heatCraneMul: 1.3,
+  heatCraneMul: 1.5,     // heat wave: the crane races (eased in and out with the heat)
   rainbowScoreMul: 2,    // Perfek bonus multiplier during a rainbow
   stormWarnMs: 2000,
   hailCount: 10,         // hailstones per hail event at strength 1
