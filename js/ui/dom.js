@@ -160,7 +160,8 @@ export function createUI(bus) {
   const probe = h('div', {
     'aria-hidden': 'true',
     style: 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;'
-      + 'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);',
+      + 'padding:var(--safe-area-inset-top,env(safe-area-inset-top,0px)) var(--safe-area-inset-right,env(safe-area-inset-right,0px)) '
+      + 'var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)) var(--safe-area-inset-left,env(safe-area-inset-left,0px));',
   });
   doc.body.append(probe);
 
@@ -194,6 +195,10 @@ export function createUI(bus) {
   root.addEventListener('keydown', shieldKeys);
   root.addEventListener('keyup', shieldKeys);
   window.addEventListener('keydown', onKey);
+  // the Android app's back button (app/shim.js): handled here unless we're on the start screen
+  window.addEventListener('stapel:back', (e) => {
+    if (goBack()) e.preventDefault();
+  });
   window.addEventListener('resize', () => {
     if (!st.externalLayout) fallbackLayout();
   });
@@ -285,19 +290,33 @@ export function createUI(bus) {
     }, content);
   }
 
+  /**
+   * Escape, and the Android app's back button: one step back. Returns false on the start
+   * screen with nothing open (the app then closes).
+   */
+  function goBack() {
+    if (st.modal) {
+      closeModal();
+    } else if (st.screen === 'pause') {
+      if (guard()) bus.emit('ui:resume');
+    } else if (st.screen === 'game') {
+      if (guard()) bus.emit('ui:pause');
+    } else if (st.screen === 'results' || st.screen === 'duel') {
+      if (guard()) bus.emit('ui:home');
+    } else if (st.screen === 'duelwait') {
+      if (guard()) bus.emit('ui:duel-cancel');
+    } else {
+      return false;
+    }
+    return true;
+  }
+
   function onKey(e) {
     st.keyboard = true;
     if (e.defaultPrevented) return;
     const key = e.key;
     if (key === 'Escape' || key === 'Esc') {
-      if (st.modal) closeModal();
-      else if (st.screen === 'pause') {
-        if (guard()) bus.emit('ui:resume');
-      } else if (st.screen === 'game') {
-        if (guard()) bus.emit('ui:pause');
-      } else if (st.screen === 'results') {
-        if (guard()) bus.emit('ui:home');
-      }
+      goBack();
     } else if ((key === 'p' || key === 'P') && !e.repeat && !st.modal) {
       if (st.screen === 'game' && guard()) bus.emit('ui:pause');
       else if (st.screen === 'pause' && guard()) bus.emit('ui:resume');

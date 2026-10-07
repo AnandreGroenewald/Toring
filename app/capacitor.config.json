@@ -1,0 +1,15 @@
+{
+  "appId": "za.co.lekkerlocal.stapel",
+  "appName": "Stapel",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#8fd3f4"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "native",
+      "initialViewportFitValueHint": "cover",
+      "style": "LIGHT"
+    }
+  }
+}

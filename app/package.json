@@ -1,0 +1,21 @@
+{
+  "name": "stapel-app",
+  "private": true,
+  "type": "module",
+  "description": "Stapel as an Android app (Capacitor): the web game from the repo root, packed for Google Play.",
+  "scripts": {
+    "www": "node build-www.mjs",
+    "sync": "node build-www.mjs && npx cap sync android",
+    "bundle": "node build-www.mjs && npx cap sync android && cd android && ./gradlew bundleRelease assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/share": "8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3",
+    "playwright-core": "1.63.0"
+  }
+}

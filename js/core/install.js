@@ -33,6 +33,7 @@ export function onInstallChange(fn) {
 
 export function isStandalone(g = globalThis) {
   try {
+    if (g.Capacitor?.isNativePlatform?.()) return true;   // the Android app is installed by definition
     if (g.navigator?.standalone === true) return true;
     return !!g.matchMedia?.('(display-mode: standalone)').matches;
   } catch {

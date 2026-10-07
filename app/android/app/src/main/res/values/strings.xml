@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Stapel</string>
+    <string name="title_activity_main">Stapel</string>
+    <string name="package_name">za.co.lekkerlocal.stapel</string>
+    <string name="custom_url_scheme">za.co.lekkerlocal.stapel</string>
+</resources>

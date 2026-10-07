@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launch screen before Android 12: the game's sky, with the tower from the app icon. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient android:angle="270" android:startColor="#5ec1f5" android:centerColor="#8fd3f4" android:endColor="#c8ecfb" />
+        </shape>
+    </item>
+    <item android:width="216dp" android:height="216dp" android:gravity="center" android:drawable="@drawable/splash_logo" />
+</layer-list>

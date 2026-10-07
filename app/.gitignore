@@ -1,0 +1,5 @@
+node_modules/
+www/
+# generated (tools/*.mjs) or kept on the Mac: store pictures, the built game copy
+store/*.png
+store/screenshots/

@@ -165,6 +165,20 @@ Later the owner added (decisions are final unless they say otherwise):
     - a daily (74,3 m) and a match against Robot Rikus;
     - the daily determinism run: identical, including a rain skid;
     - a normal visit (1.7.2 precached, 49 files).
+- **Android app for Google Play (version `1.7.3`)**, at the owner's request ("I have created the developer account for the apps!! can you please create me the app"). The owner chose Stapel first, Google Play (organisation account "Lekker Local"), and building on the Mac.
+  - **`app/`**, Capacitor 8.5.3: app ID `za.co.lekkerlocal.stapel` (fixed once uploaded), target and compile SDK 36 (Google Play's rule for new apps from 31 Aug 2026), minSdk 24, portrait on phones. Permissions: internet and vibrate. The version follows `js/config.js` (1.7.3 is versionCode 10703).
+  - **Built and signed:** `.aab` 3,7 MB, plus a test `.apk`. The upload key is `~/Documents/Stapel signing/stapel-upload.jks`, with its password in the Mac's Keychain ("Stapel upload key") and a README beside the key. Java 21 and the Android SDK are in the owner's user folders.
+  - **The web game is app-aware**, harmlessly so on the website:
+    - `IN_APP`: no service worker, and share links use the website address;
+    - the app counts as installed;
+    - Escape and Android's back button share `goBack()`, now also on the Uitdagersreeks screens;
+    - the safe-area probes also read Capacitor's `--safe-area-inset-*`.
+    - `app/shim.js` adds Android's share sheet behind Deel, the back button (closes the app on the start screen), and the sponsor page opening on the website.
+  - **Store material** (`app/tools/*.mjs`, all drawn by headless Chrome): adaptive launcher icons split from `icons/icon.svg`, a sky-blue launch screen, the 512 px Play icon, the 1024 × 500 feature graphic, five 1080 × 1920 screenshots, and the store texts in Afrikaans and English (`app/store/listing-*.txt`).
+  - **For the owner:** `~/Desktop/Stapel app (Google Play)/` holds the `.aab`, the test `.apk`, the store pictures and texts, and "Google Play steps.txt", with every Play Console answer.
+    - Suggested answers: contains ads (the sportscard.co.za house advert), data safety "no data collected" (true while the Worker is off), target audience 13+ (the owner's call).
+  - Tests: root **223/223**. The store screenshots played the app's own files with zero errors.
+  - **Not checked here:** the app on a real phone or the Android emulator (none on the Mac). That covers WebView rendering, the share sheet, the back button and edge-to-edge insets. The owner's internal-testing install is the first real run.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

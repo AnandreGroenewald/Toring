@@ -33,7 +33,9 @@ import { HudScene } from './scenes/HudScene.js';
 // ---------------------------------------------------------------------------
 const params = new URLSearchParams(location.search);
 const DEBUG = params.get('debug') === '1';
-const NO_SW = params.has('nosw') || DEBUG;
+// The Android app (Capacitor, app/): the game files ship inside it, so no service worker there.
+const IN_APP = !!globalThis.Capacitor?.isNativePlatform?.();
+const NO_SW = params.has('nosw') || DEBUG || IN_APP;
 const DEBUG_DATE = DEBUG ? parseDebugDate(location.search) : null;
 const SEED_OVERRIDE = DEBUG ? params.get('seed') : null;
 const AUTO = DEBUG && params.has('auto') ? Math.min(1, Math.max(0.0001, Number(params.get('auto')) || 0)) : 0;
@@ -72,7 +74,8 @@ const TAB_ID = (() => {
 })();
 
 function siteUrl() {
-  if (location.protocol === 'file:') return SITE_URL_FALLBACK;
+  // links shared from a file:// copy or the app (https://localhost) point at the website
+  if (location.protocol === 'file:' || IN_APP) return SITE_URL_FALLBACK;
   return location.origin + location.pathname.replace(/index\.html$/, '');
 }
 
@@ -891,7 +894,9 @@ if (landscapeMq) {
 const insetProbe = document.createElement('div');
 insetProbe.setAttribute('aria-hidden', 'true');
 insetProbe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;'
-  + 'padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);';
+  // (the app's SystemBars plugin sets --safe-area-inset-*: older Android WebViews get env() wrong)
+  + 'padding-top:var(--safe-area-inset-top,env(safe-area-inset-top,0px));'
+  + 'padding-bottom:var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px));';
 document.body.appendChild(insetProbe);
 
 let refitGuard = 0;

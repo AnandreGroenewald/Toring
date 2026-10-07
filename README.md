@@ -45,6 +45,10 @@ The game is a static site with `index.html` at the repository root. There's no b
 
 All URLs are relative, so it also works from any other static host or sub-path. It installs as an app (PWA) and plays offline after the first visit.
 
+## Android app (Google Play)
+
+`app/` packs the same game as an Android app with Capacitor (app ID `za.co.lekkerlocal.stapel`, published by the "Lekker Local" developer account). The game files ship inside the app, so it plays offline. Its version follows `VERSION` in `js/config.js`. `cd app && npm run bundle` builds the signed `.aab` for Google Play. `app/README.md` covers building, the upload key and the store pictures.
+
 ## Borge / Sponsorship
 
 Stapel stays free and is funded by monthly sponsorships, sold on `adverteer.html`:
@@ -81,6 +85,7 @@ js/duel.js            Uitdagersreeks on the device: finding an opponent, the mat
 js/ui/dom.js          menu, how-to, stats, pause and results overlays
 sw.js, manifest.webmanifest, icons/   offline support and home-screen install
 tests/                node unit tests for the core logic
+app/                  the Android app (Capacitor): build script, app shim, Android project, store tools
 ```
 
 ## Develop
