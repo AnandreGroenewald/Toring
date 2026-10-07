@@ -15,17 +15,19 @@ const DEFAULT_LIMIT = 2;
 const LIMIT = {
   hail: 4, land: 3, creak: 1, click: 3, perfect: 3, warning: 1, rain: 1,
   zap: 1, wind: 2, freeze: 2, fog: 1, heat: 1, thunder: 2, splash: 3, gull: 1,
+  monkey: 1, shoo: 1, clown: 1, thief: 1, escape: 1, caught: 1,
 };
 // Minimum ms between two starts of the same sound.
 const THROTTLE = {
   creak: 400, hail: 45, warning: 600, wind: 250, rain: 300, zap: 250,
   freeze: 90, land: 35, splash: 70, click: 35, drop: 60, thunder: 200,
   banner: 250, heart: 200, record: 400, gameover: 400, fog: 400, heat: 400, gull: 2000,
+  monkey: 300, shoo: 250, clown: 250, thief: 300, escape: 400, caught: 400,
 };
 // At the per-name limit these steal the oldest voice; all others skip the new one.
 const STEAL = new Set([
   'perfect', 'good', 'skew', 'lost', 'land', 'drop', 'click', 'splash',
-  'thunder', 'banner', 'gameover', 'record', 'heart', 'rainbow',
+  'thunder', 'banner', 'gameover', 'record', 'heart', 'rainbow', 'shoo', 'caught',
 ]);
 // Per-sound output trim, balanced with the offline level test (perfect loudest).
 const LEVEL = {
@@ -33,6 +35,7 @@ const LEVEL = {
   lost: 0.22, splash: 0.99, creak: 0.85, heart: 0.72, wind: 0.9, rain: 0.41,
   thunder: 1.0, zap: 0.39, hail: 0.44, heat: 0.27, rainbow: 0.7, fog: 0.143,
   warning: 0.22, gameover: 0.75, record: 0.62, banner: 0.4, freeze: 0.6, gull: 0.1,
+  monkey: 0.85, shoo: 0.75, clown: 0.55, thief: 0.62, escape: 0.34, caught: 0.5,
 };
 
 const PENTA = [0, 2, 4, 7, 9];   // major pentatonic (semitones)
@@ -594,6 +597,97 @@ const SOUNDS = {
     s.frequency.exponentialRampToValueAtTime(210, t + 0.06);
     const lp = v.filter('lowpass', 900, 0.7, v.env(v.out, t, 0.25, 0.001, 0.025));
     v.noise(B.white, t, 0.05, lp);
+  },
+
+  // --- visitors (js/game/visitors.js) ---
+
+  monkey(v, t) {
+    // Blouaap: "oe-oe-aa-aa", four quick squeaky syllables, each a gliding saw through two vowel formants.
+    const syl = [[0, 520, 650, 380, 900], [0.17, 540, 690, 380, 900], [0.36, 820, 1150, 820, 1300], [0.55, 860, 1240, 820, 1300]];
+    for (const [dt, f0, f1, fa, fb] of syl) {
+      const st = t + dt;
+      const d = 0.15;
+      const g = v.envHold(v.out, st, 0.5, 0.012, d - 0.06, 0.05);
+      const b1 = v.filter('bandpass', fa, 4, g);
+      const b2 = v.filter('bandpass', fb, 5, v.gain(0.7, g));
+      const o = v.osc('sawtooth', f0, st, d + 0.02, b1);
+      o.connect(b2);
+      o.frequency.linearRampToValueAtTime(f1, st + d * 0.6);
+      o.frequency.linearRampToValueAtTime(f0 * 1.05, st + d);
+      v.lfo(28, 30, o.frequency, st, d);
+    }
+  },
+
+  shoo(v, t, o, B) {
+    // the monkey scarpers: a rising whoosh and two squeaks up
+    whoosh(v, B, t, 0.3, 600, 4200, 1.1, 0.35, 0.05);
+    for (const [dt, f] of [[0.04, 900], [0.14, 1300]]) {
+      const st = t + dt;
+      const sq = v.osc('square', f, st, 0.09, v.filter('lowpass', 3000, 0.8, v.env(v.out, st, 0.22, 0.004, 0.07)));
+      sq.frequency.exponentialRampToValueAtTime(f * 1.6, st + 0.08);
+    }
+  },
+
+  clown(v, t, o) {
+    // Hanswors: honk-honk on a bulb horn, then a kazoo slide up ({ short: true }: one honk)
+    const honk = (st, f) => {
+      const bp = v.filter('bandpass', 1000, 1.6, v.envHold(v.out, st, 0.5, 0.008, 0.11, 0.05));
+      for (const [type, det] of [['square', 0], ['sawtooth', 9]]) {
+        const os = v.osc(type, f, st, 0.18, bp, det);
+        os.frequency.linearRampToValueAtTime(f * 0.9, st + 0.17);
+      }
+    };
+    honk(t, 330);
+    if (o.short) return;
+    honk(t + 0.2, 300);
+    const ks = t + 0.44;
+    const kd = 0.42;
+    const bp = v.filter('bandpass', 1300, 2.5, v.envHold(v.out, ks, 0.4, 0.03, kd - 0.12, 0.09));
+    const k1 = v.osc('sawtooth', 260, ks, kd + 0.02, bp);
+    const k2 = v.osc('sawtooth', 262, ks, kd + 0.02, bp, 12);
+    for (const k of [k1, k2]) k.frequency.exponentialRampToValueAtTime(620, ks + kd * 0.85);
+    v.lfo(7, 18, k1.frequency, ks, kd);
+  },
+
+  thief(v, t) {
+    // Skelm Sakkie: a sneaky pizzicato tiptoe (E G G# A ... E)
+    const lp = v.filter('lowpass', 1800, 1.2);
+    for (const [dt, m] of [[0, 52], [0.15, 55], [0.3, 56], [0.45, 57], [0.66, 64]]) {
+      const st = t + dt;
+      const f = mtof(m);
+      v.osc('triangle', f, st, 0.16, v.env(lp, st, 0.55, 0.003, 0.13));
+      v.osc('sawtooth', f, st, 0.06, v.env(lp, st, 0.18, 0.002, 0.05));
+      v.osc('sine', f / 2, st, 0.14, v.env(lp, st, 0.25, 0.003, 0.11));
+    }
+  },
+
+  escape(v, t, o, B) {
+    // he gets away whistling: "wheet-whooo"
+    const g = v.gain(0);
+    const p = g.gain;
+    p.setValueAtTime(0, t);
+    p.linearRampToValueAtTime(0.32, t + 0.03);
+    p.setValueAtTime(0.32, t + 0.16);
+    p.linearRampToValueAtTime(0.05, t + 0.2);
+    p.linearRampToValueAtTime(0.32, t + 0.24);
+    p.setValueAtTime(0.32, t + 0.46);
+    p.exponentialRampToValueAtTime(FLOOR, t + 0.6);
+    const w = v.osc('sine', 1700, t, 0.62, g);
+    w.frequency.linearRampToValueAtTime(2300, t + 0.16);
+    w.frequency.setValueAtTime(2250, t + 0.22);
+    w.frequency.exponentialRampToValueAtTime(1400, t + 0.58);
+    v.lfo(9, 40, w.frequency, t, 0.6);
+    v.noise(B.white, t, 0.6, v.filter('bandpass', 2000, 1.5, v.envHold(v.out, t, 0.04, 0.03, 0.4, 0.15)));
+  },
+
+  caught(v, t, o, B) {
+    // "Gevang!": ta-ta-taaa
+    brass(v, t, mtof(67), 0.06, 0.32);
+    brass(v, t + 0.1, mtof(72), 0.06, 0.32);
+    const ct = t + 0.2;
+    for (const m of [76, 79, 84]) brass(v, ct, mtof(m), 0.45, 0.2);
+    v.noise(B.white, ct, 0.55, v.filter('highpass', 6500, 0.7, v.env(v.out, ct, 0.14, 0.004, 0.5)));
+    bell(v, ct + 0.04, mtof(96), 0.1, 0.45, 0.3);
   },
 
   gull(v, t, o, B) {

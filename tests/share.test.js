@@ -109,6 +109,33 @@ test('weather line: in order, omitted when empty, unknown types skipped', () => 
   assert.equal(w([]).length, 6);
 });
 
+test('visitors line: next to the weather, in order of arrival, ✋ after a caught thief', () => {
+  const lines = (visitors, weather = ['wind', 'rain']) => buildShareText(result({ visitors, weather }), { url: URL }).split('\n');
+  const v = [
+    { type: 'monkey', outcome: 'shoved', n: 1 },
+    { type: 'thief', outcome: 'caught', n: 0 },
+    { type: 'clown', outcome: 'gift', n: 0 },
+  ];
+  assert.equal(lines(v)[4], 'Weer: 💨🌧️ · Besoekers: 🐒🦹✋🤡');
+  // the spec's own example, and a thief who got away has no hand
+  assert.equal(lines([{ type: 'monkey', outcome: 'shooed' }, { type: 'thief', outcome: 'caught' }])[4], 'Weer: 💨🌧️ · Besoekers: 🐒🦹✋');
+  assert.equal(lines([{ type: 'thief', outcome: 'stole', n: 4 }])[4], 'Weer: 💨🌧️ · Besoekers: 🦹');
+  // a visitor still there when the tower ended counts too
+  assert.equal(lines([{ type: 'clown', outcome: 'came' }])[4], 'Weer: 💨🌧️ · Besoekers: 🤡');
+  // visitors without weather, and junk skipped
+  assert.equal(lines([{ type: 'monkey' }, { type: 'yeti' }, null], [])[4], 'Besoekers: 🐒');
+  // no visitors: the line (and the whole text) is exactly as before
+  assert.deepEqual(lines([]), lines(undefined));
+  assert.equal(lines([])[4], 'Weer: 💨🌧️');
+  assert.equal(lines([], []).length, 6);
+});
+
+test('grid: the clown\'s gift is a 🎁 cell (also in high contrast)', () => {
+  const r = result({ grid: 'PGBSX', reason: 'quit', weather: [] });
+  assert.equal(buildShareText(r, { url: URL }).split('\n')[2], '🟩🟨🎁🟧🟥');
+  assert.equal(buildShareText(r, { url: URL, highContrast: true }).split('\n')[2], '🟦🟧🎁⬜⬛');
+});
+
 test('url line omitted when not given', () => {
   const lines = buildShareText(result(), {}).split('\n');
   assert.equal(lines[lines.length - 1], 'Stapel hoog. Staan sterk.');

@@ -19,6 +19,19 @@ test('each moment gives its hint once, in the first game only', () => {
   assert.equal(c.lost(), null);
 });
 
+test('the first visitor of each kind gets its hint once (first game only)', () => {
+  const c = createCoach(true);
+  assert.equal(c.visitor('monkey').text, S.coachMonkey);
+  assert.equal(c.visitor('monkey'), null, 'a second monkey needs no hint');
+  assert.equal(c.visitor('thief').text, S.coachThief);
+  assert.equal(c.visitor('clown').text, S.coachClown);
+  assert.equal(c.visitor('clown'), null);
+  assert.equal(c.visitor('dragon'), null);
+  assert.equal(createCoach(false).visitor('thief'), null);
+  // the other hints are unaffected
+  assert.equal(c.water().text, S.coachWater);
+});
+
 test('a Perfek on the first block gets the "do it again" line', () => {
   assert.equal(createCoach(true).landing('P').text, S.coachPerfect);
   assert.equal(createCoach(true).landing('S').text, S.coachMiddle);

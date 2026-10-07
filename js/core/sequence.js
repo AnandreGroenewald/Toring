@@ -1,9 +1,10 @@
-// Deterministic block + weather sequence for a seed. The daily tower uses the
-// date seed, so every player gets the exact same blocks and weather.
+// Deterministic block + weather (+ visitor) sequence for a seed. The daily tower uses
+// the date seed, so every player gets the exact same blocks, weather and visitors.
 // Changing any table below changes every daily tower — treat it as level data.
 
 import { createRng } from './rng.js';
 import { SHAPE_IDS, PALETTE } from '../config.js';
+import { buildVisitors, visitorAt as findVisitor, visitorForecast } from './visitorplan.js';
 
 // --- Blocks -----------------------------------------------------------------
 
@@ -91,12 +92,14 @@ function buildEvents(rng) {
   return events;
 }
 
-/** Deterministic block + weather sequence for `seed`. */
+/** Deterministic block + weather + visitor sequence for `seed`. */
 export function createSequence(seed) {
   const seedKey = String(seed);
   const root = createRng(seedKey);
   const blockRng = root.fork('blocks');
   const events = buildEvents(root.fork('weather'));
+  // Its own fork: adding visitors left every block and weather event of every day unchanged.
+  const visitors = buildVisitors(root.fork('visitors'), events);
   const cache = [];
 
   function generateNext() {
@@ -162,7 +165,18 @@ export function createSequence(seed) {
     return events.slice(0, Math.max(0, n)).map((e) => e.type);
   }
 
-  return { seed: seedKey, block, events, eventAt, forecast };
+  return {
+    seed: seedKey,
+    block,
+    events,
+    eventAt,
+    forecast,
+    visitors,
+    /** The visitor that arrives with block i, or null. */
+    visitorAt: (i) => findVisitor(visitors, i),
+    /** Visitor types of about one tower, each once ("Besoekers vandag: 🐒 🤡"). */
+    visitorForecast: (n) => visitorForecast(visitors, n),
+  };
 }
 
 // Exposed for tests / tooling.

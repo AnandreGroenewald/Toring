@@ -5,6 +5,7 @@
 import { RATING_EMOJI, RATING_EMOJI_HC } from '../config.js';
 import { S, WEATHER_INFO } from './strings.js';
 import { fmtM, fmtInt } from './format.js';
+import { visitorEmoji } from './visitorrules.js';
 
 const GRID_COLS = 10;
 const GRID_ROWS = 5;
@@ -48,10 +49,15 @@ export function buildShareText(result, { url, highContrast = false } = {}) {
 
   lines.push(...gridLines(r.grid, r.reason, highContrast ? RATING_EMOJI_HC : RATING_EMOJI));
 
+  // "Weer: 💨🌧️ · Besoekers: 🐒🦹✋" (either half on its own when the other is empty)
   const weather = (Array.isArray(r.weather) ? r.weather : [])
     .map((t) => WEATHER_INFO[t]?.emoji)
     .filter(Boolean);
-  if (weather.length) lines.push(`${S.weatherToday}: ${weather.join('')}`);
+  const visitors = visitorEmoji(r.visitors);
+  const day = [];
+  if (weather.length) day.push(`${S.weatherToday}: ${weather.join('')}`);
+  if (visitors) day.push(`${S.visitors}: ${visitors}`);
+  if (day.length) lines.push(day.join(' · '));
 
   lines.push(S.tagline);
   if (url) lines.push(String(url));

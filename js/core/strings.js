@@ -100,7 +100,8 @@ export const S = {
     { icon: '🌦️', text: 'Die weer slaan toe terwyl jy bou: wind, reën, weerlig, hael, mis en meer.' },
     { icon: '🌊', text: 'Die water styg. Hou jou toring bo die vloedlyn!' },
     { icon: '❤️', text: 'Jy het vier lewens. Elke keer as blokke in die see beland, kos dit jou een. Elke derde Perfek bring ’n verlore lewe terug.' },
-    { icon: '🗓️', text: 'Elke dag is daar een Daaglikse Toring: dieselfde blokke en weer vir almal, en jy kry een poging. Oefen soveel jy wil.' },
+    { icon: '🐒', text: 'Soms kom kuier iemand: Blouaap stamp blokke af, Skelm Sakkie steel blokke en Hanswors bring ’n geskenkie. Tik die aap of die skelm om hulle te keer. Besoekers kos jou nooit ’n hartjie nie.' },
+    { icon: '🗓️', text: 'Elke dag is daar een Daaglikse Toring: dieselfde blokke, weer en besoekers vir almal, en jy kry een poging. Oefen soveel jy wil.' },
   ],
   howToGo: 'Kom ons bou!',
 
@@ -158,6 +159,28 @@ export const S = {
   installBtn: '📲 Sit Stapel op jou tuisskerm',
   installTipIos: 'Tik Deel ⬆️ en dan “Voeg by tuisskerm”',
   installDismiss: 'Nie nou nie',
+
+  // --- Besoekers (visitors; js/game/visitors.js) ---
+  visitors: 'Besoekers',                      // share line: "Weer: 💨 · Besoekers: 🐒🦹✋"
+  visitorsToday: 'Besoekers vandag',          // menu, under the weather forecast
+  monkeyShooed: 'Sjoe! Weg is hy!',
+  visitorFree: (name) => `${name} se skuld — jy hou jou hartjies ❤️`,   // a visitor knocked blocks into the sea
+  thiefCaught: 'Gevang! Jy kry jou blokke terug.',
+  thiefStole: (n) => (n === 1 ? 'Skelm Sakkie het 1 blok gesteel!' : `Skelm Sakkie het ${n} blokke gesteel!`),
+  thiefEmpty: 'Skelm Sakkie het niks gekry nie!',
+  gifts: 'Geskenke',                          // results grid label (🎁 cells)
+  // one line on the results card about the day's visitors (never in the share text)
+  resThiefCaught: 'Jy het Skelm Sakkie gevang! 👮',
+  resThiefStole: (n) => (n === 1 ? 'Skelm Sakkie het 1 blok gesteel 🦹' : `Skelm Sakkie het ${n} blokke gesteel 🦹`),
+  resThiefEmpty: 'Skelm Sakkie het met leë hande weggesluip 🦹',
+  resMonkeyShooed: 'Jy het Blouaap weggejaag! 🐒',
+  resMonkeyKnocked: (n) => (n === 1 ? 'Blouaap het 1 blok van jou toring afgestamp 🐒' : `Blouaap het ${n} blokke van jou toring afgestamp 🐒`),
+  resMonkeyStood: 'Blouaap het gestamp, maar jou toring het bly staan! 🐒',
+  resClownGift: 'Hanswors het vir jou ’n geskenkie gebring 🎁',
+  // first game only: the first visitor of each kind explains itself in its arrival banner (js/core/coach.js)
+  coachMonkey: 'Tik die aap voor hy spring, anders stamp hy jou blokke af!',
+  coachClown: 'Hanswors bring vir jou ’n ekstra blok — verniet!',
+  coachThief: 'Tik vinnig op Skelm Sakkie, anders steel hy jou boonste blokke!',
 };
 
 /** Weather display info. Keys match WEATHER_TYPES in config.js. */
@@ -171,6 +194,15 @@ export const WEATHER_INFO = {
   heat:    { emoji: '☀️', name: 'Hittegolf',   desc: () => 'Die hyskraan jaag!' },
   rainbow: { emoji: '🌈', name: 'Reënboog',    desc: () => 'Dubbele punte vir elke Perfek!' },
 };
+
+/** Visitor display info (banner, share line, menu). Keys match VISITOR_TYPES in config.js. */
+export const VISITOR_INFO = {
+  monkey: { emoji: '🐒', name: 'Blouaap', hint: 'Tik hom om hom weg te jaag!' },
+  clown: { emoji: '🤡', name: 'Hanswors', hint: '’n Geskenkie!' },
+  thief: { emoji: '🦹', name: 'Skelm Sakkie', hint: 'Vang hom!' },
+};
+/** Added after 🦹 in the share line when the player caught the thief. */
+export const CAUGHT_EMOJI = '✋';
 
 /** Afrikaans names for the block shapes (for the HUD "next" preview / how-to). */
 export const SHAPE_NAMES = {

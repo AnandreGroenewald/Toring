@@ -10,7 +10,7 @@ import { installMode, isIosSafari } from '../js/core/install.js';
 import { buildShareText } from '../js/core/share.js';
 import { createStore, memoryBackend } from '../js/core/storage.js';
 import { PALETTE } from '../js/config.js';
-import { S, WEATHER_INFO } from '../js/core/strings.js';
+import { S, WEATHER_INFO, VISITOR_INFO } from '../js/core/strings.js';
 import { addDays, seedFor } from '../js/core/daily.js';
 import { createSequence } from '../js/core/sequence.js';
 import { SOUND_NAMES } from '../js/audio.js';
@@ -145,13 +145,23 @@ test('challenge strings are Afrikaans and carry the flag', () => {
 });
 
 // ---------------------------------------------------------------------------------- teaser
-test('teaser: the first three weather events of tomorrow, as emoji', () => {
+test('teaser: the first three weather events of tomorrow, as emoji (and its visitors)', () => {
   const t = tomorrowTeaser(TODAY);
-  const want = createSequence(seedFor(addDays(TODAY, 1))).forecast(3);
+  const seq = createSequence(seedFor(addDays(TODAY, 1)));
+  const want = seq.forecast(3);
   assert.equal(t.dateKey, addDays(TODAY, 1));
   assert.deepEqual(t.types, want);
   assert.deepEqual(t.emoji, want.map((x) => WEATHER_INFO[x].emoji));
-  assert.equal(t.text, `Môre: ${t.emoji.join(' ')} — kom terug!`);
+  assert.deepEqual(t.visitors, seq.visitorForecast());
+  const who = t.visitors.map((x) => VISITOR_INFO[x].emoji);
+  assert.equal(t.text, `Môre: ${t.emoji.join(' ')}${who.length ? ` · ${who.join(' ')}` : ''} — kom terug!`);
+  // across a month of days the visitors part is there when tomorrow has visitors in its first 45 blocks
+  for (let k = 0; k < 30; k++) {
+    const day = addDays(TODAY, k);
+    const tt = tomorrowTeaser(day);
+    const v = createSequence(seedFor(addDays(day, 1))).visitorForecast();
+    assert.equal(tt.text.includes(' · '), v.length > 0, day);
+  }
   assert.deepEqual(tomorrowTeaser(TODAY).types, t.types);   // same for everyone, every time
   assert.equal(tomorrowTeaser('junk'), null);
   // it follows the calendar across a month end

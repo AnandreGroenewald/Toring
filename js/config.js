@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.5.0';
+export const VERSION = '1.6.0';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -105,11 +105,11 @@ export const SCORING = {
 export const LIVES = 4;
 export const FREEZE_DEPTH = 8;   // all but the newest 8 settled blocks set like cement (become static)
 
-// Rating codes used in the result grid
-export const RATING = { PERFECT: 'P', GOOD: 'G', SKEW: 'S', LOST: 'X' };
-export const RATING_EMOJI = { P: '🟩', G: '🟨', S: '🟧', X: '🟥' };
+// Rating codes used in the result grid (GIFT: the clown's bonus block, not a drop of the player's)
+export const RATING = { PERFECT: 'P', GOOD: 'G', SKEW: 'S', LOST: 'X', GIFT: 'B' };
+export const RATING_EMOJI = { P: '🟩', G: '🟨', S: '🟧', X: '🟥', B: '🎁' };
 // High-contrast set (settings.highContrast): distinct for every kind of colour blindness.
-export const RATING_EMOJI_HC = { P: '🟦', G: '🟧', S: '⬜', X: '⬛' };
+export const RATING_EMOJI_HC = { P: '🟦', G: '🟧', S: '⬜', X: '⬛', B: '🎁' };
 
 // ---------------------------------------------------------------------------
 // Rising flood line (vloedlyn)
@@ -170,6 +170,36 @@ export const WEATHER_TUNING = {
 };
 
 // ---------------------------------------------------------------------------
+// Visitors (besoekers): who comes when is level data in core/visitorplan.js; names in core/strings.js.
+// Every time below runs on the simulated clock (fixed physics steps), like the weather.
+// ---------------------------------------------------------------------------
+export const VISITOR_TYPES = ['monkey', 'clown', 'thief'];
+
+export const VISITOR = {
+  size: 88,                // emoji sprite font size (px)
+  hitR: 60,                // tap radius (px): a 120 px circle around the visitor
+  sideX: 92,               // the monkey and the clown wait this far from the screen edge (clear of the aim)
+  monkeyRunUpMs: 1500,     // tap window: the monkey swings on its rope before it jumps
+  monkeyLeapMs: 380,
+  monkeyBounceMs: 560,     // two bounces on the tower top, then the shove
+  monkeyLeaveMs: 650,
+  monkeyKick: [1.6, 2.6],  // sideways shove of each pushed block (px/step, x strength)
+  monkeySpin: 0.035,       // rad/step
+  clownArriveMs: 1200,     // floats in, honking (tapping him only makes him honk and juggle)
+  clownTossMs: 420,        // the gift flies to the tower top...
+  clownLeaveMs: 1100,
+  giftDropPx: 22,          // ...and is let go this far above it
+  giftOffsetPx: [4, 12],   // crooked: this far off-centre...
+  giftTilt: [0.02, 0.06],  // ...and tilted this much (rad)
+  giftPoints: 25,
+  thiefClimbMs: 2000,      // tap window: he sneaks up the side of the tower
+  thiefGrabMs: 450,
+  thiefLeaveMs: 950,
+  thiefMax: 4,             // blocks he can carry (never cement)
+  graceMs: 2500,           // tower blocks lost this soon after a visitor's push cost no heart
+};
+
+// ---------------------------------------------------------------------------
 // Daily tower
 // ---------------------------------------------------------------------------
 export const EPOCH_DATE_KEY = '2026-10-06';   // Daaglikse Toring #1
@@ -188,6 +218,7 @@ export const DEPTH = {
   fxWorld: 40,
   water: 50,
   weather: 60,      // rain/fog/heat overlays (screen-space)
+  visitor: 61,      // visitors stay visible in fog and rain (rating pops sit just above them)
   crane: 70,        // crane + hanging block (screen-space)
   fxScreen: 80,     // flashes, bolts (screen-space)
 };

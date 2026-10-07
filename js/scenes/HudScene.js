@@ -291,8 +291,10 @@ export class HudScene extends Phaser.Scene {
     this.coachCur = null;       // the hint on show (or waiting), so a banner can pause and resume it
     this.pendingCoach = null;
 
-    // --- Banner (weather events): compact, above the flood pill, then flies into the chip
+    // --- Banner (weather events, visitors): compact, above the flood pill; a weather banner then flies into the chip
     this.banner = this.add.container(W / 2, this.bannerY()).setVisible(false);
+    // where the banner starts (screen px): a climbing visitor keeps above it (js/game/visitors.js)
+    this.registry.set('hudBannerTop', this.bannerY() - BANNER_H / 2);
     this.bannerBg = this.add.image(0, 0, panelTexture(this, BANNER_W, BANNER_H, NAVY, 0.82, { radius: 34, rim: 0.3 }));
     this.bannerEmoji = text(this, -BANNER_W / 2 + 70, 0, '', 72, { emoji: true, stroke: false }).setOrigin(0.5);
     this.bannerTitle = text(this, -BANNER_W / 2 + 130, -24, '', 44, { strokeMul: 0.14 }).setOrigin(0, 0.5);
@@ -626,8 +628,9 @@ export class HudScene extends Phaser.Scene {
     this.bannerTitle.setText(b.title || '');
     this.bannerSub.setText(b.subtitle || '');
     const hasSub = !!b.subtitle;
-    this.bannerTitle.y = hasSub ? -22 : 0;
-    this.bannerSub.y = 26;
+    const twoLines = hasSub && this.bannerSub.height > 40;   // a visitor's first-game hint
+    this.bannerTitle.y = hasSub ? (twoLines ? -36 : -22) : 0;
+    this.bannerSub.y = twoLines ? 20 : 26;
     this.bannerSub.setVisible(hasSub);
     if (this.bannerTween) this.bannerTween.stop();
     if (this.bannerTimer) this.bannerTimer.remove(false);
@@ -643,15 +646,21 @@ export class HudScene extends Phaser.Scene {
     this.bannerEmoji.setScale(0.4).setAngle(-14);
     this.tweens.add({ targets: this.bannerEmoji, scale: 1, angle: 0, duration: 520, ease: 'Back.easeOut', easeParams: [2.6] });
     this.bannerTween = this.tweens.add({ targets: c, alpha: 1, scale: 1, duration: 300, ease: 'Back.easeOut' });
-    this.bannerTimer = this.time.delayedCall(BANNER_HOLD_MS + 300, () => {
+    const visitor = b.kind === 'visitor';
+    this.bannerKind = visitor ? 'visitor' : 'weather';
+    this.bannerTimer = this.time.delayedCall(Math.max(BANNER_HOLD_MS, b.ms || 0) + 300, () => {
       this.bannerTimer = null;
-      // fly into the weather chip: that's where this event lives while it lasts
+      // weather flies into the weather chip (that's where the event lives while it lasts); a visitor's
+      // banner just fades where it is: the visitor itself is on screen
+      const out = visitor
+        ? { y: y0 + 24, scale: 0.92, alpha: 0, duration: 280, ease: 'Quad.easeIn' }
+        : { x: CHIP_CX, y: this.wxY, scale: 0.3, alpha: 0, duration: 320, ease: 'Cubic.easeIn' };
       this.bannerTween = this.tweens.add({
-        targets: c, x: CHIP_CX, y: this.wxY, scale: 0.3, alpha: 0, duration: 320, ease: 'Cubic.easeIn',
+        targets: c, ...out,
         onComplete: () => {
           c.setVisible(false);
           this.bannerTween = null;
-          if (this.wxBg.visible) this.pulse(this.wxEmoji, 1.25);
+          if (!visitor && this.wxBg.visible) this.pulse(this.wxEmoji, 1.25);
           const t = this.pendingToast;
           this.pendingToast = null;
           if (t) this.showToast(t);
@@ -665,8 +674,10 @@ export class HudScene extends Phaser.Scene {
 
   showToast(t) {
     if (!t || !t.text || this.hidden) return;
-    // Never stack a toast on the event banner: show it once the banner has gone.
+    // Never stack a toast on the event banner: show it once the banner has gone. A visitor's banner
+    // makes way at once instead (the toast says how the visit went: "Gevang!", "Sjoe! Weg is hy!").
     const y0 = this.H - this.sb - 150;
+    if (t.visitor && this.banner.visible && this.bannerKind === 'visitor' && this.bannerTimer) this.dismissBanner();
     if (this.banner.visible && Math.abs(y0 - this.banner.y) < BANNER_H / 2 + 40) {
       this.pendingToast = t;
       return;
@@ -692,6 +703,18 @@ export class HudScene extends Phaser.Scene {
         onComplete: () => { c.setVisible(false); this.toastTween = null; },
       });
     });
+  }
+
+  /** Take the banner away right now (its pending toast/coach hint follow it as usual). */
+  dismissBanner() {
+    if (this.bannerTimer) this.bannerTimer.remove(false);
+    this.bannerTimer = null;
+    if (this.bannerTween) this.bannerTween.stop();
+    this.bannerTween = null;
+    this.banner.setVisible(false).setAlpha(0);
+    const k = this.pendingCoach;
+    this.pendingCoach = null;
+    if (k) this.showCoach({ ...k, delay: 0 });
   }
 
   /**

@@ -5,10 +5,13 @@
 import { S } from './strings.js';
 import { COACH } from '../config.js';
 
+const VISITOR_HINT = { monkey: 'coachMonkey', clown: 'coachClown', thief: 'coachThief' };
+
 /**
  * @param {boolean} enabled  true only for a player who has not finished a first game yet
  * @returns {{ enabled: boolean, tap(fine: boolean): string|null, landing(rating: string): {id:string,text:string}|null,
- *   water(): {id:string,text:string}|null, lost(): {id:string,text:string}|null }}
+ *   water(): {id:string,text:string}|null, lost(): {id:string,text:string}|null,
+ *   visitor(type: string): {id:string,text:string}|null }}
  */
 export function createCoach(enabled) {
   const on = !!enabled;
@@ -36,6 +39,11 @@ export function createCoach(enabled) {
     /** The first time a block in the sea really costs a heart. */
     lost() {
       return once('lost', S.coachLost);
+    },
+    /** The first visitor of each kind (the banner names it; this says what to do about it). */
+    visitor(type) {
+      const key = VISITOR_HINT[type];
+      return key ? once(`visitor-${type}`, S[key]) : null;
     },
   };
 }

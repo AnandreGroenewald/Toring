@@ -752,6 +752,67 @@ function drawName(ctx, g, pal, name) {
   return true;
 }
 
+// The clown's gift: a striped circus block (red and cream, a gold star) whatever its colour.
+const GIFT_RED = 0xe23b3b;
+const GIFT_CREAM = 0xfff4dc;
+const GIFT_GOLD = 0xffcf3a;
+
+function drawStar(ctx, x, y, r, fill, stroke) {
+  ctx.beginPath();
+  for (let k = 0; k < 10; k++) {
+    const a = -Math.PI / 2 + (k * Math.PI) / 5;
+    const rr = k % 2 ? r * 0.45 : r;
+    const px = x + Math.cos(a) * rr;
+    const py = y + Math.sin(a) * rr;
+    if (k === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = stroke;
+  ctx.stroke();
+}
+
+function drawGift(ctx, g) {
+  const outlineCol = mix(GIFT_RED, 0x000000, 0.45);
+  ctx.save();
+  ctx.translate(PAD, PAD);
+  roundedPolyPath(ctx, g.outline, CORNER_R);
+  ctx.save();
+  ctx.clip();
+  ctx.fillStyle = hex(GIFT_CREAM);
+  ctx.fillRect(0, 0, g.w, g.h);
+  // diagonal circus stripes
+  const band = 14;
+  ctx.fillStyle = hex(GIFT_RED);
+  for (let x = -g.h; x < g.w + g.h; x += band * 2) {
+    ctx.beginPath();
+    ctx.moveTo(x, g.h);
+    ctx.lineTo(x + band, g.h);
+    ctx.lineTo(x + band + g.h, 0);
+    ctx.lineTo(x + g.h, 0);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // light top, dark bottom (like every block), then a gold star in the middle
+  const b = bandSizes(g.h);
+  ctx.fillStyle = rgba(0xffffff, 0.35);
+  ctx.fillRect(0, 0, g.w, b.top * 0.6);
+  ctx.fillStyle = rgba(0x000000, 0.18);
+  ctx.fillRect(0, g.h - b.bottom, g.w, b.bottom);
+  const r = Math.max(8, Math.min(16, Math.min(g.w, g.h) * 0.32));
+  drawStar(ctx, g.w / 2, g.h / 2 + 1, r, hex(GIFT_GOLD), hex(mix(GIFT_GOLD, 0x000000, 0.45)));
+  ctx.restore();
+  roundedPolyPath(ctx, g.outline, CORNER_R);
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = hex(outlineCol);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawBlock(ctx, g, pal, key, name = null) {
   const rnd = seededRand(key);
   const outlineCol = mix(pal.dark, 0x000000, 0.38);
@@ -784,6 +845,7 @@ function drawBlock(ctx, g, pal, key, name = null) {
 
 export function textureKeyFor(spec, name = null) {
   const g = getGeometry(spec);
+  if (spec.gift) return `gift_${g.shape}_${Math.round(g.w)}x${Math.round(g.h)}`;
   const color = PALETTE.indexOf(shapeColor(spec));
   const key = `blk_${g.shape}_${Math.round(g.w)}x${Math.round(g.h)}_${color}`;
   return name ? `${key}_n${nameHash(name)}` : key;
@@ -795,7 +857,7 @@ export function textureKeyFor(spec, name = null) {
  * size and physics are those of the plain block).
  */
 export function ensureTexture(scene, spec, name = null) {
-  const label = typeof name === 'string' && name.trim() && canPrintName(spec) ? name.trim() : null;
+  const label = typeof name === 'string' && name.trim() && canPrintName(spec) && !spec.gift ? name.trim() : null;
   const key = textureKeyFor(spec, label);
   const textures = scene.textures;
   let info = texInfo.get(key);
@@ -804,7 +866,8 @@ export function ensureTexture(scene, spec, name = null) {
     const tex = textures.createCanvas(key, g.texW, g.texH);
     if (!tex) return key;
     // the plain key seeds the details, so a named block is the same block plus its name
-    drawBlock(tex.getContext(), g, shapeColor(spec), textureKeyFor(spec), label);
+    if (spec.gift) drawGift(tex.getContext(), g);
+    else drawBlock(tex.getContext(), g, shapeColor(spec), textureKeyFor(spec), label);
     tex.refresh();
     if (!info) {
       info = { blocks: new Set(), lastUse: 0, named: !!label };

@@ -5,6 +5,7 @@
 
 import { STORAGE_KEY } from '../config.js';
 import { dateKeyFor, dayNumber, addDays, daysBetween, isDateKey } from './daily.js';
+import { cleanVisits } from './visitorrules.js';
 
 const SCHEMA = 1;
 const SETTING_KEYS = ['sound', 'vibration', 'reducedMotion', 'highContrast'];
@@ -88,6 +89,7 @@ export function normalizeResult(r, dateKey = null) {
     maxCombo: int(src.maxCombo),
     grid: typeof src.grid === 'string' ? src.grid : '',
     weather: Array.isArray(src.weather) ? src.weather.filter((w) => typeof w === 'string') : [],
+    visitors: cleanVisits(src.visitors),
     durationMs: int(src.durationMs),
   };
 }

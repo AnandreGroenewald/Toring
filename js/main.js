@@ -35,6 +35,8 @@ const NO_SW = params.has('nosw') || DEBUG;
 const DEBUG_DATE = DEBUG ? parseDebugDate(location.search) : null;
 const SEED_OVERRIDE = DEBUG ? params.get('seed') : null;
 const AUTO = DEBUG && params.has('auto') ? Math.min(1, Math.max(0.0001, Number(params.get('auto')) || 0)) : 0;
+// ?debug=1&visitor=monkey|clown|thief: that visitor comes as soon as there is a little tower
+const FORCE_VISITOR = DEBUG ? params.get('visitor') : null;
 
 const HEARTBEAT_MS = 4000;     // a running daily says "still here" this often...
 const STALE_MS = 15000;        // ...and another tab takes it over only after this long
@@ -230,6 +232,7 @@ function menuModel() {
     dayNumber: dayNumber(dateKey),
     dateLabel: fmtDateKey(dateKey),
     forecast: sequenceFor(dateKey).forecast(4),   // about as many as a typical tower meets
+    visitors: sequenceFor(dateKey).visitorForecast(),   // "Besoekers vandag: 🐒 🤡"
     today: store.getDaily(dateKey),
     stats: store.getStats(dateKey),
     settings,
@@ -301,6 +304,8 @@ function startGame(data) {
     billboard: billboardFor(data.dateKey),
     // a brand-new player gets short HUD hints during the first game (text only; js/core/coach.js)
     coach: data.mode !== 'idle' && !store.tutorialSeen(),
+    debug: DEBUG,
+    visitor: FORCE_VISITOR,
     ...data,
   });
 }

@@ -3,9 +3,10 @@
 // camera follow, landing ghost, wobble, idle attract mode and the game-over reveal.
 import {
   GAME_W, LAYOUT, PX_PER_M, PHYSICS, CRANE, SCORING, LIVES, FREEZE_DEPTH, WATER, DEPTH, FONT, COACH,
+  VISITOR, VISITOR_TYPES, RATING,
 } from '../config.js';
 import { bus } from '../core/bus.js';
-import { S } from '../core/strings.js';
+import { S, VISITOR_INFO } from '../core/strings.js';
 import { fmtM } from '../core/format.js';
 import { createSequence } from '../core/sequence.js';
 import { audio, haptics } from '../audio.js';
@@ -21,6 +22,8 @@ import { Crane } from '../game/crane.js';
 import { Water } from '../game/water.js';
 import { Effects } from '../game/effects.js';
 import { createIsland } from '../game/island.js';
+import { Visitors } from '../game/visitors.js';
+import { topMovable, thiefLoot, visitorFree, gridWithGifts } from '../core/visitorrules.js';
 
 const FIXED = PHYSICS.fixedDtMs;
 const MAX_FRAME_MS = 100;
@@ -98,6 +101,23 @@ function calmWeather() {
     beforeStep() {},
     update() {},
     isHail() { return false; },
+    destroy() {},
+  };
+}
+
+/** Stand-in for Visitors if they fail to start (or break): nobody comes, the tower carries on. */
+function noVisitors(records = []) {
+  return {
+    active: null,
+    log: () => records,
+    setBlockIndex() {},
+    force() {},
+    spawn: () => false,
+    step() {},
+    update() {},
+    tap: () => false,
+    freeLoss() {},
+    end() {},
     destroy() {},
   };
 }
@@ -272,6 +292,9 @@ export class GameScene extends Phaser.Scene {
     // A friend's challenge (daily only, already validated in js/core/challenge.js): the height to beat, in metres.
     this.challengeM = this.mode === 'daily' && Number.isFinite(d.challenge) && d.challenge > 0 && d.challenge <= 2000 ? d.challenge : 0;
     this.challengeWon = false;
+    // Debug only (?debug=1&visitor=thief, see main.js): this visitor comes as soon as there is a tower.
+    this.debug = d.debug === true;
+    this.forceVisitor = this.debug && !this.idle && VISITOR_TYPES.includes(d.visitor) ? d.visitor : null;
     this.resetRunState();
   }
 
@@ -338,6 +361,10 @@ export class GameScene extends Phaser.Scene {
     this.hintPending = !this.idle;
     this.hideIdx = 0;
     this.progressHeight = 0;
+    this.gifts = [];                 // per clown gift: how many blocks had been dropped when it joined the tower
+    this.visitorGraceUntil = -1e9;   // sim ms: tower blocks lost before this are a visitor's doing (no heart)
+    this.visitorBlame = null;        // ...which visitor
+    this.graceToast = false;         // the "not your fault" toast was shown for this push
   }
 
   create() {
@@ -390,6 +417,8 @@ export class GameScene extends Phaser.Scene {
     this.crane = new Crane(this, { top: this.st });
     this.effects = new Effects(this, { reducedMotion: this.reducedMotion });
     this.weather = this.idle ? calmWeather() : this.buildWeather();
+    this.visitors = this.buildVisitors();
+    if (this.forceVisitor) this.visitors.force(this.forceVisitor);
 
     // Landing ghost: white silhouette with a navy rim so it reads against a pale sky,
     // a dotted line from the hanging block to it, and (until the first drop) a label.
@@ -496,6 +525,45 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  buildVisitors() {
+    try {
+      return new Visitors(this, this.sequence, {
+        audio, bus, attract: this.idle, reducedMotion: this.reducedMotion, actions: this.visitorActions(),
+      });
+    } catch (err) {
+      console.error('[Game] visitors failed to start', err);
+      return noVisitors();
+    }
+  }
+
+  /** What a visitor can do to the game (js/game/visitors.js decides when, on the physics clock). */
+  visitorActions() {
+    return {
+      top: () => this.visitorTop(),
+      busy: () => !!this.falling,
+      shove: (plan, dir) => this.visitorShove(plan, dir),
+      gift: (plan) => this.visitorGift(plan),
+      steal: (max) => this.visitorSteal(max),
+      // first game: the first visitor of each kind explains itself (shown in its arrival banner)
+      coach: (type) => {
+        const h = this.over ? null : this.coach.visitor(type);
+        return h ? h.text : null;
+      },
+      toast: (text, color) => {
+        if (!this.over) bus.emit('hud:toast', { text, color, visitor: true });
+      },
+    };
+  }
+
+  /** A broken visitor must never stop the tower either: log once and carry on without them. */
+  visitorsFailed(err) {
+    console.error('[Game] visitor error', err);
+    let records = [];
+    safely(() => { records = this.visitors.log(); });
+    safely(() => this.visitors.destroy());
+    this.visitors = noVisitors(records);
+  }
+
   /** A broken weather effect must never stop the tower: log once and carry on calm. */
   weatherFailed(err) {
     console.error('[Game] weather error', err);
@@ -523,6 +591,7 @@ export class GameScene extends Phaser.Scene {
     // The Matter world and the display list are already torn down by their plugins
     // (they listen for 'shutdown' first); module destroy() calls only drop references.
     safely(() => this.weather.destroy());
+    safely(() => this.visitors.destroy());
     safely(() => this.crane.destroy());
     safely(() => this.water.destroy());
     safely(() => this.effects.destroy());
@@ -574,7 +643,22 @@ export class GameScene extends Phaser.Scene {
   // Input
   // -------------------------------------------------------------------------
   onPointerDown(pointer) {
+    if (pointer && this.tapVisitor(pointer)) return;
     this.tryDrop(false, this.tapLag(pointer && pointer.event));
+  }
+
+  /** A tap on a visitor shoos or catches it (or makes the clown honk) and does not drop the block. */
+  tapVisitor(pointer) {
+    if (this.over || this.inputLocked || !this.visitors.active) return false;
+    const p = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    let hit = false;
+    try {
+      hit = this.visitors.tap(p.x, p.y);
+    } catch (err) {
+      this.visitorsFailed(err);
+    }
+    if (hit) haptics.tap();
+    return hit;
   }
 
   onKeyDrop(e) {
@@ -623,6 +707,11 @@ export class GameScene extends Phaser.Scene {
     this.curSpec = spec;
     this.curGeom = getGeometry(spec);
     safely(() => this.weather.setBlockIndex(i));
+    try {
+      this.visitors.setBlockIndex(i);
+    } catch (err) {
+      this.visitorsFailed(err);
+    }
     // a sponsor's name is printed on the block (same texture on the crane, falling and in the
     // tower); the ghost below tints it into a plain silhouette
     this.curName = this.nameFor(spec);
@@ -830,6 +919,11 @@ export class GameScene extends Phaser.Scene {
       this.weatherFailed(err);
     }
     this.updateCamera(dtS);
+    try {
+      this.visitors.update();
+    } catch (err) {
+      this.visitorsFailed(err);
+    }
     this.updateFloodTag(time);
     this.updateGhostAndAutoplay();
     this.updateWobble(dtS);
@@ -866,6 +960,11 @@ export class GameScene extends Phaser.Scene {
       this.weather.beforeStep(ctx);
     } catch (err) {
       this.weatherFailed(err);
+    }
+    try {
+      this.visitors.step();
+    } catch (err) {
+      this.visitorsFailed(err);
     }
     this.matter.world.step(FIXED * this.timeScale);
     const dyn = this.dyn;
@@ -981,6 +1080,7 @@ export class GameScene extends Phaser.Scene {
   land(f, supportBody, supTop, q) {
     this.falling = null;
     this.stepCtx.falling = null;
+    f.shielded = false;   // it made it: from here on the tower's own rules apply
     f.state = 'landed';
     f.landedAt = this.now;
     this.lastLandAt = this.now;
@@ -1188,10 +1288,19 @@ export class GameScene extends Phaser.Scene {
       this.dynDirty = true;
     }
     block.state = 'lost';
+    // A visitor's doing (the clown's gift, a block that was in the air when a visitor changed the
+    // tower, or the tower still settling after a visitor's push): no heart, the combo stays and
+    // the block keeps its own grid cell.
+    const byVisitor = !this.idle && !this.over && visitorFree(block, { now: this.now, graceUntil: this.visitorGraceUntil, wasFalling });
+    if (byVisitor && !wasFalling && block.pendingRate && !block.rating) this.rateQuietly(block, 'S');
     block.pendingRate = false;
     if (!block.rating) block.rating = 'X';
     this.advance(block);            // a block that never touched the tower still brings the next one
     if (this.idle || this.over) return;
+    if (byVisitor) {
+      this.visitorLoss(block, wasFalling);
+      return;
+    }
 
     // A collapse (tower blocks falling together) costs one life, not one per block.
     // A dropped block that misses costs its own, unless the tower was coming down
@@ -1215,6 +1324,24 @@ export class GameScene extends Phaser.Scene {
     haptics.lost();
     this.emitProgress();
     if (this.lives <= 0) this.endGame('lives');
+  }
+
+  /** A lost block a visitor is to blame for: it costs height, nothing else. */
+  visitorLoss(block, wasFalling) {
+    if (wasFalling) {
+      this.grid[block.index] = 'X';   // it never reached the tower
+    } else {
+      // the rest of this collapse is the visitor's too (and so is a drop aimed at a top that fell away)
+      this.lastTowerLossAt = this.now;
+      this.collapseUntil = Math.max(this.collapseUntil, this.now + COLLAPSE_MS);
+    }
+    const blame = block.gift ? 'clown' : this.visitorBlame;
+    if (blame === 'monkey') this.visitors.freeLoss('monkey');
+    if (!block.gift && VISITOR_INFO[blame] && !this.graceToast) {
+      this.graceToast = true;
+      bus.emit('hud:toast', { text: S.visitorFree(VISITOR_INFO[blame].name), color: '#c9ffb8', visitor: true });
+    }
+    this.emitProgress();
   }
 
   /** A tower block is dropping off right now (a collapse that hasn't reached the sea yet). */
@@ -1242,6 +1369,130 @@ export class GameScene extends Phaser.Scene {
       if (o.left < x1 && o.right > x0 && o.top >= y) return true;
     }
     return false;
+  }
+
+  // -------------------------------------------------------------------------
+  // Visitors: js/game/visitors.js decides when (on the physics clock); the physics happens here.
+  // -------------------------------------------------------------------------
+  /** The tower top a visitor goes to: its centre and edges (world px). */
+  visitorTop() {
+    const tb = this.topBlock && !this.topBlock.destroyed ? this.topBlock : null;
+    const t = this.supportTop(tb);
+    const out = this.visitorTopOut || (this.visitorTopOut = { x: 0, y: 0, left: 0, right: 0 });
+    out.x = t.x;
+    out.y = this.towerTopY;
+    out.left = tb ? tb.left : BASE_CX - BASE_HALF_W;
+    out.right = tb ? tb.right : BASE_CX + BASE_HALF_W;
+    return out;
+  }
+
+  /** A visitor changed the tower: what comes down in the next moments is not the player's fault. */
+  openVisitorGrace(type) {
+    this.visitorGraceUntil = this.now + VISITOR.graceMs;
+    this.visitorBlame = type;
+    this.graceToast = false;
+    if (this.falling) this.falling.shielded = true;   // it was aimed at the tower as it stood
+  }
+
+  /** Blouaap's shove: the top 1-2 movable blocks get a sideways kick (a Perfek block is "grounded": half). */
+  visitorShove(plan, dir) {
+    if (this.over) return 0;
+    const M = this.M;
+    const targets = topMovable(this.tower, plan.count);
+    for (const b of targets) {
+      const body = b.body;
+      const grounded = b.rating === RATING.PERFECT ? 0.5 : 1;
+      M.Sleeping.set(body, false);
+      M.Body.setVelocity(body, { x: body.velocity.x + dir * plan.kick * grounded, y: body.velocity.y - 0.8 * grounded });
+      M.Body.setAngularVelocity(body, body.angularVelocity + dir * plan.spin * grounded);
+    }
+    if (targets.length) {
+      const b = targets[0];
+      this.effects.dust(b.centerX, b.top + 6, b.right - b.left);
+      this.effects.shake(0.003, 140);
+    }
+    this.openVisitorGrace('monkey');
+    return targets.length;
+  }
+
+  /** Hanswors's gift: a striped bonus block let go just above the tower top, a little crooked. */
+  visitorGift(plan) {
+    if (this.over) return null;
+    const spec = { ...plan.spec, i: -1, gift: true };
+    const geom = getGeometry(spec);
+    const tb = this.topBlock && !this.topBlock.destroyed ? this.topBlock : null;
+    const x = clamp(this.supportTop(tb).x + plan.dx, 40, GAME_W - 40);
+    const y = this.towerTopY - VISITOR.giftDropPx - (geom.h - geom.cy);
+    const b = new Block(this, spec, x, y, plan.tilt, null);
+    b.gift = true;
+    b.rating = RATING.GIFT;
+    b.state = 'landed';
+    b.droppedAt = this.now;
+    b.landedAt = this.now;
+    b.advanced = true;        // it brings no crane block of its own
+    b.lostMarked = false;
+    b.splashed = false;
+    b.pendingRate = false;
+    b.shielded = false;
+    b.setFriction(this.weather.frictionMul);
+    this.tower.push(b);
+    this.active.push(b);
+    this.dynDirty = true;
+    this.lastLandAt = this.now;   // the wobble meter lets it settle first
+    this.gifts.push(this.blocksDropped);
+    this.score += VISITOR.giftPoints;
+    this.effects.floatText(b.right + 64, b.bottom + 24, `+${VISITOR.giftPoints} 🎁`, { color: '#fff27a', size: 36 });
+    this.effects.sparkle(x, b.top, 14);
+    audio.play('land', { intensity: 0.35, size: 0.6 });
+    this.emitProgress();
+    return b;
+  }
+
+  /** Skelm Sakkie's theft: the top movable blocks (never cement) leave the tower; their pictures go into his bag. */
+  visitorSteal(max) {
+    if (this.over) return [];
+    const loot = thiefLoot(this.tower, max);
+    const pics = [];
+    for (const b of loot) {
+      if (b.pendingRate && !b.rating) this.rateQuietly(b, 'S');   // it stood on the tower: it counts as it stood
+      const img = b.image;
+      pics.push(this.add.image(img.x, img.y, b.textureKey).setOrigin(img.originX, img.originY)
+        .setRotation(img.rotation).setDepth(DEPTH.visitor - 0.5));
+      const k = this.tower.indexOf(b);
+      if (k >= 0) this.tower.splice(k, 1);
+      const a = this.active.indexOf(b);
+      if (a >= 0) this.active.splice(a, 1);
+      b.state = 'stolen';
+      b.destroy();
+    }
+    this.openVisitorGrace('thief');   // whatever leaned on them may come down
+    if (loot.length) {
+      this.dynDirty = true;
+      this.rebuildDyn();
+      this.updateTowerHeight();
+      this.emitProgress();
+    }
+    return pics;
+  }
+
+  /** A block a visitor took (or knocked off) before its landing was rated counts as it stood, quietly. */
+  rateQuietly(b, r) {
+    b.rating = r;
+    b.pendingRate = false;
+    if (this.idle || this.over || b.gift) return;
+    this.grid[b.index] = r;
+    this.score += SCORING.base;
+  }
+
+  /** Debug / tests only (?debug=1): a visitor right now, e.g. window.__stapel.scene.spawnVisitor('thief'). */
+  spawnVisitor(type, side = 1) {
+    if (!this.debug || this.idle || this.over) return false;
+    try {
+      return this.visitors.spawn(type, side);
+    } catch (err) {
+      this.visitorsFailed(err);
+      return false;
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -1780,7 +2031,7 @@ export class GameScene extends Phaser.Scene {
 
   buildResult(reason) {
     let dropped = this.blocksDropped;
-    let grid = '';
+    const cells = new Array(this.grid.length).fill(null);
     for (let k = 0; k < this.grid.length; k++) {
       let c = this.grid[k];
       if (c === undefined) continue;
@@ -1793,8 +2044,10 @@ export class GameScene extends Phaser.Scene {
           continue;
         }
       }
-      grid += c;
+      cells[k] = c;
     }
+    // the clown's gifts (🎁) sit in the grid where they joined the tower
+    const grid = gridWithGifts(cells, this.gifts);
     // 🎯 in the share line must match the 🟩 in the grid: a Perfek block that later fell is an X.
     let perfects = 0;
     for (let k = 0; k < grid.length; k++) if (grid[k] === 'P') perfects++;
@@ -1812,6 +2065,7 @@ export class GameScene extends Phaser.Scene {
       maxCombo: this.maxCombo,
       grid,
       weather: [...(this.weather.seen || [])],
+      visitors: this.visitors ? this.visitors.log() : [],
       durationMs: Math.round(this.playMs),
     };
   }
@@ -1825,6 +2079,11 @@ export class GameScene extends Phaser.Scene {
     this.overReason = reason;
     this.inputLocked = true;
     this.hintPending = false;
+    try {
+      this.visitors.end();   // whoever is visiting slips away; nothing more happens to the tower
+    } catch (err) {
+      this.visitorsFailed(err);
+    }
     for (const b of this.active) b.waitTimer = null;
     this.stepTimers.length = 0;   // pending next-block spawns
     this.spawnDue = null;
@@ -1974,7 +2233,17 @@ export class GameScene extends Phaser.Scene {
       blocksPlaced: this.tower.length,
       frozen: this.frozen.length,
       grid: this.buildResult('quit').grid,
+      visitor: this.visitorState(),
+      visitors: this.visitors ? this.visitors.log() : [],
+      gifts: this.gifts.length,
     };
+  }
+
+  /** Debug / tests: the visitor on screen (type, phase, sim ms since it came, where it is). */
+  visitorState() {
+    const c = this.visitors && this.visitors.active;
+    if (!c) return null;
+    return { type: c.type, phase: c.phase, t: Math.round(c.t), x: round1(c.x), y: round1(c.y), side: c.side, gone: !!c.gone };
   }
 }
 

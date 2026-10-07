@@ -4,9 +4,10 @@
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
 import { GAME_W, PALETTE, RATING_EMOJI, computeGameHeight } from '../config.js';
-import { S, WEATHER_INFO } from '../core/strings.js';
+import { S, WEATHER_INFO, VISITOR_INFO } from '../core/strings.js';
 import { fmtM, fmtInt, fmtClock, fmtDuration, DAYS_AF } from '../core/format.js';
 import { shareResult } from '../core/share.js';
+import { visitorResultLine } from '../core/visitorrules.js';
 import { sayingOfTheDay, resultSaying, pauseSaying } from '../core/sayings.js';
 import { audio, haptics } from '../audio.js';
 
@@ -19,8 +20,8 @@ const REASONS = {
   quit: { emoji: '🏳️', title: S.overQuit, sub: S.overQuitSub },
 };
 const CLICK_GUARD_MS = 350;   // swallow double taps on navigation buttons
-// In-app grid cells: colour AND a symbol, so every kind of colour blindness can read them.
-const CELL_GLYPH = { P: '★', G: '•', S: '∼', X: '✕' };
+// In-app grid cells: colour AND a symbol, so every kind of colour blindness can read them (🎁: the clown's gift).
+const CELL_GLYPH = { P: '★', G: '•', S: '∼', X: '✕', B: '🎁' };
 const MAX_TOASTS = 3;
 const SHORT_ASPECT = 1.72;    // canvases squatter than this (desktop, tablets) get the compact layout
 const STEP_COLORS = ['protea', 'karoo', 'sonneblom', 'bosveld', 'oseaan', 'jakaranda', 'hemel'];
@@ -581,12 +582,19 @@ export function createUI(bus) {
         button('btn-big btn-green', [icon('chart'), h('span', { text: S.seeResult })], () => bus.emit('ui:play-daily')));
     } else {
       const fc = (m.forecast || []).slice(0, 4).filter((t) => WEATHER_INFO[t]).map((t) => ({ key: t, ...WEATHER_INFO[t] }));
+      // today's visitors, each once ("Besoekers vandag: 🐒 🤡"): same for everyone, like the weather
+      const who = (m.visitors || []).filter((t) => VISITOR_INFO[t]).map((t) => VISITOR_INFO[t]);
       if (fc.length) {
-        card.append(h('div', { class: 'forecast' },
+        card.append(h('div', { class: who.length ? 'forecast has-visitors' : 'forecast' },
           h('h3', { class: 'label', text: S.forecast }),
           h('ol', { class: 'fc-strip' }, fc.map((w) => h('li', { class: 'fc-item' },
             h('span', { class: 'fc-emo', 'data-wx': w.key }, emo(w.emoji)),
-            h('span', { class: 'fc-name', text: w.name }))))));
+            h('span', { class: 'fc-name', text: w.name })))),
+          who.length
+            ? h('p', { class: 'fc-visitors', 'aria-label': `${S.visitorsToday}: ${who.map((x) => x.name).join(', ')}` },
+              h('span', { class: 'fc-vlabel', text: `${S.visitorsToday}:` }),
+              who.map((x) => h('span', { class: 'fc-who', title: x.name }, emo(x.emoji))))
+            : null));
       }
       // a friend's challenge (from a shared link, today's date only): text only, never markup
       if (m.challenge && m.challenge.text) card.append(h('p', { class: 'challenge-chip', role: 'status', text: m.challenge.text }));
@@ -789,7 +797,7 @@ export function createUI(bus) {
   // ---------------------------------------------------------------------------
   function gridEl(grid, reason) {
     const cells = [];
-    const counts = { P: 0, G: 0, S: 0, X: 0 };
+    const counts = { P: 0, G: 0, S: 0, X: 0, B: 0 };
     for (const ch of String(grid || '')) {
       if (!RATING_EMOJI[ch]) continue;
       cells.push(ch);
@@ -815,7 +823,8 @@ export function createUI(bus) {
         end ? h('span', { class: 'emoji', vars: { '--i': n++ }, text: end }) : null));
     }
     if (!rows.length) return null;
-    const label = `${S.perfects} ${counts.P}, ${S.good} ${counts.G}, ${S.skew} ${counts.S}, ${S.lostCount} ${counts.X}`;
+    const label = `${S.perfects} ${counts.P}, ${S.good} ${counts.G}, ${S.skew} ${counts.S}, ${S.lostCount} ${counts.X}`
+      + (counts.B ? `, ${S.gifts} ${counts.B}` : '');
     return h('div', { class: 'grid', role: 'img', 'aria-label': label }, rows);
   }
 
@@ -832,6 +841,12 @@ export function createUI(bus) {
         return h('span', { class: named ? 'wx-chip' : 'wx-chip solo', 'data-wx': t, title: w.name, 'aria-label': n > 1 ? `${w.name} ×${n}` : w.name },
           emo(w.emoji), named ? h('span', { text: w.name }) : null, n > 1 ? h('sup', { class: 'wx-n', text: `×${n}` }) : null);
       }));
+  }
+
+  /** One line about the day's most memorable visitor ("Jy het Skelm Sakkie gevang! 👮"), or nothing. */
+  function visitorsEl(visits) {
+    const line = visitorResultLine(visits);
+    return line ? h('p', { class: 'res-visitors', text: line }) : null;
   }
 
   function countUp(el, to, fmt, delay = 260, ms = 900) {
@@ -914,6 +929,7 @@ export function createUI(bus) {
         tile(fmtInt(r.maxCombo || 0), S.bestCombo)),
       empty ? null : gridEl(r.grid, r.reason),
       empty ? null : weatherEl(r.weather),
+      empty ? null : visitorsEl(r.visitors),
       empty
         ? h('p', { class: 'empty-note', text: S.nothingToShare })
         : h('div', { class: 'share-row' },

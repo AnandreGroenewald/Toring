@@ -1,0 +1,682 @@
+// Visitors (besoekers): Blouaap 🐒, Hanswors 🤡 and Skelm Sakkie 🦹 drop in between blocks.
+// Who comes when is level data (core/visitorplan.js) and what they may do to the tower is
+// core/visitorrules.js; this module runs one visit at a time and draws it. Everything that
+// can change the tower happens in step(), on the simulated clock (one call per fixed physics
+// step), with its randomness drawn from the visit's own seeded stream: a visit plays out the
+// same at any refresh rate and for every player. The sprites are big emoji (cheap, friendly
+// on every phone) moved in update(); the rope, balloons, swag bag and juggling balls are
+// drawn in code. GameScene does the physics through `actions` (shove, gift, steal).
+
+import { VISITOR, VISITOR_TYPES, DEPTH, GAME_W, LAYOUT, FONT, PHYSICS } from '../config.js';
+import { S, VISITOR_INFO } from '../core/strings.js';
+import { visitRng, monkeyPlan, clownPlan, thiefPlan } from '../core/visitorplan.js';
+import { getGeometry, ensureTexture } from './blocks.js';
+import { canvasTexture, clamp, lerp } from './effects.js';
+
+const STEP_MS = PHYSICS.fixedDtMs;
+const EMOJI_FONT = `"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", ${FONT}`;
+const HALF = VISITOR.size / 2;
+const HANG_ABOVE_TOP = 70;      // the monkey hangs this far above the tower-top line (screen px)
+const HOVER_ABOVE_TOP = 190;    // the clown floats this far above it
+const CLIMB_FROM = 230;         // the thief starts this far below the tower top...
+const CLIMB_TO = 64;            // ...and stops here: his tap circle never reaches the landing spot
+const HUG = 40;                 // the thief climbs this far out from the side of the top block
+const AIM_CLEAR = 40;           // a waiting visitor's tap circle stays this far from the tower top
+const SWAY = 0.05;              // rad: the monkey's sway on its rope (it stays at the side)
+const BANNER_TOP_FALLBACK = 256; // screen px above the bottom where the HUD banner starts (HudScene sets 'hudBannerTop')
+const ENTER_MS = 560;           // the monkey swings in on its rope
+const SHOO_MS = 460;
+const CAUGHT_MS = 950;
+const JUGGLE_MS = 950;
+const FADE_MS = 260;
+const ATTRACT_CHANCE = 0.35;    // menu: the clown floats past above some attract towers (looks only)
+const ATTRACT_MS = 7000;
+const FORCE_FROM = 3;           // a forced (debug) visitor waits until there is a little tower to visit
+
+const outCubic = (t) => 1 - (1 - t) ** 3;
+const inCubic = (t) => t * t * t;
+const outBack = (t) => 1 + 2.70158 * (t - 1) ** 3 + 1.70158 * (t - 1) ** 2;
+const hump = (t) => 4 * t * (1 - t);                  // 0 -> 1 -> 0
+const rand = (a, b) => a + Math.random() * (b - a);   // looks only
+
+// ---------------------------------------------------------------------------
+// Props, drawn once per game
+// ---------------------------------------------------------------------------
+function makeTextures(scene) {
+  canvasTexture(scene, 'vis_balloons', 112, 132, (ctx) => {
+    const balloons = [[30, 40, '#ff5a5f', '#ffb3b5'], [82, 36, '#3d8beb', '#a9cdfa'], [56, 26, '#ffd23f', '#fff0a8']];
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = 'rgba(40,40,60,0.7)';
+    for (const [x, y] of balloons) {
+      ctx.beginPath();
+      ctx.moveTo(x, y + 30);
+      ctx.quadraticCurveTo((x + 56) / 2 + 4, 100, 56, 130);
+      ctx.stroke();
+    }
+    for (const [x, y, fill, shine] of balloons) {
+      ctx.beginPath();
+      ctx.ellipse(x, y, 22, 27, 0, 0, Math.PI * 2);
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(29,43,69,0.55)';
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x - 4, y + 27);
+      ctx.lineTo(x + 4, y + 27);
+      ctx.lineTo(x, y + 33);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(x - 8, y - 10, 5, 8, -0.5, 0, Math.PI * 2);
+      ctx.fillStyle = shine;
+      ctx.fill();
+    }
+  });
+  // swag bag: a sack tied at the neck with a big "R" on it
+  canvasTexture(scene, 'vis_bag', 76, 80, (ctx) => {
+    ctx.beginPath();
+    ctx.moveTo(26, 22);
+    ctx.bezierCurveTo(4, 34, 2, 76, 38, 76);
+    ctx.bezierCurveTo(74, 76, 72, 34, 50, 22);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, 20, 0, 78);
+    g.addColorStop(0, '#c08a4a');
+    g.addColorStop(1, '#8a5a2b');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#4e3115';
+    ctx.stroke();
+    ctx.beginPath();   // the gathered neck
+    ctx.moveTo(24, 8);
+    ctx.lineTo(52, 8);
+    ctx.lineTo(46, 24);
+    ctx.lineTo(30, 24);
+    ctx.closePath();
+    ctx.fillStyle = '#a8743c';
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#e8c35a';   // rope tie
+    ctx.fillRect(27, 20, 22, 5);
+    ctx.font = 'bold 30px "Trebuchet MS", Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#4e3115';
+    ctx.strokeText('R', 38, 52);
+    ctx.fillStyle = '#fff7e0';
+    ctx.fillText('R', 38, 52);
+  });
+  canvasTexture(scene, 'vis_ball', 24, 24, (ctx) => {
+    ctx.beginPath();
+    ctx.arc(12, 12, 10, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(29,43,69,0.6)';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(8.5, 8, 3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fill();
+  });
+}
+
+function emojiText(scene, str, size = VISITOR.size) {
+  return scene.add.text(0, 0, str, {
+    fontFamily: EMOJI_FONT, fontSize: `${size}px`, padding: { x: 8, y: 12 }, resolution: 1,
+  }).setOrigin(0.5).setDepth(DEPTH.visitor).setVisible(false);
+}
+
+const alive = (o) => !!o && !!o.scene;
+function kill(o) {
+  if (alive(o)) o.destroy();
+}
+
+// ---------------------------------------------------------------------------
+// Visitors
+// ---------------------------------------------------------------------------
+export class Visitors {
+  /**
+   * @param {Phaser.Scene} scene  GameScene
+   * @param {object} sequence     createSequence(): visitorAt(i), seed
+   * @param {object} opts         { audio, bus, attract, reducedMotion, actions }
+   *   actions: { top() -> {x,y,left,right}, busy() -> bool, shove(plan, dir) -> n, gift(plan) -> Block|null,
+   *              steal(max) -> Image[], coach(type), toast(text, color), free() }
+   */
+  constructor(scene, sequence, { audio = null, bus = null, attract = false, reducedMotion = false, actions = {} } = {}) {
+    this.scene = scene;
+    this.sequence = sequence;
+    this.audio = audio;
+    this.bus = bus;
+    this.attract = !!attract;
+    this.reduced = !!reducedMotion;
+    this.actions = actions;
+    this.seed = sequence && sequence.seed != null ? String(sequence.seed) : 'visitors';
+    this.records = [];     // one { type, outcome, n } per visit, for the result
+    this.cur = null;       // the visit on screen
+    this.pending = null;   // a scheduled visitor that found another one still on screen
+    this.forced = null;    // debug: { type, side } for the next block from FORCE_FROM on
+    this.ended = false;
+    this.dead = false;
+    this.i = -1;
+    makeTextures(scene);
+  }
+
+  /** The visit on screen (null when there is none). */
+  get active() {
+    return this.cur;
+  }
+
+  /** The visits of this tower, oldest first: [{ type, outcome, n }]. */
+  log() {
+    return this.records.map((r) => ({ type: r.type, outcome: r.outcome, n: r.n }));
+  }
+
+  // --- schedule -------------------------------------------------------------
+
+  /** Block i was attached to the crane: the visitor that comes with it (if any) arrives now. */
+  setBlockIndex(i) {
+    if (this.dead || this.ended) return;
+    this.i = i;
+    if (this.attract) {
+      if (i === 3 && !this.cur && Math.random() < ATTRACT_CHANCE) this._start({ type: 'clown', at: i, side: Math.random() < 0.5 ? -1 : 1, strength: 1 }, true);
+      return;
+    }
+    let v = this.sequence && this.sequence.visitorAt ? this.sequence.visitorAt(i) : null;
+    if (this.forced && i >= FORCE_FROM) {
+      v = { type: this.forced.type, at: i, side: this.forced.side, strength: 1 };
+      this.forced = null;
+    }
+    if (v && this.cur) {
+      this.pending = v;   // never two visitors at once: this one waits for the next free block
+      return;
+    }
+    if (!v && this.pending && !this.cur && !this._weatherStarts(i)) {
+      v = { ...this.pending, at: i };
+      this.pending = null;
+    }
+    if (v) this._start(v, false);
+  }
+
+  _weatherStarts(i) {
+    const ev = this.sequence && this.sequence.eventAt ? this.sequence.eventAt(i) : null;
+    return !!ev && ev.start === i;
+  }
+
+  /** Debug (?visitor=thief): the next block (from block FORCE_FROM on) brings this visitor. */
+  force(type, side = 1) {
+    if (VISITOR_TYPES.includes(type)) this.forced = { type, side: side < 0 ? -1 : 1 };
+  }
+
+  /** Debug / tests: a visitor right now, if the stage is free. Returns true if it came. */
+  spawn(type, side = 1) {
+    if (this.dead || this.ended || this.attract || this.cur || !VISITOR_TYPES.includes(type)) return false;
+    this._start({ type, at: Math.max(0, this.i), side: side < 0 ? -1 : 1, strength: 1 }, false);
+    return true;
+  }
+
+  _start(v, attract) {
+    const scene = this.scene;
+    const r = visitRng(this.seed, v);
+    const c = {
+      v,
+      type: v.type,
+      side: v.side < 0 ? -1 : 1,
+      attract,
+      t: 0,
+      phase: v.type === 'monkey' ? 'swing' : v.type === 'clown' ? 'arrive' : 'climb',
+      at: 0,          // t when the phase began
+      gone: false,    // its part in the game is over (only the exit animation is left)
+      rec: null,
+      x: GAME_W / 2,
+      y: 0,
+      from: null,     // world point where the current move started
+      sprite: emojiText(scene, VISITOR_INFO[v.type].emoji),
+      objs: [],
+      juggle: -1e9,
+    };
+    c.plan = v.type === 'monkey' ? monkeyPlan(r, v) : v.type === 'clown' ? clownPlan(r, v) : thiefPlan(r, v);
+    c.objs.push(c.sprite);
+    if (!attract) {
+      c.rec = { type: v.type, outcome: 'came', n: 0 };
+      this.records.push(c.rec);
+    }
+    this.cur = c;
+    if (c.type === 'monkey') {
+      c.side = this._clearSide(c.side, VISITOR.sideX);
+      c.rope = scene.add.graphics().setDepth(DEPTH.visitor - 0.2);
+      c.objs.push(c.rope);
+    } else if (c.type === 'clown') {
+      if (!attract) c.side = this._clearSide(c.side, VISITOR.sideX + 10);
+      c.balloons = scene.add.image(0, 0, 'vis_balloons').setOrigin(0.5, 1).setDepth(DEPTH.visitor - 0.1).setVisible(false);
+      c.objs.push(c.balloons);
+      c.puffs = [emojiText(scene, '💨', 34), emojiText(scene, '💨', 30)];
+      // juggling balls in other colours than the balloons (they must not read as more balloons)
+      c.balls = [0x5bbf5a, 0xf39a2b, 0x8e6ce0].map((tint) => scene.add.image(0, 0, 'vis_ball').setTint(tint).setDepth(DEPTH.visitor + 0.1).setVisible(false));
+      c.objs.push(...c.puffs, ...c.balls);
+      if (attract) c.sprite.setAlpha(0.9);
+    } else {
+      c.bag = scene.add.image(0, 0, 'vis_bag').setDepth(DEPTH.visitor - 0.1).setScale(0.62).setVisible(false);
+      c.objs.push(c.bag);
+      c.loot = [];
+    }
+    this._place(0);
+    if (attract) return;
+
+    // The arrival banner; a first-time player's first visitor of each kind gets the coach hint as its
+    // subtitle (a separate hint pill would sit right where the thief climbs, or wait behind the banner).
+    const info = VISITOR_INFO[c.type];
+    const coach = this.actions.coach ? this.actions.coach(c.type) : null;
+    if (this.bus) {
+      this.bus.emit('hud:banner', {
+        emoji: info.emoji, title: `${info.name}!`, subtitle: coach || info.hint, type: c.type, kind: 'visitor', ms: coach ? 2600 : 0,
+      });
+    }
+    this._play(c.type === 'monkey' ? 'monkey' : c.type === 'clown' ? 'clown' : 'thief');
+    if (c.type === 'clown') this._honk(c);
+  }
+
+  /** The side a waiting visitor uses: the scheduled one, unless the tower top leans so far over that the tap circle would touch it. */
+  _clearSide(side, edgeX) {
+    const top = this.actions.top?.();
+    if (!top) return side;
+    const x = side < 0 ? edgeX : GAME_W - edgeX;
+    const reach = VISITOR.hitR + AIM_CLEAR + 30;   // + the sway on the rope / the bob under the balloons
+    const near = side < 0 ? x + reach > top.left : x - reach < top.right;
+    return near ? -side : side;
+  }
+
+  // --- simulated clock (one call per fixed physics step) --------------------
+
+  step() {
+    const c = this.cur;
+    if (this.dead || !c) return;
+    c.t += STEP_MS;
+    if (this.ended && c.phase !== 'caught') {
+      if (c.t - c.endAt >= FADE_MS) this._finish();
+      return;
+    }
+    if (c.gone) {
+      if (c.t - c.at >= this._exitMs(c)) this._finish();
+      return;
+    }
+    if (c.attract) {
+      if (c.t >= ATTRACT_MS) this._finish();
+      return;
+    }
+    const since = c.t - c.at;
+    if (c.type === 'monkey') {
+      if (c.phase === 'swing' && since >= VISITOR.monkeyRunUpMs) this._phase(c, 'leap');
+      else if (c.phase === 'leap' && since >= VISITOR.monkeyLeapMs) this._phase(c, 'bounce');
+      else if (c.phase === 'bounce' && since >= VISITOR.monkeyBounceMs) {
+        const pushed = this.actions.shove ? this.actions.shove(c.plan, -c.side) : 0;
+        c.rec.outcome = 'shoved';
+        c.pushed = pushed;
+        this._play('monkey');
+        this._leave(c, 'leave');
+      }
+    } else if (c.type === 'clown') {
+      if (c.phase === 'arrive' && since >= VISITOR.clownArriveMs) this._phase(c, 'wait');
+      // the gift waits until no block of the player's is falling (it must not land on one in the air)
+      if (c.phase === 'wait') {
+        if (!(this.actions.busy && this.actions.busy())) this._toss(c);
+      } else if (c.phase === 'toss' && c.t - c.at >= VISITOR.clownTossMs) {
+        if (c.gift) kill(c.gift);
+        c.gift = null;
+        const block = this.actions.gift ? this.actions.gift(c.plan) : null;
+        if (block) c.rec.outcome = 'gift';
+        this._leave(c, 'leave');
+      }
+    } else if (c.phase === 'climb' && since >= c.plan.climbMs) {
+      const loot = this.actions.steal ? this.actions.steal(VISITOR.thiefMax) : [];
+      c.rec.outcome = 'stole';
+      c.rec.n = loot.length;
+      this._grab(c, loot);
+      this._phase(c, 'grab');
+    } else if (c.phase === 'grab' && since >= VISITOR.thiefGrabMs) {
+      this._play('escape');
+      this.actions.toast?.(c.rec.n > 0 ? S.thiefStole(c.rec.n) : S.thiefEmpty, '#ffd0a8');
+      this._leave(c, 'leave');
+    }
+  }
+
+  _phase(c, phase) {
+    c.phase = phase;
+    c.at = c.t;
+    c.from = { x: c.x, y: c.y };
+  }
+
+  /** The visitor's part is done: only its exit animation is left (then the stage is free). */
+  _leave(c, phase) {
+    this._phase(c, phase);
+    c.gone = true;
+  }
+
+  _exitMs(c) {
+    switch (c.phase) {
+      case 'shooed': return SHOO_MS;
+      case 'caught': return CAUGHT_MS;
+      case 'leave': return c.type === 'monkey' ? VISITOR.monkeyLeaveMs : c.type === 'clown' ? VISITOR.clownLeaveMs : VISITOR.thiefLeaveMs;
+      default: return FADE_MS;
+    }
+  }
+
+  _finish() {
+    const c = this.cur;
+    if (!c) return;
+    for (const o of c.objs) kill(o);
+    if (c.gift) kill(c.gift);
+    for (const img of c.loot || []) kill(img);
+    this.cur = null;
+  }
+
+  _toss(c) {
+    this._phase(c, 'toss');
+    const spec = { ...c.plan.spec, i: -1, gift: true };
+    const g = getGeometry(spec);
+    c.giftGeom = g;
+    c.gift = this.scene.add.image(c.x, c.y + 30, ensureTexture(this.scene, spec)).setOrigin(g.originX, g.originY)
+      .setDepth(DEPTH.visitor - 0.3).setScale(0.6);
+    this._play('clown', { short: true });
+  }
+
+  _grab(c, loot) {
+    c.loot = loot;
+    const bagX = c.x - c.side * 30;
+    const bagY = c.y + 12;
+    loot.forEach((img, k) => {
+      this.scene.tweens.add({
+        targets: img, x: bagX, y: bagY, scale: 0.12, alpha: 0.6, angle: img.angle + c.side * 90,
+        duration: Math.max(120, VISITOR.thiefGrabMs - 60 * k), delay: 40 * k, ease: 'Cubic.easeIn',
+        onComplete: () => {
+          kill(img);
+          if (alive(c.bag) && !this.reduced) c.bag.setScale(Math.min(1.05, c.bag.scaleX + 0.1));
+        },
+      });
+    });
+  }
+
+  // --- taps -------------------------------------------------------------------
+
+  /**
+   * A tap at world point (wx, wy). Returns true when it hit a visitor: then it shoos the
+   * monkey or catches the thief (only while they can still be stopped), or makes the clown
+   * honk and juggle, and the block is NOT dropped. Any other tap drops as normal.
+   */
+  tap(wx, wy) {
+    const c = this.cur;
+    if (this.dead || this.ended || !c || c.attract || c.gone) return false;
+    if (!alive(c.sprite) || !c.sprite.visible) return false;
+    if ((wx - c.x) ** 2 + (wy - c.y) ** 2 > VISITOR.hitR * VISITOR.hitR) return false;
+    if (c.type === 'monkey') {
+      if (c.phase !== 'swing') return false;
+      c.rec.outcome = 'shooed';
+      this._leave(c, 'shooed');
+      this._play('shoo');
+      this.actions.toast?.(S.monkeyShooed, '#c9ffb8');
+      return true;
+    }
+    if (c.type === 'thief') {
+      if (c.phase !== 'climb') return false;
+      c.rec.outcome = 'caught';
+      this._leave(c, 'caught');
+      this._play('caught');
+      this.actions.toast?.(S.thiefCaught, '#c9ffb8');
+      c.hand = emojiText(this.scene, '✋', 56);
+      c.objs.push(c.hand);
+      return true;
+    }
+    // the clown is a gift: tapping him only makes him honk and juggle
+    this._honk(c);
+    c.juggle = c.t;
+    this._play('clown', { short: true });
+    return true;
+  }
+
+  /** A block a visitor is to blame for went into the sea (the monkey's count for the results). */
+  freeLoss(type) {
+    for (let k = this.records.length - 1; k >= 0; k--) {
+      const r = this.records[k];
+      if (r.type !== type) continue;
+      if (type === 'monkey') r.n++;
+      return;
+    }
+  }
+
+  /** Game over: whoever is on screen slips away; nothing more happens to the tower. */
+  end() {
+    if (this.ended) return;
+    this.ended = true;
+    this.pending = null;
+    this.forced = null;
+    const c = this.cur;
+    if (c) {
+      c.gone = true;
+      c.endAt = c.t;
+    }
+  }
+
+  // --- visuals (per frame) ----------------------------------------------------
+
+  update() {
+    const c = this.cur;
+    if (this.dead || !c) return;
+    // smooth between physics steps on fast screens (positions only; never the outcome)
+    const lag = clamp(Number(this.scene.acc) || 0, 0, STEP_MS);
+    this._place(lag);
+  }
+
+  _place(lag) {
+    const c = this.cur;
+    const scene = this.scene;
+    const cam = scene.cameras.main;
+    const tv = c.t + lag;
+    const since = tv - c.at;
+    const top = this.actions.top?.() || { x: GAME_W / 2, y: LAYOUT.baseTopY, left: GAME_W / 2 - 150, right: GAME_W / 2 + 150 };
+    const sy = (y) => cam.scrollY + y;   // screen y -> world y (zoom is 1 during play)
+    const drop = scene.dropLineY || LAYOUT.dropLineY;
+    let x = c.x;
+    let y = c.y;
+    let rot = 0;
+    let sx = 1;
+    let syl = 1;
+    let alpha = 1;
+    const s = c.side;
+
+    if (c.type === 'monkey') {
+      const ax = s < 0 ? VISITOR.sideX : GAME_W - VISITOR.sideX;
+      const ay = LAYOUT.jibY + (scene.st || 0);
+      const len = drop - HANG_ABOVE_TOP - ay;
+      let ropeTo = null;
+      if (c.phase === 'swing') {
+        // swings in from off-screen and settles at the side (no overshoot towards the tower)
+        const u = clamp(tv / ENTER_MS, 0, 1);
+        const swing = this.reduced ? 0 : SWAY * Math.sin((tv / 1100) * Math.PI * 2) * u;
+        const th = s * 1.3 * (1 - (this.reduced ? u : outCubic(u))) + swing;
+        x = ax + len * Math.sin(th);
+        y = sy(ay + len * Math.cos(th));
+        rot = -th * 0.7;
+        ropeTo = { x, y: y - HALF + 6 };
+      } else if (c.phase === 'leap') {
+        const p = clamp(since / VISITOR.monkeyLeapMs, 0, 1);
+        const tx = top.x;
+        const ty = top.y - HALF + 4;
+        x = lerp(c.from.x, tx, p);
+        y = lerp(c.from.y, ty, p) - (this.reduced ? 0 : 110 * hump(p));
+        rot = this.reduced ? 0 : -s * 0.6 * hump(p);
+        const k = 1 - p;   // the empty rope swings back up
+        ropeTo = { x: ax + (c.from.x - ax) * k, y: sy(ay) + (c.from.y - HALF + 6 - sy(ay)) * k };
+      } else if (c.phase === 'bounce') {
+        const p = clamp(since / VISITOR.monkeyBounceMs, 0, 1);
+        const hop = this.reduced ? 0 : Math.abs(Math.sin(p * Math.PI * 2));
+        x = top.x;
+        y = top.y - HALF + 4 - 30 * hop;
+        if (!this.reduced) {
+          syl = 1 - 0.16 * (1 - hop) ** 4;
+          sx = 2 - syl;
+        }
+      } else if (c.phase === 'leave' || c.phase === 'shooed') {
+        const ms = this._exitMs(c);
+        const p = clamp(since / ms, 0, 1);
+        if (c.phase === 'shooed') {
+          // scurries back up its rope and away
+          x = c.from.x;
+          y = c.from.y - 700 * inCubic(p);
+          ropeTo = { x, y: y - HALF + 6 };
+          rot = this.reduced ? 0 : s * 0.3 * Math.sin(p * 12);
+        } else {
+          const ex = s < 0 ? -110 : GAME_W + 110;
+          x = lerp(c.from.x, ex, p);
+          y = c.from.y - (this.reduced ? 0 : 150 * hump(Math.min(1, p * 1.2))) + 260 * p * p;
+          rot = this.reduced ? 0 : s * 2.2 * p;
+        }
+        alpha = p > 0.7 ? 1 - (p - 0.7) / 0.3 : 1;
+      }
+      const rope = c.rope;
+      if (alive(rope)) {
+        rope.clear();
+        if (ropeTo) {
+          rope.lineStyle(7, 0x4e3115, 0.9).lineBetween(ax, sy(ay), ropeTo.x, ropeTo.y);
+          rope.lineStyle(4, 0xb07a3c, 1).lineBetween(ax, sy(ay), ropeTo.x, ropeTo.y);
+        }
+      }
+      if (alive(c.sprite)) c.sprite.setFlipX(c.phase === 'leave' ? s > 0 : s < 0);
+    } else if (c.type === 'clown') {
+      const hx = s < 0 ? VISITOR.sideX + 10 : GAME_W - VISITOR.sideX - 10;
+      if (c.attract && c.skyY === undefined) c.skyY = top.y - 170;   // just above the little menu tower (it resets under him: keep his height)
+      const hy = c.attract ? c.skyY : sy(drop - HOVER_ABOVE_TOP);
+      const bob = this.reduced ? 0 : 7 * Math.sin((tv / 1300) * Math.PI * 2);
+      const walk = this.reduced ? 0 : 0.12 * Math.sin((tv / 440) * Math.PI * 2);
+      if (c.attract) {
+        // drifts right across the sky above the attract tower
+        const p = clamp(tv / ATTRACT_MS, 0, 1);
+        x = s < 0 ? lerp(-90, GAME_W + 90, p) : lerp(GAME_W + 90, -90, p);
+        y = hy + bob - 40 * hump(p);
+        rot = walk;
+        alpha = 0.95;
+      } else if (c.phase === 'arrive') {
+        const p = clamp(since / VISITOR.clownArriveMs, 0, 1);
+        const e = this.reduced ? p : outCubic(p);
+        x = lerp(s < 0 ? -90 : GAME_W + 90, hx, e);
+        y = hy + 60 * (1 - e) + bob;
+        rot = walk;
+      } else if (c.phase === 'wait' || c.phase === 'toss') {
+        x = hx;
+        y = hy + bob;
+        rot = walk * 0.5;
+      } else {
+        const p = clamp(since / this._exitMs(c), 0, 1);
+        x = c.from.x + (s < 0 ? -1 : 1) * 160 * p;
+        y = c.from.y - 520 * p * p - 40 * p;
+        rot = walk;
+        alpha = p > 0.6 ? 1 - (p - 0.6) / 0.4 : 1;
+      }
+      if (c.phase === 'toss' && alive(c.gift)) {
+        const g = c.giftGeom;
+        const p = clamp(since / VISITOR.clownTossMs, 0, 1);
+        const tx = clamp(top.x + c.plan.dx, 40, GAME_W - 40);
+        const ty = top.y - VISITOR.giftDropPx - (g.h - g.cy);
+        c.gift.setPosition(lerp(x, tx, p), lerp(y + 34, ty, p) - (this.reduced ? 0 : 120 * hump(p)))
+          .setRotation(lerp(0, c.plan.tilt, p) + (this.reduced ? 0 : s * 0.5 * hump(p))).setScale(lerp(0.6, 1, p));
+      }
+      if (alive(c.balloons)) c.balloons.setVisible(true).setPosition(x + 2, y - HALF + 10).setRotation(rot * 0.4).setAlpha(alpha);
+      if (alive(c.sprite)) c.sprite.setFlipX(s > 0);
+      this._placeJuggle(c, tv, x, y, alpha);
+    } else {
+      const sideX = s < 0 ? top.left - HUG : top.right + HUG;
+      const bannerTop = Number(scene.registry.get('hudBannerTop'));
+      const limit = sy((Number.isFinite(bannerTop) ? bannerTop : scene.H - BANNER_TOP_FALLBACK) - HALF - 10);
+      const yEnd = top.y + CLIMB_TO;
+      const yStart = Math.max(yEnd + 40, Math.min(top.y + CLIMB_FROM, limit));
+      if (c.phase === 'climb') {
+        const p = clamp(tv / c.plan.climbMs, 0, 1);
+        // tiptoe: little steps up the side, a lean into each one
+        const tip = this.reduced ? p : clamp(p + 0.025 * Math.sin(p * Math.PI * 12), 0, 1);
+        x = sideX;
+        y = lerp(yStart, yEnd, tip);
+        rot = this.reduced ? 0 : s * 0.1 * Math.sin(p * Math.PI * 12);
+        if (tv < 200) alpha = tv / 200;
+      } else if (c.phase === 'grab') {
+        x = sideX;
+        y = yEnd;
+        rot = this.reduced ? 0 : -s * 0.15;
+      } else if (c.phase === 'caught') {
+        const p = clamp(since / CAUGHT_MS, 0, 1);
+        x = c.from.x - s * 60 * p;
+        y = c.from.y - (this.reduced ? 0 : 70 * hump(Math.min(1, p * 1.6))) + 900 * p * p;
+        rot = this.reduced ? 0 : s * 7 * p * p;
+        alpha = p > 0.75 ? 1 - (p - 0.75) / 0.25 : 1;
+        if (alive(c.hand)) {
+          c.hand.setVisible(true).setPosition(c.from.x, c.from.y - HALF - 34 - 30 * outCubic(Math.min(1, p * 3)))
+            .setScale(this.reduced ? 1 : outBack(clamp(p * 4, 0, 1))).setAlpha(p > 0.7 ? 1 - (p - 0.7) / 0.3 : 1);
+        }
+      } else {
+        // slides back down the side with his loot, faster and faster
+        const p = clamp(since / this._exitMs(c), 0, 1);
+        x = c.from.x + s * 30 * p;
+        y = c.from.y + 900 * inCubic(p) + 40 * p;
+        rot = this.reduced ? 0 : -s * 0.2;
+        alpha = p > 0.8 ? 1 - (p - 0.8) / 0.2 : 1;
+      }
+      if (alive(c.bag)) c.bag.setVisible(true).setPosition(x - s * 34, y + 14).setRotation(rot).setAlpha(alpha);
+      if (alive(c.sprite)) c.sprite.setFlipX(s > 0);
+    }
+
+    if (this.ended && c.phase !== 'caught') alpha *= clamp(1 - (tv - c.endAt) / FADE_MS, 0, 1);
+    c.x = x;
+    c.y = y;
+    if (alive(c.sprite)) c.sprite.setVisible(true).setPosition(x, y).setRotation(rot).setScale(sx, syl).setAlpha(alpha);
+    if (c.type === 'clown') this._placePuffs(c, tv, x, y);
+  }
+
+  _honk(c) {
+    c.honkAt = c.t;
+  }
+
+  _placePuffs(c, tv, x, y) {
+    const since = tv - (c.honkAt ?? -1e9);
+    const s = c.side;
+    c.puffs.forEach((p, k) => {
+      if (!alive(p)) return;
+      const u = (since - k * 160) / 520;
+      if (u < 0 || u > 1 || this.ended) {
+        p.setVisible(false);
+        return;
+      }
+      p.setVisible(true).setPosition(x - s * (44 + 50 * u), y - 6 - 14 * k).setFlipX(s > 0)
+        .setScale(0.6 + 0.6 * u).setAlpha(1 - u);
+    });
+  }
+
+  _placeJuggle(c, tv, x, y, alpha) {
+    const since = tv - c.juggle;
+    const on = since >= 0 && since < JUGGLE_MS && !this.ended && !c.attract;
+    c.balls.forEach((b, k) => {
+      if (!alive(b)) return;
+      if (!on) {
+        b.setVisible(false);
+        return;
+      }
+      // a juggling cascade in front of him, from hand to hand (below the balloons)
+      const ph = (since / 520 + k / 3) % 1;
+      b.setVisible(true).setPosition(x + 44 * Math.cos(ph * Math.PI * 2), y + 34 - 64 * Math.abs(Math.sin(ph * Math.PI)))
+        .setAlpha(alpha * Math.min(1, (JUGGLE_MS - since) / 200));
+    });
+  }
+
+  _play(name, opts) {
+    if (this.attract || !this.audio || !this.audio.play) return;
+    this.audio.play(name, opts || {});
+  }
+
+  destroy() {
+    if (this.dead) return;
+    this.dead = true;
+    if (this.cur) this._finish();
+    this.cur = null;
+    this.pending = null;
+  }
+}

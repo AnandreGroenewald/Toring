@@ -460,10 +460,37 @@ test('normalizeResult fills defaults', () => {
   const r = normalizeResult({ heightM: 12.345, score: 10.6, weather: ['wind', 3] }, D1);
   assert.deepEqual(r, {
     mode: 'daily', dateKey: D1, dayNumber: 1, seed: '', reason: 'quit', score: 11, heightM: 12.3,
-    blocksPlaced: 0, blocksDropped: 0, perfects: 0, maxCombo: 0, grid: '', weather: ['wind'], durationMs: 0,
+    blocksPlaced: 0, blocksDropped: 0, perfects: 0, maxCombo: 0, grid: '', weather: ['wind'], visitors: [], durationMs: 0,
   });
   assert.equal(normalizeResult(null).dateKey, null);
   assert.equal(normalizeResult({ mode: 'practice' }).mode, 'practice');
+});
+
+test('normalizeResult keeps clean visitor records and drops junk', () => {
+  const r = normalizeResult({
+    visitors: [
+      { type: 'monkey', outcome: 'shoved', n: 2 },
+      { type: 'thief', outcome: 'caught' },
+      { type: 'clown', outcome: 'stole', n: 9 },       // a clown can't steal: just "came"
+      { type: 'dragon', outcome: 'gift' },
+      'monkey', null, { type: 'thief', outcome: 'stole', n: 4.4 },
+    ],
+  }, D1);
+  assert.deepEqual(r.visitors, [
+    { type: 'monkey', outcome: 'shoved', n: 2 },
+    { type: 'thief', outcome: 'caught', n: 0 },
+    { type: 'clown', outcome: 'came', n: 9 },
+    { type: 'thief', outcome: 'stole', n: 4 },
+  ]);
+  assert.deepEqual(normalizeResult({ visitors: 'x' }).visitors, []);
+});
+
+test('a finished daily keeps its visitors (results and share text are rebuilt from storage)', () => {
+  const s = createStore(memoryBackend());
+  const visitors = [{ type: 'clown', outcome: 'gift', n: 0 }, { type: 'thief', outcome: 'caught', n: 0 }];
+  s.finishDaily(D1, { mode: 'daily', dateKey: D1, heightM: 30, score: 300, blocksDropped: 20, grid: 'PPBG', visitors });
+  assert.deepEqual(s.getDaily(D1).result.visitors, visitors);
+  assert.equal(s.getDaily(D1).result.grid, 'PPBG');
 });
 
 test('safeLocalStorage works without window.localStorage and with a throwing one', () => {
