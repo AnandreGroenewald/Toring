@@ -251,7 +251,7 @@ test('room: a finished match sends both runs to the lobby (as challenge payloads
   for (let k = 1; k <= 30; k++) {
     clk.tick(1000);
     await say(room, a, { t: 'state', h: k * 1.5, best: k * 1.5 });
-    await say(room, b, { t: 'state', h: k, best: k });
+    await say(room, b, { t: 'state', h: k + 3, best: k });   // b's top counts a block still in the air
   }
   clk.tick(500);
   await say(room, a, { t: 'state', h: 50, best: 50 });
@@ -265,6 +265,8 @@ test('room: a finished match sends both runs to the lobby (as challenge payloads
   assert.equal(runs[0].run.end, 'goal');
   assert.equal(runs[1].run.end, 'stop', 'the loser\'s tower simply stopped');
   assert.ok(runs[1].run.samples.length >= 30);
+  assert.equal(Math.max(...runs[1].run.samples), 300, 'a recording keeps the best height, not the top');
+  assert.equal(Math.max(...runs[0].run.samples), 500);
   assert.equal(state.alarm, clk.t + 60 * 1000);
   await room.alarm();
   assert.equal(a.closed && b.closed, true);

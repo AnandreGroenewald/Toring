@@ -130,7 +130,8 @@ export function createDuel({
     m.lastT = s.t;
     m.youH = s.h;
     m.youBest = Math.max(m.youBest, s.best);
-    m.recorder.add(s.t, s.h);
+    // the recording keeps the best height (the results' number), not the top: that counts a block still in the air
+    m.recorder.add(s.t, m.youBest);
     if (!m.outcome) {
       if (m.kind === 'live') {
         const t = now();

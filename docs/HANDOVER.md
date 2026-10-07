@@ -144,6 +144,12 @@ Later the owner added (decisions are final unless they say otherwise):
     - Screenshots were taken of the menu, the mode screen, 3-2-1, mid-match, attacks, the room waiting screen and results.
   - Game payload now about **1,99 MB** (was 1,93 MB).
   - Not checked here: Cloudflare for real (the owner deploys), real phones and networks, many players at once.
+- **Recording fix (version `1.7.1`).** 1.7.0 went live on 7 Oct 2026 (the push waited out a GitHub outage). A check on the live site found that recordings counted a block still in the air: a player who quit at 12,2 m left a recording of 14,7 m, and a challenge screen said 45,5 m where the sender's results said 43,8 m. Recorded opponents also had about a 1 s head start on every mark. Fixed:
+  - the game and the Worker record the best height, the number the results show (`js/duel.js`, `MatchRoom.record`);
+  - playback: each second's height counts from the middle of that second and the last one from the moment the run ended (`heightAt`), so a recording is never ahead on average and reaches 50 m on time;
+  - heights round to 0,1 m but never up onto a mark or the goal (`heightDm`: 9,97 m stays 9,9).
+  - Tests: root **223/223** (new: the rounding, and a recorded run played back directly and through a link: marks within half a second, the goal on time, no head start on average; this test fails on the old playback), server **152 pass + 1 skipped** (a room records the best height while a block is in the air).
+  - Headless, **zero console errors**: a normal visit (1.7.1 precached, 49 files), a match against Robot Rikus at 360×640, its challenge link played at 412×915 (the link screen's 50,4 m equals the sender's results), and quitting with a block in the air (results 12,6 m, recording 12,6 m).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

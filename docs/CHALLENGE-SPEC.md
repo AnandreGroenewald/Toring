@@ -22,7 +22,7 @@ Live play needs the Worker (`SPONSOR_API_URL`, see `server/README.md`). Without 
 
 ### Recordings and the computer
 
-A recording is the height over time, sampled every second, plus how it ended (`goal`, `lives`, `flood` or `quit`). The opponent's height is read from it at the match clock. Attacks still work both ways:
+A recording is the best height over time (the number the results show, so a block still in the air never counts), sampled every second, plus how it ended (`goal`, `lives`, `flood` or `quit`). The opponent's height is read from it at the match clock, with no head start: each second's height counts from the middle of that second, and the last one from the moment the run ended. Attacks still work both ways:
 
 - When the recording reached a mark first, its visitor comes to your tower (a real visitor, which you can stop).
 - When you reach a mark first, the recording's tower gets shorter: Blouaap −2 m, Skelm Sakkie −4 m, from then on. That is about what those visitors do to a real tower.

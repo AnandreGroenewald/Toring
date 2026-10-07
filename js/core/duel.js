@@ -17,6 +17,7 @@ const SEED_RE = /^[a-z0-9]{4,24}$/;
 const LINK_MAX = 2400;
 const MAX_SAMPLES = Math.floor(DUEL.maxRunMs / DUEL.sampleMs) + 1;
 const MAX_DM = DUEL.maxHeightM * 10;
+const MARK_DM = [...DUEL.marks, DUEL.goalM].map((m) => m * 10);
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
@@ -80,6 +81,13 @@ export function createReferee({ goalM = DUEL.goalM, marks = DUEL.marks, init = n
 }
 
 // ---------------------------------------------------------------------------------- recordings
+/** A height (m) in tenths for a recording: rounded, but never up onto a height mark or the goal (9,97 m stays 9,9). */
+export function heightDm(h) {
+  const x = clamp(Number(h) || 0, 0, DUEL.maxHeightM) * 10;
+  const dm = Math.round(x);
+  return dm > x && MARK_DM.includes(dm) ? dm - 1 : dm;
+}
+
 /**
  * Records a run: the tower's height once a second (stored in decimetres) and how and when it
  * ended. add() may be called every frame; the last height in each second is kept.
@@ -93,7 +101,7 @@ export function createRecorder(sampleMs = DUEL.sampleMs) {
       if (end || !Number.isFinite(tMs) || tMs < 0) return;
       const k = Math.floor(tMs / sampleMs);
       if (k >= MAX_SAMPLES) return;
-      const dm = Math.round(clamp(Number(h) || 0, 0, DUEL.maxHeightM) * 10);
+      const dm = heightDm(h);
       while (samples.length <= k) samples.push(samples.length ? samples[samples.length - 1] : 0);
       samples[k] = dm;
     },
@@ -111,14 +119,23 @@ export function createRecorder(sampleMs = DUEL.sampleMs) {
   };
 }
 
-/** A recorded tower's height (m) at match time t, straight between samples; after its last sample it stays. */
+/**
+ * A recorded tower's height (m) at match time t. Sample k is the height at the end of second k. It
+ * counts from the middle of that second, so a recording is as often a little early as a little late
+ * (never ahead on average); the last one counts from the moment the run ended. 0 m before the first.
+ */
 export function heightAt(run, tMs) {
   const s = run && Array.isArray(run.samples) ? run.samples : [];
-  if (!s.length) return 0;
-  const x = Math.max(0, Number(tMs) || 0) / DUEL.sampleMs;
-  const k = Math.floor(x);
-  if (k >= s.length - 1) return s[s.length - 1] / 10;
-  return (s[k] + (s[k + 1] - s[k]) * (x - k)) / 10;
+  const n = s.length;
+  if (!n) return 0;
+  const S = DUEL.sampleMs;
+  const t = Math.max(0, Number(tMs) || 0);
+  const endT = Number(run.endT) || 0;
+  // (a link keeps endT to 0,1 s, which can round it up onto the end of the last second)
+  const lastAt = endT >= (n - 1) * S && endT <= n * S ? endT : (n - 0.5) * S;
+  if (t >= lastAt) return s[n - 1] / 10;
+  const k = Math.min(Math.floor(t / S - 0.5), n - 2);
+  return k < 0 ? 0 : s[k] / 10;
 }
 
 /**

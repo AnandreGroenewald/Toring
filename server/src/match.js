@@ -9,7 +9,7 @@
 
 import { DUEL } from '../../js/config.js';
 import {
-  createReferee, cleanNickname, cleanReport, decodeChallenge, encodeChallenge, isMatchSeed, newMatchSeed, newRoomCode,
+  createReferee, cleanNickname, cleanReport, decodeChallenge, encodeChallenge, heightDm, isMatchSeed, newMatchSeed, newRoomCode,
 } from '../../js/core/duel.js';
 
 const MSG_MAX = 512;                   // characters per message
@@ -215,11 +215,12 @@ export class MatchRoom {
     const cap = DUEL.maxClimbMps * (Math.max(0, now - m.startAt) / 1000) + SLACK_M;
     const h = Math.min(r.h, cap);
     const best = Math.min(r.best, cap);
-    this.record(seat, now, h);
 
     const ref = createReferee({ init: m.ref });
     const events = ref.report(seat, { h: best, over: msg.t === 'over' ? r.over : null });
     m.ref = ref.snapshot();
+    // the recording keeps the best height (what decides the race), not the top with a block in the air
+    this.record(seat, now, ref.best(seat));
     const other = this.socketFor(1 - seat);
     if (other && msg.t === 'state') sendJson(other, { t: 'opp', h: round1(h), best: round1(ref.best(seat)) });
     let important = false;
@@ -274,7 +275,7 @@ export class MatchRoom {
     if (k > DUEL.maxRunMs / DUEL.sampleMs) return;
     const s = this.m.samples[seat];
     while (s.length <= k) s.push(s.length ? s[s.length - 1] : 0);
-    s[k] = Math.round(Math.max(0, h) * 10);
+    s[k] = heightDm(h);
   }
 
   /** The match is decided: everyone hears it, the runs go to the lobby, and the room closes soon. */

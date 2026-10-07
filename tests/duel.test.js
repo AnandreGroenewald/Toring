@@ -6,8 +6,9 @@ import assert from 'node:assert/strict';
 import {
   createReferee, createRecorder, heightAt, createGhost, botRun, encodeChallenge, decodeChallenge,
   challengeLink, parseChallengeQuery, parseRoomQuery, isRoomCode, newRoomCode, ROOM_ALPHABET, newMatchSeed,
-  isMatchSeed, duelSeedKey, cleanNickname, defaultNickname, cleanReport, attackFor,
+  isMatchSeed, duelSeedKey, cleanNickname, defaultNickname, cleanReport, attackFor, heightDm,
 } from '../js/core/duel.js';
+import { createRng } from '../js/core/rng.js';
 import { createSequence } from '../js/core/sequence.js';
 import { buildDuelShareText } from '../js/core/share.js';
 import { createStore, memoryBackend } from '../js/core/storage.js';
@@ -91,23 +92,88 @@ test('recorder: one height a second (the last in each second), gaps filled, how 
   assert.deepEqual(createRecorder().run().samples, [0]);
 });
 
-test('heightAt: straight between samples, stays after the last', () => {
-  const run = { samples: [0, 20, 40, 40], endT: 4000, end: 'goal' };
+test('recorder: heights round to 0,1 m, but never up onto a height mark or the goal', () => {
+  assert.equal(heightDm(1.66), 17);
+  assert.equal(heightDm(9.97), 99, '9,97 m has not reached 10 m');
+  assert.equal(heightDm(10), 100);
+  assert.equal(heightDm(10.04), 100);
+  assert.equal(heightDm(49.96), 499);
+  assert.equal(heightDm(50), 500);
+  assert.equal(heightDm(14.96), 150, 'between the marks it simply rounds');
+  assert.equal(heightDm(-3), 0);
+  assert.equal(heightDm('x'), 0);
+  assert.equal(heightDm(99999), DUEL.maxHeightM * 10);
+});
+
+test('heightAt: each second counts from its middle, the last sample from the end of the run', () => {
+  const run = { samples: [0, 20, 40, 40], endT: 4000, end: 'stop' };
   assert.equal(heightAt(run, 0), 0);
-  assert.equal(heightAt(run, 500), 1);
-  assert.equal(heightAt(run, 1750), 3.5);
+  assert.equal(heightAt(run, 1499), 0);
+  assert.equal(heightAt(run, 1500), 2);
+  assert.equal(heightAt(run, 2499), 2);
+  assert.equal(heightAt(run, 2500), 4);
   assert.equal(heightAt(run, 99000), 4);
+  const goal = { samples: [0, 20, 500], endT: 2300, end: 'goal' };
+  assert.equal(heightAt(goal, 2299), 2);
+  assert.equal(heightAt(goal, 2300), 50, 'the goal exactly when the run reached it');
+  assert.equal(heightAt({ ...goal, endT: 3000 }, 2999), 2, 'a link rounds endT to 0,1 s: up to the end of the last second is fine');
+  assert.equal(heightAt({ samples: [70], endT: 800, end: 'quit' }, 799), 0);
+  assert.equal(heightAt({ samples: [70], endT: 800, end: 'quit' }, 800), 7);
   assert.equal(heightAt({ samples: [] }, 100), 0);
+});
+
+test('a recording plays back without a head start: marks within half a second, the goal on time', () => {
+  const r = createRng('recording-timing');
+  const FRAME = 1000 / 60;
+  const marks = [...DUEL.marks, DUEL.goalM];
+  const errs = [];
+  for (let n = 0; n < 40; n++) {
+    // a real tower: its best height steps up as blocks settle; recorded every frame, like the game does
+    const rec = createRecorder();
+    const real = {};
+    let best = 0;
+    let next = r.float(2000, 4000);
+    let t = 0;
+    for (; ; t += FRAME) {
+      if (t >= next) {
+        best += r.float(1.2, 2.2);
+        next = t + r.float(2500, 4500);
+      }
+      for (const m of marks) if (best >= m && real[m] === undefined) real[m] = t;
+      rec.add(t, best);
+      if (best >= DUEL.goalM) break;
+    }
+    rec.finish(t, 'goal');
+    const run = rec.run();
+    const viaLink = decodeChallenge(encodeChallenge({ seed: 'abc123def0', name: 'Anna', run })).run;
+    for (const [how, played] of [['recording', run], ['link', viaLink]]) {
+      const g = createGhost(played);
+      const seen = {};
+      for (let u = 0; u <= t + 2000; u += FRAME) {
+        const b = g.step(u).best;
+        for (const m of marks) if (b >= m && seen[m] === undefined) seen[m] = u;
+      }
+      for (const m of DUEL.marks) {
+        const e = seen[m] - real[m];
+        assert.ok(Math.abs(e) <= 500 + FRAME, `${how}, ${m} m: ${Math.round(e)} ms`);
+        if (how === 'recording') errs.push(e);
+      }
+      // on time to the frame (endT is kept in whole ms; a link keeps it to 0,1 s)
+      assert.ok(Math.abs(seen[DUEL.goalM] - real[DUEL.goalM]) <= (how === 'link' ? 50 : 0) + FRAME + 1, `${how}: the goal on time`);
+    }
+  }
+  const mean = errs.reduce((a, b) => a + b, 0) / errs.length;
+  assert.ok(Math.abs(mean) < 120, `on average ${Math.round(mean)} ms early or late`);
 });
 
 test('ghost: attacks take 2 m (Blouaap) or 4 m (Skelm Sakkie) off its tower from then on', () => {
   const g = createGhost({ samples: [0, 100, 200, 300], endT: 3000, end: 'stop' });
-  assert.deepEqual(g.step(1000), { h: 10, best: 10, over: null });
+  assert.deepEqual(g.step(1500), { h: 10, best: 10, over: null });
   g.hit('monkey');
-  assert.equal(g.step(1000).h, 8);
-  assert.equal(g.step(1000).best, 10, 'its best height so far stays');
+  assert.equal(g.step(1500).h, 8);
+  assert.equal(g.step(1500).best, 10, 'its best height so far stays');
   g.hit('thief');
-  assert.equal(g.step(2000).h, 14);
+  assert.equal(g.step(2500).h, 14);
   assert.equal(g.step(3000).h, 24);
   assert.equal(g.penalty, 6);
   assert.equal(g.step(9000).over, null, 'a run that simply stopped never falls');
