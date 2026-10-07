@@ -6,7 +6,7 @@
   "scripts": {
     "www": "node build-www.mjs",
     "sync": "node build-www.mjs && npx cap sync android",
-    "bundle": "node build-www.mjs && npx cap sync android && cd android && ./gradlew bundleRelease assembleRelease"
+    "bundle": "node build-www.mjs && npx cap sync android && cd android && ./gradlew --no-daemon bundleRelease assembleRelease"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",
