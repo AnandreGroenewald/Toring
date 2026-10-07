@@ -40,10 +40,10 @@ Later the owner added (decisions are final unless they say otherwise):
 ## 2. Current state (at handover)
 
 <!-- STATUS-START -->
-### Base game: playable and polished, needs its final QA pass
+### Base game: playable, polished and QA'd (T1 done, version `1.3.2`)
 - Everything in the original brief is built: daily tower, practice, crane, physics, Perfek/combo, 8 weather types, rising flood line, cement freeze, wobble, results, streak, countdown, share text, PWA/offline, WebAudio, Afrikaans UI.
 - History: 6 parallel module agents → integration agent (zero console errors) → **six-lens review (74 findings, see `docs/review-findings.md`)** → a fixer agent applied the fixes.
-- **The fixer was in its final end-to-end check when the container restarted, so its per-finding report was lost.** Its code changes are all committed. Notable ones:
+- The fixer's per-finding report was lost in a container restart; T1 re-checked every critical and high finding by hand (see the T1 bullet below). Its code changes are all committed. Notable ones:
   - seeded per-event weather (`js/core/weatherplan.js`), so every player gets identical gusts, lightning and hail
   - taps release the block at the exact tap moment
   - 4 hearts, and every 3rd Perfek restores one
@@ -95,6 +95,16 @@ Later the owner added (decisions are final unless they say otherwise):
   - Refuted (already safe): forged/re-serialised/unsigned webhooks, timing-safe compares, replayed and out-of-order events, events for unknown customers, wrong plan/amount/currency, `/status` activation with someone else's reference, double extension for one charge, XSS (all sponsor text goes through `textContent`, the checkout redirect only allows Paystack hosts), open redirects, oversized bodies, CORS on admin routes and preflights, secrets in the repo (a test now guards it).
   - Tests: root **161/161**, server **135 pass + 1 skipped** (workerd smoke test). Headless check with a mocked API: admin alerts, test banner, resolve, payments with refunds, an XSS name rendered as text, `adverteer.html` "taken" state, game start; zero console errors.
 - The server does not auto-delete ended sponsors' contact data; the owner removes it on the admin page.
+- **T1 base-game QA and T6 final pass (done, version `1.3.2`):**
+  - Every critical and high finding in `docs/review-findings.md` (20: 1 critical and 19 high) was re-checked in the code and the browser: **all 20 were already fixed, none were open.** The only change was a small HUD polish found while playtesting: at 360 px the weather chip (e.g. "Mis / nog 3 blokke") tucked about 12 px under the hearts pill, so `CHIP_CX`/`CHIP_MAX_W` in `HudScene.js` were pulled in (chip right edge now at most x 424, pill starts at 432). Medium and low findings were not chased one by one.
+  - Fixed before this pass (code evidence): `cement-prune-collapse` (prune limit uses the lowest dynamic block, `PRUNE_KEEP`), `daily-weather-random` and `weather-math-random` (seeded per-event plan; `Math.random` left only for looks), `collapse-dominated-short-daily` and `awkward-shape-perfek-tip` (a Perfek sets the cement under it, rating windows scaled to the support's width, Goed eases to the centre), `perfek-snap-rotated-support` (`SCORING.perfectMaxTilt`), `double-charge-collapse` (collapse forgiveness, `CRANE.calmWaitMaxMs`), `first-tap-loses-life` (`CRANE.amplitudeStart`), `flood-never-bites` (tuned: v0 5, accel 0.11, 4 lives; the flood is still a late-game pressure, not the main way games end), `debug-date-writes-real-stats` and `auto-and-seed-params-ungated` (all debug params need `?debug=1`, which uses separate storage), `refresh-rate-perfek-quantization` (`tapLag`), `calendar-emoji-english` (no 📅 left), `rotation-stale-fit` and `rotate-overlay-no-pause`, `gpu-memory-prefx-postfx-msaa` (FX pipelines off, no MSAA), `sw-timeout-mixes-versions` (`offlineClients` in `sw.js`), `hud-crane-collision` (HUD band above the jib), `ghost-invisible-misleading`, `idle-tower-hidden` (`menuTopGame` registry).
+  - Headless Chromium playtests (412×915 and 360×640, DPR 2, touch), **zero console errors or warnings and no failed requests** in each: a daily with real taps (pause, resume, game over, results), the second daily attempt (blocked, shows the results), a fresh profile (hints "land", "water" and "lost" appeared in game 1, none in game 2), practice with pause, quit and home, and an autoplay (`auto=0.15`) practice to 50 m (412) and 69 m (360).
+  - Leak check, restart idle → practice → home 6 times: bus handlers stayed at 17, display-list sizes (Bg 19, Game 52, Hud 0 while idle) and Matter bodies (1) did not change. The texture count rises by about 3 per game only because block textures are cached by shape and size in an LRU (`TEX_CACHE_MAX` 96, pruned to 64 in `js/game/blocks.js`); it is bounded, not a leak.
+  - Daily determinism: two runs of the same daily (`date=2026-10-12`) with fixed 60 Hz stepping, the same scripted bot, but **different `Math.random` streams** gave identical samples (wind acceleration, hail body positions, tower top, lives, score, grid) over 488 samples spanning heat, wind, rain, rainbow and hail, ending at 84 m with 36 Perfek.
+  - Rotation: a sideways phone pauses the game under the rotate overlay, and the canvas refits in both orientations.
+  - Sub-path: serving `/home/user` and opening `/Toring/index.html` loads everything with no 404 (manifest, all icons, `sponsors.json`); without `?nosw=1` the service worker registers (scope `/Toring/`) and precaches 41 files.
+  - Tests: root **161/161**, server **135 pass + 1 skipped**. Game payload (`index.html`, `lib/`, `js/` minus `js/pages/`, `css/style.css`, `icons/`, manifest, `sw.js`, `sponsors.json`) is about **1.85 MB**, under the 3 MB limit. The README's sponsorship section was re-read and is accurate.
+  - Not checked here (needs the real services or a real phone): Paystack and Cloudflare end to end, GitHub Pages itself, real-device frame rate and sound. Headless fps is only 5-40 because rendering is in software.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
@@ -102,7 +112,7 @@ Later the owner added (decisions are final unless they say otherwise):
 <!-- TODO-START -->
 Each step should end green (`npm test`, `cd server && npm test`, a headless playthrough with zero console errors) and be committed and pushed.
 
-- **T1. Base-game QA pass.** Treat `docs/review-findings.md` as a checklist: for every finding, check in the code and the browser whether it's fixed now, and fix anything still open (all critical/high first). The fixer's lost report means none are confirmed yet. Also:
+- ~~**T1. Base-game QA pass.**~~ **Done** (see section 2). Original brief: Treat `docs/review-findings.md` as a checklist: for every finding, check in the code and the browser whether it's fixed now, and fix anything still open (all critical/high first). The fixer's lost report means none are confirmed yet. Also:
   - Play full games at 412×915 and 360×640.
   - Verify the daily is deterministic: same scripted taps should give identical weather effects.
   - Restart scenes 6+ times and check for leaks.
@@ -115,9 +125,9 @@ Each step should end green (`npm test`, `cd server && npm test`, a headless play
 - ~~T3. Legal templates~~ **Done** (see section 2). The owner fills in the placeholders.
 - ~~T4. Sponsor reviews and fixes~~ **Done** (see section 2). Residual, low: two block names bought at the very same moment by one Paystack customer can get their two subscriptions swapped (both still renew; only a cancel would hit the twin); a script that fakes `Origin` can still inflate counts within the per-address caps (the in-memory limits are per Worker instance); someone can keep the billboard "Tans bespreek" by restarting unpaid checkouts (set `PENDING_HOLD_MINUTES=0` if that happens; double sales are impossible either way).
 - ~~T5. In-game sponsor integration~~ **Done** (see section 2). It also reworded the code comments that named other games and added the README section.
-- **T6. Final pass.** Full playtest plus screenshots. Confirm the **game payload** (what a player downloads: `index.html`, `lib/`, `js/` without `js/pages/`, `css/style.css`, `icons/`, `manifest`, `sw.js`) stays under 3 MB. It was about 1.8 MB after T5 (that count includes `sponsors.json`); `docs/`, `server/` and `tests/` are never loaded by the game. Check the README's sponsorship section is still accurate, then hand the owner the checklist in section 4.
+- ~~**T6. Final pass.**~~ **Done** (see section 2); only the owner's checklist in section 4 remains. Original brief: Full playtest plus screenshots. Confirm the **game payload** (what a player downloads: `index.html`, `lib/`, `js/` without `js/pages/`, `css/style.css`, `icons/`, `manifest`, `sw.js`) stays under 3 MB. It was about 1.8 MB after T5 (that count includes `sponsors.json`); `docs/`, `server/` and `tests/` are never loaded by the game. Check the README's sponsorship section is still accurate, then hand the owner the checklist in section 4.
 
-**Prompt to give the next agent:** "Continue the Stapel project in this repo on branch `claude/trusting-hopper-26qcax`. Read `docs/HANDOVER.md` first and work through its remaining-work list T1–T6 in order, committing and pushing after each step."
+**All of T1–T6 are done.** What is left is section 4 (owner-only steps). If the owner asks for more, start with the medium and low findings in `docs/review-findings.md` that were not re-checked one by one.
 <!-- TODO-END -->
 
 ## 4. Things only the owner can do
