@@ -179,6 +179,30 @@ Later the owner added (decisions are final unless they say otherwise):
     - Suggested answers: contains ads (the sportscard.co.za house advert), data safety "no data collected" (true while the Worker is off), target audience 13+ (the owner's call).
   - Tests: root **223/223**. The store screenshots played the app's own files with zero errors.
   - **Not checked here:** the app on a real phone or the Android emulator (none on the Mac). That covers WebView rendering, the share sheet, the back button and edge-to-edge insets. The owner's internal-testing install is the first real run.
+- **Server extras switched on (version `1.7.4`)**, at the owner's request ("I want those extras"). The owner's conditions: everything stays **free**, the server goes in the **Lekker Local** Cloudflare account, and sponsor sales will use **PayFast**, which the owner already uses (the payment code is still Paystack; switching it is step 2).
+  - **Deployed:**
+    - the Worker `stapel-borge` at `https://stapel-borge.bonkers-bunch-online.workers.dev`, in the Lekker Local account (`account_id` b67acf87… pinned in `wrangler.toml`; free plan);
+    - Bonkers Bunch's online Worker lives in the same account, and they share the free daily limits;
+    - the D1 database `stapel-borge` (WEUR), with `schema.sql` applied;
+    - the Durable Objects for matches, created on the first deploy;
+    - secrets `ADMIN_TOKEN` (also in the Mac's Keychain as "Stapel admin token", for `admin.html`) and `IP_HASH_SALT`. There is no Paystack key, so sales stay inactive.
+  - **Game:**
+    - `MATCH_API_URL` is set: live random matches, friend rooms (`?kamer=`), and the anonymous counts with the daily "beter as X%" line;
+    - `SPONSOR_API_URL` stays empty, so sales are off;
+    - the counts and percentile now follow `matchApiUrl()` instead of the sales switch;
+    - `ALLOWED_ORIGINS` adds `https://localhost` (the Android app).
+  - **Privacy page:**
+    - wording updated: counts are sent when "ons bediener" is on; the summary names the live-match nickname and heights (≤ 7 days) and the Android app;
+    - **still a template** (legal name, CIPC number, address, public email, phone, information officer), which blocks the Google Play submission.
+  - **Checked against the real Worker:**
+    - `/sponsors` 200; `/match/ghost` 404 with the app's origin allowed and others refused (403); admin 200 with the token and 401 without;
+    - `/stats` and `/score` reachable (empty payloads refused, nothing stored);
+    - two headless players were paired by the live lobby in 2,2 s and played; a friend room link worked;
+    - every test match was ended within 20 s, so no recording was kept (`/match/ghost` still 404);
+    - the website's Uitdagersreeks screen shows "Soek ’n teenstander", "Daag ’n vriend uit" and the computer; zero console errors;
+    - root tests **223/223**, server **152 pass + 1 skipped**.
+  - **App 1.7.4** (versionCode 10704) rebuilt with the server address. The Desktop folder and "Google Play steps.txt" are updated: data safety now declares the optional nickname and the game results/anonymous counts; the content rating says users interact (nicknames only, no chat).
+  - **Open:** the owner's privacy details; the owner's OK to push 1.7.4; PayFast for sponsor sales (step 2).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

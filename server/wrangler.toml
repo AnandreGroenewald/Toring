@@ -5,6 +5,8 @@
 # See README.md for the full step-by-step setup.
 
 name = "stapel-borge"
+# The Lekker Local Cloudflare account (free plan; Bonkers Bunch's Worker lives in it too). Not a secret.
+account_id = "b67acf87327958aa6d5e92c6079de43d"
 main = "src/worker.js"
 compatibility_date = "2026-09-01"
 workers_dev = true
@@ -18,7 +20,7 @@ crons = ["17 3 * * *"]
 binding = "DB"
 database_name = "stapel-borge"
 # Paste the database_id printed by `npx wrangler d1 create stapel-borge`:
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "1ad6d34e-515e-49f3-b76b-995a5138f388"
 
 # Uitdagersreeks (live head-to-head matches): two Durable Objects. SQLite-backed classes are
 # included in the Workers Free plan (100 000 requests and 100 000 storage writes a day).
@@ -47,8 +49,9 @@ PREMIUM_PRICE_CENTS = "149900"
 BLOCK_PRICE_CENTS = ""
 # The game's public address, with the trailing slash.
 SITE_URL = "https://anandregroenewald.github.io/Toring/"
-# Web pages allowed to call the sign-up and admin API (comma separated, no paths).
-ALLOWED_ORIGINS = "https://anandregroenewald.github.io, http://localhost:*, http://127.0.0.1:*"
+# Web pages allowed to call the API (comma separated, no paths). https://localhost is the Android app
+# (Capacitor serves the game from there); http://localhost:* and 127.0.0.1 are for testing on a computer.
+ALLOWED_ORIGINS = "https://anandregroenewald.github.io, https://localhost, http://localhost:*, http://127.0.0.1:*"
 # How many sponsors each tier can have at once.
 PREMIUM_MAX = "1"
 BLOCK_MAX = "60"

@@ -230,12 +230,16 @@ test('dailyPercentile clamps the height it sends and passes "nobody else yet" th
 // wiring
 // ---------------------------------------------------------------------------
 
-test('the game only talks to the API when SPONSOR_API_URL is set and keeps debug runs out', () => {
+test('the game only talks to the API when a Worker is set (MATCH_API_URL or SPONSOR_API_URL) and keeps debug runs out', () => {
   const main = readFileSync(new URL('../js/main.js', import.meta.url), 'utf8');
-  assert.match(main, /const AUDIENCE_ON = !!SPONSOR_API_URL && \(!DEBUG \|\| params\.get\('audience'\) === '1'\)/);
+  assert.match(main, /const AUDIENCE_ON = !!matchApiUrl\(\) && \(!DEBUG \|\| params\.get\('audience'\) === '1'\)/);
+  assert.match(main, /sendStats\(matchApiUrl\(\), batch\)/);
+  assert.match(main, /dailyPercentile\(result, \{ apiUrl: matchApiUrl\(\)/);
   assert.match(main, /if \(!AUDIENCE_ON/);
   const scene = readFileSync(new URL('../js/scenes/GameScene.js', import.meta.url), 'utf8');
   assert.match(scene, /bus\.emit\('game:audience'/);
   assert.match(scene, /tallyShow\(this\.tally, this\.curNameId\)/);
-  assert.equal(readFileSync(new URL('../js/sponsorConfig.js', import.meta.url), 'utf8').match(/SPONSOR_API_URL = '(.*)'/)[1], '', 'shipped switched off');
+  const cfg = readFileSync(new URL('../js/sponsorConfig.js', import.meta.url), 'utf8');
+  assert.equal(cfg.match(/SPONSOR_API_URL = '(.*)'/)[1], '', 'sales shipped switched off');
+  assert.match(cfg, /export const matchApiUrl = \(\) => MATCH_API_URL \|\| SPONSOR_API_URL;/);
 });

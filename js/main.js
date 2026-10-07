@@ -184,10 +184,10 @@ function onSponsorFeed(feed) {
 }
 
 // ---------------------------------------------------------------------------
-// Anonymous audience counts and the daily percentile (js/audience.js). Only with a sales backend
-// (SPONSOR_API_URL); a debug session stays out of the real numbers unless ?audience=1.
+// Anonymous audience counts and the daily percentile (js/audience.js). Only with a Worker
+// (MATCH_API_URL, or SPONSOR_API_URL); a debug session stays out of the real numbers unless ?audience=1.
 // ---------------------------------------------------------------------------
-const AUDIENCE_ON = !!SPONSOR_API_URL && (!DEBUG || params.get('audience') === '1');
+const AUDIENCE_ON = !!matchApiUrl() && (!DEBUG || params.get('audience') === '1');
 let menuCounted = false;   // the menu card is reported with the first game of a visit only
 
 bus.on('game:audience', (a) => {
@@ -200,7 +200,7 @@ bus.on('game:audience', (a) => {
       billboardId: a.billboardId,
       menu: !menuCounted && !!sponsorFeed.house?.menu,
     });
-    if (batch && sendStats(SPONSOR_API_URL, batch) && batch.menu) menuCounted = true;
+    if (batch && sendStats(matchApiUrl(), batch) && batch.menu) menuCounted = true;
   } catch {
     /* counting never gets in the way of the game */
   }
@@ -209,7 +209,7 @@ bus.on('game:audience', (a) => {
 /** The results card learns how the player did against everyone else today, when (if) the server answers. */
 function showPercentile(result) {
   if (!AUDIENCE_ON || !result || result.mode !== 'daily') return;
-  dailyPercentile(result, { apiUrl: SPONSOR_API_URL, storageKey: DEBUG ? `${STORAGE_KEY}.debug` : STORAGE_KEY })
+  dailyPercentile(result, { apiUrl: matchApiUrl(), storageKey: DEBUG ? `${STORAGE_KEY}.debug` : STORAGE_KEY })
     .then((answer) => {
       const line = percentileLine(answer);
       if (line && screen === 'results') ui.setResultsPercentile(result.dateKey, line);
