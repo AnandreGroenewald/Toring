@@ -4,7 +4,7 @@ The web game (the repo root) packed as an Android app with Capacitor 8. The game
 
 | | |
 | --- | --- |
-| App ID | `za.co.lekkerlocal.stapel` (permanent once uploaded to Google Play) |
+| App ID | `com.lekkerlocal.stapel` (permanent once uploaded to Google Play) |
 | Version | from `js/config.js` `VERSION`: 1.7.2 is versionName `1.7.2`, versionCode `10702` (`android/app/build.gradle`). Every Play upload needs a higher one, so bump `VERSION` (and `sw.js`) as for every release. |
 | Android | minSdk 24 (Android 7), target and compile SDK 36 (Android 16, Google Play's requirement from 31 Aug 2026). Portrait on phones. Permissions: internet, vibrate. |
 | Developer account | Google Play organisation account "Lekker Local" (Sportscard Trading PTY LTD). |

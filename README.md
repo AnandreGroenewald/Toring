@@ -47,7 +47,7 @@ All URLs are relative, so it also works from any other static host or sub-path. 
 
 ## Android app (Google Play)
 
-`app/` packs the same game as an Android app with Capacitor (app ID `za.co.lekkerlocal.stapel`, published by the "Lekker Local" developer account). The game files ship inside the app, so it plays offline. Its version follows `VERSION` in `js/config.js`. `cd app && npm run bundle` builds the signed `.aab` for Google Play. `app/README.md` covers building, the upload key and the store pictures.
+`app/` packs the same game as an Android app with Capacitor (app ID `com.lekkerlocal.stapel`, published by the "Lekker Local" developer account). The game files ship inside the app, so it plays offline. Its version follows `VERSION` in `js/config.js`. `cd app && npm run bundle` builds the signed `.aab` for Google Play. `app/README.md` covers building, the upload key and the store pictures.
 
 ## Borge / Sponsorship
 

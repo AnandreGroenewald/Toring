@@ -19,10 +19,10 @@ if (uploadKey.exists()) {
 }
 
 android {
-    namespace = "za.co.lekkerlocal.stapel"
+    namespace = "com.lekkerlocal.stapel"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "za.co.lekkerlocal.stapel"
+        applicationId "com.lekkerlocal.stapel"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode appVersionCode

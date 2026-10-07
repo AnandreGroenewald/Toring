@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Stapel</string>
     <string name="title_activity_main">Stapel</string>
-    <string name="package_name">za.co.lekkerlocal.stapel</string>
-    <string name="custom_url_scheme">za.co.lekkerlocal.stapel</string>
+    <string name="package_name">com.lekkerlocal.stapel</string>
+    <string name="custom_url_scheme">com.lekkerlocal.stapel</string>
 </resources>

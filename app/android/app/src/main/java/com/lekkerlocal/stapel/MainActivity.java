@@ -1,4 +1,4 @@
-package za.co.lekkerlocal.stapel;
+package com.lekkerlocal.stapel;
 
 import com.getcapacitor.BridgeActivity;
 

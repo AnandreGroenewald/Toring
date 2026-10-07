@@ -166,7 +166,7 @@ Later the owner added (decisions are final unless they say otherwise):
     - the daily determinism run: identical, including a rain skid;
     - a normal visit (1.7.2 precached, 49 files).
 - **Android app for Google Play (version `1.7.3`)**, at the owner's request ("I have created the developer account for the apps!! can you please create me the app"). The owner chose Stapel first, Google Play (organisation account "Lekker Local"), and building on the Mac.
-  - **`app/`**, Capacitor 8.5.3: app ID `za.co.lekkerlocal.stapel` (fixed once uploaded), target and compile SDK 36 (Google Play's rule for new apps from 31 Aug 2026), minSdk 24, portrait on phones. Permissions: internet and vibrate. The version follows `js/config.js` (1.7.3 is versionCode 10703).
+  - **`app/`**, Capacitor 8.5.3: app ID `com.lekkerlocal.stapel` (fixed once uploaded), target and compile SDK 36 (Google Play's rule for new apps from 31 Aug 2026), minSdk 24, portrait on phones. Permissions: internet and vibrate. The version follows `js/config.js` (1.7.3 is versionCode 10703).
   - **Built and signed:** `.aab` 3,7 MB, plus a test `.apk`. The upload key is `~/Documents/Stapel signing/stapel-upload.jks`, with its password in the Mac's Keychain ("Stapel upload key") and a README beside the key. Java 21 and the Android SDK are in the owner's user folders.
   - **The web game is app-aware**, harmlessly so on the website:
     - `IN_APP`: no service worker, and share links use the website address;
