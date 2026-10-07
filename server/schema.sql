@@ -99,3 +99,34 @@ CREATE TABLE IF NOT EXISTS daily_scores (
   count INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (date_key, bucket)
 );
+
+-- Refunds and chargebacks of a charge (Paystack refund.processed / charge.dispute.*).
+-- A payment buys nothing once refunds add up to its amount, or while a dispute about it is open
+-- or was lost (see db.js ENTITLED_PAYMENTS). Kept for accounting, like `payments`.
+-- id: 'refund:<refund id>' or 'dispute:<dispute id>'; reference: payments.reference of the charge.
+-- state: refunds 'processed'; disputes 'open' | 'won' | 'lost'.
+CREATE TABLE IF NOT EXISTS payment_reversals (
+  id TEXT PRIMARY KEY,
+  reference TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('refund', 'dispute')),
+  amount INTEGER,
+  state TEXT NOT NULL,
+  at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_reversals_reference ON payment_reversals (reference);
+
+-- Things the owner must act on, shown at the top of admin.html until marked as handled.
+-- kind: slot_taken (paid for a full tier: refund) | charge_on_ended (paid after it ended: refund
+-- or revive) | dispute (chargeback opened: the ad is stopped). id = kind + ':' + reference.
+CREATE TABLE IF NOT EXISTS alerts (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  sponsor_id TEXT,
+  reference TEXT,
+  amount INTEGER,
+  created_at INTEGER NOT NULL,
+  resolved_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_alerts_open ON alerts (resolved_at, created_at);

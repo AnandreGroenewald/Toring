@@ -49,6 +49,10 @@ export function loadConfig(env) {
   const adminToken = str(e.ADMIN_TOKEN);
   const cfg = {
     paystackSecret: str(e.PAYSTACK_SECRET_KEY),
+    // 'live' | 'test' | 'unknown', from the key prefix. A test key in production would let anyone
+    // "pay" with Paystack's test cards, so test payments never count while a live key is set.
+    paystackMode: /^sk_live_/.test(str(e.PAYSTACK_SECRET_KEY)) ? 'live'
+      : /^sk_test_/.test(str(e.PAYSTACK_SECRET_KEY)) ? 'test' : 'unknown',
     paystackBaseUrl: str(e.PAYSTACK_BASE_URL) || 'https://api.paystack.co',
     paystackTimeoutMs: int(e.PAYSTACK_TIMEOUT_MS, 8000, 1000, 30000),
     // Optional extra control on top of the signature check.
@@ -75,8 +79,13 @@ export function loadConfig(env) {
       // network can put many players behind one address.
       statsPerHour: int(e.RATE_LIMIT_STATS_PER_HOUR, 120, 1),
       scorePerHour: int(e.RATE_LIMIT_SCORE_PER_HOUR, 60, 1),
+      // Wrong admin tokens per hashed address and hour before even the right one is refused.
+      adminFailsPerHour: int(e.RATE_LIMIT_ADMIN_FAILS_PER_HOUR, 20, 1),
     },
-    ipSalt: str(e.IP_HASH_SALT) || adminToken || 'stapel',
+    // Audience counts are added up in memory and written at most this often (D1 write budget).
+    statsFlushMs: int(e.STATS_FLUSH_SECONDS, 60, 0, 3600) * 1000,
+    // A secret salt: a fixed public fallback would let anyone reverse the stored address hashes.
+    ipSalt: str(e.IP_HASH_SALT) || adminToken || str(e.PAYSTACK_SECRET_KEY) || 'stapel',
   };
   if (env && typeof env === 'object') cache.set(env, cfg);
   return cfg;

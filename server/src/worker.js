@@ -6,6 +6,8 @@ import { HttpError, corsHeaders, errorResponse, json, preflight, withHeaders } f
 import { createPaystack } from './paystack.js';
 import { getAvailability, getSponsorsFeed, status, subscribe } from './public.js';
 import { runRetention } from './retention.js';
+import { refresh } from './billing.js';
+import * as db from './db.js';
 import * as stats from './stats.js';
 import { handleWebhook } from './webhook.js';
 
@@ -26,6 +28,15 @@ function corsMode(path) {
   return 'site';
 }
 
+/** decodeURIComponent that answers 404 instead of throwing on a malformed %-escape. */
+function pathParam(raw) {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    throw new HttpError(404, 'not_found');
+  }
+}
+
 function methodNotAllowed(allow) {
   return json(405, { error: 'method_not_allowed' }, { Allow: allow });
 }
@@ -40,6 +51,7 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
   const planCache = new Map();
   // Rate limits for the anonymous counts live in memory only (see stats.js).
   const rate = stats.createRateLimiter();
+  const statsBuffer = stats.createStatsBuffer();
   // Mark stale rather than delete, so a stale copy is still there if D1 fails right after.
   const invalidate = () => {
     for (const entry of feedCache.values()) entry.at = -Infinity;
@@ -90,7 +102,18 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
   }
 
   async function routeAdmin(request, url, path, ctx) {
-    await admin.requireAdmin(request, ctx.cfg);
+    // Brute force: after too many wrong tokens from one address, refuse even the right one for a while.
+    const failKey = `admin-fail:${await stats.addressKey(ctx, request)}`;
+    if (ctx.rate.count(failKey, ctx.now) >= ctx.cfg.rate.adminFailsPerHour) throw new HttpError(429, 'rate_limited');
+    try {
+      await admin.requireAdmin(request, ctx.cfg);
+    } catch (err) {
+      if (err instanceof HttpError && err.status === 401) {
+        ctx.rate.allow(failKey, ctx.cfg.rate.adminFailsPerHour, ctx.now);
+        ctx.log('warn', 'admin_bad_token', {});
+      }
+      throw err;
+    }
     const { method } = request;
     if (path === '/admin/sponsors') {
       if (method === 'GET') return admin.listSponsors(ctx);
@@ -100,9 +123,11 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
     if (path === '/admin/payments') return method === 'GET' ? admin.listPayments(url, ctx) : methodNotAllowed('GET');
     if (path === '/admin/stats') return method === 'GET' ? stats.adminStats(url, ctx) : methodNotAllowed('GET');
     if (path === '/admin/events') return method === 'GET' ? admin.listEvents(url, ctx) : methodNotAllowed('GET');
+    const a = /^\/admin\/alerts\/([^/]+)\/resolve$/.exec(path);
+    if (a) return method === 'POST' ? admin.resolveAlert(ctx, pathParam(a[1])) : methodNotAllowed('POST');
     const m = /^\/admin\/sponsors\/([^/]+)(?:\/(cancel|manage-link))?$/.exec(path);
     if (m) {
-      const id = decodeURIComponent(m[1]);
+      const id = pathParam(m[1]);
       if (m[2] === 'cancel') return method === 'POST' ? admin.cancelSponsor(request, ctx, id) : methodNotAllowed('POST');
       if (m[2] === 'manage-link') return method === 'POST' ? admin.manageLink(ctx, id) : methodNotAllowed('POST');
       if (method === 'PATCH') return admin.updateSponsor(request, ctx, id);
@@ -135,6 +160,7 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
         invalidate,
         planCache,
         rate,
+        statsBuffer,
         paystack: createPaystack({
           secretKey: cfg.paystackSecret,
           fetch: fetchImpl,
@@ -159,7 +185,20 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
     fetch: (request, env) => handle(request, env),
 
     async scheduled(controller, env, execCtx) {
-      const job = runRetention(env.DB, now())
+      const cfg = loadConfig(env);
+      const at = now();
+      const job = runRetention(env.DB, at)
+        .then(async (counts) => {
+          // Once the owner switched to a live key, sponsors "paid" with test cards lose that time.
+          if (cfg.paystackMode === 'live') {
+            const ctx = { db: env.DB, cfg, now: at };
+            const ids = await db.sponsorsWithTestPayments(env.DB);
+            for (const id of ids) await refresh(ctx, id);
+            counts.testPaymentsDropped = ids.length;
+            invalidate();
+          }
+          return counts;
+        })
         .then((counts) => log('info', 'retention', counts))
         .catch((err) => log('error', 'retention_failed', { message: String(err?.message || err) }));
       if (execCtx?.waitUntil) execCtx.waitUntil(job);

@@ -47,21 +47,75 @@ export function createRateLimiter() {
       e.n++;
       return e.n <= limit;
     },
+    /** Hits of `key` in the current hour, without counting one. */
+    count(key, now) {
+      const e = hits.get(key);
+      return e && now - e.start < HOUR_MS ? e.n : 0;
+    },
     size: () => hits.size,
   };
 }
 
+// ---------------------------------------------------------------- write buffer (memory only)
+
+/**
+ * Adds up counter increments in this isolate's memory and writes them as one D1 batch at most
+ * every `flushMs` (one row per day, metric and sponsor, however many games were played). This
+ * keeps D1's daily write budget for payments and sign-ups even with many players or a flood of
+ * fake counts. Counts still in memory when an isolate is recycled are lost: they are anonymous
+ * totals, a few missing games don't matter.
+ */
+export function createStatsBuffer() {
+  const pending = new Map();
+  let lastFlush = null;
+  const keyOf = (i) => `${i.dateKey}|${i.metric}|${i.sponsorId}`;
+  return {
+    add(items) {
+      for (const i of items) {
+        const k = keyOf(i);
+        const e = pending.get(k);
+        if (e) e.n += i.n;
+        else pending.set(k, { ...i });
+      }
+    },
+    /** Writes the buffer when it is due. A failed write keeps the counts for the next try. */
+    async flushIfDue(database, now, flushMs) {
+      if (lastFlush === null) lastFlush = now - flushMs; // a fresh isolate writes its first batch at once
+      if (!pending.size || now - lastFlush < flushMs) return false;
+      const items = [...pending.values()];
+      pending.clear();
+      lastFlush = now;
+      try {
+        await db.addStats(database, items);
+      } catch (err) {
+        this.add(items);
+        throw err;
+      }
+      return true;
+    },
+    size: () => pending.size,
+  };
+}
+
 async function limit(ctx, request, kind, perHour) {
-  // Salt = secret + the UTC date, so an address hashes differently every day and the hash can't be
-  // linked from one day to the next (nor reversed without the secret).
-  const ip = clientIp(request);
-  const key = ip ? await hashIp(ip, `${ctx.cfg.ipSalt}:${utcDateKey(ctx.now)}`) : 'no-address';
+  const key = await addressKey(ctx, request);
   if (!ctx.rate.allow(`${kind}:${key}`, perHour, ctx.now)) throw new HttpError(429, 'rate_limited');
 }
 
+/** Hash of the caller's address for in-memory limits (daily-rotating salt, never stored). */
+export async function addressKey(ctx, request) {
+  // Salt = secret + the UTC date, so an address hashes differently every day and the hash can't be
+  // linked from one day to the next (nor reversed without the secret).
+  const ip = clientIp(request);
+  return ip ? hashIp(ip, `${ctx.cfg.ipSalt}:${utcDateKey(ctx.now)}`) : 'no-address';
+}
+
+// The game is always cross-origin to the API (GitHub Pages -> workers.dev), so the browser always
+// sends Origin. No Origin means a script; it is refused like a foreign site. (A script can fake the
+// header; the caps and rate limits below are what bound the damage.)
 function checkOrigin(request, cfg) {
   const origin = request.headers.get('Origin');
-  if (origin && !isOriginAllowed(origin, cfg.allowedOrigins)) throw new HttpError(403, 'forbidden_origin');
+  if (!isOriginAllowed(origin, cfg.allowedOrigins)) throw new HttpError(403, 'forbidden_origin');
 }
 
 // ---------------------------------------------------------------- validation
@@ -155,7 +209,13 @@ export async function postStats(request, ctx, liveIds) {
   checkOrigin(request, ctx.cfg);
   await limit(ctx, request, 'stats', ctx.cfg.rate.statsPerHour);
   const { items } = validateStats(await readBatch(request), liveIds, ctx.now);
-  await db.addStats(ctx.db, items);
+  ctx.statsBuffer.add(items);
+  try {
+    await ctx.statsBuffer.flushIfDue(ctx.db, ctx.now, ctx.cfg.statsFlushMs);
+  } catch (err) {
+    // The counts stay in memory for the next flush; the game never waits on this answer anyway.
+    ctx.log('warn', 'stats_flush_failed', { message: String(err?.message || err).slice(0, 200) });
+  }
   // sendBeacon always asks for credentials; the page never sends any, but the browser wants this header
   // on the answer or it logs a CORS error in the console.
   return json(200, { ok: true }, { 'Access-Control-Allow-Credentials': 'true' });

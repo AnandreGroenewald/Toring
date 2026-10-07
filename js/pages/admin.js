@@ -77,6 +77,8 @@ const st = {
   token: '',
   now: Date.now(),
   sponsors: [],
+  alerts: [],
+  paystackMode: '',
   payments: [],
   events: [],
   eventsLoaded: false,
@@ -148,6 +150,16 @@ async function loadSponsors() {
   if (!list) throw Object.assign(new Error('bad_response'), { code: 'bad_response' });
   st.now = Number.isFinite(data?.now) ? data.now : Date.now();
   st.sponsors = list.map(normSponsor).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  st.paystackMode = str(data?.paystackMode);
+  st.alerts = (Array.isArray(data?.alerts) ? data.alerts : []).map((a) => ({
+    id: str(a.id),
+    kind: str(a.kind),
+    sponsorId: str(a.sponsor_id),
+    sponsorName: str(a.sponsor_name),
+    reference: str(a.reference),
+    amount: Number(a.amount) || 0,
+    createdAt: toMs(a.created_at),
+  })).filter((a) => a.id);
 }
 
 async function loadPayments() {
@@ -160,6 +172,8 @@ async function loadPayments() {
     currency: str(p.currency || 'ZAR').toUpperCase(),
     paidAt: toMs(p.paid_at),
     source: str(p.source),
+    refunded: Math.max(0, Number(p.refunded) || 0),
+    dispute: str(p.dispute),
   })).sort((a, b) => (b.paidAt || 0) - (a.paidAt || 0));
 }
 
@@ -307,14 +321,52 @@ function wireTabs() {
 
 function renderAll() {
   renderKpis();
+  renderAlerts();
   renderFilters();
   renderSponsors();
   renderPayments();
   if (st.eventsLoaded) renderEvents();
 }
 
+/** What a payment still brings in: refunds and lost chargebacks taken off. */
+function netAmount(p) {
+  return p.dispute === 'lost' ? 0 : Math.max(0, p.amount - p.refunded);
+}
+
 function paymentsSince(ms) {
-  return st.payments.filter((p) => p.paidAt != null && p.paidAt >= ms && p.currency === 'ZAR').reduce((n, p) => n + p.amount, 0);
+  return st.payments.filter((p) => p.paidAt != null && p.paidAt >= ms && p.currency === 'ZAR').reduce((n, p) => n + netAmount(p), 0);
+}
+
+const ALERT_TEXT = {
+  slot_taken: (who, amount, ref) => `${who} het ${amount} betaal, maar die plek was intussen reeds gevat, so die advertensie wys nie. Betaal die bedrag in Paystack terug (verwysing ${ref}) en kyk dat die intekening gekanselleer is (die stelsel probeer dit self).`,
+  charge_on_ended: (who, amount, ref) => `${who} het ${amount} betaal nadat die borgskap reeds geëindig het. Betaal dit in Paystack terug, of heraktiveer die borg (verwysing ${ref}).`,
+  dispute: (who, amount, ref) => `Bankgeskil oor ’n betaling van ${who} (${amount}, verwysing ${ref}). Die advertensie is gestop totdat die geskil beslis is; antwoord die geskil in Paystack.`,
+};
+
+function renderAlerts() {
+  const items = [];
+  if (st.paystackMode === 'test') {
+    items.push(h('div', { class: 'alert is-info', role: 'note' },
+      'Toetsmodus: die API gebruik Paystack se toetssleutel, so betalings is nie eg nie. Sit die regte sleutel (sk_live_…) voordat jy begin verkoop; borge wat met toetskaarte betaal het, verdwyn dan vanself.'));
+  }
+  for (const a of st.alerts || []) {
+    const who = a.sponsorName || sponsorName(a.sponsorId) || '’n Borg';
+    const text = (ALERT_TEXT[a.kind] || ((w) => `Aandag nodig: ${a.kind} (${w}).`))(who, fmtRand(a.amount), a.reference || '—');
+    const done = h('button', { type: 'button', class: 'pill', text: 'Klaar' });
+    done.addEventListener('click', () => resolveAlert(a, done));
+    items.push(h('div', { class: 'alert', role: 'note' }, h('span', { text: `${text} ` }), done));
+  }
+  els.alertsBox.replaceChildren(...items);
+  els.alertsBox.hidden = !items.length;
+}
+
+async function resolveAlert(a, button) {
+  await withButton(button, '…', async () => {
+    await call(`admin/alerts/${encodeURIComponent(a.id)}/resolve`, { method: 'POST' });
+    st.alerts = st.alerts.filter((x) => x.id !== a.id);
+    renderAlerts();
+    toast('Gemerk as klaar');
+  });
 }
 
 function renderKpis() {
@@ -387,7 +439,9 @@ function untilCell(s) {
 function contactCell(s) {
   const parts = [];
   if (s.contact) parts.push(h('span', { class: 'strong', text: s.contact }));
-  if (s.email) parts.push(isEmail(s.email) ? h('a', { href: `mailto:${s.email}`, text: s.email }) : h('span', { text: s.email }));
+  // No link for addresses with ?, &, % or # (they would add mailto: fields such as bcc).
+  const linkable = isEmail(s.email) && !/[?&%#]/.test(s.email);
+  if (s.email) parts.push(linkable ? h('a', { href: `mailto:${s.email}`, text: s.email }) : h('span', { text: s.email }));
   if (s.phone) parts.push(h('span', { text: s.phone }));
   if (!parts.length) parts.push(h('span', { class: 'muted', text: '—' }));
   return h('div', { class: 'cell-stack' }, parts);
@@ -467,6 +521,8 @@ function sponsorName(id) {
   return st.sponsors.find((s) => s.id === id)?.name || '';
 }
 
+const DISPUTE_LABELS = { open: '(oop)', won: '(gewen)', lost: '(verloor)' };
+
 function money(p) {
   return p.currency === 'ZAR' ? fmtRand(p.amount) : `${(p.amount / 100).toFixed(2)} ${p.currency}`;
 }
@@ -492,7 +548,9 @@ function renderPayments() {
       td('Bedrag', money(p), 'num strong'),
       td('Borg', sponsorName(p.sponsorId) || (p.sponsorId ? 'Geskrap' : 'Nie gekoppel nie'), p.sponsorId && sponsorName(p.sponsorId) ? null : 'muted'),
       td('Verwysing', h('span', { class: 'mono', text: p.reference })),
-      td('Bron', p.source || '—', 'muted'),
+      td('Bron', [p.source || '—',
+        p.refunded > 0 ? ` · ${fmtRand(p.refunded)} terugbetaal` : '',
+        p.dispute ? ` · bankgeskil ${DISPUTE_LABELS[p.dispute] || p.dispute}` : ''].join(''), 'muted'),
     ))),
   );
   els.paymentsBox.replaceChildren(summary, table);
@@ -1118,6 +1176,7 @@ function init() {
     loginBtn: $('#login-btn'),
     token: $('#token'),
     kpis: $('#kpis'),
+    alertsBox: $('#alerts-box'),
     filters: $('#filters'),
     search: $('#search'),
     sponsorsBox: $('#sponsors-box'),

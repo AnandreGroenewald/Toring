@@ -48,6 +48,16 @@ export function isOurPlan(cfg, planCode) {
   return Boolean(planCode) && Object.values(cfg.plans).includes(planCode);
 }
 
+/** Recomputes a sponsor's paid_until with this deployment's rules (grace days, test payments). */
+export function refresh(ctx, id, extra = {}) {
+  return db.refreshEntitlement(ctx.db, id, {
+    graceDays: ctx.cfg.graceDays,
+    now: ctx.now,
+    ignoreTest: ctx.cfg.paystackMode === 'live',
+    ...extra,
+  });
+}
+
 /**
  * Records one successful charge for `sponsor` and recomputes its entitlement.
  * Safe to call any number of times, in any order, for the same reference.
@@ -55,7 +65,8 @@ export function isOurPlan(cfg, planCode) {
  * @param {object} ctx  { db, cfg, now, log }
  * @param {object} sponsor  sponsors row
  * @param {{ reference: string, amount: number, currency: string|null, paidAt: number, planCode: string|null,
- *           customerCode: string|null, matchedBy: 'metadata'|'subscription'|'customer', source: string }} charge
+ *           customerCode: string|null, matchedBy: 'metadata'|'subscription'|'customer', source: string,
+ *           domain?: 'live'|'test' }} charge
  * @returns {Promise<{ sponsorId: string, note: string, sponsor?: object }>}
  */
 export async function applyCharge(ctx, sponsor, charge) {
@@ -74,7 +85,8 @@ export async function applyCharge(ctx, sponsor, charge) {
       amount: charge.amount,
       currency: charge.currency ? String(charge.currency).toUpperCase() : 'ZAR',
       paidAt: charge.paidAt,
-      source: charge.source,
+      // Test-mode money is marked so it stops counting once a live key is set.
+      source: charge.domain === 'test' ? `${charge.source}:test` : charge.source,
     });
   } else if (existing.sponsor_id !== sponsor.id) {
     // Only an authoritative match (our metadata or the subscription code) may move a payment
@@ -83,27 +95,33 @@ export async function applyCharge(ctx, sponsor, charge) {
       return { sponsorId: existing.sponsor_id, note: 'duplicate' };
     }
     await db.reassignPayment(ctx.db, charge.reference, sponsor.id);
-    if (existing.sponsor_id) {
-      await db.refreshEntitlement(ctx.db, existing.sponsor_id, { graceDays: ctx.cfg.graceDays, now: ctx.now });
-    }
+    if (existing.sponsor_id) await refresh(ctx, existing.sponsor_id);
     note = 'reassigned';
   } else {
     note = 'duplicate';
   }
 
   const nextStatus = statusAfterCharge(sponsor.status);
-  if (sponsor.status === 'ended') {
-    // Money arrived for a sponsorship that was already ended (late webhook or the owner ended it
-    // without cancelling at Paystack). Keep it ended and flag it for the owner to refund or revive.
+  if (sponsor.status === 'ended' && note === 'applied') {
+    // Money arrived for a sponsorship that was already ended (late webhook, the owner ended it
+    // without cancelling at Paystack, or its slot was taken). Keep it ended; the owner refunds or revives.
     ctx.log('warn', 'charge_on_ended', { sponsorId: sponsor.id });
-    if (note === 'applied') note = 'applied_to_ended';
+    note = 'applied_to_ended';
+    await db.addAlert(ctx.db, { kind: 'charge_on_ended', sponsorId: sponsor.id, reference: charge.reference, amount: charge.amount, now: ctx.now });
   }
-  const updated = await db.refreshEntitlement(ctx.db, sponsor.id, {
-    graceDays: ctx.cfg.graceDays,
-    now: ctx.now,
+  // Starting a sponsorship takes a slot: re-check the tier's capacity at the moment money lands
+  // (the checkout hold may have run out, or the checkout was marked abandoned meanwhile).
+  const starting = nextStatus === 'active' && sponsor.status !== 'active';
+  const updated = await refresh(ctx, sponsor.id, {
     status: nextStatus !== sponsor.status ? nextStatus : null,
     customerCode: charge.customerCode || null,
+    claim: starting ? { max: ctx.cfg.max[sponsor.tier] } : null,
   });
+  if (updated?.full) {
+    ctx.log('warn', 'slot_taken', { sponsorId: sponsor.id, tier: sponsor.tier });
+    await db.addAlert(ctx.db, { kind: 'slot_taken', sponsorId: sponsor.id, reference: charge.reference, amount: charge.amount, now: ctx.now });
+    return { sponsorId: sponsor.id, note: 'slot_taken', sponsor: updated };
+  }
 
   if (updated && !updated.paystack_subscription) await adoptMisassignedSubscription(ctx, updated);
   return { sponsorId: sponsor.id, note, sponsor: updated };

@@ -492,6 +492,8 @@ main:focus { outline: none; }
 .alert a { color: var(--err); }
 .alert.is-info { border-color: var(--hemel-l); background: #eef5ff; color: var(--hemel-d); }
 .alert.is-info::before { content: 'i'; background: var(--hemel); }
+.alerts-box .alert > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.alerts-box .alert > .pill { flex: none; }
 
 :where(.page) :where(fieldset) { margin: 0; padding: 0; border: 0; min-width: 0; }
 :where(.page) :where(legend) { padding: 0; }

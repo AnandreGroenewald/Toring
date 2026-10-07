@@ -79,7 +79,22 @@ Later the owner added (decisions are final unless they say otherwise):
   - Text only: no gameplay, RNG or physics change, so the first daily is exactly as fair as any other. The flag `store.tutorialSeen()` is now set when a first game ends with at least 4 drops (a quick quit keeps the hints for next time); closing the how-to sheet no longer sets it. Existing players who already closed the old how-to stay "seen".
   - Other games' names were removed from the whole repo (`docs/workflows/*.js`, `docs/SPEC.md`, `docs/review-findings.md`, this file's quote of the brief, two code comments); keep it that way (a case-insensitive grep over the repo for those games' names must stay empty).
   - Tests: root **161/161**, server **115 pass + 1 skipped**. Headless check at 412×915 with a fresh profile (real first tap, then autoplay): hints at tap, landing and water; a second game shows none and the menu nudge is gone; quick-quit keeps the flag unset; 360×640 and a short 800×500 viewport checked numerically; zero console errors.
-- Not yet reviewed: the server (security, payment edge cases), `admin.html` (incl. the Statistiek tab), the new `/stats` and `/score` endpoints (abuse, D1 write cost) and the UX and legal wording (T4). The server does not auto-delete ended sponsors' contact data; the owner removes it on the admin page.
+- **T4 security and billing review (done, version `1.3.1`):** attacked, then fixed, with a failing test first for each item (`server/test/security.test.js`, 20 tests); one line per change:
+  - Refunds: `refund.processed` is handled; once refunds add up to a payment's amount it buys no time (partial refunds don't), in any order with the charge. New table `payment_reversals`.
+  - Chargebacks: `charge.dispute.create/remind` stop the ad while open and flag it; `charge.dispute.resolve` restores it when the merchant wins (`declined`) and keeps it off when lost (`merchant-accepted`); a late remind never reopens a resolved dispute.
+  - Premium/full-tier race: the slot is re-checked atomically (inside the UPDATE) when money lands via webhook or `/status`, also for checkouts already marked abandoned; a late payer is set `ended`, flagged `slot_taken`, their Paystack subscription is disabled as soon as `subscription.create` arrives, `/status` answers `taken` and `adverteer.html` explains the refund. A full refund clears the flag.
+  - Owner alerts: new table `alerts` (slot_taken, charge_on_ended, dispute), listed at the top of `admin.html` with a "Klaar" button (`POST /admin/alerts/:id/resolve`); payments show refunds/disputes and income is net of them.
+  - Test-mode keys: with an `sk_live_` key, test-mode charges are refused (`rejected:test_mode`), test payments are marked `…:test` and stop counting (the cron drops test sponsors after the switch); `admin.html` shows a "Toetsmodus" banner while a test key is set.
+  - Month arithmetic: months are anchored to the chain's first charge (31 Jan → 28 Feb → 31 Mar, leap years), and a renewal inside the grace days belongs to the same cycle (it used to drift the anniversary to the 28th).
+  - `subscription.disable` now keeps a paid sponsor live until `paid_until` (status `cancelling`), as terme.html §3/§5 promise; immediate removal stays the owner's hide/"immediate" cancel.
+  - Moderation (`js/core/nameRules.js`): letters must read as plain a-z (accented, or a short fold list such as ø/æ/ß); small capitals, hooked/IPA letters and other scripts are refused (`ꜰᴜᴄᴋ`, `ƒuck` used to pass). New: spaced-out letters (`S H I T`, `P.O.E.S`), stretched letters (`Shiiit`), `ph`→`f`. Scunthorpe fix: short slurs only count at a word start, and words split over pieces only when the split looks like a trick, so "Scunthorpe Motors", "Mother Farm", "Top Ornaments", "Hot Notes", "Swanker" are allowed again.
+  - Admin: 20 wrong tokens per hashed address per hour, then 429 even for the right token; malformed `%` escapes in admin paths answer 404 instead of 500; `mailto:` links are not made for addresses with `?&%#`.
+  - `/stats` and `/score` need an allowed `Origin` (scripts without one get 403); `/stats` increments are summed in isolate memory and written at most once a minute (`STATS_FLUSH_SECONDS`), so a flood can't spend the D1 write budget that payments need.
+  - The address-hash salt falls back to the Paystack secret before the public constant.
+  - terme.html: manual-approval timing ("binne [[1 werksdag]]", full refund if refused), the full-slot refund promise, and automatic dispute handling now match the code; adverteer.html's success line says "binne ’n paar minute" (the feed cache can take just over 5). The terms version date was not bumped (sales are still off, nobody has accepted it).
+  - Refuted (already safe): forged/re-serialised/unsigned webhooks, timing-safe compares, replayed and out-of-order events, events for unknown customers, wrong plan/amount/currency, `/status` activation with someone else's reference, double extension for one charge, XSS (all sponsor text goes through `textContent`, the checkout redirect only allows Paystack hosts), open redirects, oversized bodies, CORS on admin routes and preflights, secrets in the repo (a test now guards it).
+  - Tests: root **161/161**, server **135 pass + 1 skipped** (workerd smoke test). Headless check with a mocked API: admin alerts, test banner, resolve, payments with refunds, an XSS name rendered as text, `adverteer.html` "taken" state, game start; zero console errors.
+- The server does not auto-delete ended sponsors' contact data; the owner removes it on the admin page.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
@@ -98,12 +113,7 @@ Each step should end green (`npm test`, `cd server && npm test`, a headless play
   - Include the T5 sponsor features in those games: names on blocks, the billboard (it floats with the flood) and the menu card. A test feed can be injected with Playwright's `page.route('**/sponsors.json', ...)`.
 - ~~T2. Core sponsor logic~~ **Done** (see section 2).
 - ~~T3. Legal templates~~ **Done** (see section 2). The owner fills in the placeholders.
-- **T4. Sponsor reviews and fixes:**
-  - security (forged or replayed webhooks, activating without paying, moderation bypass with unicode, admin token, XSS, CORS)
-  - payment state machine (renewals when one email has several sponsorships, missed webhooks, refunds and chargebacks, premium-slot races, month arithmetic)
-  - the new anonymous `/stats` and `/score` endpoints: counter inflation by scripts, rate-limit behaviour behind shared addresses, D1 write usage, and that the privacy wording matches what is really stored
-  - UX, Afrikaans and legal completeness
-  - The prompts are in `docs/workflows/3-sponsors-backend.js` (Review and Fix phases).
+- ~~T4. Sponsor reviews and fixes~~ **Done** (see section 2). Residual, low: two block names bought at the very same moment by one Paystack customer can get their two subscriptions swapped (both still renew; only a cancel would hit the twin); a script that fakes `Origin` can still inflate counts within the per-address caps (the in-memory limits are per Worker instance); someone can keep the billboard "Tans bespreek" by restarting unpaid checkouts (set `PENDING_HOLD_MINUTES=0` if that happens; double sales are impossible either way).
 - ~~T5. In-game sponsor integration~~ **Done** (see section 2). It also reworded the code comments that named other games and added the README section.
 - **T6. Final pass.** Full playtest plus screenshots. Confirm the **game payload** (what a player downloads: `index.html`, `lib/`, `js/` without `js/pages/`, `css/style.css`, `icons/`, `manifest`, `sw.js`) stays under 3 MB. It was about 1.8 MB after T5 (that count includes `sponsors.json`); `docs/`, `server/` and `tests/` are never loaded by the game. Check the README's sponsorship section is still accurate, then hand the owner the checklist in section 4.
 
@@ -112,6 +122,7 @@ Each step should end green (`npm test`, `cd server && npm test`, a headless play
 
 ## 4. Things only the owner can do
 
+0. **Before deploying the Worker:** re-run `schema.sql` (adds `payment_reversals` and `alerts`), and set `IP_HASH_SALT` as a secret. Act on the "Aandag nodig" items on `admin.html` (refund slot-taken payers in the Paystack Dashboard). Ask the lawyer to check the new terme.html clauses (full-slot refund, manual approval within [[1 werksdag]], automatic dispute handling).
 1. **Paystack:** create and verify a business account. Create two **monthly ZAR plans**: one for name-on-blocks (any amount the owner chooses) and one for the billboard at R1 499 = 149900 cents. Copy the secret key and both plan codes.
 2. **Cloudflare:** create a free account, then follow `server/README.md` (`wrangler login`, `d1 create`, schema, secrets, deploy), and point Paystack's webhook at `https://<worker>/paystack/webhook`.
 3. **Go live:** set `SPONSOR_API_URL` in `js/sponsorConfig.js`. That one value switches on the "Adverteer hier" link, the sign-up form and the "Jou advertensie hier" billboard. Test first with Paystack test keys and test cards.

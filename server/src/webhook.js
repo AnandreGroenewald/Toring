@@ -2,7 +2,7 @@
 // Every handler is idempotent and tolerant of events arriving out of order or more than once.
 
 import * as db from './db.js';
-import { applyCharge, matchCharge, parseTime, planCodeOf, subscriptionCodeOf, isOurPlan } from './billing.js';
+import { applyCharge, matchCharge, parseTime, planCodeOf, refresh, subscriptionCodeOf, isOurPlan } from './billing.js';
 import { sha256Hex, verifyPaystackSignature } from './crypto.js';
 import { statusAfterDisable, statusAfterNotRenew } from './entitlement.js';
 import { HttpError, json, readBody, clientIp } from './http.js';
@@ -65,6 +65,7 @@ async function onChargeSuccess(ctx, data) {
     customerCode: m.customerCode,
     matchedBy: m.matchedBy,
     source: 'webhook',
+    domain: data.domain,
   });
   return { ...r, related: true };
 }
@@ -86,6 +87,7 @@ async function onInvoice(ctx, data) {
     customerCode: m.customerCode,
     matchedBy: m.matchedBy,
     source: 'webhook-invoice',
+    domain: data.domain,
   });
   return { ...r, related: true };
 }
@@ -124,9 +126,75 @@ async function onSubscriptionCreate(ctx, data) {
   // covers sponsors still on an older plan after the owner created new ones.
   if (!planCode) return { note: 'no_plan', related: false };
   const owner = await db.findSubscriptionOwner(ctx.db, { customerCode, email, planCode });
-  if (!owner) return { note: 'unmatched', related: isOurPlan(ctx.cfg, planCode) };
+  if (!owner) {
+    const ended = await db.findSubscriptionOwner(ctx.db, { customerCode, email, planCode, statuses: ['ended'] });
+    if (ended && (await db.hasAlert(ctx.db, ended.id, 'slot_taken'))) return stopSlotTakenSubscription(ctx, ended, { code, emailToken, customerCode });
+    return { note: 'unmatched', related: isOurPlan(ctx.cfg, planCode) };
+  }
   await db.setSubscription(ctx.db, owner.id, { code, emailToken, customerCode, now: ctx.now });
   return { sponsorId: owner.id, note: 'subscription_stored', related: true };
+}
+
+/**
+ * The buyer paid for a slot that was already taken (see applyCharge): Paystack has just started
+ * their monthly subscription, so stop it before it bills them again. The refund of the first
+ * charge stays with the owner (alert on the admin page).
+ */
+async function stopSlotTakenSubscription(ctx, sponsor, { code, emailToken, customerCode }) {
+  await db.setSubscription(ctx.db, sponsor.id, { code, emailToken, customerCode, now: ctx.now });
+  if (!emailToken) return { sponsorId: sponsor.id, note: 'slot_taken_subscription_kept', related: true };
+  try {
+    await ctx.paystack.disableSubscription(code, emailToken);
+    return { sponsorId: sponsor.id, note: 'slot_taken_subscription_disabled', related: true };
+  } catch (err) {
+    ctx.log('error', 'paystack_disable_failed', { sponsorId: sponsor.id, code: err?.code || 'error' });
+    return { sponsorId: sponsor.id, note: 'slot_taken_subscription_kept', related: true };
+  }
+}
+
+/** The payment a refund or dispute is about, if it is one of ours. */
+async function reversedPayment(ctx, reference) {
+  return typeof reference === 'string' && reference ? db.getPayment(ctx.db, reference) : null;
+}
+
+/** refund.processed: a refund that adds up to the whole charge takes back the month it bought. */
+async function onRefund(ctx, data) {
+  const reference = data.transaction_reference ?? data.transaction?.reference;
+  if (typeof reference !== 'string' || !reference) return { note: 'no_reference', related: false };
+  if (data.status && data.status !== 'processed') return { note: 'not_processed', related: false };
+  const amount = Number(data.amount);
+  const id = String(data.refund_reference ?? data.id ?? reference).slice(0, 100);
+  // Stored even when the charge isn't known yet, so a late charge.success can't undo it.
+  await db.insertRefund(ctx.db, { id, reference, amount: Number.isFinite(amount) && amount > 0 ? amount : 0, now: ctx.now });
+  const payment = await reversedPayment(ctx, reference);
+  if (!payment?.sponsor_id) return { note: 'refund_unmatched', related: Boolean(payment) };
+  if ((await db.refundedAmount(ctx.db, reference)) >= Number(payment.amount)) {
+    await db.resolveRefundAlerts(ctx.db, reference, ctx.now);
+  }
+  await refresh(ctx, payment.sponsor_id);
+  return { sponsorId: payment.sponsor_id, note: 'refund_recorded', related: true };
+}
+
+const DISPUTE_STATE = { 'merchant-accepted': 'lost', declined: 'won' };
+
+/** charge.dispute.create / remind / resolve: a chargeback stops the ad until it is decided. */
+async function onDispute(ctx, data, event) {
+  const reference = data.transaction?.reference ?? data.transaction_reference;
+  if (typeof reference !== 'string' || !reference || data.id == null) return { note: 'no_reference', related: false };
+  const resolved = event === 'charge.dispute.resolve';
+  const state = resolved ? DISPUTE_STATE[data.resolution] : 'open';
+  if (!state) return { note: 'dispute_unknown_resolution', related: false };
+  const amount = Number(data.refund_amount ?? data.transaction?.amount);
+  await db.upsertDispute(ctx.db, {
+    id: String(data.id).slice(0, 100), reference, amount: Number.isFinite(amount) ? amount : null, state, now: ctx.now,
+  });
+  const payment = await reversedPayment(ctx, reference);
+  if (!payment?.sponsor_id) return { note: 'dispute_unmatched', related: Boolean(payment) };
+  if (!resolved) {
+    await db.addAlert(ctx.db, { kind: 'dispute', sponsorId: payment.sponsor_id, reference, amount: payment.amount, now: ctx.now });
+  }
+  await refresh(ctx, payment.sponsor_id);
+  return { sponsorId: payment.sponsor_id, note: `dispute:${state}`, related: true };
 }
 
 async function onNotRenew(ctx, data) {
@@ -153,6 +221,10 @@ const HANDLERS = {
   'subscription.create': onSubscriptionCreate,
   'subscription.not_renew': onNotRenew,
   'subscription.disable': onDisable,
+  'refund.processed': onRefund,
+  'charge.dispute.create': onDispute,
+  'charge.dispute.remind': onDispute,
+  'charge.dispute.resolve': onDispute,
 };
 
 /**
@@ -196,7 +268,7 @@ export async function handleWebhook(request, ctx) {
   const handler = HANDLERS[evt.event];
   let result;
   try {
-    result = handler ? await handler(ctx, evt.data) : { note: 'ignored', related: false };
+    result = handler ? await handler(ctx, evt.data, evt.event) : { note: 'ignored', related: false };
   } catch (err) {
     // Leave handled = 0 and answer 500 so Paystack retries; handlers are idempotent.
     ctx.log('error', 'webhook_handler_failed', { type: evt.event, message: String(err?.message || err) });

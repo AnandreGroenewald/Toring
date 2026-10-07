@@ -3,8 +3,11 @@
 // A sponsor is live iff status IN ('active','cancelling') AND approved = 1 AND hidden = 0
 // AND paid_until > now.
 //
-// Each successful charge buys one calendar month starting at max(end of the previous
-// month, charge time). paid_until = end of that chain + GRACE_DAYS. Computing it from the
+// Each successful charge buys one calendar month: a renewal that arrives before the paid
+// period (plus grace) ends extends it by one more month counted from the first charge of the chain (so
+// 31 Jan -> 28 Feb -> 31 Mar, never drifting to the 28th); a charge after a lapse starts a new
+// chain at the charge time. paid_until = end of that chain + GRACE_DAYS. Refunded, disputed
+// and (with a live key) test-mode payments are left out before this runs (db.js). Computing it from the
 // stored payments (instead of incrementing) makes it order-independent and idempotent:
 // duplicate or out-of-order webhooks always produce the same answer, and the grace buffer
 // is added once instead of piling up every month.
@@ -34,8 +37,18 @@ export function addMonthsUTC(ms, months) {
  */
 export function computePaidUntil(paidAts, { graceDays, adminUntil = null }) {
   let end = null;
+  let anchor = null;
+  let months = 0;
   for (const t of [...paidAts].filter(Number.isFinite).sort((a, b) => a - b)) {
-    end = addMonthsUTC(end === null ? t : Math.max(end, t), 1);
+    // A renewal that lands a little late (still inside the grace days) belongs to the same
+    // billing cycle; only a charge after a real lapse starts a new chain.
+    if (end === null || t > end + graceDays * DAY_MS) {
+      anchor = t;
+      months = 1;
+    } else {
+      months += 1;
+    }
+    end = addMonthsUTC(anchor, months);
   }
   const fromPayments = end === null ? null : end + graceDays * DAY_MS;
   if (fromPayments === null) return Number.isFinite(adminUntil) ? adminUntil : null;
@@ -61,14 +74,14 @@ export function statusAfterNotRenew(status) {
 }
 
 /**
- * Status after Paystack disables the subscription. A cancel that was already requested
- * (by the sponsor or the owner) runs out at paid_until, as the terms promise; any other
- * disable (failed payments, dashboard action) ends it now.
+ * Status after Paystack disables the subscription. Billing has stopped, but the month that
+ * was paid for (plus the grace days) is honoured, as the terms promise for a cancellation
+ * and a failed renewal alike: it runs out at paid_until. Removing an ad at once (a breach)
+ * is the owner's call on the admin page (hide, or cancel with "immediate").
  */
 export function statusAfterDisable(sponsor, now) {
-  if (sponsor.status === 'cancelling' && Number.isFinite(sponsor.paid_until) && sponsor.paid_until > now) {
-    return 'cancelling';
-  }
+  const paid = Number.isFinite(sponsor.paid_until) && sponsor.paid_until > now;
+  if (paid && (sponsor.status === 'cancelling' || sponsor.status === 'active')) return 'cancelling';
   return 'ended';
 }
 
@@ -77,6 +90,8 @@ export function statusAfterDisable(sponsor, now) {
  * paying R1 through Paystack Inline with our public key and a copied sponsorId in metadata.
  */
 export function chargeProblem(cfg, sponsor, charge) {
+  // Paystack's test cards cost nothing: with a live key, a test-mode charge is never real money.
+  if (cfg.paystackMode === 'live' && charge.domain === 'test') return 'test_mode';
   if (charge.currency ? String(charge.currency).toUpperCase() !== 'ZAR' : charge.matchedBy !== 'subscription') {
     return 'currency';
   }

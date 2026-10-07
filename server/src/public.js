@@ -186,6 +186,7 @@ export async function status(url, ctx) {
           // We generated this reference for this sponsor, so the link is as strong as our metadata.
           matchedBy: 'metadata',
           source: 'verify',
+          domain: tx.domain,
         });
         if (r.sponsor) sponsor = r.sponsor;
         ctx.invalidate();
@@ -199,8 +200,10 @@ export async function status(url, ctx) {
 
   const live = isLive(sponsor, ctx.now);
   const first = live ? await db.firstPaymentAt(ctx.db, id) : null;
+  // Paid while the tier filled up: the page explains that the money comes back.
+  const taken = sponsor.status === 'ended' && (await db.hasAlert(ctx.db, id, 'slot_taken'));
   return json(200, {
-    status: publicStatus(sponsor, ctx.now, failed),
+    status: taken ? 'taken' : publicStatus(sponsor, ctx.now, failed),
     tier: sponsor.tier,
     name: sponsor.name,
     needsApproval: Number(sponsor.approved) !== 1,

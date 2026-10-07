@@ -43,10 +43,11 @@ export function findByCustomerPlan(db, customerCode, planCode, { unlinkedOnly = 
  * Owner of a new subscription. Normally the charge already stored the customer code; if
  * subscription.create arrives first we fall back to the e-mail the checkout was started with.
  */
-export function findSubscriptionOwner(db, { customerCode, email, planCode }) {
+export function findSubscriptionOwner(db, { customerCode, email, planCode, statuses = ['pending', 'active', 'cancelling'] }) {
+  const list = statuses.map((st) => `'${st.replace(/[^a-z]/g, '')}'`).join(', ');
   return db.prepare(`SELECT * FROM sponsors
       WHERE paystack_subscription IS NULL AND plan_code = ?1
-        AND status IN ('pending', 'active', 'cancelling')
+        AND status IN (${list})
         AND (paystack_customer = ?2 OR (paystack_customer IS NULL AND email = ?3))
       ORDER BY (paystack_customer = ?2) DESC, ${STATUS_PRIORITY}, created_at DESC LIMIT 1`)
     .bind(planCode, customerCode || '', email || '').first();
@@ -93,16 +94,45 @@ export function setLastVerify(db, id, now) {
   return db.prepare('UPDATE sponsors SET last_verify_at = ?2 WHERE id = ?1').bind(id, now).run();
 }
 
-/** Recomputes paid_until from the payments (see entitlement.js) and applies a status/customer change. */
-export async function refreshEntitlement(db, id, { graceDays, now, status = null, customerCode = null }) {
+// The payments that still buy time: not refunded in full, no open or lost chargeback, and (when
+// ?2 = 1, i.e. a live Paystack key is set) not made in Paystack's test mode.
+const ENTITLED_PAYMENTS = `SELECT p.paid_at FROM payments p WHERE p.sponsor_id = ?1
+    AND (?2 = 0 OR p.source NOT LIKE '%:test')
+    AND NOT EXISTS (SELECT 1 FROM payment_reversals r
+      WHERE r.reference = p.reference AND r.kind = 'dispute' AND r.state IN ('open', 'lost'))
+    AND COALESCE((SELECT SUM(r.amount) FROM payment_reversals r
+      WHERE r.reference = p.reference AND r.kind = 'refund'), 0) < COALESCE(p.amount, 0)`;
+
+/**
+ * Recomputes paid_until from the payments (see entitlement.js) and applies a status/customer change.
+ * `claim` ({ max }): the change takes a slot in the sponsor's tier (pending -> active). The capacity
+ * check runs inside the same UPDATE, so two payments landing at once can't both get the last slot.
+ * @returns {Promise<object|null>} the sponsor row after the update; `full: true` when the claim failed
+ */
+export async function refreshEntitlement(db, id, { graceDays, now, status = null, customerCode = null, ignoreTest = false, claim = null }) {
   const sponsor = await getSponsor(db, id);
   if (!sponsor) return null;
-  const paid = await rows(db.prepare('SELECT paid_at FROM payments WHERE sponsor_id = ?1').bind(id));
+  const paid = await rows(db.prepare(ENTITLED_PAYMENTS).bind(id, ignoreTest ? 1 : 0));
   const paidUntil = computePaidUntil(paid.map((r) => r.paid_at), { graceDays, adminUntil: sponsor.admin_until });
-  await db.prepare(`UPDATE sponsors SET paid_until = ?2, status = COALESCE(?3, status),
-        paystack_customer = COALESCE(paystack_customer, ?4), updated_at = ?5 WHERE id = ?1`)
-    .bind(id, paidUntil, status, customerCode, now).run();
+  const room = claim ? `AND (SELECT COUNT(*) FROM sponsors o WHERE o.tier = sponsors.tier AND o.id <> sponsors.id
+        AND o.status IN ('active', 'cancelling') AND o.paid_until > ?5) < ?6` : '';
+  const res = await db.prepare(`UPDATE sponsors SET paid_until = ?2, status = COALESCE(?3, status),
+        paystack_customer = COALESCE(paystack_customer, ?4), updated_at = ?5 WHERE id = ?1 ${room}`)
+    .bind(id, paidUntil, status, customerCode, now, ...(claim ? [claim.max] : [])).run();
+  if (claim && Number(res?.meta?.changes ?? 0) === 0) {
+    // The tier filled up while this buyer was paying: record the money, never show the ad.
+    await db.prepare(`UPDATE sponsors SET paid_until = ?2, status = 'ended',
+          paystack_customer = COALESCE(paystack_customer, ?3), updated_at = ?4 WHERE id = ?1`)
+      .bind(id, paidUntil, customerCode, now).run();
+    return { ...(await getSponsor(db, id)), full: true };
+  }
   return getSponsor(db, id);
+}
+
+/** Sponsors that have test-mode payments (to re-check once the owner switched to a live key). */
+export async function sponsorsWithTestPayments(db) {
+  return (await rows(db.prepare(`SELECT DISTINCT sponsor_id FROM payments
+      WHERE source LIKE '%:test' AND sponsor_id IS NOT NULL`))).map((r) => r.sponsor_id);
 }
 
 const LIVE_WHERE = `status IN ('active', 'cancelling') AND approved = 1 AND hidden = 0 AND paid_until > ?1`;
@@ -183,9 +213,63 @@ export function reassignPayment(db, reference, sponsorId) {
 
 export function listPayments(db, limit) {
   return rows(db.prepare(`SELECT p.reference, p.sponsor_id, p.amount, p.currency, p.paid_at, p.source,
-        s.name AS sponsor_name, s.tier AS sponsor_tier
+        s.name AS sponsor_name, s.tier AS sponsor_tier,
+        COALESCE((SELECT SUM(r.amount) FROM payment_reversals r WHERE r.reference = p.reference AND r.kind = 'refund'), 0)
+          AS refunded,
+        (SELECT r.state FROM payment_reversals r WHERE r.reference = p.reference AND r.kind = 'dispute'
+          ORDER BY CASE r.state WHEN 'lost' THEN 0 WHEN 'open' THEN 1 ELSE 2 END LIMIT 1) AS dispute
       FROM payments p LEFT JOIN sponsors s ON s.id = p.sponsor_id
       ORDER BY p.paid_at DESC LIMIT ?1`).bind(limit));
+}
+
+// ---------------------------------------------------------------- refunds, chargebacks, alerts
+
+/** Records a processed refund once (by Paystack's refund id). */
+export function insertRefund(db, { id, reference, amount, now }) {
+  return db.prepare(`INSERT INTO payment_reversals (id, reference, kind, amount, state, at)
+      VALUES (?1, ?2, 'refund', ?3, 'processed', ?4) ON CONFLICT(id) DO NOTHING`)
+    .bind(`refund:${id}`, reference, amount, now).run();
+}
+
+/** Opens or resolves a dispute. A resolved dispute is never reopened by a late create/remind. */
+export function upsertDispute(db, { id, reference, amount, state, now }) {
+  return db.prepare(`INSERT INTO payment_reversals (id, reference, kind, amount, state, at)
+      VALUES (?1, ?2, 'dispute', ?3, ?4, ?5)
+      ON CONFLICT(id) DO UPDATE SET state = excluded.state, at = excluded.at
+        WHERE payment_reversals.state = 'open'`)
+    .bind(`dispute:${id}`, reference, amount, state, now).run();
+}
+
+/** Adds an alert for the owner once (id = kind:reference). */
+export function addAlert(db, { kind, sponsorId, reference, amount = null, now }) {
+  return db.prepare(`INSERT INTO alerts (id, kind, sponsor_id, reference, amount, created_at)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(id) DO NOTHING`)
+    .bind(`${kind}:${reference || sponsorId}`, kind, sponsorId ?? null, reference ?? null, amount, now).run();
+}
+
+export function hasAlert(db, sponsorId, kind) {
+  return db.prepare('SELECT 1 AS x FROM alerts WHERE sponsor_id = ?1 AND kind = ?2 LIMIT 1').bind(sponsorId, kind).first('x');
+}
+
+export function listOpenAlerts(db) {
+  return rows(db.prepare(`SELECT a.id, a.kind, a.sponsor_id, a.reference, a.amount, a.created_at, s.name AS sponsor_name
+      FROM alerts a LEFT JOIN sponsors s ON s.id = a.sponsor_id
+      WHERE a.resolved_at IS NULL ORDER BY a.created_at DESC LIMIT 200`));
+}
+
+export async function refundedAmount(db, reference) {
+  return Number(await db.prepare(`SELECT COALESCE(SUM(amount), 0) AS n FROM payment_reversals
+      WHERE reference = ?1 AND kind = 'refund'`).bind(reference).first('n')) || 0;
+}
+
+/** A full refund settles the "please refund" alerts about that payment. */
+export function resolveRefundAlerts(db, reference, now) {
+  return db.prepare(`UPDATE alerts SET resolved_at = ?2 WHERE reference = ?1 AND resolved_at IS NULL
+      AND kind IN ('slot_taken', 'charge_on_ended')`).bind(reference, now).run();
+}
+
+export function resolveAlert(db, id, now) {
+  return db.prepare('UPDATE alerts SET resolved_at = ?2 WHERE id = ?1 AND resolved_at IS NULL').bind(id, now).run();
 }
 
 // ---------------------------------------------------------------- webhook events

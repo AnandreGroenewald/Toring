@@ -11,17 +11,36 @@ export const NAME_MAX = 22;
 export const TAGLINE_MAX = 40;
 export const URL_MAX = 200;
 
-// Latin letters only (incl. ê ë ô ï á ...) so look-alike Cyrillic/Greek letters can't
-// smuggle words past the filter. Digits, space and & . - ' ’ !
-const NAME_CHARS = /^(?:[0-9 &.\-'’!]|(?=\p{L})\p{Script=Latin})+$/u;
-// Taglines are sentences, so a few more punctuation marks are allowed.
-const TAGLINE_CHARS = /^(?:[0-9 &.\-'’!,:?%]|(?=\p{L})\p{Script=Latin})+$/u;
-const ALNUM = /[0-9]|(?=\p{L})\p{Script=Latin}/gu;
+// Letters must read as a plain a-z letter: ASCII, an accented one that decomposes to one
+// (ê ë ô ï á é ...), or one of the few Latin letters in FOLD. Everything else is refused, so
+// look-alikes can't smuggle words past the filter: Cyrillic/Greek letters, Latin small capitals
+// ("ꜰᴜᴄᴋ"), hooked or IPA letters ("ƒ", "ɑ") and stacked combining marks.
+// Allowed besides letters: digits, space and & . - ' ’ ! (taglines also , : ? %).
+const FOLD = {
+  ø: 'o', æ: 'ae', œ: 'oe', ß: 'ss', ð: 'd', þ: 'th', ı: 'i', ł: 'l', ŀ: 'l', đ: 'd', ħ: 'h', ŧ: 't', ŋ: 'n', ĸ: 'k',
+};
+const NAME_PUNCT = /^[0-9 &.\-'’!]$/u;
+const TAGLINE_PUNCT = /^[0-9 &.\-'’!,:?%]$/u;
+
+function stripDiacritics(s) {
+  return s.normalize('NFD').replace(/\p{M}/gu, '');
+}
+
+function isPlainLetter(ch) {
+  if (/^[a-z]$/i.test(ch)) return true;
+  const lower = ch.toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(FOLD, lower)) return true;
+  // One precomposed letter (NFKC already composed it) whose base is a-z.
+  return [...ch].length === 1 && /^[a-z]$/i.test(stripDiacritics(ch));
+}
 
 /** True if `ch` (one character) may appear in a name ('name') or tagline ('tagline'). */
 export function isAllowedChar(ch, kind = 'name') {
-  return (kind === 'tagline' ? TAGLINE_CHARS : NAME_CHARS).test(ch);
+  return (kind === 'tagline' ? TAGLINE_PUNCT : NAME_PUNCT).test(ch) || isPlainLetter(ch);
 }
+
+const allAllowed = (text, kind) => [...text].every((ch) => isAllowedChar(ch, kind));
+const alnumCount = (text) => [...text].filter((ch) => /[0-9]/.test(ch) || isPlainLetter(ch)).length;
 
 const INVISIBLE = /[­͏؜ᅟᅠ឴឵᠎​-‏‪-‮⁠-⁯ㅤ︀-️﻿]/g;
 
@@ -36,10 +55,6 @@ export function normalizeText(input) {
     .trim();
 }
 
-function stripDiacritics(s) {
-  return s.normalize('NFD').replace(/\p{M}/gu, '');
-}
-
 const LEET_I = { 0: 'o', 1: 'i', 2: 'z', 3: 'e', 4: 'a', 5: 's', 6: 'g', 7: 't', 8: 'b', 9: 'g', '@': 'a', $: 's', '!': 'i', '|': 'i', '+': 't' };
 const LEET_L = { ...LEET_I, 1: 'l', '!': ' ', '|': 'l' };
 
@@ -47,22 +62,65 @@ function deleet(s, map) {
   return [...s].map((ch) => map[ch] ?? ch).join('');
 }
 
-/** Lower-case, accent-free, de-leeted readings of the text (two readings: 1 -> i and 1 -> l). */
-function readings(text) {
-  const base = stripDiacritics(text.toLowerCase());
-  return [deleet(base, LEET_I), deleet(base, LEET_L), base].map((r) => ({
-    tokens: r.split(/[^a-z]+/).filter(Boolean),
-    compact: r.replace(/[^a-z]/g, ''),
-  }));
+const fold = (s) => [...s].map((ch) => FOLD[ch] ?? ch).join('');
+
+/** Letter runs of a reading, with their offsets in the reading's compact (letters-only) form. */
+function piecesOf(r) {
+  const pieces = [];
+  let at = 0;
+  for (const m of r.matchAll(/[a-z]+/g)) {
+    pieces.push({ text: m[0], start: at, end: at + m[0].length });
+    at += m[0].length;
+  }
+  return pieces;
 }
 
-// Matched anywhere, even across spaces/dots and with letters stretched ("f.u.u.c.k").
-// Only words long and distinctive enough not to hide inside innocent names.
+/**
+ * Lower-case, accent-free, folded, de-leeted readings of the text: 1 -> i, 1 -> l, as typed,
+ * and "ph" -> "f" ("Phuk").
+ */
+function readings(text) {
+  const base = fold(stripDiacritics(text.toLowerCase()));
+  const leetI = deleet(base, LEET_I);
+  return [leetI, deleet(base, LEET_L), base, leetI.replace(/ph/g, 'f')].map((r) => {
+    const pieces = piecesOf(r);
+    return { tokens: pieces.map((p) => p.text), pieces, compact: pieces.map((p) => p.text).join('') };
+  });
+}
+
+/**
+ * Whole-word candidates: every token, stretched letters squeezed ("shiiit" -> "shit", "sexxx" ->
+ * "sexx"/"sex"), and runs of 1-2 letter fragments joined ("S H I T", "Ka K", "P.O.E.S").
+ */
+function wordCandidates(tokens) {
+  const out = new Set();
+  for (const t of tokens) {
+    out.add(t);
+    out.add(t.replace(/(.)\1{2,}/g, '$1'));
+    out.add(t.replace(/(.)\1{2,}/g, '$1$1'));
+  }
+  for (let i = 0; i < tokens.length; i++) {
+    let joined = tokens[i];
+    for (let j = i + 1; j < tokens.length && tokens[j - 1].length <= 2 && tokens[j].length <= 2; j++) {
+      joined += tokens[j];
+      out.add(joined);
+    }
+  }
+  return out;
+}
+
+// Matched inside words, and across spaces/dots when the gaps look like a trick ("f.u.u.c.k",
+// "Fuc King"), with letters stretched. Long, distinctive words that don't hide in innocent ones.
 const HARD = [
-  'fuck', 'cunt', 'nigger', 'nigga', 'kaffir', 'kaffer', 'faggot', 'motherf', 'hotnot', 'moffie',
-  'bullshit', 'porn', 'wanker', 'asshole', 'arsehole', 'dildo', 'blowjob', 'handjob', 'jizz', 'whore',
-  'naaier', 'poephol', 'poesklap', 'fokken', 'fokker', 'fokkof',
+  'fuck', 'nigger', 'nigga', 'kaffir', 'faggot', 'moffie', 'bullshit', 'dildo', 'blowjob', 'handjob', 'jizz',
+  'poephol', 'poesklap', 'fokken', 'fokker', 'fokkof',
 ];
+// The same, but only at the start of a word: these hide inside innocent names
+// ("Scunthorpe", "Swanker", "Skaffer"), so they count only as a word or a word's beginning.
+const HARD_START = ['cunt', 'porn', 'whore', 'wanker', 'asshole', 'arsehole', 'naaier', 'hotnot', 'kaffer'];
+// What may follow a word split over several pieces ("fu cking", "Fuc Kers"). Anything else
+// means the pieces are real words that happen to touch ("Who Reads", "Hot Notes").
+const SPLIT_ENDINGS = new Set(['', 's', 'z', 'a', 'y', 'ie', 'er', 'ers', 'in', 'ing', 'ings', 'ed']);
 
 // Matched as whole words only (so "Fokus", "Therapist", "Torpedo", "Hoërskool", "Naaimasjien",
 // "Moer en Bout" and "Cum Laude" stay allowed).
@@ -106,11 +164,33 @@ function stretchRegex(word) {
   return STRETCH.get(word);
 }
 
+function pieceAt(pieces, offset) {
+  return pieces.find((p) => offset >= p.start && offset < p.end);
+}
+
+/** True if `word` (letters may be stretched) appears in the reading in a way that reads as that word. */
+function hardHit(word, { pieces, compact }, startOnly) {
+  const re = new RegExp(stretchRegex(word).source, 'g');
+  for (const m of compact.matchAll(re)) {
+    const s = m.index;
+    const e = s + m[0].length;
+    const first = pieceAt(pieces, s);
+    const last = pieceAt(pieces, e - 1);
+    if (first === last) {
+      if (!startOnly || s === first.start) return true;
+    } else if (s === first.start && SPLIT_ENDINGS.has(compact.slice(e, last.end))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** True if the text contains a blocked word in any reading. */
 export function containsBlockedWord(text) {
-  for (const { tokens, compact } of readings(text)) {
-    if (tokens.some((t) => WORDS.has(t))) return true;
-    if (HARD.some((w) => stretchRegex(w).test(compact))) return true;
+  for (const reading of readings(text)) {
+    for (const c of wordCandidates(reading.tokens)) if (WORDS.has(c)) return true;
+    if (HARD.some((w) => hardHit(w, reading, false))) return true;
+    if (HARD_START.some((w) => hardHit(w, reading, true))) return true;
   }
   return false;
 }
@@ -163,7 +243,7 @@ export function lengthOf(s) {
  * too_short | too_long | bad_chars | symbols | contact | reserved | blocked.
  * @returns {{ ok: true, value: string, fixed: boolean } | { ok: false, code: string, reason: string }}
  */
-function checkDisplayText(raw, { min, max, chars, invalidCode, rejectedCode, admin }) {
+function checkDisplayText(raw, { min, max, kind, invalidCode, rejectedCode, admin }) {
   const invalid = (reason) => ({ ok: false, code: invalidCode, reason });
   const rejected = (reason) => ({ ok: false, code: rejectedCode, reason });
   if (typeof raw !== 'string') return invalid('bad_chars');
@@ -171,9 +251,9 @@ function checkDisplayText(raw, { min, max, chars, invalidCode, rejectedCode, adm
   const len = lengthOf(text);
   if (len === 0) return invalid('too_short');
   if (len > max) return invalid('too_long');
-  if (!chars.test(text)) return invalid('bad_chars');
+  if (!allAllowed(text, kind)) return invalid('bad_chars');
   if (len < min) return invalid('too_short');
-  if ((text.match(ALNUM) || []).length < Math.min(2, min)) return invalid('symbols');
+  if (alnumCount(text) < Math.min(2, min)) return invalid('symbols');
   if (looksLikeContact(text)) return rejected('contact');
   if (!admin) {
     if (containsBlockedWord(text)) return rejected('blocked');
@@ -185,7 +265,7 @@ function checkDisplayText(raw, { min, max, chars, invalidCode, rejectedCode, adm
 /** Business name shown on the blocks / billboard. `admin` skips the word lists (owner's own call). */
 export function checkName(raw, { admin = false, max = NAME_MAX } = {}) {
   return checkDisplayText(raw, {
-    min: NAME_MIN, max, chars: NAME_CHARS, invalidCode: 'invalid_name', rejectedCode: 'name_rejected', admin,
+    min: NAME_MIN, max, kind: 'name', invalidCode: 'invalid_name', rejectedCode: 'name_rejected', admin,
   });
 }
 
@@ -195,7 +275,7 @@ export function checkTagline(raw, { admin = false, max = TAGLINE_MAX } = {}) {
     return { ok: true, value: null, fixed: false };
   }
   return checkDisplayText(raw, {
-    min: 2, max, chars: TAGLINE_CHARS, invalidCode: 'invalid_tagline', rejectedCode: 'tagline_rejected', admin,
+    min: 2, max, kind: 'tagline', invalidCode: 'invalid_tagline', rejectedCode: 'tagline_rejected', admin,
   });
 }
 

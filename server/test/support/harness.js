@@ -28,12 +28,13 @@ export function baseEnv(db, overrides = {}) {
     BLOCK_MAX: '60',
     AUTO_APPROVE: 'true',
     GRACE_DAYS: '3',
+    STATS_FLUSH_SECONDS: '0',
     ...overrides,
   };
 }
 
 /** A scriptable fake of api.paystack.co. */
-export function fakePaystack() {
+export function fakePaystack(secret = SECRET) {
   const calls = [];
   const plans = { [PLAN_BLOCK]: 4900, [PLAN_PREMIUM]: 149900 };
   const transactions = new Map(); // reference -> verify data
@@ -52,7 +53,7 @@ export function fakePaystack() {
     const method = init.method || 'GET';
     const body = init.body ? JSON.parse(init.body) : null;
     calls.push({ method, path: url.pathname, body, auth: init.headers?.Authorization });
-    if (init.headers?.Authorization !== `Bearer ${SECRET}`) return fail(401, 'Invalid key');
+    if (init.headers?.Authorization !== `Bearer ${secret}`) return fail(401, 'Invalid key');
     if (method === 'POST' && url.pathname === '/transaction/initialize') {
       if (nextInit) {
         const r = nextInit;
@@ -114,7 +115,8 @@ export function fakePaystack() {
 export function createHarness(envOverrides = {}) {
   const db = createTestDb();
   const clock = { now: T0 };
-  const paystack = fakePaystack();
+  const key = envOverrides.PAYSTACK_SECRET_KEY ?? SECRET;
+  const paystack = fakePaystack(key);
   const logs = [];
   const worker = createWorker({
     now: () => clock.now,
@@ -147,7 +149,7 @@ export function createHarness(envOverrides = {}) {
     body, headers: token === null ? {} : { Authorization: `Bearer ${token}` },
   });
 
-  async function webhook(evt, { secret = SECRET, signature } = {}) {
+  async function webhook(evt, { secret = key, signature } = {}) {
     const raw = JSON.stringify(evt);
     const sig = signature ?? createHmac('sha512', secret).update(raw).digest('hex');
     return request('POST', '/paystack/webhook', {
@@ -192,12 +194,12 @@ export function premiumBody(overrides = {}) {
 const customer = (email, code) => ({ id: 1, email, customer_code: code, first_name: 'Anna', last_name: 'Smit', phone: '0821234567' });
 const planObj = (code, amount) => ({ id: 9, name: 'Stapel', plan_code: code, amount, interval: 'monthly', currency: 'ZAR' });
 
-export function chargeSuccess({ reference, amount = 4900, plan = PLAN_BLOCK, email = 'anna@example.co.za', customerCode = 'CUS_anna', paidAt, metadata = null, currency = 'ZAR' }) {
+export function chargeSuccess({ reference, amount = 4900, plan = PLAN_BLOCK, email = 'anna@example.co.za', customerCode = 'CUS_anna', paidAt, metadata = null, currency = 'ZAR', domain = 'live' }) {
   return {
     event: 'charge.success',
     data: {
       id: Math.floor(Math.random() * 1e9),
-      domain: 'test',
+      domain,
       status: 'success',
       reference,
       amount,

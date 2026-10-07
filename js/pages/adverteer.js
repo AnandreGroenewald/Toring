@@ -1467,6 +1467,7 @@ function startStatus({ sponsor, reference }) {
         if (st?.status === 'active') return render(v, 'active', st);
         if (st?.status === 'failed') return render(v, 'failed', st, { retry: () => backToForm() });
         if (st?.status === 'ended') return render(v, 'ended', st);
+        if (st?.status === 'taken') return render(v, 'taken', st);
       } catch (err) {
         if (signal.aborted) return;
         if (err.code === 'not_found' || err.status === 400 || /^invalid_/.test(err.code || '')) return render(v, 'invalid');
@@ -1513,8 +1514,8 @@ function render(v, state, st = null, actions = {}) {
     } else {
       v.title.textContent = 'Dankie!';
       v.msg.textContent = tier === 'premium'
-        ? 'Jou advertensiebord verskyn binne 5 minute in die spel.'
-        : 'Jou naam verskyn binne 5 minute in die spel.';
+        ? 'Jou advertensiebord verskyn binne ’n paar minute in die spel, sodra spelers ’n nuwe spel begin.'
+        : 'Jou naam verskyn binne ’n paar minute in die spel, sodra spelers ’n nuwe spel begin.';
     }
     v.msg2.textContent = 'Paystack stuur vir jou ’n kwitansie per e-pos, met ’n knoppie om jou intekening later te bestuur of te kanselleer.';
     show(v.msg2);
@@ -1555,6 +1556,11 @@ function render(v, state, st = null, actions = {}) {
     );
     v.hint.replaceChildren('Het jy die betaling op Paystack gekanselleer? ', h('a', { href: 'adverteer.html#teken-in', text: 'Begin weer' }), '.');
     show(v.hint);
+  } else if (state === 'taken') {
+    setIcon(v.ic, 'cross');
+    v.title.textContent = st?.tier === 'premium' ? 'Die advertensiebord is intussen bespreek' : 'Die plekke op die blokke is intussen vol';
+    v.msg.textContent = 'Iemand anders het net voor jou betaal, so ons kan nie jou advertensie wys nie. Ons stop jou intekening en betaal die volle bedrag terug na die kaart waarmee jy betaal het — jy hoef niks te doen nie.';
+    v.actions.append(homeBtn());
   } else if (state === 'ended') {
     setIcon(v.ic, 'clock');
     v.title.textContent = 'Hierdie borgskap het verval';

@@ -207,13 +207,16 @@ test('subscription.not_renew -> cancelling, still live until paid_until, then en
   assert.equal(s.status, 'ended');
 });
 
-test('subscription.disable on an active sponsor -> ended immediately', async () => {
+test('subscription.disable on an active sponsor -> live until paid_until, then ended; never revived', async () => {
   const h = createHarness();
   const { sponsorId, reference } = await signup(h);
   await h.webhook(chargeSuccess({ reference, paidAt: T0, metadata: { sponsorId } }));
   await h.webhook(subscriptionCreate({}));
   h.clock.now = T0 + DAY;
   await h.webhook(subscriptionEvent('subscription.disable', {}));
+  assert.equal(sponsor(h, sponsorId).status, 'cancelling', 'billing stopped, the paid month is honoured');
+  h.clock.now = sponsor(h, sponsorId).paid_until + 1;
+  await h.worker.scheduled({}, h.env, { waitUntil() {} });
   assert.equal(sponsor(h, sponsorId).status, 'ended');
   assert.deepEqual(await feedNames(h), []);
 

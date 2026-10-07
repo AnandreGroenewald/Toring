@@ -4,6 +4,7 @@ import * as db from './db.js';
 import { TIERS } from './config.js';
 import { newSponsorId, safeEqual } from './crypto.js';
 import { isLive } from './entitlement.js';
+import { refresh } from './billing.js';
 import { HttpError, json, readJsonObject } from './http.js';
 import { isUuid, validateAdminFields } from './validate.js';
 
@@ -35,7 +36,17 @@ async function loadSponsor(ctx, id) {
 /** GET /admin/sponsors */
 export async function listSponsors(ctx) {
   const sponsors = (await db.listSponsors(ctx.db)).map((s) => withLive(s, ctx.now));
-  return json(200, { sponsors, now: ctx.now });
+  const alerts = await db.listOpenAlerts(ctx.db);
+  return json(200, { sponsors, alerts, paystackMode: ctx.cfg.paystackMode, now: ctx.now });
+}
+
+/** POST /admin/alerts/:id/resolve — the owner has dealt with it (refunded, revived, ...). */
+export async function resolveAlert(ctx, id) {
+  if (typeof id !== 'string' || id.length > 200) throw new HttpError(404, 'not_found');
+  const res = await db.resolveAlert(ctx.db, id, ctx.now);
+  if (Number(res?.meta?.changes ?? 0) === 0) throw new HttpError(404, 'not_found');
+  ctx.log('info', 'admin_alert_resolved', { id });
+  return json(200, { ok: true });
 }
 
 /** POST /admin/sponsors — a manual deal (quote/EFT) with an explicit end date. */
@@ -74,7 +85,7 @@ export async function updateSponsor(request, ctx, id) {
   await db.updateSponsorFields(ctx.db, id, f, ctx.now);
   // paid_until is derived: payments + grace, with the admin date as a minimum.
   if (Object.prototype.hasOwnProperty.call(f, 'admin_until')) {
-    await db.refreshEntitlement(ctx.db, id, { graceDays: ctx.cfg.graceDays, now: ctx.now });
+    await refresh(ctx, id);
   }
   ctx.invalidate();
   ctx.log('info', 'admin_update', { sponsorId: id, fields: Object.keys(f) });

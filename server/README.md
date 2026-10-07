@@ -117,6 +117,8 @@ npx wrangler d1 execute stapel-borge --remote --file=./schema.sql
 It's safe to run this again later; it only creates what is missing.
 
 > **Migration note (anonymous audience counts).** If your database already exists from before the audience counts were added, run the very same command again. Because every statement is `CREATE TABLE IF NOT EXISTS`, it only adds the two new tables `stats_daily` and `daily_scores` and leaves everything else untouched. Then `wrangler deploy` the new Worker. Until the tables exist, `POST /stats` and `/score` answer `500` and the game silently ignores that; nothing else is affected.
+>
+> **Migration note (security update, version 1.3.1 of the game).** Run the same command once more: it adds `payment_reversals` (refunds and chargebacks) and `alerts` (the "needs attention" list on the admin page). **Do this before deploying the new Worker**, because webhooks for payments use these tables.
 
 ### 3.2 Settings (`wrangler.toml` → `[vars]`)
 
@@ -133,6 +135,8 @@ Open `wrangler.toml` and fill in:
 | `PREMIUM_MAX` / `BLOCK_MAX` | How many sponsors at once: `1` billboard and `60` block names |
 | `AUTO_APPROVE` | `true`: clean names go live straight after payment. `false`: you approve each one first on the admin page. |
 | `GRACE_DAYS` | `3`: extra days a sponsor stays visible after the paid month, so a renewal that's a day late doesn't make them disappear. |
+| `STATS_FLUSH_SECONDS` | Optional. The Worker adds the anonymous counts up in memory and writes them to D1 at most this often (default `60`). This keeps D1's free daily write budget for payments and sign-ups. `0` writes every message straight away. |
+| `RATE_LIMIT_ADMIN_FAILS_PER_HOUR` | Optional. Wrong admin tokens one address may try per hour before it has to wait (default `20`), even with the right token. |
 | `RATE_LIMIT_STATS_PER_HOUR` / `RATE_LIMIT_SCORE_PER_HOUR` | Optional. How many anonymous counts (`POST /stats`) and daily-percentile requests (`/score`) one network address may send per hour: `120` and `60` by default. Generous on purpose, because a school or a mobile network can put many players behind one address. |
 | `PAYSTACK_IP_ALLOWLIST` | `false` by default. `true` also checks that webhooks come from Paystack's published IP addresses. The signature check is the main protection either way. |
 
@@ -152,7 +156,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 It must be at least 32 characters. If it's shorter or missing, the admin API stays switched off.
 
-Optional: `npx wrangler secret put IP_HASH_SALT` (any long random string) to key the IP fingerprints used for rate limiting. If you don't set it, the admin token is used.
+Optional: `npx wrangler secret put IP_HASH_SALT` (any long random string) to key the IP fingerprints used for rate limiting. If you don't set it, the admin token is used (or, without one, the Paystack secret key).
 
 ### 3.4 Deploy
 
@@ -220,7 +224,7 @@ npx wrangler d1 execute stapel-borge --remote --command "DELETE FROM payments; D
 4. Set the live key: `npx wrangler secret put PAYSTACK_SECRET_KEY` and paste `sk_live_...`.
 5. Set the **Live Webhook URL** in Paystack to the same `…/paystack/webhook` address.
 6. `npx wrangler deploy`.
-7. Clear the test data (command above), then buy one block sponsorship yourself with a real card, check it appears, and cancel or refund it.
+7. Clear the test data (command above), then buy one block sponsorship yourself with a real card, check it appears, and cancel or refund it. (Should you forget the clean-up: with a live key, payments made in test mode never count, and the daily clean-up takes test sponsors out of the game. The admin page shows a "Toetsmodus" warning while a test key is set.)
 
 ## 8. Everyday tasks
 
@@ -322,10 +326,13 @@ curl -s -H "Authorization: Bearer $TOKEN" "$API/admin/stats?from=2026-10-01&to=2
   - the sponsor is approved
   - the sponsor is not hidden
   - **paid until** is in the future
-- **Paid until.** Each successful monthly payment adds one calendar month. A month starts when the previous one ends, or on the payment date if that's later. `GRACE_DAYS` (3) are added once at the end, so a renewal that's a few days late doesn't make the sponsor disappear. Paid until is always worked out again from all the payments, so messages that arrive late, twice or in the wrong order can't give anyone extra time.
+- **Paid until.** Each successful monthly payment adds one calendar month, counted from the first payment's day (31 Jan, 28 Feb, 31 Mar: the day never drifts). A renewal that arrives a little late (within `GRACE_DAYS`) still belongs to the same month; after a real lapse, a payment starts a new month on the payment date. `GRACE_DAYS` (3) are added once at the end, so a renewal that's a few days late doesn't make the sponsor disappear. Paid until is always worked out again from all the payments, so messages that arrive late, twice or in the wrong order can't give anyone extra time.
 - **Renewals** happen automatically every month. If a card fails, there's no extension, and the sponsor drops out once paid until passes. If Paystack's retry succeeds later, they come back. Depending on your plan settings, Paystack can e-mail the sponsor about the failed payment, and you can send them the card link from section 8.
-- **Cancelling.** When the sponsor or you cancel, the status becomes *cancelling* and they stay visible until paid until. The daily clean-up then marks them *ended*.
-- **One billboard.** While someone is paying for it, or has been at Paystack's checkout for the last 30 minutes, the sign-up page shows the billboard as "Tans bespreek" (booked) and nobody else can buy it.
+- **Cancelling.** When the sponsor or you cancel (or Paystack stops the subscription for another reason), the status becomes *cancelling* and they stay visible until paid until, as the terms promise. The daily clean-up then marks them *ended*. To take an ad down at once (a breach of the terms), hide it or cancel with "immediately" on the admin page.
+- **Refunds and chargebacks.** Refund in the Paystack Dashboard as usual. Once the refunds for a payment add up to the whole amount, that payment no longer buys time (a partial refund leaves the month alone). A chargeback (bank dispute) stops the ad automatically while it is open, and for good if the bank decides for the customer; if it's decided for you, the ad comes back. The admin page flags every dispute.
+- **Paid but the slot is gone.** The checkout hold lasts 30 minutes. If someone pays for the billboard after that while someone else has bought it in the meantime (or pays for a sign-up that was already marked abandoned), the Worker checks the slot again when the money arrives. The late buyer is not shown, their Paystack subscription is stopped as soon as Paystack creates it, their sign-up page says the money comes back, and the admin page asks you to **refund** them in the Paystack Dashboard.
+- **One billboard.** While someone is paying for it, or has been at Paystack's checkout for the last 30 minutes, the sign-up page shows the billboard as "Tans bespreek" (booked) and nobody else can buy it. (Someone could keep restarting an unpaid checkout to keep it "booked"; if that happens, set `PENDING_HOLD_MINUTES` to `0`. The slot is checked again when the money arrives, so it can never be sold twice; see "Paid but the slot is gone".)
+- **Needs attention.** The top of the admin page lists what you must act on: a refund for a slot that was already taken, money that arrived for an ended sponsorship, and bank disputes. Click "Klaar" when it's dealt with.
 - **Daily clean-up** (03:17 UTC):
   - unpaid sign-ups older than 7 days become *abandoned*
   - their contact details are removed after 30 days
@@ -338,7 +345,7 @@ curl -s -H "Authorization: Bearer $TOKEN" "$API/admin/stats?from=2026-10-01&to=2
 Check current prices on the providers' pages. They change.
 
 - **Cloudflare Workers, free plan:** 100 000 requests per day. Each game start fetches the sponsor list once, and the game also keeps its own 5-minute cache. If Stapel gets more than roughly 100 000 game starts a day, the list request starts failing (the game then falls back to its cached copy and `sponsors.json`). At that point, move to Workers Paid, currently from **US$5 per month**.
-- **Cloudflare D1, free plan:** 5 million rows read and 100 000 rows written per day, and 5 GB of storage. Every finished game writes about 3 to 6 small counter rows (a Daaglikse Toring result one more), so the free plan covers roughly 15 000 to 30 000 finished games a day. Beyond that the counts start failing quietly (the game ignores it) until the next day. Since September 2026, queries fail once a free daily limit is reached. The Worker keeps the sponsor list in memory for 30 seconds and serves the last good copy if the database is unavailable, so normal use stays far below these limits.
+- **Cloudflare D1, free plan:** 5 million rows read and 100 000 rows written per day, and 5 GB of storage. Each Worker instance adds the anonymous counts up in memory and writes them once a minute (`STATS_FLUSH_SECONDS`), so the writes grow with the number of sponsors, not with the number of games; a Daaglikse Toring result still writes one row. Even a script flooding `/stats` can't use up the write budget that payments need. Beyond that the counts start failing quietly (the game ignores it) until the next day. Since September 2026, queries fail once a free daily limit is reached. The Worker keeps the sponsor list in memory for 30 seconds and serves the last good copy if the database is unavailable, so normal use stays far below these limits.
 - **Paystack:** no monthly fee. A fee per successful payment, at the time of writing about **2.9% + R1 per local card payment** (more for international cards), **plus VAT**. Check <https://paystack.com/za/pricing>. On R1 499 that's roughly R44 + VAT per month. Refunds and chargebacks can have their own fees. Payouts go to your bank account.
 
 ## 11. Security and privacy
@@ -346,12 +353,13 @@ Check current prices on the providers' pages. They change.
 - **No secrets in the repository.** `wrangler.toml` only holds plan codes, the D1 id and settings. Secrets live in Cloudflare (`wrangler secret put`). `.dev.vars` (local secrets for `wrangler dev`) is git-ignored.
 - **Webhooks** must carry a valid HMAC-SHA512 signature of the exact request body, made with your secret key. The Worker checks it in constant time. Unsigned or tampered messages get `401`.
 - **Payments are checked**, not trusted: the plan must be the sponsor's plan, the currency must be ZAR, and premium payments can't be less than `PREMIUM_PRICE_CENTS`. This stops someone paying R1 with a copied sponsor id.
-- **Admin token:** at least 32 characters, compared in constant time, sent only in the `Authorization` header. If it leaks, run `npx wrangler secret put ADMIN_TOKEN` with a new one; the old one stops working immediately.
+- **Paystack test keys** never pay for anything once a live key (`sk_live_...`) is set: test-mode charges are refused and old test payments stop counting.
+- **Admin token:** at least 32 characters, compared in constant time, sent only in the `Authorization` header (never in a URL or the logs). After 20 wrong tokens from one address in an hour, that address has to wait. If it leaks, run `npx wrangler secret put ADMIN_TOKEN` with a new one; the old one stops working immediately.
 - **Public data:** `GET /sponsors` returns only names, taglines and website addresses of live sponsors. It never returns e-mails, phone numbers or Paystack details.
 - **Card details** never touch this server. Paystack's checkout handles them. Stored webhook copies have card and IP details removed.
 - **POPIA:** the server stores the business name, contact name, e-mail, phone number and a consent record. The consent record holds the terms and privacy versions, the time, and a keyed hash of the IP address, never the IP itself. Retention is described in section 9. Mention Cloudflare (hosting) and Paystack (payments) as operators in `privaatheid.html`.
 - **Anonymous audience counts (`POST /stats`, `POST /score`).** When a game ends, the game sends one small message: the date, daily or practice, how many times each sponsor's name was on a block the player dropped, which sponsor's billboard stood on the island, and whether the menu card was shown. The Worker validates and clamps it (known live sponsor ids only, at most 60 per sponsor, 4 KB, date within a day of today) and only **adds to totals** in `stats_daily` (per day, metric and sponsor). A Daaglikse Toring result adds one to a 0,5 m bucket in `daily_scores`, which is how the "beter as 72% van spelers" line is worked out. No IP address, name, device id, cookie, timestamp or per-player row is stored anywhere. To limit abuse, an address is hashed with your secret and the **date** (so the hash changes every day and can't be followed across days), held only in the Worker's memory for at most an hour and never written to the database or the logs. Counts older than about 13 months are deleted.
-- **Names are checked before payment.** The filter blocks swear words and slurs (English and Afrikaans, including tricks like `sh1t` or look-alike letters), web addresses, e-mail addresses, phone numbers, and names that pretend to be Stapel, admin or Paystack. Nobody pays for a name that won't be shown. You can still hide anything later.
+- **Names are checked before payment.** The filter blocks swear words and slurs (English and Afrikaans, including tricks like `sh1t`, `S H I T`, stretched letters, invisible characters and look-alike letters such as small capitals or other alphabets, which are refused outright), while innocent names that merely contain such a word, like "Scunthorpe", stay allowed; web addresses, e-mail addresses, phone numbers, and names that pretend to be Stapel, admin or Paystack. Nobody pays for a name that won't be shown. You can still hide anything later.
 - **Content rules** come from the terms, not the code: no illegal goods, unlawful gambling, alcohol, tobacco or vaping (minors play the game), adult content, political or religious campaigning, or hateful or misleading content. Check new sponsors on the admin page, or set `AUTO_APPROVE` to `false` to approve each one yourself.
 
 ## 12. Troubleshooting
@@ -374,12 +382,13 @@ All endpoints answer JSON. Errors look like `{ "error": "<code>", "field"?: "<fi
 | `GET /sponsors` | anyone (CORS `*`) | `{ updatedAt, block: [{ id, name }], premium: [{ id, name, tagline, url }] }`. Live sponsors only. `tagline` and `url` are `""` when empty. `Cache-Control: public, max-age=300`. |
 | `GET /availability` | anyone (CORS `*`) | `{ premium: { available }, block: { available } }` |
 | `POST /subscribe` | site origins | Body: `{ tier, name, tagline?, url?, contactName, email, phone?, acceptTerms: true, acceptPrivacy: true, termsVersion, privacyVersion, website: "" }`. Returns `{ url, reference, sponsorId, name, needsApproval }`, where `name` is the cleaned name. |
-| `GET /status?sponsor=&reference=` | site origins | `{ status: "active" \| "pending" \| "failed" \| "ended", tier, name, needsApproval, liveFrom, paidUntil }`. `trxref` is accepted instead of `reference`. |
+| `GET /status?sponsor=&reference=` | site origins | `{ status: "active" \| "pending" \| "failed" \| "ended" \| "taken", tier, name, needsApproval, liveFrom, paidUntil }`. `trxref` is accepted instead of `reference`. |
 | `POST /stats` | site origins | One finished game, anonymous: `{ dateKey, mode: "daily" \| "practice", blocks: { <sponsorId>: n }, billboard: <sponsorId> \| null, menu: bool }`. Body at most 4 KB, `application/json` or `text/plain` (that is what `sendBeacon` sends). Unknown sponsor ids are ignored, `n` is capped at 60, `dateKey` must be within a day of the server's date. Returns `{ ok: true }`. Rate limit: `RATE_LIMIT_STATS_PER_HOUR` per network address (`429`). |
 | `POST /score` | site origins | A Daaglikse Toring result: `{ dateKey, dayNumber, heightM }` (`dayNumber` must match `dateKey`; `heightM` is clamped to 0 to 1000). Returns `{ percentile, players }`: the share (rounded) of the *other* players' results that are strictly below yours, ties counting half; `percentile` is `null` when you are the only one. Rate limit: `RATE_LIMIT_SCORE_PER_HOUR`. |
 | `GET /score?dateKey=&heightM=` | site origins | The same answer without adding anything (for revisiting the results). |
 | `POST /paystack/webhook` | Paystack only | Needs a valid `x-paystack-signature`. |
-| `GET /admin/sponsors` | admin | `{ sponsors: [ {…all columns, live} ], now }` |
+| `GET /admin/sponsors` | admin | `{ sponsors: [ {…all columns, live} ], alerts: [{ id, kind, sponsor_id, sponsor_name, reference, amount, created_at }], paystackMode: "live" \| "test" \| "unknown", now }` |
+| `POST /admin/alerts/:id/resolve` | admin | Marks a "needs attention" item as dealt with. `{ ok: true }` or `404`. |
 | `POST /admin/sponsors` | admin | `{ tier, name, paid_until, tagline?, url?, email?, contact_name?, phone?, notes?, approved?, hidden? }` returns `201 { sponsor }` |
 | `PATCH /admin/sponsors/:id` | admin | Any of `name, tagline, url, email, contact_name, phone, approved, hidden, status, notes, paid_until`. Returns `{ sponsor }`. |
 | `DELETE /admin/sponsors/:id[?force=1]` | admin | `409 cancel_first` while a subscription is active |

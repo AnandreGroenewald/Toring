@@ -27,9 +27,13 @@ test('computePaidUntil: order-independent, idempotent, grace added once', () => 
   const expected = addMonthsUTC(t0, 3) + 3 * DAY_MS;
   assert.equal(computePaidUntil(pays, { graceDays: 3 }), expected);
   assert.equal(computePaidUntil([...pays].reverse(), { graceDays: 3 }), expected);
-  // A renewal charged 2 days late (inside the grace) buys a month from the charge time.
+  // A renewal charged 2 days late (a retry inside the grace) is the same billing cycle: Paystack
+  // keeps charging on the original day, so the month stays anchored to it.
   const late = addMonthsUTC(t0, 1) + 2 * DAY_MS;
-  assert.equal(computePaidUntil([t0, late], { graceDays: 3 }), addMonthsUTC(late, 1) + 3 * DAY_MS);
+  assert.equal(computePaidUntil([t0, late], { graceDays: 3 }), addMonthsUTC(t0, 2) + 3 * DAY_MS);
+  // After a real lapse (past the grace) a charge starts a new month at the charge time.
+  const lapsed = addMonthsUTC(t0, 1) + 5 * DAY_MS;
+  assert.equal(computePaidUntil([t0, lapsed], { graceDays: 3 }), addMonthsUTC(lapsed, 1) + 3 * DAY_MS);
   // Paying early never loses days.
   const early = t0 + 10 * DAY_MS;
   assert.equal(computePaidUntil([t0, early], { graceDays: 3 }), addMonthsUTC(t0, 2) + 3 * DAY_MS);
@@ -58,7 +62,10 @@ test('status transitions', () => {
   assert.equal(statusAfterNotRenew('active'), 'cancelling');
   assert.equal(statusAfterNotRenew('pending'), 'cancelling');
   assert.equal(statusAfterNotRenew('ended'), 'ended');
-  assert.equal(statusAfterDisable({ status: 'active', paid_until: 10 }, 5), 'ended');
+  // Billing stopped, but the paid month (plus grace) is honoured, as the terms promise.
+  assert.equal(statusAfterDisable({ status: 'active', paid_until: 10 }, 5), 'cancelling');
+  assert.equal(statusAfterDisable({ status: 'active', paid_until: 10 }, 11), 'ended');
+  assert.equal(statusAfterDisable({ status: 'pending', paid_until: null }, 5), 'ended');
   assert.equal(statusAfterDisable({ status: 'cancelling', paid_until: 10 }, 5), 'cancelling');
   assert.equal(statusAfterDisable({ status: 'cancelling', paid_until: 10 }, 11), 'ended');
 });
