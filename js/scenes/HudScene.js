@@ -21,8 +21,8 @@ const NEXT_BOX_H = 66;
 const NEXT_FIT_W = 80;
 const NEXT_FIT_H = 34;
 const HEART_GAP = 38;
-const CHIP_CX = 338;       // weather chip centre (between the height and the hearts)
-const CHIP_MAX_W = 236;
+const CHIP_CX = 318;       // weather chip centre (between the height and the hearts pill, which starts at x 432)
+const CHIP_MAX_W = 212;   // keeps the chip clear of the hearts pill (right edge <= 424)
 const WATER_TEXT_MS = 500;
 const WARN_M = WATER.warnPx / PX_PER_M;
 const BANNER_W = 640;
