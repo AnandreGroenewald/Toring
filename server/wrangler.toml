@@ -20,6 +20,20 @@ database_name = "stapel-borge"
 # Paste the database_id printed by `npx wrangler d1 create stapel-borge`:
 database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
 
+# Uitdagersreeks (live head-to-head matches): two Durable Objects. SQLite-backed classes are
+# included in the Workers Free plan (100 000 requests and 100 000 storage writes a day).
+[[durable_objects.bindings]]
+name = "MATCH_LOBBY"
+class_name = "MatchLobby"
+
+[[durable_objects.bindings]]
+name = "MATCH_ROOM"
+class_name = "MatchRoom"
+
+[[migrations]]
+tag = "v1-uitdagersreeks"
+new_sqlite_classes = ["MatchLobby", "MatchRoom"]
+
 [observability]
 enabled = true
 

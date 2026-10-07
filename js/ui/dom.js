@@ -134,6 +134,8 @@ export function createUI(bus) {
     menu: h('section', { class: 'screen screen-menu', 'aria-label': S.title, tabindex: '-1' }),
     results: h('section', { class: 'screen screen-results', 'aria-label': S.results, tabindex: '-1' }),
     pause: h('section', { class: 'screen screen-pause', 'aria-label': S.paused, tabindex: '-1' }),
+    duel: h('section', { class: 'screen screen-duel', 'aria-label': S.duel, tabindex: '-1' }),
+    duelwait: h('section', { class: 'screen screen-duelwait', 'aria-label': S.duel, tabindex: '-1' }),
   };
   const modals = {
     howto: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-howto-title', tabindex: '-1' }),
@@ -150,7 +152,7 @@ export function createUI(bus) {
   }, h('span', null, icon('pause')));
   const toastBox = h('div', { class: 'toasts', role: 'status', 'aria-live': 'polite' });
 
-  root.append(screens.menu, screens.results, screens.pause, modals.howto, modals.stats, pauseBtn, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, pauseBtn, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // Measures env(safe-area-inset-*) so layout() can work out how much of each
@@ -606,8 +608,13 @@ export function createUI(bus) {
     }
 
     const practice = button('btn-teal btn-practice',
-      [icon('again'), h('span', { class: 'btn-txt' }, h('span', { text: S.practice }), h('span', { class: 'btn-sub', text: S.practiceSub }))],
-      () => bus.emit('ui:play-practice'));
+      [icon('again'), h('span', { class: 'btn-txt' }, h('span', { text: S.practice }), h('span', { class: 'btn-sub', text: S.practiceSubShort }))],
+      () => bus.emit('ui:play-practice'), { attrs: { 'aria-label': `${S.practice}: ${S.practiceSub}` } });
+    // Uitdagersreeks (head-to-head) beside practice: two equal buttons in one row, no extra height
+    const duelBtn = button('btn-purple btn-practice btn-duel',
+      [emo('⚔️'), h('span', { class: 'btn-txt' }, h('span', { text: S.duel }), h('span', { class: 'btn-sub', text: S.duelSubShort }))],
+      () => bus.emit('ui:duel'), { attrs: { 'aria-label': `${S.duel}: ${S.duelSub}` } });
+    const playRow = h('div', { class: 'play-row' }, practice, duelBtn);
 
     const dock = h('div', { class: 'dock' },
       dockBtn('help', S.howTo, () => { audio.play('click'); showHowTo(); }),
@@ -628,7 +635,7 @@ export function createUI(bus) {
           h('p', { class: 'saying-text', text: saying })))
       : null);
     screens.menu.replaceChildren(brand, gap,
-      h('div', { class: 'menu-stack' }, card, practice, dock, adSlot));
+      h('div', { class: 'menu-stack' }, card, playRow, dock, adSlot));
     // the gap shrinks when the sponsor feed adds the ad card later, so re-check whenever it resizes
     if (saying && typeof ResizeObserver === 'function') {
       if (!st.sayingRO) st.sayingRO = new ResizeObserver(() => fitSaying());
@@ -793,6 +800,109 @@ export function createUI(bus) {
   }
 
   // ---------------------------------------------------------------------------
+  // Uitdagersreeks (head-to-head): the mode's screen, searching / waiting / 3-2-1
+  // ---------------------------------------------------------------------------
+  function duelRecordText(d) {
+    if (!d || !(d.played > 0)) return '';
+    const parts = [S.duelRecord(d.wins | 0, d.losses | 0)];
+    if ((d.streak | 0) >= 2) parts.push(S.duelStreak(d.streak | 0));
+    return parts.join(' · ');
+  }
+
+  /** What the mode is, your nickname, the ways to play, your wins and losses. */
+  function showDuel(m = {}) {
+    if (st.modal) closeModal();
+    const d = m.duel || {};
+    const input = h('input', {
+      class: 'nick-input', type: 'text', maxlength: '16', autocomplete: 'nickname', autocapitalize: 'words',
+      spellcheck: 'false', enterkeyhint: 'done', 'aria-label': S.duelNick, placeholder: m.placeholder || '',
+    });
+    input.value = d.name || '';
+    const msg = h('p', { class: 'nick-msg', role: 'status', 'aria-live': 'polite', text: S.duelNickHint });
+    input.addEventListener('change', () => bus.emit('ui:duel-name', input.value));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        input.blur();
+      }
+    });
+    const record = duelRecordText(d);
+    const card = h('div', { class: 'card duel-card' },
+      h('div', { class: 'duel-head' }, emo('⚔️'), h('h2', { text: S.duel })),
+      h('p', { class: 'duel-intro', text: S.duelIntro }),
+      h('div', { class: 'nick' }, h('span', { class: 'label', text: S.duelNick }), input, msg),
+      h('div', { class: 'duel-btns' },
+        m.live ? button('btn-big btn-green', [emo('🎲'), h('span', { text: S.duelRandom })], () => bus.emit('ui:duel-random')) : null,
+        button(m.live ? 'btn-purple' : 'btn-big btn-purple', [emo('📲'), h('span', { text: S.duelFriend })], () => bus.emit('ui:duel-friend')),
+        button('btn-teal', [emo('🤖'), h('span', { text: S.duelBot })], () => bus.emit('ui:duel-bot'))),
+      m.live ? null : h('p', { class: 'note duel-note', text: S.duelOffline }),
+      record ? h('p', { class: 'duel-record', text: record }) : null);
+    screens.duel.replaceChildren(h('div', { class: 'duel-wrap' }, card,
+      button('btn-white', [icon('home'), h('span', { text: S.back })], () => bus.emit('ui:home'))));
+    st.duelMsg = msg;
+    showScreen('duel');
+  }
+
+  /** The nickname was saved (or refused by the name rules). */
+  function setDuelName({ ok, name } = {}) {
+    const msg = st.duelMsg;
+    if (!msg || !msg.isConnected) return;
+    msg.textContent = ok ? (name ? `✓ ${S.duelNickSaved}` : S.duelNickHint) : S.duelNickBad;
+    msg.classList.toggle('bad', !ok);
+  }
+
+  /**
+   * Searching ('search'), a friend's room ('room'), "Teen <naam>!" with the 3-2-1 ('versus'),
+   * somebody's challenge link ('link') or a problem ('error').
+   */
+  function showDuelWait(o = {}) {
+    if (st.modal) closeModal();
+    const kids = [];
+    if (o.state === 'search') {
+      kids.push(h('div', { class: 'spinner', 'aria-hidden': 'true' }),
+        h('h2', { text: S.duelSearching }),
+        h('p', { class: 'duel-sub', text: S.duelSearchHint }),
+        h('p', { class: 'duel-count', 'data-duel-count': '' }),
+        button('btn-white', [icon('close'), h('span', { text: S.duelCancel })], () => bus.emit('ui:duel-cancel')));
+    } else if (o.state === 'room') {
+      const linkBox = h('input', { class: 'link-box', type: 'text', readonly: true, 'aria-label': S.duelFriend });
+      linkBox.value = o.link || '';
+      kids.push(h('div', { class: 'spinner', 'aria-hidden': 'true' }),
+        h('h2', { text: S.duelWaitFriend }),
+        h('p', { class: 'duel-sub', text: S.duelWaitHint }),
+        linkBox,
+        h('div', { class: 'share-row' },
+          button('btn-wa', [icon('chat'), h('span', { text: S.shareWhatsApp })], () => doShare(o.shareText || o.link, 'whatsapp'), { nav: false }),
+          button('btn-blue btn-mini', [icon('copy'), h('span', { text: S.copy })], () => doShare(o.link, 'copy'), { nav: false })),
+        button('btn-teal', [emo('🤖'), h('span', { text: S.duelPlayLater })], () => bus.emit('ui:duel-later')),
+        button('btn-white', [icon('close'), h('span', { text: S.duelCancel })], () => bus.emit('ui:duel-cancel')));
+    } else if (o.state === 'versus') {
+      kids.push(h('p', { class: 'vs-badge' }, emo('⚔️')),
+        h('h2', { class: 'vs-title', text: S.duelVs(o.oppName || S.duelSomeone) }),
+        o.note ? h('p', { class: 'duel-sub', text: o.note }) : null,
+        h('p', { class: 'vs-count', 'data-duel-count': '', 'aria-live': 'assertive' }));
+    } else if (o.state === 'link') {
+      kids.push(h('p', { class: 'vs-badge' }, emo('⚔️')),
+        h('h2', { class: 'vs-title', text: S.duelLinkTitle(o.oppName || S.duelSomeone) }),
+        h('p', { class: 'duel-sub', text: S.duelLinkSub(fmtM(o.height || 0)) }),
+        button('btn-big btn-green', [icon('play'), h('span', { text: S.duelLinkPlay })], () => bus.emit('ui:duel-accept')),
+        button('btn-white', [icon('home'), h('span', { text: S.home })], () => bus.emit('ui:home')));
+    } else {
+      kids.push(h('p', { class: 'vs-badge' }, emo('😕')),
+        h('p', { class: 'duel-sub', text: o.text || S.duelNoServer }),
+        button('btn-white', [icon('again'), h('span', { text: S.back })], () => bus.emit('ui:duel')));
+    }
+    screens.duelwait.replaceChildren(h('div', { class: 'card duel-wait' }, kids));
+    showScreen('duelwait');
+  }
+
+  /** The count on the waiting / versus screen ("17", "3", "Bou!"). */
+  function setDuelCount(text) {
+    const el = screens.duelwait.querySelector('[data-duel-count]');
+    if (el) el.textContent = text;
+  }
+
+  // ---------------------------------------------------------------------------
   // Results
   // ---------------------------------------------------------------------------
   function gridEl(grid, reason) {
@@ -896,7 +1006,31 @@ export function createUI(bus) {
     else if (res === 'failed') toast(S.copyFailed);
   }
 
-  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null } = {}) {
+  /** Uitdagersreeks results: who won and why. */
+  function duelHead(d) {
+    const won = d.outcome === 'won';
+    const name = d.oppName || S.duelSomeone;
+    let title = won ? S.duelWon : S.duelLost;
+    let badge = won ? '🏆' : '😮';
+    let why;
+    if (d.outcome === 'none') {
+      title = S.duelLost;
+      badge = '📡';
+      why = S.duelConnLost;
+    } else if (won) {
+      why = d.reason === 'goal' ? S.duelWhyGoal
+        : d.reason === 'left' ? S.duelWhyTheyLeft(name)
+          : d.reason === 'quit' ? S.duelWhyTheyQuit(name) : S.duelWhyTheyFell(name);
+    } else {
+      why = d.reason === 'goal' ? S.duelWhyTheyGoal(name) : d.reason === 'quit' ? S.duelWhyYouQuit : S.duelWhyYouFell;
+    }
+    return h('div', { class: 'res-head' },
+      h('div', { class: 'chip' }, emo('⚔️'), h('span', { text: S.duel })),
+      h('h2', { class: 'res-title' }, emo(badge), h('span', { text: d.outcome === 'none' ? S.duel : title })),
+      h('p', { class: 'res-sub', text: why }));
+  }
+
+  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null } = {}) {
     if (st.modal) closeModal();
     const r = result || {};
     const m = mode || r.mode || 'practice';
@@ -907,7 +1041,7 @@ export function createUI(bus) {
     st.nextDayAt = Number(nextDayAt) || st.nextDayAt;
 
     // a new record is the headline, whatever ended the run
-    const head = h('div', { class: 'res-head' },
+    const head = duel ? duelHead(duel) : h('div', { class: 'res-head' },
       h('div', { class: 'chip' }, emo(daily ? '🏗️' : '🧱'), h('span', { text: daily ? S.dailyN(r.dayNumber ?? '?') : S.practiceLabel })),
       h('h2', { class: 'res-title' }, emo(isNewBest ? '🏆' : why.emoji), h('span', { text: isNewBest ? S.newRecord : why.title })),
       h('p', { class: 'res-sub', text: isNewBest ? `${why.emoji} ${why.title}` : why.sub }),
@@ -922,18 +1056,26 @@ export function createUI(bus) {
         h('div', { class: 'label' }, emo('🏗️'), h('span', { text: S.height })),
         bigM,
         r.durationMs > 0 ? h('div', { class: 'res-time', text: `${S.duration}: ${fmtDuration(r.durationMs)}` }) : null),
-      h('div', { class: 'res-stats' },
-        h('div', { class: 'tile' }, scoreB, h('span', { text: S.points })),
-        tile(fmtInt(r.blocksPlaced || 0), S.blocks),
-        tile(fmtInt(r.perfects || 0), S.perfects),
-        tile(fmtInt(r.maxCombo || 0), S.bestCombo)),
+      duel
+        // the two towers side by side, then points and Perfeks
+        ? h('div', { class: 'res-stats' },
+          tile(fmtM(duel.youBest || 0), S.duelYou, 'tile-you'),
+          tile(fmtM(duel.oppBest || 0), duel.oppName || S.duelSomeone, 'tile-them'),
+          h('div', { class: 'tile' }, scoreB, h('span', { text: S.points })),
+          tile(fmtInt(r.perfects || 0), S.perfects))
+        : h('div', { class: 'res-stats' },
+          h('div', { class: 'tile' }, scoreB, h('span', { text: S.points })),
+          tile(fmtInt(r.blocksPlaced || 0), S.blocks),
+          tile(fmtInt(r.perfects || 0), S.perfects),
+          tile(fmtInt(r.maxCombo || 0), S.bestCombo)),
       empty ? null : gridEl(r.grid, r.reason),
       empty ? null : weatherEl(r.weather),
       empty ? null : visitorsEl(r.visitors),
       empty
         ? h('p', { class: 'empty-note', text: S.nothingToShare })
         : h('div', { class: 'share-row' },
-          button('btn-wa', [icon('chat'), h('span', { text: S.shareWhatsApp })], () => doShare(shareText, 'whatsapp'), { nav: false }),
+          // after a match the WhatsApp text carries your run: your friend plays the same tower against it
+          button('btn-wa', [icon('chat'), h('span', { text: duel ? S.duelFriend : S.shareWhatsApp })], () => doShare(shareText, 'whatsapp'), { nav: false }),
           typeof navigator !== 'undefined' && typeof navigator.share === 'function'
             ? button('btn-purple btn-mini', [icon('share'), h('span', { text: S.share })], () => doShare(shareText, 'native'), { nav: false })
             : null,
@@ -958,7 +1100,9 @@ export function createUI(bus) {
       if (inst) wrap.append(inst);
     }
     wrap.append(h('div', { class: 'btn-row' },
-      button('btn-teal', [icon('again'), h('span', { text: daily ? S.practice : S.practiceAgain })], () => bus.emit('ui:play-practice')),
+      duel
+        ? button('btn-purple btn-duel-again', h('span', { text: S.duelAgain }), () => bus.emit('ui:duel-again'))
+        : button('btn-teal', [icon('again'), h('span', { text: daily ? S.practice : S.practiceAgain })], () => bus.emit('ui:play-practice')),
       button('btn-white', [icon('home'), h('span', { text: S.home })], () => bus.emit('ui:home'))));
 
     // peek: hide the card to look at (and screenshot) the whole tower
@@ -1057,6 +1201,10 @@ export function createUI(bus) {
     showStats,
     showPause,
     showResults,
+    showDuel,
+    setDuelName,
+    showDuelWait,
+    setDuelCount,
     setInstall,
     setResultsPercentile,
     showInGame,

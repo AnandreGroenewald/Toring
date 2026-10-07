@@ -33,7 +33,9 @@ test('smoke: real worker in workerd + local D1', { skip: Miniflare ? false : 'mi
     const files = readdirSync(`${root}src`).filter((f) => f.endsWith('.js')).sort((a, b) => (a === 'worker.js' ? -1 : b === 'worker.js' ? 1 : 0));
     const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
     mf = new Miniflare(toOptions({
-      modules: [...files.map((f) => `${root}src/${f}`), `${repoRoot}js/core/nameRules.js`].map((path) => ({ type: 'ESModule', path })),
+      // (the live matches share the game's referee: js/core/duel.js with rng.js and config.js)
+      modules: [...files.map((f) => `${root}src/${f}`), ...['js/core/nameRules.js', 'js/core/duel.js', 'js/core/rng.js', 'js/config.js'].map((f) => `${repoRoot}${f}`)]
+        .map((path) => ({ type: 'ESModule', path })),
       modulesRoot: repoRoot,
       compatibilityDate: '2026-09-01',
       d1Databases: { DB: 'stapel-smoke' },

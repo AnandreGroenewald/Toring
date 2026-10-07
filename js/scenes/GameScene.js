@@ -3,7 +3,7 @@
 // camera follow, landing ghost, wobble, idle attract mode and the game-over reveal.
 import {
   GAME_W, LAYOUT, PX_PER_M, PHYSICS, CRANE, SCORING, LIVES, FREEZE_DEPTH, WATER, DEPTH, FONT, COACH,
-  VISITOR, VISITOR_TYPES, RATING,
+  VISITOR, VISITOR_TYPES, RATING, DUEL,
 } from '../config.js';
 import { bus } from '../core/bus.js';
 import { S, VISITOR_INFO } from '../core/strings.js';
@@ -24,6 +24,7 @@ import { Effects } from '../game/effects.js';
 import { createIsland } from '../game/island.js';
 import { Visitors } from '../game/visitors.js';
 import { topMovable, thiefLoot, visitorFree, gridWithGifts } from '../core/visitorrules.js';
+import { duelSeedKey } from '../core/duel.js';
 
 const FIXED = PHYSICS.fixedDtMs;
 const MAX_FRAME_MS = 100;
@@ -274,7 +275,7 @@ export class GameScene extends Phaser.Scene {
   // -------------------------------------------------------------------------
   init(data) {
     const d = data || {};
-    this.mode = d.mode === 'daily' || d.mode === 'practice' ? d.mode : 'idle';
+    this.mode = d.mode === 'daily' || d.mode === 'practice' || d.mode === 'duel' ? d.mode : 'idle';
     this.idle = this.mode === 'idle';
     this.ambQ = -1;
     this.seed = String(d.seed ?? `idle-${Math.floor(Math.random() * 1e9)}`);
@@ -292,6 +293,8 @@ export class GameScene extends Phaser.Scene {
     // A friend's challenge (daily only, already validated in js/core/challenge.js): the height to beat, in metres.
     this.challengeM = this.mode === 'daily' && Number.isFinite(d.challenge) && d.challenge > 0 && d.challenge <= 2000 ? d.challenge : 0;
     this.challengeWon = false;
+    // Uitdagersreeks (js/duel.js runs the match; the scene reports its height and takes attacks)
+    this.duel = this.mode === 'duel' ? { name: typeof d.duel?.name === 'string' ? d.duel.name : '' } : null;
     // Debug only (?debug=1&visitor=thief, see main.js): this visitor comes as soon as there is a tower.
     this.debug = d.debug === true;
     this.forceVisitor = this.debug && !this.idle && VISITOR_TYPES.includes(d.visitor) ? d.visitor : null;
@@ -396,7 +399,9 @@ export class GameScene extends Phaser.Scene {
     eng.gravity.y = PHYSICS.gravityY;
 
     // Practice seeds live in their own namespace: no practice run can replay a daily.
-    this.sequence = createSequence(this.mode === 'practice' ? `oefen/${this.seed}` : this.seed);
+    // Practice and match seeds live in their own namespaces: no practice run or match can replay a daily.
+    const seqSeed = this.mode === 'practice' ? `oefen/${this.seed}` : this.mode === 'duel' ? duelSeedKey(this.seed) : this.seed;
+    this.sequence = createSequence(seqSeed);
     this.namer = this.makeNamer();
 
     const mat = PHYSICS.block;
@@ -450,6 +455,7 @@ export class GameScene extends Phaser.Scene {
     // Friend challenge: one thin line across the world at the height to beat, with a flag label (cheap, world space).
     this.challengeLine = null;
     this.challengeTag = null;
+    if (this.duel) this.buildGoalLine();
     if (this.challengeM > 0) {
       const cy = LAYOUT.baseTopY - this.challengeM * PX_PER_M;
       this.challengeLine = this.add.image(GAME_W / 2, cy, '__WHITE').setDisplaySize(GAME_W, 5)
@@ -487,6 +493,18 @@ export class GameScene extends Phaser.Scene {
 
     this.offs.push(
       bus.on('game:quit', () => this.endGame('quit')),
+      // Uitdagersreeks: the other player sent a visitor / the match was decided
+      bus.on('duel:attack', (a) => {
+        if (!this.duel || this.over) return;
+        try {
+          this.visitors.attack(a?.kind, a?.from || this.duel.name);
+        } catch (err) {
+          this.visitorsFailed(err);
+        }
+      }),
+      bus.on('duel:end', (e) => {
+        if (this.duel) this.endGame(e?.outcome === 'won' ? 'won' : 'lost');
+      }),
       bus.on('weather:rainbow', () => this.onRainbow()),
       bus.on('hud:ready', () => this.onHudReady()),
     );
@@ -528,7 +546,7 @@ export class GameScene extends Phaser.Scene {
   buildVisitors() {
     try {
       return new Visitors(this, this.sequence, {
-        audio, bus, attract: this.idle, reducedMotion: this.reducedMotion, actions: this.visitorActions(),
+        audio, bus, attract: this.idle, scheduled: !this.duel, reducedMotion: this.reducedMotion, actions: this.visitorActions(),
       });
     } catch (err) {
       console.error('[Game] visitors failed to start', err);
@@ -928,7 +946,29 @@ export class GameScene extends Phaser.Scene {
     this.updateGhostAndAutoplay();
     this.updateWobble(dtS);
     this.emitHud();
+    if (this.duel && !this.over) this.emitDuel();
     this.writeRegistry();
+  }
+
+  /** Uitdagersreeks: the finish line at 50 m (world space, like the friend's challenge line). */
+  buildGoalLine() {
+    const y = LAYOUT.baseTopY - DUEL.goalM * PX_PER_M;
+    this.goalLine = this.add.image(GAME_W / 2, y, '__WHITE').setDisplaySize(GAME_W, 6)
+      .setTintFill(0xffd23f).setAlpha(0.9).setDepth(DEPTH.fxWorld + 1);
+    // tag left of the HUD's race track (and clear of the pause button when the line is near the top)
+    this.goalTag = this.add.text(GAME_W - 46, y - 6, `🏁 ${fmtM(DUEL.goalM).replace(',0', '')}`, {
+      fontFamily: FONT, fontSize: '26px', fontStyle: 'bold', color: '#ffffff',
+      stroke: '#8a5a00', strokeThickness: 6, resolution: 1,
+    }).setOrigin(1, 1).setDepth(DEPTH.fxWorld + 2);
+  }
+
+  /** Uitdagersreeks: this tower's height for js/duel.js, every frame (sim ms, tower top and best height in m). */
+  emitDuel() {
+    const s = this.duelSelf || (this.duelSelf = { t: 0, h: 0, best: 0 });
+    s.t = this.now;
+    s.h = Math.max(0, LAYOUT.baseTopY - this.towerTopY) / PX_PER_M;
+    s.best = this.maxHeightM;
+    bus.emit('duel:self', s);
   }
 
   updateFloodTag(time) {
@@ -2095,8 +2135,10 @@ export class GameScene extends Phaser.Scene {
     bus.emit('hud:hint', { text: null });
     const result = this.buildResult(reason);
     this.result = result;
+    // the tower ended by itself (hearts, flood, quit): the match hears it before the result is built
+    if (this.duel && reason !== 'won' && reason !== 'lost') bus.emit('duel:over', { reason, t: this.now });
     bus.emit('game:audience', {
-      mode: this.mode,
+      mode: this.mode === 'duel' ? 'practice' : this.mode,   // a match counts like a practice game for sponsors
       dateKey: this.dateKey,
       tally: this.tally,
       billboardId: this.billboardData?.premium?.id ?? null,
@@ -2112,6 +2154,16 @@ export class GameScene extends Phaser.Scene {
     }
     this.timeScale = SLOWMO_SCALE;
     this.slowT = 0;
+    if (reason === 'won') {
+      // first to 50 m (or the other tower fell): a celebration, not a game-over
+      audio.play('record');
+      haptics.perfect();
+      this.effects.flash(0xfff3b0, 0.35, 420);
+      this.effects.sparkle(this.topBlock?.centerX ?? GAME_W / 2, this.towerTopY, 30);
+      this.delay(REVEAL_DELAY_MS, () => this.reveal());
+      this.delay(OVER_EMIT_MS, () => bus.emit('game:over', result));
+      return;
+    }
     audio.play('gameover');
     haptics.heavy();
     if (reason === 'lives') {

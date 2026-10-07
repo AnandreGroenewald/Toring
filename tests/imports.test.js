@@ -15,6 +15,10 @@ const MODULES = {
   '../js/core/weatherplan.js': ['eventRng', 'gustMul', 'strikePlan', 'hailPlan'],
   '../js/core/visitorplan.js': ['buildVisitors', 'visitorAt', 'visitorForecast', 'visitRng', 'monkeyPlan', 'clownPlan', 'thiefPlan', 'VISITOR_RULES'],
   '../js/core/visitorrules.js': ['movable', 'topMovable', 'thiefLoot', 'visitorFree', 'gridWithGifts', 'cleanVisits', 'visitorEmoji', 'visitorResultLine'],
+  '../js/core/duel.js': [
+    'createReferee', 'createRecorder', 'heightAt', 'createGhost', 'botRun', 'encodeChallenge', 'decodeChallenge',
+    'challengeLink', 'parseChallengeQuery', 'parseRoomQuery', 'isRoomCode', 'newRoomCode', 'cleanNickname', 'cleanReport',
+  ],
   '../js/core/storage.js': ['createStore', 'streakAfter'],
   '../js/core/share.js': ['buildShareText', 'shareResult', 'whatsappUrl'],
 };

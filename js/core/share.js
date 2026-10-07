@@ -64,6 +64,20 @@ export function buildShareText(result, { url, highContrast = false } = {}) {
   return lines.join('\n');
 }
 
+/**
+ * The WhatsApp text after an Uitdagersreeks match: who won, then the link that lets a friend play the
+ * same tower against your run.
+ */
+export function buildDuelShareText({ outcome, youBest = 0, oppName = '', oppBest = 0, link = '' } = {}) {
+  const lines = [S.duelShareHead];
+  if (outcome === 'won' || outcome === 'lost') {
+    lines.push(S.duelShareLine(fmtM(youBest), oppName || S.duelSomeone, fmtM(oppBest), outcome === 'won'));
+  }
+  if (link) lines.push(S.duelShareInvite, String(link));
+  lines.push(S.tagline);
+  return lines.join('\n');
+}
+
 export function whatsappUrl(text) {
   return 'https://wa.me/?text=' + encodeURIComponent(text);
 }

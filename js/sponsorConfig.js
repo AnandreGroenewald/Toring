@@ -28,3 +28,11 @@ export const SPONSOR = {
 };
 
 export const salesEnabled = () => !!SPONSOR_API_URL;
+
+/**
+ * Uitdagersreeks (live head-to-head matches) run on the same Worker. While this is empty they follow
+ * SPONSOR_API_URL; put the Worker's URL here to switch live matches on before sponsorship sales.
+ * Without either, the mode still works against the computer and with friend challenge links.
+ */
+export const MATCH_API_URL = '';
+export const matchApiUrl = () => MATCH_API_URL || SPONSOR_API_URL;

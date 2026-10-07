@@ -711,6 +711,13 @@ svg.ic {
 
 .btn-practice .btn-txt { align-items: flex-start; }
 
+/* Oefen + Uitdagersreeks side by side on the menu (one row: the menu is no taller than before) */
+.play-row { display: grid; grid-template-columns: 1fr 1fr; gap: calc(16 * var(--u)); }
+.play-row .btn { padding: calc(12 * var(--u)) calc(14 * var(--u)); font-size: calc(32 * var(--u)); }
+.play-row .btn > .ic, .play-row .btn > .emoji { display: none; }
+.play-row .btn .btn-txt { align-items: center; }
+.play-row .btn-sub { font-size: max(11px, calc(20 * var(--u))); white-space: nowrap; }
+
 /* pinned house ad (sponsors.json) + "Adverteer hier": quieter than the play buttons */
 .menu-ad {
   display: flex;
@@ -932,6 +939,58 @@ svg.ic {
   font-weight: 700;
   color: var(--muted);
 }
+
+/* ------------------------------------------------------------------------- */
+/* Uitdagersreeks (head-to-head)                                             */
+/* ------------------------------------------------------------------------- */
+.screen-duel, .screen-duelwait { z-index: 2; background: var(--scrim); justify-content: center; }
+.duel-wrap { display: flex; flex-direction: column; gap: calc(18 * var(--u)); margin: auto 0; }
+.duel-card, .duel-wait { display: flex; flex-direction: column; align-items: stretch; gap: calc(18 * var(--u)); text-align: center; }
+.duel-wait { margin: auto 0; }
+.duel-head { display: flex; align-items: center; justify-content: center; gap: calc(14 * var(--u)); }
+.duel-head h2 { font-size: calc(48 * var(--u)); font-weight: 900; }
+.duel-head .emoji { font-size: calc(52 * var(--u)); }
+.duel-intro, .duel-sub { margin: 0; font-size: max(13px, calc(25 * var(--u))); font-weight: 700; color: var(--ink-soft); line-height: 1.35; }
+.nick { display: flex; flex-direction: column; gap: calc(8 * var(--u)); text-align: left; }
+.nick-input, .link-box {
+  width: 100%;
+  border: calc(3 * var(--u)) solid #cfdcee;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--font);
+  font-weight: 800;
+}
+.nick-input { font-size: max(16px, calc(30 * var(--u))); padding: calc(16 * var(--u)) calc(22 * var(--u)); border-radius: calc(24 * var(--u)); }
+.link-box { font-size: max(12px, calc(21 * var(--u))); padding: calc(12 * var(--u)) calc(16 * var(--u)); border-radius: calc(18 * var(--u)); text-overflow: ellipsis; }
+.nick-input:focus, .link-box:focus { outline: none; border-color: var(--hemel); }
+.nick-msg { margin: 0; min-height: 1.3em; font-size: max(12px, calc(21 * var(--u))); font-weight: 700; color: var(--muted); }
+.nick-msg.bad { color: var(--klei-d); }
+.duel-btns { display: flex; flex-direction: column; gap: calc(18 * var(--u)); }
+.duel-btns .btn .emoji, .duel-wait .btn .emoji { font-size: 1.05em; }
+.duel-wait .btn:not(.btn-big):not(.btn-mini):not(.btn-wa) { font-size: calc(32 * var(--u)); }
+.duel-note { margin: 0; }
+.duel-record { margin: 0; font-size: max(12px, calc(23 * var(--u))); font-weight: 800; color: var(--ink-soft); }
+.duel-wait h2 { font-size: calc(44 * var(--u)); font-weight: 900; }
+.duel-count { margin: 0; min-height: 1.2em; font-size: calc(30 * var(--u)); font-weight: 900; color: var(--muted); font-variant-numeric: tabular-nums; }
+.duel-wait .share-row { margin-top: 0; }
+.vs-badge { margin: 0; font-size: calc(80 * var(--u)); line-height: 1; }
+.vs-title { font-size: calc(54 * var(--u)); font-weight: 900; overflow-wrap: anywhere; }
+.vs-count { margin: 0; min-height: 1.1em; font-size: calc(130 * var(--u)); font-weight: 900; line-height: 1.05; color: var(--jakaranda-d); font-variant-numeric: tabular-nums; }
+.spinner {
+  width: calc(64 * var(--u));
+  height: calc(64 * var(--u));
+  margin: 0 auto;
+  border-radius: 50%;
+  border: calc(8 * var(--u)) solid #d5e2f2;
+  border-top-color: var(--jakaranda);
+  animation: duel-spin 0.9s linear infinite;
+}
+@keyframes duel-spin { to { transform: rotate(360deg); } }
+#ui.rm .spinner { animation-duration: 3s; }
+.btn-row .btn-duel-again { font-size: calc(32 * var(--u)); }
+.tile-you b { color: #a86a00; }
+.tile-them b { color: var(--hemel-d); }
+.tile-them span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 
 /* ------------------------------------------------------------------------- */
 /* Pause                                                                     */

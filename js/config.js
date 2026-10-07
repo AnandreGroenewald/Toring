@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.6.0';
+export const VERSION = '1.7.0';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -197,6 +197,25 @@ export const VISITOR = {
   thiefLeaveMs: 950,
   thiefMax: 4,             // blocks he can carry (never cement)
   graceMs: 2500,           // tower blocks lost this soon after a visitor's push cost no heart
+};
+
+// ---------------------------------------------------------------------------
+// Uitdagersreeks (head-to-head; docs/CHALLENGE-SPEC.md). Rules in core/duel.js, live side in duel.js.
+// ---------------------------------------------------------------------------
+export const DUEL = {
+  goalM: 50,               // the first to 50 m wins
+  marks: [10, 20, 30, 40], // whoever reaches a mark first sends a visitor to the other tower
+  attackFor: { 10: 'monkey', 20: 'thief', 30: 'monkey', 40: 'thief' },
+  ghostPenaltyM: { monkey: 2, thief: 4 }, // what an attack takes off a recording's tower
+  sampleMs: 1000,          // a recording keeps the height once a second
+  maxRunMs: 15 * 60 * 1000,
+  maxHeightM: 2000,
+  maxClimbMps: 2,          // faster than this is not a real tower (live reports are refused)
+  searchMs: 20000,         // random opponent: search this long, then a recording or the computer
+  roomWaitMs: 10 * 60 * 1000,
+  countdownMs: 3000,
+  stateEveryMs: 400,       // live: how often a tower sends its height
+  nameMax: 16,
 };
 
 // ---------------------------------------------------------------------------

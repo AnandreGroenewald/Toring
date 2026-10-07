@@ -1,13 +1,15 @@
 // Stapel — boot + wiring: Phaser game, storage, DOM UI, audio, bus events,
 // pause/visibility, settings, service worker and debug hooks.
-import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY } from './config.js';
+import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL } from './config.js';
 import { bus } from './core/bus.js';
 import { S } from './core/strings.js';
 import { fmtDateKey, fmtM } from './core/format.js';
 import { createStore } from './core/storage.js';
 import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate } from './core/daily.js';
 import { createSequence } from './core/sequence.js';
-import { buildShareText } from './core/share.js';
+import { buildShareText, buildDuelShareText } from './core/share.js';
+import { parseChallengeQuery, parseRoomQuery, defaultNickname } from './core/duel.js';
+import { createDuel } from './duel.js';
 import { loadChallenge, shareUrlFor } from './core/challenge.js';
 import { buildSkyline, SKYLINE_DAYS } from './core/skyline.js';
 import { tomorrowTeaser } from './core/teaser.js';
@@ -17,7 +19,7 @@ import { buildStatsBatch, percentileLine } from './core/audience.js';
 import { tutorialDone } from './core/coach.js';
 import { loadSponsors } from './sponsorsFeed.js';
 import { sendStats, dailyPercentile } from './audience.js';
-import { SPONSOR_API_URL, salesEnabled } from './sponsorConfig.js';
+import { SPONSOR_API_URL, salesEnabled, matchApiUrl } from './sponsorConfig.js';
 import { createUI } from './ui/dom.js';
 import { audio, haptics } from './audio.js';
 import { BgScene } from './scenes/BgScene.js';
@@ -292,6 +294,7 @@ for (const type of ['pointerdown', 'keydown']) {
 // ---------------------------------------------------------------------------
 function startGame(data) {
   wakeLoop();
+  if (data.mode !== 'duel') duel.leave();   // a new game of another kind ends any match (and its live room)
   if (run.paused) {
     audio.resume();
     run.paused = false;
@@ -549,6 +552,8 @@ bus.on('ui:quit', () => {
   bus.emit('game:quit');
 });
 bus.on('ui:home', () => {
+  stopDuelFlow();
+  duel.leave();
   if (run.mode !== 'idle' || run.paused) {
     startIdle();
   } else {
@@ -568,6 +573,202 @@ bus.on('ui:settings', (partial) => {
 bus.on('ui:day-rollover', () => {
   if (screen === 'menu') showMenu();
 });
+
+// ---------------------------------------------------------------------------
+// Uitdagersreeks (head-to-head): js/duel.js runs the match; these are the screens around it.
+// ---------------------------------------------------------------------------
+const sessionNick = defaultNickname();
+const duelNick = () => store.getDuel().name || sessionNick;
+const duel = createDuel({
+  bus,
+  apiUrl: matchApiUrl(),
+  nickname: duelNick,
+  onDecided: (outcome) => {
+    if (outcome === 'won' || outcome === 'lost') store.recordDuel(outcome);
+  },
+});
+// A friend's run (?teen=...) or live room (?kamer=CODE) from the link this page was opened with. They
+// are taken off the address straight away, so a reload or a shared screenshot doesn't repeat them.
+let duelLink = parseChallengeQuery(location.search);
+let duelRoom = parseRoomQuery(location.search);
+if (params.has('teen') || params.has('kamer')) {
+  try {
+    const q = new URLSearchParams(location.search);
+    q.delete('teen');
+    q.delete('kamer');
+    const rest = q.toString();
+    history.replaceState(history.state, '', location.pathname + (rest ? `?${rest}` : '') + location.hash);
+  } catch {
+    // sandboxed frames: the parameters simply stay
+  }
+}
+let duelFlow = 0;        // bumps on every new search or cancel, so a late answer can't start a stale match
+let duelTimer = 0;
+let lastDuelKind = null;
+
+function stopDuelFlow() {
+  duelFlow++;
+  clearInterval(duelTimer);
+  duelTimer = 0;
+  duel.cancel();
+}
+
+function showDuelScreen() {
+  stopDuelFlow();
+  screen = 'duel';
+  ui.showDuel({ live: duel.live, duel: store.getDuel(), placeholder: sessionNick });
+}
+
+/** "Teen <naam>!", 3-2-1, "Bou!", then the tower. */
+function versus(m, note = '') {
+  if (!m) return;
+  clearInterval(duelTimer);
+  const flow = ++duelFlow;
+  lastDuelKind = m.kind;
+  screen = 'duelwait';
+  ui.showDuelWait({ state: 'versus', oppName: m.oppName, note });
+  let n = Math.max(1, Math.round(DUEL.countdownMs / 1000));
+  ui.setDuelCount(String(n));
+  duelTimer = setInterval(() => {
+    if (flow !== duelFlow) return;
+    n -= 1;
+    if (n > 0) {
+      ui.setDuelCount(String(n));
+      audio.play('click');
+      return;
+    }
+    clearInterval(duelTimer);
+    ui.setDuelCount(S.duelGo);
+    audio.play('banner');
+    setTimeout(() => {
+      if (flow === duelFlow) startDuelGame(m);
+    }, 450);
+  }, 1000);
+}
+
+function startDuelGame(m) {
+  resetRun('duel');
+  startGame({ mode: 'duel', seed: m.seed, duel: { name: m.oppName }, autoplay: AUTO });
+  screen = 'game';
+  ui.showInGame();
+}
+
+function showDuelResults(r) {
+  if (screen === 'results' || run.mode !== 'duel') return;
+  const d = duel.summary() || {};
+  if (!d.outcome) d.outcome = 'none';
+  const link = d.challenge ? `${siteUrl()}?teen=${d.challenge}` : '';
+  if (d.outcome === 'won') audio.play('record');
+  screen = 'results';
+  ui.showResults({
+    result: r,
+    mode: 'duel',
+    duel: d,
+    shareText: buildDuelShareText({ outcome: d.outcome, youBest: d.youBest, oppName: d.oppName, oppBest: d.oppBest, link }),
+    nextDayAt: 0,
+  });
+  sleepLoop(RESULTS_SLEEP_MS);
+}
+
+/** A random opponent: the lobby pairs two players; after 20 s a recording or Robot Rikus. */
+function searchOpponent() {
+  stopDuelFlow();
+  const flow = duelFlow;
+  screen = 'duelwait';
+  ui.showDuelWait({ state: 'search' });
+  const until = Date.now() + DUEL.searchMs;
+  const tick = () => ui.setDuelCount(`${Math.max(0, Math.ceil((until - Date.now()) / 1000))}`);
+  tick();
+  duelTimer = setInterval(tick, 500);
+  duel.findOpponent({
+    onFound: (m) => {
+      if (flow === duelFlow) versus(m);
+    },
+    onFallback: (m, note) => {
+      if (flow === duelFlow) versus(m, note);
+    },
+  });
+}
+
+bus.on('ui:duel', showDuelScreen);
+bus.on('ui:duel-name', (text) => ui.setDuelName(store.setDuelName(text)));
+bus.on('ui:duel-bot', () => versus(duel.startBot()));
+bus.on('ui:duel-random', searchOpponent);
+bus.on('ui:duel-friend', () => {
+  if (!duel.live) {
+    // no server yet: play a round first; its results carry the link for the friend
+    versus(duel.startBot(), S.duelFriendLater);
+    return;
+  }
+  stopDuelFlow();
+  const flow = duelFlow;
+  duel.createRoom({
+    onCode: (code) => {
+      if (flow !== duelFlow) return;
+      const link = `${siteUrl()}?kamer=${code}`;
+      screen = 'duelwait';
+      ui.showDuelWait({ state: 'room', link, shareText: S.duelRoomText(duelNick(), link) });
+    },
+    onStart: (m) => {
+      if (flow === duelFlow) versus(m);
+    },
+    onFail: (msg) => {
+      if (flow !== duelFlow) return;
+      screen = 'duelwait';
+      ui.showDuelWait({ state: 'error', text: msg });
+    },
+  });
+});
+bus.on('ui:duel-later', () => {
+  stopDuelFlow();
+  versus(duel.startBot(), S.duelFriendLater);
+});
+bus.on('ui:duel-cancel', showDuelScreen);
+bus.on('ui:duel-accept', () => {
+  const m = duelLink ? duel.startLink(duelLink) : null;
+  duelLink = null;
+  if (m) versus(m);
+  else showDuelScreen();
+});
+bus.on('ui:duel-again', () => {
+  duel.leave();
+  if (duel.live && lastDuelKind !== 'bot') searchOpponent();
+  else versus(duel.startBot());
+});
+
+/** Opened from a friend's link: their run (play it now?) or their live room (join it). */
+function openDuelLink() {
+  if (duelLink) {
+    const best = Math.max(0, ...duelLink.run.samples) / 10;
+    screen = 'duelwait';
+    ui.showDuelWait({ state: 'link', oppName: duelLink.name || S.duelSomeone, height: best });
+    return true;
+  }
+  if (duelRoom) {
+    const code = duelRoom;
+    duelRoom = null;
+    stopDuelFlow();
+    const flow = duelFlow;
+    screen = 'duelwait';
+    if (!duel.live) {
+      ui.showDuelWait({ state: 'error', text: S.duelOffline });
+      return true;
+    }
+    ui.showDuelWait({ state: 'search' });
+    ui.setDuelCount(S.duelJoining);
+    duel.joinRoom(code, {
+      onStart: (m) => {
+        if (flow === duelFlow) versus(m);
+      },
+      onFail: (msg) => {
+        if (flow !== duelFlow) return;
+        ui.showDuelWait({ state: 'error', text: msg });
+      },
+    });
+    return true;
+  }
+  return false;
+}
 
 // Game over: the pause button goes away during the reveal (results follow).
 bus.on('hud:hide', () => {
@@ -593,6 +794,11 @@ function finalize(result) {
   run.over = true;
   stopHeartbeat();
   releaseBackGuard();
+  if (result.mode === 'duel') {
+    // a match keeps its own wins and losses (recorded by js/duel.js once it is decided)
+    run.final = { result, stats: null, isNewBest: false, aborted: false };
+    return run.final;
+  }
   let shown = result;
   let stats = null;
   let isNewBest = false;
@@ -629,6 +835,10 @@ bus.on('game:over', (result) => {
   if (!result || run.mode === 'idle' || screen === 'results' || screen === 'menu') return;
   const f = finalize(result);
   if (run.paused) resumeScenes();
+  if (result.mode === 'duel') {
+    duel.whenDecided(() => showDuelResults(f.result));
+    return;
+  }
   if (f.aborted) {
     startIdle();
     showMenu();
@@ -759,6 +969,7 @@ function onReady() {
   const recovered = store.recoverUnfinished(todayKey(), { staleMs: STALE_MS, owner: TAB_ID });
   startIdle();
   showMenu();
+  openDuelLink();
   ui.setLoading(false);
   if (recovered.length) ui.toast(S.unfinished, 3200);
   else if (liveElsewhere(todayKey())) ui.toast(S.otherTab, 3000);

@@ -1,0 +1,392 @@
+// Uitdagersreeks live matches: the room (relay, height marks, results, leaving, limits, sleeping),
+// the lobby (pairing, recordings) and the /match routes. Fake Durable Object state and sockets.
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { MatchRoom, MatchLobby } from '../src/match.js';
+import { createWorker } from '../src/worker.js';
+import { decodeChallenge, encodeChallenge, isRoomCode } from '../../js/core/duel.js';
+import { DUEL } from '../../js/config.js';
+import { ORIGIN, T0 } from './support/harness.js';
+
+// ---------------------------------------------------------------- fakes
+function fakeSocket() {
+  return {
+    sent: [],
+    closed: false,
+    att: null,
+    send(s) {
+      if (this.closed) throw new Error('closed');
+      this.sent.push(JSON.parse(s));
+    },
+    close(code, reason) {
+      this.closed = true;
+      this.reason = reason;
+    },
+    serializeAttachment(v) {
+      this.att = structuredClone(v);
+    },
+    deserializeAttachment() {
+      return this.att ? structuredClone(this.att) : null;
+    },
+    of(t) {
+      return this.sent.filter((m) => m.t === t);
+    },
+    last(t) {
+      return this.of(t).at(-1);
+    },
+  };
+}
+
+function fakeState() {
+  const store = new Map();
+  const sockets = [];
+  const st = {
+    writes: 0,
+    alarm: null,
+    storage: {
+      async get(k) {
+        return store.has(k) ? structuredClone(store.get(k)) : undefined;
+      },
+      async put(k, v) {
+        st.writes++;
+        store.set(k, structuredClone(v));
+      },
+      async delete(k) {
+        return store.delete(k);
+      },
+      async deleteAll() {
+        store.clear();
+      },
+      async setAlarm(t) {
+        st.alarm = t;
+      },
+    },
+    acceptWebSocket(ws, tags = []) {
+      sockets.push({ ws, tags });
+    },
+    getWebSockets(tag) {
+      return sockets.filter((s) => !s.ws.closed && (!tag || s.tags.includes(tag))).map((s) => s.ws);
+    },
+    store,
+  };
+  return st;
+}
+
+const upgrade = () => {
+  const ws = fakeSocket();
+  return [{ status: 101, ws }, ws];
+};
+
+function clock(t = T0) {
+  const c = { t, now: () => c.t, tick: (ms) => { c.t += ms; } };
+  return c;
+}
+
+/** A room with two players who said hello; returns { room, a, b, clk, state }. */
+async function startedRoom({ env = {}, names = ['Anna', 'Bennie'] } = {}) {
+  const clk = clock();
+  const state = fakeState();
+  const room = new MatchRoom(state, env, { now: clk.now, upgrade });
+  await room.init({ kind: 'friend', seed: 'seedabc123' });
+  const a = fakeSocket();
+  const b = fakeSocket();
+  await room.join(a);
+  await room.join(b);
+  await room.onMessage(a, JSON.stringify({ t: 'hello', name: names[0] }));
+  await room.onMessage(b, JSON.stringify({ t: 'hello', name: names[1] }));
+  clk.tick(DUEL.countdownMs);
+  return { room, a, b, clk, state };
+}
+
+const say = (room, ws, o) => room.onMessage(ws, JSON.stringify(o));
+
+// ---------------------------------------------------------------- room
+test('room: init once, two players, hello -> both start with the same seed and each other\'s name', async () => {
+  const clk = clock();
+  const state = fakeState();
+  const room = new MatchRoom(state, {}, { now: clk.now, upgrade });
+  const r1 = await room.init({ kind: 'friend', seed: 'seedabc123' });
+  assert.equal(r1.status, 200);
+  assert.equal((await room.init({})).status, 409, 'a room is made once');
+  assert.equal(state.alarm, T0 + DUEL.roomWaitMs, 'a friend room waits 10 minutes');
+  const a = fakeSocket();
+  const b = fakeSocket();
+  await room.join(a);
+  assert.deepEqual(a.sent, [{ t: 'wait' }]);
+  await room.join(b);
+  await say(room, a, { t: 'hello', name: 'Anna' });
+  assert.equal(a.of('start').length, 0, 'not before both said hello');
+  await say(room, b, { t: 'hello', name: 'kak' });   // refused by the name rules -> the default
+  assert.deepEqual(a.last('start'), { t: 'start', seed: 'seedabc123', you: 0, opp: { name: 'Bouer' } });
+  assert.deepEqual(b.last('start'), { t: 'start', seed: 'seedabc123', you: 1, opp: { name: 'Anna' } });
+  // a third player, or anyone after the start, is turned away
+  const c = fakeSocket();
+  await room.join(c);
+  assert.deepEqual(c.sent, [{ t: 'gone' }]);
+  assert.equal(c.closed, true);
+});
+
+test('room: an unknown code is "gone"', async () => {
+  const room = new MatchRoom(fakeState(), {}, { now: clock().now, upgrade });
+  const a = fakeSocket();
+  await room.join(a);
+  assert.deepEqual(a.sent, [{ t: 'gone' }]);
+  assert.equal(a.closed, true);
+});
+
+test('room: heights are relayed; the first to a mark sends its visitor (once)', async () => {
+  const { room, a, b, clk } = await startedRoom();
+  clk.tick(5000);
+  await say(room, a, { t: 'state', h: 6, best: 6 });
+  assert.deepEqual(b.last('opp'), { t: 'opp', h: 6, best: 6 });
+  await say(room, a, { t: 'state', h: 10.4, best: 10.4 });
+  assert.deepEqual(b.last('attack'), { t: 'attack', m: 10, kind: 'monkey' });
+  assert.deepEqual(a.last('sent'), { t: 'sent', m: 10, kind: 'monkey' });
+  clk.tick(4000);
+  await say(room, b, { t: 'state', h: 12, best: 12 });
+  assert.equal(a.of('attack').length, 0, 'the 10 m mark was already taken');
+  clk.tick(4000);
+  await say(room, b, { t: 'state', h: 21, best: 21 });
+  assert.deepEqual(a.last('attack'), { t: 'attack', m: 20, kind: 'thief' });
+});
+
+test('room: the first to 50 m wins; after the result nothing changes', async () => {
+  const { room, a, b, clk } = await startedRoom();
+  clk.tick(40000);
+  await say(room, b, { t: 'state', h: 50.2, best: 50.2 });
+  const r = { t: 'result', winner: 1, reason: 'goal', best: [0, 50.2] };
+  assert.deepEqual(a.last('result'), r);
+  assert.deepEqual(b.last('result'), r);
+  assert.equal(a.of('opp').length, 1, 'Bennie\'s last height reached Anna with the result');
+  await say(room, a, { t: 'state', h: 55, best: 55 });
+  assert.equal(a.of('result').length, 1);
+  assert.equal(b.of('opp').length, 0, 'nothing is relayed after the result');
+});
+
+test('room: a tower that falls loses at once (hearts, flood or quitting)', async () => {
+  const { room, a, b, clk } = await startedRoom();
+  clk.tick(30000);
+  await say(room, a, { t: 'state', h: 20, best: 20 });
+  await say(room, a, { t: 'over', reason: 'flood', best: 20 });
+  assert.equal(b.last('result').winner, 1);
+  assert.equal(b.last('result').reason, 'flood');
+  assert.equal(a.last('result').winner, 1);
+});
+
+test('room: leaving a running match hands the other player the win', async () => {
+  const { room, a, b } = await startedRoom();
+  a.closed = true;
+  await room.onClose(a);
+  assert.deepEqual(b.last('result'), { t: 'result', winner: 1, reason: 'left', best: [0, 0] });
+});
+
+test('room: impossible heights are cut back (no faster than 2 m/s, plus a little slack)', async () => {
+  const { room, a, b, clk } = await startedRoom();
+  clk.tick(10000);
+  await say(room, a, { t: 'state', h: 900, best: 900 });
+  assert.equal(a.of('result').length, 0, 'no goal from a made-up number');
+  assert.equal(b.last('opp').best, DUEL.maxClimbMps * 10 + 5);
+});
+
+test('room: junk, unknown and too many messages are ignored', async () => {
+  const { room, a, b, clk } = await startedRoom();
+  clk.tick(5000);
+  for (const junk of ['nope', '[1,2]', 'null', JSON.stringify({ t: 'state', h: 'x', best: 2 }), JSON.stringify({ t: 'boom' }), `{"t":"state","h":1,"best":1,"pad":"${'x'.repeat(600)}"}`]) {
+    await room.onMessage(a, junk);
+  }
+  assert.equal(b.of('opp').length, 0);
+  clk.tick(1000);
+  for (let k = 0; k < 15; k++) await say(room, a, { t: 'state', h: 1 + k * 0.1, best: 1 + k * 0.1 });
+  assert.equal(b.of('opp').length, 10, 'ten messages a second per player');
+});
+
+test('room: a sleeping room wakes up where it was (seats, hello, marks, result)', async () => {
+  const clk = clock();
+  const state = fakeState();
+  let room = new MatchRoom(state, {}, { now: clk.now, upgrade });
+  await room.init({ kind: 'friend', seed: 'seedabc123' });
+  const a = fakeSocket();
+  await room.join(a);
+  await say(room, a, { t: 'hello', name: 'Anna' });
+  // ... minutes later, after hibernation, the friend comes
+  room = new MatchRoom(state, {}, { now: clk.now, upgrade });
+  const b = fakeSocket();
+  await room.join(b);
+  await say(room, b, { t: 'hello', name: 'Bennie' });
+  assert.equal(a.last('start').opp.name, 'Bennie', 'the host\'s hello survived the sleep');
+  clk.tick(DUEL.countdownMs + 8000);
+  await say(room, a, { t: 'state', h: 11, best: 11 });
+  room = new MatchRoom(state, {}, { now: clk.now, upgrade });
+  clk.tick(4000);
+  await say(room, b, { t: 'state', h: 12, best: 12 });
+  assert.equal(a.of('attack').length, 0, 'the 10 m mark stayed Anna\'s');
+  clk.tick(30000);
+  await say(room, b, { t: 'over', reason: 'lives', best: 12 });
+  assert.equal(a.last('result').winner, 0);
+});
+
+test('room: few storage writes (the free plan allows 100 000 a day)', async () => {
+  const { room, a, b, clk, state } = await startedRoom();
+  const before = state.writes;
+  for (let k = 0; k < 250; k++) {
+    clk.tick(400);
+    const h = Math.min(49, k * 0.2);
+    await say(room, a, { t: 'state', h, best: h });
+    await say(room, b, { t: 'state', h: h * 0.9, best: h * 0.9 });
+  }
+  const writes = state.writes - before;
+  assert.ok(writes <= 40, `${writes} writes for a 100 s match`);
+});
+
+test('room: a finished match sends both runs to the lobby (as challenge payloads) and closes later', async () => {
+  const posts = [];
+  const env = {
+    MATCH_LOBBY: {
+      idFromName: (n) => n,
+      get: () => ({ fetch: async (url, init) => { posts.push({ url, body: JSON.parse(init.body) }); return new Response('{}'); } }),
+    },
+  };
+  const { room, a, b, clk, state } = await startedRoom({ env });
+  for (let k = 1; k <= 30; k++) {
+    clk.tick(1000);
+    await say(room, a, { t: 'state', h: k * 1.5, best: k * 1.5 });
+    await say(room, b, { t: 'state', h: k, best: k });
+  }
+  clk.tick(500);
+  await say(room, a, { t: 'state', h: 50, best: 50 });
+  assert.equal(b.last('result').reason, 'goal');
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].url, 'https://lobby/runs');
+  const runs = posts[0].body.payloads.map(decodeChallenge);
+  assert.equal(runs.length, 2);
+  assert.equal(runs[0].seed, 'seedabc123');
+  assert.equal(runs[0].name, 'Anna');
+  assert.equal(runs[0].run.end, 'goal');
+  assert.equal(runs[1].run.end, 'stop', 'the loser\'s tower simply stopped');
+  assert.ok(runs[1].run.samples.length >= 30);
+  assert.equal(state.alarm, clk.t + 60 * 1000);
+  await room.alarm();
+  assert.equal(a.closed && b.closed, true);
+  assert.equal(state.store.size, 0, 'a finished room forgets everything');
+});
+
+test('room: a friend room nobody joined says "gone" when its time is up', async () => {
+  const state = fakeState();
+  const room = new MatchRoom(state, {}, { now: clock().now, upgrade });
+  await room.init({ kind: 'friend' });
+  const a = fakeSocket();
+  await room.join(a);
+  await room.alarm();
+  assert.deepEqual(a.last('gone'), { t: 'gone' });
+  assert.equal(a.closed, true);
+});
+
+// ---------------------------------------------------------------- lobby
+function lobbyWith() {
+  const inits = [];
+  const env = {
+    MATCH_ROOM: {
+      idFromName: (n) => n,
+      get: (code) => ({
+        fetch: async (url, init) => {
+          inits.push({ code, url, body: JSON.parse(init.body) });
+          return new Response('{}', { status: 200 });
+        },
+      }),
+    },
+  };
+  const clk = clock();
+  const state = fakeState();
+  let n = 0;
+  const lobby = new MatchLobby(state, env, { now: clk.now, upgrade, roomCode: () => ['ABCDEF', 'GHJKMN'][n++ % 2] });
+  return { lobby, inits, clk, state };
+}
+
+test('lobby: the longest-waiting player is paired with the next; both go to a new random room', async () => {
+  const { lobby, inits, clk } = lobbyWith();
+  const r1 = await lobby.fetch(new Request('https://x/match/lobby', { headers: { Upgrade: 'websocket' } }));
+  const a = r1.ws;
+  clk.tick(1000);
+  const b = (await lobby.fetch(new Request('https://x/match/lobby', { headers: { Upgrade: 'websocket' } }))).ws;
+  const quiet = (await lobby.fetch(new Request('https://x/match/lobby', { headers: { Upgrade: 'websocket' } }))).ws;   // never says hello
+  await lobby.onMessage(a, JSON.stringify({ t: 'hello', name: 'Anna' }));
+  assert.deepEqual(a.sent, [{ t: 'wait' }]);
+  await lobby.onMessage(b, JSON.stringify({ t: 'hello', name: 'Bennie' }));
+  assert.deepEqual(a.last('match'), { t: 'match', room: 'ABCDEF' });
+  assert.deepEqual(b.last('match'), { t: 'match', room: 'ABCDEF' });
+  assert.equal(a.closed && b.closed, true);
+  assert.equal(quiet.sent.length, 0, 'someone who never said hello is not paired');
+  assert.equal(inits.length, 1);
+  assert.equal(inits[0].body.kind, 'random');
+  assert.match(inits[0].body.seed, /^[a-z0-9]{10}$/);
+  assert.ok(isRoomCode(inits[0].code));
+});
+
+test('lobby: recordings are validated, capped and expire after a week; a ghost is one of them', async () => {
+  const { lobby, clk } = lobbyWith();
+  assert.equal((await lobby.ghost()).status, 404, 'nothing yet');
+  const good = encodeChallenge({ seed: 'seedabc123', name: 'Anna', run: { samples: [0, 10, 20, 30], endT: 4000, end: 'goal' } });
+  const post = (payloads) => lobby.fetch(new Request('https://lobby/runs', { method: 'POST', body: JSON.stringify({ payloads }) }));
+  await post([good, 'junk', 12]);
+  const g = await (await lobby.ghost()).json();
+  assert.equal(g.payload, good);
+  for (let k = 0; k < 70; k++) await post([good]);
+  assert.equal((await lobby.state.storage.get('runs')).length, 60);
+  clk.tick(8 * 864e5);
+  assert.equal((await lobby.ghost()).status, 404, 'a week later they are gone');
+});
+
+// ---------------------------------------------------------------- routes
+function matchEnv(extra = {}) {
+  const forwarded = [];
+  const room = {
+    idFromName: (n) => n,
+    get: (code) => ({
+      fetch: async (req, init) => {
+        forwarded.push({ code, url: typeof req === 'string' ? req : req.url, method: init?.method || req.method });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      },
+    }),
+  };
+  const lobby = { idFromName: (n) => n, get: () => ({ fetch: async () => new Response(JSON.stringify({ payload: 'x' }), { status: 200 }) }) };
+  return { env: { ALLOWED_ORIGINS: `${ORIGIN}, http://localhost:*`, MATCH_ROOM: room, MATCH_LOBBY: lobby, ...extra }, forwarded };
+}
+
+test('routes: no bindings -> 503; a foreign site -> 403; a friend room -> a code', async () => {
+  const worker = createWorker({ now: () => T0, log: () => {} });
+  const res0 = await worker.fetch(new Request('https://w/match/room', { method: 'POST', headers: { Origin: ORIGIN } }), { ALLOWED_ORIGINS: ORIGIN });
+  assert.equal(res0.status, 503);
+  const { env, forwarded } = matchEnv();
+  const bad = await worker.fetch(new Request('https://w/match/room', { method: 'POST', headers: { Origin: 'https://evil.example' } }), env);
+  assert.equal(bad.status, 403);
+  const res = await worker.fetch(new Request('https://w/match/room', { method: 'POST', headers: { Origin: ORIGIN, 'CF-Connecting-IP': '1.2.3.4' } }), env);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+  const { code } = await res.json();
+  assert.ok(isRoomCode(code));
+  assert.equal(forwarded[0].url, 'https://room/init');
+  assert.equal(forwarded[0].code, code);
+});
+
+test('routes: an address can open 30 friend rooms an hour', async () => {
+  const worker = createWorker({ now: () => T0, log: () => {} });
+  const { env } = matchEnv();
+  let last;
+  for (let k = 0; k < 31; k++) {
+    last = await worker.fetch(new Request('https://w/match/room', { method: 'POST', headers: { Origin: ORIGIN, 'CF-Connecting-IP': '9.9.9.9' } }), env);
+  }
+  assert.equal(last.status, 429);
+});
+
+test('routes: room codes are checked; sockets must be upgrades', async () => {
+  const worker = createWorker({ now: () => T0, log: () => {} });
+  const { env } = matchEnv();
+  const h = { Origin: ORIGIN, Upgrade: 'websocket' };
+  assert.equal((await worker.fetch(new Request('https://w/match/room/abc', { headers: h }), env)).status, 404);
+  assert.equal((await worker.fetch(new Request('https://w/match/room/ABCDE0', { headers: h }), env)).status, 404, 'no 0 in codes');
+  assert.equal((await worker.fetch(new Request('https://w/match/room/ABCDEF', { headers: { Origin: ORIGIN } }), env)).status, 426);
+  assert.equal((await worker.fetch(new Request('https://w/match/lobby', { headers: { Origin: ORIGIN } }), env)).status, 426);
+  assert.equal((await worker.fetch(new Request('https://w/match/ghost', { headers: { Origin: ORIGIN } }), env)).status, 200);
+  assert.equal((await worker.fetch(new Request('https://w/match/nope', { headers: { Origin: ORIGIN } }), env)).status, 404);
+});

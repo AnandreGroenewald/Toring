@@ -1,7 +1,7 @@
 // Stapel sponsorship API — Cloudflare Worker entry point (router, CORS, cron).
 
 import * as admin from './admin.js';
-import { loadConfig } from './config.js';
+import { loadConfig, isOriginAllowed } from './config.js';
 import { HttpError, corsHeaders, errorResponse, json, preflight, withHeaders } from './http.js';
 import { createPaystack } from './paystack.js';
 import { getAvailability, getSponsorsFeed, status, subscribe } from './public.js';
@@ -10,7 +10,13 @@ import { refresh } from './billing.js';
 import * as db from './db.js';
 import * as stats from './stats.js';
 import { handleWebhook } from './webhook.js';
+import { rand32 } from './match.js';
+import { isRoomCode, newRoomCode } from '../../js/core/duel.js';
 
+// Uitdagersreeks: the live-match Durable Objects must be exported by the Worker's main module.
+export { MatchLobby, MatchRoom } from './match.js';
+
+const ROOMS_PER_HOUR = 30;   // friend rooms one address may open
 const FEED_TTL_MS = { '/sponsors': 30_000, '/availability': 15_000 };
 const BROWSER_CACHE = { '/sponsors': 'public, max-age=300', '/availability': 'public, max-age=60' };
 
@@ -23,6 +29,7 @@ function defaultLog(level, event, fields = {}) {
 
 /** CORS class of a path: feeds are public, the webhook is server-to-server, the rest is site-only. */
 function corsMode(path) {
+  if (path.startsWith('/match/')) return 'site';
   if (path === '/sponsors' || path === '/availability' || path === '/') return 'public';
   if (path === '/paystack/webhook') return 'none';
   return 'site';
@@ -101,6 +108,45 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
     throw new HttpError(404, 'not_found');
   }
 
+  /**
+   * Uitdagersreeks (no D1 needed): the lobby pairs players (WebSocket), POST /match/room opens a friend
+   * room, /match/room/<CODE> joins one (WebSocket), /match/ghost gives a recent recording. Only the
+   * game's own pages may use them (Origin), and an address can open ROOMS_PER_HOUR rooms an hour.
+   */
+  async function routeMatch(request, env, path, cfg) {
+    if (!env?.MATCH_LOBBY || !env?.MATCH_ROOM) throw new HttpError(503, 'not_configured');
+    if (!isOriginAllowed(request.headers.get('Origin'), cfg.allowedOrigins)) throw new HttpError(403, 'forbidden_origin');
+    const upgrade = (request.headers.get('Upgrade') || '').toLowerCase() === 'websocket';
+    const lobby = () => env.MATCH_LOBBY.get(env.MATCH_LOBBY.idFromName('lobby'));
+    if (path === '/match/lobby') {
+      if (request.method !== 'GET' || !upgrade) throw new HttpError(426, 'websocket_expected');
+      return lobby().fetch(request);
+    }
+    if (path === '/match/ghost') {
+      if (request.method !== 'GET') return methodNotAllowed('GET');
+      return lobby().fetch(request);
+    }
+    if (path === '/match/room') {
+      if (request.method !== 'POST') return methodNotAllowed('POST');
+      const t = now();
+      const key = `room:${await stats.addressKey({ cfg, now: t }, request)}`;
+      if (!rate.allow(key, ROOMS_PER_HOUR, t)) throw new HttpError(429, 'rate_limited');
+      for (let tries = 0; tries < 4; tries++) {
+        const code = newRoomCode(rand32);
+        const res = await env.MATCH_ROOM.get(env.MATCH_ROOM.idFromName(code))
+          .fetch('https://room/init', { method: 'POST', body: JSON.stringify({ kind: 'friend' }) });
+        if (res.status === 200) return json(200, { code });
+      }
+      throw new HttpError(503, 'busy');
+    }
+    const m = /^\/match\/room\/([A-Za-z0-9]+)$/.exec(path);
+    if (m && isRoomCode(m[1])) {
+      if (request.method !== 'GET' || !upgrade) throw new HttpError(426, 'websocket_expected');
+      return env.MATCH_ROOM.get(env.MATCH_ROOM.idFromName(m[1])).fetch(request);
+    }
+    throw new HttpError(404, 'not_found');
+  }
+
   async function routeAdmin(request, url, path, ctx) {
     // Brute force: after too many wrong tokens from one address, refuse even the right one for a while.
     const failKey = `admin-fail:${await stats.addressKey(ctx, request)}`;
@@ -150,6 +196,17 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
     if (request.method === 'OPTIONS') return mode === 'none' ? methodNotAllowed('POST') : preflight(request, mode, cfg);
 
     let response;
+    if (path.startsWith('/match/')) {
+      try {
+        response = await routeMatch(request, env, path, cfg);
+      } catch (err) {
+        response = err instanceof HttpError ? errorResponse(err) : json(500, { error: 'server_error' });
+        if (!(err instanceof HttpError)) log('error', 'match_unhandled', { path, message: String(err?.message || err).slice(0, 300) });
+      }
+      // a WebSocket upgrade (101) goes back exactly as the Durable Object made it
+      if (response.status === 101 || response.webSocket) return response;
+      return withHeaders(response, corsHeaders(request, mode, cfg));
+    }
     try {
       if (!env?.DB) throw new HttpError(503, 'not_configured');
       const ctx = {

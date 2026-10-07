@@ -168,6 +168,8 @@ It prints your Worker's address, e.g. `https://stapel-borge.<your-subdomain>.wor
 
 Run `npx wrangler deploy` again after every change to `wrangler.toml` or `src/`.
 
+The same deploy also sets up the **Uitdagersreeks** (live head-to-head matches): two Durable Objects, `MatchLobby` and `MatchRoom`, declared in `wrangler.toml`. The first deploy creates them through the `v1-uitdagersreeks` migration, and there is nothing else to set up. They are SQLite-backed, which the free plan allows. See [section 5](#5-switch-the-game-on) to switch them on in the game.
+
 ## 4. Connect Paystack to the Worker (webhook)
 
 Paystack tells the Worker about every payment, renewal and cancellation by calling a **webhook** URL.
@@ -194,6 +196,8 @@ export const SPONSOR_API_URL = 'https://stapel-borge.<your-subdomain>.workers.de
 Also fill in `contactEmail` when you have a public address. Commit and push. GitHub Pages updates in a minute or two.
 
 While `SPONSOR_API_URL` is empty, the game shows only the house ad and any manual entries in `sponsors.json`, and `adverteer.html` shows a "kom binnekort" (coming soon) page.
+
+**Live Uitdagersreeks matches** use the same Worker. With `SPONSOR_API_URL` set they're on. To switch on live matches *before* sponsorship sales, leave `SPONSOR_API_URL` empty and put the Worker's address in `MATCH_API_URL` (same file) instead. Without either, the mode still works against the computer and with friend challenge links; the "Soek ’n teenstander" button and live friend rooms appear once a Worker is set.
 
 ## 6. Test everything with Paystack test cards
 
@@ -346,6 +350,7 @@ Check current prices on the providers' pages. They change.
 
 - **Cloudflare Workers, free plan:** 100 000 requests per day. Each game start fetches the sponsor list once, and the game also keeps its own 5-minute cache. If Stapel gets more than roughly 100 000 game starts a day, the list request starts failing (the game then falls back to its cached copy and `sponsors.json`). At that point, move to Workers Paid, currently from **US$5 per month**.
 - **Cloudflare D1, free plan:** 5 million rows read and 100 000 rows written per day, and 5 GB of storage. Each Worker instance adds the anonymous counts up in memory and writes them once a minute (`STATS_FLUSH_SECONDS`), so the writes grow with the number of sponsors, not with the number of games; a Daaglikse Toring result still writes one row. Even a script flooding `/stats` can't use up the write budget that payments need. Beyond that the counts start failing quietly (the game ignores it) until the next day. Since September 2026, queries fail once a free daily limit is reached. The Worker keeps the sponsor list in memory for 30 seconds and serves the last good copy if the database is unavailable, so normal use stays far below these limits.
+- **Uitdagersreeks (Durable Objects), free plan:** 100 000 requests and 100 000 storage writes per day, and the duration of the objects (13 000 GB-s per day). The rooms use WebSocket hibernation, so a quiet room costs nothing. Incoming WebSocket messages count 20 to 1 as requests, and a room saves only at the moments that matter, so a two-minute match costs roughly 20 requests and 30 writes. That is a few thousand matches a day before anything runs out; past a limit, new matches fail until 00:00 UTC (the game then offers the computer).
 - **Paystack:** no monthly fee. A fee per successful payment, at the time of writing about **2.9% + R1 per local card payment** (more for international cards), **plus VAT**. Check <https://paystack.com/za/pricing>. On R1 499 that's roughly R44 + VAT per month. Refunds and chargebacks can have their own fees. Payouts go to your bank account.
 
 ## 11. Security and privacy
@@ -387,6 +392,10 @@ All endpoints answer JSON. Errors look like `{ "error": "<code>", "field"?: "<fi
 | `POST /score` | site origins | A Daaglikse Toring result: `{ dateKey, dayNumber, heightM }` (`dayNumber` must match `dateKey`; `heightM` is clamped to 0 to 1000). Returns `{ percentile, players }`: the share (rounded) of the *other* players' results that are strictly below yours, ties counting half; `percentile` is `null` when you are the only one. Rate limit: `RATE_LIMIT_SCORE_PER_HOUR`. |
 | `GET /score?dateKey=&heightM=` | site origins | The same answer without adding anything (for revisiting the results). |
 | `POST /paystack/webhook` | Paystack only | Needs a valid `x-paystack-signature`. |
+| `GET /match/lobby` | site origins, WebSocket | Uitdagersreeks: looking for a random opponent. Client sends `{ t: "hello", v: 1, name }`; the server answers `{ t: "wait" }` and, once paired, `{ t: "match", room }` and closes. |
+| `POST /match/room` | site origins | A new friend room: `{ code }` (6 characters from `ABCDEFGHJKMNPQRSTUVWXYZ23456789`). Waits 10 minutes. Rate limit: 30 per network address per hour. |
+| `GET /match/room/<CODE>` | site origins, WebSocket | Join a room. Server: `{ t: "wait" }`, then `{ t: "start", seed, you: 0 \| 1, opp: { name } }`, during the match `{ t: "opp", h, best }`, `{ t: "attack", m, kind }`, `{ t: "sent", m, kind }` and finally `{ t: "result", winner, reason, best: [a, b] }`; `{ t: "gone" }` for a room that is full, over or unknown. Client: `{ t: "hello", v: 1, name }`, `{ t: "state", h, best }` (about every 0,4 s) and `{ t: "over", reason, best }`. At most 10 messages a second; heights faster than 2 m/s are cut back. |
+| `GET /match/ghost` | site origins | A recent recording for a player nobody is around to play: `{ payload }` (the same format as a `?teen=` challenge link), or `404 { error: "none" }`. Recordings are kept at most 7 days. |
 | `GET /admin/sponsors` | admin | `{ sponsors: [ {…all columns, live} ], alerts: [{ id, kind, sponsor_id, sponsor_name, reference, amount, created_at }], paystackMode: "live" \| "test" \| "unknown", now }` |
 | `POST /admin/alerts/:id/resolve` | admin | Marks a "needs attention" item as dealt with. `{ ok: true }` or `404`. |
 | `POST /admin/sponsors` | admin | `{ tier, name, paid_until, tagline?, url?, email?, contact_name?, phone?, notes?, approved?, hidden? }` returns `201 { sponsor }` |
@@ -427,7 +436,7 @@ Dates are Unix milliseconds. `paid_until` in admin requests may also be `"YYYY-M
 ```sh
 npm test            # node --test: real SQL on node:sqlite + a fake Paystack; nothing to install
 npm install         # optional: adds wrangler; npm test then also runs a smoke test in the real Workers runtime
-npx wrangler dev    # local server on http://localhost:8787 with a local D1 database
+npx wrangler dev    # local server on http://localhost:8787 with a local D1 database and the match objects
 ```
 
 For `wrangler dev`, put local test secrets in a `.dev.vars` file in this folder (it's git-ignored), then create the local tables:

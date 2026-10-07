@@ -142,11 +142,12 @@ export class Visitors {
   /**
    * @param {Phaser.Scene} scene  GameScene
    * @param {object} sequence     createSequence(): visitorAt(i), seed
-   * @param {object} opts         { audio, bus, attract, reducedMotion, actions }
+   * @param {object} opts         { audio, bus, attract, scheduled, reducedMotion, actions }
+   *   scheduled: false in a head-to-head match (visitors then only come as attacks, see attack())
    *   actions: { top() -> {x,y,left,right}, busy() -> bool, shove(plan, dir) -> n, gift(plan) -> Block|null,
    *              steal(max) -> Image[], coach(type), toast(text, color), free() }
    */
-  constructor(scene, sequence, { audio = null, bus = null, attract = false, reducedMotion = false, actions = {} } = {}) {
+  constructor(scene, sequence, { audio = null, bus = null, attract = false, scheduled = true, reducedMotion = false, actions = {} } = {}) {
     this.scene = scene;
     this.sequence = sequence;
     this.audio = audio;
@@ -159,6 +160,9 @@ export class Visitors {
     this.cur = null;       // the visit on screen
     this.pending = null;   // a scheduled visitor that found another one still on screen
     this.forced = null;    // debug: { type, side } for the next block from FORCE_FROM on
+    this.scheduled = !!scheduled;
+    this.queue = [];       // attacks waiting for the stage (Uitdagersreeks)
+    this.attacks = 0;
     this.ended = false;
     this.dead = false;
     this.i = -1;
@@ -185,7 +189,7 @@ export class Visitors {
       if (i === 3 && !this.cur && Math.random() < ATTRACT_CHANCE) this._start({ type: 'clown', at: i, side: Math.random() < 0.5 ? -1 : 1, strength: 1 }, true);
       return;
     }
-    let v = this.sequence && this.sequence.visitorAt ? this.sequence.visitorAt(i) : null;
+    let v = this.scheduled && this.sequence && this.sequence.visitorAt ? this.sequence.visitorAt(i) : null;
     if (this.forced && i >= FORCE_FROM) {
       v = { type: this.forced.type, at: i, side: this.forced.side, strength: 1 };
       this.forced = null;
@@ -209,6 +213,20 @@ export class Visitors {
   /** Debug (?visitor=thief): the next block (from block FORCE_FROM on) brings this visitor. */
   force(type, side = 1) {
     if (VISITOR_TYPES.includes(type)) this.forced = { type, side: side < 0 ? -1 : 1 };
+  }
+
+  /**
+   * Uitdagersreeks: the other player reached a height mark first and sends this visitor. It comes
+   * now, or right after the one on screen. Its plan comes from the match seed and the attack's
+   * number, so it is the same visit whichever device plays it.
+   */
+  attack(type, from) {
+    if (this.dead || this.ended || this.attract || !VISITOR_TYPES.includes(type)) return false;
+    this.attacks += 1;
+    const v = { type, at: 1000 + this.attacks, side: this.attacks % 2 ? -1 : 1, strength: 1, from: from || null };
+    if (this.cur) this.queue.push(v);
+    else this._start(v, false);
+    return true;
   }
 
   /** Debug / tests: a visitor right now, if the stage is free. Returns true if it came. */
@@ -269,10 +287,15 @@ export class Visitors {
     // The arrival banner; a first-time player's first visitor of each kind gets the coach hint as its
     // subtitle (a separate hint pill would sit right where the thief climbs, or wait behind the banner).
     const info = VISITOR_INFO[c.type];
-    const coach = this.actions.coach ? this.actions.coach(c.type) : null;
+    const coach = !v.from && this.actions.coach ? this.actions.coach(c.type) : null;
     if (this.bus) {
       this.bus.emit('hud:banner', {
-        emoji: info.emoji, title: `${info.name}!`, subtitle: coach || info.hint, type: c.type, kind: 'visitor', ms: coach ? 2600 : 0,
+        emoji: info.emoji,
+        title: v.from ? S.duelAttackIn(v.from, info.name) : `${info.name}!`,
+        subtitle: coach || info.hint,
+        type: c.type,
+        kind: 'visitor',
+        ms: coach ? 2600 : 0,
       });
     }
     this._play(c.type === 'monkey' ? 'monkey' : c.type === 'clown' ? 'clown' : 'thief');
@@ -292,6 +315,7 @@ export class Visitors {
   // --- simulated clock (one call per fixed physics step) --------------------
 
   step() {
+    if (!this.cur && this.queue.length && !this.ended && !this.dead) this._start(this.queue.shift(), false);
     const c = this.cur;
     if (this.dead || !c) return;
     c.t += STEP_MS;
@@ -452,6 +476,7 @@ export class Visitors {
     this.ended = true;
     this.pending = null;
     this.forced = null;
+    this.queue.length = 0;
     const c = this.cur;
     if (c) {
       c.gone = true;

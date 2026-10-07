@@ -20,6 +20,7 @@ A free Afrikaans block-stacking phone game that runs in the browser.
 | **Wobble** | Real Matter.js physics. The top of the tower wobbles, creaks and can topple, while deeper blocks set like cement. A collapse costs one heart, and the crane waits for the tower to settle before the next block. |
 | **Afrikaanse spreekwoorde** | Genuine Afrikaans sayings "in between": a *Spreekwoord van die dag* on the menu (the same for everyone), a gentle toast with the height at 25 m, 50 m, 75 m, ..., one line on the results card that fits the outcome, and one on the pause screen. Curated in `js/core/sayings.js`; never part of the WhatsApp share text. |
 | **Visitors (*besoekers*)** | Now and then someone drops in between blocks: 🐒 *Blouaap* shoves the top blocks unless you tap him away, 🤡 *Hanswors* brings a crooked bonus block, and 🦹 *Skelm Sakkie* steals up to four blocks unless you catch him. Same visitors for everyone in the daily, and they never cost a heart. |
+| **Uitdagersreeks** | Head-to-head: two players build the same tower at the same time. Whoever reaches a 10 m mark first sends a visitor to the other tower, and the first to 50 m wins. Random opponents play live through the Worker (a recording of a real match or the computer, *Robot Rikus*, when nobody is around). Friends join a live room by link (`?kamer=CODE`), or play your run later from the results' challenge link (`?teen=…`, no server needed). |
 | **Come-back hooks** | *Jou Stapelstad*: every finished Daaglikse Toring becomes a building in your own skyline (on the shore behind the game and on the results). A shared link (`?klop=<dm>&d=<date>`) challenges a friend to beat your height that day, the results tease tomorrow's weather, and an install button offers the home screen. |
 
 Share line example:
@@ -76,6 +77,7 @@ js/core/              pure logic: seeded RNG, daily date/seed, block & weather s
 js/game/              blocks, crane, water, island, weather, effects
 js/scenes/            BgScene (sky, Tafelberg, clouds), GameScene (core loop), HudScene
 js/audience.js        anonymous counts + daily percentile (network side; only with SPONSOR_API_URL)
+js/duel.js            Uitdagersreeks on the device: finding an opponent, the match, the race track (rules: js/core/duel.js)
 js/ui/dom.js          menu, how-to, stats, pause and results overlays
 sw.js, manifest.webmanifest, icons/   offline support and home-screen install
 tests/                node unit tests for the core logic

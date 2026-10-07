@@ -6,6 +6,7 @@
 import { STORAGE_KEY } from '../config.js';
 import { dateKeyFor, dayNumber, addDays, daysBetween, isDateKey } from './daily.js';
 import { cleanVisits } from './visitorrules.js';
+import { cleanNickname } from './duel.js';
 
 const SCHEMA = 1;
 const SETTING_KEYS = ['sound', 'vibration', 'reducedMotion', 'highContrast'];
@@ -104,6 +105,7 @@ function defaultData() {
       played: 0, streak: 0, maxStreak: 0, bestScore: 0, bestHeightM: 0, totalPerfects: 0, lastDateKey: null,
     },
     practice: { played: 0, heightM: 0, score: 0 },
+    duel: { name: null, played: 0, wins: 0, losses: 0, streak: 0, bestStreak: 0 },
   };
 }
 
@@ -150,6 +152,20 @@ function sanitize(raw) {
   const p = raw.practice;
   if (p && typeof p === 'object') {
     d.practice = { played: int(p.played), heightM: round1(Math.max(0, num(p.heightM))), score: int(p.score) };
+  }
+
+  const u = raw.duel;
+  if (u && typeof u === 'object') {
+    d.duel = {
+      name: cleanNickname(u.name),
+      played: int(u.played),
+      wins: int(u.wins),
+      losses: int(u.losses),
+      streak: int(u.streak),
+      bestStreak: int(u.bestStreak),
+    };
+    d.duel.played = Math.max(d.duel.played, d.duel.wins + d.duel.losses);
+    d.duel.bestStreak = Math.max(d.duel.bestStreak, d.duel.streak);
   }
   return d;
 }
@@ -443,6 +459,45 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     getPracticeBest() {
       sync();
       return { heightM: data.practice.heightM, score: data.practice.score };
+    },
+
+    /** Uitdagersreeks: nickname and wins/losses ({ name|null, played, wins, losses, streak, bestStreak }). */
+    getDuel() {
+      sync();
+      return clone(data.duel);
+    },
+
+    /** Sets the nickname (empty clears it). Returns { ok, name }: ok false when the name rules refuse it. */
+    setDuelName(raw) {
+      sync();
+      const text = typeof raw === 'string' ? raw.trim() : '';
+      if (!text) {
+        data.duel.name = null;
+        persist();
+        return { ok: true, name: null };
+      }
+      const name = cleanNickname(text);
+      if (!name) return { ok: false, name: data.duel.name };
+      data.duel.name = name;
+      persist();
+      return { ok: true, name };
+    },
+
+    /** A finished match: 'won' or 'lost' (a winning streak counts wins in a row). */
+    recordDuel(outcome) {
+      sync();
+      const u = data.duel;
+      u.played += 1;
+      if (outcome === 'won') {
+        u.wins += 1;
+        u.streak += 1;
+        u.bestStreak = Math.max(u.bestStreak, u.streak);
+      } else {
+        u.losses += 1;
+        u.streak = 0;
+      }
+      persist();
+      return clone(u);
     },
 
     recordPractice(result) {

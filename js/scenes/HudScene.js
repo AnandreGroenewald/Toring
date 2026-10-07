@@ -1,7 +1,7 @@
 // In-game HUD (screen space): height + points, next block, hearts, weather chip,
 // combo badge, flood distance, wobble meter, event banners, toasts and the tap hint.
 // Driven entirely by bus events from GameScene; texts re-render only on change.
-import { LAYOUT, LIVES, FONT, COLORS, WATER, PX_PER_M, SCORING, COACH } from '../config.js';
+import { LAYOUT, LIVES, FONT, COLORS, WATER, PX_PER_M, SCORING, COACH, DUEL } from '../config.js';
 import { bus } from '../core/bus.js';
 import { S, WEATHER_INFO } from '../core/strings.js';
 import { fmtM, fmtInt } from '../core/format.js';
@@ -34,6 +34,9 @@ const SAYING_RETRY_MS = 500;   // how often a waiting saying checks whether bann
 const SAYING_MAX_WAIT_MS = 9000; // then it is skipped: the tower has moved on
 const WOBBLE_W = 18;
 const COACH_W = 620;        // widest first-game hint pill
+const TRACK_W = 18;         // Uitdagersreeks race track on the right edge (mirrors the wobble meter)
+const YOU_TINT = 0xffc23d;
+const THEM_TINT = 0x4fb3ff;
 const COACH_BELOW_TOP = 250; // hint centre: this far below the tower-top line (clear of the landing spot)
 
 const rgba = (c, a) => `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${a})`;
@@ -267,6 +270,7 @@ export class HudScene extends Phaser.Scene {
     this.wmLbl = add(text(this, 10 + WOBBLE_W / 2, wmTop - 12, S.wobbleTitle, 20, { strokeMul: 0.22, shadow: false })
       .setOrigin(0, 0.5).setAngle(-90));
     this.wmVal = -1;
+    this.buildTrack(add);
     this.wmAlpha = 0.7;
     this.wmParts = [this.wmBg, this.wmFill, this.wmTick, this.wmLbl];
     for (const o of this.wmParts) o.setAlpha(this.wmAlpha);
@@ -326,6 +330,7 @@ export class HudScene extends Phaser.Scene {
       bus.on('hud:hint', (h) => this.showHint(h)),
       bus.on('hud:coach', (c) => this.showCoach(c)),
       bus.on('hud:hide', (o) => this.hideAll(o)),
+      bus.on('hud:duel', (d) => { this.duelState = d; }),
       // the results card takes over from the big height
       bus.on('game:over', () => this.tweens.add({ targets: this.heightTxt, alpha: 0, duration: 250 })),
     );
@@ -343,6 +348,7 @@ export class HudScene extends Phaser.Scene {
     const game = this.scene.get('Game');
     const mode = game && game.mode;
     if (mode === 'daily') return `🏗️ ${S.dailyN(game.dayNumber ?? '?')}`;
+    if (mode === 'duel') return `⚔️ ${S.duelVs(game.duel?.name || S.duelSomeone)}`;
     return `🧱 ${S.practiceLabel}`;
   }
 
@@ -408,6 +414,7 @@ export class HudScene extends Phaser.Scene {
     this.setNext(s.next);
     this.setWeather(s.weather);
     this.setWater(s.waterDistM, time);
+    if (this.track) this.updateTrack(dt);
     this.drawWobble(s.wobble || 0);
     // the meter steps forward when the tower actually moves (with hysteresis)
     const wob = s.wobble || 0;
@@ -416,6 +423,74 @@ export class HudScene extends Phaser.Scene {
       this.wmAlpha = wa;
       this.tweens.killTweensOf(this.wmParts);
       this.tweens.add({ targets: this.wmParts, alpha: wa, duration: wa > 0.8 ? 150 : 600 });
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Uitdagersreeks: a race track on the right edge, 0-50 m, with the height marks (gold once you got
+  // there first, blue when they did), you (gold) and the other player (blue), and their name + height.
+  // -------------------------------------------------------------------------
+  buildTrack(add) {
+    this.track = null;
+    this.duelState = null;   // the scene is reused: never show the last match's heights
+    const game = this.scene.get('Game');
+    if (!game || !game.duel) return;
+    const H = this.H;
+    const top = Math.round(H * 0.3);
+    const bottom = Math.round(H * 0.6);
+    const x = this.W - 10 - TRACK_W / 2;
+    const dot = (key, fill) => {
+      if (this.textures.exists(key)) return key;
+      const tex = this.textures.createCanvas(key, 30, 30);
+      const ctx = tex.getContext();
+      ctx.beginPath();
+      ctx.arc(15, 15, 11, 0, Math.PI * 2);
+      ctx.fillStyle = rgba(fill, 1);
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#1d2b45';
+      ctx.stroke();
+      tex.refresh();
+      return key;
+    };
+    const bg = add(this.add.image(x, (top + bottom) / 2, panelTexture(this, TRACK_W, bottom - top + 14, NAVY, 0.5, { radius: 9, rim: 0.35 })));
+    const ticks = DUEL.marks.map((m) => add(this.add.image(x, this.trackY(m, top, bottom), 'fx_px').setDisplaySize(TRACK_W + 8, 4).setAlpha(0.75)));
+    const flag = add(text(this, x - 2, top - 18, '🏁', 30, { emoji: true, stroke: false }).setOrigin(0.5));
+    const them = add(this.add.image(x, bottom, dot('hud_dot_them', THEM_TINT)));
+    const you = add(this.add.image(x, bottom, dot('hud_dot_you', YOU_TINT)));
+    // the other player's name and height ride along beside their marker
+    const label = add(text(this, x - 22, bottom, '', 22, { strokeMul: 0.22 }).setOrigin(1, 0.5));
+    this.track = { x, top, bottom, bg, ticks, flag, them, you, label, youY: bottom, themY: bottom, labelStr: '', claimed: '' };
+    for (const o of [bg, ...ticks, flag, them, you, label]) o.setAlpha(0.92);
+  }
+
+  trackY(m, top = this.track.top, bottom = this.track.bottom) {
+    const k = Math.max(0, Math.min(1, m / DUEL.goalM));
+    return Math.round(bottom - k * (bottom - top));
+  }
+
+  updateTrack(dt) {
+    const d = this.duelState;
+    const t = this.track;
+    if (!d || !t) return;
+    const ease = 1 - Math.exp(-dt / 140);
+    t.youY += (this.trackY(d.you) - t.youY) * ease;
+    t.themY += (this.trackY(d.them) - t.themY) * ease;
+    t.you.y = t.youY;
+    t.them.y = t.themY;
+    t.label.y = t.themY;
+    const str = `${d.name} ${fmtM(d.them)}`;
+    if (str !== t.labelStr) {
+      t.labelStr = str;
+      t.label.setText(str).setColor('#cfe9ff');
+    }
+    const claimed = DUEL.marks.map((m) => d.claimed?.[m] || '-').join('');
+    if (claimed !== t.claimed) {
+      t.claimed = claimed;
+      DUEL.marks.forEach((m, k) => {
+        const who = d.claimed?.[m];
+        t.ticks[k].setTint(who === 'you' ? YOU_TINT : who === 'them' ? THEM_TINT : 0xffffff);
+      });
     }
   }
 
@@ -625,7 +700,10 @@ export class HudScene extends Phaser.Scene {
   showBanner(b) {
     if (!b || this.hidden) return;
     this.bannerEmoji.setText(b.emoji || '');
-    this.bannerTitle.setText(b.title || '');
+    this.bannerTitle.setText(b.title || '').setScale(1);
+    // a long title ("Sannie stuur Skelm Sakkie!") shrinks to fit the banner instead of running off it
+    const titleMax = BANNER_W - 130 - 26;
+    if (this.bannerTitle.width > titleMax) this.bannerTitle.setScale(titleMax / this.bannerTitle.width);
     this.bannerSub.setText(b.subtitle || '');
     const hasSub = !!b.subtitle;
     const twoLines = hasSub && this.bannerSub.height > 40;   // a visitor's first-game hint
