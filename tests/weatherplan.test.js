@@ -10,12 +10,13 @@ const DAILY1 = createSequence(seedFor('2026-10-06'));
 const GUST = DAILY1.events.find((e) => e.type === 'gust');
 const STORM = DAILY1.events.find((e) => e.type === 'storm');
 
+// 1.10: the stages moved daily #1's first gust from block 17 to 49 (its own stream, so new values)
 test('golden: daily #1 gust strengths and first lightning strike (changing this changes every tower)', () => {
-  assert.deepEqual({ type: GUST.type, start: GUST.start }, { type: 'gust', start: 17 });
+  assert.deepEqual({ type: GUST.type, start: GUST.start }, { type: 'gust', start: 49 });
   const r = eventRng(DAILY1.seed, GUST);
-  assert.deepEqual([1, 2, 3, 4].map((n) => Number(gustMul(r, n).toFixed(6))), [0.856259, 0.908142, 0.903805, 1.038077]);
+  assert.deepEqual([1, 2, 3, 4].map((n) => Number(gustMul(r, n).toFixed(6))), [1.028815, 1.170769, 0.889318, 0.893384]);
   const s = strikePlan(eventRng(DAILY1.seed, STORM), 1);
-  assert.equal(Number(s.kick.toFixed(6)), 1.999841);
+  assert.equal(Number(s.kick.toFixed(6)), 1.890232);
   assert.equal(s.spin, -1);
 });
 

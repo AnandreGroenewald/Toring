@@ -808,7 +808,7 @@ svg.ic {
 }
 .sheet-head h2 { font-size: calc(46 * var(--u)); font-weight: 900; line-height: 1.05; }
 .sheet-head .emoji { font-size: calc(54 * var(--u)); }
-.sheet .close {
+.sheet .close, .duel-card > .close, .duel-wait > .close {
   position: absolute;
   z-index: 2;   /* always above the sheet's own head (the shop's head is positioned and came later) */
   top: calc(26 * var(--u));
@@ -958,7 +958,7 @@ svg.ic {
 .duel-wrap { display: flex; flex-direction: column; gap: calc(18 * var(--u)); margin: auto 0; }
 .duel-card, .duel-wait { display: flex; flex-direction: column; align-items: stretch; gap: calc(18 * var(--u)); text-align: center; }
 .duel-wait { margin: auto 0; }
-.duel-head { display: flex; align-items: center; justify-content: center; gap: calc(14 * var(--u)); }
+.duel-head { display: flex; align-items: center; justify-content: center; gap: calc(14 * var(--u)); padding: 0 calc(84 * var(--u)); }
 .duel-head h2 { font-size: calc(48 * var(--u)); font-weight: 900; }
 .duel-head .emoji { font-size: calc(52 * var(--u)); }
 .duel-intro, .duel-sub { margin: 0; font-size: max(13px, calc(25 * var(--u))); font-weight: 700; color: var(--ink-soft); line-height: 1.35; }
@@ -1287,6 +1287,54 @@ svg.ic {
 @keyframes pop-in { from { transform: scale(0.2) rotate(-20deg); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes record-pop { from { transform: scale(0.2) rotate(-30deg); opacity: 0; } to { transform: rotate(4deg); opacity: 1; } }
 @keyframes cell-in { from { transform: scale(0); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ------------------------------------------------------------------------- */
+/* The short lesson (1.10): one card at the top; the game goes on underneath  */
+/* ------------------------------------------------------------------------- */
+.tutor {
+  position: absolute;
+  top: calc(var(--sat) + 6 * var(--u));
+  left: calc(var(--sal) + 10 * var(--u));
+  right: calc(var(--sar) + max(50px, 108 * var(--u)));   /* the pause button stays free */
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--u));
+  padding: calc(14 * var(--u)) calc(16 * var(--u));
+  border-radius: calc(26 * var(--u));
+  background: rgba(12, 32, 66, 0.92);
+  box-shadow: 0 calc(8 * var(--u)) calc(20 * var(--u)) rgba(5, 15, 35, 0.35);
+  color: #fff;
+  pointer-events: none;   /* only its buttons take taps: a tap anywhere else still drops a block */
+  animation: punish-in 0.25s ease-out both;
+}
+.tutor[hidden] { display: none; }
+.tutor.is-done { flex-direction: column; align-items: stretch; text-align: center; }
+.tutor-step {
+  flex: none;
+  padding: calc(6 * var(--u)) calc(12 * var(--u));
+  border-radius: 999px;
+  background: var(--sonneblom);
+  color: #3d2c00;
+  font-weight: 900;
+  font-size: max(12px, calc(22 * var(--u)));
+}
+.tutor-text { flex: 1 1 auto; margin: 0; font-weight: 800; font-size: max(13px, calc(25 * var(--u))); line-height: 1.3; }
+.tutor-skip, .tutor-btns .btn { pointer-events: auto; }
+.tutor-skip {
+  flex: none;
+  border: 0;
+  background: none;
+  color: #cfe9ff;
+  font: inherit;
+  font-weight: 800;
+  font-size: max(12px, calc(21 * var(--u)));
+  text-decoration: underline;
+  cursor: pointer;
+  padding: calc(8 * var(--u));
+}
+.tutor-btns { display: grid; gap: calc(10 * var(--u)); margin-top: calc(10 * var(--u)); }
+.lesson-link { border: 0; background: none; font: inherit; cursor: pointer; }
 
 /* ------------------------------------------------------------------------- */
 /* Uitdagersreeks: choose a punishment (the tower keeps going underneath)     */
@@ -1957,6 +2005,9 @@ canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 
 }
 .lang-btn.on { border-color: var(--jakaranda-d, #5b3fa8); background: #fff; }
 .lang-btn:focus-visible { outline: 3px solid var(--jakaranda-d, #5b3fa8); outline-offset: 2px; }
+
+/* the version under the statistics (testers can say which one they have) */
+.version-note { margin: 0; text-align: center; font-size: max(11px, calc(20 * var(--u))); font-weight: 700; color: var(--ink-soft); opacity: 0.8; }
 
 /* 1.9.2 daily leaderboard: the place on the results card, and the Ranglys sheet */
 .res-board {

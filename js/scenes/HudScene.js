@@ -1,7 +1,7 @@
 // In-game HUD (screen space): height + points, next block, hearts, weather chip,
 // combo badge, flood distance, wobble meter, event banners, toasts and the tap hint.
 // Driven entirely by bus events from GameScene; texts re-render only on change.
-import { LAYOUT, LIVES, FONT, COLORS, WATER, PX_PER_M, SCORING, COACH, DUEL } from '../config.js';
+import { LAYOUT, LIVES, FONT, COLORS, WATER, PX_PER_M, SCORING, COACH, STAGES } from '../config.js';
 import { bus } from '../core/bus.js';
 import { S, WEATHER_INFO, VISITOR_INFO } from '../core/strings.js';
 import { fmtM, fmtInt } from '../core/format.js';
@@ -16,6 +16,7 @@ const EDGE = 6;
 // The HUD lives in its own band above the crane jib (two rows), so it never hides the trolley or hook.
 const ROW1 = 37;           // centre of row 1 (height, weather chip, hearts)
 const ROW2 = 107;          // centre of row 2 (points, combo, next block)
+const ROW3 = 160;          // centre of row 3 (Uitdagersreeks: the other player's height), above the jib
 const NEXT_BOX_W = 96;
 const NEXT_BOX_H = 66;
 const NEXT_FIT_W = 80;
@@ -38,9 +39,6 @@ const SAYING_MAX_WAIT_MS = 9000; // then it is skipped: the tower has moved on
 const readMs = (text, min) => Math.min(READ_MAX_MS, Math.max(min, 900 + String(text || '').length * 55));
 const WOBBLE_W = 18;
 const COACH_W = 620;        // widest first-game hint pill
-const TRACK_W = 18;         // Uitdagersreeks race track on the right edge (mirrors the wobble meter)
-const YOU_TINT = 0xffc23d;
-const THEM_TINT = 0x4fb3ff;
 const COACH_BELOW_TOP = 250; // hint centre: this far below the tower-top line (clear of the landing spot)
 
 const rgba = (c, a) => `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${a})`;
@@ -247,7 +245,8 @@ export class HudScene extends Phaser.Scene {
     // Emoji are drawn once into textures (emojiTexture): drawing a big emoji glyph is slow, and done in the
     // frame a weather banner appeared it stalled that frame, just as the new block arrives and the player
     // starts to aim. The weather and visitor emoji are drawn ahead, one per frame (update).
-    this.emojiQueue = [...Object.values(WEATHER_INFO), ...Object.values(VISITOR_INFO)].flatMap((i) => [[i.emoji, 72], [i.emoji, 32]]);
+    this.emojiQueue = [...Object.values(WEATHER_INFO), ...Object.values(VISITOR_INFO)].flatMap((i) => [[i.emoji, 72], [i.emoji, 32]])
+      .concat(STAGES.slice(1).map((st) => [st.emoji, 72]));   // the stage banners' too
     this.wxEmoji = add(this.add.image(0, this.wxY, '__WHITE').setOrigin(0.5));
     this.wxName = add(text(this, 0, this.wxY - 11, '', 22, { strokeMul: 0.2 }).setOrigin(0, 0.5));
     this.wxLeft = add(text(this, 0, this.wxY + 14, '', 20, { color: '#d9ecff', strokeMul: 0.22, shadow: false }).setOrigin(0, 0.5));
@@ -423,7 +422,7 @@ export class HudScene extends Phaser.Scene {
     this.setNext(s.next);
     this.setWeather(s.weather);
     this.setWater(s.waterDistM, time);
-    if (this.track) this.updateTrack(dt);
+    if (this.track) this.updateTrack();
     this.drawWobble(s.wobble || 0);
     // the meter steps forward when the tower actually moves (with hysteresis)
     const wob = s.wobble || 0;
@@ -436,71 +435,33 @@ export class HudScene extends Phaser.Scene {
   }
 
   // -------------------------------------------------------------------------
-  // Uitdagersreeks: a race track on the right edge, 0-50 m, with the height marks (gold once you got
-  // there first, blue when they did), you (gold) and the other player (blue), and their name + height.
+  // Uitdagersreeks: the other player's name and height on one small line under the points (testers
+  // found the race track on the right edge in the way; the marks are announced by the banners anyway).
   // -------------------------------------------------------------------------
   buildTrack(add) {
     this.track = null;
     this.duelState = null;   // the scene is reused: never show the last match's heights
     const game = this.scene.get('Game');
     if (!game || !game.duel) return;
-    const H = this.H;
-    const top = Math.round(H * 0.3);
-    const bottom = Math.round(H * 0.6);
-    const x = this.W - 10 - TRACK_W / 2;
-    const dot = (key, fill) => {
-      if (this.textures.exists(key)) return key;
-      const tex = this.textures.createCanvas(key, 30, 30);
-      const ctx = tex.getContext();
-      ctx.beginPath();
-      ctx.arc(15, 15, 11, 0, Math.PI * 2);
-      ctx.fillStyle = rgba(fill, 1);
-      ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#1d2b45';
-      ctx.stroke();
-      tex.refresh();
-      return key;
-    };
-    const bg = add(this.add.image(x, (top + bottom) / 2, panelTexture(this, TRACK_W, bottom - top + 14, NAVY, 0.5, { radius: 9, rim: 0.35 })));
-    const ticks = DUEL.marks.map((m) => add(this.add.image(x, this.trackY(m, top, bottom), 'fx_px').setDisplaySize(TRACK_W + 8, 4).setAlpha(0.75)));
-    const flag = add(text(this, x - 2, top - 18, '🏁', 30, { emoji: true, stroke: false }).setOrigin(0.5));
-    const them = add(this.add.image(x, bottom, dot('hud_dot_them', THEM_TINT)));
-    const you = add(this.add.image(x, bottom, dot('hud_dot_you', YOU_TINT)));
-    // the other player's name and height ride along beside their marker
-    const label = add(text(this, x - 22, bottom, '', 22, { strokeMul: 0.22 }).setOrigin(1, 0.5));
-    this.track = { x, top, bottom, bg, ticks, flag, them, you, label, youY: bottom, themY: bottom, labelStr: '', claimed: '' };
-    for (const o of [bg, ...ticks, flag, them, you, label]) o.setAlpha(0.92);
+    const y = this.st + ROW3;
+    const bg = add(this.add.image(16, y, '__WHITE').setOrigin(0, 0.5).setVisible(false));
+    const label = add(text(this, 30, y - 1, '', 24, { emoji: true, strokeMul: 0.2 }).setOrigin(0, 0.5).setVisible(false));
+    this.track = { bg, label, labelStr: '', lead: null };
   }
 
-  trackY(m, top = this.track.top, bottom = this.track.bottom) {
-    const k = Math.max(0, Math.min(1, m / DUEL.goalM));
-    return Math.round(bottom - k * (bottom - top));
-  }
-
-  updateTrack(dt) {
+  updateTrack() {
     const d = this.duelState;
     const t = this.track;
     if (!d || !t) return;
-    const ease = 1 - Math.exp(-dt / 140);
-    t.youY += (this.trackY(d.you) - t.youY) * ease;
-    t.themY += (this.trackY(d.them) - t.themY) * ease;
-    t.you.y = t.youY;
-    t.them.y = t.themY;
-    t.label.y = t.themY;
-    const str = `${d.badge ? `${d.badge} ` : ''}${d.name} ${fmtM(d.them)}`;
-    if (str !== t.labelStr) {
-      t.labelStr = str;
-      t.label.setText(str).setColor('#cfe9ff');
-    }
-    const claimed = DUEL.marks.map((m) => d.claimed?.[m] || '-').join('');
-    if (claimed !== t.claimed) {
-      t.claimed = claimed;
-      DUEL.marks.forEach((m, k) => {
-        const who = d.claimed?.[m];
-        t.ticks[k].setTint(who === 'you' ? YOU_TINT : who === 'them' ? THEM_TINT : 0xffffff);
-      });
-    }
+    const str = `${d.badge || '⚔️'} ${d.name} ${fmtM(d.them)}`;
+    const lead = d.you > d.them + 0.05 ? 'you' : d.them > d.you + 0.05 ? 'them' : 'even';
+    if (str === t.labelStr && lead === t.lead) return;
+    t.labelStr = str;
+    t.lead = lead;
+    // their height in blue; the pill turns gold while you're ahead
+    t.label.setText(str).setColor('#cfe9ff').setVisible(true);
+    const w = Math.ceil((t.label.width + 30) / 8) * 8;
+    t.bg.setTexture(panelTexture(this, w, 40, lead === 'you' ? 0x7a5a12 : NAVY, 0.72, { radius: 20, rim: 0.3 })).setVisible(true);
   }
 
   /** Quick scale pop (no text re-render). */
@@ -743,13 +704,17 @@ export class HudScene extends Phaser.Scene {
       this.pendingCoach = this.coachCur;
       this.hideCoach(true);
     }
+    // a toast (a milestone saying) already showing moves up out of the banner's way: a visitor's
+    // instructions were hidden under "25 m — Klein maar dapper!" (testers: "the words at the bottom")
+    this.toastAboveBanner(y0);
     c.setVisible(true).setAlpha(0).setScale(0.6);
     c.setPosition(this.W / 2, y0);
     this.bannerEmoji.setScale(0.4).setAngle(-14);
     this.tweens.add({ targets: this.bannerEmoji, scale: 1, angle: 0, duration: 520, ease: 'Back.easeOut', easeParams: [2.6] });
     this.bannerTween = this.tweens.add({ targets: c, alpha: 1, scale: 1, duration: 300, ease: 'Back.easeOut' });
-    const visitor = b.kind === 'visitor';
-    this.bannerKind = visitor ? 'visitor' : 'weather';
+    // a visitor's (or a stage's) banner fades where it is; weather flies into its chip
+    const visitor = b.kind === 'visitor' || b.kind === 'stage';
+    this.bannerKind = b.kind === 'visitor' ? 'visitor' : b.kind === 'stage' ? 'stage' : 'weather';
     this.bannerTimer = this.time.delayedCall(Math.max(readMs(`${b.title || ''} ${b.subtitle || ''}`, BANNER_HOLD_MS), b.ms || 0) + 300, () => {
       this.bannerTimer = null;
       // weather flies into the weather chip (that's where the event lives while it lasts); a visitor's
@@ -805,6 +770,29 @@ export class HudScene extends Phaser.Scene {
         onComplete: () => { c.setVisible(false); this.toastTween = null; },
       });
     });
+  }
+
+  /** A showing toast that would sit on a banner at `bannerY` slides up to just above it. */
+  toastAboveBanner(bannerY) {
+    const c = this.toast;
+    if (!c.visible || c.alpha < 0.05) return;
+    const half = this.toastBg.displayHeight / 2;
+    if (Math.abs(c.y - bannerY) >= BANNER_H / 2 + half) return;
+    const y = Math.round(bannerY - BANNER_H / 2 - half - 14);
+    if (this.toastTween) this.toastTween.stop();
+    this.toastTween = this.tweens.add({ targets: c, y, alpha: 1, scale: 1, duration: 220, ease: 'Quad.easeOut' });
+    // its fade-out starts from where it is now
+    if (this.toastTimer) {
+      const left = this.toastTimer.getRemaining();
+      this.toastTimer.remove(false);
+      this.toastTimer = this.time.delayedCall(left, () => {
+        this.toastTimer = null;
+        this.toastTween = this.tweens.add({
+          targets: c, alpha: 0, y: y - 30, duration: 300, ease: 'Quad.easeIn',
+          onComplete: () => { c.setVisible(false); this.toastTween = null; },
+        });
+      });
+    }
   }
 
   /** Take the banner away right now (its pending toast/coach hint follow it as usual). */

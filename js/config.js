@@ -102,6 +102,7 @@ export const SCORING = {
   goodBonus: 5,
   comboCap: 10,
   heartEvery: 3,         // every 3rd Perfek (not necessarily in a row) while a heart is missing brings it back
+  rewardStreak: 5,       // every 5 Perfeks in a row bring Hanswors with a big log (a new foundation)
 };
 export const LIVES = 4;
 export const FREEZE_DEPTH = 8;   // all but the newest 8 settled blocks set like cement (become static)
@@ -194,9 +195,9 @@ export const VISITOR = {
   clownArriveMs: 1200,     // floats in, honking (tapping him only makes him honk and juggle)
   clownTossMs: 420,        // each gift block flies onto the tower top and sets there as cement
   clownLeaveMs: 1100,
-  giftMax: 4,              // he brings 1-4 blocks: a new foundation (the tower under them sets too)
+  giftMax: 1,              // he brings one big log: a new foundation (the tower under it sets too)
   giftGapMs: 300,          // between two of his blocks
-  giftPoints: 25,
+  giftPoints: 50,
   thiefClimbMs: 2000,      // tap window: he sneaks up the side of the tower
   thiefGrabMs: 450,
   thiefLeaveMs: 950,
@@ -204,6 +205,30 @@ export const VISITOR = {
   graceMs: 2500,           // tower blocks lost this soon after a visitor's push cost no heart...
   knockMaxMs: 8000,        // ...and so does a block the monkey moved, until it comes to rest (at most this long)
 };
+
+// ---------------------------------------------------------------------------
+// Stages (vlakke, 1.10): a tower starts calm and gets harder as it grows, each stage announced
+// ("Moeiliker!"). Testers found the bad weather and visitors came too soon. By block index (the same
+// for everyone on a day): core/sequence.js plans the weather and core/visitorplan.js the visitors
+// with these rules; GameScene announces each stage when its first block is on the crane.
+// ---------------------------------------------------------------------------
+export const STAGES = Object.freeze([
+  // warm-up: no bad weather, no visitors (about the first 20 m)
+  Object.freeze({ from: 0, weather: null, gap: null, visitors: null, thief: false, emoji: '🌤️' }),
+  // Moeiliker: the mild weather, Blouaap and Hanswors, with room to breathe between them
+  Object.freeze({ from: 12, weather: 'mild', gap: [5, 8], visitors: [14, 20], thief: false, emoji: '🌦️' }),
+  // Nog moeiliker: storms, hail and gusts too, and Skelm Sakkie
+  Object.freeze({ from: 30, weather: 'all', gap: [3, 6], visitors: [11, 17], thief: true, emoji: '⛈️' }),
+  // Op sy moeilikste: as often as every tower was before 1.10
+  Object.freeze({ from: 55, weather: 'all', gap: [2, 4], visitors: [9, 14], thief: true, emoji: '🔥' }),
+]);
+
+/** The stage (index into STAGES) block `i` belongs to. */
+export function stageAt(i) {
+  let k = 0;
+  while (k + 1 < STAGES.length && i >= STAGES[k + 1].from) k++;
+  return k;
+}
 
 // ---------------------------------------------------------------------------
 // Uitdagersreeks (head-to-head; docs/CHALLENGE-SPEC.md). Rules in core/duel.js, live side in duel.js.

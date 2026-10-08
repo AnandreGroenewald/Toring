@@ -99,12 +99,24 @@ export const S = {
     { icon: '👆', text: 'Tik enige plek op die skerm om die blok van die hyskraan te laat val. Die wit vorm op die toring wys waar dit gaan land.' },
     { icon: '🎯', text: 'Laat die blok reg in die middel land vir ’n Perfek! Perfekte landings op ’n ry bou ’n kombo vir ekstra punte.' },
     { icon: '🧱', text: 'Onder in die toring word die blokke hard soos sement — bo bly die toring wankelrig. ’n Perfek laat die blokke daaronder dadelik vassit.' },
+    { icon: '📈', text: 'Die toring begin rustig. Hoe hoër jy bou, hoe moeiliker word dit: elke nuwe vlak sê “Moeiliker!”.' },
     { icon: '🌦️', text: 'Die weer slaan toe terwyl jy bou: wind, reën, weerlig, hael, mis en meer.' },
     { icon: '🌊', text: 'Die water styg. Hou jou toring bo die vloedlyn!' },
     { icon: '❤️', text: 'Jy het vier lewens. Elke keer as blokke in die see beland, kos dit jou een. Elke derde Perfek bring ’n verlore lewe terug.' },
-    { icon: '🐒', text: 'Soms kom kuier iemand: Blouaap gooi blokke in die see, tensy jou volgende blok Perfek land. Skelm Sakkie steel blokke: tik hom om hom te vang. Hanswors bou vir jou ’n nuwe fondament. Besoekers kos jou nooit ’n hartjie nie.' },
+    { icon: '🐒', text: 'Soms kom kuier iemand: Blouaap gooi blokke in die see, tensy jou volgende blok Perfek land. Skelm Sakkie steel blokke: tik hom om hom te vang. Hanswors bring ’n groot boomstam: ’n nuwe fondament om op te bou (ook as jy 5 keer op ’n ry Perfek land). Besoekers kos jou nooit ’n hartjie nie.' },
     { icon: '🗓️', text: 'Elke dag is daar een Daaglikse Toring: dieselfde blokke, weer en besoekers vir almal, en jy kry een poging. Oefen soveel jy wil.' },
   ],
+  // the short lesson (1.10): a new player's first Oefen game, step by step
+  lessonTry: 'Probeer die kort les',
+  lesson1: 'Tik enige plek op die skerm om die blok te laat val. 👆',
+  lesson2: 'Mik vir die middel: die wit vorm wys waar die blok gaan land. Land ’n Perfek! 🎯',
+  lesson3: 'Perfek! Perfeks op ’n ry gee ekstra punte, en 5 op ’n ry bring Hanswors met ’n groot boomstam. 🤡',
+  lesson3b: 'Amper! Hoe nader aan die middel, hoe meer punte. 5 Perfeks op ’n ry bring Hanswors met ’n groot boomstam. 🤡',
+  lesson4: 'Die water styg: hou jou toring bo die vloedlyn. ’n Blok in die see kos ’n hartjie. ❤️',
+  lessonDone: 'Mooi so, jy is reg! 🎉 Elke dag is daar een Daaglikse Toring: almal kry dieselfde blokke, en jy kry een kans.',
+  lessonDaily: 'Speel vandag se toring',
+  lessonMore: 'Oefen verder',
+  lessonSkip: 'Slaan oor',
   howToGo: 'Kom ons bou!',
   privacyPolicy: 'Privaatheidsbeleid',
 
@@ -179,11 +191,13 @@ export const S = {
   resMonkeyShooed: 'Jou Perfek het Blouaap weggejaag! 🐒',
   resMonkeyKnocked: (n) => (n === 1 ? 'Blouaap het 1 blok van jou toring afgegooi 🐒' : `Blouaap het ${n} blokke van jou toring afgegooi 🐒`),
   resMonkeyStood: 'Blouaap het gestamp, maar jou toring het bly staan! 🐒',
-  resClownGift: (n) => (n > 1 ? `Hanswors het vir jou ${n} blokke gebring 🎁` : 'Hanswors het vir jou ’n geskenkie gebring 🎁'),
-  clownFoundation: 'Nuwe fondament! 🧱 Alles daaronder staan vas',   // Hanswors's blocks set as cement
+  resClownGift: (n) => (n > 1 ? `Hanswors het vir jou ${n} boomstamme gebring 🪵` : 'Hanswors het vir jou ’n groot boomstam gebring 🪵'),
+  clownFoundation: 'Nuwe fondament! 🪵 Alles daaronder staan vas',   // Hanswors's log sets as cement
+  clownRewardTitle: (n) => `${n} Perfeks op ’n ry!`,
+  clownRewardSub: 'Hanswors bring vir jou ’n groot boomstam. Bou daarop verder!',
   // first game only: the first visitor of each kind explains itself in its arrival banner (js/core/coach.js)
   coachMonkey: 'Land jou volgende blok Perfek, anders gooi Blouaap jou boonste blok in die see!',
-  coachClown: 'Hanswors stapel ekstra blokke op jou toring en sement hulle vas!',
+  coachClown: 'Hanswors sit ’n groot boomstam bo-op jou toring en sement dit vas. Bou daarop verder!',
   coachThief: 'Tik vinnig op Skelm Sakkie, anders steel hy jou boonste blokke!',
 
   // --- Uitdagersreeks (head-to-head; docs/CHALLENGE-SPEC.md) ---
@@ -210,6 +224,7 @@ export const S = {
   duelTheyCelebrate: (name) => `${name} vier!`,
   duelGo: 'Bou!',
   duelCancel: 'Kanselleer',
+  duelReconnecting: 'Koppel weer aan…',
   duelWaitFriend: 'Wag vir jou vriend…',
   duelWaitHint: 'Stuur die skakel. Sodra jou vriend dit oopmaak, begin julle.',
   duelRoomText: (name, link) => `${name} daag jou uit vir ’n Stapel-wedstryd! Kom bou kop-aan-kop: ${link}`,
@@ -283,6 +298,10 @@ export const S = {
   duelLinkSub: (height) => `Bou dieselfde toring kop-aan-kop teen hul rondte (${height}).`,
   duelLinkPlay: 'Aanvaar die uitdaging',
   // --- Daaglikse ranglys (1.9.2; js/board.js) ---
+  versionNote: (v) => `Weergawe ${v}`,
+  // the stages (config.js STAGES): announced when each begins
+  stageTitle: (k) => ['', 'Moeiliker!', 'Nog moeiliker!', 'Op sy moeilikste!'][k] || '',
+  stageSub: (k) => ['', 'Die weer begin draai, en daar kom besoekers.', 'Storms, hael en rukwinde. Pas op vir Skelm Sakkie!', 'Alles, en meer dikwels. Hou vas!'][k] || '',
   board: 'Ranglys',
   boardTitle: 'Vandag se ranglys',
   boardPlace: (rank, n) => `Jy is #${rank} van ${n} vandag`,
@@ -317,7 +336,7 @@ export const WEATHER_INFO = {
 /** Visitor display info (banner, share line, menu). Keys match VISITOR_TYPES in config.js. */
 export const VISITOR_INFO = {
   monkey: { emoji: '🐒', name: 'Blouaap', hint: 'Land ’n Perfek, anders gooi hy blokke af!' },
-  clown: { emoji: '🤡', name: 'Hanswors', hint: 'Geskenk: ’n nuwe fondament!' },
+  clown: { emoji: '🤡', name: 'Hanswors', hint: 'Geskenk: ’n groot boomstam om op te bou!' },
   thief: { emoji: '🦹', name: 'Skelm Sakkie', hint: 'Vang hom!' },
 };
 
@@ -378,7 +397,8 @@ export const SHAPE_NAMES = {
   cube: 'Blokkie',
   pillar: 'Pilaar',
   wedge: 'Wig',
-  arch: 'Boog',
+  arch: 'U-blok',
+  log: 'Boomstam',
   L: 'L-stuk',
   J: 'J-stuk',
   T: 'T-stuk',

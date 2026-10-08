@@ -3,7 +3,7 @@
 // camera follow, landing ghost, wobble, idle attract mode and the game-over reveal.
 import {
   GAME_W, LAYOUT, PX_PER_M, PHYSICS, CRANE, SCORING, LIVES, FREEZE_DEPTH, WATER, DEPTH, FONT, COACH,
-  VISITOR, VISITOR_TYPES, RATING, DUEL, WEATHER_TUNING,
+  VISITOR, VISITOR_TYPES, RATING, DUEL, WEATHER_TUNING, STAGES,
 } from '../config.js';
 import { bus } from '../core/bus.js';
 import { S, VISITOR_INFO, WEATHER_INFO } from '../core/strings.js';
@@ -127,6 +127,7 @@ function noVisitors(records = []) {
     setBlockIndex() {},
     force() {},
     spawn: () => false,
+    reward: () => false,
     step() {},
     update() {},
     tap: () => false,
@@ -768,6 +769,14 @@ export class GameScene extends Phaser.Scene {
     this.curSpec = spec;
     this.curGeom = getGeometry(spec);
     if (!this.idle) this.emitPowerups();
+    // a new stage begins with this block: say so (no weather or visitor starts on this block)
+    if (!this.idle) {
+      const k = STAGES.findIndex((st) => st.from === i);
+      if (k > 0) {
+        bus.emit('hud:banner', { emoji: STAGES[k].emoji, title: S.stageTitle(k), subtitle: S.stageSub(k), kind: 'stage' });
+        audio.play('banner');
+      }
+    }
     safely(() => this.weather.setBlockIndex(i));
     try {
       this.visitors.setBlockIndex(i);
@@ -881,6 +890,7 @@ export class GameScene extends Phaser.Scene {
     this.stepCtx.falling = block;
     this.active.push(block);
     this.blocksDropped++;
+    if (!this.idle) bus.emit('game:dropped', { n: this.blocksDropped });   // (the lesson, main.js)
     // the Stadige hyskraan counts drops, so it is always SLOW_BLOCKS slow blocks, whenever it was switched on
     if (this.slowLeft > 0) this.slowLeft--;
     // while this block falls, draw the textures of the blocks after the next one (the next one's exists)
@@ -1376,6 +1386,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.score += pts;
     this.visitorRated(block, r);
+    bus.emit('game:rated', { rating: r, combo: this.combo });   // (the lesson, main.js)
 
     this.coachSay(this.coach.landing(r), COACH.landingDelayMs);
     this.effects.rating(block, r, this.combo);
@@ -1396,6 +1407,8 @@ export class GameScene extends Phaser.Scene {
       this.effects.floatText(block.centerX, block.top - 170, S.extraLife, { color: '#ff8fb0', size: 42 });
       audio.play('heart');
     }
+    // a run of Perfeks brings Hanswors with his log (every SCORING.rewardStreak in a row, in every mode)
+    if (r === 'P' && this.combo % SCORING.rewardStreak === 0) this.visitors.reward?.(this.combo);
   }
 
   /**

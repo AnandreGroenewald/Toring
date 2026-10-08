@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSequence, SEQUENCE_RULES } from '../js/core/sequence.js';
-import { SHAPE_IDS, PALETTE, WEATHER_TYPES } from '../js/config.js';
+import { SHAPE_IDS, PALETTE, WEATHER_TYPES, STAGES, stageAt } from '../js/config.js';
 import { seedFor, addDays } from '../js/core/daily.js';
 
 const SEEDS = Array.from({ length: 300 }, (_, k) => seedFor(addDays('2026-10-06', k)));
@@ -148,7 +148,8 @@ test('weather rules', () => {
   for (const seed of SEEDS) {
     const { events } = createSequence(seed);
     assert.ok(events.length >= 25, `${seed} only ${events.length} events`);
-    assert.equal(events[0].start, 5, 'first event at block 5');
+    assert.equal(events[0].start, SEQUENCE_RULES.FIRST_EVENT_AT, 'the warm-up stage is calm');
+    assert.ok(events[0].start > STAGES[1].from, 'the stage is announced before its first weather');
     assert.ok(events[events.length - 1].start < WEATHER_HORIZON);
     // Events cover the whole horizon: the last ends within a gap of 300.
     assert.ok(events[events.length - 1].end >= WEATHER_HORIZON - 5);
@@ -169,8 +170,9 @@ test('weather rules', () => {
       assert.ok(Math.abs(e.strength - base) <= 0.1 + 0.005 + 1e-9, `strength ${e.strength} at ${e.start}`);
       assert.ok(e.strength >= 0.55 && e.strength <= 1.65);
 
+      assert.ok(!STAGES.some((st) => st.from === e.start), `${seed}: weather on the block that announces a stage (${e.start})`);
       if (e.type !== 'rainbow') {
-        if (e.start < 15) assert.ok(EARLY_TYPES.includes(e.type), `${seed}: ${e.type} too early (${e.start})`);
+        if (STAGES[stageAt(e.start)].weather === 'mild') assert.ok(EARLY_TYPES.includes(e.type), `${seed}: ${e.type} too early (${e.start})`);
         else assert.ok(LATE_TYPES.includes(e.type));
       }
 
@@ -181,9 +183,13 @@ test('weather rules', () => {
         const gap = e.start - p.end;
         if (e.type === 'rainbow') {
           assert.equal(p.type, 'rain', 'rainbow only right after rain');
-          assert.ok(gap === 0 || gap === 1, `rainbow gap ${gap}`);
+          // 0-1 blocks after the rain; one more when that block announces a stage
+          const bumped = STAGES.some((st) => st.from === e.start - 1);
+          assert.ok(gap === 0 || gap === 1 || (gap === 2 && bumped), `rainbow gap ${gap}`);
         } else {
-          assert.ok(gap >= 2 && gap <= 4, `${seed}: gap ${gap} before ${e.type}`);
+          // the stage of the event before sets the gap (+1 when the next start would announce a stage)
+          const [lo, hi] = STAGES[stageAt(p.start)].gap;
+          assert.ok(gap >= lo && gap <= hi + 1, `${seed}: gap ${gap} before ${e.type} (stage of ${p.start}: ${lo}-${hi})`);
         }
       } else {
         assert.notEqual(e.type, 'rainbow');
@@ -207,7 +213,7 @@ test('strength grows with start index', () => {
   let lateN = 0;
   for (const seed of SEEDS.slice(0, 50)) {
     for (const e of createSequence(seed).events) {
-      if (e.start < 12) {
+      if (e.start < STAGES[2].from) {
         early += e.strength;
         earlyN++;
       } else if (e.start >= 50) {
@@ -216,17 +222,17 @@ test('strength grows with start index', () => {
       }
     }
   }
-  assert.ok(early / earlyN < 0.85 && late / lateN > 1.4, `${early / earlyN} ${late / lateN}`);
+  assert.ok(earlyN > 0 && early / earlyN < 1.15 && late / lateN > 1.4, `${early / earlyN} ${late / lateN}`);
 });
 
-test('eventAt matches a linear scan; null in gaps and before block 5', () => {
+test('eventAt matches a linear scan; null in gaps and in the calm warm-up', () => {
   for (const seed of SEEDS.slice(0, 60)) {
     const seq = createSequence(seed);
     for (let i = -2; i < 330; i++) {
       const linear = seq.events.find((e) => e.start <= i && i < e.end) || null;
       assert.equal(seq.eventAt(i), linear, `${seed} i=${i}`);
     }
-    for (let i = 0; i < 5; i++) assert.equal(seq.eventAt(i), null);
+    for (let i = 0; i < SEQUENCE_RULES.FIRST_EVENT_AT; i++) assert.equal(seq.eventAt(i), null);
     const first = seq.events[0];
     assert.equal(seq.eventAt(first.start), first);
     assert.equal(seq.eventAt(first.end - 1), first);
@@ -260,9 +266,30 @@ test('block() tolerates odd indices', () => {
 // Updated deliberately in 1.0.1 (cube/pillar from block 12, L/J/T from 20): block 6 became an arch.
 const GOLDEN_BLOCKS = 'plank:1:0 slab:1.01:1 plank:1.1:6 plank:1.04:0 wedge:1.08:1 plank:0.94:7 '
   + 'arch:1:3 brick:1.06:1 arch:1:6 slab:0.93:5 slab:1.07:7 plank:0.96:6';
+// 1.10: the stages (calm warm-up, then "Moeiliker!") moved every day's weather later and further apart
 const GOLDEN_EVENTS = [
-  { type: 'rain', start: 5, end: 9, dir: 1, strength: 0.6 },
-  { type: 'rainbow', start: 10, end: 13, dir: 1, strength: 0.79 },
-  { type: 'gust', start: 17, end: 21, dir: -1, strength: 0.85 },
-  { type: 'storm', start: 24, end: 27, dir: 1, strength: 1.08 },
+  { type: 'rain', start: 14, end: 18, dir: 1, strength: 0.78 },
+  { type: 'rainbow', start: 19, end: 22, dir: 1, strength: 0.97 },
+  { type: 'wind', start: 29, end: 33, dir: -1, strength: 1.09 },
+  { type: 'storm', start: 40, end: 43, dir: 1, strength: 1.4 },
 ];
+
+test('stages: calm first, then each stage harder; every block belongs to one', () => {
+  assert.equal(stageAt(0), 0);
+  assert.equal(stageAt(STAGES[1].from - 1), 0);
+  assert.equal(stageAt(STAGES[1].from), 1);
+  assert.equal(stageAt(10000), STAGES.length - 1);
+  for (let k = 1; k < STAGES.length; k++) {
+    assert.ok(STAGES[k].from > STAGES[k - 1].from);
+    if (k > 1) assert.ok(STAGES[k].gap[1] <= STAGES[k - 1].gap[1], 'weather comes as often or more often');
+  }
+  assert.equal(STAGES[0].weather, null, 'the warm-up has no weather');
+  // over 300 days: the warm-up never has weather, and the last stage is as busy as before 1.10
+  let busy = 0;
+  for (const seed of SEEDS.slice(0, 100)) {
+    const { events } = createSequence(seed);
+    assert.ok(events.every((e) => e.start >= STAGES[1].from));
+    busy += events.filter((e) => e.start >= STAGES[3].from && e.start < 100).length;
+  }
+  assert.ok(busy / 100 > 6, `${busy / 100} events in blocks 55-99`);
+});

@@ -3,7 +3,7 @@
 // Changing any table below changes every daily tower — treat it as level data.
 
 import { createRng } from './rng.js';
-import { SHAPE_IDS, PALETTE } from '../config.js';
+import { SHAPE_IDS, PALETTE, STAGES, stageAt } from '../config.js';
 import { buildVisitors, visitorAt as findVisitor, visitorForecast } from './visitorplan.js';
 
 // --- Blocks -----------------------------------------------------------------
@@ -45,12 +45,12 @@ const COLOR_MEMORY = 2;
 // --- Weather ------------------------------------------------------------------
 
 const WEATHER_HORIZON = 300;     // events are precomputed for block indices 0..299
-const FIRST_EVENT_AT = 5;
-const LATE_FROM = 15;            // events starting at/after this may be the harsh types
+// The stages (config.js STAGES) set the pace: no weather in the warm-up, the mild kinds with room to
+// breathe in the first stage, everything (and more often) after that.
+const FIRST_EVENT_AT = STAGES[1].from + 2;   // a stage's own banner comes first
 const EARLY_TYPES = ['wind', 'rain', 'heat', 'fog'];
 const LATE_TYPES = ['wind', 'gust', 'rain', 'storm', 'hail', 'fog', 'heat'];
 const TYPE_WEIGHTS = { wind: 3, gust: 2.5, rain: 3, storm: 2.5, hail: 2.5, fog: 2, heat: 2 };
-const GAP = [2, 4];
 const RAINBOW_GAP = [0, 1];
 const RAINBOW_CHANCE = 0.5;
 
@@ -70,11 +70,13 @@ function buildEvents(rng) {
   let prev = null;
   let rainbowNext = false;
   while (start < WEATHER_HORIZON) {
+    if (STAGES.some((st) => st.from === start)) start++;   // that block announces its stage
+    const stage = STAGES[stageAt(start)];
     let type;
     if (rainbowNext) {
       type = 'rainbow';
     } else {
-      const pool = start < LATE_FROM ? EARLY_TYPES : LATE_TYPES;
+      const pool = stage.weather === 'mild' ? EARLY_TYPES : LATE_TYPES;
       const items = [];
       for (const t of pool) if (t !== prev) items.push({ w: TYPE_WEIGHTS[t], v: t });
       type = rng.weighted(items);
@@ -85,7 +87,7 @@ function buildEvents(rng) {
     events.push({ type, start, end, dir, strength });
 
     rainbowNext = type === 'rain' && rng.chance(RAINBOW_CHANCE);
-    const gap = rainbowNext ? rng.int(RAINBOW_GAP[0], RAINBOW_GAP[1]) : rng.int(GAP[0], GAP[1]);
+    const gap = rainbowNext ? rng.int(RAINBOW_GAP[0], RAINBOW_GAP[1]) : rng.int(stage.gap[0], stage.gap[1]);
     prev = type;
     start = end + gap;
   }
@@ -181,7 +183,7 @@ export function createSequence(seed) {
 
 // Exposed for tests / tooling.
 export const SEQUENCE_RULES = Object.freeze({
-  WEATHER_HORIZON, FIRST_EVENT_AT, LATE_FROM, EARLY_TYPES, LATE_TYPES, SHAPE_UNLOCK,
+  WEATHER_HORIZON, FIRST_EVENT_AT, LATE_FROM: STAGES.find((st) => st.weather === 'all').from, EARLY_TYPES, LATE_TYPES, SHAPE_UNLOCK,
   SCALE_MIN: SCALE_LATE[0], SCALE_MAX: SCALE_EARLY[1],
 });
 

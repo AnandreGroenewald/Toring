@@ -13,7 +13,7 @@ import {
 } from './economy.js';
 
 const SCHEMA = 1;
-const SETTING_KEYS = ['sound', 'vibration', 'reducedMotion', 'highContrast'];
+const SETTING_KEYS = ['sound', 'vibration', 'reducedMotion', 'highContrast', 'howtoSeen'];
 const HISTORY_DAYS = 7;
 const KEEP_DAILY_DAYS = 90; // older finished entries are pruned (stats are aggregated separately) to keep writes cheap
 

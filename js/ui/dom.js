@@ -3,7 +3,7 @@
 // and real buttons lives here, positioned exactly over the canvas by layout().
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
-import { GAME_W, PALETTE, RATING_EMOJI, computeGameHeight } from '../config.js';
+import { GAME_W, PALETTE, RATING_EMOJI, VERSION, computeGameHeight } from '../config.js';
 import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO, COSMETIC_INFO } from '../core/strings.js';
 import { COIN, RANKS, RANK_POINTS, rankFor, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic } from '../core/economy.js';
 import { fmtM, fmtInt, fmtClock, fmtDuration, dayName, monthName } from '../core/format.js';
@@ -24,6 +24,7 @@ const REASONS = {
 };
 // (?emojifont=noto: tests only, to see the shop the way Android draws emoji)
 const EMOJI_NOTO_FIRST = typeof location !== 'undefined' && /[?&]emojifont=noto\b/.test(location.search);
+const NICK_SAVE_MS = 900;   // a nickname is saved this long after typing stops
 const CLICK_GUARD_MS = 350;   // swallow double taps on navigation buttons
 // In-app grid cells: colour AND a symbol, so every kind of colour blindness can read them (🎁: the clown's gift,
 // 🧱: a Fondamentblok).
@@ -76,6 +77,11 @@ function h(tag, attrs, ...kids) {
     el.append(kid instanceof Node ? kid : String(kid));
   }
   return el;
+}
+
+/** The ✕ in a card's top right corner (sheets, the Uitdagersreeks). */
+function closeX(action) {
+  return h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); action(); } }, icon('close'));
 }
 
 function icon(name) {
@@ -165,12 +171,13 @@ export function createUI(bus) {
   // Uitdagersreeks: choose a punishment for the other tower. It sits over the score strip at the top,
   // away from the taps that drop blocks, and only its buttons take taps: the game keeps running.
   const punishBar = h('div', { class: 'punish', role: 'group', 'aria-label': S.duelChooseLabel, hidden: true });
+  const tutorBar = h('div', { class: 'tutor', role: 'status', 'aria-live': 'polite', hidden: true });
   let punishAt = 0;        // when the strip appeared (a tap right after it was meant for the tower)
   let punishPick = null;   // (n) => choose option n (keys 1-4) while the strip is up
   // 1.8 power-ups: round buttons on the right edge; only the buttons take taps (the rest drops a block)
   const powerTray = h('div', { class: 'power-tray', role: 'group', 'aria-label': S.powerups, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, pauseBtn, punishBar, powerTray, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, pauseBtn, punishBar, tutorBar, powerTray, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // Measures env(safe-area-inset-*) so layout() can work out how much of each
@@ -206,6 +213,10 @@ export function createUI(bus) {
     audio.unlock();
   }, { passive: true });
   root.addEventListener('touchstart', () => {}, { passive: true });   // enables :active on iOS
+  // leaving the game (another app, the home screen) saves a nickname still being typed
+  doc.addEventListener('visibilitychange', () => {
+    if (doc.hidden) st.nickSave?.();
+  });
   // Phaser listens for Space/Enter on window; a key that activates a DOM button must not also drop a block.
   const shieldKeys = (e) => {
     if ((e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') && e.target?.closest?.('button')) e.stopPropagation();
@@ -794,13 +805,19 @@ export function createUI(bus) {
       h('div', { class: 'sheet-head' }, emo('🏗️'), h('h2', { id: 'stapel-howto-title', text: S.howToTitle })),
       h('div', { class: 'sheet-body' }, h('ol', { class: 'steps' }, steps)),
       h('div', { class: 'sheet-foot' },
-        button('btn-big btn-green', [icon('play'), h('span', { text: S.howToGo })], () => closeModal(), { nav: false }),
+        // a new player's "Kom ons bou!" starts the short lesson; anyone can take it from here
+        button('btn-big btn-green', [icon('play'), h('span', { text: S.howToGo })], () => {
+          closeModal();
+          if (st.howtoLesson) bus.emit('ui:lesson');
+        }, { nav: false }),
+        st.howtoLesson ? null : h('button', { type: 'button', class: 'sheet-link lesson-link', text: `🎓 ${S.lessonTry}`, onclick: () => { audio.play('click'); closeModal(); bus.emit('ui:lesson'); } }),
         // the privacy policy, linked from inside the game too (Google Play asks for that)
         h('a', { class: 'sheet-link', href: 'privaatheid.html', target: '_blank', rel: 'noopener', text: S.privacyPolicy })));
     modals.howto.replaceChildren(sheet);
   }
 
-  function showHowTo() {
+  function showHowTo({ lesson = false } = {}) {
+    st.howtoLesson = !!lesson;
     renderHowTo();
     openModal('howto');
   }
@@ -871,7 +888,8 @@ export function createUI(bus) {
       body,
       h('div', { class: 'sheet-foot stats-foot' },
         h('div', { class: 'dock' }, toggleBtns({ contrast: true })),
-        button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false })));
+        button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false }),
+        h('p', { class: 'version-note', text: S.versionNote(VERSION) })));
     // today's leaderboard (only when the game can reach the server)
     if (st.boardOn) sheet.querySelector('.stats-foot').prepend(button('btn-blue', [emo('🏆'), h('span', { text: S.board })], () => bus.emit('ui:board'), { nav: false }));
     modals.stats.replaceChildren(sheet);
@@ -1093,7 +1111,22 @@ export function createUI(bus) {
     });
     input.value = d.name || '';
     const msg = h('p', { class: 'nick-msg', role: 'status', 'aria-live': 'polite', text: S.duelNickHint });
-    input.addEventListener('change', () => bus.emit('ui:duel-name', input.value));
+    // saved when the box loses focus, and also a moment after typing stops or when the game is left:
+    // a name typed just before switching apps (or tapping straight into a match) isn't lost
+    let saved = input.value;
+    let typing = 0;
+    const save = () => {
+      clearTimeout(typing);
+      if (input.value === saved || !input.isConnected) return;
+      saved = input.value;
+      bus.emit('ui:duel-name', input.value);
+    };
+    input.addEventListener('change', save);
+    input.addEventListener('input', () => {
+      clearTimeout(typing);
+      typing = setTimeout(save, NICK_SAVE_MS);
+    });
+    st.nickSave = save;
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -1103,6 +1136,7 @@ export function createUI(bus) {
     const record = duelRecordText(d);
     st.duelPlaceholder = m.placeholder || '';
     const card = h('div', { class: 'card duel-card' },
+      closeX(() => bus.emit('ui:home')),
       h('div', { class: 'duel-head' }, emo('⚔️'), h('h2', { text: S.duel })),
       h('p', { class: 'duel-intro', text: S.duelIntro }),
       m.rank ? rankBox(m.rank, m.card, d.name || st.duelPlaceholder) : null,
@@ -1213,8 +1247,16 @@ export function createUI(bus) {
         h('p', { class: 'duel-sub', text: o.text || S.duelNoServer }),
         button('btn-white', [icon('again'), h('span', { text: S.back })], () => bus.emit('ui:duel')));
     }
-    screens.duelwait.replaceChildren(h('div', { class: 'card duel-wait' }, kids));
+    // the ✕ top right does what the screen's own way out does (not during the 3-2-1)
+    const exit = { search: 'ui:duel-cancel', room: 'ui:duel-cancel', link: 'ui:home', error: 'ui:duel' }[o.state];
+    screens.duelwait.replaceChildren(h('div', { class: 'card duel-wait' }, exit ? closeX(() => bus.emit(exit)) : null, kids));
     showScreen('duelwait');
+  }
+
+  /** The friend room's line under "Wag vir jou vriend…": `text` (reconnecting), or the usual hint. */
+  function setDuelWaitNote(text) {
+    const sub = screens.duelwait.querySelector('.duel-wait .duel-sub');
+    if (sub && st.screen === 'duelwait') sub.textContent = text || S.duelWaitHint;
   }
 
   /** The count on the waiting / versus screen ("17", "3", "Bou!"). */
@@ -1631,6 +1673,32 @@ export function createUI(bus) {
     powerTray.hidden = false;
   }
 
+  /**
+   * The short lesson's card at the top (the game goes on underneath: a tap anywhere else still drops
+   * a block). { step, total, text } for a step, { done, daily } for the end; null hides it.
+   */
+  function showTutor(o) {
+    if (!o) {
+      tutorBar.hidden = true;
+      tutorBar.replaceChildren();
+      return;
+    }
+    if (o.done) {
+      tutorBar.replaceChildren(
+        h('p', { class: 'tutor-text', text: S.lessonDone }),
+        h('div', { class: 'tutor-btns' },
+          o.daily ? button('btn-green', [emo('🏗️'), h('span', { text: S.lessonDaily })], () => bus.emit('ui:lesson-daily'), { nav: false }) : null,
+          button('btn-white', h('span', { text: S.lessonMore }), () => bus.emit('ui:lesson-close'), { nav: false })));
+    } else {
+      tutorBar.replaceChildren(
+        h('span', { class: 'tutor-step', text: `${o.step}/${o.total}` }),
+        h('p', { class: 'tutor-text', text: o.text }),
+        h('button', { type: 'button', class: 'tutor-skip', text: S.lessonSkip, onclick: () => { audio.play('click'); bus.emit('ui:lesson-close'); } }));
+    }
+    tutorBar.classList.toggle('is-done', !!o.done);
+    tutorBar.hidden = false;
+  }
+
   function hidePunish() {
     punishBar.hidden = true;
     punishBar.replaceChildren();
@@ -1690,6 +1758,8 @@ export function createUI(bus) {
     setInstall,
     setResultsPercentile,
     setResultsBoard,
+    setDuelWaitNote,
+    showTutor,
     setBoardOn,
     showBoard,
     showInGame,

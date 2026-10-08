@@ -36,10 +36,12 @@ export const SHAPES = {
   cube: { w: 60, h: 60, parts: [R(0, 0, 60, 60)], uniform: true },
   pillar: { w: 52, h: 128, parts: [R(0, 0, 52, 128)] },
   wedge: { w: 150, h: 60, poly: [P(30, 0), P(120, 0), P(150, 60), P(0, 60)] },
+  // the U: it stands on its flat beam, with a shallow cup on top that every block can bridge
+  // (testers found the old arch on two legs too hard to land)
   arch: {
     w: 132, h: 88,
-    parts: [R(0, 0, 132, 36), R(0, 36, 36, 52), R(96, 36, 36, 52)],
-    outline: [P(0, 0), P(132, 0), P(132, 88), P(96, 88), P(96, 36), P(36, 36), P(36, 88), P(0, 88)],
+    parts: [R(0, 52, 132, 36), R(0, 0, 48, 52), R(84, 0, 48, 52)],
+    outline: [P(0, 0), P(48, 0), P(48, 52), P(84, 52), P(84, 0), P(132, 0), P(132, 88), P(0, 88)],
   },
   L: {
     w: 132, h: 88,
@@ -53,6 +55,8 @@ export const SHAPES = {
     cells: [R(2 * CELL, 0, CELL, CELL), R(0, CELL, CELL, CELL), R(CELL, CELL, CELL, CELL), R(2 * CELL, CELL, CELL, CELL)],
     outline: [P(88, 0), P(132, 0), P(132, 88), P(0, 88), P(0, 44), P(88, 44)],
   },
+  // Hanswors's big log (never in the block sequence): a wide, steady new floor on top of the tower
+  log: { w: 260, h: 50, parts: [R(0, 0, 260, 50)] },
   T: {
     w: 132, h: 88,
     parts: [R(0, 0, 132, CELL), R(CELL, CELL, CELL, CELL)],
@@ -588,28 +592,22 @@ const DETAIL = {
     ctx.fillRect(0, Math.round(b.top + (h - b.top - b.bottom) * 0.72) + 2, w, 1.5);
   },
   arch(ctx, g, pal) {
+    // the U: a beam below, two posts up; a seam where each post meets the beam, and the cup's floor in shade
     const beam = g.cells[0];
-    // keystone in the middle of the beam
-    const kw = Math.round(beam.h * 0.75);
-    const cx = beam.x + beam.w / 2;
-    const top = beam.y;
-    const bot = beam.y + beam.h;
-    ctx.beginPath();
-    ctx.moveTo(cx - kw / 2, top);
-    ctx.lineTo(cx + kw / 2, top);
-    ctx.lineTo(cx + kw / 2 - 5, bot);
-    ctx.lineTo(cx - kw / 2 + 5, bot);
-    ctx.closePath();
-    ctx.fillStyle = rgba(0xffffff, 0.16);
-    ctx.fill();
-    ctx.strokeStyle = rgba(pal.dark, 0.7);
+    const postL = g.cells[1];
+    const postR = g.cells[2];
+    ctx.strokeStyle = rgba(pal.dark, 0.55);
     ctx.lineWidth = 2;
-    ctx.stroke();
-    // shadow under the beam inside the opening
-    const legL = g.cells[1];
-    const legR = g.cells[2];
-    ctx.fillStyle = rgba(0x000000, 0.12);
-    ctx.fillRect(legL.x + legL.w, bot - 3, legR.x - legL.x - legL.w, 3);
+    for (const post of [postL, postR]) {
+      ctx.beginPath();
+      ctx.moveTo(post.x + 3, beam.y);
+      ctx.lineTo(post.x + post.w - 3, beam.y);
+      ctx.stroke();
+    }
+    ctx.fillStyle = rgba(0x000000, 0.14);
+    ctx.fillRect(postL.x + postL.w, beam.y, postR.x - postL.x - postL.w, 4);
+    ctx.fillStyle = rgba(0xffffff, 0.18);
+    ctx.fillRect(beam.x + 6, beam.y + Math.round(beam.h * 0.62), beam.w - 12, 2);
   },
   tetro(ctx, g, pal) {
     // faint inner square per cell — reads as a toy brick
@@ -813,6 +811,65 @@ function drawGift(ctx, g) {
   ctx.restore();
 }
 
+// Hanswors's log: bark along the length, the sawn ends showing their rings.
+const LOG_BARK = 0x7a4a26;
+const LOG_BARK_D = 0x5a3519;
+const LOG_WOOD = 0xe8bf86;
+const LOG_RING = 0xb57c45;
+
+function drawLog(ctx, g) {
+  ctx.save();
+  ctx.translate(PAD, PAD);
+  roundedPolyPath(ctx, g.outline, CORNER_R + 4);
+  ctx.save();
+  ctx.clip();
+  ctx.fillStyle = hex(LOG_BARK);
+  ctx.fillRect(0, 0, g.w, g.h);
+  // bark grooves: long uneven strokes along the log
+  ctx.strokeStyle = hex(LOG_BARK_D);
+  ctx.lineCap = 'round';
+  const rows = 4;
+  for (let k = 0; k < rows; k++) {
+    const y = Math.round(((k + 0.6) / rows) * g.h);
+    ctx.lineWidth = k % 2 ? 2 : 3;
+    for (let x = 14 + (k % 2) * 22; x < g.w - 30; x += 58) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 34 - (k % 3) * 6, y + (k % 2 ? 1 : -1));
+      ctx.stroke();
+    }
+  }
+  // the sawn ends: pale wood with rings
+  const ew = Math.min(30, g.w * 0.12);
+  for (const left of [true, false]) {
+    const cx = left ? ew * 0.5 : g.w - ew * 0.5;
+    ctx.fillStyle = hex(LOG_WOOD);
+    ctx.beginPath();
+    ctx.ellipse(cx, g.h / 2, ew * 0.55, g.h * 0.44, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = hex(LOG_RING);
+    ctx.lineWidth = 1.6;
+    for (const f of [0.72, 0.45, 0.2]) {
+      ctx.beginPath();
+      ctx.ellipse(cx, g.h / 2, ew * 0.55 * f, g.h * 0.44 * f, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  // light top, dark bottom (like every block)
+  const b = bandSizes(g.h);
+  ctx.fillStyle = rgba(0xffffff, 0.2);
+  ctx.fillRect(0, 0, g.w, b.top * 0.6);
+  ctx.fillStyle = rgba(0x000000, 0.22);
+  ctx.fillRect(0, g.h - b.bottom, g.w, b.bottom);
+  ctx.restore();
+  roundedPolyPath(ctx, g.outline, CORNER_R + 4);
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = hex(0x3b2210);
+  ctx.stroke();
+  ctx.restore();
+}
+
 // The Fondamentblok power-up: a long dark slab with hazard stripes at both ends, like the base.
 const FOUND_DARK = 0x2b3038;
 const FOUND_STRIPE = 0xf7c948;
@@ -899,6 +956,7 @@ function drawBlock(ctx, g, pal, key, name = null) {
 
 export function textureKeyFor(spec, name = null) {
   const g = getGeometry(spec);
+  if (spec.log) return `log_${Math.round(g.w)}x${Math.round(g.h)}`;
   if (spec.gift) return `gift_${g.shape}_${Math.round(g.w)}x${Math.round(g.h)}`;
   if (spec.foundation) return `found_${g.shape}_${Math.round(g.w)}x${Math.round(g.h)}`;
   const color = PALETTE.indexOf(shapeColor(spec));
@@ -921,7 +979,8 @@ export function ensureTexture(scene, spec, name = null) {
     const tex = textures.createCanvas(key, g.texW, g.texH);
     if (!tex) return key;
     // the plain key seeds the details, so a named block is the same block plus its name
-    if (spec.gift) drawGift(tex.getContext(), g);
+    if (spec.log) drawLog(tex.getContext(), g);
+    else if (spec.gift) drawGift(tex.getContext(), g);
     else if (spec.foundation) drawFoundation(tex.getContext(), g);
     else drawBlock(tex.getContext(), g, shapeColor(spec), textureKeyFor(spec), label);
     tex.refresh();

@@ -11,9 +11,10 @@ import {
 } from '../js/core/visitorrules.js';
 import { createRng } from '../js/core/rng.js';
 import { seedFor, addDays } from '../js/core/daily.js';
-import { VISITOR, VISITOR_TYPES, SHAPE_IDS, PALETTE, RATING } from '../js/config.js';
+import { VISITOR, VISITOR_TYPES, SHAPE_IDS, PALETTE, RATING, STAGES, stageAt } from '../js/config.js';
 import { S } from '../js/core/strings.js';
 import { SOUND_NAMES } from '../js/audio.js';
+import { SHAPES } from '../js/game/blocks.js';
 
 const DAYS = Array.from({ length: 365 }, (_, k) => seedFor(addDays('2026-10-06', k)));
 const PRACTICE = Array.from({ length: 60 }, (_, k) => `oefen/oefen-test-${k}`);
@@ -45,8 +46,9 @@ test('golden: the visitors of daily #1 (changing this changes every player\'s to
   assert.deepEqual(createSequence('stapel-2026-10-06').visitors.slice(0, 4), GOLDEN_VISITORS);
 });
 
-test('schedule rules: from block 8, apart, never with a weather start, no repeats, one thief', () => {
-  const { HORIZON, FIRST_AT, FIRST_SPREAD, GAP, THIEF_FROM } = VISITOR_RULES;
+test('schedule rules: none in the warm-up, apart by stage, never with a weather start or a stage, no repeats, one thief', () => {
+  const { HORIZON, FIRST_AT, FIRST_SPREAD, THIEF_FROM } = VISITOR_RULES;
+  assert.ok(FIRST_AT > STAGES[1].from, 'the warm-up has no visitors');
   const gaps = [];
   const types = Object.fromEntries(VISITOR_TYPES.map((t) => [t, 0]));
   for (const seed of [...DAYS, ...PRACTICE]) {
@@ -60,6 +62,7 @@ test('schedule rules: from block 8, apart, never with a weather start, no repeat
       assert.ok(VISITOR_TYPES.includes(v.type), v.type);
       assert.ok(Number.isInteger(v.at) && v.at >= FIRST_AT && v.at < HORIZON, `${seed}: at ${v.at}`);
       assert.ok(!starts.has(v.at), `${seed}: visitor on the block where weather starts (${v.at})`);
+      assert.ok(!STAGES.some((st) => st.from === v.at), `${seed}: visitor on the block that announces a stage (${v.at})`);
       assert.ok(v.side === -1 || v.side === 1);
       assert.ok(v.strength >= 0.6 && v.strength <= 1.1, `strength ${v.strength}`);
       types[v.type]++;
@@ -72,18 +75,18 @@ test('schedule rules: from block 8, apart, never with a weather start, no repeat
         const gap = v.at - p.at;
         gaps.push(gap);
         // only one visitor at a time: they are blocks apart (a visit lasts a few seconds)
-        assert.ok(gap >= GAP[0], `${seed}: gap ${gap}`);
+        assert.ok(gap >= STAGES[stageAt(p.at)].visitors[0], `${seed}: gap ${gap} after block ${p.at}`);
         assert.notEqual(v.type, p.type, `${seed}: ${v.type} twice in a row`);
       }
     });
     assert.ok(thieves <= 1, `${seed}: ${thieves} thieves`);
   }
   const mean = gaps.reduce((s, g) => s + g, 0) / gaps.length;
-  assert.ok(mean >= 12 && mean <= 18, `about one visitor every 12-18 blocks (mean gap ${mean})`);
+  assert.ok(mean >= 10 && mean <= 16, `about one visitor every 10-16 blocks over a whole tower (mean gap ${mean})`);
   for (const t of VISITOR_TYPES) assert.ok(types[t] > 200, `${t} too rare (${types[t]})`);
 });
 
-test('a typical tower (45 blocks) meets 2-3 visitors; most days bring the thief', () => {
+test('a typical tower (45 blocks) meets about 2 visitors, after a calm start; many days bring the thief', () => {
   let n = 0;
   let thief = 0;
   for (const seed of DAYS) {
@@ -91,8 +94,8 @@ test('a typical tower (45 blocks) meets 2-3 visitors; most days bring the thief'
     n += early.length;
     if (early.some((v) => v.type === 'thief')) thief++;
   }
-  assert.ok(n / DAYS.length > 2 && n / DAYS.length < 3.5, `per tower ${n / DAYS.length}`);
-  assert.ok(thief / DAYS.length > 0.4, `thief days ${thief / DAYS.length}`);
+  assert.ok(n / DAYS.length > 1.7 && n / DAYS.length < 2.6, `per tower ${n / DAYS.length}`);
+  assert.ok(thief / DAYS.length > 0.3, `thief days ${thief / DAYS.length}`);
 });
 
 test('visitorAt and visitorForecast', () => {
@@ -122,7 +125,7 @@ test('each visit draws from its own stream: same values for everyone, independen
   assert.deepEqual(clownPlan(visitRng('x', c), c), clownPlan(visitRng('x', c), c));
 });
 
-test('plan ranges: a hurled top block and a 1-2 block stamp, 1-4 steady gift blocks, a ~2 s climb', () => {
+test('plan ranges: a hurled top block and a 1-2 block stamp, one big log, a ~2 s climb', () => {
   let twos = 0;
   const gifts = new Set();
   for (const seed of DAYS.slice(0, 120)) {
@@ -138,14 +141,11 @@ test('plan ranges: a hurled top block and a 1-2 block stamp, 1-4 steady gift blo
         assert.ok(p.hurlSpin >= VISITOR.monkeyHurlSpin[0] - 0.001 && p.hurlSpin <= VISITOR.monkeyHurlSpin[1] + 0.001, `hurlSpin ${p.hurlSpin}`);
         assert.ok(p.hurl > p.kick * 1.4, 'the top block goes much faster than the stamped ones: it lands in the sea');
       } else if (v.type === 'clown') {
+        // Hanswors brings one big log (testers found his narrow gift blocks a nuisance)
         const p = clownPlan(r, v);
-        assert.ok(p.specs.length >= 1 && p.specs.length <= VISITOR.giftMax, `${p.specs.length} gifts`);
         gifts.add(p.specs.length);
-        for (const spec of p.specs) {
-          assert.ok(VISITOR_RULES.GIFT_SHAPES.includes(spec.shape) && SHAPE_IDS.includes(spec.shape));
-          assert.ok(spec.scale >= 0.85 && spec.scale <= 0.95);
-          assert.ok(Number.isInteger(spec.color) && spec.color >= 0 && spec.color < PALETTE.length);
-        }
+        assert.deepEqual(p.specs, [{ shape: 'log', scale: 1, color: 0, log: true }]);
+        assert.ok(SHAPES.log.w > SHAPES.plank.w, 'wider than any block: a new floor to build on');
       } else {
         const p = thiefPlan(r, v);
         assert.ok(p.climbMs >= 1700 && p.climbMs <= 2300, `climb ${p.climbMs}`);
@@ -153,8 +153,8 @@ test('plan ranges: a hurled top block and a 1-2 block stamp, 1-4 steady gift blo
     }
   }
   assert.ok(twos > 10, 'the monkey sometimes stamps on two blocks');
-  assert.deepEqual([...gifts].sort(), [1, 2, 3, 4], 'the clown brings 1, 2, 3 or 4 blocks');
-  assert.equal(VISITOR.giftMax, 4);
+  assert.deepEqual([...gifts], [1], 'the clown brings one log');
+  assert.equal(VISITOR.giftMax, 1);
 });
 
 // ---------------------------------------------------------------------------------- tower rules
@@ -250,7 +250,7 @@ test('results line: the most memorable visit (thief, then monkey, then clown)', 
   assert.equal(line({ type: 'clown', outcome: 'gift' }), S.resClownGift(1));
   assert.equal(line({ type: 'clown', outcome: 'gift', n: 3 }), S.resClownGift(3));
   assert.equal(line({ type: 'clown', outcome: 'gift', n: 3 }, { type: 'clown', outcome: 'gift', n: 1 }), S.resClownGift(4));
-  assert.match(S.resClownGift(3), /3 blokke/);
+  assert.match(S.resClownGift(3), /3 boomstamme/);
   assert.equal(line({ type: 'clown', outcome: 'came' }), '');
   assert.equal(line({ type: 'thief', outcome: 'came' }, { type: 'clown', outcome: 'came' }), '', 'nothing happened yet');
   assert.equal(visitorResultLine([]), '');
@@ -261,9 +261,10 @@ test('every visitor has its sounds', () => {
 });
 
 // Golden snapshot of Daaglikse Toring #1's first visitors (seed 'stapel-2026-10-06'), added in 1.6.0.
+// 1.10: the stages (a calm warm-up, then "Moeiliker!") moved every day's visitors later
 const GOLDEN_VISITORS = [
-  { type: 'clown', at: 13, side: -1, strength: 0.92 },
-  { type: 'monkey', at: 29, side: 1, strength: 1.05 },
-  { type: 'clown', at: 49, side: -1, strength: 0.93 },
-  { type: 'monkey', at: 63, side: 1, strength: 0.98 },
+  { type: 'clown', at: 20, side: -1, strength: 0.99 },
+  { type: 'monkey', at: 37, side: 1, strength: 1.06 },
+  { type: 'clown', at: 54, side: -1, strength: 0.93 },
+  { type: 'monkey', at: 67, side: 1, strength: 0.98 },
 ];

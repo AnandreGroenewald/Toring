@@ -58,6 +58,8 @@ function wsBase(apiUrl) {
   return null;
 }
 
+const ROOM_RETRY_MS = [1000, 2000, 4000, 8000];   // a dropped room wait reconnects after these (then every 8 s)
+
 /**
  * @param {{ bus, apiUrl?: string, nickname: () => string, card?: () => object, onDecided?: (outcome) => void,
  *   WebSocketImpl?, fetchImpl?, timers? }} deps
@@ -286,55 +288,98 @@ export function createDuel({
     }
   }
 
-  /** Join a live room (a friend's code, or the one the lobby found). `onStart(match)` when both are in. */
-  function joinRoom(code, { onWait = () => {}, onStart = () => {}, onFail = () => {} } = {}) {
+  /**
+   * Join a live room (a friend's code, or the one the lobby found). `onStart(match)` when both are in.
+   * Once in the room, a dropped connection doesn't end the wait (the game went to the background to
+   * share the link, the network blinked): it comes back to the same room, `onRetry` meanwhile, until
+   * the room is gone. While the game is hidden (away()) the connection stays closed, so a match never
+   * starts while this player isn't looking; back() reconnects.
+   */
+  function joinRoom(code, { onWait = () => {}, onStart = () => {}, onFail = () => {}, onRetry = () => {} } = {}) {
     if (!live || !isRoomCode(code)) {
       onFail(live ? S.duelRoomGone : S.duelOffline);
       return;
     }
-    let started = false;
-    let ws;
-    try {
-      ws = new WebSocketImpl(`${wsUrl}/match/room/${code}`);
-    } catch {
-      onFail(S.duelNoServer);
-      return;
-    }
-    pending = { ws, timer: null };
-    ws.onopen = () => send(ws, hello());
-    ws.onmessage = (e) => {
-      const msg = parse(e.data);
-      if (!msg) return;
-      if (!started) {
-        if (msg.t === 'wait') onWait(code);
-        else if (msg.t === 'gone') {
-          stopPending();
-          onFail(S.duelRoomGone);
-        } else if (msg.t === 'start' && isMatchSeed(msg.seed) && (msg.you === 0 || msg.you === 1)) {
-          started = true;
-          clearTimer(pending?.timer);
-          pending = null;
-          const m = newMatch({
-            kind: 'live', seed: msg.seed, oppName: cleanNickname(msg.opp?.name) || S.duelSomeone, oppCard: msg.opp?.card, ws, you: msg.you,
-          });
-          onStart(m);
-        }
+    const room = { code, joined: false, started: false, tries: 0, retry: null, away: hidden(), connect: null, onRetry, until: now() + DUEL.roomWaitMs };
+    pending = { ws: null, timer: null, room };
+    const retryLater = () => {
+      if (pending?.room !== room || room.retry || room.away) return;
+      if (now() > room.until) {   // a room waits DUEL.roomWaitMs at most: by now it is gone
+        stopPending();
+        onFail(S.duelRoomGone);
         return;
       }
-      if (match && match.ws === ws) onRoomMessage(match, msg);
+      const ms = ROOM_RETRY_MS[Math.min(room.tries, ROOM_RETRY_MS.length - 1)];
+      room.tries++;
+      onRetry();
+      room.retry = setTimer(() => {
+        room.retry = null;
+        if (pending?.room === room && !pending.ws && !room.away) room.connect();
+      }, ms);
     };
-    ws.onclose = () => {
-      if (!started) {
-        if (pending?.ws === ws) {
+    room.connect = () => {
+      let ws;
+      try {
+        ws = new WebSocketImpl(`${wsUrl}/match/room/${code}`);
+      } catch {
+        if (room.joined) retryLater();
+        else {
           stopPending();
           onFail(S.duelNoServer);
         }
         return;
       }
-      const m = match;
-      if (m && m.ws === ws && !m.outcome) m.lostConn = true;
+      pending.ws = ws;
+      ws.onopen = () => send(ws, hello());
+      ws.onmessage = (e) => {
+        const msg = parse(e.data);
+        if (!msg) return;
+        if (!room.started) {
+          if (pending?.ws !== ws) return;
+          if (msg.t === 'wait') {
+            room.joined = true;
+            room.tries = 0;
+            onWait(code);
+          } else if (msg.t === 'gone') {
+            stopPending();
+            onFail(S.duelRoomGone);
+          } else if (msg.t === 'start' && isMatchSeed(msg.seed) && (msg.you === 0 || msg.you === 1)) {
+            room.started = true;
+            clearTimer(pending?.timer);
+            pending = null;
+            const m = newMatch({
+              kind: 'live', seed: msg.seed, oppName: cleanNickname(msg.opp?.name) || S.duelSomeone, oppCard: msg.opp?.card, ws, you: msg.you,
+            });
+            onStart(m);
+          }
+          return;
+        }
+        if (match && match.ws === ws) onRoomMessage(match, msg);
+      };
+      ws.onclose = () => {
+        if (!room.started) {
+          if (pending?.ws !== ws) return;   // stopped, or replaced by a reconnect
+          pending.ws = null;
+          if (room.joined) {
+            retryLater();   // the room is still there: come back to it
+            return;
+          }
+          stopPending();
+          onFail(S.duelNoServer);
+          return;
+        }
+        const m = match;
+        if (m && m.ws === ws && !m.outcome) m.lostConn = true;
+      };
+      ws.onerror = () => {};
     };
-    ws.onerror = () => {};
+    if (room.away) room.joined = true;   // the room was made a moment ago; it is entered on back()
+    else room.connect();
+  }
+
+  /** Is the game out of sight (another app, the home screen)? */
+  function hidden() {
+    return typeof document !== 'undefined' && document.visibilityState === 'hidden';
   }
 
   /** Random opponent: the lobby pairs two players; after DUEL.searchMs a recording or the computer instead. */
@@ -396,7 +441,7 @@ export function createDuel({
   }
 
   /** A friend room: the server makes a code; the host waits in the room until the friend comes. */
-  async function createRoom({ onCode = () => {}, onStart = () => {}, onFail = () => {} } = {}) {
+  async function createRoom({ onCode = () => {}, onStart = () => {}, onFail = () => {}, onWait = () => {}, onRetry = () => {} } = {}) {
     stopPending();
     if (!live || !fetchImpl) {
       onFail(S.duelOffline);
@@ -417,7 +462,7 @@ export function createDuel({
       return;
     }
     onCode(code);
-    joinRoom(code, { onStart, onFail });
+    joinRoom(code, { onStart, onFail, onWait, onRetry });
     if (pending) {
       pending.timer = setTimer(() => {
         stopPending();
@@ -439,9 +484,35 @@ export function createDuel({
 
   function stopPending() {
     if (!pending) return;
-    clearTimer(pending.timer);
-    close(pending.ws);
+    const { ws, timer, room } = pending;
     pending = null;
+    clearTimer(timer);
+    if (room?.retry) clearTimer(room.retry);
+    if (ws) close(ws);
+  }
+
+  /** The game went out of sight: a room still waiting closes its connection (it reopens on back()). */
+  function away() {
+    const room = pending?.room;
+    if (!room || room.started || room.away) return;
+    room.away = true;
+    if (room.retry) clearTimer(room.retry);
+    room.retry = null;
+    const ws = pending.ws;
+    pending.ws = null;
+    if (ws) close(ws);
+  }
+
+  /** The game is back: a waiting room reconnects at once. */
+  function back() {
+    const room = pending?.room;
+    if (!room || room.started || !room.away) return;
+    room.away = false;
+    room.tries = 0;
+    if (!pending.ws) {
+      room.onRetry();
+      room.connect();
+    }
   }
 
   return {
@@ -458,6 +529,8 @@ export function createDuel({
     startLink,
     /** Stop searching / waiting (the match itself, if any, is left alone). */
     cancel: stopPending,
+    away,
+    back,
     /** Leave the current match (home button, new game): closes a live room. */
     leave() {
       stopPending();

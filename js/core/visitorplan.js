@@ -6,25 +6,29 @@
 // every daily tower: treat it as level data. Pure: importable in node (unit tested).
 
 import { createRng } from './rng.js';
-import { VISITOR, VISITOR_TYPES, SHAPE_IDS, PALETTE } from '../config.js';
+import { VISITOR, VISITOR_TYPES, STAGES, stageAt } from '../config.js';
 
 const HORIZON = 300;          // visitors are planned for block indices 0..299, like the weather
-const FIRST_AT = 8;           // nobody visits before block 8...
-const FIRST_SPREAD = 6;       // ...and the first visitor comes by block 14
-const GAP = [10, 20];         // blocks from one visitor to the next (mean 15)
-const THIEF_FROM = 14;        // the thief needs a tower worth robbing
+// The stages (config.js STAGES) set the pace: nobody in the warm-up, then a visitor every STAGES[k].visitors
+// blocks, the thief only from the stage that brings him (he needs a tower worth robbing anyway).
+const FIRST_AT = STAGES[1].from + 4;   // nobody visits before block 16...
+const FIRST_SPREAD = 4;               // ...and the first visitor comes by block 20
+const GAP = STAGES[1].visitors;       // (the first stage's gap; later stages are quicker)
+const THIEF_FROM = STAGES.find((st) => st.thief).from;
 const TYPE_WEIGHTS = { monkey: 4, clown: 3.5, thief: 2.5 };
 const FORECAST_BLOCKS = 45;   // the menu and the teaser name the visitors of about one tower
-const GIFT_SHAPES = ['crate', 'slab', 'brick'];   // steady shapes: they stack straight
+const GIFT_SHAPES = ['crate', 'slab', 'brick'];   // (1.9 and before: his 1-4 gift blocks)
+// Hanswors brings one big log: a wide, steady new floor (testers found his narrow gift blocks a nuisance)
+const LOG_SPEC = Object.freeze({ shape: 'log', scale: 1, color: 0, log: true });
 
 const round2 = (x) => Math.round(x * 100) / 100;
 
 /**
  * The day's visitors: [{ type, at, side, strength }] sorted by `at` (the block index that
  * is on the crane when the visitor arrives). `side` is the screen side it comes from.
- * Rules: none before block 8, never on a block where a weather event starts, at least
- * GAP[0] blocks apart (so only one is ever on screen), never the same type twice in a
- * row, and the thief at most once per tower.
+ * Rules: none in the warm-up stage, never on a block where a weather event starts or a stage
+ * begins, at least the stage's gap apart (so only one is ever on screen), never the same type
+ * twice in a row, and the thief at most once per tower, from his stage on.
  */
 export function buildVisitors(rng, events = []) {
   const weatherStarts = new Set((events || []).map((e) => e.start));
@@ -33,11 +37,12 @@ export function buildVisitors(rng, events = []) {
   let prev = null;
   let thief = false;
   while (at < HORIZON) {
-    while (weatherStarts.has(at)) at++;
+    while (weatherStarts.has(at) || STAGES.some((st) => st.from === at)) at++;
     if (at >= HORIZON) break;
+    const stage = STAGES[stageAt(at)];
     const items = [];
     for (const t of VISITOR_TYPES) {
-      if (t === prev || (t === 'thief' && (thief || at < THIEF_FROM))) continue;
+      if (t === prev || (t === 'thief' && (thief || !stage.thief))) continue;
       items.push({ w: TYPE_WEIGHTS[t], v: t });
     }
     const type = rng.weighted(items);
@@ -46,7 +51,7 @@ export function buildVisitors(rng, events = []) {
     list.push({ type, at, side, strength });
     if (type === 'thief') thief = true;
     prev = type;
-    at += rng.int(GAP[0], GAP[1]);
+    at += rng.int(stage.visitors[0], stage.visitors[1]);
   }
   return list;
 }
@@ -92,15 +97,8 @@ export function monkeyPlan(r, v) {
 }
 
 /** Hanswors: 1-4 gift blocks (steady shapes) that he stacks on the tower, where they set as a new foundation. */
-export function clownPlan(r) {
-  const gift = () => {
-    const shape = r.pick(GIFT_SHAPES);
-    return { shape: SHAPE_IDS.includes(shape) ? shape : 'crate', scale: round2(r.float(0.85, 0.95)), color: r.int(0, PALETTE.length - 1) };
-  };
-  const specs = [gift()];
-  const n = r.int(1, VISITOR.giftMax);
-  while (specs.length < n) specs.push(gift());
-  return { specs };
+export function clownPlan() {
+  return { specs: [{ ...LOG_SPEC }] };
 }
 
 /** Skelm Sakkie: how long the climb (the tap window) takes; a little quicker on later visits. */

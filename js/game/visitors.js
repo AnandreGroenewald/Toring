@@ -328,6 +328,20 @@ export class Visitors {
     return true;
   }
 
+  /**
+   * A reward: SCORING.rewardStreak Perfeks in a row bring Hanswors with his log, now or right after the
+   * visitor on screen (in every mode, also the Uitdagersreeks). Its plan is keyed by the reward's number,
+   * so the same tower gets the same visit.
+   */
+  reward(streak) {
+    if (this.dead || this.ended || this.attract) return false;
+    this.rewards = (this.rewards || 0) + 1;
+    const v = { type: 'clown', at: 2000 + this.rewards, side: this.rewards % 2 ? 1 : -1, strength: 1, reward: streak };
+    if (this.cur) this.queue.push(v);
+    else this._start(v, false);
+    return true;
+  }
+
   /** Debug / tests: a visitor right now, if the stage is free. Returns true if it came. */
   spawn(type, side = 1) {
     if (this.dead || this.ended || this.attract || this.cur || !VISITOR_TYPES.includes(type)) return false;
@@ -406,8 +420,8 @@ export class Visitors {
     if (this.bus) {
       this.bus.emit('hud:banner', {
         emoji: info.emoji,
-        title: v.from ? S.duelAttackIn(v.from, info.name) : `${info.name}!`,
-        subtitle: coach || info.hint,
+        title: v.from ? S.duelAttackIn(v.from, info.name) : v.reward ? S.clownRewardTitle(v.reward) : `${info.name}!`,
+        subtitle: v.reward ? S.clownRewardSub : coach || info.hint,
         type: c.type,
         kind: 'visitor',
         ms: coach ? 2600 : 0,

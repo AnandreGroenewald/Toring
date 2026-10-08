@@ -473,8 +473,16 @@ for (const type of ['pointerdown', 'keydown']) {
 // ---------------------------------------------------------------------------
 // Scene control
 // ---------------------------------------------------------------------------
+const LESSON_STEPS = 4;
+const LESSON_SEED = 'stapel-les';   // the short lesson's Oefen tower (see startLesson)
+let lesson = null;   // { step, landings, after } while it runs
+
 function startGame(data) {
   wakeLoop();
+  if (data.seed !== LESSON_SEED || data.mode !== 'practice') {
+    lesson = null;
+    ui.showTutor(null);
+  }
   if (data.mode !== 'duel') duel.leave();   // a new game of another kind ends any match (and its live room)
   if (run.paused) {
     audio.resume();
@@ -782,6 +790,56 @@ bus.on('ui:install-dismiss', () => {
 });
 onInstallChange(() => ui.setInstall(installMode()));
 bus.on('ui:play-practice', playPractice);
+
+// ---------------------------------------------------------------------------
+// The short lesson (1.10): a new player's first Oefen game, four steps that follow what they do
+// (tap, aim for a Perfek, Perfeks in a row, the water and the hearts), then "Jy is reg!". The usual
+// first-game hints stay quiet meanwhile. Skippable; anyone can take it again from "Hoe speel ek?".
+// ---------------------------------------------------------------------------
+function lessonStep(step, text) {
+  lesson.step = step;
+  lesson.after = 0;
+  ui.showTutor({ step, total: LESSON_STEPS, text });
+}
+
+function startLesson() {
+  resetRun('practice');
+  startGame({ mode: 'practice', seed: LESSON_SEED, autoplay: AUTO, coach: false });
+  screen = 'game';
+  ui.showInGame();
+  renderTray();
+  lesson = { step: 0, landings: 0, after: 0 };
+  lessonStep(1, S.lesson1);
+}
+
+function endLesson({ done = false } = {}) {
+  if (!lesson) return;
+  lesson = null;
+  store.markTutorialSeen();   // the basics are known: no first-game hints after this
+  if (done) ui.showTutor({ done: true, daily: store.getDaily(todayKey())?.status !== 'done' });
+  else ui.showTutor(null);
+}
+
+bus.on('ui:lesson', startLesson);
+bus.on('game:dropped', () => {
+  if (lesson?.step === 1) lessonStep(2, S.lesson2);
+});
+bus.on('game:rated', ({ rating } = {}) => {
+  if (!lesson) return;
+  lesson.landings++;
+  lesson.after++;
+  if (lesson.step === 2 && (rating === 'P' || lesson.after >= 5)) lessonStep(3, rating === 'P' ? S.lesson3 : S.lesson3b);
+  else if (lesson.step === 3 && lesson.after >= 2) lessonStep(4, S.lesson4);
+  else if (lesson.step === 4 && lesson.after >= 2) endLesson({ done: true });
+});
+bus.on('ui:lesson-close', () => {
+  endLesson();
+  ui.showTutor(null);
+});
+bus.on('ui:lesson-daily', () => {
+  ui.showTutor(null);
+  bus.emit('ui:play-daily');
+});
 bus.on('ui:pause', pauseGame);
 bus.on('ui:resume', resumeGame);
 bus.on('ui:quit', () => {
@@ -793,6 +851,7 @@ bus.on('ui:quit', () => {
   bus.emit('game:quit');
 });
 bus.on('ui:home', () => {
+  if (lesson) endLesson();
   stopDuelFlow();
   duel.leave();
   if (run.mode !== 'idle' || run.paused) {
@@ -1010,6 +1069,13 @@ bus.on('ui:duel-friend', () => {
       screen = 'duelwait';
       ui.showDuelWait({ state: 'error', text: msg });
     },
+    // the link was shared from another app: the room waits, and the game finds its way back to it
+    onRetry: () => {
+      if (flow === duelFlow) ui.setDuelWaitNote(S.duelReconnecting);
+    },
+    onWait: () => {
+      if (flow === duelFlow) ui.setDuelWaitNote(null);
+    },
   });
 });
 bus.on('ui:duel-later', () => {
@@ -1056,6 +1122,12 @@ function openDuelLink() {
       onFail: (msg) => {
         if (flow !== duelFlow) return;
         ui.showDuelWait({ state: 'error', text: msg });
+      },
+      onRetry: () => {
+        if (flow === duelFlow) ui.setDuelCount(S.duelReconnecting);
+      },
+      onWait: () => {
+        if (flow === duelFlow) ui.setDuelCount(S.duelJoining);
       },
     });
     return true;
@@ -1150,6 +1222,7 @@ bus.on('game:final', (result) => {
 });
 
 bus.on('game:over', (result) => {
+  if (lesson) endLesson();
   if (!result || run.mode === 'idle' || screen === 'results' || screen === 'menu') return;
   const f = finalize(result);
   if (run.paused) resumeScenes();
@@ -1179,14 +1252,17 @@ bus.on('game:over', (result) => {
   sleepLoop(RESULTS_SLEEP_MS);
 });
 
-// Tab hidden / app switched away mid-tower: pause like the button does, and save.
+// Tab hidden / app switched away mid-tower: pause like the button does, and save. A friend room
+// still waiting lets go of its connection meanwhile (the match can't start without this player).
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     saveProgressNow();
+    duel.away();
     if (canPause()) pauseGame();
     else audio.suspend();
-  } else if (!run.paused) {
-    audio.resume();
+  } else {
+    duel.back();
+    if (!run.paused) audio.resume();
   }
 });
 window.addEventListener('pagehide', saveProgressNow);
@@ -1292,9 +1368,13 @@ function onReady() {
   startIdle();
   showMenu();
   retryBoard();
-  // a new player chooses a language first; a challenge link waits for that choice
+  // a new player chooses a language first; a challenge link waits for that choice. A first visit
+  // without a link opens "Hoe speel ek?" (once).
   if (askLanguage) ui.showLanguage({ first: true });
-  else openDuelLink();
+  else if (!openDuelLink() && !store.hasPlayed() && !settings.howtoSeen) {
+    ui.showHowTo({ lesson: true });   // its "Kom ons bou!" starts the short lesson
+    settings = store.setSettings({ howtoSeen: true });
+  }
   ui.setLoading(false);
   if (recovered.length) ui.toast(recoveredCoins ? `${S.unfinished} +${recoveredCoins} 🪙` : S.unfinished, 3600);
   else if (liveElsewhere(todayKey())) ui.toast(S.otherTab, 3000);
