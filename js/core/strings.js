@@ -282,6 +282,17 @@ export const S = {
   duelLinkTitle: (name) => `${name} daag jou uit!`,
   duelLinkSub: (height) => `Bou dieselfde toring kop-aan-kop teen hul rondte (${height}).`,
   duelLinkPlay: 'Aanvaar die uitdaging',
+  // --- Daaglikse ranglys (1.9.2; js/board.js) ---
+  board: 'Ranglys',
+  boardTitle: 'Vandag se ranglys',
+  boardPlace: (rank, n) => `Jy is #${rank} van ${n} vandag`,
+  boardEmpty: 'Nog niemand op die ranglys nie. Wees die eerste!',
+  boardLoading: 'Laai die ranglys…',
+  boardOffline: 'Die ranglys kan nie nou laai nie. Probeer later weer.',
+  boardShowMe: 'Wys my op die ranglys',
+  boardAs: (name) => `Jy verskyn as “${name}”. Verander jou bynaam in die Uitdagersreeks.`,
+  boardYou: 'Jy',
+  boardHiddenNote: 'Jy is versteek: ander sien jou nie, maar jy sien jou plek.',
   // --- Taal (1.9; js/core/i18n.js) ---
   language: 'Taal',
   langPick: 'Kies jou taal · Choose your language',

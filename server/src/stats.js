@@ -97,7 +97,7 @@ export function createStatsBuffer() {
   };
 }
 
-async function limit(ctx, request, kind, perHour) {
+export async function limit(ctx, request, kind, perHour) {
   const key = await addressKey(ctx, request);
   if (!ctx.rate.allow(`${kind}:${key}`, perHour, ctx.now)) throw new HttpError(429, 'rate_limited');
 }
@@ -113,7 +113,7 @@ export async function addressKey(ctx, request) {
 // The game is always cross-origin to the API (GitHub Pages -> workers.dev), so the browser always
 // sends Origin. No Origin means a script; it is refused like a foreign site. (A script can fake the
 // header; the caps and rate limits below are what bound the damage.)
-function checkOrigin(request, cfg) {
+export function checkOrigin(request, cfg) {
   const origin = request.headers.get('Origin');
   if (!isOriginAllowed(origin, cfg.allowedOrigins)) throw new HttpError(403, 'forbidden_origin');
 }
@@ -124,7 +124,7 @@ function checkOrigin(request, cfg) {
  * The game sends text/plain with sendBeacon (no CORS preflight needed), a fetch may send JSON.
  * Both are plain JSON in the body.
  */
-async function readBatch(request) {
+export async function readBatch(request) {
   const type = (request.headers.get('Content-Type') || '').toLowerCase();
   if (!type.startsWith('application/json') && !type.startsWith('text/plain')) throw new HttpError(415, 'unsupported_media_type');
   const bytes = await readBody(request, STATS_MAX_BYTES);
@@ -139,7 +139,7 @@ async function readBatch(request) {
 }
 
 /** A date key of today +/- 1 day (the player's local day can be a day ahead of or behind UTC). */
-function checkDateKey(value, now) {
+export function checkDateKey(value, now) {
   if (!isDateKey(value)) throw new HttpError(400, 'invalid_field', { field: 'dateKey' });
   const today = utcDateKey(now);
   if (value < addDays(today, -1) || value > addDays(today, 1)) throw new HttpError(400, 'invalid_field', { field: 'dateKey' });

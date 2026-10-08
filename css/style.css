@@ -1957,3 +1957,53 @@ canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 
 }
 .lang-btn.on { border-color: var(--jakaranda-d, #5b3fa8); background: #fff; }
 .lang-btn:focus-visible { outline: 3px solid var(--jakaranda-d, #5b3fa8); outline-offset: 2px; }
+
+/* 1.9.2 daily leaderboard: the place on the results card, and the Ranglys sheet */
+.res-board {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: calc(8 * var(--u));
+  max-width: 100%;
+  margin-top: calc(8 * var(--u));
+  padding: calc(6 * var(--u)) calc(10 * var(--u)) calc(6 * var(--u)) calc(14 * var(--u));
+  border-radius: 999px;
+  background: #fff4cc;
+  color: #6b4d00;
+  font-size: max(12px, calc(22 * var(--u)));
+  font-weight: 800;
+}
+.res-board .emoji { flex: none; font-size: calc(24 * var(--u)); }
+.res-board-btn {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 2px solid #e3a714;
+  border-radius: 999px;
+  background: #fff;
+  color: #6b4d00;
+  font: 900 max(12px, calc(20 * var(--u))) / 1.1 var(--font);
+  cursor: pointer;
+}
+.board-list { margin: 0; padding: 0; list-style: none; display: grid; gap: calc(8 * var(--u)); }
+.board-row {
+  display: grid;
+  grid-template-columns: calc(56 * var(--u)) 1fr auto;
+  align-items: center;
+  gap: calc(10 * var(--u));
+  padding: calc(10 * var(--u)) calc(16 * var(--u));
+  border-radius: calc(18 * var(--u));
+  background: var(--panel);
+  font-size: max(14px, calc(28 * var(--u)));
+}
+.board-row.is-you { background: #fff4cc; box-shadow: inset 0 0 0 calc(3 * var(--u)) #e3a714; }
+.board-rank { text-align: center; color: var(--ink-soft); }
+.board-rank .emoji { font-size: calc(36 * var(--u)); }
+.board-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
+.board-h { font-variant-numeric: tabular-nums; }
+.board-gap { text-align: center; color: var(--ink-soft); font-weight: 900; line-height: 1; }
+.board-msg { margin: calc(16 * var(--u)) 0; text-align: center; color: var(--ink-soft); font-weight: 700; }
+.board-foot { display: grid; gap: calc(10 * var(--u)); }
+.board-foot .note { margin: 0; text-align: center; }
+.board-toggle { display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u)); min-height: 40px; font-weight: 800; cursor: pointer; }
+.board-check { width: 22px; height: 22px; accent-color: #2f8f3a; }

@@ -22,6 +22,7 @@ import { buildStatsBatch, percentileLine } from './core/audience.js';
 import { tutorialDone } from './core/coach.js';
 import { loadSponsors } from './sponsorsFeed.js';
 import { sendStats, dailyPercentile } from './audience.js';
+import { postBoard, getBoard } from './board.js';
 import { SPONSOR_API_URL, salesEnabled, matchApiUrl } from './sponsorConfig.js';
 import { createUI } from './ui/dom.js';
 import { getLanguage, isLang } from './core/i18n.js';
@@ -221,8 +222,65 @@ bus.on('game:audience', (a) => {
   }
 });
 
+// The daily leaderboard (js/board.js): with the match server, outside debug unless ?board=1 (tests).
+const BOARD_ON = !!matchApiUrl() && (!DEBUG || params.get('board') === '1');
+ui.setBoardOn(BOARD_ON);
+let boardLast = null;   // { dateKey, board }: the last answer, so the sheet opens on it at once
+
+/**
+ * A daily's results: the first time a day's result is seen it goes on the leaderboard (POST); after
+ * that, revisits only read it (GET). The card then shows "Jy is #23 van 140 vandag".
+ */
+function showBoardPlace(result) {
+  if (!BOARD_ON || !result || result.mode !== 'daily' || !result.dateKey) return;
+  const player = store.getBoardPlayer();
+  const posted = store.getBoardPosted() === result.dateKey;
+  const job = posted
+    ? getBoard({ apiUrl: matchApiUrl(), dateKey: result.dateKey, player })
+    : postBoard({ apiUrl: matchApiUrl(), result, player, name: duelNick(), hidden: store.getBoardHidden() });
+  job.then((board) => {
+    if (!board) return;
+    if (!posted && board.you) store.setBoardPosted(result.dateKey);
+    boardLast = { dateKey: result.dateKey, board };
+    if (screen === 'results') ui.setResultsBoard(result.dateKey, board);
+  }, () => {});
+}
+
+/** Today's posted result goes again: the server keeps its height and takes the new name or hiding. */
+function repostBoard(hidden = store.getBoardHidden()) {
+  const dateKey = todayKey();
+  const e = store.getDaily(dateKey);
+  if (!BOARD_ON || store.getBoardPosted() !== dateKey || e?.status !== 'done' || !e.result) return Promise.resolve(null);
+  return postBoard({ apiUrl: matchApiUrl(), result: { ...e.result, mode: 'daily', dateKey }, player: store.getBoardPlayer(), name: duelNick(), hidden })
+    .then((board) => {
+      if (board) boardLast = { dateKey, board };
+      return board;
+    }, () => null);
+}
+
+/** The Ranglys sheet: today's top 10 and your place (from the results card or the statistics). */
+function openBoard() {
+  if (!BOARD_ON) return;
+  const dateKey = todayKey();
+  const look = () => ({ name: duelNick(), hidden: store.getBoardHidden() });
+  ui.showBoard(boardLast?.dateKey === dateKey ? { board: boardLast.board, ...look() } : { loading: true, ...look() });
+  getBoard({ apiUrl: matchApiUrl(), dateKey, player: store.getBoardPlayer() }).then((board) => {
+    if (board) boardLast = { dateKey, board };
+    ui.showBoard({ board: board || (boardLast?.dateKey === dateKey ? boardLast.board : null), ...look(), refresh: true });
+  }, () => {});
+}
+bus.on('ui:board', openBoard);
+bus.on('ui:board-hide', (hide) => {
+  store.setBoardHidden(!!hide);
+  const dateKey = todayKey();
+  repostBoard(!!hide).then((board) => {
+    ui.showBoard({ board: board || (boardLast?.dateKey === dateKey ? boardLast.board : null), name: duelNick(), hidden: !!hide, refresh: true });
+  });
+});
+
 /** The results card learns how the player did against everyone else today, when (if) the server answers. */
 function showPercentile(result) {
+  showBoardPlace(result);
   if (!AUDIENCE_ON || !result || result.mode !== 'daily') return;
   dailyPercentile(result, { apiUrl: matchApiUrl(), storageKey: DEBUG ? `${STORAGE_KEY}.debug` : STORAGE_KEY })
     .then((answer) => {
@@ -848,7 +906,11 @@ bus.on('ui:duel', showDuelScreen);
 // first to a height mark: choose the punishment (js/duel.js times it out with the default)
 bus.on('duel:choose', (c) => ui.showPunish(c));
 bus.on('duel:chosen', () => ui.hidePunish());
-bus.on('ui:duel-name', (text) => ui.setDuelName(store.setDuelName(text)));
+bus.on('ui:duel-name', (text) => {
+  const saved = store.setDuelName(text);
+  ui.setDuelName(saved);
+  if (saved?.ok) repostBoard();   // today's leaderboard row takes the new name
+});
 bus.on('ui:duel-bot', () => versus(duel.startBot()));
 bus.on('ui:duel-random', searchOpponent);
 bus.on('ui:duel-friend', () => {

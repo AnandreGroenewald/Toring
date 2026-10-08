@@ -276,6 +276,17 @@ export const S_EN = {
   duelLinkTitle: (name) => `${name} challenges you!`,
   duelLinkSub: (height) => `Build the same tower head-to-head against their round (${height}).`,
   duelLinkPlay: 'Accept the challenge',
+  // --- Daily leaderboard (1.9.2; js/board.js) ---
+  board: 'Leaderboard',
+  boardTitle: 'Today’s leaderboard',
+  boardPlace: (rank, n) => `You’re #${rank} of ${n} today`,
+  boardEmpty: 'Nobody on the leaderboard yet. Be the first!',
+  boardLoading: 'Loading the leaderboard…',
+  boardOffline: 'The leaderboard can’t load right now. Try again later.',
+  boardShowMe: 'Show me on the leaderboard',
+  boardAs: (name) => `You appear as “${name}”. Change your nickname in the Challenger Series.`,
+  boardYou: 'You',
+  boardHiddenNote: 'You’re hidden: others don’t see you, but you see your place.',
   // --- Language (1.9) ---
   language: 'Language',
   langPick: 'Kies jou taal · Choose your language',

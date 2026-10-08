@@ -9,6 +9,8 @@ import { runRetention } from './retention.js';
 import { refresh } from './billing.js';
 import * as db from './db.js';
 import * as stats from './stats.js';
+import * as board from './board.js';
+import { readJsonObject } from './http.js';
 import { handleWebhook } from './webhook.js';
 import { rand32 } from './match.js';
 import { isRoomCode, newRoomCode } from '../../js/core/duel.js';
@@ -100,6 +102,10 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
       if (method === 'POST') return stats.postScore(request, ctx);
       return method === 'GET' ? stats.getScore(request, url, ctx) : methodNotAllowed('GET, POST');
     }
+    if (path === '/board') {
+      if (method === 'POST') return board.postBoard(request, ctx);
+      return method === 'GET' ? board.getBoard(request, url, ctx) : methodNotAllowed('GET, POST');
+    }
     if (path === '/subscribe') return method === 'POST' ? subscribe(request, ctx) : methodNotAllowed('POST');
     if (path === '/status') return method === 'GET' ? status(url, ctx) : methodNotAllowed('GET');
     if (path === '/paystack/webhook') return method === 'POST' ? handleWebhook(request, ctx) : methodNotAllowed('POST');
@@ -169,6 +175,10 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
     if (path === '/admin/payments') return method === 'GET' ? admin.listPayments(url, ctx) : methodNotAllowed('GET');
     if (path === '/admin/stats') return method === 'GET' ? stats.adminStats(url, ctx) : methodNotAllowed('GET');
     if (path === '/admin/events') return method === 'GET' ? admin.listEvents(url, ctx) : methodNotAllowed('GET');
+    if (path === '/admin/board') {
+      // hide one leaderboard entry: { dateKey, player }
+      return method === 'POST' ? board.adminHideEntry(ctx, await readJsonObject(request, 1024)) : methodNotAllowed('POST');
+    }
     if (path === '/admin/runs') {
       if (method === 'GET') return admin.listRuns(ctx);
       if (method === 'POST') return admin.forgetRuns(request, ctx);
@@ -252,6 +262,7 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
       const at = now();
       const job = runRetention(env.DB, at)
         .then(async (counts) => {
+          await board.pruneBoard(env.DB, at);   // the leaderboard keeps BOARD_DAYS days
           // Once the owner switched to a live key, sponsors "paid" with test cards lose that time.
           if (cfg.paystackMode === 'live') {
             const ctx = { db: env.DB, cfg, now: at };

@@ -13,7 +13,7 @@ const TIMEOUT_MS = 6000;
 // text/plain keeps these POSTs "simple" for CORS (no preflight round trip); the Worker reads JSON from it.
 const TEXT = 'text/plain;charset=UTF-8';
 
-function base(apiUrl) {
+export function base(apiUrl) {
   const u = typeof apiUrl === 'string' ? apiUrl.trim().replace(/\/+$/, '') : '';
   return /^https?:\/\//i.test(u) ? u : '';
 }
@@ -45,7 +45,7 @@ export function sendStats(apiUrl, batch, { fetchImpl, navigatorImpl } = {}) {
 }
 
 /** A JSON answer, or null on any failure (network, status, timeout, shape). */
-async function request(url, init, fetchImpl) {
+export async function request(url, init, fetchImpl) {
   const f = fetcher(fetchImpl);
   if (!f) return null;
   let timer;

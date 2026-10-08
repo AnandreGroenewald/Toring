@@ -360,6 +360,25 @@ Later the owner added (decisions are final unless they say otherwise):
     Checked with Apple's emoji and with Google's Noto Color Emoji (`?emojifont=noto` makes Noto win, for tests).
   - **Coins on the Winkel button** show as a coin pill ("🪙 30"), not a notification-style count.
   - **English sayings:** an English saying for each Afrikaans one (see 1.9.0).
+- **The daily leaderboard (version `1.9.2`, 8 Oct 2026)**, at the owner's request ("to confirm who has the highest tower?" — "Yes please").
+  - **Server:** `server/src/board.js`, the `daily_board` table (`migrations/0003_board.sql`, also in `schema.sql`), routes `POST /board` and `GET /board`, and the admin route `POST /admin/board` (hide an entry).
+    - One row per player per day: a random player number made on the phone, linked to nothing; the nickname, through the name rules; the height; and the blocks and seconds, which only feed the plausibility check.
+    - The first post of a day is kept; later posts change only the name or the hiding.
+    - Impossible towers are refused with 422.
+    - Places are true places: a hidden player keeps theirs.
+    - Kept 30 days (cron). Rate limits per hashed address.
+  - **Game:** `js/board.js` (post and get, answers checked) and the store's own key `stapel.v1.board` (player number, hidden, last posted day).
+    - After a daily, the results card shows "🏆 Jy is #23 van 140 vandag" with a Ranglys button.
+    - The sheet shows the top 10 (🥇🥈🥉), your own row in its place, and a "Wys my op die ranglys" switch.
+    - Statistiek has the button too.
+    - Changing your nickname or hiding re-posts today's result.
+    - Only with the match server, and not in debug unless `?board=1`.
+  - **Privacy page:** a new section 2c (the leaderboard: what is sent, who sees it, hiding, 30 days). Section 7 got the 30 days; section 11 got `stapel.v1.econ`, `.lang` and `.board`. The keys from 1.8 and 1.9 had been missing.
+  - **Checked:**
+    - server tests: ranking, ties, hiding, re-posts, impossible towers, names, the top size, the origin, rate limits, admin hiding, pruning;
+    - game tests;
+    - end to end in the browser against `wrangler dev --local` (requests to the live Worker re-routed to it): a real daily posted, the place shown, the sheet, hiding and showing, both sizes, Afrikaans and English.
+  - **To go live:** run the migration once on the live database, deploy the Worker, push, and upload the app (asked first).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

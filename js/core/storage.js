@@ -192,6 +192,29 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
   const econKey = `${key}.econ`;
   // The language ('af' / 'en') too: js/core/langboot.js reads it before anything else loads.
   const langKey = `${key}.lang`;
+  // The daily leaderboard (js/board.js): this phone's random player number, whether to show it, and
+  // the last day whose result was posted. Its own key too (an older version would drop it).
+  const boardKey = `${key}.board`;
+  const PLAYER_RE = /^[a-z0-9]{12,32}$/;
+  function readBoard() {
+    try {
+      const v = JSON.parse(readRaw(boardKey) || 'null');
+      return {
+        player: typeof v?.player === 'string' && PLAYER_RE.test(v.player) ? v.player : null,
+        hidden: v?.hidden === true,
+        posted: isDateKey(v?.posted) ? v.posted : null,
+      };
+    } catch {
+      return { player: null, hidden: false, posted: null };
+    }
+  }
+  function writeBoard(b) {
+    try {
+      be.setItem(boardKey, JSON.stringify(b));
+    } catch {
+      // private mode: the board still works for this visit
+    }
+  }
   let data = defaultData();
   let econ = defaultEconomy();
   let lastRaw = null;
@@ -563,6 +586,42 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       } catch {
         return false;
       }
+    },
+
+    /** This phone's leaderboard number (made once, at random: 16 letters and digits, linked to nothing). */
+    getBoardPlayer() {
+      const b = readBoard();
+      if (b.player) return b.player;
+      const abc = 'abcdefghijklmnopqrstuvwxyz0123456789';
+      const bytes = new Uint8Array(16);
+      if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(bytes);
+      else for (let k = 0; k < bytes.length; k++) bytes[k] = Math.floor(Math.random() * 256);
+      b.player = Array.from(bytes, (x) => abc[x % abc.length]).join('');
+      writeBoard(b);
+      return b.player;
+    },
+
+    /** Whether the player chose to stay off the leaderboard (they still see their own place). */
+    getBoardHidden() {
+      return readBoard().hidden;
+    },
+
+    setBoardHidden(hidden) {
+      const b = readBoard();
+      b.hidden = !!hidden;
+      writeBoard(b);
+    },
+
+    /** The last day whose result reached the leaderboard (later visits only read it). */
+    getBoardPosted() {
+      return readBoard().posted;
+    },
+
+    setBoardPosted(dateKey) {
+      if (!isDateKey(dateKey)) return;
+      const b = readBoard();
+      b.posted = dateKey;
+      writeBoard(b);
     },
 
     /** Has this player played before (a daily, Oefen, a match, or the first-game hints)? */

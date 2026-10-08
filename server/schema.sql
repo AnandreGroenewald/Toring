@@ -130,3 +130,20 @@ CREATE TABLE IF NOT EXISTS alerts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_alerts_open ON alerts (resolved_at, created_at);
+
+-- Die daaglikse ranglys (POST/GET /board, src/board.js): one row per player per day. `player` is a
+-- random number made on the phone (linked to nothing else); `name` the Uitdagersreeks nickname (name
+-- rules applied); `blocks` and `duration_s` only serve the plausibility check. Kept 30 days (cron).
+CREATE TABLE IF NOT EXISTS daily_board (
+  date_key TEXT NOT NULL,
+  player TEXT NOT NULL,
+  name TEXT NOT NULL,
+  height_dm INTEGER NOT NULL,
+  blocks INTEGER NOT NULL,
+  duration_s INTEGER NOT NULL,
+  hidden INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1)),
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (date_key, player)
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_board_rank ON daily_board (date_key, hidden, height_dm DESC, created_at);

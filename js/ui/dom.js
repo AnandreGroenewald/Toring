@@ -150,6 +150,7 @@ export function createUI(bus) {
     stats: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-stats-title', tabindex: '-1' }),
     shop: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-shop-title', tabindex: '-1' }),
     lang: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-lang-title', tabindex: '-1' }),
+    board: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-board-title', tabindex: '-1' }),
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -169,7 +170,7 @@ export function createUI(bus) {
   // 1.8 power-ups: round buttons on the right edge; only the buttons take taps (the rest drops a block)
   const powerTray = h('div', { class: 'power-tray', role: 'group', 'aria-label': S.powerups, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, pauseBtn, punishBar, powerTray, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, pauseBtn, punishBar, powerTray, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // Measures env(safe-area-inset-*) so layout() can work out how much of each
@@ -871,6 +872,8 @@ export function createUI(bus) {
       h('div', { class: 'sheet-foot stats-foot' },
         h('div', { class: 'dock' }, toggleBtns({ contrast: true })),
         button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false })));
+    // today's leaderboard (only when the game can reach the server)
+    if (st.boardOn) sheet.querySelector('.stats-foot').prepend(button('btn-blue', [emo('🏆'), h('span', { text: S.board })], () => bus.emit('ui:board'), { nav: false }));
     modals.stats.replaceChildren(sheet);
     openModal('stats');
   }
@@ -1477,6 +1480,70 @@ export function createUI(bus) {
     return h('div', { class: 'res-reward', role: 'status' }, kids);
   }
 
+  /** The game can reach the leaderboard (main.js says so once at start). */
+  function setBoardOn(on) {
+    st.boardOn = !!on;
+  }
+
+  /**
+   * "Jy is #23 van 140 vandag" with a Ranglys button, under the height on a daily's results card, once
+   * the server has answered. Does nothing if another screen (or another day's result) shows by then.
+   */
+  function setResultsBoard(dateKey, board) {
+    if (!board?.you || st.screen !== 'results' || !st.resultsDaily || st.resultsDateKey !== dateKey) return;
+    const box = screens.results.querySelector('.res-height');
+    if (!box) return;
+    box.querySelector('.res-board')?.remove();
+    box.append(h('div', { class: 'res-board', role: 'status' },
+      emo('🏆'), h('span', { text: S.boardPlace(board.you.rank, board.players) }),
+      h('button', { type: 'button', class: 'res-board-btn', text: S.board, onclick: () => { audio.play('click'); bus.emit('ui:board'); } })));
+  }
+
+  /**
+   * Today's leaderboard: the top 10 (medals for the first three), your own row (also when you're not in
+   * the top, or hidden), and the "show me" switch. `board` null with `loading` while it comes, null
+   * without it when the server can't be reached.
+   */
+  function showBoard({ board = null, loading = false, name = '', hidden = false, refresh = false } = {}) {
+    if (refresh && st.modal !== 'board') return;   // an answer that came after the sheet was closed
+    const MEDAL = ['🥇', '🥈', '🥉'];
+    const row = (t) => h('li', { class: `board-row${t.you ? ' is-you' : ''}` },
+      h('span', { class: 'board-rank' }, t.rank <= 3 ? emo(MEDAL[t.rank - 1]) : h('b', { text: `#${t.rank}` })),
+      h('span', { class: 'board-name', text: t.you ? `${t.name} (${S.boardYou})` : t.name }),
+      h('b', { class: 'board-h', text: fmtM(t.heightM) }));
+    let body;
+    if (loading) body = h('p', { class: 'board-msg', text: S.boardLoading });
+    else if (!board) body = h('p', { class: 'board-msg', text: S.boardOffline });
+    else if (!board.top.length && !board.you) body = h('p', { class: 'board-msg', text: S.boardEmpty });
+    else {
+      // your own row (hidden, or below the top) goes in its place; "⋯" when it is far below the list
+      const list = board.top.slice();
+      if (board.you && !list.some((t) => t.you)) list.push({ rank: board.you.rank, name: name || S.boardYou, heightM: board.you.heightM, you: true });
+      list.sort((a, b) => a.rank - b.rank);
+      const rows = [];
+      list.forEach((t, k) => {
+        if (t.you && k > 0 && t.rank > list[k - 1].rank + 1 && k === list.length - 1) rows.push(h('li', { class: 'board-gap', 'aria-hidden': 'true', text: '⋯' }));
+        rows.push(row(t));
+      });
+      body = h('ol', { class: 'board-list' }, rows);
+    }
+    const toggle = h('input', { type: 'checkbox', class: 'board-check' });
+    toggle.checked = !hidden;
+    toggle.addEventListener('change', () => {
+      audio.play('click');
+      bus.emit('ui:board-hide', !toggle.checked);
+    });
+    modals.board.replaceChildren(h('div', { class: 'card sheet board-sheet' },
+      h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); } }, icon('close')),
+      h('div', { class: 'sheet-head' }, emo('🏆'), h('h2', { id: 'stapel-board-title', text: S.boardTitle })),
+      h('div', { class: 'sheet-body' }, body),
+      h('div', { class: 'sheet-foot board-foot' },
+        h('label', { class: 'board-toggle' }, toggle, h('span', { text: S.boardShowMe })),
+        h('p', { class: 'note', text: hidden ? S.boardHiddenNote : S.boardAs(name) }),
+        button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false }))));
+    if (st.modal !== 'board') openModal('board');
+  }
+
   /**
    * "Jy het beter gedoen as 72% van spelers vandag" under the height, once the answer from the
    * server is in. Does nothing if another screen (or another day's result) is showing by then.
@@ -1615,6 +1682,9 @@ export function createUI(bus) {
     setDuelCount,
     setInstall,
     setResultsPercentile,
+    setResultsBoard,
+    setBoardOn,
+    showBoard,
     showInGame,
     hideAll,
     showPunish,
