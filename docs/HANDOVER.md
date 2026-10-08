@@ -398,6 +398,34 @@ Later the owner added (decisions are final unless they say otherwise):
   - **Also:** the nickname saves while typing and when the game is left; the version shows under Statistiek ("Weergawe 1.10.0"); the how-to explains the stages, the log and the balance meter.
   - **Checked:** unit tests (rooms reconnecting, the week, stages, the log), and headless runs of the lesson, the stages, the log and the reward, the duel line, the reminder and links (with a fake of the app), the balance meter, a null scan of every screen, the button audit.
   - **To go live:** the owner decides whether the 1.9.2 leaderboard goes live with it (else it stays switched off); the root site for App Links; Play's Data safety (unchanged by 1.10 itself); then push and upload 11000 (asked first).
+- **1.10.0 continued (8-9 Oct 2026): the review's fixes, a new address, Back, and the search.**
+  - **A second review** (all of 1.10) found 12 problems, all fixed in `a6d592c`:
+    - a challenge link abandoned a paused tower;
+    - a reconnect could start a match against the player's own dead connection: the room's hello now carries a `key`, and a reconnect replaces its old seat (`server/src/match.js`); the lobby pairs only the same `DUEL.rules`;
+    - the app swallowed `?klop=` links;
+    - new players who kept Afrikaans never got the how-to or the lesson;
+    - a T's foot dropped into the U's cup: the U's body is now one solid block and the cup is only drawn;
+    - "open in the app" left the page's own room join running;
+    - reminders promised boxes a lapsed player wouldn't get;
+    - a toast could stick; the lesson card stayed over the results;
+    - a launch link could reopen from Recents;
+    - a Reeksskild was spent after a full week;
+    - and smaller ones.
+  - **The new address: https://stapelspel.pages.dev/** (the owner didn't want their name in links).
+    - It is a Cloudflare Pages project `stapelspel` in the Lekker Local account (free). It was created with `wrangler pages project create --force`: wrangler 4.148 otherwise makes a Workers site on the account's workers.dev name.
+    - **Deploy:** `node tools/build-pages.mjs && (cd pages-dist && ../server/node_modules/.bin/wrangler pages deploy . --project-name stapelspel --branch main)`. The build adds `.well-known/assetlinks.json` and `_headers`.
+    - **Push the repo too.** GitHub Pages still serves it, and `js/moved.js` (loaded first by every page) sends visitors of `anandregroenewald.github.io/Toring/...` to the same page at the new address.
+    - **The hand-over:** it brings along the player's `localStorage` (`stapel.*`, in the link's `#move=`). The new address takes it only from the old one (referrer), and never over newer data.
+    - **Other places the address lives:**
+      - the Worker's `SITE_URL`, and `ALLOWED_ORIGINS` (both addresses);
+      - `SITE_URL_FALLBACK`; `app/shim.js`;
+      - the App Links filters (both hosts; assetlinks on both).
+    - Pages drops `.html`: `/privaatheid.html` answers 308 to `/privaatheid`.
+  - **The website's Back button** goes one step back everywhere (a sheet closes, a tower pauses, a screen goes home). It leaves only from the bare menu (`ui:view` → `syncBackGuard`). The app already did this.
+  - **Find an opponent without a time limit:**
+    - The search runs until someone comes (no 20 s fallback). The waiting screen (`state: 'lobby'`) offers "Oefen terwyl jy wag" (an Oefen tower meanwhile, with a "Soek ’n teenstander…" chip and its ✕) and "Speel dadelik" (a recording or Robot Rikus).
+    - When someone comes, the practice tower is paused (not restarted: that would close the match's socket) and "Teen <naam>!" starts the match.
+    - The lobby reconnects, closes while hidden, and pings every 25 s.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

@@ -35,7 +35,7 @@ Stapel #1 🏗️ 37,5 m
 🟩🟨🟧🟩🟥🌊
 Weer: 💨🌧️🌈⛈️
 Stapel hoog. Staan sterk.
-https://anandregroenewald.github.io/Toring/
+https://stapelspel.pages.dev/ (Cloudflare Pages; the old GitHub Pages address forwards there)
 ```
 
 ## Publish on GitHub Pages

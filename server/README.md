@@ -134,8 +134,8 @@ Open `wrangler.toml` and fill in:
 | `PLAN_PREMIUM` | Premium plan code |
 | `PREMIUM_PRICE_CENTS` | `149900` (R1 499) |
 | `BLOCK_PRICE_CENTS` | Leave empty: the price is read from the Paystack plan. |
-| `SITE_URL` | Your game's address with a slash at the end, e.g. `https://anandregroenewald.github.io/Toring/` |
-| `ALLOWED_ORIGINS` | Web addresses allowed to use the sign-up and admin API: your site's **origin** (no path), e.g. `https://anandregroenewald.github.io`. `http://localhost:*` is for testing on your computer. |
+| `SITE_URL` | Your game's address with a slash at the end, e.g. `https://stapelspel.pages.dev/` |
+| `ALLOWED_ORIGINS` | Web addresses allowed to use the sign-up and admin API: your site's **origin** (no path), e.g. `https://stapelspel.pages.dev`. `http://localhost:*` is for testing on your computer. |
 | `PREMIUM_MAX` / `BLOCK_MAX` | How many sponsors at once: `1` billboard and `60` block names |
 | `AUTO_APPROVE` | `true`: clean names go live straight after payment. `false`: you approve each one first on the admin page. |
 | `GRACE_DAYS` | `3`: extra days a sponsor stays visible after the paid month, so a renewal that's a day late doesn't make them disappear. |
@@ -383,7 +383,7 @@ Check current prices on the providers' pages. They change.
 | Problem | What to check |
 | --- | --- |
 | The sign-up page says "kom binnekort" | `SPONSOR_API_URL` in `js/sponsorConfig.js` is empty or not deployed yet. |
-| The browser console shows a CORS error | Your site's origin (e.g. `https://anandregroenewald.github.io`, without `/Toring/`) must be in `ALLOWED_ORIGINS`. Redeploy after changing it. |
+| The browser console shows a CORS error | Your site's origin (e.g. `https://stapelspel.pages.dev`, without `/Toring/`) must be in `ALLOWED_ORIGINS`. Redeploy after changing it. |
 | "Ons kon nie die betaling by Paystack begin nie" | `npx wrangler tail` shows the reason. Usually a wrong `PAYSTACK_SECRET_KEY` (test vs live) or a plan code from the other mode. |
 | Paid, but the name doesn't show | 1. In `admin.html`, is the sponsor *active*, approved and not hidden? 2. Wait 5 minutes (game cache). 3. Under events, a note like `rejected:plan_mismatch` means the plan codes in `wrangler.toml` don't match Paystack. |
 | Paystack shows webhook failures | The webhook URL must end in `/paystack/webhook`, and the secret key must be from the same mode (test/live). Paystack retries failed webhooks for a while. Paystack's dashboard also lets you resend them. |
