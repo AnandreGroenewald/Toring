@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.7.8';
+export const VERSION = '1.7.9';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -130,7 +130,7 @@ export const WATER = {
 // ---------------------------------------------------------------------------
 export const COACH = {
   minBlocks: 4,          // a first game with this many drops counts as learned (no hints from then on)
-  holdMs: 3800,          // how long a hint stays before it fades on its own
+  holdMs: 4500,          // how long a hint stays before it fades on its own
   landingDelayMs: 450,   // after the first landing: let the rating pop finish first
 };
 
@@ -182,7 +182,7 @@ export const VISITOR = {
   size: 88,                // emoji sprite font size (px)
   hitR: 60,                // tap radius (px): a 120 px circle around the visitor
   sideX: 92,               // the monkey and the clown wait this far from the screen edge (clear of the aim)
-  monkeyRunUpMs: 1500,     // tap window: the monkey swings on its rope before it jumps
+  monkeyWaitMs: 10000,     // he waits on his rope for the player's next landing (a Perfek scares him off), at most this long
   monkeyLeapMs: 380,
   monkeyBounceMs: 560,     // two bounces on the tower top, then he strikes:
   monkeyLeaveMs: 650,

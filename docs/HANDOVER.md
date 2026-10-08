@@ -240,6 +240,20 @@ Later the owner added (decisions are final unless they say otherwise):
   - taps in the first 0,4 s are ignored (`PUNISH_GUARD_MS`), and keys 1–4 choose;
   - the game never pauses, so the time to choose went up from 5 s to 7 s (`DUEL.chooseMs`), and the server waits 8,5 s (Worker redeployed);
   - headless at 412×915 and 360×640: the strip clears the pause button, a tap mid-screen drops a block while it is up, an early tap is ignored, and a later tap or key 3 picks; zero console errors.
+- **Blouaap waits for a Perfek; messages stay longer (version `1.7.9`, 8 Oct 2026)**, at the owner's request ("The monkey, can you make it that it shows up then if you do not have a perfect then it pushes the blocks, if you do have a perfect it shows 'Ek sal terug wees'"; "some words is a little to fast, so cant read it"; "Double check the physics please"):
+  - he waits on his rope and judges the first block dropped after he came (`Visitors.landed`, called from `applyRating` and `markLost`):
+    - a Perfek: after 0,85 s (once the "Perfek!" pop has faded) he shakes his fist with a speech bubble, "Ek sal terug wees!" (`vis_bubble_l/_r`, 1,8 s), then climbs away;
+    - anything else: he jumps 0,25 s later;
+    - no drop within `monkeyWaitMs` (10 s): he strikes anyway;
+  - tapping him no longer shoos him: a tap on him drops the block like any other (only the thief is caught with a tap);
+  - he fidgets while the player's block is in the air;
+  - after his strike, the grace window stays open while the tower is still moving (up to `knockMaxMs`, 8 s), so a block knocked over by a knocked block never costs a heart;
+  - banners and toasts stay until they can be read (`readMs` in `HudScene.js`: about 20 letters a second, 2,2–4,2 s), sayings 3,8 s, first-game hints 4,5 s.
+  - **Physics checked**, stepped at 60 Hz:
+    - the monkey's four cases on two towers (Perfek: leaves, 0 lost; Goed: strikes, 1–2 lost, hearts kept; a miss: exactly the miss's own heart; no drop: strikes at 10 s). Every tower came to rest, with no bad poses;
+    - Hanswors's cement blocks sit flush, with zero overlap, and nothing moved;
+    - the crane, old ramp vs new, for the same human-like bot (0–50 ms late) on three daily towers: the same low down, fewer Perfeks and lower towers higher up;
+    - the daily tower stays identical for everyone (two runs with different randomness, same tower).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

@@ -33,7 +33,12 @@ const ATTRACT_CHANCE = 0.35;    // menu: the clown floats past above some attrac
 const ATTRACT_MS = 7000;
 const FORCE_FROM = 3;           // a forced (debug) visitor waits until there is a little tower to visit
 const CALL_MS = 240;            // the monkey's call comes just after the alarm
-const ITCH_MS = 600;            // ...and he fidgets for this long before he jumps
+const SULK_MS = 1800;           // a Perfek scared him off: "Ek sal terug wees!" this long, then up his rope
+const REACT_PERFECT_MS = 850;   // he answers a Perfek once its "Perfek!" pop has faded (they'd overlap)...
+const REACT_STRIKE_MS = 250;    // ...and jumps a moment after any other landing
+const BUBBLE_W = 380;           // his speech bubble (the tail sits BUBBLE_TAIL px from one end)
+const BUBBLE_H = 120;
+const BUBBLE_TAIL = 62;
 
 const outCubic = (t) => 1 - (1 - t) ** 3;
 const inCubic = (t) => t * t * t;
@@ -111,6 +116,10 @@ function makeTextures(scene) {
     ctx.fillStyle = '#fff7e0';
     ctx.fillText('R', 38, 52);
   });
+  // the monkey's speech bubble, with its tail at the left end (he hangs on the left) or the right end
+  for (const [key, tail] of [['vis_bubble_l', BUBBLE_TAIL], ['vis_bubble_r', BUBBLE_W - BUBBLE_TAIL]]) {
+    canvasTexture(scene, key, BUBBLE_W, BUBBLE_H, (ctx) => drawBubble(ctx, tail, S.monkeyBack));
+  }
   canvasTexture(scene, 'vis_ball', 24, 24, (ctx) => {
     ctx.beginPath();
     ctx.arc(12, 12, 10, 0, Math.PI * 2);
@@ -124,6 +133,45 @@ function makeTextures(scene) {
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.fill();
   });
+}
+
+/** A white speech bubble (rounded box, a tail down at tailX) with the text in navy. */
+function drawBubble(ctx, tailX, text) {
+  const w = BUBBLE_W;
+  const bh = BUBBLE_H - 26;   // the box; the tail hangs below it
+  const r = 28;
+  const x0 = 4;
+  const y0 = 4;
+  const x1 = w - 4;
+  const y1 = bh;
+  ctx.beginPath();
+  ctx.moveTo(x0 + r, y0);
+  ctx.lineTo(x1 - r, y0);
+  ctx.arcTo(x1, y0, x1, y0 + r, r);
+  ctx.lineTo(x1, y1 - r);
+  ctx.arcTo(x1, y1, x1 - r, y1, r);
+  ctx.lineTo(tailX + 18, y1);
+  ctx.lineTo(tailX, BUBBLE_H - 3);
+  ctx.lineTo(tailX - 18, y1);
+  ctx.lineTo(x0 + r, y1);
+  ctx.arcTo(x0, y1, x0, y1 - r, r);
+  ctx.lineTo(x0, y0 + r);
+  ctx.arcTo(x0, y0, x0 + r, y0, r);
+  ctx.closePath();
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = '#1d2b45';
+  ctx.stroke();
+  let size = 38;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  do {
+    ctx.font = `bold ${size}px "Trebuchet MS", "Segoe UI", Arial, sans-serif`;
+    size -= 2;
+  } while (ctx.measureText(text).width > w - 40 && size > 18);
+  ctx.fillStyle = '#1d2b45';
+  ctx.fillText(text, w / 2, (y0 + y1) / 2 + 2);
 }
 
 function emojiText(scene, str, size = VISITOR.size) {
@@ -269,6 +317,13 @@ export class Visitors {
       c.side = this._clearSide(c.side, VISITOR.sideX);
       c.rope = scene.add.graphics().setDepth(DEPTH.visitor - 0.2);
       c.objs.push(c.rope);
+      c.watch = Math.max(0, this.i);   // he judges the first block dropped from now on (it is on the crane)
+      c.verdict = null;                 // 'perfect' or 'strike', once that block is rated
+      c.itch = 0;
+      const left = c.side < 0;
+      c.bubble = scene.add.image(0, 0, left ? 'vis_bubble_l' : 'vis_bubble_r')
+        .setOrigin(left ? BUBBLE_TAIL / BUBBLE_W : 1 - BUBBLE_TAIL / BUBBLE_W, 1).setDepth(DEPTH.visitor + 0.2).setVisible(false);
+      c.objs.push(c.bubble);
     } else if (c.type === 'clown') {
       if (!attract) c.side = this._clearSide(c.side, VISITOR.sideX + 10);
       c.k = 0;          // the next gift block to toss
@@ -329,6 +384,10 @@ export class Visitors {
       return;
     }
     if (c.gone) {
+      if (c.phase === 'sulk' && !c.fled && c.t - c.at >= SULK_MS) {
+        c.fled = true;   // he has had his say: off up the rope
+        this._play('shoo');
+      }
       if (c.t - c.at >= this._exitMs(c)) this._finish();
       return;
     }
@@ -342,8 +401,20 @@ export class Visitors {
         c.called = true;
         this._play('monkey');
       }
-      if (c.phase === 'swing' && since >= VISITOR.monkeyRunUpMs) this._phase(c, 'leap');
-      else if (c.phase === 'leap' && since >= VISITOR.monkeyLeapMs) this._phase(c, 'bounce');
+      // He waits on his rope for the player's next landing: a Perfek scares him off ("Ek sal terug
+      // wees!"), anything else (or no landing within monkeyWaitMs) and he jumps onto the tower.
+      if (c.phase === 'swing') {
+        const reacted = c.verdict && c.t - c.verdictAt >= (c.verdict === 'perfect' ? REACT_PERFECT_MS : REACT_STRIKE_MS);
+        if (since >= ENTER_MS && (reacted || (!c.verdict && since >= VISITOR.monkeyWaitMs))) {
+          if (c.verdict === 'perfect') {
+            c.rec.outcome = 'shooed';
+            this._leave(c, 'sulk');
+            this._play('monkey');
+          } else {
+            this._phase(c, 'leap');
+          }
+        }
+      } else if (c.phase === 'leap' && since >= VISITOR.monkeyLeapMs) this._phase(c, 'bounce');
       else if (c.phase === 'bounce' && since >= VISITOR.monkeyBounceMs) {
         const pushed = this.actions.shove ? this.actions.shove(c.plan, -c.side) : 0;
         c.rec.outcome = 'shoved';
@@ -405,6 +476,7 @@ export class Visitors {
   _exitMs(c) {
     switch (c.phase) {
       case 'shooed': return SHOO_MS;
+      case 'sulk': return SULK_MS + SHOO_MS;
       case 'caught': return CAUGHT_MS;
       case 'leave': return c.type === 'monkey' ? VISITOR.monkeyLeaveMs : c.type === 'clown' ? VISITOR.clownLeaveMs : VISITOR.thiefLeaveMs;
       default: return FADE_MS;
@@ -453,23 +525,15 @@ export class Visitors {
   // --- taps -------------------------------------------------------------------
 
   /**
-   * A tap at world point (wx, wy). Returns true when it hit a visitor: then it shoos the
-   * monkey or catches the thief (only while they can still be stopped), or makes the clown
-   * honk and juggle, and the block is NOT dropped. Any other tap drops as normal.
+   * A tap at world point (wx, wy). Returns true when it hit a visitor: then it catches the thief
+   * (while he can still be stopped) or makes the clown honk and juggle, and the block is NOT
+   * dropped. Any other tap drops as normal, also one on the monkey: only a Perfek stops him.
    */
   tap(wx, wy) {
     const c = this.cur;
-    if (this.dead || this.ended || !c || c.attract || c.gone) return false;
+    if (this.dead || this.ended || !c || c.attract || c.gone || c.type === 'monkey') return false;
     if (!alive(c.sprite) || !c.sprite.visible) return false;
     if ((wx - c.x) ** 2 + (wy - c.y) ** 2 > VISITOR.hitR * VISITOR.hitR) return false;
-    if (c.type === 'monkey') {
-      if (c.phase !== 'swing') return false;
-      c.rec.outcome = 'shooed';
-      this._leave(c, 'shooed');
-      this._play('shoo');
-      this.actions.toast?.(S.monkeyShooed, '#c9ffb8');
-      return true;
-    }
     if (c.type === 'thief') {
       if (c.phase !== 'climb') return false;
       c.rec.outcome = 'caught';
@@ -485,6 +549,18 @@ export class Visitors {
     c.juggle = c.t;
     this._play('clown', { short: true });
     return true;
+  }
+
+  /**
+   * The player's block `index` was rated: 'P', 'G' or 'S', or 'X' when it was lost. A monkey
+   * waiting on his rope judges the first block dropped since he came: a Perfek scares him off.
+   */
+  landed(index, rating) {
+    const c = this.cur;
+    if (this.dead || this.ended || !c || c.type !== 'monkey' || c.phase !== 'swing' || c.gone || c.verdict) return;
+    if (!(index >= c.watch)) return;
+    c.verdict = rating === 'P' ? 'perfect' : 'strike';
+    c.verdictAt = c.t;
   }
 
   /** A block a visitor is to blame for went into the sea (the monkey's count for the results). */
@@ -552,13 +628,13 @@ export class Visitors {
         y = sy(ay + len * Math.cos(th));
         rot = -th * 0.7;
         ropeTo = { x, y: y - HALF + 6 };
-        // the last moments before he jumps: he crouches and fidgets (tap him now!)
-        const itch = (tv - (VISITOR.monkeyRunUpMs - ITCH_MS)) / ITCH_MS;
-        if (itch > 0 && !this.reduced) {
-          const k = 0.09 * Math.min(1, itch * 2) * Math.sin(tv / 35);
+        // while the player's block is in the air he crouches and fidgets: is it a Perfek?
+        c.itch += ((this._busy() && tv > ENTER_MS ? 1 : 0) - c.itch) * 0.15;
+        if (c.itch > 0.02 && !this.reduced) {
+          const k = 0.09 * c.itch * Math.sin(tv / 35);
           sx = 1 + k;
           syl = 1 - k;
-          rot += 0.08 * Math.sin(tv / 23);
+          rot += 0.08 * c.itch * Math.sin(tv / 23);
         }
       } else if (c.phase === 'leap') {
         const p = clamp(since / VISITOR.monkeyLeapMs, 0, 1);
@@ -578,10 +654,22 @@ export class Visitors {
           syl = 1 - 0.16 * (1 - hop) ** 4;
           sx = 2 - syl;
         }
-      } else if (c.phase === 'leave' || c.phase === 'shooed') {
-        const ms = this._exitMs(c);
-        const p = clamp(since / ms, 0, 1);
-        if (c.phase === 'shooed') {
+      } else if (c.phase === 'sulk' && since < SULK_MS) {
+        // a Perfek: he stays on his rope, shakes his fist and says he'll be back
+        x = c.from.x;
+        y = c.from.y;
+        ropeTo = { x, y: y - HALF + 6 };
+        rot = this.reduced ? 0 : 0.12 * Math.sin(tv / 70) - s * 0.1;
+        if (alive(c.bubble)) {
+          const u = clamp(since / 220, 0, 1);
+          const fade = since > SULK_MS - 250 ? (SULK_MS - since) / 250 : 1;
+          c.bubble.setVisible(true).setPosition(x - s * 6, y - HALF - 6).setScale(this.reduced ? 1 : outBack(u)).setAlpha(fade);
+        }
+      } else if (c.phase === 'leave' || c.phase === 'shooed' || c.phase === 'sulk') {
+        if (alive(c.bubble)) c.bubble.setVisible(false);
+        const ms = c.phase === 'sulk' ? SHOO_MS : this._exitMs(c);
+        const p = clamp((c.phase === 'sulk' ? since - SULK_MS : since) / ms, 0, 1);
+        if (c.phase === 'shooed' || c.phase === 'sulk') {
           // scurries back up its rope and away
           x = c.from.x;
           y = c.from.y - 700 * inCubic(p);

@@ -100,7 +100,7 @@ export const S = {
     { icon: '🌦️', text: 'Die weer slaan toe terwyl jy bou: wind, reën, weerlig, hael, mis en meer.' },
     { icon: '🌊', text: 'Die water styg. Hou jou toring bo die vloedlyn!' },
     { icon: '❤️', text: 'Jy het vier lewens. Elke keer as blokke in die see beland, kos dit jou een. Elke derde Perfek bring ’n verlore lewe terug.' },
-    { icon: '🐒', text: 'Soms kom kuier iemand: Blouaap gooi blokke in die see, Skelm Sakkie steel blokke en Hanswors bou vir jou ’n nuwe fondament. Tik die aap of die skelm om hulle te keer. Besoekers kos jou nooit ’n hartjie nie.' },
+    { icon: '🐒', text: 'Soms kom kuier iemand: Blouaap gooi blokke in die see, tensy jou volgende blok Perfek land. Skelm Sakkie steel blokke: tik hom om hom te vang. Hanswors bou vir jou ’n nuwe fondament. Besoekers kos jou nooit ’n hartjie nie.' },
     { icon: '🗓️', text: 'Elke dag is daar een Daaglikse Toring: dieselfde blokke, weer en besoekers vir almal, en jy kry een poging. Oefen soveel jy wil.' },
   ],
   howToGo: 'Kom ons bou!',
@@ -164,7 +164,7 @@ export const S = {
   // --- Besoekers (visitors; js/game/visitors.js) ---
   visitors: 'Besoekers',                      // share line: "Weer: 💨 · Besoekers: 🐒🦹✋"
   visitorsToday: 'Besoekers vandag',          // menu, under the weather forecast
-  monkeyShooed: 'Sjoe! Weg is hy!',
+  monkeyBack: 'Ek sal terug wees!',          // Blouaap's speech bubble when a Perfek scares him off
   visitorFree: (name) => `${name} se skuld — jy hou jou hartjies ❤️`,   // a visitor knocked blocks into the sea
   thiefCaught: 'Gevang! Jy kry jou blokke terug.',
   thiefStole: (n) => (n === 1 ? 'Skelm Sakkie het 1 blok gesteel!' : `Skelm Sakkie het ${n} blokke gesteel!`),
@@ -174,13 +174,13 @@ export const S = {
   resThiefCaught: 'Jy het Skelm Sakkie gevang! 👮',
   resThiefStole: (n) => (n === 1 ? 'Skelm Sakkie het 1 blok gesteel 🦹' : `Skelm Sakkie het ${n} blokke gesteel 🦹`),
   resThiefEmpty: 'Skelm Sakkie het met leë hande weggesluip 🦹',
-  resMonkeyShooed: 'Jy het Blouaap weggejaag! 🐒',
+  resMonkeyShooed: 'Jou Perfek het Blouaap weggejaag! 🐒',
   resMonkeyKnocked: (n) => (n === 1 ? 'Blouaap het 1 blok van jou toring afgegooi 🐒' : `Blouaap het ${n} blokke van jou toring afgegooi 🐒`),
   resMonkeyStood: 'Blouaap het gestamp, maar jou toring het bly staan! 🐒',
   resClownGift: (n) => (n > 1 ? `Hanswors het vir jou ${n} blokke gebring 🎁` : 'Hanswors het vir jou ’n geskenkie gebring 🎁'),
   clownFoundation: 'Nuwe fondament! 🧱 Alles daaronder staan vas',   // Hanswors's blocks set as cement
   // first game only: the first visitor of each kind explains itself in its arrival banner (js/core/coach.js)
-  coachMonkey: 'Tik die aap voor hy spring, anders gooi hy jou boonste blok in die see!',
+  coachMonkey: 'Land jou volgende blok Perfek, anders gooi Blouaap jou boonste blok in die see!',
   coachClown: 'Hanswors stapel ekstra blokke op jou toring en sement hulle vas!',
   coachThief: 'Tik vinnig op Skelm Sakkie, anders steel hy jou boonste blokke!',
 
@@ -259,7 +259,7 @@ export const WEATHER_INFO = {
 
 /** Visitor display info (banner, share line, menu). Keys match VISITOR_TYPES in config.js. */
 export const VISITOR_INFO = {
-  monkey: { emoji: '🐒', name: 'Blouaap', hint: 'Tik hom gou, anders gooi hy blokke af!' },
+  monkey: { emoji: '🐒', name: 'Blouaap', hint: 'Land ’n Perfek, anders gooi hy blokke af!' },
   clown: { emoji: '🤡', name: 'Hanswors', hint: 'Geskenk: ’n nuwe fondament!' },
   thief: { emoji: '🦹', name: 'Skelm Sakkie', hint: 'Vang hom!' },
 };

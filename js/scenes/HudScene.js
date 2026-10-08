@@ -27,11 +27,14 @@ const WATER_TEXT_MS = 500;
 const WARN_M = WATER.warnPx / PX_PER_M;
 const BANNER_W = 640;
 const BANNER_H = 150;
-const BANNER_HOLD_MS = 1400;
-const TOAST_HOLD_MS = 1500;
-const SAYING_HOLD_MS = 2800;   // a saying toast stays a little longer: it is meant to be read
+const BANNER_HOLD_MS = 2200;   // at least; a longer banner or toast stays until it can be read (readMs)
+const TOAST_HOLD_MS = 2200;
+const READ_MAX_MS = 4200;
+const SAYING_HOLD_MS = 3800;   // a saying toast stays a little longer: it is meant to be read
 const SAYING_RETRY_MS = 500;   // how often a waiting saying checks whether banner, hint and toast are clear
 const SAYING_MAX_WAIT_MS = 9000; // then it is skipped: the tower has moved on
+/** How long a message stays: long enough to read (about 20 characters a second), at least `min`. */
+const readMs = (text, min) => Math.min(READ_MAX_MS, Math.max(min, 900 + String(text || '').length * 55));
 const WOBBLE_W = 18;
 const COACH_W = 620;        // widest first-game hint pill
 const TRACK_W = 18;         // Uitdagersreeks race track on the right edge (mirrors the wobble meter)
@@ -726,7 +729,7 @@ export class HudScene extends Phaser.Scene {
     this.bannerTween = this.tweens.add({ targets: c, alpha: 1, scale: 1, duration: 300, ease: 'Back.easeOut' });
     const visitor = b.kind === 'visitor';
     this.bannerKind = visitor ? 'visitor' : 'weather';
-    this.bannerTimer = this.time.delayedCall(Math.max(BANNER_HOLD_MS, b.ms || 0) + 300, () => {
+    this.bannerTimer = this.time.delayedCall(Math.max(readMs(`${b.title || ''} ${b.subtitle || ''}`, BANNER_HOLD_MS), b.ms || 0) + 300, () => {
       this.bannerTimer = null;
       // weather flies into the weather chip (that's where the event lives while it lasts); a visitor's
       // banner just fades where it is: the visitor itself is on screen
@@ -774,7 +777,7 @@ export class HudScene extends Phaser.Scene {
     c.setVisible(true).setAlpha(0).setScale(0.8);
     c.y = y0 + 30;
     this.toastTween = this.tweens.add({ targets: c, alpha: 1, scale: 1, y: y0, duration: 260, ease: 'Back.easeOut' });
-    this.toastTimer = this.time.delayedCall(t.ms || TOAST_HOLD_MS, () => {
+    this.toastTimer = this.time.delayedCall(t.ms || readMs(t.text, TOAST_HOLD_MS), () => {
       this.toastTimer = null;
       this.toastTween = this.tweens.add({
         targets: c, alpha: 0, y: y0 - 30, duration: 300, ease: 'Quad.easeIn',

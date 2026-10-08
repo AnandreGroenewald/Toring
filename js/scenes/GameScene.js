@@ -50,6 +50,8 @@ const SET_MAX_SPIN = 0.01;       // ...and turns slower than this (rad/step)
 const LOCK_MAX_SPEED = 0.35;     // a Perfek sets the blocks under it if they are at rest (px/step)...
 const LOCK_MAX_SPIN = 0.006;     // ...(rad/step)
 const CEMENT_MAX_SPEED = 3;      // Hanswors's cement: a block moving faster than this (px/step) is on its way down
+const GRACE_MOVING_SPEED = 0.6;  // after a visitor's push, a tower block faster than this (px/step) is still settling...
+const GRACE_TAIL_MS = 500;       // ...and keeps the grace open until this long after it slows down
 const TIPPED = 0.35;             // rad: an odd shape tipped further than this has no top surface to sit flush on
 const FOOT_MARGIN = 4;           // px: a snapped block must rest on its support on both sides of its centre
 const SKID_SLOW = 0.9;           // rain skid: each step slides this fraction of the step before...
@@ -124,6 +126,8 @@ function noVisitors(records = []) {
     step() {},
     update() {},
     tap: () => false,
+    attack: () => false,
+    landed() {},
     freeLoss() {},
     end() {},
     destroy() {},
@@ -373,6 +377,7 @@ export class GameScene extends Phaser.Scene {
     this.progressHeight = 0;
     this.gifts = [];                 // per clown gift: how many blocks had been dropped when it joined the tower
     this.visitorGraceUntil = -1e9;   // sim ms: tower blocks lost before this are a visitor's doing (no heart)
+    this.visitorGraceStart = -1e9;   // sim ms: when that visitor's push came
     this.visitorBlame = null;        // ...which visitor
     this.graceToast = false;         // the "not your fault" toast was shown for this push
   }
@@ -1315,6 +1320,7 @@ export class GameScene extends Phaser.Scene {
       this.combo = 0;
     }
     this.score += pts;
+    this.visitorRated(block, r);
 
     this.coachSay(this.coach.landing(r), COACH.landingDelayMs);
     this.effects.rating(block, r, this.combo);
@@ -1380,6 +1386,7 @@ export class GameScene extends Phaser.Scene {
     if (!block.rating) block.rating = 'X';
     this.advance(block);            // a block that never touched the tower still brings the next one
     if (this.idle || this.over) return;
+    if (block.rating === 'X') this.visitorRated(block, 'X');   // a drop that never stood: no Perfek
     if (byVisitor) {
       this.visitorLoss(block, wasFalling);
       return;
@@ -1469,8 +1476,19 @@ export class GameScene extends Phaser.Scene {
     return out;
   }
 
+  /** The player's block got its rating (or was lost): a monkey waiting on his rope judges it. */
+  visitorRated(block, r) {
+    if (this.idle || this.over || block.gift || !(block.index >= 0)) return;
+    try {
+      this.visitors.landed(block.index, r);
+    } catch (err) {
+      this.visitorsFailed(err);
+    }
+  }
+
   /** A visitor changed the tower: what comes down in the next moments is not the player's fault. */
   openVisitorGrace(type) {
+    this.visitorGraceStart = this.now;
     this.visitorGraceUntil = this.now + VISITOR.graceMs;
     this.visitorBlame = type;
     this.graceToast = false;
@@ -1697,6 +1715,18 @@ export class GameScene extends Phaser.Scene {
         }
       } else if (b.state === 'settled' && b.quietSteps === 0 && !b.body.isSleeping && b.body.speed > 0.6) {
         b.state = 'landed';   // knocked loose again
+      }
+    }
+
+    // A visitor's push is still settling for as long as the tower keeps moving (at most knockMaxMs):
+    // a block that a knocked block sends over the edge is the visitor's doing too.
+    const graceCap = (this.visitorGraceStart ?? -Infinity) + VISITOR.knockMaxMs;
+    if (this.now < this.visitorGraceUntil && this.visitorGraceUntil < graceCap) {
+      for (let k = 0; k < dyn.length; k++) {
+        if (dyn[k].body.speed > GRACE_MOVING_SPEED) {
+          this.visitorGraceUntil = Math.min(graceCap, Math.max(this.visitorGraceUntil, this.now + GRACE_TAIL_MS));
+          break;
+        }
       }
     }
 
