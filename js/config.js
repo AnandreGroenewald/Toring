@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.7.6';
+export const VERSION = '1.7.7';
 
 // ---------------------------------------------------------------------------
 // Screen / layout

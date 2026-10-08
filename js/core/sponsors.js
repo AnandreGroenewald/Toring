@@ -149,7 +149,7 @@ function plainText(raw, max) {
 }
 
 function cleanHouseCard(raw) {
-  if (!isObj(raw)) return null;
+  if (!isObj(raw) || raw.hidden === true) return null;   // "hidden": true switches the card off, keeping its text
   const title = plainText(raw.title, 60);
   const text = plainText(raw.text, 120);
   const url = checkUrl(typeof raw.url === 'string' ? raw.url : '', { admin: true });

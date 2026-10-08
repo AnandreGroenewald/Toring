@@ -229,6 +229,11 @@ Later the owner added (decisions are final unless they say otherwise):
   - **Owner tool:** `GET /admin/runs` lists the recordings that lonely players get as opponents, and `POST /admin/runs {names}` forgets them (`server/README.md`). It was used once to remove two test matches that ran over 20 s. Live test matches must end within 20 s, or they are kept.
   - Fix: the default nickname "Bouer 455" failed the name rules (455 reads as a rude word), so it was refused. `defaultNickname()` now skips any number the rules refuse, and a test checks all 900.
   - Real players were already in the recordings on 7 Oct 2026 (QueenB, Klippie, Bouer 621).
+- **House ad off for testing (version `1.7.7`, 8 Oct 2026)**, at the owner's request ("Please remove the sportscard.co.za ad, I want people to test the app so it might interfere"):
+  - `sponsors.json` keeps the card's text with `"hidden": true`, and `cleanHouseCard()` drops a hidden card; switch it back by setting `false`;
+  - the menu checked at 412×915 and 360×640: no card, nothing else moved;
+  - the app ships its own `sponsors.json`, so 1.7.7 is rebuilt for Play internal testing too;
+  - Play Console still says the app "contains ads" (sponsors are planned), which is the owner's call.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

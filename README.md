@@ -56,7 +56,7 @@ Stapel stays free and is funded by monthly sponsorships, sold on `adverteer.html
 - **Jou naam op die blokke** (name on the blocks): the business name is printed on blocks in every tower, daily and practice. About every 2nd or 3rd name-capable block carries a name (`SPONSOR.blockShare`, 0.4); sponsors take turns in a fixed order per tower, so each gets a fair share. Cubes never carry a name, and pillars only carry short ones.
 - **Die groot advertensiebord** (the billboard, R1 499 per month): one sponsor's name, tagline and web address on a sign on the island beside the tower. It is seen at the start of every game and in the zoomed-out tower view at the end.
 
-The menu also has a pinned card for the owner's own business, sportscard.co.za, labelled "Advertensie". Its text lives in `sponsors.json`, which can also hold sponsors arranged by hand. The WhatsApp share text never mentions sponsors.
+The menu can show a pinned card for the owner's own business, sportscard.co.za, labelled "Advertensie". Its text lives in `sponsors.json`, which can also hold sponsors arranged by hand. The card is **switched off** while friends and family test (`"hidden": true` in `sponsors.json`); set it to `false` (or remove the line) to show it again. The WhatsApp share text never mentions sponsors.
 
 With the backend on, the game also sends **anonymous counts** when a game ends (how often each sponsor's name was on a block, whose billboard stood on the island, daily or practice; never anything about the player) so sponsors can get a monthly report from `admin.html` (Statistiek tab), and the daily results card says how the player did against everyone else that day. See `server/README.md` and `privaatheid.html`. Nothing is sent while `SPONSOR_API_URL` is empty.
 

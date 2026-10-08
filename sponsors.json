@@ -5,7 +5,8 @@
       "title": "sportscard.co.za",
       "text": "Besoek sportscard.co.za",
       "url": "https://sportscard.co.za",
-      "label": "Advertensie"
+      "label": "Advertensie",
+      "hidden": true
     }
   },
   "block": [],

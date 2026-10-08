@@ -210,15 +210,18 @@ test('hostnameOf shows a plain hostname for https addresses only', () => {
 const TODAY = '2026-10-06';
 const EMPTY = { house: { menu: null }, block: [], premium: [] };
 
-test('sponsors.json is the sportscard.co.za house ad with empty paid lists', () => {
+test('sponsors.json: the sportscard.co.za house ad is switched off for testing ("hidden"), paid lists empty', () => {
   const json = JSON.parse(read('sponsors.json'));
   assert.deepEqual(json, {
     version: 1,
-    house: { menu: { title: 'sportscard.co.za', text: 'Besoek sportscard.co.za', url: 'https://sportscard.co.za', label: 'Advertensie' } },
+    house: { menu: { title: 'sportscard.co.za', text: 'Besoek sportscard.co.za', url: 'https://sportscard.co.za', label: 'Advertensie', hidden: true } },
     block: [],
     premium: [],
   });
-  assert.deepEqual(normalizeFeed(json, null, TODAY), {
+  assert.deepEqual(normalizeFeed(json, null, TODAY), EMPTY, 'no card on the menu');
+  // switched back on, the same card shows
+  const on = { ...json, house: { menu: { ...json.house.menu, hidden: false } } };
+  assert.deepEqual(normalizeFeed(on, null, TODAY), {
     house: { menu: { title: 'sportscard.co.za', text: 'Besoek sportscard.co.za', url: 'https://sportscard.co.za/', label: 'Advertensie' } },
     block: [],
     premium: [],
