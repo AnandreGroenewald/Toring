@@ -221,6 +221,11 @@ export const S = {
   duelAttackOut: (visitor, name, emoji) => `Jy stuur ${visitor} na ${name}! ${emoji}`,
   duelChoose: (m, name) => `Eerste by ${m} m! Kies ’n straf vir ${name}:`,
   duelChooseLabel: 'Kies ’n straf',
+  // --- Muntstukke, kragte en rang (1.8; js/core/economy.js) ---
+  coinsTotal: (n) => `jy het ${n}`,
+  coinsCapped: 'genoeg vir vandag, kom môre weer',
+  rankUp: (name) => `Nuwe rang: ${name}!`,
+  rankPointsDelta: (d) => (d >= 0 ? `+${d} punte` : `${d} punte`),
   duelGhostHit: (name, m) => `${name} se toring is ${m} m korter!`,
   duelYou: 'Jy',
   duelLeft: (name) => `${name} het die wedstryd verlaat.`,

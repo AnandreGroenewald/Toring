@@ -4,7 +4,8 @@
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
 import { GAME_W, PALETTE, RATING_EMOJI, computeGameHeight } from '../config.js';
-import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO } from '../core/strings.js';
+import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO } from '../core/strings.js';
+import { COIN, RANKS, rankFor } from '../core/economy.js';
 import { fmtM, fmtInt, fmtClock, fmtDuration, DAYS_AF } from '../core/format.js';
 import { shareResult } from '../core/share.js';
 import { visitorResultLine } from '../core/visitorrules.js';
@@ -1062,7 +1063,7 @@ export function createUI(bus) {
       h('p', { class: 'res-sub', text: why }));
   }
 
-  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null } = {}) {
+  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null } = {}) {
     if (st.modal) closeModal();
     const r = result || {};
     const m = mode || r.mode || 'practice';
@@ -1100,6 +1101,7 @@ export function createUI(bus) {
           tile(fmtInt(r.blocksPlaced || 0), S.blocks),
           tile(fmtInt(r.perfects || 0), S.perfects),
           tile(fmtInt(r.maxCombo || 0), S.bestCombo)),
+      rewardEl(reward),
       empty ? null : gridEl(r.grid, r.reason),
       empty ? null : weatherEl(r.weather),
       empty ? null : visitorsEl(r.visitors),
@@ -1168,6 +1170,25 @@ export function createUI(bus) {
     }
     countUp(bigM, r.heightM || 0, fmtM);
     countUp(scoreB, r.score || 0, fmtInt);
+  }
+
+  /** "🪙 +18 · jy het 250" and, after a match, the rank points ("🥈 Silwer +25"). */
+  function rewardEl(reward) {
+    const c = reward?.coins;
+    const rk = reward?.rank;
+    if (!c && !rk) return null;
+    const kids = [];
+    if (c) {
+      kids.push(h('span', { class: 'rw-coins' }, emo(COIN), h('b', { text: `+${fmtInt(c.added)}` }),
+        h('span', { class: 'rw-sub', text: c.short ? S.coinsCapped : S.coinsTotal(fmtInt(c.total)) })));
+    }
+    if (rk && RANK_INFO[rk.rank]) {
+      const r = RANKS.find((x) => x.id === rankFor(rk.points).id) || RANKS[0];
+      kids.push(h('span', { class: `rw-rank${rk.up ? ' is-up' : ''}` }, emo(r.emoji),
+        h('b', { text: rk.up ? S.rankUp(RANK_INFO[r.id].name) : RANK_INFO[r.id].name }),
+        h('span', { class: 'rw-sub', text: S.rankPointsDelta(rk.delta) })));
+    }
+    return h('div', { class: 'res-reward', role: 'status' }, kids);
   }
 
   /**

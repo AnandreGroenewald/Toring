@@ -9,6 +9,7 @@ import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate } from
 import { createSequence } from './core/sequence.js';
 import { buildShareText, buildDuelShareText } from './core/share.js';
 import { parseChallengeQuery, parseRoomQuery, defaultNickname } from './core/duel.js';
+import { coinsForGame } from './core/economy.js';
 import { createDuel } from './duel.js';
 import { loadChallenge, shareUrlFor } from './core/challenge.js';
 import { buildSkyline, SKYLINE_DAYS } from './core/skyline.js';
@@ -582,12 +583,17 @@ bus.on('ui:day-rollover', () => {
 // ---------------------------------------------------------------------------
 const sessionNick = defaultNickname();
 const duelNick = () => store.getDuel().name || sessionNick;
+let duelReward = null;   // the decided match's coins and rank points, for its results card
 const duel = createDuel({
   bus,
   apiUrl: matchApiUrl(),
   nickname: duelNick,
   onDecided: (outcome) => {
-    if (outcome === 'won' || outcome === 'lost') store.recordDuel(outcome);
+    if (outcome !== 'won' && outcome !== 'lost') return;
+    store.recordDuel(outcome);
+    // a live opponent counts for more than a recording or Robot Rikus (js/core/economy.js)
+    const live = duel.match?.kind === 'live';
+    duelReward = { coins: awardCoins({ mode: 'duel', outcome, live }), rank: store.recordDuelRank({ outcome, live }) };
   },
 });
 // A friend's run (?teen=...) or live room (?kamer=CODE) from the link this page was opened with. They
@@ -650,6 +656,7 @@ function versus(m, note = '') {
 }
 
 function startDuelGame(m) {
+  duelReward = null;
   resetRun('duel');
   startGame({ mode: 'duel', seed: m.seed, duel: { name: m.oppName }, autoplay: AUTO });
   screen = 'game';
@@ -667,6 +674,7 @@ function showDuelResults(r) {
     result: r,
     mode: 'duel',
     duel: d,
+    reward: duelReward,
     shareText: buildDuelShareText({ outcome: d.outcome, youBest: d.youBest, oppName: d.oppName, oppBest: d.oppBest, link }),
     nextDayAt: 0,
   });
@@ -794,6 +802,14 @@ bus.on('game:progress', (partial) => {
   if (run.mode === 'daily' && partial && partial.dateKey && !run.over) store.saveDailyProgress(partial.dateKey, partial);
 });
 
+/** Coins for a finished game (js/core/economy.js): { added, total, short } (short: the day's cap held some back). */
+function awardCoins(game) {
+  const earned = coinsForGame(game);
+  if (!earned.coins) return { added: 0, total: store.getEconomy().coins, short: false };
+  const r = store.earnCoins(earned.coins, { capped: earned.capped });
+  return { added: r.added, total: r.coins, short: r.added < earned.coins };
+}
+
 /** The result is saved the moment the game ends (the results screen comes a few seconds later). */
 function finalize(result) {
   if (run.final) return run.final;
@@ -826,7 +842,14 @@ function finalize(result) {
     const rec = store.recordPractice(result);
     isNewBest = !!rec.isNewBest;
   }
-  run.final = { result: shown, stats, isNewBest, aborted };
+  // coins: the daily tower pays in full (once); Oefen counts towards the day's cap
+  let coins = null;
+  if (result.mode === 'daily' && stats?.applied) {
+    coins = awardCoins({ mode: 'daily', heightM: shown.heightM, perfects: shown.perfects, streak: stats.currentStreak });
+  } else if (result.mode === 'practice') {
+    coins = awardCoins({ mode: 'practice', heightM: result.heightM, perfects: result.perfects });
+  }
+  run.final = { result: shown, stats, isNewBest, aborted, coins };
   return run.final;
 }
 
@@ -857,6 +880,7 @@ bus.on('game:over', (result) => {
     result: r,
     stats: f.stats,
     isNewBest: f.isNewBest,
+    reward: f.coins ? { coins: f.coins } : null,
     shareText: shareTextFor(r),
     nextDayAt: r.mode === 'daily' ? nextDayFor(r.dateKey) : 0,
     mode: r.mode,

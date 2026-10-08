@@ -1125,6 +1125,26 @@ svg.ic {
 #ui.compact .res-pct { margin-top: calc(8 * var(--u)); padding: calc(4 * var(--u)) calc(14 * var(--u)) calc(4 * var(--u)) calc(10 * var(--u)); font-size: calc(19 * var(--u)); }
 
 .res-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: calc(10 * var(--u)); margin-top: calc(20 * var(--u)); }
+/* 1.8: what the game earned ("🪙 +18 · jy het 250") and, after a match, the rank points */
+.res-reward { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(10 * var(--u)); margin-top: calc(16 * var(--u)); }
+.res-reward > span {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  padding: calc(7 * var(--u)) calc(18 * var(--u)) calc(7 * var(--u)) calc(12 * var(--u));
+  border-radius: 999px;
+  background: #fff4cc;
+  color: #6b4d00;
+  font-size: max(12px, calc(20 * var(--u)));
+  font-weight: 800;
+}
+.res-reward .emoji { font-size: calc(26 * var(--u)); }
+.res-reward b { font-size: max(14px, calc(26 * var(--u))); }
+.res-reward .rw-sub { font-weight: 700; opacity: 0.8; }
+.res-reward .rw-rank { background: #ece6ff; color: #45308f; }
+.res-reward .rw-rank.is-up { background: #ffe9a8; color: #6b4d00; animation: rank-up 0.9s ease-out both; }
+@keyframes rank-up { 0% { transform: scale(0.6); } 60% { transform: scale(1.12); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .res-reward .rw-rank.is-up { animation: none; } }
 .res-stats .tile { min-height: calc(112 * var(--u)); padding: calc(10 * var(--u)) calc(4 * var(--u)); border-radius: calc(22 * var(--u)); }
 .res-stats .tile b { font-size: calc(38 * var(--u)); }
 .res-stats .tile span { font-size: calc(18 * var(--u)); }
