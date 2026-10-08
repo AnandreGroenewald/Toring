@@ -163,3 +163,27 @@ test('the store keeps the economy: coins, the day cap, the daily free Fondamentb
   assert.ok(again.getEconomy().owned.badge.includes('s-brons'));
   assert.equal(again.getCard().rank, 'brons');
 });
+
+test('the season on the Uitdagersreeks screen: a new month rolls over when the screen opens', () => {
+  const backend = memoryBackend();
+  let t = Date.UTC(2026, 9, 8, 10);
+  const store = createStore(backend, { now: () => t });
+  let r = store.getSeasonRank();
+  assert.deepEqual([r.season, r.points, r.rank, r.next, r.toNext, r.reward], ['2026-10', 0, 'brons', 'silwer', 100, null]);
+  for (let k = 0; k < 11; k++) store.recordDuelRank({ outcome: 'won', live: true });   // 275 points: Goud
+  r = store.getSeasonRank();
+  assert.deepEqual([r.points, r.rank, r.min, r.next, r.nextMin, r.toNext, r.best], [275, 'goud', 250, 'platinum', 450, 175, 'goud']);
+  // a loss takes points; the results card shows the rank you are in now
+  const lost = store.recordDuelRank({ outcome: 'lost', live: true });
+  assert.deepEqual([lost.points, lost.rank], [265, 'goud']);
+  for (let k = 0; k < 2; k++) store.recordDuelRank({ outcome: 'lost', live: true });
+  assert.equal(store.recordDuelRank({ outcome: 'lost', live: true }).rank, 'silwer', 'down to Silwer by points');
+  assert.equal(store.getSeasonRank().best, 'goud', 'the best of the season stays');
+  // November, nothing played yet: the screen starts the new season and hands out the Goud badge once
+  t = Date.UTC(2026, 10, 1, 9);
+  r = store.getSeasonRank();
+  assert.deepEqual([r.season, r.points, r.reward], ['2026-11', Math.floor(235 / 2), 's-goud']);
+  assert.deepEqual(r.badges, ['s-goud']);
+  assert.equal(store.getSeasonRank().reward, null, 'once');
+  assert.equal(store.getCard().rank, 'silwer');
+});

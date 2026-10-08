@@ -2,14 +2,14 @@
 // pause/visibility, settings, service worker and debug hooks.
 import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL } from './config.js';
 import { bus } from './core/bus.js';
-import { S, POWERUP_INFO, COSMETIC_INFO } from './core/strings.js';
+import { S, POWERUP_INFO, COSMETIC_INFO, RANK_INFO } from './core/strings.js';
 import { fmtDateKey, fmtM } from './core/format.js';
 import { createStore } from './core/storage.js';
 import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate } from './core/daily.js';
 import { createSequence } from './core/sequence.js';
 import { buildShareText, buildDuelShareText } from './core/share.js';
 import { parseChallengeQuery, parseRoomQuery, defaultNickname } from './core/duel.js';
-import { coinsForGame, POWERUP_IDS } from './core/economy.js';
+import { coinsForGame, cosmetic, POWERUP_IDS } from './core/economy.js';
 import { createDuel } from './duel.js';
 import { loadChallenge, shareUrlFor } from './core/challenge.js';
 import { buildSkyline, SKYLINE_DAYS } from './core/skyline.js';
@@ -259,7 +259,13 @@ function shopModel() {
   return { coins: e.coins, stock: e.stock, owned: e.owned, look: e.look, card: store.getCard(), name: duelNick() };
 }
 
-bus.on('ui:shop', () => ui.showShop(shopModel()));
+bus.on('ui:shop', (tab) => ui.showShop(shopModel(), typeof tab === 'string' ? tab : undefined));
+/** A new look from the shop shows at once on the Uitdagersreeks card underneath. */
+function lookChanged() {
+  if (screen !== 'duel') return;
+  const card = store.getCard();
+  ui.setDuelCard(card, card.rank);
+}
 bus.on('ui:shop-buy', ({ kind, id } = {}) => {
   const r = kind === 'powerup' ? store.buyPowerup(id) : store.buyCosmetic(kind, id);
   if (r.ok) {
@@ -269,10 +275,12 @@ bus.on('ui:shop-buy', ({ kind, id } = {}) => {
     if (name) ui.toast(S.bought(name));
   }
   ui.showShop(shopModel());
+  if (r.ok && kind !== 'powerup') lookChanged();
 });
 bus.on('ui:shop-wear', ({ kind, id } = {}) => {
   store.wearCosmetic(kind, id);
   ui.showShop(shopModel());
+  lookChanged();
 });
 
 function gameScene() {
@@ -711,7 +719,14 @@ function stopDuelFlow() {
 function showDuelScreen() {
   stopDuelFlow();
   screen = 'duel';
-  ui.showDuel({ live: duel.live, duel: store.getDuel(), placeholder: sessionNick });
+  // the season first: a new month halves the points and hands out last month's badge
+  const rank = store.getSeasonRank();
+  ui.showDuel({ live: duel.live, duel: store.getDuel(), placeholder: sessionNick, rank, card: store.getCard() });
+  if (rank.reward) {
+    const badge = cosmetic('badge', rank.reward);
+    const r = RANK_INFO[rank.reward.slice(2)];
+    if (badge && r) ui.toast(S.seasonReward(r.name, badge.emoji), 4000);
+  }
 }
 
 /** "Teen <naam>!", 3-2-1, "Bou!", then the tower. */

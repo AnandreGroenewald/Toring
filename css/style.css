@@ -951,7 +951,9 @@ svg.ic {
 /* ------------------------------------------------------------------------- */
 /* Uitdagersreeks (head-to-head)                                             */
 /* ------------------------------------------------------------------------- */
-.screen-duel, .screen-duelwait { z-index: 2; background: var(--scrim); justify-content: center; }
+.screen-duel, .screen-duelwait { z-index: 2; background: var(--scrim); }
+/* centred while it fits, from the top (and scrollable) when it doesn't: never justify-content: center here */
+.screen-duelwait > * { margin-top: auto; margin-bottom: auto; }
 .duel-wrap { display: flex; flex-direction: column; gap: calc(18 * var(--u)); margin: auto 0; }
 .duel-card, .duel-wait { display: flex; flex-direction: column; align-items: stretch; gap: calc(18 * var(--u)); text-align: center; }
 .duel-wait { margin: auto 0; }
@@ -978,6 +980,21 @@ svg.ic {
 .duel-wait .btn:not(.btn-big):not(.btn-mini):not(.btn-wa) { font-size: calc(32 * var(--u)); }
 .duel-note { margin: 0; }
 .duel-record { margin: 0; font-size: max(12px, calc(23 * var(--u))); font-weight: 800; color: var(--ink-soft); }
+/* Uitdagersreeks rank and season (1.8) */
+.rank-box { display: grid; gap: calc(8 * var(--u)); padding: calc(14 * var(--u)); border-radius: calc(24 * var(--u)); background: #eef6ff; }
+.rank-box .pcard { margin: 0 auto; }
+.rank-season { margin: 0; font-size: max(12px, calc(22 * var(--u))); font-weight: 800; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.04em; }
+.rank-now { display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u)); font-size: max(15px, calc(32 * var(--u))); }
+.rank-now .emoji { font-size: 1.3em; }
+.rank-now span { font-weight: 700; color: var(--ink-soft); font-size: 0.8em; }
+.rank-bar { height: calc(16 * var(--u)); min-height: 8px; border-radius: 999px; background: rgba(20, 28, 48, 0.12); overflow: hidden; }
+.rank-bar i { display: block; height: 100%; width: var(--p, 0%); border-radius: inherit; background: linear-gradient(90deg, #f5b833, #f08c2b); }
+.rank-next { margin: 0; font-size: max(12px, calc(22 * var(--u))); font-weight: 800; color: var(--ink-soft); }
+.season-notes { display: grid; gap: calc(10 * var(--u)); justify-items: center; }
+.season-notes p { margin: 0; }
+.rank-badges { display: flex; align-items: center; justify-content: center; gap: calc(8 * var(--u)); font-weight: 800; color: var(--ink-soft); }
+.rank-badges .emoji { font-size: calc(40 * var(--u)); }
+.rank-how { font-size: max(11px, calc(21 * var(--u))); line-height: 1.4; }
 .duel-wait h2 { font-size: calc(44 * var(--u)); font-weight: 900; }
 .duel-count { margin: 0; min-height: 1.2em; font-size: calc(30 * var(--u)); font-weight: 900; color: var(--muted); font-variant-numeric: tabular-nums; }
 .duel-wait .share-row { margin-top: 0; }

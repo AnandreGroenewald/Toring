@@ -5,8 +5,8 @@
 
 import { GAME_W, PALETTE, RATING_EMOJI, computeGameHeight } from '../config.js';
 import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO, COSMETIC_INFO } from '../core/strings.js';
-import { COIN, RANKS, rankFor, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic } from '../core/economy.js';
-import { fmtM, fmtInt, fmtClock, fmtDuration, DAYS_AF } from '../core/format.js';
+import { COIN, RANKS, RANK_POINTS, rankFor, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic } from '../core/economy.js';
+import { fmtM, fmtInt, fmtClock, fmtDuration, DAYS_AF, MONTHS_AF } from '../core/format.js';
 import { shareResult } from '../core/share.js';
 import { visitorResultLine } from '../core/visitorrules.js';
 import { sayingOfTheDay, resultSaying, pauseSaying } from '../core/sayings.js';
@@ -1010,20 +1010,61 @@ export function createUI(bus) {
       }
     });
     const record = duelRecordText(d);
+    st.duelPlaceholder = m.placeholder || '';
     const card = h('div', { class: 'card duel-card' },
       h('div', { class: 'duel-head' }, emo('⚔️'), h('h2', { text: S.duel })),
       h('p', { class: 'duel-intro', text: S.duelIntro }),
+      m.rank ? rankBox(m.rank, m.card, d.name || st.duelPlaceholder) : null,
       h('div', { class: 'nick' }, h('span', { class: 'label', text: S.duelNick }), input, msg),
       h('div', { class: 'duel-btns' },
         m.live ? button('btn-big btn-green', [emo('🎲'), h('span', { text: S.duelRandom })], () => bus.emit('ui:duel-random')) : null,
         button(m.live ? 'btn-purple' : 'btn-big btn-purple', [emo('📲'), h('span', { text: S.duelFriend })], () => bus.emit('ui:duel-friend')),
         button('btn-teal', [emo('🤖'), h('span', { text: S.duelBot })], () => bus.emit('ui:duel-bot'))),
       m.live ? null : h('p', { class: 'note duel-note', text: S.duelOffline }),
-      record ? h('p', { class: 'duel-record', text: record }) : null);
+      record ? h('p', { class: 'duel-record', text: record }) : null,
+      m.rank ? seasonNotes(m.rank) : null);
     screens.duel.replaceChildren(h('div', { class: 'duel-wrap' }, card,
       button('btn-white', [icon('home'), h('span', { text: S.back })], () => bus.emit('ui:home'))));
     st.duelMsg = msg;
     showScreen('duel');
+  }
+
+  /**
+   * Your card and this season's rank (js/core/economy.js): the rank, the points, a bar to the next
+   * rank. `r` is the store's getSeasonRank().
+   */
+  function rankBox(r, card, name) {
+    const info = RANKS.find((x) => x.id === r.rank) || RANKS[0];
+    const next = RANKS.find((x) => x.id === r.next) || null;
+    const [year, month] = String(r.season || '').split('-').map(Number);
+    const span = next ? Math.max(1, next.min - info.min) : 1;
+    const pct = next ? Math.round((100 * Math.max(0, r.points - info.min)) / span) : 100;
+    return h('div', { class: 'rank-box' },
+      h('div', { 'data-my-card': '' }, playerCard({ name, card: { ...card, rank: r.rank } })),
+      month ? h('p', { class: 'rank-season', text: S.season(MONTHS_AF[month - 1], year) }) : null,
+      h('div', { class: 'rank-now' }, emo(info.emoji), h('b', { text: RANK_INFO[info.id].name }), h('span', { text: S.rankPoints(r.points) })),
+      h('div', {
+        class: 'rank-bar', role: 'progressbar', 'aria-label': S.rankPoints(r.points),
+        'aria-valuemin': String(info.min), 'aria-valuemax': String(next ? next.min : r.points), 'aria-valuenow': String(r.points),
+      }, h('i', { vars: { '--p': `${pct}%` } })),
+      h('p', { class: 'rank-next', text: next ? S.rankToNext(r.toNext, `${RANK_INFO[next.id].name} ${next.emoji}`) : S.rankTop }));
+  }
+
+  /** Under the buttons: how the points work, the season badges kept, and the way to the looks. */
+  function seasonNotes(r) {
+    const badges = (r.badges || []).map((b) => cosmetic('badge', b)).filter(Boolean);
+    return h('div', { class: 'season-notes' },
+      badges.length ? h('p', { class: 'rank-badges' }, h('span', { text: S.seasonBadges }), ...badges.map((b) => emo(b.emoji))) : null,
+      h('p', { class: 'note rank-how', text: S.rankHow(RANK_POINTS) }),
+      button('btn-white btn-mini', [emo('🛍️'), h('span', { text: S.changeLook })], () => bus.emit('ui:shop', 'looks'), { nav: false }));
+  }
+
+  /** The look changed in the shop while the Uitdagersreeks screen is open: its card follows. */
+  function setDuelCard(card, rank) {
+    const box = screens.duel.querySelector('[data-my-card]');
+    if (!box) return;
+    const name = box.querySelector('.pc-name')?.textContent || st.duelPlaceholder || '';
+    box.replaceChildren(playerCard({ name, card: { ...card, rank } }));
   }
 
   /** The nickname was saved (or refused by the name rules). */
@@ -1032,6 +1073,8 @@ export function createUI(bus) {
     if (!msg || !msg.isConnected) return;
     msg.textContent = ok ? (name ? `✓ ${S.duelNickSaved}` : S.duelNickHint) : S.duelNickBad;
     msg.classList.toggle('bad', !ok);
+    const pcName = screens.duel.querySelector('[data-my-card] .pc-name');
+    if (ok && pcName) pcName.textContent = name || st.duelPlaceholder || '';
   }
 
   /**
@@ -1489,6 +1532,7 @@ export function createUI(bus) {
     showShop,
     setMenuCoins,
     celebrate,
+    setDuelCard,
     playerCard,
     toast,
     setLoading,

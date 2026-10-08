@@ -9,7 +9,7 @@ import { cleanVisits } from './visitorrules.js';
 import { cleanNickname } from './duel.js';
 import {
   defaultEconomy, cleanEconomy, earnCoins, buyPowerup, usePowerup, buyCosmetic, wearCosmetic, grantRankLooks,
-  rankAfterMatch, seasonOf, cardOf,
+  rankAfterMatch, rolloverSeason, rankFor, seasonOf, cardOf,
 } from './economy.js';
 
 const SCHEMA = 1;
@@ -570,7 +570,36 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       data.econ.rank = r.rank;
       data.econ = grantRankLooks(data.econ, r.rank.best, { badge: r.reward });
       persist();
-      return { points: r.rank.points, delta: r.delta, rank: r.rank.best, up: r.up, reward: r.reward };
+      return { points: r.rank.points, delta: r.delta, rank: rankFor(r.rank.points).id, up: r.up, reward: r.reward };
+    },
+
+    /**
+     * This season's rank for the Uitdagersreeks screen. A new month starts the new season here too
+     * (points halve, the old season's badge is handed out: `reward`), so the screen is never a month behind.
+     */
+    getSeasonRank() {
+      sync();
+      const season = seasonOf(today());
+      const rolled = rolloverSeason(data.econ.rank, season);
+      if (rolled.rank.season !== data.econ.rank.season) {
+        data.econ.rank = rolled.rank;
+        data.econ = grantRankLooks(data.econ, rolled.rank.best, { badge: rolled.reward });
+        persist();
+      }
+      const r = data.econ.rank;
+      const now = rankFor(r.points);
+      return {
+        season: r.season,
+        points: r.points,
+        rank: now.id,
+        min: now.min,
+        next: now.next ? now.next.id : null,
+        nextMin: now.next ? now.next.min : null,
+        toNext: now.toNext,
+        best: r.best,
+        badges: data.econ.owned.badge.filter((b) => b.startsWith('s-')),
+        reward: rolled.reward,
+      };
     },
 
     recordPractice(result) {
