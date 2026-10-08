@@ -1756,6 +1756,7 @@ svg.ic {
 .cell-X { background: #31373d; color: #fff; }
 /* the clown's gift block: cream with a circus-red rim (same in high contrast) */
 .cell-B { background: #fff4dc; box-shadow: inset 0 0 0 calc(3 * var(--u)) #e23b3b; font-size: calc(22 * var(--u)); }
+.cell-F { background: #3a3f47; box-shadow: inset 0 0 0 calc(3 * var(--u)) #f5b833; font-size: calc(22 * var(--u)); }
 /* high contrast (matches the 🟦🟧⬜⬛ share grid) */
 #ui.hc .cell-P { background: #2563b0; color: #fff; }
 #ui.hc .cell-G { background: #f39a2b; color: var(--ink); }

@@ -21,8 +21,9 @@ const REASONS = {
   quit: { emoji: '🏳️', title: S.overQuit, sub: S.overQuitSub },
 };
 const CLICK_GUARD_MS = 350;   // swallow double taps on navigation buttons
-// In-app grid cells: colour AND a symbol, so every kind of colour blindness can read them (🎁: the clown's gift).
-const CELL_GLYPH = { P: '★', G: '•', S: '∼', X: '✕', B: '🎁' };
+// In-app grid cells: colour AND a symbol, so every kind of colour blindness can read them (🎁: the clown's gift,
+// 🧱: a Fondamentblok).
+const CELL_GLYPH = { P: '★', G: '•', S: '∼', X: '✕', B: '🎁', F: '🧱' };
 const MAX_TOASTS = 3;
 const SHORT_ASPECT = 1.72;    // canvases squatter than this (desktop, tablets) get the compact layout
 const STEP_COLORS = ['protea', 'karoo', 'sonneblom', 'bosveld', 'oseaan', 'jakaranda', 'hemel'];
@@ -1137,7 +1138,7 @@ export function createUI(bus) {
   // ---------------------------------------------------------------------------
   function gridEl(grid, reason) {
     const cells = [];
-    const counts = { P: 0, G: 0, S: 0, X: 0, B: 0 };
+    const counts = { P: 0, G: 0, S: 0, X: 0, B: 0, F: 0 };
     for (const ch of String(grid || '')) {
       if (!RATING_EMOJI[ch]) continue;
       cells.push(ch);
@@ -1164,7 +1165,8 @@ export function createUI(bus) {
     }
     if (!rows.length) return null;
     const label = `${S.perfects} ${counts.P}, ${S.good} ${counts.G}, ${S.skew} ${counts.S}, ${S.lostCount} ${counts.X}`
-      + (counts.B ? `, ${S.gifts} ${counts.B}` : '');
+      + (counts.B ? `, ${S.gifts} ${counts.B}` : '')
+      + (counts.F ? `, ${POWERUP_INFO.foundation.name} ${counts.F}` : '');
     return h('div', { class: 'grid', role: 'img', 'aria-label': label }, rows);
   }
 

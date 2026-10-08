@@ -372,7 +372,7 @@ export class Visitors {
       });
     }
     // the player's Skild (a power-up): this monkey or thief arrives, then bounces off (step())
-    if ((c.type === 'monkey' || c.type === 'thief') && this.actions.shield?.()) c.blocked = true;
+    if ((c.type === 'monkey' || c.type === 'thief') && this.actions.shield?.(false)) c.blocked = true;
     // the monkey comes with an alarm (his call follows in step()): he is trouble
     this._play(c.type === 'monkey' ? 'warning' : c.type === 'clown' ? 'clown' : 'thief');
     if (c.type === 'clown') this._honk(c);
@@ -484,6 +484,7 @@ export class Visitors {
   /** The player's shield: the visitor bounces off and leaves (it costs nothing). */
   _bounceOff(c) {
     c.blocked = false;
+    this.actions.shield?.(true);
     c.rec.outcome = 'blocked';
     this._leave(c, c.type === 'monkey' ? 'shooed' : 'caught');
     this._play(c.type === 'monkey' ? 'shoo' : 'caught');

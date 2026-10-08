@@ -339,7 +339,7 @@ export class GameScene extends Phaser.Scene {
     this.nextMilestoneM = MILESTONE_STEP_M;   // the next height (m) that earns a saying toast
     this.score = 0;
     this.lives = LIVES;
-    this.slowLeft = 0;              // power-up: blocks the crane still swings slower (this one counts)
+    this.slowLeft = 0;              // power-up: drops the crane still swings slower for (counted at each drop)
     this.shieldOn = false;          // power-up: the next monkey or thief bounces off
     this.freeFoundationOffered = false;   // the daily's free Fondamentblok (from FOUNDATION_FREE_M)
     this.combo = 0;
@@ -590,11 +590,14 @@ export class GameScene extends Phaser.Scene {
       gift: (spec) => this.visitorGift(spec),
       found: (gifts) => this.visitorFoundation(gifts),
       steal: (max) => this.visitorSteal(max),
-      // power-up: the next monkey or thief bounces off (true once; then the shield is gone)
-      shield: () => {
+      // power-up: the next monkey or thief bounces off. shield(false) only asks; the shield is used up
+      // when he really bounces (caught or scared off before that, and it waits for the next one)
+      shield: (use = true) => {
         if (!this.shieldOn || this.over) return false;
-        this.shieldOn = false;
-        this.emitPowerups();
+        if (use) {
+          this.shieldOn = false;
+          this.emitPowerups();
+        }
         return true;
       },
       // first game: the first visitor of each kind explains itself (shown in its arrival banner)
@@ -756,7 +759,6 @@ export class GameScene extends Phaser.Scene {
     if (this.over) return;
     if (this.crane.hasBlock()) return;   // never two blocks on the hook
     this.i = i;
-    if (this.slowLeft > 0) this.slowLeft--;
     const spec = this.sequence.block(i);
     this.curSpec = spec;
     this.curGeom = getGeometry(spec);
@@ -856,6 +858,8 @@ export class GameScene extends Phaser.Scene {
     this.stepCtx.falling = block;
     this.active.push(block);
     this.blocksDropped++;
+    // the Stadige hyskraan counts drops, so it is always SLOW_BLOCKS slow blocks, whenever it was switched on
+    if (this.slowLeft > 0) this.slowLeft--;
     // audience count: a name that was really on a block the player let go of (js/core/audience.js)
     if (!this.idle && this.curNameId) tallyShow(this.tally, this.curNameId);
     this.setGhostVisible(false);

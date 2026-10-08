@@ -110,7 +110,6 @@ function defaultData() {
     },
     practice: { played: 0, heightM: 0, score: 0 },
     duel: { name: null, played: 0, wins: 0, losses: 0, streak: 0, bestStreak: 0 },
-    econ: defaultEconomy(),
   };
 }
 
@@ -172,7 +171,6 @@ function sanitize(raw) {
     d.duel.played = Math.max(d.duel.played, d.duel.wins + d.duel.losses);
     d.duel.bestStreak = Math.max(d.duel.bestStreak, d.duel.streak);
   }
-  d.econ = cleanEconomy(raw.econ);
   return d;
 }
 
@@ -189,12 +187,17 @@ const laterKey = (a, b) => (!a ? b : !b ? a : daysBetween(a, b) > 0 ? b : a);
 export function createStore(backend = safeLocalStorage(), { now = () => Date.now(), key = STORAGE_KEY } = {}) {
   const be = backend || memoryBackend();
   const storeKey = key;
+  // The wallet (coins, power-ups, looks, rank: js/core/economy.js) has a key of its own. A page still
+  // running an older version rebuilds the main blob from the keys it knows, which would drop it.
+  const econKey = `${key}.econ`;
   let data = defaultData();
+  let econ = defaultEconomy();
   let lastRaw = null;
+  let lastEconRaw = null;
 
-  function readRaw() {
+  function readRaw(k = storeKey) {
     try {
-      const raw = be.getItem(storeKey);
+      const raw = be.getItem(k);
       return typeof raw === 'string' ? raw : null;
     } catch {
       return undefined; // unreadable: keep what we have in memory
@@ -204,16 +207,22 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
   // Pick up changes made by another tab; keep memory if storage is unreadable.
   function sync() {
     const raw = readRaw();
-    if (raw === undefined || raw === lastRaw) return;
-    lastRaw = raw;
-    if (raw === null) {
-      data = defaultData();
-      return;
+    if (raw !== undefined && raw !== lastRaw) {
+      lastRaw = raw;
+      try {
+        data = raw === null ? defaultData() : sanitize(JSON.parse(raw));
+      } catch {
+        data = defaultData();
+      }
     }
-    try {
-      data = sanitize(JSON.parse(raw));
-    } catch {
-      data = defaultData();
+    const er = readRaw(econKey);
+    if (er !== undefined && er !== lastEconRaw) {
+      lastEconRaw = er;
+      try {
+        econ = cleanEconomy(er === null ? null : JSON.parse(er));
+      } catch {
+        econ = defaultEconomy();
+      }
     }
   }
 
@@ -222,6 +231,16 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     try {
       be.setItem(storeKey, raw);
       lastRaw = raw;
+    } catch {
+      // Quota / private mode: keep playing from memory.
+    }
+  }
+
+  function persistEcon() {
+    const raw = JSON.stringify(econ);
+    try {
+      be.setItem(econKey, raw);
+      lastEconRaw = raw;
     } catch {
       // Quota / private mode: keep playing from memory.
     }
@@ -316,15 +335,19 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     return { applied: true, flags };
   }
 
-  /** Store an economy step's result; returns { ok, economy }. */
-  function apply(step, write) {
+  /** Run an economy step on the latest wallet (another tab may have changed it) and keep it. Returns { ok, economy }. */
+  function apply(step) {
     sync();
-    if (step.ok) {
-      data.econ = step.economy;
-      if (write) persist();
+    const r = step(econ);
+    if (r.ok) {
+      econ = r.economy;
+      persistEcon();
     }
-    return { ok: step.ok, economy: clone(data.econ) };
+    return { ok: r.ok, economy: clone(econ) };
   }
+
+  /** The rank as this month sees it: a new month halves the points and leaves last season's badge (`reward`). */
+  const seasonNow = () => rolloverSeason(econ.rank, seasonOf(today()));
 
   sync();
 
@@ -520,57 +543,64 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
 
     getEconomy() {
       sync();
-      return clone(data.econ);
+      return clone(econ);
     },
 
-    /** What duel opponents see of this player (cleanCard). */
+    /** What duel opponents see of this player (cleanCard), with this month's rank. */
     getCard() {
       sync();
-      return cardOf(data.econ);
+      return cardOf({ ...econ, rank: seasonNow().rank });
     },
 
     /** Coins for a finished game; Oefen and duels count towards the day's cap. Returns { added, coins }. */
     earnCoins(n, { capped = true } = {}) {
       sync();
-      const r = earnCoins(data.econ, n, { capped, dayKey: today() });
-      data.econ = r.economy;
-      if (r.added) persist();
-      return { added: r.added, coins: data.econ.coins };
+      const r = earnCoins(econ, n, { capped, dayKey: today() });
+      econ = r.economy;
+      if (r.added) persistEcon();
+      return { added: r.added, coins: econ.coins };
     },
 
     buyPowerup(id) {
-      return apply(buyPowerup(data.econ, id), true);
+      return apply((e) => buyPowerup(e, id));
     },
 
     usePowerup(id) {
-      return apply(usePowerup(data.econ, id), true);
+      return apply((e) => usePowerup(e, id));
     },
 
     buyCosmetic(kind, id) {
-      return apply(buyCosmetic(data.econ, kind, id), true);
+      return apply((e) => buyCosmetic(e, kind, id));
     },
 
     wearCosmetic(kind, id) {
-      return apply(wearCosmetic(data.econ, kind, id), true);
+      return apply((e) => wearCosmetic(e, kind, id));
     },
 
     /** The Daily Tower's free Fondamentblok: true the first time for `dateKey`, then false. */
     takeFreeFoundation(dateKey) {
       sync();
-      if (!dateKey || data.econ.freeFoundation === dateKey) return false;
-      data.econ.freeFoundation = dateKey;
-      persist();
+      if (!dateKey || econ.freeFoundation === dateKey) return false;
+      econ.freeFoundation = dateKey;
+      persistEcon();
       return true;
     },
 
-    /** A finished duel moves the season's rank points. Returns { points, delta, rank, up, reward }. */
+    /**
+     * A finished duel moves the season's rank points. Returns { points, delta, rank, up, reward, halved }:
+     * `reward` is last season's badge and `halved` the points before the halving, when this match began a new month.
+     */
     recordDuelRank({ outcome, live = false } = {}) {
       sync();
-      const r = rankAfterMatch(data.econ.rank, { outcome, live, season: seasonOf(today()) });
-      data.econ.rank = r.rank;
-      data.econ = grantRankLooks(data.econ, r.rank.best, { badge: r.reward });
-      persist();
-      return { points: r.rank.points, delta: r.delta, rank: rankFor(r.rank.points).id, up: r.up, reward: r.reward };
+      const before = econ.rank.points;
+      const r = rankAfterMatch(econ.rank, { outcome, live, season: seasonOf(today()) });
+      econ.rank = r.rank;
+      econ = grantRankLooks(econ, r.rank.best, { badge: r.reward });
+      persistEcon();
+      return {
+        points: r.rank.points, delta: r.delta, rank: rankFor(r.rank.points).id, up: r.up, reward: r.reward,
+        halved: r.reward ? before : null,
+      };
     },
 
     /**
@@ -579,14 +609,13 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
      */
     getSeasonRank() {
       sync();
-      const season = seasonOf(today());
-      const rolled = rolloverSeason(data.econ.rank, season);
-      if (rolled.rank.season !== data.econ.rank.season) {
-        data.econ.rank = rolled.rank;
-        data.econ = grantRankLooks(data.econ, rolled.rank.best, { badge: rolled.reward });
-        persist();
+      const rolled = seasonNow();
+      if (rolled.rank.season !== econ.rank.season) {
+        econ.rank = rolled.rank;
+        econ = grantRankLooks(econ, rolled.rank.best, { badge: rolled.reward });
+        persistEcon();
       }
-      const r = data.econ.rank;
+      const r = econ.rank;
       const now = rankFor(r.points);
       return {
         season: r.season,
@@ -597,7 +626,7 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
         nextMin: now.next ? now.next.min : null,
         toNext: now.toNext,
         best: r.best,
-        badges: data.econ.owned.badge.filter((b) => b.startsWith('s-')),
+        badges: econ.owned.badge.filter((b) => b.startsWith('s-')),
         reward: rolled.reward,
       };
     },

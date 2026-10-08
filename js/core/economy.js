@@ -109,10 +109,11 @@ export const seasonOf = (dateKey) => (isDateKey(dateKey) ? dateKey.slice(0, 7) :
 /**
  * A new season began: points halve (a head start, not a fresh climb), and the season that ended
  * leaves a badge for the best rank reached in it. Returns { rank, reward } (reward: a badge id or null).
+ * Only a later month starts a season: a phone clock set back (or a trip west on the 1st) changes nothing.
  */
 export function rolloverSeason(rank, season) {
   const r = cleanRank(rank);
-  if (!season || r.season === season) return { rank: r, reward: null };
+  if (!season || r.season === season || (r.season && season < r.season)) return { rank: r, reward: null };
   if (!r.season) return { rank: { ...r, season, best: rankFor(r.points).id }, reward: null };
   const reward = `s-${r.best}`;
   const points = Math.floor(r.points / 2);

@@ -453,8 +453,8 @@ function playDaily() {
       ui.toast(S.otherTab, 3000);
       return;
     }
-    // Started in a tab that is gone, or a crashed session: it counts (one try per day).
-    store.recoverUnfinished(dateKey);
+    // Started in a tab that is gone, or a crashed session: it counts (one try per day), and pays.
+    payRecovered(store.recoverUnfinished(dateKey));
     entry = store.getDaily(dateKey);
   }
   if (entry && entry.status === 'done') {
@@ -722,11 +722,14 @@ function showDuelScreen() {
   // the season first: a new month halves the points and hands out last month's badge
   const rank = store.getSeasonRank();
   ui.showDuel({ live: duel.live, duel: store.getDuel(), placeholder: sessionNick, rank, card: store.getCard() });
-  if (rank.reward) {
-    const badge = cosmetic('badge', rank.reward);
-    const r = RANK_INFO[rank.reward.slice(2)];
-    if (badge && r) ui.toast(S.seasonReward(r.name, badge.emoji), 4000);
-  }
+  seasonToast(rank.reward);
+}
+
+/** A new month began: "Nuwe seisoen! Jy hou ’n Goud-kenteken 🥇" (the badge of the season that ended). */
+function seasonToast(reward) {
+  const badge = reward ? cosmetic('badge', reward) : null;
+  const r = badge ? RANK_INFO[reward.slice(2)] : null;
+  if (r) ui.toast(S.seasonReward(r.name, badge.emoji), 4000);
 }
 
 /** "Teen <naam>!", 3-2-1, "Bou!", then the tower. */
@@ -782,6 +785,7 @@ function showDuelResults(r) {
   // the winner's celebration (js/core/economy.js): ours with the fanfare, or theirs as they see it
   if (d.outcome === 'won') ui.celebrate(store.getCard().celebration);
   else if (d.outcome === 'lost' && d.reason !== 'quit') ui.celebrate(d.oppCard?.celebration, { caption: S.duelTheyCelebrate(d.oppName || S.duelSomeone), sound: false });
+  seasonToast(duelReward?.rank?.reward);   // this match began a new month
   sleepLoop(RESULTS_SLEEP_MS);
 }
 
@@ -912,6 +916,16 @@ function awardCoins(game) {
   if (!earned.coins) return { added: 0, total: store.getEconomy().coins, short: false };
   const r = store.earnCoins(earned.coins, { capped: earned.capped });
   return { added: r.added, total: r.coins, short: r.added < earned.coins };
+}
+
+/**
+ * Dailies that ended without their results (the page was closed, the app killed or crashed mid-game)
+ * count as they were when they stopped, and pay their coins like any finished daily. Returns the coins.
+ */
+function payRecovered(results) {
+  if (!results?.length) return 0;
+  const streak = store.getStats().currentStreak;
+  return results.reduce((sum, r) => sum + awardCoins({ mode: 'daily', heightM: r.heightM, perfects: r.perfects, streak }).added, 0);
 }
 
 /** The result is saved the moment the game ends (the results screen comes a few seconds later). */
@@ -1103,11 +1117,12 @@ function onReady() {
   watchContextLoss();
 
   const recovered = store.recoverUnfinished(todayKey(), { staleMs: STALE_MS, owner: TAB_ID });
+  const recoveredCoins = payRecovered(recovered);
   startIdle();
   showMenu();
   openDuelLink();
   ui.setLoading(false);
-  if (recovered.length) ui.toast(S.unfinished, 3200);
+  if (recovered.length) ui.toast(recoveredCoins ? `${S.unfinished} +${recoveredCoins} 🪙` : S.unfinished, 3600);
   else if (liveElsewhere(todayKey())) ui.toast(S.otherTab, 3000);
   if (DEBUG) startFpsMeter();
   window.__stapel.booted = true;

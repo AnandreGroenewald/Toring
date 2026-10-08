@@ -118,6 +118,12 @@ test('ranks: Brons to Diamant by points; duels move them; a season halves them a
   assert.equal(m.rank.season, '2026-11');
   assert.equal(m.rank.points, 150 + 10);
   assert.deepEqual(rolloverSeason({ season: null, points: 0 }, '2026-10'), { rank: { season: '2026-10', points: 0, best: 'brons' }, reward: null });
+  // a clock set back a month changes nothing, and going forward again doesn't halve twice
+  const nov = rolloverSeason({ season: '2026-10', points: 300, best: 'goud' }, '2026-11');
+  assert.deepEqual(rolloverSeason(nov.rank, '2026-10'), { rank: nov.rank, reward: null });
+  assert.deepEqual(rolloverSeason(nov.rank, '2026-11'), { rank: nov.rank, reward: null });
+  assert.equal(rankAfterMatch(nov.rank, { outcome: 'won', live: true, season: '2026-10' }).rank.season, '2026-11');
+  assert.equal(rolloverSeason({ season: '2026-12', points: 80 }, '2027-01').rank.points, 40, 'December to January is later');
   assert.equal(seasonOf('2026-10-08'), '2026-10');
   assert.equal(seasonOf('nope'), null);
   // rank looks: the season badge, and the Diamant frame once Diamant is reached
@@ -186,4 +192,47 @@ test('the season on the Uitdagersreeks screen: a new month rolls over when the s
   assert.deepEqual(r.badges, ['s-goud']);
   assert.equal(store.getSeasonRank().reward, null, 'once');
   assert.equal(store.getCard().rank, 'silwer');
+});
+
+test('two tabs, one wallet: a purchase starts from the latest coins; an older version can never wipe it', () => {
+  const backend = memoryBackend();
+  const t = Date.UTC(2026, 9, 8, 10);
+  const a = createStore(backend, { now: () => t });
+  const b = createStore(backend, { now: () => t });
+  a.earnCoins(100, { capped: false });
+  assert.equal(b.getEconomy().coins, 100, 'tab B has seen 100');
+  a.earnCoins(100, { capped: false });
+  a.recordDuelRank({ outcome: 'won', live: true });
+  assert.ok(b.buyPowerup('slow').ok, 'tab B buys from the 200 tab A left');
+  assert.equal(a.getEconomy().coins, 200 - POWERUPS.slow.price);
+  assert.equal(a.getEconomy().rank.points, 25, 'and tab A\'s rank points are kept');
+  assert.ok(b.buyCosmetic('frame', 'see').ok);
+  assert.equal(a.wearCosmetic('frame', 'see').ok, true, 'tab A can wear what tab B bought');
+  // a page still on 1.7.9 rewrites the main blob from the keys it knows (no wallet in it)
+  a.setSettings({ sound: false });
+  const main = JSON.parse(backend.getItem('stapel.v1'));
+  assert.equal(main.econ, undefined, 'the wallet is not in the main blob');
+  backend.setItem('stapel.v1', JSON.stringify({ ...main, settings: { sound: true } }));
+  const c = createStore(backend, { now: () => t });
+  assert.equal(c.getEconomy().coins, 200 - POWERUPS.slow.price - 120);
+  assert.equal(c.getCard().frame, 'see');
+  assert.equal(c.getSettings().sound, true);
+  // a broken wallet key starts a fresh wallet; the rest of the game is untouched
+  backend.setItem('stapel.v1.econ', '{nope');
+  const d = createStore(backend, { now: () => t });
+  assert.deepEqual(d.getEconomy(), defaultEconomy());
+  assert.equal(d.getSettings().sound, true);
+});
+
+test('the card on the 1st of a month already shows the new season; a match that starts it says so', () => {
+  const backend = memoryBackend();
+  let t = Date.UTC(2026, 9, 20, 10);
+  const store = createStore(backend, { now: () => t });
+  for (let k = 0; k < 30; k++) store.recordDuelRank({ outcome: 'won', live: true });   // 750: Diamant
+  assert.equal(store.getCard().rank, 'diamant');
+  t = Date.UTC(2026, 10, 1, 9);
+  assert.equal(store.getCard().rank, 'goud', 'November: 375 points, before anything was played');
+  const r = store.recordDuelRank({ outcome: 'won', live: false });
+  assert.deepEqual([r.reward, r.halved, r.points], ['s-diamant', 750, 375 + 10]);
+  assert.equal(store.recordDuelRank({ outcome: 'won', live: false }).halved, null);
 });
