@@ -225,6 +225,15 @@ export const S = {
   coinsTotal: (n) => `jy het ${n}`,
   coinsCapped: 'genoeg vir vandag, kom môre weer',
   rankUp: (name) => `Nuwe rang: ${name}!`,
+  powerups: 'Kragte',
+  powerOn: 'AAN',
+  powerupSlow: 'Stadige hyskraan: 5 blokke lank 🐢',
+  powerupShield: 'Skild aan! Die volgende aap of skelm bons af 🛡️',
+  foundationSet: 'Nuwe fondament! 🧱 Alles daaronder staan vas',
+  freeFoundation: 'Fondamentblok verdien! Tik 🧱 wanneer jy dit wil gebruik',
+  shieldBlocked: (name) => `${name} bons van jou skild af! 🛡️`,
+  resMonkeyBlocked: 'Jou skild het Blouaap gekeer! 🛡️',
+  resThiefBlocked: 'Jou skild het Skelm Sakkie gekeer! 🛡️',
   rankPointsDelta: (d) => (d >= 0 ? `+${d} punte` : `${d} punte`),
   duelGhostHit: (name, m) => `${name} se toring is ${m} m korter!`,
   duelYou: 'Jy',
@@ -314,6 +323,8 @@ export const RANK_INFO = {
 
 /** Added after 🦹 in the share line when the player caught the thief. */
 export const CAUGHT_EMOJI = '✋';
+/** Added after a visitor the player's Skild (a power-up) kept off. */
+export const SHIELD_EMOJI = '🛡️';
 
 /** Afrikaans names for the block shapes (for the HUD "next" preview / how-to). */
 export const SHAPE_NAMES = {

@@ -25,6 +25,7 @@ import { createIsland } from '../game/island.js';
 import { Visitors } from '../game/visitors.js';
 import { topMovable, thiefLoot, visitorFree, gridWithGifts } from '../core/visitorrules.js';
 import { duelSeedKey } from '../core/duel.js';
+import { FOUNDATION_FREE_M, SLOW_BLOCKS, SLOW_MUL } from '../core/economy.js';
 
 const FIXED = PHYSICS.fixedDtMs;
 const MAX_FRAME_MS = 100;
@@ -338,6 +339,9 @@ export class GameScene extends Phaser.Scene {
     this.nextMilestoneM = MILESTONE_STEP_M;   // the next height (m) that earns a saying toast
     this.score = 0;
     this.lives = LIVES;
+    this.slowLeft = 0;              // power-up: blocks the crane still swings slower (this one counts)
+    this.shieldOn = false;          // power-up: the next monkey or thief bounces off
+    this.freeFoundationOffered = false;   // the daily's free Fondamentblok (from FOUNDATION_FREE_M)
     this.combo = 0;
     this.maxCombo = 0;
     this.perfects = 0;
@@ -586,6 +590,13 @@ export class GameScene extends Phaser.Scene {
       gift: (spec) => this.visitorGift(spec),
       found: (gifts) => this.visitorFoundation(gifts),
       steal: (max) => this.visitorSteal(max),
+      // power-up: the next monkey or thief bounces off (true once; then the shield is gone)
+      shield: () => {
+        if (!this.shieldOn || this.over) return false;
+        this.shieldOn = false;
+        this.emitPowerups();
+        return true;
+      },
       // first game: the first visitor of each kind explains itself (shown in its arrival banner)
       coach: (type) => {
         const h = this.over ? null : this.coach.visitor(type);
@@ -745,9 +756,11 @@ export class GameScene extends Phaser.Scene {
     if (this.over) return;
     if (this.crane.hasBlock()) return;   // never two blocks on the hook
     this.i = i;
+    if (this.slowLeft > 0) this.slowLeft--;
     const spec = this.sequence.block(i);
     this.curSpec = spec;
     this.curGeom = getGeometry(spec);
+    if (!this.idle) this.emitPowerups();
     safely(() => this.weather.setBlockIndex(i));
     try {
       this.visitors.setBlockIndex(i);
@@ -827,6 +840,7 @@ export class GameScene extends Phaser.Scene {
     const vx = pose.vx * CRANE.carry;
     const vy = pose.vy * CRANE.carry;
     const block = new Block(this, this.curSpec, pose.x - vx * d, pose.y + cam.scrollY - vy * d + 0.5 * g * d * d, pose.angle, this.curName);
+    block.special = this.curSpec.foundation ? 'foundation' : null;
     block.setVelocityPxS(vx, vy - g * d);
     block.setFriction(this.weather.frictionMul);
     block.state = 'falling';
@@ -933,7 +947,8 @@ export class GameScene extends Phaser.Scene {
     // 1. Crane (the swing widens over the first blocks; the crane eases it so the trolley never jumps)
     const w = this.weather;
     const opts = this.craneOpts;
-    opts.omega = Math.min(CRANE.omegaTop, Math.min(CRANE.omegaMax, CRANE.omega0 + CRANE.omegaPerBlock * this.i) * w.craneSpeedMul);
+    opts.omega = Math.min(CRANE.omegaTop, Math.min(CRANE.omegaMax, CRANE.omega0 + CRANE.omegaPerBlock * this.i) * w.craneSpeedMul)
+      * (this.slowLeft > 0 ? SLOW_MUL : 1);
     opts.amplitude = this.amplitudeFor(this.i);
     opts.windAccel = w.windAccel;
     opts.heat = w.heatLevel;
@@ -1155,6 +1170,10 @@ export class GameScene extends Phaser.Scene {
     this.dynDirty = true;
     this.landedCount++;
     this.advance(f);
+    if (f.special === 'foundation' && !this.over) {
+      this.landFoundation(f, supportBody === this.baseBody ? null : supportBody.gameBlock);
+      return;
+    }
 
     const topHit = f.bottom <= supTop + TOP_HIT_TOL || (Math.abs(q.ny) > 0.75 && q.cy > f.centerY);
     const sup = supportBody === this.baseBody ? null : supportBody.gameBlock;
@@ -1484,6 +1503,102 @@ export class GameScene extends Phaser.Scene {
     } catch (err) {
       this.visitorsFailed(err);
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Power-ups (1.8; js/core/economy.js): main.js checks the player may use one (Oefen stock, or
+  // the daily's free Fondamentblok) and calls applyPowerup; never in a match.
+  // -------------------------------------------------------------------------
+  /** Returns true when the power-up took effect (then main.js takes it from the stock). */
+  applyPowerup(id) {
+    if (this.idle || this.over || this.duel) return false;
+    let ok = false;
+    if (id === 'foundation') ok = this.armFoundation();
+    else if (id === 'slow' && this.slowLeft === 0) {
+      this.slowLeft = SLOW_BLOCKS;
+      bus.emit('hud:toast', { text: S.powerupSlow, color: '#c9ffb8' });
+      ok = true;
+    } else if (id === 'shield' && !this.shieldOn) {
+      this.shieldOn = true;
+      bus.emit('hud:toast', { text: S.powerupShield, color: '#c9ffb8' });
+      ok = true;
+    } else if (id === 'heart' && this.lives < LIVES) {
+      this.lives += 1;
+      this.effects.floatText(GAME_W / 2, this.towerTopY - 170, S.extraLife, { color: '#ff8fb0', size: 42 });
+      audio.play('heart');
+      ok = true;
+    }
+    if (ok) {
+      haptics.tap();
+      this.emitPowerups();
+      this.emitProgress();
+    }
+    return ok;
+  }
+
+  /** What the power-up tray needs to know (active effects; whether a heart can still be added). */
+  emitPowerups() {
+    bus.emit('game:powerups', {
+      slowLeft: this.slowLeft, shield: this.shieldOn, foundation: this.crane.hasBlock() && !!this.curSpec?.foundation, heartRoom: this.lives < LIVES,
+    });
+  }
+
+  /** The Fondamentblok replaces the block on the hook (that block's turn is skipped). */
+  armFoundation() {
+    if (!this.crane.hasBlock() || !this.curSpec || this.curSpec.foundation) return false;
+    const spec = { shape: 'slab', scale: 2, color: 0, i: this.i, foundation: true };
+    const geo = getGeometry(spec);
+    const key = ensureTexture(this, spec);
+    this.curSpec = spec;
+    this.curGeom = geo;
+    this.curName = null;
+    this.curNameId = null;
+    this.curKey = key;
+    this.crane.setBlock(spec, key, geo);
+    this.ghostMiss = false;
+    this.ghost.setTexture(key).setOrigin(geo.originX, geo.originY).setTintFill(0xffffff).setAlpha(GHOST_A);
+    this.ghostEdge.setTexture(key).setOrigin(geo.originX, geo.originY).setTintFill(0x1d2b45)
+      .setScale((geo.w + GHOST_PAD) / geo.w, (geo.h + GHOST_PAD) / geo.h);
+    this.planAutoplay();
+    audio.play('banner');
+    return true;
+  }
+
+  /**
+   * The Fondamentblok lands: flush on what it hit (where the player aimed it), at rest; then it
+   * and the tower under it set as cement, a new foundation (like Hanswors's blocks).
+   */
+  landFoundation(f, sup) {
+    const M = this.M;
+    const t = this.supportTop(sup);
+    const ang = sup && !isRect(sup.geom) && Math.abs(t.angle) > TIPPED ? 0 : t.angle;
+    const d = f.geom.h - f.geom.cy;
+    const x = f.centerX;
+    const along = Math.cos(ang) ? (x - t.x) / Math.cos(ang) : 0;
+    const sy = t.y + along * Math.sin(ang);
+    M.Sleeping.set(f.body, false);
+    M.Body.setAngle(f.body, ang);
+    M.Body.setPosition(f.body, { x: x + d * Math.sin(ang), y: sy - d * Math.cos(ang) });
+    M.Body.setVelocity(f.body, { x: 0, y: 0 });
+    M.Body.setAngularVelocity(f.body, 0);
+    f.sync();
+    f.rating = RATING.FOUNDATION;
+    f.pendingRate = false;
+    f.state = 'settled';
+    if (!this.idle) this.grid[f.index] = RATING.FOUNDATION;
+    this.score += SCORING.base;
+    this.cementTower();
+    if (f.state !== 'frozen') this.freezeBlock(f);
+    this.updateTowerHeight();
+    this.effects.dust(f.centerX, f.bottom, f.right - f.left);
+    this.effects.sparkle(f.centerX, f.top, 26);
+    this.effects.shake(0.004, 160);
+    audio.play('land', { intensity: 1, size: 1 });
+    audio.play('freeze');
+    haptics.heavy();
+    bus.emit('hud:toast', { text: S.foundationSet, color: '#ffe38c' });
+    this.emitPowerups();
+    this.emitProgress();
   }
 
   /** A visitor changed the tower: what comes down in the next moments is not the player's fault. */
@@ -1834,6 +1949,10 @@ export class GameScene extends Phaser.Scene {
       if (h > this.maxHeightM && !this.over) {
         this.maxHeightM = h;
         this.checkMilestone();
+        if (this.mode === 'daily' && !this.freeFoundationOffered && h >= FOUNDATION_FREE_M) {
+          this.freeFoundationOffered = true;
+          bus.emit('game:free-foundation');
+        }
         this.checkChallenge();
         // keep the saved daily up to date with every new best height (a reload must not lose a block)
         if (h - this.progressHeight >= 0.5) {

@@ -813,6 +813,60 @@ function drawGift(ctx, g) {
   ctx.restore();
 }
 
+// The Fondamentblok power-up: a long dark slab with hazard stripes at both ends, like the base.
+const FOUND_DARK = 0x2b3038;
+const FOUND_STRIPE = 0xf7c948;
+
+function drawFoundation(ctx, g) {
+  ctx.save();
+  ctx.translate(PAD, PAD);
+  roundedPolyPath(ctx, g.outline, CORNER_R);
+  ctx.save();
+  ctx.clip();
+  ctx.fillStyle = hex(FOUND_DARK);
+  ctx.fillRect(0, 0, g.w, g.h);
+  const end = Math.min(46, g.w * 0.16);
+  const band = 9;
+  for (const x0 of [0, g.w - end]) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x0, 0, end, g.h);
+    ctx.clip();
+    ctx.fillStyle = hex(FOUND_STRIPE);
+    ctx.fillRect(x0, 0, end, g.h);
+    ctx.fillStyle = hex(0x1d2b45);
+    for (let x = x0 - g.h; x < x0 + end + g.h; x += band * 2) {
+      ctx.beginPath();
+      ctx.moveTo(x, g.h);
+      ctx.lineTo(x + band, g.h);
+      ctx.lineTo(x + band + g.h, 0);
+      ctx.lineTo(x + g.h, 0);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  // a row of rivets, a light top and a dark bottom (like every block)
+  ctx.fillStyle = rgba(0xffffff, 0.24);
+  for (let x = end + 20; x < g.w - end - 12; x += 34) {
+    ctx.beginPath();
+    ctx.arc(x, g.h / 2, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const b = bandSizes(g.h);
+  ctx.fillStyle = rgba(0xffffff, 0.16);
+  ctx.fillRect(0, 0, g.w, b.top * 0.6);
+  ctx.fillStyle = rgba(0x000000, 0.28);
+  ctx.fillRect(0, g.h - b.bottom, g.w, b.bottom);
+  ctx.restore();
+  roundedPolyPath(ctx, g.outline, CORNER_R);
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = hex(0x11151b);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawBlock(ctx, g, pal, key, name = null) {
   const rnd = seededRand(key);
   const outlineCol = mix(pal.dark, 0x000000, 0.38);
@@ -846,6 +900,7 @@ function drawBlock(ctx, g, pal, key, name = null) {
 export function textureKeyFor(spec, name = null) {
   const g = getGeometry(spec);
   if (spec.gift) return `gift_${g.shape}_${Math.round(g.w)}x${Math.round(g.h)}`;
+  if (spec.foundation) return `found_${g.shape}_${Math.round(g.w)}x${Math.round(g.h)}`;
   const color = PALETTE.indexOf(shapeColor(spec));
   const key = `blk_${g.shape}_${Math.round(g.w)}x${Math.round(g.h)}_${color}`;
   return name ? `${key}_n${nameHash(name)}` : key;
@@ -857,7 +912,7 @@ export function textureKeyFor(spec, name = null) {
  * size and physics are those of the plain block).
  */
 export function ensureTexture(scene, spec, name = null) {
-  const label = typeof name === 'string' && name.trim() && canPrintName(spec) && !spec.gift ? name.trim() : null;
+  const label = typeof name === 'string' && name.trim() && canPrintName(spec) && !spec.gift && !spec.foundation ? name.trim() : null;
   const key = textureKeyFor(spec, label);
   const textures = scene.textures;
   let info = texInfo.get(key);
@@ -867,6 +922,7 @@ export function ensureTexture(scene, spec, name = null) {
     if (!tex) return key;
     // the plain key seeds the details, so a named block is the same block plus its name
     if (spec.gift) drawGift(tex.getContext(), g);
+    else if (spec.foundation) drawFoundation(tex.getContext(), g);
     else drawBlock(tex.getContext(), g, shapeColor(spec), textureKeyFor(spec), label);
     tex.refresh();
     if (!info) {

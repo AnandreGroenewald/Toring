@@ -9,7 +9,7 @@ import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate } from
 import { createSequence } from './core/sequence.js';
 import { buildShareText, buildDuelShareText } from './core/share.js';
 import { parseChallengeQuery, parseRoomQuery, defaultNickname } from './core/duel.js';
-import { coinsForGame } from './core/economy.js';
+import { coinsForGame, POWERUP_IDS } from './core/economy.js';
 import { createDuel } from './duel.js';
 import { loadChallenge, shareUrlFor } from './core/challenge.js';
 import { buildSkyline, SKYLINE_DAYS } from './core/skyline.js';
@@ -318,6 +318,8 @@ function startGame(data) {
 }
 
 function resetRun(mode, dateKey = null) {
+  pw.effects = {};
+  pw.free = false;
   run.mode = mode;
   run.dateKey = dateKey;
   run.dayNumber = dateKey ? dayNumber(dateKey) : null;
@@ -325,6 +327,60 @@ function resetRun(mode, dateKey = null) {
   run.started = false;
   run.final = null;
 }
+
+// ---------------------------------------------------------------------------
+// Power-ups (1.8; js/core/economy.js): in Oefen from the player's stock; in the Daily Tower only the
+// free Fondamentblok from 55 m (the same for everyone); never in a match.
+// ---------------------------------------------------------------------------
+const pw = { effects: {}, free: false };
+
+function renderTray() {
+  const mode = run.mode;
+  if (screen !== 'game' || run.over || (mode !== 'practice' && mode !== 'daily')) {
+    ui.setPowerups(null);
+    return;
+  }
+  const e = pw.effects || {};
+  const items = [];
+  if (mode === 'daily') {
+    if (pw.free || e.foundation) items.push({ id: 'foundation', count: pw.free ? 1 : 0, active: !!e.foundation, glow: pw.free && !e.foundation, enabled: pw.free && !e.foundation });
+  } else {
+    const stock = store.getEconomy().stock;
+    for (const id of POWERUP_IDS) {
+      const active = (id === 'slow' && e.slowLeft > 0) || (id === 'shield' && !!e.shield) || (id === 'foundation' && !!e.foundation);
+      if (!(stock[id] > 0) && !active) continue;
+      const enabled = !active && stock[id] > 0 && !(id === 'heart' && e.heartRoom === false);
+      items.push({ id, count: stock[id], active, enabled });
+    }
+  }
+  ui.setPowerups(items);
+}
+
+bus.on('game:powerups', (e) => {
+  pw.effects = e || {};
+  renderTray();
+});
+bus.on('game:free-foundation', () => {
+  if (run.mode !== 'daily' || !run.dateKey || store.getEconomy().freeFoundation === run.dateKey) return;
+  pw.free = true;
+  bus.emit('hud:toast', { text: S.freeFoundation, color: '#ffe38c' });
+  renderTray();
+});
+bus.on('ui:powerup', (id) => {
+  const gs = gameScene();
+  if (!gs || run.over || screen !== 'game') return;
+  if (run.mode === 'daily') {
+    if (id !== 'foundation' || !pw.free) return;
+    if (gs.applyPowerup('foundation')) {
+      store.takeFreeFoundation(run.dateKey);
+      pw.free = false;
+    }
+  } else if (run.mode === 'practice') {
+    if (!(store.getEconomy().stock[id] > 0)) return;
+    if (gs.applyPowerup(id)) store.usePowerup(id);
+  }
+  renderTray();
+});
 
 function startIdle() {
   resetRun('idle');
@@ -379,6 +435,7 @@ function playDaily() {
   });
   screen = 'game';
   ui.showInGame();
+  renderTray();
 }
 
 function playPractice() {
@@ -387,6 +444,7 @@ function playPractice() {
   startGame({ mode: 'practice', seed, autoplay: AUTO });
   screen = 'game';
   ui.showInGame();
+  renderTray();
 }
 
 function showDoneResults(dateKey, result) {
@@ -454,6 +512,7 @@ function resumeGame() {
   resumeScenes();
   screen = 'game';
   ui.showInGame();
+  renderTray();
 }
 
 /** Snapshot of a running daily straight into storage (tab hidden, page closing). */
@@ -553,6 +612,7 @@ bus.on('ui:quit', () => {
   resumeScenes();
   screen = 'game';
   ui.showInGame();
+  renderTray();
   bus.emit('game:quit');
 });
 bus.on('ui:home', () => {
@@ -661,6 +721,7 @@ function startDuelGame(m) {
   startGame({ mode: 'duel', seed: m.seed, duel: { name: m.oppName }, autoplay: AUTO });
   screen = 'game';
   ui.showInGame();
+  renderTray();
 }
 
 function showDuelResults(r) {

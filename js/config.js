@@ -107,10 +107,10 @@ export const LIVES = 4;
 export const FREEZE_DEPTH = 8;   // all but the newest 8 settled blocks set like cement (become static)
 
 // Rating codes used in the result grid (GIFT: the clown's bonus block, not a drop of the player's)
-export const RATING = { PERFECT: 'P', GOOD: 'G', SKEW: 'S', LOST: 'X', GIFT: 'B' };
-export const RATING_EMOJI = { P: '🟩', G: '🟨', S: '🟧', X: '🟥', B: '🎁' };
+export const RATING = { PERFECT: 'P', GOOD: 'G', SKEW: 'S', LOST: 'X', GIFT: 'B', FOUNDATION: 'F' };
+export const RATING_EMOJI = { P: '🟩', G: '🟨', S: '🟧', X: '🟥', B: '🎁', F: '🧱' };
 // High-contrast set (settings.highContrast): distinct for every kind of colour blindness.
-export const RATING_EMOJI_HC = { P: '🟦', G: '🟧', S: '⬜', X: '⬛', B: '🎁' };
+export const RATING_EMOJI_HC = { P: '🟦', G: '🟧', S: '⬜', X: '⬛', B: '🎁', F: '🧱' };
 
 // ---------------------------------------------------------------------------
 // Rising flood line (vloedlyn)

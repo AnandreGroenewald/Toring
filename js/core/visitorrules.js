@@ -3,7 +3,7 @@
 // the physics. Pure: importable in node.
 
 import { VISITOR, VISITOR_TYPES, RATING } from '../config.js';
-import { S, VISITOR_INFO, CAUGHT_EMOJI } from './strings.js';
+import { S, VISITOR_INFO, CAUGHT_EMOJI, SHIELD_EMOJI } from './strings.js';
 
 /** A block a visitor may touch: on the tower and able to move (never cement, never one still in the air). */
 export const movable = (b) => !!b && !b.destroyed && (b.state === 'landed' || b.state === 'settled');
@@ -56,9 +56,9 @@ export function gridWithGifts(cells, gifts = []) {
 
 // How a visit ended: 'came' = the tower ended while the visitor was still there.
 const OUTCOMES = {
-  monkey: ['came', 'shooed', 'shoved'],   // n = blocks it knocked into the sea
+  monkey: ['came', 'shooed', 'shoved', 'blocked'],   // n = blocks it knocked into the sea; blocked = the player's Skild
   clown: ['came', 'gift'],                // n = blocks he brought
-  thief: ['came', 'caught', 'stole'],     // n = blocks he took
+  thief: ['came', 'caught', 'stole', 'blocked'],     // n = blocks he took
 };
 const MAX_VISITS = 40;
 
@@ -87,6 +87,7 @@ export function visitorEmoji(visits) {
   for (const v of cleanVisits(visits)) {
     out += VISITOR_INFO[v.type].emoji;
     if (v.type === 'thief' && v.outcome === 'caught') out += CAUGHT_EMOJI;
+    if (v.outcome === 'blocked') out += SHIELD_EMOJI;
   }
   return out;
 }
@@ -97,6 +98,7 @@ export function visitorResultLine(visits) {
   const thief = list.find((v) => v.type === 'thief' && v.outcome !== 'came');
   if (thief) {
     if (thief.outcome === 'caught') return S.resThiefCaught;
+    if (thief.outcome === 'blocked') return S.resThiefBlocked;
     return thief.n > 0 ? S.resThiefStole(thief.n) : S.resThiefEmpty;
   }
   const monkeys = list.filter((v) => v.type === 'monkey');
@@ -104,6 +106,7 @@ export function visitorResultLine(visits) {
   if (knocked > 0) return S.resMonkeyKnocked(knocked);
   if (monkeys.some((v) => v.outcome === 'shoved')) return S.resMonkeyStood;
   if (monkeys.some((v) => v.outcome === 'shooed')) return S.resMonkeyShooed;
+  if (monkeys.some((v) => v.outcome === 'blocked')) return S.resMonkeyBlocked;
   const gifts = list.filter((v) => v.type === 'clown' && v.outcome === 'gift');
   if (gifts.length) return S.resClownGift(gifts.reduce((sum, v) => sum + Math.max(1, v.n), 0));
   return '';

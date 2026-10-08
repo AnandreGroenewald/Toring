@@ -195,7 +195,8 @@ export class Visitors {
    * @param {object} opts         { audio, bus, attract, scheduled, reducedMotion, actions }
    *   scheduled: false in a head-to-head match (visitors then only come as attacks, see attack())
    *   actions: { top() -> {x,y,left,right}, busy() -> bool, shove(plan, dir) -> n, giftAt(spec) -> {x,y,angle},
-   *              gift(spec) -> Block|null, found(blocks) -> n, steal(max) -> Image[], coach(type), toast(text, color) }
+   *              gift(spec) -> Block|null, found(blocks) -> n, steal(max) -> Image[], shield() -> bool,
+   *              coach(type), toast(text, color) }
    */
   constructor(scene, sequence, { audio = null, bus = null, attract = false, scheduled = true, reducedMotion = false, actions = {} } = {}) {
     this.scene = scene;
@@ -357,6 +358,8 @@ export class Visitors {
         ms: coach ? 2600 : 0,
       });
     }
+    // the player's Skild (a power-up): this monkey or thief arrives, then bounces off (step())
+    if ((c.type === 'monkey' || c.type === 'thief') && this.actions.shield?.()) c.blocked = true;
     // the monkey comes with an alarm (his call follows in step()): he is trouble
     this._play(c.type === 'monkey' ? 'warning' : c.type === 'clown' ? 'clown' : 'thief');
     if (c.type === 'clown') this._honk(c);
@@ -396,6 +399,10 @@ export class Visitors {
       return;
     }
     const since = c.t - c.at;
+    if (c.blocked && since >= (c.type === 'monkey' ? ENTER_MS : 600)) {
+      this._bounceOff(c);
+      return;
+    }
     if (c.type === 'monkey') {
       if (c.phase === 'swing' && !c.called && since >= CALL_MS) {
         c.called = true;
@@ -459,6 +466,16 @@ export class Visitors {
       this.actions.toast?.(c.rec.n > 0 ? S.thiefStole(c.rec.n) : S.thiefEmpty, '#ffd0a8');
       this._leave(c, 'leave');
     }
+  }
+
+  /** The player's shield: the visitor bounces off and leaves (it costs nothing). */
+  _bounceOff(c) {
+    c.blocked = false;
+    c.rec.outcome = 'blocked';
+    this._leave(c, c.type === 'monkey' ? 'shooed' : 'caught');
+    this._play(c.type === 'monkey' ? 'shoo' : 'caught');
+    this.scene.effects?.floatText(c.x, c.y - 70, '🛡️', { size: 72 });
+    this.actions.toast?.(S.shieldBlocked(VISITOR_INFO[c.type].name), '#c9ffb8');
   }
 
   _phase(c, phase) {

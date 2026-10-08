@@ -4,7 +4,7 @@
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
 import { GAME_W, PALETTE, RATING_EMOJI, computeGameHeight } from '../config.js';
-import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO } from '../core/strings.js';
+import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO } from '../core/strings.js';
 import { COIN, RANKS, rankFor } from '../core/economy.js';
 import { fmtM, fmtInt, fmtClock, fmtDuration, DAYS_AF } from '../core/format.js';
 import { shareResult } from '../core/share.js';
@@ -158,8 +158,10 @@ export function createUI(bus) {
   const punishBar = h('div', { class: 'punish', role: 'group', 'aria-label': S.duelChooseLabel, hidden: true });
   let punishAt = 0;        // when the strip appeared (a tap right after it was meant for the tower)
   let punishPick = null;   // (n) => choose option n (keys 1-4) while the strip is up
+  // 1.8 power-ups: round buttons on the right edge; only the buttons take taps (the rest drops a block)
+  const powerTray = h('div', { class: 'power-tray', role: 'group', 'aria-label': S.powerups, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, pauseBtn, punishBar, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, pauseBtn, punishBar, powerTray, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // Measures env(safe-area-inset-*) so layout() can work out how much of each
@@ -230,7 +232,10 @@ export function createUI(bus) {
       if (k === name && st.modal) el.inert = true;   // stays visible under an open sheet
     }
     pauseBtn.hidden = name !== 'game';
-    if (name !== 'game') hidePunish();
+    if (name !== 'game') {
+      hidePunish();
+      setPowerups(null);
+    }
     if (name && screens[name]) {
       screens[name].scrollTop = 0;
       if (st.keyboard && !st.modal) focusQuietly(screens[name]);
@@ -1243,6 +1248,34 @@ export function createUI(bus) {
     punishBar.hidden = false;
   }
 
+  /**
+   * The power-up tray: [{ id, count, active, enabled, glow }] (null hides it). A count above 1 shows
+   * as "×3"; an active power-up (the slow crane, the shield, a Fondamentblok on the hook) shows "AAN".
+   */
+  function setPowerups(items) {
+    if (!items || !items.length || st.screen !== 'game') {
+      powerTray.hidden = true;
+      powerTray.replaceChildren();
+      return;
+    }
+    powerTray.replaceChildren(...items.filter((it) => POWERUP_INFO[it.id]).map((it) => {
+      const info = POWERUP_INFO[it.id];
+      return h('button', {
+        type: 'button',
+        class: `power-btn${it.active ? ' is-active' : ''}${it.glow ? ' is-glow' : ''}`,
+        disabled: it.enabled === false,
+        'aria-label': `${info.name}: ${info.what}`,
+        title: info.name,
+        onclick: () => {
+          audio.play('click');
+          bus.emit('ui:powerup', it.id);
+        },
+      }, emo(info.emoji),
+      it.active ? h('span', { class: 'power-tag', text: S.powerOn }) : it.count > 1 ? h('span', { class: 'power-tag', text: `×${it.count}` }) : null);
+    }));
+    powerTray.hidden = false;
+  }
+
   function hidePunish() {
     punishBar.hidden = true;
     punishBar.replaceChildren();
@@ -1303,6 +1336,7 @@ export function createUI(bus) {
     hideAll,
     showPunish,
     hidePunish,
+    setPowerups,
     toast,
     setLoading,
   };
