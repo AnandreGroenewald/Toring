@@ -4,6 +4,11 @@
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
 import { GAME_W, PALETTE, RATING_EMOJI, VERSION, computeGameHeight } from '../config.js';
+import { WEEK } from '../core/week.js';
+
+const WEEK_COINS = WEEK.coins;
+const WEEK_SHIELD_MAX = WEEK.shieldMax;
+const WEEK_SHIELD_PRICE = WEEK.shieldPrice;
 import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO, COSMETIC_INFO } from '../core/strings.js';
 import { COIN, RANKS, RANK_POINTS, rankFor, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic } from '../core/economy.js';
 import { fmtM, fmtInt, fmtClock, fmtDuration, dayName, monthName } from '../core/format.js';
@@ -84,6 +89,11 @@ function closeX(action) {
   return h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); action(); } }, icon('close'));
 }
 
+/** el.append() without the empty ones: append() prints a null as the text "null" (it did, on the menu). */
+function put(el, ...kids) {
+  for (const k of kids.flat(Infinity)) if (k != null && k !== false) el.append(k);
+}
+
 function icon(name) {
   const span = document.createElement('span');
   span.innerHTML = `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
@@ -157,6 +167,7 @@ export function createUI(bus) {
     shop: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-shop-title', tabindex: '-1' }),
     lang: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-lang-title', tabindex: '-1' }),
     board: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-board-title', tabindex: '-1' }),
+    remind: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-remind-title', tabindex: '-1' }),
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -177,7 +188,7 @@ export function createUI(bus) {
   // 1.8 power-ups: round buttons on the right edge; only the buttons take taps (the rest drops a block)
   const powerTray = h('div', { class: 'power-tray', role: 'group', 'aria-label': S.powerups, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, pauseBtn, punishBar, tutorBar, powerTray, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, pauseBtn, punishBar, tutorBar, powerTray, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // Measures env(safe-area-inset-*) so layout() can work out how much of each
@@ -538,6 +549,27 @@ export function createUI(bus) {
     for (const btn of root.querySelectorAll('[data-setting]')) paintToggle(btn);
   }
 
+  /**
+   * Die weekkis on the daily card: seven boxes (opened ones ticked, today's lit) and what today's or
+   * tomorrow's box holds. `w` is js/core/week.js weekView().
+   */
+  function weekStrip(w) {
+    if (!w) return null;
+    const cells = [];
+    for (let d = 1; d <= 7; d++) {
+      const opened = d <= w.done;
+      const today = !w.opened && d === w.day;
+      cells.push(h('span', { class: `wk-cell${opened ? ' is-done' : ''}${today ? ' is-today' : ''}${d === 7 ? ' is-big' : ''}`, 'aria-hidden': 'true' },
+        opened ? '✓' : d === 7 ? emo('🎁') : emo('📦')));
+    }
+    const line = w.opened ? (w.next ? S.weekTomorrow(w.next.coins) : '') : S.weekToday(w.coins);
+    return h('div', { class: 'week-strip', role: 'img', 'aria-label': `${S.weekTitle}: ${S.weekDay(w.opened ? w.day : w.day)}. ${line}` },
+      h('span', { class: 'wk-title', text: S.weekTitle }),
+      h('span', { class: 'wk-cells' }, cells),
+      h('span', { class: 'wk-line', text: line }),
+      w.shields ? h('span', { class: 'wk-shield', title: S.weekShield, text: `🛡️${w.shields > 1 ? `×${w.shields}` : ''}` }) : null);
+  }
+
   function streakChip(n) {
     const v = Math.max(0, n | 0);
     return h('div', {
@@ -641,7 +673,7 @@ export function createUI(bus) {
         h('p', { class: 'daily-date', text: m.dateLabel || '' })));
 
     // a brand-new player sees no grey "🔥 0" before they have played
-    const card = h('div', { class: 'card daily-card' }, (stats.played | 0) > 0 ? streakChip(stats.currentStreak) : null, head);
+    const card = h('div', { class: 'card daily-card' }, (stats.played | 0) > 0 ? streakChip(stats.currentStreak) : null, head, weekStrip(m.week));
     if (done) {
       const r = entry.result || {};
       card.append(
@@ -671,7 +703,7 @@ export function createUI(bus) {
       }
       // a friend's challenge (from a shared link, today's date only): text only, never markup
       if (m.challenge && m.challenge.text) card.append(h('p', { class: 'challenge-chip', role: 'status', text: m.challenge.text }));
-      card.append(
+      put(card,
         h('p', { class: 'note', text: S.sameForAll }),
         // first visit: no pop-up, just a friendly line (the game itself coaches the first tower)
         m.newPlayer ? h('p', { class: 'note nudge', text: S.firstNudge }) : null,
@@ -880,7 +912,7 @@ export function createUI(bus) {
       body.append(h('p', { class: 'empty-note', text: S.noGamesYet }));
     }
 
-    body.append(cityBlock(st.city, { streak: s.currentStreak | 0, compact: true }));
+    put(body, cityBlock(st.city, { streak: s.currentStreak | 0, compact: true }));
 
     const sheet = h('div', { class: 'card sheet' },
       h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); } }, icon('close')),
@@ -890,6 +922,8 @@ export function createUI(bus) {
         h('div', { class: 'dock' }, toggleBtns({ contrast: true })),
         button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false }),
         h('p', { class: 'version-note', text: S.versionNote(VERSION) })));
+    // the daily reminder (only in the Android app)
+    if (st.remindOn) sheet.querySelector('.stats-foot').prepend(button('btn-white', [emo('🔔'), h('span', { text: S.remindButton(st.remindTime) })], () => bus.emit('ui:remind'), { nav: false }));
     // today's leaderboard (only when the game can reach the server)
     if (st.boardOn) sheet.querySelector('.stats-foot').prepend(button('btn-blue', [emo('🏆'), h('span', { text: S.board })], () => bus.emit('ui:board'), { nav: false }));
     modals.stats.replaceChildren(sheet);
@@ -1005,6 +1039,7 @@ export function createUI(bus) {
     })));
     const body = h('div', { class: 'sheet-body shop-body' });
     if (tab === 'powerups') {
+      const shields = m.week?.shields | 0;
       body.append(h('p', { class: 'shop-note', text: S.shopPowerupsNote }),
         h('div', { class: 'shop-list' }, POWERUP_IDS.map((id) => {
           const info = POWERUP_INFO[id];
@@ -1012,7 +1047,12 @@ export function createUI(bus) {
             h('span', { class: 'shop-ic' }, emo(info.emoji)),
             h('span', { class: 'shop-txt' }, h('b', { text: info.name }), h('span', { text: info.what }), h('small', { text: S.inBag(m.stock?.[id] | 0) })),
             buyBtn(POWERUPS[id].price, m.coins, () => bus.emit('ui:shop-buy', { kind: 'powerup', id })));
-        })));
+        }),
+        // the weekkis's Reeksskild: not for Oefen, for the week (js/core/week.js)
+        h('div', { class: 'shop-row' },
+          h('span', { class: 'shop-ic' }, emo('🗓️')),
+          h('span', { class: 'shop-txt' }, h('b', { text: S.weekShield }), h('span', { text: S.weekShieldWhat }), h('small', { text: S.weekShieldHave(shields) })),
+          shields >= WEEK_SHIELD_MAX ? h('span', { class: 'shop-on', text: '✓' }) : buyBtn(WEEK_SHIELD_PRICE, m.coins, () => bus.emit('ui:shop-buy', { kind: 'weekshield' })))));
     } else {
       body.append(playerCard({ name: m.name, card: m.card }), h('p', { class: 'shop-note', text: S.shopLooksNote }));
       for (const kind of LOOK_KINDS) {
@@ -1024,6 +1064,7 @@ export function createUI(bus) {
             if (on) action = h('span', { class: 'shop-on', text: S.wearing });
             else if (owned) action = h('button', { type: 'button', class: 'shop-wear', text: S.wear, onclick: () => { audio.play('click'); bus.emit('ui:shop-wear', { kind, id: c.id }); } });
             else if (c.rank) action = h('span', { class: 'shop-lock', text: S.lockedRank(RANK_INFO[c.rank].name) });
+            else if (c.week) action = h('span', { class: 'shop-lock', text: S.lockedWeek });
             else action = buyBtn(c.price, m.coins, () => bus.emit('ui:shop-buy', { kind, id: c.id }));
             return h('div', { class: `shop-item${on ? ' is-on' : ''}` },
               h('span', { class: 'shop-prev' }, lookPreview(kind, c)),
@@ -1247,6 +1288,10 @@ export function createUI(bus) {
         h('p', { class: 'duel-sub', text: o.text || S.duelNoServer }),
         button('btn-white', [icon('again'), h('span', { text: S.back })], () => bus.emit('ui:duel')));
     }
+    // the website on an Android phone: a challenge link can go on in the app
+    if (o.appLink && (o.state === 'link' || o.state === 'search')) {
+      kids.push(h('a', { class: 'btn btn-white app-open', href: o.appLink }, emo('📲'), h('span', { text: S.openInApp })));
+    }
     // the ✕ top right does what the screen's own way out does (not during the 3-2-1)
     const exit = { search: 'ui:duel-cancel', room: 'ui:duel-cancel', link: 'ui:home', error: 'ui:duel' }[o.state];
     screens.duelwait.replaceChildren(h('div', { class: 'card duel-wait' }, exit ? closeX(() => bus.emit(exit)) : null, kids));
@@ -1462,7 +1507,7 @@ export function createUI(bus) {
       // today's tower joins the player's own skyline and rises into place
       const cityEl = cityBlock(city, { animate: !empty, streak });
       if (cityEl) wrap.append(h('div', { class: 'card res-city' }, cityEl));
-      wrap.append(h('div', { class: 'card res-foot' },
+      put(wrap, h('div', { class: 'card res-foot' },
         h('div', { class: `foot-cell streak-cell${streak ? '' : ' is-zero'}` },
           h('b', null, emo('🔥'), fmtInt(streak)),
           h('span', { text: S.currentStreak })),
@@ -1503,12 +1548,25 @@ export function createUI(bus) {
     countUp(scoreB, r.score || 0, fmtInt);
   }
 
-  /** "🪙 +18 · jy het 250" and, after a match, the rank points ("🥈 Silwer +25"). */
+  /** "🪙 +18 · jy het 250", the weekkis box, and, after a match, the rank points ("🥈 Silwer +25"). */
   function rewardEl(reward) {
     const c = reward?.coins;
     const rk = reward?.rank;
-    if (!c && !rk) return null;
+    const wk = reward?.week;
+    if (!c && !rk && !wk) return null;
     const kids = [];
+    if (wk) {
+      const notes = [];
+      if (wk.saved) notes.push(S.weekSaved(wk.saved));
+      else if (wk.restarted) notes.push(S.weekRestart);
+      if (wk.day === 7) notes.push(S.weekFull);
+      if (wk.shield) notes.push(S.weekShieldWon);
+      if (wk.look) notes.push(S.weekLook(COSMETIC_INFO[wk.look.kind]?.[wk.look.id]?.name || ''));
+      notes.push(wk.day < 7 ? S.weekTomorrow(WEEK_COINS[wk.day]) : S.weekTomorrow(WEEK_COINS[0]));
+      kids.push(h('span', { class: `rw-week${wk.day === 7 ? ' is-full' : ''}` },
+        h('b', { text: S.weekBox(wk.day, wk.coins) }),
+        h('span', { class: 'rw-sub', text: notes.join(' · ') })));
+    }
     if (c) {
       kids.push(h('span', { class: 'rw-coins' }, emo(COIN), h('b', { text: `+${fmtInt(c.added)}` }),
         h('span', { class: 'rw-sub', text: c.short ? S.coinsCapped : S.coinsTotal(fmtInt(c.total)) })));
@@ -1520,6 +1578,30 @@ export function createUI(bus) {
         h('span', { class: 'rw-sub', text: S.rankPointsDelta(rk.delta) })));
     }
     return h('div', { class: 'res-reward', role: 'status' }, kids);
+  }
+
+  /** The daily reminder exists here (the Android app) and its time ('HH:MM' or null). */
+  function setReminderInfo(on, time) {
+    st.remindOn = !!on;
+    st.remindTime = time || null;
+  }
+
+  /** "Moet ek jou elke dag herinner?": three times, and no (or off, once it is on). Emits 'ui:remind-pick'. */
+  function showReminder({ time = null } = {}) {
+    const pick = (v) => {
+      audio.play('click');
+      closeModal();
+      bus.emit('ui:remind-pick', v);
+    };
+    const times = [['08:00', S.remindMorning], ['13:00', S.remindNoon], ['18:30', S.remindEvening]];
+    modals.remind.replaceChildren(h('div', { class: 'card sheet remind-sheet' },
+      closeX(() => closeModal()),
+      h('div', { class: 'sheet-head' }, emo('🔔'), h('h2', { id: 'stapel-remind-title', text: S.remindTitle })),
+      h('div', { class: 'sheet-body' },
+        h('p', { class: 'remind-ask', text: S.remindAsk }),
+        h('div', { class: 'remind-times' }, times.map(([v, label]) => button(`btn-blue${time === v ? ' is-on' : ''}`, h('span', { text: label }), () => pick(v), { nav: false })))),
+      h('div', { class: 'sheet-foot' }, button('btn-white', h('span', { text: time ? S.remindOff : S.remindNo }), () => pick(null), { nav: false }))));
+    openModal('remind');
   }
 
   /** The game can reach the leaderboard (main.js says so once at start). */
@@ -1760,6 +1842,8 @@ export function createUI(bus) {
     setResultsBoard,
     setDuelWaitNote,
     showTutor,
+    setReminderInfo,
+    showReminder,
     setBoardOn,
     showBoard,
     showInGame,

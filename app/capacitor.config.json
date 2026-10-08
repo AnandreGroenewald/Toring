@@ -6,6 +6,10 @@
     "backgroundColor": "#8fd3f4"
   },
   "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_stapel",
+      "iconColor": "#F39A2B"
+    },
     "SystemBars": {
       "insetsHandling": "native",
       "initialViewportFitValueHint": "cover",

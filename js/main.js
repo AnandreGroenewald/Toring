@@ -12,6 +12,9 @@ import { createSequence } from './core/sequence.js';
 import { buildShareText, buildDuelShareText } from './core/share.js';
 import { parseChallengeQuery, parseRoomQuery, defaultNicknameFor } from './core/duel.js';
 import { coinsForGame, cosmetic, POWERUP_IDS } from './core/economy.js';
+import { weekView, WEEK } from './core/week.js';
+
+const WEEK_COINS = WEEK.coins;
 import { createDuel } from './duel.js';
 import { loadChallenge, shareUrlFor } from './core/challenge.js';
 import { buildSkyline, SKYLINE_DAYS } from './core/skyline.js';
@@ -392,6 +395,7 @@ function menuModel() {
     challenge: activeChallenge() ? { text: S.challengeMenu(fmtM(activeChallenge().heightM)) } : null,
     city: skylineFor(dateKey),
     coins: store.getEconomy().coins,
+    week: weekView(store.getWeek(), dateKey),   // the weekkis strip (js/core/week.js)
   };
 }
 
@@ -400,7 +404,7 @@ function menuModel() {
 // ---------------------------------------------------------------------------
 function shopModel() {
   const e = store.getEconomy();
-  return { coins: e.coins, stock: e.stock, owned: e.owned, look: e.look, card: store.getCard(), name: duelNick() };
+  return { coins: e.coins, stock: e.stock, owned: e.owned, look: e.look, card: store.getCard(), name: duelNick(), week: store.getWeek() };
 }
 
 bus.on('ui:shop', (tab) => ui.showShop(shopModel(), typeof tab === 'string' ? tab : undefined));
@@ -411,6 +415,15 @@ function lookChanged() {
   ui.setDuelCard(card, card.rank);
 }
 bus.on('ui:shop-buy', ({ kind, id } = {}) => {
+  if (kind === 'weekshield') {
+    const w = store.buyWeekShield();
+    if (w.ok) {
+      audio.play('heart');
+      ui.toast(S.bought(S.weekShield));
+    }
+    ui.showShop(shopModel());
+    return;
+  }
   const r = kind === 'powerup' ? store.buyPowerup(id) : store.buyCosmetic(kind, id);
   if (r.ok) {
     audio.play('heart');
@@ -840,6 +853,92 @@ bus.on('ui:lesson-daily', () => {
   ui.showTutor(null);
   bus.emit('ui:play-daily');
 });
+
+// A challenge link opened while the app was already running (app/shim.js): straight to it, or, in the
+// middle of a tower, once that tower is done (the home button).
+let linkWaiting = false;
+window.addEventListener('stapel:link', (e) => {
+  let q = '';
+  try {
+    q = new URL(String(e.detail)).search;
+  } catch {
+    return;
+  }
+  const link = parseChallengeQuery(q);
+  const room = parseRoomQuery(q);
+  if (!link && !room) return;
+  duelLink = link;
+  duelRoom = room;
+  if (screen === 'game' && run.mode !== 'idle' && !run.over) {
+    linkWaiting = true;
+    ui.toast(S.linkLater, 3200);
+    return;
+  }
+  ui.closeModal();
+  openDuelLink();
+});
+
+// ---------------------------------------------------------------------------
+// The daily reminder (1.10; only the Android app has it: app/shim.js window.stapelApp.reminders). One
+// message a day at the time the player chose, planned a week ahead, never on a day whose tower is
+// built. Asked once, after the first Daily Tower; Statistiek changes it.
+// ---------------------------------------------------------------------------
+const REMIND = window.stapelApp?.reminders || null;
+const REMIND_DAYS = 7;
+const REMIND_ID = 7000;
+ui.setReminderInfo(!!REMIND, store.getReminder().time);
+
+/** The reminders of the next REMIND_DAYS days (the week chest's box if every day before is played). */
+function reminderList(time, now = new Date()) {
+  const [hh, mm] = time.split(':').map(Number);
+  const today = todayKey();
+  const view = weekView(store.getWeek(), today);
+  // the week chest's box every other day (the strongest reason to come back), the others in turn
+  const texts = (day, coins, n) => (n % 2 === 0 ? S.remind2(day, coins) : [S.remind1, S.remind3, S.remind4][Math.floor(n / 2) % 3]);
+  const list = [];
+  for (let k = 0; k < REMIND_DAYS; k++) {
+    const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + k, hh, mm, 0, 0);
+    if (at.getTime() <= now.getTime() + 60000) continue;
+    if (k === 0 && store.getDaily(today)?.status === 'done') continue;   // built already
+    const day = ((view.day - 1 + k) % 7) + 1;
+    const n = Math.floor(at.getTime() / 86400000);   // the day's number: the same text for the same day
+    list.push({ id: REMIND_ID + k, at: at.getTime(), title: 'Stapel', body: texts(day, WEEK_COINS[day - 1], n) });
+  }
+  return list;
+}
+
+/** (Re)plan the reminders: after a daily, at start, back in the app, or a new time. */
+function planReminders() {
+  if (!REMIND) return;
+  const { time } = store.getReminder();
+  if (!time) {
+    REMIND.set([]).catch(() => {});
+    return;
+  }
+  REMIND.permission().then((p) => (p === 'granted' ? REMIND.set(reminderList(time)) : null)).catch(() => {});
+}
+
+function askReminder() {
+  if (!REMIND || store.getReminder().asked || screen !== 'results') return;
+  ui.showReminder({ time: null });
+}
+
+bus.on('ui:remind', () => ui.showReminder({ time: store.getReminder().time }));
+bus.on('ui:remind-pick', (time) => {
+  if (!REMIND) return;
+  if (!time) {
+    store.setReminder({ time: null, asked: true });
+    ui.setReminderInfo(true, null);
+    planReminders();
+    return;
+  }
+  REMIND.ask().then((ok) => {
+    store.setReminder({ time: ok ? time : null, asked: true });
+    ui.setReminderInfo(true, ok ? time : null);
+    ui.toast(ok ? S.remindSet(time) : S.remindDenied, 3200);
+    planReminders();
+  }, () => ui.toast(S.remindDenied, 3200));
+});
 bus.on('ui:pause', pauseGame);
 bus.on('ui:resume', resumeGame);
 bus.on('ui:quit', () => {
@@ -852,6 +951,12 @@ bus.on('ui:quit', () => {
 });
 bus.on('ui:home', () => {
   if (lesson) endLesson();
+  if (linkWaiting) {
+    linkWaiting = false;
+    duel.leave();
+    startIdle();
+    if (openDuelLink()) return;
+  }
   stopDuelFlow();
   duel.leave();
   if (run.mode !== 'idle' || run.paused) {
@@ -919,6 +1024,11 @@ const duel = createDuel({
 // address straight away, so a reload or a shared screenshot doesn't repeat them.
 let duelLink = parseChallengeQuery(location.search);
 let duelRoom = parseRoomQuery(location.search);
+// The website on an Android phone: a challenge link can go on in the app (Chrome's intent: link; the
+// app installed opens it, else the page stays). Built before the address is cleaned up below.
+const APP_LINK = !IN_APP && /Android/i.test(navigator.userAgent || '') && (duelLink || duelRoom)
+  ? `intent://anandregroenewald.github.io/Toring/${location.search}#Intent;scheme=https;package=com.lekkerlocal.stapel;end`
+  : null;
 if (params.has('teen') || params.has('kamer') || params.has('lang')) {
   try {
     const q = new URLSearchParams(location.search);
@@ -1100,7 +1210,7 @@ function openDuelLink() {
   if (duelLink) {
     const best = Math.max(0, ...duelLink.run.samples) / 10;
     screen = 'duelwait';
-    ui.showDuelWait({ state: 'link', oppName: duelLink.name || S.duelSomeone, height: best });
+    ui.showDuelWait({ state: 'link', oppName: duelLink.name || S.duelSomeone, height: best, appLink: APP_LINK });
     return true;
   }
   if (duelRoom) {
@@ -1113,7 +1223,7 @@ function openDuelLink() {
       ui.showDuelWait({ state: 'error', text: S.duelOffline });
       return true;
     }
-    ui.showDuelWait({ state: 'search' });
+    ui.showDuelWait({ state: 'search', appLink: APP_LINK });
     ui.setDuelCount(S.duelJoining);
     duel.joinRoom(code, {
       onStart: (m) => {
@@ -1168,7 +1278,11 @@ function awardCoins(game) {
 function payRecovered(results) {
   if (!results?.length) return 0;
   const streak = store.getStats().currentStreak;
-  return results.reduce((sum, r) => sum + awardCoins({ mode: 'daily', heightM: r.heightM, perfects: r.perfects, streak }).added, 0);
+  return results.reduce((sum, r) => {
+    const paid = awardCoins({ mode: 'daily', heightM: r.heightM, perfects: r.perfects, streak }).added;
+    const box = r.blocksDropped > 0 ? store.openWeekBox(r.dateKey) : null;   // it was played: its box opens
+    return sum + paid + (box ? box.coins : 0);
+  }, 0);
 }
 
 /** The result is saved the moment the game ends (the results screen comes a few seconds later). */
@@ -1205,12 +1319,15 @@ function finalize(result) {
   }
   // coins: the daily tower pays in full (once); Oefen counts towards the day's cap
   let coins = null;
+  let week = null;
   if (result.mode === 'daily' && stats?.applied) {
     coins = awardCoins({ mode: 'daily', heightM: shown.heightM, perfects: shown.perfects, streak: stats.currentStreak });
+    week = store.openWeekBox(result.dateKey);   // the day's box of the weekkis
+    if (week) coins = { ...coins, total: week.total };
   } else if (result.mode === 'practice') {
     coins = awardCoins({ mode: 'practice', heightM: result.heightM, perfects: result.perfects });
   }
-  run.final = { result: shown, stats, isNewBest, aborted, coins };
+  run.final = { result: shown, stats, isNewBest, aborted, coins, week };
   return run.final;
 }
 
@@ -1242,7 +1359,7 @@ bus.on('game:over', (result) => {
     result: r,
     stats: f.stats,
     isNewBest: f.isNewBest,
-    reward: f.coins ? { coins: f.coins } : null,
+    reward: f.coins || f.week ? { coins: f.coins, week: f.week } : null,
     shareText: shareTextFor(r),
     nextDayAt: r.mode === 'daily' ? nextDayFor(r.dateKey) : 0,
     mode: r.mode,
@@ -1250,6 +1367,10 @@ bus.on('game:over', (result) => {
   });
   showPercentile(r);
   sleepLoop(RESULTS_SLEEP_MS);
+  if (r.mode === 'daily') {
+    planReminders();   // today is built: no reminder today
+    if (REMIND && !store.getReminder().asked) setTimeout(askReminder, 2600);
+  }
 });
 
 // Tab hidden / app switched away mid-tower: pause like the button does, and save. A friend room
@@ -1262,6 +1383,7 @@ document.addEventListener('visibilitychange', () => {
     else audio.suspend();
   } else {
     duel.back();
+    planReminders();
     if (!run.paused) audio.resume();
   }
 });
@@ -1368,6 +1490,7 @@ function onReady() {
   startIdle();
   showMenu();
   retryBoard();
+  planReminders();
   // a new player chooses a language first; a challenge link waits for that choice. A first visit
   // without a link opens "Hoe speel ek?" (once).
   if (askLanguage) ui.showLanguage({ first: true });

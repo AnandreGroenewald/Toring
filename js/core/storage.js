@@ -7,6 +7,7 @@ import { STORAGE_KEY } from '../config.js';
 import { dateKeyFor, dayNumber, addDays, daysBetween, isDateKey } from './daily.js';
 import { cleanVisits } from './visitorrules.js';
 import { cleanNickname } from './duel.js';
+import { WEEK, cleanWeek, openBox, addShield } from './week.js';
 import {
   defaultEconomy, cleanEconomy, earnCoins, buyPowerup, usePowerup, buyCosmetic, wearCosmetic, grantRankLooks,
   rankAfterMatch, rolloverSeason, rankFor, seasonOf, cardOf,
@@ -215,6 +216,35 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       be.setItem(boardKey, JSON.stringify(b));
     } catch {
       // private mode: the board still works for this visit
+    }
+  }
+  // The daily reminder (the Android app): the time the player chose ('HH:MM', or null: off) and
+  // whether they were asked. Its own key.
+  const remindKey = `${key}.remind`;
+  const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+  function readRemind() {
+    try {
+      const v = JSON.parse(readRaw(remindKey) || 'null');
+      return { time: typeof v?.time === 'string' && TIME_RE.test(v.time) ? v.time : null, asked: v?.asked === true };
+    } catch {
+      return { time: null, asked: false };
+    }
+  }
+
+  // Die weekkis (js/core/week.js): this week's boxes, Reeksskilde, full weeks. Its own key too.
+  const weekKey = `${key}.week`;
+  function readWeek() {
+    try {
+      return cleanWeek(JSON.parse(readRaw(weekKey) || 'null'));
+    } catch {
+      return cleanWeek(null);
+    }
+  }
+  function writeWeek(w) {
+    try {
+      be.setItem(weekKey, JSON.stringify(cleanWeek(w)));
+    } catch {
+      // private mode: the box still opens for this visit
     }
   }
   let data = defaultData();
@@ -635,6 +665,59 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       const b = readBoard();
       b.pending = !!pending;
       writeBoard(b);
+    },
+
+    /** The daily reminder: { time: 'HH:MM' | null, asked }. */
+    getReminder() {
+      return readRemind();
+    },
+
+    setReminder({ time = null, asked = true } = {}) {
+      const r = { time: typeof time === 'string' && TIME_RE.test(time) ? time : null, asked: !!asked };
+      try {
+        be.setItem(remindKey, JSON.stringify(r));
+      } catch {
+        // private mode: off
+      }
+      return r;
+    },
+
+    /** This week's boxes as stored: { day, last, shields, weeks } (js/core/week.js). */
+    getWeek() {
+      return readWeek();
+    },
+
+    /**
+     * The Daily Tower of `dateKey` was played: its box opens and pays (coins outside the day's cap,
+     * a Reeksskild, the first full week's look). Returns the box (js/core/week.js openBox) or null when
+     * that day's box is open already.
+     */
+    openWeekBox(dateKey) {
+      sync();
+      const r = openBox(readWeek(), dateKey);
+      if (!r) return null;
+      writeWeek(r.week);
+      const earned = earnCoins(econ, r.box.coins, { capped: false, dayKey: today() });
+      econ = earned.economy;
+      if (r.box.look) {
+        const owned = econ.owned[r.box.look.kind];
+        if (owned && !owned.includes(r.box.look.id)) owned.push(r.box.look.id);
+      }
+      persistEcon();
+      return { ...r.box, total: econ.coins, shields: r.week.shields };
+    },
+
+    /** Buy a Reeksskild (WEEK.shieldPrice coins): { ok, coins, shields }. */
+    buyWeekShield() {
+      sync();
+      const w = readWeek();
+      if (econ.coins < WEEK.shieldPrice) return { ok: false, coins: econ.coins, shields: w.shields };
+      const r = addShield(w);
+      if (!r.ok) return { ok: false, coins: econ.coins, shields: w.shields };
+      writeWeek(r.week);
+      econ = { ...econ, coins: econ.coins - WEEK.shieldPrice };
+      persistEcon();
+      return { ok: true, coins: econ.coins, shields: r.week.shields };
     },
 
     /** Has this player played before (a daily, Oefen, a match, or the first-game hints)? */

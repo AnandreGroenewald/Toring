@@ -519,6 +519,40 @@ svg.ic {
 .menu-stack { display: flex; flex-direction: column; gap: calc(22 * var(--u)); }
 
 .daily-card { padding-top: calc(30 * var(--u)); }
+/* die weekkis on the daily card (1.10): seven boxes, today's lit, and what it holds */
+.week-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: calc(6 * var(--u)) calc(10 * var(--u));
+  margin: calc(12 * var(--u)) 0 calc(4 * var(--u));
+  padding: calc(8 * var(--u)) calc(12 * var(--u));
+  border-radius: calc(18 * var(--u));
+  background: #fff7dd;
+  color: #6b4d00;
+  font-weight: 800;
+}
+.wk-title { font-size: max(10px, calc(18 * var(--u))); letter-spacing: 0.04em; text-transform: uppercase; }
+.wk-cells { display: inline-flex; gap: calc(4 * var(--u)); }
+.wk-cell {
+  display: grid;
+  place-items: center;
+  width: calc(36 * var(--u));
+  height: calc(36 * var(--u));
+  border-radius: calc(10 * var(--u));
+  background: #fff;
+  box-shadow: inset 0 0 0 calc(2 * var(--u)) #f0d78f;
+  font-size: calc(20 * var(--u));
+  opacity: 0.55;
+}
+.wk-cell.is-done { opacity: 1; background: var(--bosveld); color: #fff; box-shadow: none; font-weight: 900; }
+.wk-cell.is-today { opacity: 1; box-shadow: inset 0 0 0 calc(3 * var(--u)) var(--karoo); animation: wk-pulse 1.6s ease-in-out infinite; }
+.wk-cell.is-big { width: calc(42 * var(--u)); }
+.wk-line, .wk-shield { font-size: max(12px, calc(21 * var(--u))); }
+@keyframes wk-pulse { 50% { transform: scale(1.1); } }
+@media (prefers-reduced-motion: reduce) { .wk-cell.is-today { animation: none; } }
+.rm .wk-cell.is-today { animation: none; }
 
 .daily-head {
   display: flex;
@@ -1160,6 +1194,9 @@ svg.ic {
 .res-reward b { font-size: max(14px, calc(26 * var(--u))); }
 .res-reward .rw-sub { font-weight: 700; opacity: 0.8; }
 .res-reward .rw-rank { background: #ece6ff; color: #45308f; }
+/* the weekkis box on the results (1.10): its own line, the notes under it */
+.res-reward .rw-week { flex-direction: column; gap: calc(2 * var(--u)); border-radius: calc(22 * var(--u)); padding: calc(8 * var(--u)) calc(18 * var(--u)); background: #e7f7e3; color: #22582a; text-align: center; }
+.res-reward .rw-week.is-full { background: #fff0c2; color: #6b4d00; box-shadow: 0 0 0 calc(3 * var(--u)) #f7c948; }
 .res-reward .rw-rank.is-up { background: #ffe9a8; color: #6b4d00; animation: rank-up 0.9s ease-out both; }
 @keyframes rank-up { 0% { transform: scale(0.6); } 60% { transform: scale(1.12); } 100% { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .res-reward .rw-rank.is-up { animation: none; } }
@@ -1334,7 +1371,7 @@ svg.ic {
   padding: calc(8 * var(--u));
 }
 .tutor-btns { display: grid; gap: calc(10 * var(--u)); margin-top: calc(10 * var(--u)); }
-.lesson-link { border: 0; background: none; font: inherit; cursor: pointer; }
+.lesson-link { border: 0; background: none; font: inherit; cursor: pointer; min-height: 44px; padding: 10px 16px; }
 
 /* ------------------------------------------------------------------------- */
 /* Uitdagersreeks: choose a punishment (the tower keeps going underneath)     */
@@ -2005,6 +2042,12 @@ canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 
 }
 .lang-btn.on { border-color: var(--jakaranda-d, #5b3fa8); background: #fff; }
 .lang-btn:focus-visible { outline: 3px solid var(--jakaranda-d, #5b3fa8); outline-offset: 2px; }
+
+/* the daily reminder (1.10, the Android app) */
+.remind-ask { margin: 0 0 calc(16 * var(--u)); font-weight: 700; line-height: 1.4; }
+.remind-times { display: grid; gap: calc(12 * var(--u)); }
+.remind-times .btn.is-on { box-shadow: 0 0 0 calc(4 * var(--u)) var(--sonneblom); }
+.app-open { text-decoration: none; }
 
 /* the version under the statistics (testers can say which one they have) */
 .version-note { margin: 0; text-align: center; font-size: max(11px, calc(20 * var(--u))); font-weight: 700; color: var(--ink-soft); opacity: 0.8; }

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
@@ -23,6 +24,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Challenge links (?kamer=, ?teen=) open in the app (Android App Links: verified through
+                 https://anandregroenewald.github.io/.well-known/assetlinks.json). Only the game's own
+                 page: the privacy and sponsor pages stay in the browser. app/shim.js hands the link
+                 to the game. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="anandregroenewald.github.io" android:path="/Toring/" />
+                <data android:scheme="https" android:host="anandregroenewald.github.io" android:path="/Toring" />
+                <data android:scheme="https" android:host="anandregroenewald.github.io" android:path="/Toring/index.html" />
+            </intent-filter>
+
         </activity>
 
         <provider
@@ -41,4 +55,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- the game's Vibrasie setting (navigator.vibrate) -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- the daily reminder (LocalNotifications) asks for POST_NOTIFICATIONS itself; it never needs
+         exact alarms (Google Play allows those only for alarm and calendar apps), so that goes -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
 </manifest>

@@ -58,6 +58,7 @@ export const COSMETICS = Object.freeze({
     { id: 'perfekmeester', price: 150 },
     { id: 'wolkekrabber', price: 200 },
     { id: 'toringkoning', price: 300 },
+    { id: 'getrou', price: 0, week: true },   // the first full week of the weekkis (js/core/week.js), never sold
   ]),
   celebration: Object.freeze([
     { id: 'konfetti', price: 0, emoji: '🎊' },
@@ -251,7 +252,7 @@ export function usePowerup(eco, id) {
 export function buyCosmetic(eco, kind, id) {
   const e = cleanEconomy(eco);
   const c = cosmetic(kind, id);
-  if (!c || c.rank || e.owned[kind].includes(id) || e.coins < c.price) return { economy: e, ok: false };
+  if (!c || c.rank || c.week || e.owned[kind].includes(id) || e.coins < c.price) return { economy: e, ok: false };
   e.coins -= c.price;
   e.owned[kind].push(id);
   return { economy: e, ok: true };
