@@ -8,6 +8,7 @@ import { createDuel } from '../js/duel.js';
 import { PUNISHMENTS, isPunishment, botPunishment, attackFor } from '../js/core/duel.js';
 import { PUNISH_INFO } from '../js/core/strings.js';
 import { DUEL } from '../js/config.js';
+import { cleanCard, BOT_CARD } from '../js/core/economy.js';
 
 function fakeTimers() {
   let id = 0;
@@ -57,7 +58,7 @@ function setup(extra = {}) {
   const bus = new Bus();
   const timers = fakeTimers();
   const seen = [];
-  for (const ev of ['duel:choose', 'duel:chosen', 'duel:attack', 'hud:toast']) bus.on(ev, (p) => seen.push([ev, p]));
+  for (const ev of ['duel:choose', 'duel:chosen', 'duel:attack', 'hud:toast', 'hud:duel']) bus.on(ev, (p) => seen.push([ev, p]));
   const duel = createDuel({
     bus, nickname: () => 'Anna', setTimer: timers.setTimer, clearTimer: timers.clearTimer, now: timers.now, ...extra,
   });
@@ -127,7 +128,7 @@ test('a recording that gets there first sends the seed\'s punishment; an open ch
   const { bus, timers, duel, of } = setup();
   duel.startLink({ seed: SEED, name: 'Sannie', run: fast });
   bus.emit('duel:self', { t: 6000, h: 3, best: 3 });
-  assert.deepEqual(of('duel:attack'), [{ kind: botPunishment(SEED, 10), from: 'Sannie' }]);
+  assert.deepEqual(of('duel:attack'), [{ kind: botPunishment(SEED, 10), from: 'Sannie', style: 'gewoon' }], 'a recording has no card: no style');
   assert.equal(of('duel:choose').length, 0, 'the mark was theirs');
   // we beat them to nothing else; a new link match where we do, then our tower falls mid-choice
   duel.startLink({ seed: SEED, name: 'Sannie', run: slow });
@@ -140,12 +141,14 @@ test('a recording that gets there first sends the seed\'s punishment; an open ch
 });
 
 test('live: the server asks, the player\'s pick goes to the server, and both sides hear about it', () => {
-  const { bus, duel, of } = setup({ apiUrl: 'https://borge.example', WebSocketImpl: FakeSocket });
+  const mine = { badge: 'leeu', style: 'hoed', title: 'nope', junk: 1 };
+  const { bus, duel, of } = setup({ apiUrl: 'https://borge.example', WebSocketImpl: FakeSocket, card: () => mine });
   duel.joinRoom('ABCD23');
   const ws = FakeSocket.last;
   ws.onopen();
-  assert.deepEqual(ws.sent[0], { t: 'hello', v: 2, name: 'Anna' });
-  ws.hear({ t: 'start', seed: SEED, you: 0, opp: { name: 'Bennie' } });
+  assert.deepEqual(ws.sent[0], { t: 'hello', v: 2, name: 'Anna', card: cleanCard(mine) }, 'our card, known looks only');
+  ws.hear({ t: 'start', seed: SEED, you: 0, opp: { name: 'Bennie', card: { badge: 'olifant', style: 'kroon', rank: 'mega' } } });
+  assert.deepEqual(duel.match.oppCard, cleanCard({ badge: 'olifant', style: 'kroon' }), 'their card, cleaned');
   ws.hear({ t: 'choose', m: 10, def: 'monkey' });
   assert.deepEqual(of('duel:choose')[0], { m: 10, opp: 'Bennie', def: 'monkey', options: PUNISHMENTS, ms: DUEL.chooseMs });
   bus.emit('ui:duel-punish', { m: 10, kind: 'heat' });
@@ -154,17 +157,31 @@ test('live: the server asks, the player\'s pick goes to the server, and both sid
   assert.equal(of('hud:toast').length, 0, 'the toast waits for the server');
   ws.hear({ t: 'sent', m: 10, kind: 'heat' });
   assert.match(of('hud:toast')[0].text, /Hittegolf/);
+  assert.doesNotMatch(of('hud:toast')[0].text, /🎩/, 'weather wears no hat');
   // theirs: a known punishment comes through; anything else is ignored
   ws.hear({ t: 'attack', m: 20, kind: 'bomb' });
   ws.hear({ t: 'attack', m: 21, kind: 'fog' });
   assert.equal(of('duel:attack').length, 0);
   ws.hear({ t: 'attack', m: 20, kind: 'fog' });
-  assert.deepEqual(of('duel:attack'), [{ kind: 'fog', from: 'Bennie' }]);
+  assert.deepEqual(of('duel:attack'), [{ kind: 'fog', from: 'Bennie', style: 'kroon' }], 'their visitors wear their style');
   // the server's default came before our pick: the choice bar closes
   ws.hear({ t: 'choose', m: 30, def: 'monkey' });
   ws.hear({ t: 'sent', m: 30, kind: 'monkey' });
   assert.deepEqual(of('duel:chosen').at(-1), { m: 30, kind: 'monkey' });
   bus.emit('ui:duel-punish', { m: 30, kind: 'fog' });
   assert.notDeepEqual(ws.sent.at(-1), { t: 'punish', m: 30, kind: 'fog' });
+  assert.match(of('hud:toast').at(-1).text, /🐒🎩/, 'our monkey wears our hat');
+  assert.equal(duel.summary().oppCard.badge, 'olifant', 'the results know their card');
   duel.leave();
+});
+
+test('cards: Robot Rikus wears his own; the race track shows the opponent\'s badge', () => {
+  const { bus, duel, of } = setup();
+  const m = duel.startBot();
+  assert.deepEqual(m.oppCard, BOT_CARD);
+  bus.emit('duel:self', { t: 1000, h: 1, best: 1 });
+  assert.equal(of('hud:duel').at(-1).badge, '🦅');
+  duel.startLink({ seed: SEED, name: 'Sannie', run: slow });
+  bus.emit('duel:self', { t: 1000, h: 1, best: 1 });
+  assert.equal(of('hud:duel').at(-1).badge, '', 'a link carries no card');
 });

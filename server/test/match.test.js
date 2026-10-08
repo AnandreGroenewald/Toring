@@ -7,6 +7,7 @@ import { MatchRoom, MatchLobby } from '../src/match.js';
 import { createWorker } from '../src/worker.js';
 import { decodeChallenge, encodeChallenge, isRoomCode } from '../../js/core/duel.js';
 import { DUEL } from '../../js/config.js';
+import { cleanCard } from '../../js/core/economy.js';
 import { ORIGIN, T0, ADMIN, createHarness } from './support/harness.js';
 
 // ---------------------------------------------------------------- fakes
@@ -102,7 +103,7 @@ async function startedRoom({ env = {}, names = ['Anna', 'Bennie'], v = [undefine
 const say = (room, ws, o) => room.onMessage(ws, JSON.stringify(o));
 
 // ---------------------------------------------------------------- room
-test('room: init once, two players, hello -> both start with the same seed and each other\'s name', async () => {
+test('room: init once, two players, hello -> both start with the same seed and each other\'s name and card', async () => {
   const clk = clock();
   const state = fakeState();
   const room = new MatchRoom(state, {}, { now: clk.now, upgrade });
@@ -115,11 +116,15 @@ test('room: init once, two players, hello -> both start with the same seed and e
   await room.join(a);
   assert.deepEqual(a.sent, [{ t: 'wait' }]);
   await room.join(b);
-  await say(room, a, { t: 'hello', name: 'Anna' });
+  // a card goes through as known looks only (an older game sends none: the default card)
+  await say(room, a, { t: 'hello', name: 'Anna', card: { frame: 'goud', badge: 'leeu', title: '<b>baas</b>', celebration: 'braai', style: 'kroon', rank: 'goud', extra: 'x' } });
   assert.equal(a.of('start').length, 0, 'not before both said hello');
   await say(room, b, { t: 'hello', name: 'kak' });   // refused by the name rules -> the default
-  assert.deepEqual(a.last('start'), { t: 'start', seed: 'seedabc123', you: 0, opp: { name: 'Bouer' } });
-  assert.deepEqual(b.last('start'), { t: 'start', seed: 'seedabc123', you: 1, opp: { name: 'Anna' } });
+  assert.deepEqual(a.last('start'), { t: 'start', seed: 'seedabc123', you: 0, opp: { name: 'Bouer', card: cleanCard(null) } });
+  assert.deepEqual(b.last('start'), {
+    t: 'start', seed: 'seedabc123', you: 1,
+    opp: { name: 'Anna', card: { frame: 'goud', badge: 'leeu', title: 'bouer', celebration: 'braai', style: 'kroon', rank: 'goud' } },
+  });
   // a third player, or anyone after the start, is turned away
   const c = fakeSocket();
   await room.join(c);
@@ -283,13 +288,14 @@ test('room: a sleeping room wakes up where it was (seats, hello, marks, result)'
   await room.init({ kind: 'friend', seed: 'seedabc123' });
   const a = fakeSocket();
   await room.join(a);
-  await say(room, a, { t: 'hello', name: 'Anna' });
+  await say(room, a, { t: 'hello', name: 'Anna', card: { style: 'pet' } });
   // ... minutes later, after hibernation, the friend comes
   room = new MatchRoom(state, {}, { now: clk.now, upgrade });
   const b = fakeSocket();
   await room.join(b);
   await say(room, b, { t: 'hello', name: 'Bennie' });
   assert.equal(a.last('start').opp.name, 'Bennie', 'the host\'s hello survived the sleep');
+  assert.equal(b.last('start').opp.card.style, 'pet', 'and so did the host\'s card');
   clk.tick(DUEL.countdownMs + 8000);
   await say(room, a, { t: 'state', h: 11, best: 11 });
   room = new MatchRoom(state, {}, { now: clk.now, upgrade });

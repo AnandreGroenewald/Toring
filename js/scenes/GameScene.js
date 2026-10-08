@@ -523,7 +523,7 @@ export class GameScene extends Phaser.Scene {
           return;
         }
         try {
-          this.visitors.attack(a?.kind, from);
+          this.visitors.attack(a?.kind, from, a?.style);
         } catch (err) {
           this.visitorsFailed(err);
         }

@@ -12,10 +12,17 @@ import { S, VISITOR_INFO } from '../core/strings.js';
 import { visitRng, monkeyPlan, clownPlan, thiefPlan } from '../core/visitorplan.js';
 import { getGeometry, ensureTexture } from './blocks.js';
 import { canvasTexture, clamp, lerp } from './effects.js';
+import { cosmetic } from '../core/economy.js';
 
 const STEP_MS = PHYSICS.fixedDtMs;
 const EMOJI_FONT = `"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", ${FONT}`;
 const HALF = VISITOR.size / 2;
+// A duel attack wears the sender's style (js/core/economy.js): where it sits on the emoji, in sprite
+// sizes from its centre (x towards the way he faces), and how big it is.
+const ACC_FIT = {
+  monkey: { pet: [0.05, -0.4, 0.5], sonbril: [0.08, -0.16, 0.42], hoed: [0.05, -0.46, 0.52], kroon: [0.05, -0.44, 0.46] },
+  thief: { pet: [0, -0.42, 0.5], sonbril: [0, -0.2, 0.4], hoed: [0, -0.48, 0.52], kroon: [0, -0.46, 0.46] },
+};
 const HANG_ABOVE_TOP = 70;      // the monkey hangs this far above the tower-top line (screen px)
 const HOVER_ABOVE_TOP = 190;    // the clown floats this far above it
 const CLIMB_FROM = 230;         // the thief starts this far below the tower top...
@@ -271,10 +278,10 @@ export class Visitors {
    * now, or right after the one on screen. Its plan comes from the match seed and the attack's
    * number, so it is the same visit whichever device plays it.
    */
-  attack(type, from) {
+  attack(type, from, style = null) {
     if (this.dead || this.ended || this.attract || !VISITOR_TYPES.includes(type)) return false;
     this.attacks += 1;
-    const v = { type, at: 1000 + this.attacks, side: this.attacks % 2 ? -1 : 1, strength: 1, from: from || null };
+    const v = { type, at: 1000 + this.attacks, side: this.attacks % 2 ? -1 : 1, strength: 1, from: from || null, style };
     if (this.cur) this.queue.push(v);
     else this._start(v, false);
     return true;
@@ -309,6 +316,12 @@ export class Visitors {
     };
     c.plan = v.type === 'monkey' ? monkeyPlan(r, v) : v.type === 'clown' ? clownPlan(r, v) : thiefPlan(r, v);
     c.objs.push(c.sprite);
+    const fit = ACC_FIT[v.type]?.[v.style];
+    if (fit) {
+      c.acc = emojiText(scene, cosmetic('style', v.style).emoji, Math.round(VISITOR.size * fit[2])).setDepth(DEPTH.visitor + 0.05);
+      c.accFit = fit;
+      c.objs.push(c.acc);
+    }
     if (!attract) {
       c.rec = { type: v.type, outcome: 'came', n: 0 };
       this.records.push(c.rec);
@@ -796,6 +809,14 @@ export class Visitors {
     c.x = x;
     c.y = y;
     if (alive(c.sprite)) c.sprite.setVisible(true).setPosition(x, y).setRotation(rot).setScale(sx, syl).setAlpha(alpha);
+    if (alive(c.acc) && alive(c.sprite)) {
+      // the hat (or the sunglasses) turns, squashes and flips with him
+      const face = c.sprite.flipX ? 1 : -1;
+      const ox = face * c.accFit[0] * VISITOR.size * sx;
+      const oy = c.accFit[1] * VISITOR.size * syl;
+      c.acc.setVisible(true).setFlipX(c.sprite.flipX).setRotation(rot).setScale(sx, syl).setAlpha(alpha)
+        .setPosition(x + ox * Math.cos(rot) - oy * Math.sin(rot), y + ox * Math.sin(rot) + oy * Math.cos(rot));
+    }
     if (c.type === 'clown') this._placePuffs(c, tv, x, y);
   }
 

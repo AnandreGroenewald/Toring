@@ -482,7 +482,7 @@ export class HudScene extends Phaser.Scene {
     t.you.y = t.youY;
     t.them.y = t.themY;
     t.label.y = t.themY;
-    const str = `${d.name} ${fmtM(d.them)}`;
+    const str = `${d.badge ? `${d.badge} ` : ''}${d.name} ${fmtM(d.them)}`;
     if (str !== t.labelStr) {
       t.labelStr = str;
       t.label.setText(str).setColor('#cfe9ff');

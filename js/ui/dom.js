@@ -937,8 +937,11 @@ export function createUI(bus) {
     setMenuCoins(m.coins);
   }
 
-  /** A win celebration (the shop's preview; the winner of a match): its emoji rain down, with a fanfare. */
-  function celebrate(id) {
+  /**
+   * A win celebration (the shop's preview; the winner of a match): its emoji rain down, with a fanfare
+   * (`sound`: false for the other player's), and an optional caption ("Bennie vier!").
+   */
+  function celebrate(id, { caption = '', sound = true } = {}) {
     const c = cosmetic('celebration', id) || cosmetic('celebration', 'konfetti');
     const box = h('div', { class: `celebrate cel-${c.id}`, 'aria-hidden': 'true' });
     const n = reducedMotion() ? 0 : 24;
@@ -955,9 +958,9 @@ export function createUI(bus) {
         },
       }));
     }
-    box.append(h('b', { class: 'cel-big' }, emo(c.emoji)));
+    box.append(h('b', { class: 'cel-big' }, emo(c.emoji), caption ? h('span', { class: 'cel-cap', text: caption }) : null));
     root.append(box);
-    audio.play('record');
+    if (sound) audio.play('record');
     setTimeout(() => box.remove(), 4300);
   }
 
@@ -1057,8 +1060,12 @@ export function createUI(bus) {
         button('btn-teal', [emo('🤖'), h('span', { text: S.duelPlayLater })], () => bus.emit('ui:duel-later')),
         button('btn-white', [icon('close'), h('span', { text: S.duelCancel })], () => bus.emit('ui:duel-cancel')));
     } else if (o.state === 'versus') {
+      // both player cards: theirs big, ours small underneath
       kids.push(h('p', { class: 'vs-badge' }, emo('⚔️')),
         h('h2', { class: 'vs-title', text: S.duelVs(o.oppName || S.duelSomeone) }),
+        o.oppCard ? h('div', { class: 'vs-cards' },
+          playerCard({ name: o.oppName || S.duelSomeone, card: o.oppCard }),
+          o.youCard ? playerCard({ name: o.youName || S.duelYou, card: o.youCard, compact: true }) : null) : null,
         o.note ? h('p', { class: 'duel-sub', text: o.note }) : null,
         h('p', { class: 'vs-count', 'data-duel-count': '', 'aria-live': 'assertive' }));
     } else if (o.state === 'link') {

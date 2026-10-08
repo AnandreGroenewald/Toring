@@ -61,7 +61,7 @@ export const COSMETICS = Object.freeze({
   ]),
   celebration: Object.freeze([
     { id: 'konfetti', price: 0, emoji: '🎊' },
-    { id: 'vuurwerk', price: 150, emoji: '🎆' },
+    { id: 'vuurwerk', price: 150, emoji: '🧨' },
     { id: 'vuvuzela', price: 180, emoji: '📯' },
     { id: 'braai', price: 200, emoji: '🍖' },
     { id: 'skrum', price: 200, emoji: '🏉' },

@@ -673,6 +673,7 @@ const duel = createDuel({
   bus,
   apiUrl: matchApiUrl(),
   nickname: duelNick,
+  card: () => store.getCard(),
   onDecided: (outcome) => {
     if (outcome !== 'won' && outcome !== 'lost') return;
     store.recordDuel(outcome);
@@ -720,7 +721,7 @@ function versus(m, note = '') {
   const flow = ++duelFlow;
   lastDuelKind = m.kind;
   screen = 'duelwait';
-  ui.showDuelWait({ state: 'versus', oppName: m.oppName, note });
+  ui.showDuelWait({ state: 'versus', oppName: m.oppName, oppCard: m.oppCard, youName: duelNick(), youCard: store.getCard(), note });
   let n = Math.max(1, Math.round(DUEL.countdownMs / 1000));
   ui.setDuelCount(String(n));
   duelTimer = setInterval(() => {
@@ -754,7 +755,6 @@ function showDuelResults(r) {
   const d = duel.summary() || {};
   if (!d.outcome) d.outcome = 'none';
   const link = d.challenge ? `${siteUrl()}?teen=${d.challenge}` : '';
-  if (d.outcome === 'won') audio.play('record');
   screen = 'results';
   ui.showResults({
     result: r,
@@ -764,6 +764,9 @@ function showDuelResults(r) {
     shareText: buildDuelShareText({ outcome: d.outcome, youBest: d.youBest, oppName: d.oppName, oppBest: d.oppBest, link }),
     nextDayAt: 0,
   });
+  // the winner's celebration (js/core/economy.js): ours with the fanfare, or theirs as they see it
+  if (d.outcome === 'won') ui.celebrate(store.getCard().celebration);
+  else if (d.outcome === 'lost' && d.reason !== 'quit') ui.celebrate(d.oppCard?.celebration, { caption: S.duelTheyCelebrate(d.oppName || S.duelSomeone), sound: false });
   sleepLoop(RESULTS_SLEEP_MS);
 }
 

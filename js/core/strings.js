@@ -205,6 +205,7 @@ export const S = {
   duelNobody: 'Niemand is nou aanlyn nie. Jy speel teen ’n opname van ’n ander speler se wedstryd.',
   duelNobodyBot: 'Niemand is nou aanlyn nie. Jy speel teen Robot Rikus.',
   duelVs: (name) => `Teen ${name}!`,
+  duelTheyCelebrate: (name) => `${name} vier!`,
   duelGo: 'Bou!',
   duelCancel: 'Kanselleer',
   duelWaitFriend: 'Wag vir jou vriend…',

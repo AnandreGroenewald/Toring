@@ -1429,8 +1429,11 @@ svg.ic {
   font-size: calc(var(--s) * var(--u));
   animation: confetti-fall var(--t) ease-in var(--d) both;
 }
-.celebrate .cel-big { position: absolute; left: 0; right: 0; top: 28%; text-align: center; animation: pop-in 0.5s ease-out both, cel-out 0.6s ease-in 3.2s both; }
+.celebrate .cel-big { position: absolute; left: 0; right: 0; top: 7%; text-align: center; animation: pop-in 0.5s ease-out both, cel-out 0.6s ease-in 3.2s both; }
 .celebrate .cel-big .emoji { font-size: calc(200 * var(--u)); }
+.celebrate .cel-cap { display: block; margin: calc(8 * var(--u)) auto 0; width: max-content; max-width: 90%; padding: calc(8 * var(--u)) calc(22 * var(--u)); border-radius: 999px; background: rgba(20, 28, 48, 0.82); color: #fff; font-size: calc(40 * var(--u)); font-weight: 900; overflow-wrap: anywhere; }
+.vs-cards { display: grid; justify-items: center; gap: calc(10 * var(--u)); margin: calc(4 * var(--u)) 0 calc(8 * var(--u)); }
+.vs-cards .pcard { margin: 0; }
 @keyframes cel-out { to { opacity: 0; transform: scale(1.3); } }
 
 /* ------------------------------------------------------------------------- */

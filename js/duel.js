@@ -3,6 +3,8 @@
 // happens: attacks ('duel:attack'), the result ('duel:end') and the race track ('hud:duel'). The first
 // to a height mark chooses the punishment ('duel:choose' -> 'ui:duel-punish' -> 'duel:chosen'). The rules
 // are js/core/duel.js; for a live match the server runs the same referee (server/src/match.js).
+// Both players' cards (js/core/economy.js: frame, badge, title, celebration, visitor style, rank) travel
+// with the hello and the start, so each side sees the other's looks.
 
 import { DUEL } from './config.js';
 import { S, PUNISH_INFO } from './core/strings.js';
@@ -10,11 +12,13 @@ import {
   createReferee, createRecorder, createGhost, botRun, newMatchSeed, isMatchSeed, decodeChallenge,
   encodeChallenge, isRoomCode, cleanNickname, attackFor, PUNISHMENTS, isPunishment, botPunishment,
 } from './core/duel.js';
+import { cleanCard, cosmetic, BOT_CARD } from './core/economy.js';
 
 const YOU = 0;
 const THEM = 1;
 const RESULT_WAIT_MS = 2500;   // live: after our tower fell, wait this long for the server's verdict
 const PROTOCOL = 2;            // 2: the first to a height mark chooses the punishment ('choose' / 'punish')
+const DEFAULT_CARD = cleanCard(null);   // a recording or a link carries no card
 const round1 = (v) => Math.round(v * 10) / 10;
 const num = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(DUEL.maxHeightM, Number(v))) : 0);
 
@@ -55,11 +59,11 @@ function wsBase(apiUrl) {
 }
 
 /**
- * @param {{ bus, apiUrl?: string, nickname: () => string, onDecided?: (outcome) => void,
+ * @param {{ bus, apiUrl?: string, nickname: () => string, card?: () => object, onDecided?: (outcome) => void,
  *   WebSocketImpl?, fetchImpl?, timers? }} deps
  */
 export function createDuel({
-  bus, apiUrl = '', nickname = () => '', onDecided = () => {},
+  bus, apiUrl = '', nickname = () => '', card = () => null, onDecided = () => {},
   WebSocketImpl = globalThis.WebSocket, fetchImpl = globalThis.fetch ? globalThis.fetch.bind(globalThis) : null,
   setTimer = (fn, ms) => setTimeout(fn, ms), clearTimer = (id) => clearTimeout(id), now = () => Date.now(),
 } = {}) {
@@ -68,14 +72,16 @@ export function createDuel({
   const live = !!wsUrl && typeof WebSocketImpl === 'function';
   let match = null;
   let pending = null;   // { ws, timer } while searching or waiting in a room
-  const hud = { you: 0, them: 0, name: '', claimed: {} };
+  const hud = { you: 0, them: 0, name: '', badge: '', claimed: {} };
+  const hello = () => ({ t: 'hello', v: PROTOCOL, name: nickname() || '', card: cleanCard(card()) });
 
   // ------------------------------------------------------------------------------- a match
-  function newMatch({ kind, seed, oppName, run = null, ws = null, you = YOU }) {
+  function newMatch({ kind, seed, oppName, oppCard = null, run = null, ws = null, you = YOU }) {
     if (match) dropChoice(match);
     match = {
       kind, seed, ws, you,
       oppName: oppName || S.duelSomeone,
+      oppCard: oppCard ? cleanCard(oppCard) : DEFAULT_CARD,
       youName: nickname() || '',
       referee: kind === 'live' ? null : createReferee(),
       ghost: run ? createGhost(run) : null,
@@ -89,6 +95,7 @@ export function createDuel({
       lastSent: -1e9, sentBest: 0, lastT: 0,
     };
     hud.name = match.oppName;
+    hud.badge = cosmetic('badge', match.oppCard.badge)?.emoji || '';
     hud.claimed = match.claimed;
     hud.you = 0;
     hud.them = 0;
@@ -134,7 +141,7 @@ export function createDuel({
   /** The other tower sent us a punishment. */
   function punishIn(m, kind) {
     if (!isPunishment(kind) || m.over) return;
-    bus.emit('duel:attack', { kind, from: m.oppName });
+    bus.emit('duel:attack', { kind, from: m.oppName, style: m.oppCard.style });
   }
 
   /** Our punishment reached the other tower: a recording loses height, and the player hears about it. */
@@ -142,7 +149,9 @@ export function createDuel({
     const info = PUNISH_INFO[kind];
     if (!info) return;
     if (m.ghost) m.ghost.hit(kind);
-    bus.emit('hud:toast', { text: S.duelAttackOut(info.name, m.oppName, info.emoji), color: '#ffe38c', visitor: true });
+    // a visitor wears our style (js/core/economy.js) on the other tower: the toast shows it too
+    const acc = kind === 'monkey' || kind === 'thief' ? cosmetic('style', card()?.style)?.emoji || '' : '';
+    bus.emit('hud:toast', { text: S.duelAttackOut(info.name, m.oppName, info.emoji + acc), color: '#ffe38c', visitor: true });
   }
 
   // ------------------------------------------------------------------------- choosing a punishment
@@ -292,7 +301,7 @@ export function createDuel({
       return;
     }
     pending = { ws, timer: null };
-    ws.onopen = () => send(ws, { t: 'hello', v: PROTOCOL, name: nickname() || '' });
+    ws.onopen = () => send(ws, hello());
     ws.onmessage = (e) => {
       const msg = parse(e.data);
       if (!msg) return;
@@ -305,7 +314,9 @@ export function createDuel({
           started = true;
           clearTimer(pending?.timer);
           pending = null;
-          const m = newMatch({ kind: 'live', seed: msg.seed, oppName: cleanNickname(msg.opp?.name) || S.duelSomeone, ws, you: msg.you });
+          const m = newMatch({
+            kind: 'live', seed: msg.seed, oppName: cleanNickname(msg.opp?.name) || S.duelSomeone, oppCard: msg.opp?.card, ws, you: msg.you,
+          });
           onStart(m);
         }
         return;
@@ -346,7 +357,7 @@ export function createDuel({
       fallback(onFallback);
     }, DUEL.searchMs);
     pending = { ws, timer };
-    ws.onopen = () => send(ws, { t: 'hello', v: PROTOCOL, name: nickname() || '' });
+    ws.onopen = () => send(ws, hello());
     ws.onmessage = (e) => {
       const msg = parse(e.data);
       if (!msg || msg.t !== 'match' || !isRoomCode(msg.room) || pending?.ws !== ws) return;
@@ -417,7 +428,7 @@ export function createDuel({
 
   function startBot() {
     const seed = newMatchSeed();
-    return newMatch({ kind: 'bot', seed, oppName: S.duelBotName, run: botRun(seed) });
+    return newMatch({ kind: 'bot', seed, oppName: S.duelBotName, oppCard: BOT_CARD, run: botRun(seed) });
   }
 
   /** Someone's run from a link (?teen=): the same tower against their recording. */
@@ -465,6 +476,7 @@ export function createDuel({
         outcome: m.outcome || (m.lostConn ? 'none' : null),
         reason: m.reason,
         oppName: m.oppName,
+        oppCard: m.oppCard,
         oppBest: round1(m.oppBest),
         youBest: round1(m.youBest),
         lostConn: m.lostConn,

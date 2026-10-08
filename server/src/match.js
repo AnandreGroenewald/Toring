@@ -12,6 +12,7 @@ import {
   createReferee, cleanNickname, cleanReport, decodeChallenge, encodeChallenge, heightDm, isMatchSeed, newMatchSeed, newRoomCode,
   isPunishment,
 } from '../../js/core/duel.js';
+import { cleanCard } from '../../js/core/economy.js';
 
 const MSG_MAX = 512;                   // characters per message
 const MSG_PER_SEC = 10;                // per player
@@ -58,7 +59,7 @@ function parseMsg(data) {
   }
 }
 
-/** What a socket carries through hibernation: { seat, hello, name, v } in a room, { at, hello } in the lobby. */
+/** What a socket carries through hibernation: { seat, hello, name, v, card } in a room, { at, hello } in the lobby. */
 function att(ws) {
   try {
     return ws.deserializeAttachment() || {};
@@ -210,7 +211,8 @@ export class MatchRoom {
     if (msg.t === 'hello') {
       if (m.started) return;
       const v = Math.max(1, Math.min(99, Math.floor(Number(msg.v)) || 1));
-      ws.serializeAttachment({ seat, hello: true, name: cleanNickname(msg.name) || DEFAULT_NAME, v });
+      // the player card (looks and rank, js/core/economy.js) goes to the other player as known ids only
+      ws.serializeAttachment({ seat, hello: true, name: cleanNickname(msg.name) || DEFAULT_NAME, v, card: cleanCard(msg.card) });
       const both = [this.socketFor(0), this.socketFor(1)];
       if (both.every((s) => s && att(s).hello)) await this.start(now);
       return;
@@ -307,7 +309,7 @@ export class MatchRoom {
     for (const k of [0, 1]) m.names[k] = att(this.socketFor(k)).name || DEFAULT_NAME;
     for (const s of this.sockets()) {
       const k = seatOf(s);
-      if (k >= 0) sendJson(s, { t: 'start', seed: m.seed, you: k, opp: { name: m.names[1 - k] } });
+      if (k >= 0) sendJson(s, { t: 'start', seed: m.seed, you: k, opp: { name: m.names[1 - k], card: cleanCard(att(this.socketFor(1 - k)).card) } });
     }
     await this.save();
     await this.state.storage.setAlarm(now + DUEL.maxRunMs + DUEL.countdownMs);
