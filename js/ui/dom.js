@@ -10,7 +10,7 @@ import { fmtM, fmtInt, fmtClock, fmtDuration, dayName, monthName } from '../core
 import { shareResult } from '../core/share.js';
 import { visitorResultLine } from '../core/visitorrules.js';
 import { sayingOfTheDay, resultSaying, pauseSaying } from '../core/sayings.js';
-import { getLanguage, glossSaying, sayingMeaning } from '../core/i18n.js';
+import { getLanguage, localSaying } from '../core/i18n.js';
 import { audio, haptics } from '../audio.js';
 
 const GRID_COLS = 10;
@@ -684,14 +684,12 @@ export function createUI(bus) {
 
     // "Spreekwoord van die dag" lives inside the spacer (absolutely placed): it never adds height, so
     // it can't push the play button down; fitSaying() hides it when the gap is too small for it.
-    const saying = m.dateKey ? sayingOfTheDay(m.dateKey) : '';
-    const meaning = sayingMeaning(saying);   // English: what the Afrikaans saying means
+    const saying = m.dateKey ? localSaying(sayingOfTheDay(m.dateKey)) : '';
     const gap = h('div', { class: saying ? 'spacer has-saying' : 'spacer' }, saying
       ? h('div', { class: 'saying-day' },
         h('div', { class: 'saying-inner' },
           h('span', { class: 'saying-label', text: S.sayingOfDay }),
-          h('p', { class: 'saying-text', text: saying }),
-          meaning ? h('p', { class: 'saying-meaning', text: meaning }) : null))
+          h('p', { class: 'saying-text', text: saying })))
       : null);
     // 🌐 Afrikaans or English (the same picker a new player sees once)
     const lang = getLanguage();
@@ -1011,7 +1009,7 @@ export function createUI(bus) {
     const card = h('div', { class: 'card pause-card' },
       h('div', { class: 'pause-ic', 'aria-hidden': 'true' }, icon('pause')),
       h('h2', { text: S.paused }),
-      h('p', { class: 'saying-line', text: glossSaying(pauseSaying()) }),
+      h('p', { class: 'saying-line', text: localSaying(pauseSaying()) }),
       // before the first drop nothing counts yet, so no warning
       mode === 'daily' && started ? h('p', { class: 'warn' }, emo('⚠️'), h('span', { text: S.quitWarnDaily })) : null,
       button('btn-big btn-green', [icon('play'), h('span', { text: S.resume })], () => bus.emit('ui:resume')),
@@ -1316,7 +1314,7 @@ export function createUI(bus) {
       h('h2', { class: 'res-title' }, emo(isNewBest ? '🏆' : why.emoji), h('span', { text: isNewBest ? S.newRecord : why.title })),
       h('p', { class: 'res-sub', text: isNewBest ? `${why.emoji} ${why.title}` : why.sub }),
       // a saying for the outcome (same for everyone with the same daily seed and outcome); not part of the share text
-      h('p', { class: 'saying-line res-saying', text: glossSaying(resultSaying(r, isNewBest)) }));
+      h('p', { class: 'saying-line res-saying', text: localSaying(resultSaying(r, isNewBest)) }));
     const empty = !(r.blocksDropped > 0);
 
     const bigM = h('div', { class: 'big-m', text: fmtM(r.heightM || 0) });

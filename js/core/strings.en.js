@@ -1,7 +1,7 @@
 // English text for Stapel: the same keys and shapes as js/core/strings.js (tests/i18n.test.js checks
 // that). js/core/i18n.js lays these over the Afrikaans tables when the player chooses English.
-// Character names stay Afrikaans (Blouaap, Hanswors, Skelm Sakkie, Robot Rikus), and so do the
-// sayings: English shows each with its meaning (SAYING_MEANINGS). Use the typographic ’ (U+2019).
+// Character names stay Afrikaans (Blouaap, Hanswors, Skelm Sakkie, Robot Rikus). Each Afrikaans saying
+// has an English one (SAYINGS_EN). Use the typographic ’ (U+2019).
 
 export const S_EN = {
   title: 'Stapel',
@@ -114,7 +114,7 @@ export const S_EN = {
 
   // --- First game: hints during play (js/core/coach.js) ---
   firstNudge: 'New? Just tap and play — we’ll show you how.',
-  sayingOfDay: 'Afrikaans saying of the day',
+  sayingOfDay: 'Saying of the day',
   coachTap: 'Tap to drop 👆',
   coachMiddle: 'Aim for the middle — the white outline shows where it lands',
   coachPerfect: 'Perfect! Do it again 🎯',
@@ -352,45 +352,49 @@ export const SHAPE_NAMES_EN = {
   T: 'T-piece',
 };
 
-/** What each Afrikaans saying (js/core/sayings.js) means; English shows the saying with its meaning. */
-export const SAYING_MEANINGS = {
-  'Aanhouer wen.': 'Perseverance wins.',
-  'Aanhouer wen!': 'Perseverance wins!',
-  'Klein begin, aanhou wen.': 'Start small, keep going.',
-  'Klein begin, aanhou wen!': 'Start small, keep going!',
+/**
+ * The English saying shown in place of each Afrikaans one (js/core/sayings.js): the closest real English
+ * saying where there is one, else the plain meaning. Keyed by the Afrikaans line, so English players get
+ * the same saying of the day as everyone else.
+ */
+export const SAYINGS_EN = {
+  'Aanhouer wen.': 'Perseverance pays off.',
+  'Aanhouer wen!': 'Perseverance pays off!',
+  'Klein begin, aanhou wen.': 'Little by little, one goes far.',
+  'Klein begin, aanhou wen!': 'Little by little, one goes far!',
   'Rome is nie in een dag gebou nie.': 'Rome wasn’t built in a day.',
-  '’n Boer maak ’n plan.': 'There’s always a way.',
-  '’n Boer maak ’n plan!': 'There’s always a way!',
-  'Alle begin is moeilik.': 'Every beginning is hard.',
+  '’n Boer maak ’n plan.': 'Necessity is the mother of invention.',
+  '’n Boer maak ’n plan!': 'Where there’s a will, there’s a way!',
+  'Alle begin is moeilik.': 'All beginnings are hard.',
   'Oefening baar kuns.': 'Practice makes perfect.',
   'Waar daar ’n wil is, is daar ’n weg.': 'Where there’s a will, there’s a way.',
   'Wie nie waag nie, wen nie.': 'Nothing ventured, nothing gained.',
-  'Moed verloor, alles verloor.': 'Lose heart, lose everything.',
-  'Moed verloor, alles verloor — probeer weer!': 'Lose heart, lose all — try again!',
-  'Na reën kom sonskyn.': 'After rain comes sunshine.',
-  'Moenie die bobbejaan agter die bult gaan haal nie.': 'Don’t go looking for trouble.',
+  'Moed verloor, alles verloor.': 'Never lose heart.',
+  'Moed verloor, alles verloor — probeer weer!': 'Never lose heart — try again!',
+  'Na reën kom sonskyn.': 'Every cloud has a silver lining.',
+  'Moenie die bobbejaan agter die bult gaan haal nie.': 'Don’t cross a bridge before you come to it.',
   'Môre is nog ’n dag.': 'Tomorrow is another day.',
   'Elke hond kry sy dag.': 'Every dog has its day.',
-  'Hou die blink kant bo.': 'Stay positive.',
-  'Hou die blink kant bo!': 'Stay positive!',
-  'Agteros kom ook in die kraal.': 'Slow and steady gets there too.',
+  'Hou die blink kant bo.': 'Look on the bright side.',
+  'Hou die blink kant bo!': 'Look on the bright side!',
+  'Agteros kom ook in die kraal.': 'Slow and steady wins the race.',
   'Wie laaste lag, lag die lekkerste.': 'Whoever laughs last laughs best.',
   'Hoe meer haas, hoe minder spoed.': 'More haste, less speed.',
   'Haastige spoed is selde goed.': 'Haste makes waste.',
   'Eendrag maak mag.': 'Unity is strength.',
   'Een swaeltjie maak nie ’n somer nie.': 'One swallow doesn’t make a summer.',
-  'Die beste stuurlui staan aan wal.': 'It’s easy to judge from the side.',
-  'Kyk eers hoe die kat uit die boom klim.': 'Wait and see first.',
+  'Die beste stuurlui staan aan wal.': 'Everyone’s an expert from the sidelines.',
+  'Kyk eers hoe die kat uit die boom klim.': 'Wait and see which way the wind blows.',
   'Beter laat as nooit.': 'Better late than never.',
   'Stadig oor die klippe.': 'Easy does it.',
   'So sterk soos ’n os!': 'As strong as an ox!',
   'Stapel hoog, staan sterk!': 'Stack high, stand strong!',
-  'Klein maar dapper!': 'Small but brave!',
-  'Dit staan soos ’n paal bo water!': 'There’s no doubt about it!',
-  'Jy is nie onder ’n kalkoen uitgebroei nie!': 'You’re nobody’s fool!',
-  'Gedane sake het geen keer nie.': 'What’s done is done.',
-  'Dis die laaste strooi wat die kameel se rug breek.': 'The last straw breaks the camel’s back.',
+  'Klein maar dapper!': 'Small but mighty!',
+  'Dit staan soos ’n paal bo water!': 'No doubt about it!',
+  'Jy is nie onder ’n kalkoen uitgebroei nie!': 'You weren’t born yesterday!',
+  'Gedane sake het geen keer nie.': 'No use crying over spilt milk.',
+  'Dis die laaste strooi wat die kameel se rug breek.': 'It’s the last straw that breaks the camel’s back.',
   'Vroeg ryp, vroeg vrot.': 'Early ripe, early rotten.',
-  '’n Halwe eier is beter as ’n leë dop.': 'Half an egg beats an empty shell.',
+  '’n Halwe eier is beter as ’n leë dop.': 'Half a loaf is better than none.',
   'Iets is beter as niks.': 'Something is better than nothing.',
 };

@@ -7,7 +7,7 @@
 import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, POWERUP_INFO, COSMETIC_INFO, RANK_INFO, SHAPE_NAMES } from './strings.js';
 import {
   S_EN, WEATHER_INFO_EN, VISITOR_INFO_EN, PUNISH_INFO_EN, POWERUP_INFO_EN, COSMETIC_INFO_EN, RANK_INFO_EN, SHAPE_NAMES_EN,
-  SAYING_MEANINGS,
+  SAYINGS_EN,
 } from './strings.en.js';
 import { setNumberStyle } from './format.js';
 
@@ -52,12 +52,8 @@ export function setLanguage(lang) {
 
 export const getLanguage = () => current;
 
-/** What an Afrikaans saying means, in English ('' in Afrikaans, where it speaks for itself). */
-export const sayingMeaning = (line) => (current === 'en' && line ? SAYING_MEANINGS[line] || '' : '');
-
-/** An Afrikaans saying as shown: as it is in Afrikaans, with its meaning in English. */
-export function glossSaying(line) {
+/** A saying (picked from the Afrikaans lists in js/core/sayings.js) in the player's language. */
+export function localSaying(line) {
   if (current !== 'en' || !line) return line;
-  const meaning = SAYING_MEANINGS[line];
-  return meaning ? `${line} (${meaning})` : line;
+  return SAYINGS_EN[line] || line;
 }

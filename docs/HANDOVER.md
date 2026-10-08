@@ -318,7 +318,7 @@ Later the owner added (decisions are final unless they say otherwise):
   - **Switching later:** the menu's 🌐 button (top left) opens the same picker.
   - **What stays Afrikaans:**
     - the characters' names (Blouaap, Hanswors, Skelm Sakkie, Robot Rikus) and "Bouer" in default nicknames;
-    - the sayings: English shows each with its meaning (`SAYING_MEANINGS`), e.g. "Aanhouer wen. (Perseverance wins.)". The menu shows the meaning on a line of its own.
+    - the sayings are picked from the Afrikaans lists as before (the same for everyone), and English shows the closest real English saying for each (`SAYINGS_EN`), e.g. "Hou die blink kant bo" → "Look on the bright side". (1.9.0 showed the Afrikaans with its meaning; the owner asked for English.)
   - **Numbers and dates:** English uses a decimal point (37.5 m) and English day and month names (`js/core/format.js`).
   - **Not translated yet:** the sponsor pages, `privaatheid.html` and `terme.html`. An English privacy page would suit the English store listing. The store texts in `app/store/` mention both languages.
   - **Switching:** the address carries the new language (`?lang=`, which comes off the address at start-up like the challenge links), so a switch works even where nothing can be saved. A double tap can't start a second reload. The page title follows the language.

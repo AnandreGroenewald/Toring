@@ -16,7 +16,7 @@ import { createBlockNamer } from '../core/sponsors.js';
 import { createTally, tallyShow } from '../core/audience.js';
 import { createCoach } from '../core/coach.js';
 import { milestoneSaying, MILESTONE_STEP_M } from '../core/sayings.js';
-import { glossSaying } from '../core/i18n.js';
+import { localSaying } from '../core/i18n.js';
 import { SPONSOR } from '../sponsorConfig.js';
 import { Weather } from '../game/weather.js';
 import { Crane } from '../game/crane.js';
@@ -1988,7 +1988,7 @@ export class GameScene extends Phaser.Scene {
       hit = this.nextMilestoneM;
       this.nextMilestoneM += MILESTONE_STEP_M;
     }
-    if (hit) bus.emit('hud:saying', { text: `${hit}\u00a0m — ${glossSaying(milestoneSaying(this.seed, hit))}` });
+    if (hit) bus.emit('hud:saying', { text: `${hit}\u00a0m — ${localSaying(milestoneSaying(this.seed, hit))}` });
   }
 
   updateFriction() {

@@ -660,16 +660,6 @@ svg.ic {
   text-wrap: balance;
   text-shadow: 0 calc(3 * var(--u)) 0 rgba(29, 43, 69, 0.42), 0 0 calc(16 * var(--u)) rgba(29, 43, 69, 0.28);
 }
-/* English: what the Afrikaans saying of the day means */
-.saying-meaning {
-  margin: 0;
-  font-size: calc(23 * var(--u));
-  font-weight: 700;
-  line-height: 1.25;
-  opacity: 0.92;
-  text-wrap: balance;
-  text-shadow: 0 calc(2 * var(--u)) 0 rgba(29, 43, 69, 0.42);
-}
 .saying-line {
   margin: 0;
   font-size: calc(26 * var(--u));

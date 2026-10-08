@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as AF from '../js/core/strings.js';
 import * as EN from '../js/core/strings.en.js';
-import { setLanguage, getLanguage, glossSaying, sayingMeaning, LANGS } from '../js/core/i18n.js';
+import { setLanguage, getLanguage, localSaying, LANGS } from '../js/core/i18n.js';
 import { fmtM, fmtMShort, fmtDateKey } from '../js/core/format.js';
 import { SAYINGS } from '../js/core/sayings.js';
 import { buildShareText } from '../js/core/share.js';
@@ -101,18 +101,18 @@ test('switching: English laid over in place, Afrikaans back exactly; numbers and
   assert.equal(JSON.stringify(AF.S) + JSON.stringify(AF.WEATHER_INFO) + JSON.stringify(AF.COSMETIC_INFO), before);
 });
 
-test('sayings stay Afrikaans; English adds what each one means', () => {
+test('sayings: Afrikaans as they are; English gets an English saying for each, the same day for everyone', () => {
   const all = new Set(Object.values(SAYINGS).flat());
-  const missing = [...all].filter((line) => !EN.SAYING_MEANINGS[line]);
-  assert.deepEqual(missing, [], 'every saying has an English meaning');
-  assert.deepEqual(Object.keys(EN.SAYING_MEANINGS).filter((k) => !all.has(k)), [], 'no meanings for sayings that are gone');
+  assert.deepEqual([...all].filter((line) => !EN.SAYINGS_EN[line]), [], 'every saying has an English one');
+  assert.deepEqual(Object.keys(EN.SAYINGS_EN).filter((k) => !all.has(k)), [], 'none for sayings that are gone');
+  for (const line of all) assert.doesNotMatch(EN.SAYINGS_EN[line], /’n |\b(die|nie|jou)\b/, `${line}: English`);
   setLanguage('af');
-  assert.equal(glossSaying('Aanhouer wen.'), 'Aanhouer wen.');
-  assert.equal(sayingMeaning('Aanhouer wen.'), '');
+  assert.equal(localSaying('Aanhouer wen.'), 'Aanhouer wen.');
   setLanguage('en');
-  assert.equal(glossSaying('Aanhouer wen.'), 'Aanhouer wen. (Perseverance wins.)');
-  assert.equal(sayingMeaning('Oefening baar kuns.'), 'Practice makes perfect.');
-  assert.equal(glossSaying(''), '');
+  assert.equal(localSaying('Hou die blink kant bo.'), 'Look on the bright side.');
+  assert.equal(localSaying('Oefening baar kuns.'), 'Practice makes perfect.');
+  assert.equal(localSaying(''), '');
+  assert.equal(AF.S.sayingOfDay, 'Saying of the day');
   setLanguage('af');
 });
 
