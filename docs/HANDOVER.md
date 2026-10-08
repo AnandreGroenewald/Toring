@@ -339,6 +339,27 @@ Later the owner added (decisions are final unless they say otherwise):
     - all the 1.8 checks again in Afrikaans (24 runs, both sizes);
     - the daily is still identical for everyone.
   - **Seen, not changed:** if a player drops just as Blouaap's 10 s run out and the block misses, the strike's grace covers that miss too (no heart lost). This has been so since 1.7.9, and is rare.
+- **Smoother, and fixes from testers (version `1.9.1`, 8 Oct 2026).** The owner and a tester reported:
+  - "the shadow of the block sometimes lags";
+  - the shop's ✕ did nothing;
+  - the menu's bottom labels were "a little off balance";
+  - "the monkey ... doesn't line up" (the hats on Android);
+  - "it shows a notification let's say 30, but it's the amount of coins".
+
+  What changed:
+  - **No more stalls while aiming.** Measured frame by frame, the GameScene update took up to ~27 ms. It now peaks at ~5 ms in the headless check:
+    - a block's texture used to be drawn in the frame it arrived on the crane. Textures are now drawn ahead (`prewarmTextures`): the first few at the start, then two at a time while each block falls;
+    - the weather banner's emoji (and the weather chip's) cost 12.5 ms in that same frame. They are drawn once into textures, one per frame early in the game (`emojiTexture` in `HudScene.js`);
+    - the flood tag's 🌊 is drawn once, apart from its number, and the number redraws once a second (it was 4 times).
+  - **The ✕ on every sheet works.** The shop's head was positioned and painted over the ✕, so taps hit the head. `.sheet .close` now has `z-index: 2`. A new check taps every button on every screen and sheet, at both sizes and in both languages, and confirms none is covered. It found nothing else. The celebration "Wys / Try it" preview was a 32×15 px word; it is now a button 32 px high.
+  - **The menu's bottom row:** five equal columns, one line each. The how-to button reads "Speelreëls" / "Rules"; its sheet keeps "Hoe speel ek?".
+  - **Hats fit every phone.** `js/core/emojifit.js` finds the head in the glyph's own pixels: the biggest blob in the top 22 % (Noto's monkey has its tail curled up beside its head). Hats sit on the head and sunglasses on the eyes, sized to the head:
+    - in the game (`accessoryFit` in `visitors.js`, cached per visitor and style; the old fixed offsets remain the fallback);
+    - in the shop's Straf-styl previews (`stylePreview`, a canvas).
+
+    Checked with Apple's emoji and with Google's Noto Color Emoji (`?emojifont=noto` makes Noto win, for tests).
+  - **Coins on the Winkel button** show as a coin pill ("🪙 30"), not a notification-style count.
+  - **English sayings:** an English saying for each Afrikaans one (see 1.9.0).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
