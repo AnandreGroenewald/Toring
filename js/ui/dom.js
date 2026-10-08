@@ -4,8 +4,8 @@
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
 import { GAME_W, PALETTE, RATING_EMOJI, computeGameHeight } from '../config.js';
-import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO } from '../core/strings.js';
-import { COIN, RANKS, rankFor } from '../core/economy.js';
+import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO, COSMETIC_INFO } from '../core/strings.js';
+import { COIN, RANKS, rankFor, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic } from '../core/economy.js';
 import { fmtM, fmtInt, fmtClock, fmtDuration, DAYS_AF } from '../core/format.js';
 import { shareResult } from '../core/share.js';
 import { visitorResultLine } from '../core/visitorrules.js';
@@ -38,6 +38,7 @@ const ICONS = {
   copy: `<g ${STROKE} stroke-width="2.4"><rect x="8.6" y="8.6" width="11.4" height="12" rx="2.2"/><path d="M15.4 8.6V5.7c0-1.2-1-2.2-2.2-2.2H6.2C5 3.5 4 4.5 4 5.7v8.1C4 15 5 16 6.2 16h2.4"/></g>`,
   chat: '<path d="M12 2.6a9.3 9.3 0 0 0-8 14l-1.3 4.8 4.9-1.3A9.3 9.3 0 1 0 12 2.6z"/><g style="fill:var(--wa-d)"><circle cx="7.9" cy="12" r="1.45"/><circle cx="12" cy="12" r="1.45"/><circle cx="16.1" cy="12" r="1.45"/></g>',
   close: `<path ${STROKE} stroke-width="3" d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>`,
+  shop: `<path d="M5.4 8.4h13.2l-1.15 11.3a1.7 1.7 0 0 1-1.7 1.5H8.25a1.7 1.7 0 0 1-1.7-1.5z"/><path ${STROKE} stroke-width="2.3" d="M8.9 8.4V7.1a3.1 3.1 0 0 1 6.2 0v1.3"/>`,
   chart: '<rect x="3.4" y="11.5" width="4.6" height="9" rx="1.3"/><rect x="9.7" y="3.5" width="4.6" height="17" rx="1.3"/><rect x="16" y="8" width="4.6" height="12.5" rx="1.3"/>',
   help: `<circle ${STROKE} stroke-width="2.4" cx="12" cy="12" r="9.4"/><path ${STROKE} stroke-width="2.5" d="M9.3 9.4a2.8 2.8 0 1 1 4 2.5c-.8.4-1.3 1-1.3 1.8v.5"/><circle cx="12" cy="17.3" r="1.45"/>`,
   soundOn: `<path d="M3.5 9.3h3.3L11.6 5c.6-.5 1.4-.1 1.4.7v12.6c0 .8-.8 1.2-1.4.7l-4.8-4.3H3.5c-.6 0-1-.4-1-1V10.3c0-.6.4-1 1-1z"/><path ${STROKE} stroke-width="2.3" d="M16.2 9.2a4 4 0 0 1 0 5.6M18.9 6.5a7.8 7.8 0 0 1 0 11"/>`,
@@ -142,6 +143,7 @@ export function createUI(bus) {
   const modals = {
     howto: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-howto-title', tabindex: '-1' }),
     stats: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-stats-title', tabindex: '-1' }),
+    shop: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-shop-title', tabindex: '-1' }),
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -161,7 +163,7 @@ export function createUI(bus) {
   // 1.8 power-ups: round buttons on the right edge; only the buttons take taps (the rest drops a block)
   const powerTray = h('div', { class: 'power-tray', role: 'group', 'aria-label': S.powerups, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, pauseBtn, punishBar, powerTray, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, pauseBtn, punishBar, powerTray, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // Measures env(safe-area-inset-*) so layout() can work out how much of each
@@ -457,6 +459,19 @@ export function createUI(bus) {
     }, h('span', { class: 'dock-ic' }, icon(iconName)), h('span', { class: 'dock-label', text: label }));
   }
 
+  /** The menu's Winkel button, with the player's coins on it. */
+  function shopBtn(coins) {
+    const b = dockBtn('shop', S.shop, () => { audio.play('click'); bus.emit('ui:shop'); }, { class: 'dock-btn dock-shop' });
+    b.querySelector('.dock-ic').append(h('span', { class: 'dock-coins', text: fmtInt(coins || 0) }));
+    return b;
+  }
+
+  /** New coin balance on the menu's Winkel button (after buying, or a game). */
+  function setMenuCoins(n) {
+    const el = screens.menu.querySelector('.dock-coins');
+    if (el) el.textContent = fmtInt(n || 0);
+  }
+
   const LABELS = { sound: S.sound, vibration: S.vibration, highContrast: S.highContrast };
 
   function toggleBtns({ contrast = false } = {}) {
@@ -652,9 +667,10 @@ export function createUI(bus) {
       () => bus.emit('ui:duel'), { attrs: { 'aria-label': `${S.duel}: ${S.duelSub}` } });
     const playRow = h('div', { class: 'play-row' }, practice, duelBtn);
 
-    const dock = h('div', { class: 'dock' },
+    const dock = h('div', { class: 'dock dock-menu' },
       dockBtn('help', S.howTo, () => { audio.play('click'); showHowTo(); }),
       dockBtn('chart', S.stats, () => { audio.play('click'); showStats(st.model?.stats); }),
+      shopBtn(m.coins),
       toggleBtns());
 
 
@@ -817,6 +833,132 @@ export function createUI(bus) {
         button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false })));
     modals.stats.replaceChildren(sheet);
     openModal('stats');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Winkel (1.8): power-ups for Oefen, and looks for the Uitdagersreeks, bought with earned coins
+  // ---------------------------------------------------------------------------
+  const LOOK_KINDS = ['frame', 'badge', 'title', 'celebration', 'style'];
+
+  /** What an opponent sees of a player: frame, badge, nickname, title and rank. */
+  function playerCard({ name = '', card = null, compact = false } = {}) {
+    const c = card || {};
+    const frame = cosmetic('frame', c.frame) ? c.frame : 'hout';
+    const badge = cosmetic('badge', c.badge)?.emoji || '';
+    const rank = RANKS.find((r) => r.id === c.rank) || RANKS[0];
+    return h('div', { class: `pcard frame-${frame}${compact ? ' is-compact' : ''}` },
+      badge ? h('span', { class: 'pc-badge' }, emo(badge)) : null,
+      h('span', { class: 'pc-main' },
+        h('b', { class: 'pc-name', text: name }),
+        h('span', { class: 'pc-title', text: (COSMETIC_INFO.title[c.title] || COSMETIC_INFO.title.bouer).name })),
+      h('span', { class: 'pc-rank' }, emo(rank.emoji), h('span', { text: RANK_INFO[rank.id].name })));
+  }
+
+  function lookPreview(kind, item) {
+    if (kind === 'frame') return h('span', { class: `frame-swatch frame-${item.id}` });
+    if (kind === 'title') return h('span', { class: 'title-prev', text: COSMETIC_INFO.title[item.id].name });
+    if (kind === 'style') return h('span', { class: 'style-prev' }, emo('🐒'), item.emoji ? emo(item.emoji, 'acc') : null);
+    return emo(item.emoji || '–');
+  }
+
+  function buyBtn(price, coins, onBuy) {
+    const can = (coins | 0) >= price;
+    return h('button', {
+      type: 'button',
+      class: `shop-buy${can ? '' : ' is-poor'}`,
+      'aria-label': `${S.buy}: ${fmtInt(price)}`,
+      onclick: () => {
+        audio.play('click');
+        if (!can) {
+          toast(S.notEnoughCoins);
+          return;
+        }
+        onBuy();
+      },
+    }, emo(COIN), h('span', { text: fmtInt(price) }));
+  }
+
+  /**
+   * The shop sheet. m: { coins, stock, owned, look, card, name }. Re-rendered after every buy or
+   * wear (the tab and the scroll position stay).
+   */
+  function showShop(m = {}, tab = st.shopTab || 'powerups') {
+    const prevBody = modals.shop.querySelector('.sheet-body');
+    const keepScroll = st.modal === 'shop' && st.shopTab === tab && prevBody ? prevBody.scrollTop : 0;
+    st.shopTab = tab;
+    st.shopModel = m;
+    const tabs = h('div', { class: 'shop-tabs', role: 'tablist' }, [['powerups', S.shopPowerups], ['looks', S.shopLooks]].map(([id, label]) => h('button', {
+      type: 'button', role: 'tab', class: `shop-tab${tab === id ? ' on' : ''}`, 'aria-selected': String(tab === id), text: label,
+      onclick: () => {
+        audio.play('click');
+        showShop(st.shopModel, id);
+      },
+    })));
+    const body = h('div', { class: 'sheet-body shop-body' });
+    if (tab === 'powerups') {
+      body.append(h('p', { class: 'shop-note', text: S.shopPowerupsNote }),
+        h('div', { class: 'shop-list' }, POWERUP_IDS.map((id) => {
+          const info = POWERUP_INFO[id];
+          return h('div', { class: 'shop-row' },
+            h('span', { class: 'shop-ic' }, emo(info.emoji)),
+            h('span', { class: 'shop-txt' }, h('b', { text: info.name }), h('span', { text: info.what }), h('small', { text: S.inBag(m.stock?.[id] | 0) })),
+            buyBtn(POWERUPS[id].price, m.coins, () => bus.emit('ui:shop-buy', { kind: 'powerup', id })));
+        })));
+    } else {
+      body.append(playerCard({ name: m.name, card: m.card }), h('p', { class: 'shop-note', text: S.shopLooksNote }));
+      for (const kind of LOOK_KINDS) {
+        body.append(h('h3', { class: 'label shop-kind', text: S.lookKinds[kind] }),
+          h('div', { class: 'shop-grid' }, COSMETICS[kind].map((c) => {
+            const owned = !!m.owned?.[kind]?.includes(c.id);
+            const on = m.look?.[kind] === c.id;
+            let action;
+            if (on) action = h('span', { class: 'shop-on', text: S.wearing });
+            else if (owned) action = h('button', { type: 'button', class: 'shop-wear', text: S.wear, onclick: () => { audio.play('click'); bus.emit('ui:shop-wear', { kind, id: c.id }); } });
+            else if (c.rank) action = h('span', { class: 'shop-lock', text: S.lockedRank(RANK_INFO[c.rank].name) });
+            else action = buyBtn(c.price, m.coins, () => bus.emit('ui:shop-buy', { kind, id: c.id }));
+            return h('div', { class: `shop-item${on ? ' is-on' : ''}` },
+              h('span', { class: 'shop-prev' }, lookPreview(kind, c)),
+              h('b', { class: 'shop-name', text: COSMETIC_INFO[kind][c.id].name }),
+              action,
+              kind === 'celebration' ? h('button', { type: 'button', class: 'shop-try', text: S.preview, onclick: () => celebrate(c.id) }) : null);
+          })));
+      }
+    }
+    const sheet = h('div', { class: 'card sheet shop-sheet' },
+      h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); } }, icon('close')),
+      h('div', { class: 'sheet-head' }, emo('🛒'), h('h2', { id: 'stapel-shop-title', text: S.shop }),
+        h('span', { class: 'shop-coins', role: 'status' }, emo(COIN), h('b', { text: fmtInt(m.coins || 0) }))),
+      tabs,
+      body,
+      h('div', { class: 'sheet-foot' }, button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false })));
+    modals.shop.replaceChildren(sheet);
+    if (st.modal !== 'shop') openModal('shop');
+    else if (keepScroll) body.scrollTop = keepScroll;
+    setMenuCoins(m.coins);
+  }
+
+  /** A win celebration (the shop's preview; the winner of a match): its emoji rain down, with a fanfare. */
+  function celebrate(id) {
+    const c = cosmetic('celebration', id) || cosmetic('celebration', 'konfetti');
+    const box = h('div', { class: `celebrate cel-${c.id}`, 'aria-hidden': 'true' });
+    const n = reducedMotion() ? 0 : 24;
+    for (let i = 0; i < n; i++) {
+      box.append(h('i', {
+        text: c.emoji,
+        vars: {
+          '--x': `${(Math.random() * 100).toFixed(1)}%`,
+          '--s': (40 + Math.random() * 40).toFixed(0),
+          '--t': `${(1.8 + Math.random() * 1.4).toFixed(2)}s`,
+          '--d': `${(Math.random() * 0.8).toFixed(2)}s`,
+          '--dx': (Math.random() * 200 - 100).toFixed(0),
+          '--rot': `${(Math.random() * 720 - 360).toFixed(0)}deg`,
+        },
+      }));
+    }
+    box.append(h('b', { class: 'cel-big' }, emo(c.emoji)));
+    root.append(box);
+    audio.play('record');
+    setTimeout(() => box.remove(), 4300);
   }
 
   // ---------------------------------------------------------------------------
@@ -1337,6 +1479,10 @@ export function createUI(bus) {
     showPunish,
     hidePunish,
     setPowerups,
+    showShop,
+    setMenuCoins,
+    celebrate,
+    playerCard,
     toast,
     setLoading,
   };

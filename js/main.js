@@ -2,7 +2,7 @@
 // pause/visibility, settings, service worker and debug hooks.
 import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL } from './config.js';
 import { bus } from './core/bus.js';
-import { S } from './core/strings.js';
+import { S, POWERUP_INFO, COSMETIC_INFO } from './core/strings.js';
 import { fmtDateKey, fmtM } from './core/format.js';
 import { createStore } from './core/storage.js';
 import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate } from './core/daily.js';
@@ -247,8 +247,33 @@ function menuModel() {
     newPlayer: !store.tutorialSeen(),   // first visit: a one-line nudge instead of the old how-to pop-up
     challenge: activeChallenge() ? { text: S.challengeMenu(fmtM(activeChallenge().heightM)) } : null,
     city: skylineFor(dateKey),
+    coins: store.getEconomy().coins,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Winkel (1.8): power-ups and looks, bought with coins earned by playing
+// ---------------------------------------------------------------------------
+function shopModel() {
+  const e = store.getEconomy();
+  return { coins: e.coins, stock: e.stock, owned: e.owned, look: e.look, card: store.getCard(), name: duelNick() };
+}
+
+bus.on('ui:shop', () => ui.showShop(shopModel()));
+bus.on('ui:shop-buy', ({ kind, id } = {}) => {
+  const r = kind === 'powerup' ? store.buyPowerup(id) : store.buyCosmetic(kind, id);
+  if (r.ok) {
+    audio.play('heart');
+    if (kind !== 'powerup') store.wearCosmetic(kind, id);   // a new look goes on at once
+    const name = kind === 'powerup' ? POWERUP_INFO[id]?.name : COSMETIC_INFO[kind]?.[id]?.name;
+    if (name) ui.toast(S.bought(name));
+  }
+  ui.showShop(shopModel());
+});
+bus.on('ui:shop-wear', ({ kind, id } = {}) => {
+  store.wearCosmetic(kind, id);
+  ui.showShop(shopModel());
+});
 
 function gameScene() {
   return game.scene.getScene('Game');
