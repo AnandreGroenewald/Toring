@@ -383,7 +383,7 @@ Later the owner added (decisions are final unless they say otherwise):
     - server tests: ranking, ties, hiding, re-posts, impossible towers and real ones, the day window, names, the top size, the origin, rate limits, places far below the top against a full sort (150 players), the owner's block after a re-post, unblock and remove, pruning all three tables, and the cron going on when the board's cleanup fails;
     - game tests;
     - end to end in the browser against `wrangler dev --local` (requests to the live Worker re-routed to it): a real daily posted, the place shown, the sheet, hiding and showing, both sizes, Afrikaans and English.
-  - **To go live:** run the migration once on the live database, deploy the Worker, push, update Play's Data safety form (the nickname and the random player number now leave the phone), and upload the app (asked first).
+  - **To go live:** run the migration once on the live database, deploy the Worker, push, update Play's Data safety form (the nickname and the random player number now leave the phone), and upload the app (asked first). **Done 8-9 Oct 2026** (see "1.10.0 is live" below).
 - **What the testers asked for, and reasons to come back (version `1.10.0`, 8 Oct 2026).** The owner passed on testers' notes ("the bar on the right seems to bother the people", "the bad stuff comes a little too quick", "the hans wors needs to be a good thing", "the counter balance is not that great", "the words at the bottom is hidden", the U block "please flip it", a ✕ on the Uitdagersreeks, a tutorial, and "I really need a hook for people to return"). Built on top of 1.9.2 (the leaderboard, still not live).
   - **Stages** (`config.js STAGES`, used by `core/sequence.js` and `core/visitorplan.js`): blocks 0-11 are calm (no weather, no visitors), then "Moeiliker!" (block 12: mild weather every 5-8 blocks, Blouaap and Hanswors), "Nog moeiliker!" (block 30: storms, hail, gusts, Skelm Sakkie) and "Op sy moeilikste!" (block 55: the old pace). Each is announced with a banner; no weather or visitor starts on that block. **Every day's weather and visitors changed** (golden tests updated): a daily played on 1.9.x and on 1.10 differs.
   - **Hanswors is a friend:** one big log (`log` shape, 260 px, drawn as a log) laid on top and set as cement, a wide new floor (was 1-4 narrow gift blocks). **5 Perfeks in a row bring him too**, in every mode (`Visitors.reward`, keyed by its number; `SCORING.rewardStreak`).
@@ -397,7 +397,7 @@ Later the owner added (decisions are final unless they say otherwise):
   - **Challenge links in the app:** an App Links intent filter for `/Toring/` (not the privacy and sponsor pages); `app/shim.js` takes the launch link (reload with its query, once per visit) and links that come while it runs (`stapel:link`; mid-tower, it waits for the home button). Android verifies it through `https://anandregroenewald.github.io/.well-known/assetlinks.json`, which needs the owner's **user site repo `anandregroenewald.github.io`** (doesn't exist yet) with the Play app-signing and upload certificates' SHA-256. Until then links open in the browser, where an Android phone gets "Maak oop in die Stapel-app" (an `intent:` link).
   - **Also:** the nickname saves while typing and when the game is left; the version shows under Statistiek ("Weergawe 1.10.0"); the how-to explains the stages, the log and the balance meter.
   - **Checked:** unit tests (rooms reconnecting, the week, stages, the log), and headless runs of the lesson, the stages, the log and the reward, the duel line, the reminder and links (with a fake of the app), the balance meter, a null scan of every screen, the button audit.
-  - **To go live:** the owner decides whether the 1.9.2 leaderboard goes live with it (else it stays switched off); the root site for App Links; Play's Data safety (unchanged by 1.10 itself); then push and upload 11000 (asked first).
+  - **To go live:** the owner decides whether the 1.9.2 leaderboard goes live with it (else it stays switched off); the root site for App Links; Play's Data safety (unchanged by 1.10 itself); then push and upload 11000 (asked first). **Done 8-9 Oct 2026**: the leaderboard went live with it (see "1.10.0 is live" below).
 - **1.10.0 continued (8-9 Oct 2026): the review's fixes, a new address, Back, and the search.**
   - **A second review** (all of 1.10) found 12 problems, all fixed in `a6d592c`:
     - a challenge link abandoned a paused tower;
@@ -426,6 +426,21 @@ Later the owner added (decisions are final unless they say otherwise):
     - The search runs until someone comes (no 20 s fallback). The waiting screen (`state: 'lobby'`) offers "Oefen terwyl jy wag" (an Oefen tower meanwhile, with a "Soek ’n teenstander…" chip and its ✕) and "Speel dadelik" (a recording or Robot Rikus).
     - When someone comes, the practice tower is paused (not restarted: that would close the match's socket) and "Teen <naam>!" starts the match.
     - The lobby reconnects, closes while hidden, and pings every 25 s.
+- **1.10.0 is live (8-9 Oct 2026).** The site (both addresses), the Worker with the leaderboard (migration 0003 on the live database), and the app: 11000 is out on internal testing, and on the closed test (Alpha) once Google's review passes.
+  - **Play Console (9 Oct, sent for review together with the closed test):**
+    - Data safety adds "Device or other IDs" (the random player number: collected, not shared, required, app functionality), next to Name and App interactions. The Delete data URL is now `https://stapelspel.pages.dev/privaatheid#p9`.
+    - Privacy policy: `https://stapelspel.pages.dev/privaatheid`. Store settings → Website: `https://stapelspel.pages.dev/` (published at once).
+    - Play also listed "Testers: Remove feedback channel". Nobody changed it: the closed test's "Feedback URL or email" field is empty. Put an address there if testers should see one.
+  - **Checked on the live site (9 Oct):**
+    - The leaderboard round trip: a hidden test entry was posted from the new origin, read back, and removed with the admin token, so the count went back to 0.
+    - Random pairing through the live lobby took 2.3 s.
+    - Invites for brand-new players, in Afrikaans and in English: the language choice comes first, then the friend's room (both players in the match in about 4 s), "race my run" (the challenge screen) or "beat my tower" (the chip, plus the how-to).
+    - A first visit without test switches works: the how-to, the menu with the week chest, the shop and the board closing on Back, and the service worker at `stapel-v1.10.0`.
+    - The old address forwards a player's progress. `assetlinks.json` has both keys.
+    - Tests: 271 and 171 (+1 skipped) pass.
+  - **Left to tidy:**
+    - wrangler's leftovers in the repo root (the `package.json` change, `package-lock.json`, `wrangler.jsonc`, `node_modules/`), from the first `pages project create`: delete them, never commit them;
+    - the merged worktrees `~/Desktop/Toring-search` and `.claude/worktrees/agent-…`.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
@@ -448,7 +463,7 @@ Each step should end green (`npm test`, `cd server && npm test`, a headless play
 - ~~T5. In-game sponsor integration~~ **Done** (see section 2). It also reworded the code comments that named other games and added the README section.
 - ~~**T6. Final pass.**~~ **Done** (see section 2); only the owner's checklist in section 4 remains. Original brief: Full playtest plus screenshots. Confirm the **game payload** (what a player downloads: `index.html`, `lib/`, `js/` without `js/pages/`, `css/style.css`, `icons/`, `manifest`, `sw.js`) stays under 3 MB. It was about 1.8 MB after T5 (that count includes `sponsors.json`); `docs/`, `server/` and `tests/` are never loaded by the game. Check the README's sponsorship section is still accurate, then hand the owner the checklist in section 4.
 
-**All of T1–T6 are done**, and so are the visitors (`docs/CHARACTERS-SPEC.md`, version `1.6.0`), the Uitdagersreeks (`docs/CHALLENGE-SPEC.md`) and coins, power-ups and ranks (`1.8.0`). English is done (`1.9.0`). Next with the owner: production on Google Play (an English store listing, and maybe an English privacy page, first). Later: biomes (height bands and a daily world), sponsor sales through PayFast, and iOS. What is left beyond that is section 4 (owner-only steps). If the owner asks for more, start with the medium and low findings in `docs/review-findings.md` that were not re-checked one by one, or tune the visitors (`VISITOR` in `js/config.js`) after playtests on real phones.
+**All of T1–T6 are done**, and so are the visitors (`docs/CHARACTERS-SPEC.md`, version `1.6.0`), the Uitdagersreeks (`docs/CHALLENGE-SPEC.md`) and coins, power-ups and ranks (`1.8.0`). English is done (`1.9.0`). Next with the owner: production on Google Play (an English store listing, and maybe an English privacy page, first). Google lets this account apply for production only after **12 testers have been opted in to the closed test for 14 days in a row**: their Gmail addresses go on the closed test's email list (Play Console → Test and release → Closed testing → Testers), then they join through `https://play.google.com/apps/testing/com.lekkerlocal.stapel`. Later: biomes (height bands and a daily world), sponsor sales through PayFast, and iOS. What is left beyond that is section 4 (owner-only steps). If the owner asks for more, start with the medium and low findings in `docs/review-findings.md` that were not re-checked one by one, or tune the visitors (`VISITOR` in `js/config.js`) after playtests on real phones.
 <!-- TODO-END -->
 
 ## 4. Things only the owner can do
