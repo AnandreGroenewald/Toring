@@ -13,12 +13,12 @@ export const SPONSOR_API_URL = '';
 export const SPONSOR = {
   // Public contact address. Every link or sentence that would show it stays
   // hidden while this is empty.
-  contactEmail: '',
+  contactEmail: 'lekkerlocal.apps@gmail.com',
   // Must match the "Weergawe" line in terme.html / privaatheid.html. Bump both
   // together whenever the text changes: the server records which version each
   // sponsor accepted.
   termsVersion: '2026-10-06',
-  privacyVersion: '2026-10-06',
+  privacyVersion: '2026-10-08',
   // Shown on adverteer.html. Must match the Paystack plan for the premium tier.
   // (The block tier's price is deliberately never shown on the site.)
   premiumPriceLabel: 'R1 499 per maand',

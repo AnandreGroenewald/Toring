@@ -730,18 +730,26 @@ test('the legal pages carry the versions the sign-up form sends', () => {
   assert.equal(version(read('privaatheid.html')), SPONSOR.privacyVersion);
 });
 
-test('the legal pages are templates: banner, yellow placeholders, linked from the sign-up page', () => {
+test('the legal pages: the privacy policy is complete, the sponsor terms still a template; both linked from the sign-up page', () => {
   const adverteer = read('adverteer.html');
   for (const page of ['terme.html', 'privaatheid.html']) {
     const html = read(page);
-    assert.match(html, /Sjabloon — moet deur die eienaar voltooi en nagegaan word/, `${page}: template banner`);
     assert.match(html, /<link rel="stylesheet" href="css\/style\.css">\s*<link rel="stylesheet" href="css\/pages\.css">/);
-    const bare = html.replace(/<span class="ph">\[\[[^\]]+\]\]<\/span>/g, '');
-    assert.ok(!bare.includes('[['), `${page}: every [[placeholder]] is wrapped in <span class="ph">`);
-    assert.ok((html.match(/class="ph"/g) || []).length >= 8, `${page}: has placeholders`);
     assert.match(adverteer, new RegExp(`<footer[\\s\\S]*href="${page.replace('.', '\\.')}"`), `adverteer.html footer links to ${page}`);
     for (const id of html.matchAll(/href="#(\w+)"/g)) assert.ok(html.includes(`id="${id[1]}"`), `${page}: #${id[1]} exists`);
   }
+  // the sponsor terms wait for sales to open: a template, every blank a yellow placeholder
+  const terms = read('terme.html');
+  assert.match(terms, /Sjabloon — moet deur die eienaar voltooi en nagegaan word/, 'terme.html: template banner');
+  assert.ok(!terms.replace(/<span class="ph">\[\[[^\]]+\]\]<\/span>/g, '').includes('[['), 'terme.html: every [[placeholder]] is wrapped in <span class="ph">');
+  assert.ok((terms.match(/class="ph"/g) || []).length >= 8, 'terme.html: has placeholders');
+  // the privacy policy is published as is (Google Play links to it): no banner, no blanks, no notes for the owner
+  const privacy = read('privaatheid.html');
+  assert.doesNotMatch(privacy, /Sjabloon|template-banner|owner-note|class="ph"|\[\[/, 'privaatheid.html: nothing left to fill in');
+  for (const want of ['Sportscard Trading (Pty) Ltd', '2026/492510/07', 'Inligtingsbeampte', 'POPIAComplaints@inforegulator.org.za', '13 jaar en ouer']) {
+    assert.ok(privacy.includes(want), `privaatheid.html: ${want}`);
+  }
+  assert.equal(SPONSOR.contactEmail, 'lekkerlocal.apps@gmail.com', 'the footers show the public contact address');
 });
 
 test('adverteer.js only uses names that js/core/sponsors.js exports', async () => {

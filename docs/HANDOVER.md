@@ -254,6 +254,15 @@ Later the owner added (decisions are final unless they say otherwise):
     - Hanswors's cement blocks sit flush, with zero overlap, and nothing moved;
     - the crane, old ramp vs new, for the same human-like bot (0–50 ms late) on three daily towers: the same low down, fewer Perfeks and lower towers higher up;
     - the daily tower stays identical for everyone (two runs with different randomness, same tower).
+- **Privacy policy completed and published (8 Oct 2026)**, with the owner's details ("The name is correct, Reg no: 2026/492510/07, 39 Delport Avenue Oatlands, Krugersdorp. email is correct. Anandre Groenewald, and same email. Phone number, 081 264 6506, OK"):
+  - `privaatheid.html` names the responsible party: Sportscard Trading (Pty) Ltd ("Lekker Local" on Google Play), 2026/492510/07, 39 Delport Avenue, Oatlands, Krugersdorp, 1739 (the postal code is from Play Console), lekkerlocal.apps@gmail.com, 081 264 6506. The Information Officer is Anandre Groenewald;
+  - the template banner and the owner notes are gone. The page now says Stapel is for players of 13 and older (Play's target audience), that sponsorships aren't open yet, and that live matches and counts run on Cloudflare (D1 in Western Europe). Google Play is listed;
+  - the Regulator's POPIA complaints address is now POPIAComplaints@inforegulator.org.za (checked 8 Oct 2026); its address is unchanged and its phone is 010 023 5200;
+  - `SPONSOR.privacyVersion` is `2026-10-08`. `SPONSOR.contactEmail` is set, so the pages show "Kontak ons";
+  - **owner reminders** (from the removed notes):
+    - register the Information Officer with the Information Regulator (inforegulator.org.za, eServices);
+    - delete former sponsors' contact details by hand within 24 months (admin page "Skrap"); the server doesn't do it;
+  - `terme.html` (sponsor terms) is still a template, until sponsor sales (PayFast) open.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
