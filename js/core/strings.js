@@ -18,6 +18,7 @@ export const S = {
   practice: 'Oefen',
   practiceSub: 'Speel soveel jy wil — dit tel nie',
   howTo: 'Hoe speel ek?',
+  howToShort: 'Speelreëls',           // the menu's bottom row (one line under its icon)
   stats: 'Statistiek',
   settings: 'Instellings',
   sound: 'Klank',

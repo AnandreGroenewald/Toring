@@ -673,7 +673,7 @@ export function createUI(bus) {
     const playRow = h('div', { class: 'play-row' }, practice, duelBtn);
 
     const dock = h('div', { class: 'dock dock-menu' },
-      dockBtn('help', S.howTo, () => { audio.play('click'); showHowTo(); }),
+      dockBtn('help', S.howToShort, () => { audio.play('click'); showHowTo(); }, { 'aria-label': S.howTo, title: S.howTo }),
       dockBtn('chart', S.stats, () => { audio.play('click'); showStats(st.model?.stats); }),
       shopBtn(m.coins),
       toggleBtns());

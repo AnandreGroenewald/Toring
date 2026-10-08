@@ -810,6 +810,7 @@ svg.ic {
 .sheet-head .emoji { font-size: calc(54 * var(--u)); }
 .sheet .close {
   position: absolute;
+  z-index: 2;   /* always above the sheet's own head (the shop's head is positioned and came later) */
   top: calc(26 * var(--u));
   right: calc(26 * var(--u));
   width: calc(80 * var(--u));
@@ -1406,7 +1407,9 @@ svg.ic {
 .shop-buy.is-poor { opacity: 0.5; }
 /* the menu's dock holds five buttons (Winkel joined in 1.8): narrower, labels may wrap */
 .dock-menu { gap: calc(8 * var(--u)); }
-.dock-menu .dock-btn { min-width: calc(110 * var(--u)); max-width: calc(130 * var(--u)); white-space: normal; text-align: center; }
+.dock-menu .dock-btn { flex: 1 1 0; min-width: 0; max-width: calc(130 * var(--u)); text-align: center; }
+/* equal columns, one line each: the icons sit evenly and the labels line up */
+.dock-menu .dock-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .shop-kind { margin: calc(20 * var(--u)) 0 calc(10 * var(--u)); }
 .shop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: calc(10 * var(--u)); }
 .shop-item { display: flex; flex-direction: column; align-items: center; gap: calc(6 * var(--u)); padding: calc(12 * var(--u)) calc(6 * var(--u)); border: calc(3 * var(--u)) solid transparent; border-radius: calc(20 * var(--u)); background: var(--panel); text-align: center; }
@@ -1416,7 +1419,8 @@ svg.ic {
 .shop-name { font-size: max(12px, calc(20 * var(--u))); }
 .shop-on { color: #1f7a35; font-weight: 900; font-size: max(12px, calc(20 * var(--u))); }
 .shop-lock { color: var(--muted); font-weight: 800; font-size: max(10px, calc(17 * var(--u))); }
-.shop-try { border: 0; background: none; color: var(--hemel-d); font: 800 max(11px, calc(18 * var(--u))) / 1.2 var(--font); text-decoration: underline; }
+/* the celebration preview: a real button (at least 32px high), not a thin underlined word */
+.shop-try { min-height: 32px; min-width: 56px; padding: 4px 12px; border: 2px solid var(--hemel-d); border-radius: 999px; background: #fff; color: var(--hemel-d); font: 800 max(12px, calc(19 * var(--u))) / 1.1 var(--font); cursor: pointer; }
 .title-prev { padding: calc(6 * var(--u)) calc(10 * var(--u)); border-radius: calc(10 * var(--u)); background: #fff; font: 900 max(11px, calc(19 * var(--u))) / 1.1 var(--font); color: var(--ink); }
 .style-prev { position: relative; }
 .style-prev .acc { position: absolute; left: 50%; top: calc(-18 * var(--u)); transform: translateX(-50%); font-size: calc(30 * var(--u)); }

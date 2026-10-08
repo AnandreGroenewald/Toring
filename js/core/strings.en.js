@@ -19,6 +19,7 @@ export const S_EN = {
   practice: 'Practice',
   practiceSub: 'Play as much as you like — it doesn’t count',
   howTo: 'How do I play?',
+  howToShort: 'Rules',
   stats: 'Statistics',
   settings: 'Settings',
   sound: 'Sound',
