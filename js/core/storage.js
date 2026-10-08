@@ -699,9 +699,11 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       writeWeek(r.week);
       const earned = earnCoins(econ, r.box.coins, { capped: false, dayKey: today() });
       econ = earned.economy;
-      if (r.box.look) {
-        const owned = econ.owned[r.box.look.kind];
-        if (owned && !owned.includes(r.box.look.id)) owned.push(r.box.look.id);
+      // the full week's look; given again by a later day-7 chest if an older version dropped it
+      const owned = econ.owned[WEEK.look.kind];
+      if (r.box.day === 7 && owned && !owned.includes(WEEK.look.id)) {
+        owned.push(WEEK.look.id);
+        r.box.look = { ...WEEK.look };
       }
       persistEcon();
       return { ...r.box, total: econ.coins, shields: r.week.shields };

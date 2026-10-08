@@ -24,6 +24,7 @@ const RUNS_MAX = 60;
 const RUN_DAYS = 7;
 const SLACK_M = 5;                     // a report may run this far ahead of the climb limit (lag, bursts)
 const DEFAULT_NAME = 'Bouer';
+const SEAT_KEY_RE = /^[a-z0-9]{8,32}$/;   // a game's own key for one room (a reconnect brings the same)
 // The first to a height mark chooses the punishment ('choose' -> 'punish'). A player who doesn't answer
 // in time (or a game older than protocol 2, which never asks) gets the mark's default punishment.
 const CHOOSE_WAIT_MS = DUEL.chooseMs + 1500;
@@ -178,12 +179,14 @@ export class MatchRoom {
     const taken = new Set(this.sockets().filter((s) => s !== ws).map(seatOf));
     const seat = !taken.has(0) ? 0 : !taken.has(1) ? 1 : -1;
     this.state.acceptWebSocket(ws);
-    if (!m || m.started || m.done || seat < 0) {
+    if (!m || m.started || m.done) {
       sendJson(ws, { t: 'gone' });
       closeWs(ws, 'gone');
       return;
     }
-    // the hello lives on the socket: a friend room may sleep for minutes before the second player comes
+    // the hello lives on the socket: a friend room may sleep for minutes before the second player comes.
+    // Both seats taken: this may be a player back on a new connection while their old one still counts
+    // (a network change closes it on the phone, not here); their hello's key decides (onMessage).
     ws.serializeAttachment({ seat, hello: false, name: null });
     sendJson(ws, { t: 'wait' });
   }
@@ -205,18 +208,35 @@ export class MatchRoom {
     if (!this.allow(ws, now)) return;
     const msg = parseMsg(data);
     const m = await this.load();
-    const seat = seatOf(ws);
-    if (!msg || !m || seat < 0 || m.done) return;
+    let seat = seatOf(ws);
+    if (!msg || !m || m.done) return;
 
     if (msg.t === 'hello') {
-      if (m.started) return;
+      if (m.started || att(ws).replaced) return;
+      // A player back on a new connection (the game's key for this room is the same): their old
+      // connection goes and can never start the match, whether or not it ever closed here.
+      const key = typeof msg.key === 'string' && SEAT_KEY_RE.test(msg.key) ? msg.key : null;
+      if (key) {
+        for (const s of this.sockets()) {
+          if (s === ws || att(s).key !== key) continue;
+          if (seat < 0) seat = seatOf(s);
+          s.serializeAttachment({ ...att(s), seat: -1, hello: false, key: null, replaced: true });
+          closeWs(s, 'replaced');
+        }
+      }
+      if (seat < 0) {   // both seats are someone else's
+        sendJson(ws, { t: 'gone' });
+        closeWs(ws, 'gone');
+        return;
+      }
       const v = Math.max(1, Math.min(99, Math.floor(Number(msg.v)) || 1));
       // the player card (looks and rank, js/core/economy.js) goes to the other player as known ids only
-      ws.serializeAttachment({ seat, hello: true, name: cleanNickname(msg.name) || DEFAULT_NAME, v, card: cleanCard(msg.card) });
+      ws.serializeAttachment({ seat, hello: true, name: cleanNickname(msg.name) || DEFAULT_NAME, v, card: cleanCard(msg.card), key });
       const both = [this.socketFor(0), this.socketFor(1)];
       if (both.every((s) => s && att(s).hello)) await this.start(now);
       return;
     }
+    if (seat < 0) return;
     if (!m.started || m.result) return;
     // a choice nobody made in time gets the default (checked whenever either player says anything)
     if (await this.expireChoices(now)) await this.save();
@@ -397,9 +417,11 @@ export class MatchLobby {
     if (!msg || msg.t !== 'hello') return;
     const me = att(ws);
     if (me.hello) return;
-    ws.serializeAttachment({ ...me, hello: true });
+    // the same game rules only (stages, blocks and visitors change between versions; older games send none)
+    const rules = Number.isInteger(msg.rules) && msg.rules > 0 && msg.rules < 100000 ? msg.rules : 0;
+    ws.serializeAttachment({ ...me, hello: true, rules });
     const waiting = this.state.getWebSockets('wait')
-      .filter((s) => s !== ws && att(s).hello && !att(s).paired)
+      .filter((s) => s !== ws && att(s).hello && !att(s).paired && (att(s).rules || 0) === rules)
       .sort((a, b) => (att(a).at || 0) - (att(b).at || 0));
     const other = waiting[0];
     if (!other) {

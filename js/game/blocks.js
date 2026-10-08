@@ -36,12 +36,14 @@ export const SHAPES = {
   cube: { w: 60, h: 60, parts: [R(0, 0, 60, 60)], uniform: true },
   pillar: { w: 52, h: 128, parts: [R(0, 0, 52, 128)] },
   wedge: { w: 150, h: 60, poly: [P(30, 0), P(120, 0), P(150, 60), P(0, 60)] },
-  // the U: it stands on its flat beam, with a shallow cup on top that every block can bridge
-  // (testers found the old arch on two legs too hard to land)
+  // the U: it stands on its flat beam, with a shallow cup on top (testers found the old arch on two
+  // legs too hard to land). Its body is one solid block, so whatever lands on it rests on the posts'
+  // height and never drops into the cup (a T's narrow foot did); the cup is drawn, narrower than any block.
   arch: {
     w: 132, h: 88,
-    parts: [R(0, 52, 132, 36), R(0, 0, 48, 52), R(84, 0, 48, 52)],
-    outline: [P(0, 0), P(48, 0), P(48, 52), P(84, 52), P(84, 0), P(132, 0), P(132, 88), P(0, 88)],
+    parts: [R(0, 0, 132, 88)],
+    cells: [R(0, 26, 132, 62), R(0, 0, 56, 26), R(76, 0, 56, 26)],
+    outline: [P(0, 0), P(56, 0), P(56, 26), P(76, 26), P(76, 0), P(132, 0), P(132, 88), P(0, 88)],
   },
   L: {
     w: 132, h: 88,

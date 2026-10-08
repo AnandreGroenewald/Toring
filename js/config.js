@@ -218,9 +218,9 @@ export const STAGES = Object.freeze([
   // Moeiliker: the mild weather, Blouaap and Hanswors, with room to breathe between them
   Object.freeze({ from: 12, weather: 'mild', gap: [5, 8], visitors: [14, 20], thief: false, emoji: '🌦️' }),
   // Nog moeiliker: storms, hail and gusts too, and Skelm Sakkie
-  Object.freeze({ from: 30, weather: 'all', gap: [3, 6], visitors: [11, 17], thief: true, emoji: '⛈️' }),
+  Object.freeze({ from: 30, weather: 'all', gap: [3, 6], visitors: [12, 20], thief: true, emoji: '⛈️' }),
   // Op sy moeilikste: as often as every tower was before 1.10
-  Object.freeze({ from: 55, weather: 'all', gap: [2, 4], visitors: [9, 14], thief: true, emoji: '🔥' }),
+  Object.freeze({ from: 55, weather: 'all', gap: [2, 4], visitors: [10, 20], thief: true, emoji: '🔥' }),
 ]);
 
 /** The stage (index into STAGES) block `i` belongs to. */
@@ -235,6 +235,7 @@ export function stageAt(i) {
 // ---------------------------------------------------------------------------
 export const DUEL = {
   goalM: 50,               // the first to 50 m wins
+  rules: 110,              // the game's rules (stages, blocks, visitors: 1.10): the lobby pairs only the same
   marks: [10, 20, 30, 40], // whoever reaches a mark first chooses a punishment for the other tower
   punishments: ['monkey', 'thief', 'fog', 'heat'], // Blouaap, Skelm Sakkie, Mis, Hittegolf
   attackFor: { 10: 'monkey', 20: 'thief', 30: 'monkey', 40: 'thief' }, // sent when nobody chooses in time
@@ -257,7 +258,7 @@ export const DUEL = {
 // ---------------------------------------------------------------------------
 export const EPOCH_DATE_KEY = '2026-10-06';   // Daaglikse Toring #1
 export const STORAGE_KEY = 'stapel.v1';
-export const SITE_URL_FALLBACK = 'https://anandregroenewald.github.io/Toring/';
+export const SITE_URL_FALLBACK = 'https://stapelspel.pages.dev/';
 
 // ---------------------------------------------------------------------------
 // Render depths (within GameScene)

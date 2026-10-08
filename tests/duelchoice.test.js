@@ -146,7 +146,9 @@ test('live: the server asks, the player\'s pick goes to the server, and both sid
   duel.joinRoom('ABCD23');
   const ws = FakeSocket.last;
   ws.onopen();
-  assert.deepEqual(ws.sent[0], { t: 'hello', v: 2, name: 'Anna', card: cleanCard(mine) }, 'our card, known looks only');
+  const { key, ...hello } = ws.sent[0];
+  assert.deepEqual(hello, { t: 'hello', v: 2, rules: DUEL.rules, name: 'Anna', card: cleanCard(mine) }, 'our card, known looks only, and the rules');
+  assert.match(key, /^[a-z0-9]{16}$/, 'the room key: a reconnect brings the same one');
   ws.hear({ t: 'start', seed: SEED, you: 0, opp: { name: 'Bennie', card: { badge: 'olifant', style: 'kroon', rank: 'mega' } } });
   assert.deepEqual(duel.match.oppCard, cleanCard({ badge: 'olifant', style: 'kroon' }), 'their card, cleaned');
   ws.hear({ t: 'choose', m: 10, def: 'monkey' });

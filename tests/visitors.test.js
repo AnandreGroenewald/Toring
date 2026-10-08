@@ -265,6 +265,6 @@ test('every visitor has its sounds', () => {
 const GOLDEN_VISITORS = [
   { type: 'clown', at: 20, side: -1, strength: 0.99 },
   { type: 'monkey', at: 37, side: 1, strength: 1.06 },
-  { type: 'clown', at: 54, side: -1, strength: 0.93 },
-  { type: 'monkey', at: 67, side: 1, strength: 0.98 },
+  { type: 'clown', at: 58, side: -1, strength: 0.93 },
+  { type: 'monkey', at: 72, side: 1, strength: 0.98 },
 ];

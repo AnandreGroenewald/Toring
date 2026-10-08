@@ -38,6 +38,7 @@ function nextBox(w, dateKey) {
   if (!w.last) return { day: 1, used: 0, restarted: false };
   const gap = daysFrom(w.last, dateKey);
   if (gap <= 0) return null;
+  if (w.day === 7) return { day: 1, used: 0, restarted: false };   // a full week: a new one either way
   const missed = gap - 1;
   if (missed === 0) return { day: (w.day % 7) + 1, used: 0, restarted: false };
   if (missed <= w.shields) return { day: (w.day % 7) + 1, used: missed, restarted: false };
@@ -79,7 +80,8 @@ export function openBox(state, dateKey) {
  */
 export function weekView(state, today) {
   const w = cleanWeek(state);
-  if (w.last && isDateKey(today) && daysFrom(w.last, today) === 0) {
+  // today's box is open (or the clock went back past it: nothing to promise)
+  if (w.last && isDateKey(today) && daysFrom(w.last, today) <= 0) {
     const day = (w.day % 7) + 1;
     return { day: w.day, coins: WEEK.coins[w.day - 1], opened: true, done: w.day, next: { day, coins: WEEK.coins[day - 1] }, shields: w.shields };
   }

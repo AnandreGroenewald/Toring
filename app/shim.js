@@ -8,7 +8,7 @@
 (function () {
   var cap = window.Capacitor;
   if (!cap || !cap.isNativePlatform || !cap.isNativePlatform()) return;
-  var SITE = 'https://anandregroenewald.github.io/Toring/';
+  var SITE = 'https://stapelspel.pages.dev/';
 
   if (typeof navigator.share !== 'function') {
     navigator.share = function (data) {
@@ -61,30 +61,43 @@
     },
   };
 
-  // Challenge links (AndroidManifest: App Links). One that started the app reloads the game with its
-  // ?kamer= / ?teen= (read at start, once per visit); one that comes while the game runs is handed
-  // over as 'stapel:link' (no reload: a tower in progress stays).
+  // Challenge links (AndroidManifest: App Links): a friend's room (?kamer=), run (?teen=) or daily height
+  // (?klop=). One that started the app reloads the game with its query (read at start), once: Android
+  // hands the same link again when the app comes back from Recents, so a link opened in the last
+  // LAUNCH_ONCE_MS is let go. One that comes while the game runs is handed over as 'stapel:link' (no
+  // reload: a tower in progress stays); the starting link, which Capacitor also hands over, isn't.
+  var LAUNCH_ONCE_MS = 12 * 60 * 60 * 1000;
   function linkQuery(url) {
     try {
       var q = new URL(url).search;
-      return /[?&](kamer|teen)=/.test(q) ? q : '';
+      return /[?&](kamer|teen|klop)=/.test(q) ? q : '';
     } catch (err) {
       return '';
     }
   }
-  if (!/[?&](kamer|teen)=/.test(location.search)) {
-    cap.nativePromise('App', 'getLaunchUrl', {}).then(function (r) {
-      var url = (r && r.url) || '';
-      var q = linkQuery(url);
+  var launchUrl = null;
+  var launched = cap.nativePromise('App', 'getLaunchUrl', {}).then(function (r) {
+    launchUrl = (r && r.url) || null;
+    return launchUrl;
+  }, function () { return null; });
+  if (!/[?&](kamer|teen|klop)=/.test(location.search)) {
+    launched.then(function (url) {
+      var q = url ? linkQuery(url) : '';
+      if (!q) return;
       var seen = null;
-      try { seen = sessionStorage.getItem('stapel.launch'); } catch (err) { seen = null; }
-      if (!q || seen === url) return;
-      try { sessionStorage.setItem('stapel.launch', url); } catch (err) { /* private */ }
+      try { seen = JSON.parse(localStorage.getItem('stapel.launch') || 'null'); } catch (err) { seen = null; }
+      if (seen && seen.url === url && Date.now() - seen.at < LAUNCH_ONCE_MS) return;
+      try { localStorage.setItem('stapel.launch', JSON.stringify({ url: url, at: Date.now() })); } catch (err) { /* private */ }
       location.replace(location.pathname + q);
-    }, function () {});
+    });
   }
   cap.addListener('App', 'appUrlOpen', function (e) {
-    if (e && e.url && linkQuery(e.url)) window.dispatchEvent(new CustomEvent('stapel:link', { detail: e.url }));
+    var url = e && e.url;
+    if (!url || !linkQuery(url)) return;
+    launched.then(function () {
+      if (url === launchUrl) return;   // the starting link: the reload above has it
+      window.dispatchEvent(new CustomEvent('stapel:link', { detail: url }));
+    });
   });
 
   document.addEventListener('click', function (e) {

@@ -49,10 +49,10 @@ PREMIUM_PRICE_CENTS = "149900"
 # Optional: the block plan's amount in cents. Leave empty to read it from Paystack.
 BLOCK_PRICE_CENTS = ""
 # The game's public address, with the trailing slash.
-SITE_URL = "https://anandregroenewald.github.io/Toring/"
+SITE_URL = "https://stapelspel.pages.dev/"
 # Web pages allowed to call the API (comma separated, no paths). https://localhost is the Android app
 # (Capacitor serves the game from there); http://localhost:* and 127.0.0.1 are for testing on a computer.
-ALLOWED_ORIGINS = "https://anandregroenewald.github.io, https://localhost, http://localhost:*, http://127.0.0.1:*"
+ALLOWED_ORIGINS = "https://stapelspel.pages.dev, https://anandregroenewald.github.io, https://localhost, http://localhost:*, http://127.0.0.1:*"
 # How many sponsors each tier can have at once.
 PREMIUM_MAX = "1"
 BLOCK_MAX = "60"

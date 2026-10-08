@@ -62,7 +62,7 @@ const randomSeed = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.floo
 const todayKey = () => DEBUG_DATE || dateKeyFor();
 
 // Friend challenge from a shared link (?klop=<dm>&d=<date>): only valid for today's date; kept for this tab in sessionStorage.
-const challengeRaw = loadChallenge(location.search, todayKey());
+let challengeRaw = loadChallenge(location.search, todayKey());
 /** The friend's challenge while it is still today's date (it lapses at midnight), else null. */
 const activeChallenge = () => (challengeRaw && challengeRaw.dateKey === todayKey() ? challengeRaw : null);
 
@@ -620,6 +620,7 @@ function playDaily() {
     }
     // Started in a tab that is gone, or a crashed session: it counts (one try per day), and pays.
     payRecovered(store.recoverUnfinished(dateKey));
+    planReminders();
     entry = store.getDaily(dateKey);
   }
   if (entry && entry.status === 'done') {
@@ -864,12 +865,19 @@ window.addEventListener('stapel:link', (e) => {
   } catch {
     return;
   }
+  const klop = /[?&]klop=/.test(q) ? loadChallenge(q, todayKey()) : null;
+  if (klop) {
+    challengeRaw = klop;   // "Kan jy my klop?": on the daily card (now, or when the menu comes back)
+    if (screen === 'menu') showMenu();
+  }
   const link = parseChallengeQuery(q);
   const room = parseRoomQuery(q);
   if (!link && !room) return;
   duelLink = link;
   duelRoom = room;
-  if (screen === 'game' && run.mode !== 'idle' && !run.over) {
+  // a tower in progress (paused too), its game-over reveal, or a match counting down finishes first
+  const busy = (run.mode !== 'idle' && screen !== 'results' && screen !== 'menu') || (screen === 'duelwait' && !!duel.match);
+  if (busy) {
     linkWaiting = true;
     ui.toast(S.linkLater, 3200);
     return;
@@ -892,7 +900,7 @@ ui.setReminderInfo(!!REMIND, store.getReminder().time);
 function reminderList(time, now = new Date()) {
   const [hh, mm] = time.split(':').map(Number);
   const today = todayKey();
-  const view = weekView(store.getWeek(), today);
+  const week = store.getWeek();
   // the week chest's box every other day (the strongest reason to come back), the others in turn
   const texts = (day, coins, n) => (n % 2 === 0 ? S.remind2(day, coins) : [S.remind1, S.remind3, S.remind4][Math.floor(n / 2) % 3]);
   const list = [];
@@ -900,7 +908,8 @@ function reminderList(time, now = new Date()) {
     const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + k, hh, mm, 0, 0);
     if (at.getTime() <= now.getTime() + 60000) continue;
     if (k === 0 && store.getDaily(today)?.status === 'done') continue;   // built already
-    const day = ((view.day - 1 + k) % 7) + 1;
+    // it only fires if the game wasn't opened since (that plans again): the box waiting that day, as is
+    const day = weekView(week, dateKeyFor(at)).day;
     const n = Math.floor(at.getTime() / 86400000);   // the day's number: the same text for the same day
     list.push({ id: REMIND_ID + k, at: at.getTime(), title: 'Stapel', body: texts(day, WEEK_COINS[day - 1], n) });
   }
@@ -920,6 +929,7 @@ function planReminders() {
 
 function askReminder() {
   if (!REMIND || store.getReminder().asked || screen !== 'results') return;
+  store.setReminder({ time: null, asked: true });   // asked once, whatever the answer (✕ and Back too)
   ui.showReminder({ time: null });
 }
 
@@ -987,8 +997,15 @@ bus.on('ui:lang', (lang) => {
     return;
   }
   ui.closeModal();
-  if (first) openDuelLink();
+  if (first && !openDuelLink()) firstVisit();
 });
+
+/** A new player's first visit (no link): "Hoe speel ek?" opens by itself, once; its "Kom ons bou!" starts the lesson. */
+function firstVisit() {
+  if (store.hasPlayed() || settings.howtoSeen) return;
+  ui.showHowTo({ lesson: true });
+  settings = store.setSettings({ howtoSeen: true });
+}
 bus.on('ui:settings', (partial) => {
   settings = store.setSettings(partial || {});
   audio.setEnabled(settings.sound);
@@ -1026,9 +1043,18 @@ let duelLink = parseChallengeQuery(location.search);
 let duelRoom = parseRoomQuery(location.search);
 // The website on an Android phone: a challenge link can go on in the app (Chrome's intent: link; the
 // app installed opens it, else the page stays). Built before the address is cleaned up below.
-const APP_LINK = !IN_APP && /Android/i.test(navigator.userAgent || '') && (duelLink || duelRoom)
-  ? `intent://anandregroenewald.github.io/Toring/${location.search}#Intent;scheme=https;package=com.lekkerlocal.stapel;end`
+const APP_LINK = !IN_APP && /Android/i.test(navigator.userAgent || '') && (duelLink || duelRoom) && !params.has('noapp')
+  ? (() => {
+    const back = new URL(location.href);
+    back.searchParams.set('noapp', '1');   // no app here: the page again, without the button
+    return `intent://stapelspel.pages.dev/${location.search}#Intent;scheme=https;package=com.lekkerlocal.stapel;S.browser_fallback_url=${encodeURIComponent(back.href)};end`;
+  })()
   : null;
+// tapped: the app takes the room over, so this page lets go of it (else it would join it too)
+bus.on('ui:app-open', () => {
+  stopDuelFlow();
+  duel.cancel();
+});
 if (params.has('teen') || params.has('kamer') || params.has('lang')) {
   try {
     const q = new URLSearchParams(location.search);
@@ -1149,10 +1175,15 @@ bus.on('ui:duel', showDuelScreen);
 // first to a height mark: choose the punishment (js/duel.js times it out with the default)
 bus.on('duel:choose', (c) => ui.showPunish(c));
 bus.on('duel:chosen', () => ui.hidePunish());
+const NAME_BOARD_MS = 4000;
+let nameBoardTimer = 0;
 bus.on('ui:duel-name', (text) => {
   const saved = store.setDuelName(text);
   ui.setDuelName(saved);
-  if (saved?.ok) boardChanged();   // the latest leaderboard row takes the new name
+  if (saved?.ok) {
+    clearTimeout(nameBoardTimer);
+    nameBoardTimer = setTimeout(boardChanged, NAME_BOARD_MS);   // the latest leaderboard row takes the new name
+  }
 });
 bus.on('ui:duel-bot', () => versus(duel.startBot()));
 bus.on('ui:duel-random', searchOpponent);
@@ -1280,7 +1311,7 @@ function payRecovered(results) {
   const streak = store.getStats().currentStreak;
   return results.reduce((sum, r) => {
     const paid = awardCoins({ mode: 'daily', heightM: r.heightM, perfects: r.perfects, streak }).added;
-    const box = r.blocksDropped > 0 ? store.openWeekBox(r.dateKey) : null;   // it was played: its box opens
+    const box = store.openWeekBox(r.dateKey);   // its try is used: its box opens
     return sum + paid + (box ? box.coins : 0);
   }, 0);
 }
@@ -1491,13 +1522,9 @@ function onReady() {
   showMenu();
   retryBoard();
   planReminders();
-  // a new player chooses a language first; a challenge link waits for that choice. A first visit
-  // without a link opens "Hoe speel ek?" (once).
+  // a new player chooses a language first; a challenge link waits for that choice
   if (askLanguage) ui.showLanguage({ first: true });
-  else if (!openDuelLink() && !store.hasPlayed() && !settings.howtoSeen) {
-    ui.showHowTo({ lesson: true });   // its "Kom ons bou!" starts the short lesson
-    settings = store.setSettings({ howtoSeen: true });
-  }
+  else if (!openDuelLink()) firstVisit();
   ui.setLoading(false);
   if (recovered.length) ui.toast(recoveredCoins ? `${S.unfinished} +${recoveredCoins} 🪙` : S.unfinished, 3600);
   else if (liveElsewhere(todayKey())) ui.toast(S.otherTab, 3000);

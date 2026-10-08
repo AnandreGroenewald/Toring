@@ -2,6 +2,8 @@
 <html lang="af">
 <head>
   <meta charset="utf-8">
+  <!-- the game moved to stapelspel.pages.dev: the old address forwards (with the player's progress) -->
+  <script src="js/moved.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Privaatheidsbeleid — Stapel</title>
   <meta name="description" content="Wat Stapel oor spelers en adverteerders weet, hoekom, hoe lank, en jou regte onder POPIA.">
@@ -204,7 +206,7 @@
       <p>Stapel gebruik die berging van jou blaaier, nie koekies om jou te volg nie. Hierdie berging self word nie na ons gestuur nie. Wat wel weggaan, staan in afdeling 2: die anonieme tellings, en vir die daaglikse ranglys jou bynaam en die lukrake spelernommer uit <code>stapel.v1.board</code>.</p>
       <dl class="disclosure">
         <dt><code>stapel.v1</code></dt>
-        <dd>Jou resultate, reeks, beste hoogte en instellings (klank, vibrasie, minder beweging, hoë kontras). Bly tot jy jou blaaierdata uitvee.</dd>
+        <dd>Jou resultate, reeks, beste hoogte en instellings (klank, vibrasie, minder beweging, hoë kontras, en of jy “Hoe speel ek?” al gesien het). Bly tot jy jou blaaierdata uitvee.</dd>
         <dt><code>stapel.v1.econ</code></dt>
         <dd>Jou muntstukke, kragte, voorkoms (Uitdagersreeks-styl) en rang. Bly tot jy jou blaaierdata uitvee.</dd>
         <dt><code>stapel.v1.lang</code></dt>
@@ -221,8 +223,10 @@
         <dd>Die laaste lys van Borge, sodat die spel vinnig en ook sonder internet begin. Word ná 7 dae nie meer gebruik nie en met elke opdatering vervang.</dd>
         <dt>Diensfunksie-kas</dt>
         <dd>Die speletjie se lêers, sodat dit sonder internet werk. Bly totdat ’n nuwe weergawe dit vervang.</dd>
-        <dt><code>stapel.tab</code>, <code>stapel.launch</code>, <code>stapel.adverteer.draft</code>, <code>stapel.adverteer.pending</code></dt>
-        <dd>Sessiegeheue van die oortjie: ’n lukrake kode wat onthou watter oortjie die spel oop het, in die toep die uitdagingskakel waarmee dit oopgemaak is (sodat dit net een keer oopgaan), en op die adverteer-bladsy jou halfingevulde vorm en ’n betaling wat nog loop. Verdwyn wanneer jy die oortjie toemaak.</dd>
+        <dt><code>stapel.launch</code></dt>
+        <dd>Net in die Android-toep: die uitdagingskakel waarmee die toep laaste oopgemaak is, en wanneer, sodat dieselfde skakel nie weer oopgaan as jy later na die toep terugkeer nie.</dd>
+        <dt><code>stapel.tab</code>, <code>stapel.adverteer.draft</code>, <code>stapel.adverteer.pending</code></dt>
+        <dd>Sessiegeheue van die oortjie: ’n lukrake kode wat onthou watter oortjie die spel oop het, en op die adverteer-bladsy jou halfingevulde vorm en ’n betaling wat nog loop. Verdwyn wanneer jy die oortjie toemaak.</dd>
       </dl>
 
       <h2 id="p12">12. Wysigings en kontak</h2>

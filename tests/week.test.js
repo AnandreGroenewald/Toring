@@ -102,3 +102,33 @@ test('the store: the box pays outside the day\'s cap, the first full week gives 
   const poor = createStore(memoryBackend());
   assert.equal(poor.buyWeekShield().ok, false, 'no coins, no shield');
 });
+
+test('after a full week the next box is day 1 anyway: no Reeksskild is spent on a missed day', () => {
+  const full = cleanWeek({ day: 7, last: day(0), shields: 2, weeks: 1 });
+  const r = openBox(full, day(3));
+  assert.equal(r.box.day, 1);
+  assert.equal(r.box.saved, 0);
+  assert.equal(r.box.restarted, false);
+  assert.equal(r.week.shields, 2, 'both kept');
+});
+
+test('a clock that went back promises nothing', () => {
+  const w = openBox(null, day(5)).week;
+  const v = weekView(w, day(3));
+  assert.equal(v.opened, true, 'shown as opened: openBox would give nothing');
+  assert.equal(openBox(w, day(3)), null);
+});
+
+test('the full week\'s title comes back with a later chest if something dropped it', () => {
+  const backend = memoryBackend();
+  const store = createStore(backend);
+  for (let n = 0; n < 7; n++) store.openWeekBox(day(n));
+  assert.ok(store.getEconomy().owned.title.includes('getrou'));
+  // an older version rewrote the wallet without it
+  const econ = JSON.parse(backend.getItem('stapel.v1.econ'));
+  econ.owned.title = econ.owned.title.filter((id) => id !== 'getrou');
+  backend.setItem('stapel.v1.econ', JSON.stringify(econ));
+  const again = createStore(backend);
+  for (let n = 7; n < 14; n++) again.openWeekBox(day(n));
+  assert.ok(again.getEconomy().owned.title.includes('getrou'));
+});

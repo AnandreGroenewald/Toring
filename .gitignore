@@ -4,3 +4,6 @@ playwright-report/
 *.log
 .DS_Store
 __*.html
+
+# Cloudflare Pages build (tools/build-pages.mjs)
+pages-dist/

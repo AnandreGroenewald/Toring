@@ -663,10 +663,12 @@ export class HudScene extends Phaser.Scene {
   /** The arrow under the balance meter: the side the loose top leans to (none while it's about centred). */
   drawSide(lean) {
     const side = lean > 0.3 ? 1 : lean < -0.3 ? -1 : Math.abs(lean) > 0.2 ? this.wmSideNow : 0;
-    if (side === this.wmSideNow) return;
+    const hot = Math.abs(lean) > 0.7;   // red near the tipping point, amber before
+    if (side === this.wmSideNow && hot === this.wmSideHot) return;
     this.wmSideNow = side;
+    this.wmSideHot = hot;
     this.wmSide.setVisible(side !== 0);
-    if (side) this.wmSide.setText(side < 0 ? '◀' : '▶').setColor(Math.abs(lean) > 0.7 ? '#ff6b5e' : '#ffc56e');
+    if (side) this.wmSide.setText(side < 0 ? '◀' : '▶').setColor(hot ? '#ff6b5e' : '#ffc56e');
   }
 
   drawWobble(v) {
@@ -795,6 +797,14 @@ export class HudScene extends Phaser.Scene {
     if (Math.abs(c.y - bannerY) >= BANNER_H / 2 + half) return;
     const y = Math.round(bannerY - BANNER_H / 2 - half - 14);
     if (this.toastTween) this.toastTween.stop();
+    if (!this.toastTimer) {
+      // it was already on its way out: it goes, from up here
+      this.toastTween = this.tweens.add({
+        targets: c, y: y - 30, alpha: 0, duration: 220, ease: 'Quad.easeIn',
+        onComplete: () => { c.setVisible(false); this.toastTween = null; },
+      });
+      return;
+    }
     this.toastTween = this.tweens.add({ targets: c, y, alpha: 1, scale: 1, duration: 220, ease: 'Quad.easeOut' });
     // its fade-out starts from where it is now
     if (this.toastTimer) {

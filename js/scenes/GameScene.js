@@ -1409,7 +1409,13 @@ export class GameScene extends Phaser.Scene {
       audio.play('heart');
     }
     // a run of Perfeks brings Hanswors with his log (every SCORING.rewardStreak in a row, in every mode)
-    if (r === 'P' && this.combo % SCORING.rewardStreak === 0) this.visitors.reward?.(this.combo);
+    if (r === 'P' && this.combo % SCORING.rewardStreak === 0) {
+      try {
+        this.visitors.reward?.(this.combo);
+      } catch (err) {
+        this.visitorsFailed(err);
+      }
+    }
   }
 
   /**
@@ -1702,11 +1708,12 @@ export class GameScene extends Phaser.Scene {
     const g = getGeometry(gspec);
     const sup = support && !support.destroyed ? support : null;
     const t = this.supportTop(sup);
-    const level = !!sup && !isRect(sup.geom) && Math.abs(t.angle) > TIPPED;
+    // Hanswors's log is a new floor: always level, on the highest point under it
+    const level = gspec.log || (!!sup && !isRect(sup.geom) && Math.abs(t.angle) > TIPPED);
     const ang = level ? 0 : t.angle;
     const d = g.h - g.cy;
     out.x = t.x + d * Math.sin(ang);
-    out.y = (level ? sup.top : t.y) - d * Math.cos(ang);
+    out.y = (level ? (sup ? sup.top : t.y) : t.y) - d * Math.cos(ang);
     out.angle = ang;
     return out;
   }
@@ -2334,11 +2341,18 @@ export class GameScene extends Phaser.Scene {
       }
       l = Math.max(l, b.left);
       r = Math.min(r, b.right);
-      let m = 0;
-      let mx = 0;
-      for (let k = i; k < loose.length; k++) {
-        m += loose[k].body.mass;
-        mx += loose[k].body.mass * loose[k].body.position.x;
+      // it and what stands over it: the loose blocks above it that overlap it (side by side doesn't count)
+      let m = b.body.mass;
+      let mx = b.body.mass * b.body.position.x;
+      let over0 = b.left;
+      let over1 = b.right;
+      for (let k = i + 1; k < loose.length; k++) {
+        const o = loose[k];
+        if (o.right <= over0 || o.left >= over1) continue;
+        m += o.body.mass;
+        mx += o.body.mass * o.body.position.x;
+        over0 = Math.min(over0, o.left);
+        over1 = Math.max(over1, o.right);
       }
       const lean = r - l < 2 ? (mx / m < (l + r) / 2 ? -1.5 : 1.5) : clamp((mx / m - (l + r) / 2) / ((r - l) / 2), -1.5, 1.5);
       if (Math.abs(lean) > Math.abs(worst)) worst = lean;

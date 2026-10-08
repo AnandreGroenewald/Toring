@@ -7,7 +7,7 @@
 // on every phone) moved in update(); the rope, balloons, swag bag and juggling balls are
 // drawn in code. GameScene does the physics through `actions` (shove, gift, found, steal).
 
-import { VISITOR, VISITOR_TYPES, DEPTH, GAME_W, LAYOUT, FONT, PHYSICS } from '../config.js';
+import { VISITOR, VISITOR_TYPES, DEPTH, GAME_W, LAYOUT, FONT, PHYSICS, STAGES } from '../config.js';
 import { S, VISITOR_INFO } from '../core/strings.js';
 import { visitRng, monkeyPlan, clownPlan, thiefPlan } from '../core/visitorplan.js';
 import { getGeometry, ensureTexture } from './blocks.js';
@@ -297,7 +297,7 @@ export class Visitors {
       this.pending = v;   // never two visitors at once: this one waits for the next free block
       return;
     }
-    if (!v && this.pending && !this.cur && !this._weatherStarts(i)) {
+    if (!v && this.pending && !this.cur && !this._weatherStarts(i) && !STAGES.some((st) => st.from === i)) {
       v = { ...this.pending, at: i };
       this.pending = null;
     }

@@ -132,6 +132,55 @@ test('room: init once, two players, hello -> both start with the same seed and e
   assert.equal(c.closed, true);
 });
 
+test('room: a player back on a new connection replaces the old one (the same key); no match against it', async () => {
+  const clk = clock();
+  const room = new MatchRoom(fakeState(), {}, { now: clk.now, upgrade });
+  await room.init({ kind: 'friend', seed: 'seedabc123' });
+  const old = fakeSocket();
+  await room.join(old);
+  await say(room, old, { t: 'hello', name: 'Anna', key: 'annakey12345' });
+  // the phone's network changed: it closed the connection, the server never heard
+  const back = fakeSocket();
+  await room.join(back);
+  await say(room, back, { t: 'hello', name: 'Anna', key: 'annakey12345' });
+  assert.equal(old.closed, true, 'the old connection goes');
+  assert.equal(back.of('start').length, 0, 'no match against herself');
+  const friend = fakeSocket();
+  await room.join(friend);
+  assert.deepEqual(friend.sent, [{ t: 'wait' }]);
+  await say(room, friend, { t: 'hello', name: 'Bennie', key: 'bennie123456' });
+  assert.equal(back.last('start').opp.name, 'Bennie');
+  assert.equal(friend.last('start').opp.name, 'Anna');
+  assert.equal(old.of('start').length, 0);
+  // the old connection's close (when it comes) doesn't count as leaving the match
+  await room.onClose(old);
+  assert.equal(back.of('result').length, 0);
+});
+
+test('room: both seats taken (an old connection and the friend): the one who comes back gets their seat; a stranger does not', async () => {
+  const clk = clock();
+  const room = new MatchRoom(fakeState(), {}, { now: clk.now, upgrade });
+  await room.init({ kind: 'friend', seed: 'seedabc123' });
+  const old = fakeSocket();
+  await room.join(old);
+  await say(room, old, { t: 'hello', name: 'Anna', key: 'annakey12345' });
+  const friend = fakeSocket();
+  await room.join(friend);   // seat 1, hello still on its way
+  const stranger = fakeSocket();
+  await room.join(stranger);
+  await say(room, stranger, { t: 'hello', name: 'Carla', key: 'carlakey1234' });
+  assert.deepEqual(stranger.last('gone'), { t: 'gone' });
+  assert.equal(stranger.closed, true);
+  assert.equal(old.closed, false, 'a stranger never takes anyone\'s seat');
+  const back = fakeSocket();
+  await room.join(back);
+  await say(room, back, { t: 'hello', name: 'Anna', key: 'annakey12345' });
+  assert.equal(old.closed, true);
+  await say(room, friend, { t: 'hello', name: 'Bennie', key: 'bennie123456' });
+  assert.equal(back.last('start').you, 0, 'her own seat');
+  assert.equal(friend.last('start').opp.name, 'Anna');
+});
+
 test('room: an unknown code is "gone"', async () => {
   const room = new MatchRoom(fakeState(), {}, { now: clock().now, upgrade });
   const a = fakeSocket();
@@ -404,6 +453,23 @@ test('lobby: the longest-waiting player is paired with the next; both go to a ne
   assert.equal(inits[0].body.kind, 'random');
   assert.match(inits[0].body.seed, /^[a-z0-9]{10}$/);
   assert.ok(isRoomCode(inits[0].code));
+});
+
+test('lobby: only games with the same rules are paired (older games, sending none, with each other)', async () => {
+  const { lobby } = lobbyWith();
+  const open = async () => (await lobby.fetch(new Request('https://x/match/lobby', { headers: { Upgrade: 'websocket' } }))).ws;
+  const old = await open();
+  const now = await open();
+  await lobby.onMessage(old, JSON.stringify({ t: 'hello', name: 'Anna' }));   // a 1.9 game: no rules
+  await lobby.onMessage(now, JSON.stringify({ t: 'hello', name: 'Bennie', rules: DUEL.rules }));
+  assert.equal(now.of('match').length, 0, 'a 1.10 tower is not raced against a 1.9 one');
+  assert.deepEqual(now.sent, [{ t: 'wait' }]);
+  const now2 = await open();
+  await lobby.onMessage(now2, JSON.stringify({ t: 'hello', name: 'Carla', rules: DUEL.rules }));
+  assert.equal(now.last('match').room, now2.last('match').room);
+  const old2 = await open();
+  await lobby.onMessage(old2, JSON.stringify({ t: 'hello', name: 'Dawie' }));
+  assert.equal(old.last('match').room, old2.last('match').room);
 });
 
 test('lobby: recordings are validated, capped and expire after a week; a ghost is one of them', async () => {

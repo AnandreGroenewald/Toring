@@ -75,7 +75,7 @@ export function createDuel({
   let match = null;
   let pending = null;   // { ws, timer } while searching or waiting in a room
   const hud = { you: 0, them: 0, name: '', badge: '', claimed: {} };
-  const hello = () => ({ t: 'hello', v: PROTOCOL, name: nickname() || '', card: cleanCard(card()) });
+  const hello = () => ({ t: 'hello', v: PROTOCOL, rules: DUEL.rules, name: nickname() || '', card: cleanCard(card()) });
 
   // ------------------------------------------------------------------------------- a match
   function newMatch({ kind, seed, oppName, oppCard = null, run = null, ws = null, you = YOU }) {
@@ -300,7 +300,10 @@ export function createDuel({
       onFail(live ? S.duelRoomGone : S.duelOffline);
       return;
     }
-    const room = { code, joined: false, started: false, tries: 0, retry: null, away: hidden(), connect: null, onRetry, until: now() + DUEL.roomWaitMs };
+    // `key`: this game's own key for the room; a reconnect brings it, so the server lets it replace our old
+    // connection (which may never have closed there) instead of starting a match against it
+    const key = Array.from({ length: 16 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]).join('');
+    const room = { code, key, joined: false, started: false, tries: 0, retry: null, away: hidden(), connect: null, onRetry, until: now() + DUEL.roomWaitMs };
     pending = { ws: null, timer: null, room };
     const retryLater = () => {
       if (pending?.room !== room || room.retry || room.away) return;
@@ -330,7 +333,7 @@ export function createDuel({
         return;
       }
       pending.ws = ws;
-      ws.onopen = () => send(ws, hello());
+      ws.onopen = () => send(ws, { ...hello(), key: room.key });
       ws.onmessage = (e) => {
         const msg = parse(e.data);
         if (!msg) return;

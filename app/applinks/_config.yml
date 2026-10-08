@@ -1,0 +1,2 @@
+# GitHub Pages skips folders that start with a dot unless they are named here.
+include: [".well-known"]

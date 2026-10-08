@@ -24,10 +24,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Challenge links (?kamer=, ?teen=) open in the app (Android App Links: verified through
-                 https://anandregroenewald.github.io/.well-known/assetlinks.json). Only the game's own
-                 page: the privacy and sponsor pages stay in the browser. app/shim.js hands the link
+            <!-- Challenge links (?kamer=, ?teen=, ?klop=) open in the app (Android App Links, verified
+                 through each address's /.well-known/assetlinks.json): the game's own page at its
+                 address, https://stapelspel.pages.dev/, and at the old one (links shared before the
+                 move). The privacy and sponsor pages stay in the browser. app/shim.js hands the link
                  to the game. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="stapelspel.pages.dev" android:path="/" />
+                <data android:scheme="https" android:host="stapelspel.pages.dev" android:path="/index.html" />
+            </intent-filter>
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

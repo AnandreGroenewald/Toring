@@ -267,6 +267,7 @@ export function createUI(bus) {
       hidePunish();
       setPowerups(null);
     }
+    syncTutor();
     if (name && screens[name]) {
       screens[name].scrollTop = 0;
       if (st.keyboard && !st.modal) focusQuietly(screens[name]);
@@ -274,9 +275,15 @@ export function createUI(bus) {
     syncTicker();
   }
 
+  /** The lesson's card shows over the game only (it stays in place while a sheet or the pause card is up). */
+  function syncTutor() {
+    tutorBar.classList.toggle('is-away', st.screen !== 'game' || !!st.modal);
+  }
+
   function openModal(name) {
     if (st.modal && st.modal !== name) setOn(modals[st.modal], false);
     st.modal = name;
+    syncTutor();
     st.modalReturn = doc.activeElement;
     setOn(modals[name], true);
     const scr = screens[st.screen];
@@ -294,6 +301,7 @@ export function createUI(bus) {
     const name = st.modal;
     if (!name) return;
     st.modal = null;
+    syncTutor();
     setOn(modals[name], false);
     const scr = screens[st.screen];
     if (scr) setOn(scr, true);
@@ -1290,7 +1298,7 @@ export function createUI(bus) {
     }
     // the website on an Android phone: a challenge link can go on in the app
     if (o.appLink && (o.state === 'link' || o.state === 'search')) {
-      kids.push(h('a', { class: 'btn btn-white app-open', href: o.appLink }, emo('📲'), h('span', { text: S.openInApp })));
+      kids.push(h('a', { class: 'btn btn-white app-open', href: o.appLink, onclick: () => bus.emit('ui:app-open') }, emo('📲'), h('span', { text: S.openInApp })));
     }
     // the ✕ top right does what the screen's own way out does (not during the 3-2-1)
     const exit = { search: 'ui:duel-cancel', room: 'ui:duel-cancel', link: 'ui:home', error: 'ui:duel' }[o.state];
