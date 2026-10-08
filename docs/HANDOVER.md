@@ -440,7 +440,7 @@ Later the owner added (decisions are final unless they say otherwise):
     - Tests: 271 and 171 (+1 skipped) pass.
   - **Left to tidy:**
     - wrangler's leftovers in the repo root (the `package.json` change, `package-lock.json`, `wrangler.jsonc`, `node_modules/`), from the first `pages project create`: delete them, never commit them;
-    - the merged worktrees `~/Desktop/Toring-search` and `.claude/worktrees/agent-…`.
+    - the worktree `~/Desktop/Toring-search` (branch `claude/search-practice`, merged). **Keep** `.claude/worktrees/agent-a1516b63df4322d9e`: it holds the parked PayFast branch (`dd2163d`, not merged).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
