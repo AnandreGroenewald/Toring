@@ -32,6 +32,7 @@ const PRECACHE = [
   'js/core/visitorrules.js',
   'js/core/duel.js',
   'js/core/economy.js',
+  'js/core/emojifit.js',
   'js/core/storage.js',
   'js/core/share.js',
   'js/core/nameRules.js',

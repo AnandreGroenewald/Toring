@@ -11,6 +11,7 @@ import { shareResult } from '../core/share.js';
 import { visitorResultLine } from '../core/visitorrules.js';
 import { sayingOfTheDay, resultSaying, pauseSaying } from '../core/sayings.js';
 import { getLanguage, localSaying } from '../core/i18n.js';
+import { opaqueBox, headOf, accessoryPlace } from '../core/emojifit.js';
 import { audio, haptics } from '../audio.js';
 
 const GRID_COLS = 10;
@@ -21,6 +22,8 @@ const REASONS = {
   flood: { emoji: '🌊', title: S.overFlood, sub: S.overFloodSub },
   quit: { emoji: '🏳️', title: S.overQuit, sub: S.overQuitSub },
 };
+// (?emojifont=noto: tests only, to see the shop the way Android draws emoji)
+const EMOJI_NOTO_FIRST = typeof location !== 'undefined' && /[?&]emojifont=noto\b/.test(location.search);
 const CLICK_GUARD_MS = 350;   // swallow double taps on navigation buttons
 // In-app grid cells: colour AND a symbol, so every kind of colour blindness can read them (🎁: the clown's gift,
 // 🧱: a Fondamentblok).
@@ -467,13 +470,13 @@ export function createUI(bus) {
   /** The menu's Winkel button, with the player's coins on it. */
   function shopBtn(coins) {
     const b = dockBtn('shop', S.shop, () => { audio.play('click'); bus.emit('ui:shop'); }, { class: 'dock-btn dock-shop' });
-    b.querySelector('.dock-ic').append(h('span', { class: 'dock-coins', text: fmtInt(coins || 0) }));
+    b.querySelector('.dock-ic').append(h('span', { class: 'dock-coins' }, emo(COIN), h('b', { text: fmtInt(coins || 0) })));
     return b;
   }
 
   /** New coin balance on the menu's Winkel button (after buying, or a game). */
   function setMenuCoins(n) {
-    const el = screens.menu.querySelector('.dock-coins');
+    const el = screens.menu.querySelector('.dock-coins b');
     if (el) el.textContent = fmtInt(n || 0);
   }
 
@@ -894,8 +897,56 @@ export function createUI(bus) {
   function lookPreview(kind, item) {
     if (kind === 'frame') return h('span', { class: `frame-swatch frame-${item.id}` });
     if (kind === 'title') return h('span', { class: 'title-prev', text: COSMETIC_INFO.title[item.id].name });
-    if (kind === 'style') return h('span', { class: 'style-prev' }, emo('🐒'), item.emoji ? emo(item.emoji, 'acc') : null);
+    if (kind === 'style') return stylePreview(item);
     return emo(item.emoji || '–');
+  }
+
+  /**
+   * A style's preview: the monkey wearing it, drawn with this phone's own emoji, the hat put on the
+   * head the way the game does it (js/core/emojifit.js finds the head in the glyph's pixels), so the
+   * shop shows what opponents will see. Falls back to the two emoji when a canvas can't be read.
+   */
+  function stylePreview(item) {
+    try {
+      const font = `${EMOJI_NOTO_FIRST ? '"Noto Color Emoji", ' : ''}"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+      const G = 160;
+      const glyph = (txt) => {
+        const k = doc.createElement('canvas');
+        k.width = G;
+        k.height = G;
+        const x = k.getContext('2d', { willReadFrequently: true });
+        x.font = `100px ${font}`;
+        x.textAlign = 'center';
+        x.textBaseline = 'middle';
+        x.fillText(txt, G / 2, G / 2 + 4);
+        return { k, img: x.getImageData(0, 0, G, G) };
+      };
+      const S = 144;   // canvas pixels, shown at about 60 units: sharp on 2-3x screens
+      const c = doc.createElement('canvas');
+      c.width = S;
+      c.height = S;
+      const m = glyph('🐒');
+      const mBox = opaqueBox(m.img);
+      if (!mBox) throw new Error('no monkey');
+      const k = (S * 0.72) / Math.max(mBox.w, mBox.h);
+      const ox = S / 2 - (mBox.l + mBox.w / 2) * k;
+      const oy = S - 4 - (mBox.b + 1) * k;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(m.k, ox, oy, G * k, G * k);
+      if (item.emoji) {
+        const a = glyph(item.emoji);
+        const aBox = opaqueBox(a.img);
+        const place = accessoryPlace(item.id, headOf(m.img), aBox);
+        if (!place) throw new Error('no place');
+        const sc = place.scale * k;
+        ctx.drawImage(a.k, ox + place.cx * k - (aBox.l + aBox.w / 2) * sc, oy + place.cy * k - (aBox.t + aBox.h / 2) * sc, G * sc, G * sc);
+      }
+      c.className = 'style-prev';
+      c.setAttribute('aria-hidden', 'true');
+      return c;
+    } catch {
+      return h('span', { class: 'style-prev-plain' }, emo('🐒'), item.emoji ? emo(item.emoji) : null);
+    }
   }
 
   function buyBtn(price, coins, onBuy) {

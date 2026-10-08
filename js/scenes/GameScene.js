@@ -45,6 +45,8 @@ const BASE_HALF_W = LAYOUT.baseWidth / 2;
 const GHOST_FROZEN_SCAN = 12;    // frozen blocks near the top that can still be a landing surface
 const GHOST_WIND_STEPS = 240;    // wind forecast horizon for the landing ghost (4 s of fall)
 const GHOST_MISS_DROP = 120;     // a ghost for a drop that misses the tower is shown this far below the top, in red
+const PREWARM_AHEAD = 2;         // block textures drawn ahead while a block falls (see prewarmTextures)
+const FLOOD_TAG_MS = 1000;       // the flood tag's text redraws at most this often (each redraw is a canvas + upload)
 const COLLAPSE_MS = 1500;        // tower blocks lost this soon after another loss are the same collapse: one life
 const SET_AFTER_MS = 1500;       // a deep block still stirred by wind sets this long after landing...
 const SET_MAX_SPEED = 0.3;       // ...if it moves slower than this (px/step)
@@ -462,11 +464,12 @@ export class GameScene extends Phaser.Scene {
     this.floodTag = null;
     this.floodTagStr = '';
     this.floodTagAt = -1e9;
+    this.floodIcon = null;
     if (!this.idle) {
-      this.floodTag = this.add.text(GAME_W - 18, 0, '', {
-        fontFamily: FONT, fontSize: '24px', fontStyle: 'bold', color: '#ffffff',
-        stroke: '#0f3f73', strokeThickness: 6, resolution: 1,
-      }).setOrigin(1, 1).setDepth(DEPTH.water + 1).setVisible(false);
+      const style = { fontFamily: FONT, fontSize: '24px', fontStyle: 'bold', color: '#ffffff', stroke: '#0f3f73', strokeThickness: 6, resolution: 1 };
+      this.floodTag = this.add.text(GAME_W - 18, 0, '', style).setOrigin(1, 1).setDepth(DEPTH.water + 1).setVisible(false);
+      // the 🌊 is drawn once, apart from the number: redrawing an emoji with every new number was slow
+      this.floodIcon = this.add.text(0, 0, '🌊', style).setOrigin(1, 1).setDepth(DEPTH.water + 1).setVisible(false);
     }
 
     // Friend challenge: one thin line across the world at the height to beat, with a flag label (cheap, world space).
@@ -550,6 +553,7 @@ export class GameScene extends Phaser.Scene {
 
     if (!this.idle) this.scene.launch('Hud');
 
+    this.prewarmTextures(0, PREWARM_AHEAD + 2);   // the first blocks, while the screen changes anyway
     this.spawnBlock(0);
     if (this.hintPending) bus.emit('hud:hint', { text: this.hintText() });
 
@@ -799,6 +803,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** The sponsor name for a block spec, or null (cubes, long names on pillars, no sponsors). */
+  /**
+   * Draws the textures of the coming blocks ahead of time. A new shape or colour (or sponsor name)
+   * costs a canvas drawing and an upload; done in the frame where the block arrives on the crane,
+   * that hitch showed as the landing ghost stuttering just as the player starts to aim. So it is
+   * done while a block falls instead (nobody aims then). Textures only: nothing in the game changes.
+   */
+  prewarmTextures(from, count = PREWARM_AHEAD) {
+    if (!this.sequence || this.over) return;
+    for (let k = Math.max(0, from); k < from + count; k++) {
+      try {
+        const spec = this.sequence.block(k);
+        ensureTexture(this, spec, this.nameFor(spec));
+      } catch {
+        // drawing ahead is only an optimisation
+      }
+    }
+  }
+
   nameFor(spec) {
     if (!this.namer || !spec) return null;
     try {
@@ -861,6 +883,9 @@ export class GameScene extends Phaser.Scene {
     this.blocksDropped++;
     // the Stadige hyskraan counts drops, so it is always SLOW_BLOCKS slow blocks, whenever it was switched on
     if (this.slowLeft > 0) this.slowLeft--;
+    // while this block falls, draw the textures of the blocks after the next one (the next one's exists)
+    const dropped = this.i;
+    this.time.delayedCall(80, () => this.prewarmTextures(dropped + 2));
     // audience count: a name that was really on a block the player let go of (js/core/audience.js)
     if (!this.idle && this.curNameId) tallyShow(this.tally, this.curNameId);
     this.setGhostVisible(false);
@@ -1023,15 +1048,21 @@ export class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     const y = water.surfaceY - 22;
     const show = water.rising && !this.over && y > cam.worldView.y + 80 && y < cam.worldView.bottom - 120;
-    if (show !== tag.visible) tag.setVisible(show);
+    const icon = this.floodIcon;
+    if (show !== tag.visible) {
+      tag.setVisible(show);
+      icon?.setVisible(show);
+    }
     if (!show) return;
     tag.y = y;
-    if (time - this.floodTagAt < 250) return;
+    if (icon) icon.y = y;
+    if (time - this.floodTagAt < FLOOD_TAG_MS) return;
     this.floodTagAt = time;
-    const str = `🌊 ${fmtM(Math.max(0, (water.surfaceY - this.towerTopY) / PX_PER_M))}`;
+    const str = fmtM(Math.max(0, (water.surfaceY - this.towerTopY) / PX_PER_M));
     if (str !== this.floodTagStr) {
       this.floodTagStr = str;
       tag.setText(str);
+      if (icon) icon.x = tag.x - tag.width - 6;
     }
   }
 

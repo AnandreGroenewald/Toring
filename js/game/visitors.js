@@ -13,16 +13,57 @@ import { visitRng, monkeyPlan, clownPlan, thiefPlan } from '../core/visitorplan.
 import { getGeometry, ensureTexture } from './blocks.js';
 import { canvasTexture, clamp, lerp } from './effects.js';
 import { cosmetic } from '../core/economy.js';
+import { opaqueBox, headOf, accessoryPlace } from '../core/emojifit.js';
 
 const STEP_MS = PHYSICS.fixedDtMs;
-const EMOJI_FONT = `"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", ${FONT}`;
+// (?emojifont=noto: tests only, to see the game the way Android draws emoji)
+const NOTO_FIRST = typeof location !== 'undefined' && /[?&]emojifont=noto\b/.test(location.search);
+const EMOJI_FONT = `${NOTO_FIRST ? '"Noto Color Emoji", ' : ''}"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", ${FONT}`;
 const HALF = VISITOR.size / 2;
-// A duel attack wears the sender's style (js/core/economy.js): where it sits on the emoji, in sprite
-// sizes from its centre (x towards the way he faces), and how big it is.
+// A duel attack wears the sender's style (js/core/economy.js). Where it sits is measured on the glyph as
+// this phone draws it (js/core/emojifit.js: the head is found in the pixels), once per visitor and style.
+// These sizes from the sprite's centre (x towards the way he faces) are only the fallback when the
+// glyph can't be read; they suit Apple's emoji.
 const ACC_FIT = {
   monkey: { pet: [0.05, -0.4, 0.5], sonbril: [0.08, -0.16, 0.42], hoed: [0.05, -0.46, 0.52], kroon: [0.05, -0.44, 0.46] },
   thief: { pet: [0, -0.42, 0.5], sonbril: [0, -0.2, 0.4], hoed: [0, -0.48, 0.52], kroon: [0, -0.46, 0.46] },
 };
+const ACC_DRAW = 0.6;           // an accessory is drawn at this share of the visitor's size, then scaled to the head
+const accCache = new Map();     // `${type}|${style}` -> { dx, dy, scale } in sprite pixels, as the glyph faces
+
+/**
+ * Where the accessory goes on this visitor: measured from both glyphs' pixels (so a hat sits on the
+ * head whichever emoji font the phone has), else the fixed fallback. { dx, dy, scale } from the sprite's
+ * centre, for the glyph as drawn (flip mirrors dx).
+ */
+function accessoryFit(type, style, sprite, acc) {
+  const key = `${type}|${style}`;
+  if (accCache.has(key)) return accCache.get(key);
+  let fit = null;
+  try {
+    const read = (t) => t.canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, t.canvas.width, t.canvas.height);
+    const head = headOf(read(sprite));
+    const box = opaqueBox(read(acc));
+    const place = accessoryPlace(style, head, box);
+    if (place && Number.isFinite(place.scale) && place.scale > 0) {
+      fit = {
+        dx: place.cx - sprite.canvas.width / 2 - (box.l + box.w / 2 - acc.canvas.width / 2) * place.scale,
+        dy: place.cy - sprite.canvas.height / 2 - (box.t + box.h / 2 - acc.canvas.height / 2) * place.scale,
+        scale: place.scale,
+      };
+    }
+  } catch {
+    fit = null;   // a canvas that can't be read: the fixed fallback below
+  }
+  if (!fit) {
+    const f = ACC_FIT[type]?.[style];
+    if (!f) return null;
+    fit = { dx: -f[0] * VISITOR.size, dy: f[1] * VISITOR.size, scale: f[2] / ACC_DRAW };
+  }
+  accCache.set(key, fit);
+  return fit;
+}
+
 const HANG_ABOVE_TOP = 70;      // the monkey hangs this far above the tower-top line (screen px)
 const HOVER_ABOVE_TOP = 190;    // the clown floats this far above it
 const CLIMB_FROM = 230;         // the thief starts this far below the tower top...
@@ -316,11 +357,12 @@ export class Visitors {
     };
     c.plan = v.type === 'monkey' ? monkeyPlan(r, v) : v.type === 'clown' ? clownPlan(r, v) : thiefPlan(r, v);
     c.objs.push(c.sprite);
-    const fit = ACC_FIT[v.type]?.[v.style];
-    if (fit) {
-      c.acc = emojiText(scene, cosmetic('style', v.style).emoji, Math.round(VISITOR.size * fit[2])).setDepth(DEPTH.visitor + 0.05);
-      c.accFit = fit;
-      c.objs.push(c.acc);
+    const accEmoji = ACC_FIT[v.type]?.[v.style] ? cosmetic('style', v.style)?.emoji : null;
+    if (accEmoji) {
+      c.acc = emojiText(scene, accEmoji, Math.round(VISITOR.size * ACC_DRAW)).setDepth(DEPTH.visitor + 0.05);
+      c.accFit = accessoryFit(v.type, v.style, c.sprite, c.acc);
+      if (c.accFit) c.objs.push(c.acc);
+      else c.acc = (c.acc.destroy(), null);
     }
     if (!attract) {
       c.rec = { type: v.type, outcome: 'came', n: 0 };
@@ -812,10 +854,11 @@ export class Visitors {
     if (alive(c.sprite)) c.sprite.setVisible(true).setPosition(x, y).setRotation(rot).setScale(sx, syl).setAlpha(alpha);
     if (alive(c.acc) && alive(c.sprite)) {
       // the hat (or the sunglasses) turns, squashes and flips with him
-      const face = c.sprite.flipX ? 1 : -1;
-      const ox = face * c.accFit[0] * VISITOR.size * sx;
-      const oy = c.accFit[1] * VISITOR.size * syl;
-      c.acc.setVisible(true).setFlipX(c.sprite.flipX).setRotation(rot).setScale(sx, syl).setAlpha(alpha)
+      const f = c.accFit;
+      const flip = c.sprite.flipX;
+      const ox = (flip ? -f.dx : f.dx) * sx;
+      const oy = f.dy * syl;
+      c.acc.setVisible(true).setFlipX(flip).setRotation(rot).setScale(f.scale * sx, f.scale * syl).setAlpha(alpha)
         .setPosition(x + ox * Math.cos(rot) - oy * Math.sin(rot), y + ox * Math.sin(rot) + oy * Math.cos(rot));
     }
     if (c.type === 'clown') this._placePuffs(c, tv, x, y);

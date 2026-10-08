@@ -3,7 +3,7 @@
 // Driven entirely by bus events from GameScene; texts re-render only on change.
 import { LAYOUT, LIVES, FONT, COLORS, WATER, PX_PER_M, SCORING, COACH, DUEL } from '../config.js';
 import { bus } from '../core/bus.js';
-import { S, WEATHER_INFO } from '../core/strings.js';
+import { S, WEATHER_INFO, VISITOR_INFO } from '../core/strings.js';
 import { fmtM, fmtInt } from '../core/format.js';
 import { ensureTexture } from '../game/blocks.js';
 
@@ -244,7 +244,11 @@ export class HudScene extends Phaser.Scene {
     // --- Row 1: weather chip (centre) ------------------------------------------------
     this.wxY = y1;
     this.wxBg = add(this.add.image(CHIP_CX, this.wxY, '__WHITE'));
-    this.wxEmoji = add(text(this, 0, this.wxY, '', 32, { emoji: true, stroke: false }).setOrigin(0.5));
+    // Emoji are drawn once into textures (emojiTexture): drawing a big emoji glyph is slow, and done in the
+    // frame a weather banner appeared it stalled that frame, just as the new block arrives and the player
+    // starts to aim. The weather and visitor emoji are drawn ahead, one per frame (update).
+    this.emojiQueue = [...Object.values(WEATHER_INFO), ...Object.values(VISITOR_INFO)].flatMap((i) => [[i.emoji, 72], [i.emoji, 32]]);
+    this.wxEmoji = add(this.add.image(0, this.wxY, '__WHITE').setOrigin(0.5));
     this.wxName = add(text(this, 0, this.wxY - 11, '', 22, { strokeMul: 0.2 }).setOrigin(0, 0.5));
     this.wxLeft = add(text(this, 0, this.wxY + 14, '', 20, { color: '#d9ecff', strokeMul: 0.22, shadow: false }).setOrigin(0, 0.5));
     this.wxType = null;
@@ -304,7 +308,7 @@ export class HudScene extends Phaser.Scene {
     // where the banner starts (screen px): a climbing visitor keeps above it (js/game/visitors.js)
     this.registry.set('hudBannerTop', this.bannerY() - BANNER_H / 2);
     this.bannerBg = this.add.image(0, 0, panelTexture(this, BANNER_W, BANNER_H, NAVY, 0.82, { radius: 34, rim: 0.3 }));
-    this.bannerEmoji = text(this, -BANNER_W / 2 + 70, 0, '', 72, { emoji: true, stroke: false }).setOrigin(0.5);
+    this.bannerEmoji = this.add.image(-BANNER_W / 2 + 70, 0, '__WHITE').setOrigin(0.5);
     this.bannerTitle = text(this, -BANNER_W / 2 + 130, -24, '', 44, { strokeMul: 0.14 }).setOrigin(0, 0.5);
     this.bannerSub = text(this, -BANNER_W / 2 + 130, 26, '', 24, { color: '#d9ecff', strokeMul: 0.2, shadow: false }).setOrigin(0, 0.5);
     this.bannerSub.setWordWrapWidth(BANNER_W - 130 - 22, true);
@@ -384,6 +388,7 @@ export class HudScene extends Phaser.Scene {
   // Per-frame: apply the latest state (texts only when their string changes)
   // -------------------------------------------------------------------------
   update(time, delta) {
+    if (this.emojiQueue?.length) this.emojiTexture(...this.emojiQueue.shift());   // one a frame, ahead of need
     const s = this.state;
     if (!s || this.hidden) return;
     const dt = Math.min(delta, 100);
@@ -616,7 +621,7 @@ export class HudScene extends Phaser.Scene {
       return;
     }
     if (changedType) {
-      this.wxEmoji.setText(info.emoji);
+      this.wxEmoji.setTexture(this.emojiTexture(info.emoji, 32));
       this.wxName.setText(info.name);
     }
     this.wxLeft.setText(left !== null && left > 0 ? S.blocksLeft(left) : '');
@@ -701,9 +706,24 @@ export class HudScene extends Phaser.Scene {
   // -------------------------------------------------------------------------
   // Banner / toast / hint / hide
   // -------------------------------------------------------------------------
+  /** An emoji at `px`, drawn once (same look as the HUD's emoji text) into a texture; returns its key. */
+  emojiTexture(emoji, px) {
+    const key = `hud_emo_${px}_${[...String(emoji)].map((ch) => ch.codePointAt(0).toString(16)).join('_')}`;
+    if (this.textures.exists(key)) return key;
+    const t = text(this, 0, 0, emoji, px, { emoji: true, stroke: false });
+    const tex = this.textures.createCanvas(key, Math.max(1, t.canvas.width), Math.max(1, t.canvas.height));
+    if (tex) {
+      tex.context.drawImage(t.canvas, 0, 0);
+      tex.refresh();
+    }
+    t.destroy();
+    return key;
+  }
+
   showBanner(b) {
     if (!b || this.hidden) return;
-    this.bannerEmoji.setText(b.emoji || '');
+    if (b.emoji) this.bannerEmoji.setTexture(this.emojiTexture(b.emoji, 72));
+    this.bannerEmoji.setVisible(!!b.emoji);
     this.bannerTitle.setText(b.title || '').setScale(1);
     // a long title ("Sannie stuur Skelm Sakkie!") shrinks to fit the banner instead of running off it
     const titleMax = BANNER_W - 130 - 26;

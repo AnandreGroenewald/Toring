@@ -1352,19 +1352,24 @@ svg.ic {
 /* 1.8 Winkel: the shop sheet, player cards, frames and win celebrations      */
 /* ------------------------------------------------------------------------- */
 .dock-shop .dock-ic { position: relative; }
+/* the player's coins on the Winkel button: a coin and the amount, so it never reads as a notification count */
 .dock-coins {
   position: absolute;
-  right: calc(-14 * var(--u));
-  top: calc(-10 * var(--u));
-  min-width: calc(40 * var(--u));
-  padding: calc(3 * var(--u)) calc(9 * var(--u));
+  right: calc(-30 * var(--u));
+  top: calc(-12 * var(--u));
+  display: inline-flex;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  padding: calc(2 * var(--u)) calc(8 * var(--u)) calc(2 * var(--u)) calc(4 * var(--u));
+  border: calc(2 * var(--u)) solid #e3a714;
   border-radius: 999px;
-  background: #ffd23f;
-  color: #1d2b45;
+  background: #fff4cc;
+  color: #6b4d00;
   font: 900 max(10px, calc(18 * var(--u))) / 1.2 var(--font);
-  text-align: center;
+  white-space: nowrap;
   box-shadow: 0 calc(2 * var(--u)) calc(4 * var(--u)) rgba(10, 34, 78, 0.25);
 }
+.dock-coins .emoji { font-size: 1.15em; line-height: 1; }
 .shop-sheet .sheet-head { position: relative; }
 .shop-coins {
   display: inline-flex;
@@ -1422,8 +1427,8 @@ svg.ic {
 /* the celebration preview: a real button (at least 32px high), not a thin underlined word */
 .shop-try { min-height: 32px; min-width: 56px; padding: 4px 12px; border: 2px solid var(--hemel-d); border-radius: 999px; background: #fff; color: var(--hemel-d); font: 800 max(12px, calc(19 * var(--u))) / 1.1 var(--font); cursor: pointer; }
 .title-prev { padding: calc(6 * var(--u)) calc(10 * var(--u)); border-radius: calc(10 * var(--u)); background: #fff; font: 900 max(11px, calc(19 * var(--u))) / 1.1 var(--font); color: var(--ink); }
-.style-prev { position: relative; }
-.style-prev .acc { position: absolute; left: 50%; top: calc(-18 * var(--u)); transform: translateX(-50%); font-size: calc(30 * var(--u)); }
+canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 * var(--u)); }
+.style-prev-plain { display: inline-flex; align-items: flex-end; gap: calc(2 * var(--u)); }
 .frame-swatch { display: block; width: calc(64 * var(--u)); height: calc(44 * var(--u)); border-radius: calc(12 * var(--u)); background: #fff; }
 /* the frames, on a swatch and on a player card */
 .frame-hout { border: calc(5 * var(--u)) solid #a8743c; }
