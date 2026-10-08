@@ -271,6 +271,42 @@ export const PUNISH_INFO = {
   fog: { emoji: '🌫️', name: 'Mis', what: '3 blokke blind' },
   heat: { emoji: '☀️', name: 'Hittegolf', what: 'Hyskraan jaag' },
 };
+/** Power-ups (js/core/economy.js POWERUPS): Oefen, and the Daily Tower's free Fondamentblok. */
+export const POWERUP_INFO = {
+  foundation: { emoji: '🧱', name: 'Fondamentblok', what: 'Jou volgende blok is ’n lang sementblok: ’n nuwe fondament' },
+  slow: { emoji: '🐢', name: 'Stadige hyskraan', what: 'Die hyskraan swaai stadiger vir 5 blokke' },
+  shield: { emoji: '🛡️', name: 'Skild', what: 'Die volgende aap of skelm bons af' },
+  heart: { emoji: '❤️', name: 'Ekstra hartjie', what: 'Kry een hartjie terug' },
+};
+
+/** Uitdagersreeks looks (js/core/economy.js COSMETICS): what an opponent sees of you. */
+export const COSMETIC_INFO = {
+  frame: {
+    hout: { name: 'Hout' }, see: { name: 'See' }, goud: { name: 'Goud' }, springbok: { name: 'Groen en goud' },
+    vuur: { name: 'Vuur' }, diamant: { name: 'Diamant' },
+  },
+  badge: {
+    geen: { name: 'Geen' }, leeu: { name: 'Leeu' }, vuur: { name: 'Vuur' }, rugby: { name: 'Rugby' }, olifant: { name: 'Olifant' },
+    arend: { name: 'Visarend' }, kroon: { name: 'Kroon' }, 's-brons': { name: 'Seisoen: Brons' }, 's-silwer': { name: 'Seisoen: Silwer' },
+    's-goud': { name: 'Seisoen: Goud' }, 's-platinum': { name: 'Seisoen: Platinum' }, 's-diamant': { name: 'Seisoen: Diamant' },
+  },
+  title: {
+    bouer: { name: 'Bouer' }, hyskraanheld: { name: 'Hyskraanheld' }, perfekmeester: { name: 'Perfek-meester' },
+    wolkekrabber: { name: 'Wolkekrabber' }, toringkoning: { name: 'Toringkoning' },
+  },
+  celebration: {
+    konfetti: { name: 'Konfetti' }, vuurwerk: { name: 'Vuurwerk' }, vuvuzela: { name: 'Vuvuzela' }, braai: { name: 'Braai' }, skrum: { name: 'Skrum' },
+  },
+  style: {
+    gewoon: { name: 'Gewoon' }, pet: { name: 'Pet' }, sonbril: { name: 'Sonbril' }, hoed: { name: 'Hoed' }, kroon: { name: 'Kroon' },
+  },
+};
+
+/** Duel ranks (js/core/economy.js RANKS). */
+export const RANK_INFO = {
+  brons: { name: 'Brons' }, silwer: { name: 'Silwer' }, goud: { name: 'Goud' }, platinum: { name: 'Platinum' }, diamant: { name: 'Diamant' },
+};
+
 /** Added after 🦹 in the share line when the player caught the thief. */
 export const CAUGHT_EMOJI = '✋';
 

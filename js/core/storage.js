@@ -1,4 +1,4 @@
-// Persistent player data (settings, daily results, streaks, practice best).
+// Persistent player data (settings, daily results, streaks, practice best, coins and looks).
 // Everything lives in one JSON blob under STORAGE_KEY. The in-memory copy is
 // the source of truth, so a missing or throwing localStorage (private mode,
 // quota, blocked cookies) never breaks the game — it just won't persist.
@@ -7,6 +7,10 @@ import { STORAGE_KEY } from '../config.js';
 import { dateKeyFor, dayNumber, addDays, daysBetween, isDateKey } from './daily.js';
 import { cleanVisits } from './visitorrules.js';
 import { cleanNickname } from './duel.js';
+import {
+  defaultEconomy, cleanEconomy, earnCoins, buyPowerup, usePowerup, buyCosmetic, wearCosmetic, grantRankLooks,
+  rankAfterMatch, seasonOf, cardOf,
+} from './economy.js';
 
 const SCHEMA = 1;
 const SETTING_KEYS = ['sound', 'vibration', 'reducedMotion', 'highContrast'];
@@ -106,6 +110,7 @@ function defaultData() {
     },
     practice: { played: 0, heightM: 0, score: 0 },
     duel: { name: null, played: 0, wins: 0, losses: 0, streak: 0, bestStreak: 0 },
+    econ: defaultEconomy(),
   };
 }
 
@@ -167,6 +172,7 @@ function sanitize(raw) {
     d.duel.played = Math.max(d.duel.played, d.duel.wins + d.duel.losses);
     d.duel.bestStreak = Math.max(d.duel.bestStreak, d.duel.streak);
   }
+  d.econ = cleanEconomy(raw.econ);
   return d;
 }
 
@@ -308,6 +314,16 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     }
     s.maxStreak = Math.max(s.maxStreak, s.streak);
     return { applied: true, flags };
+  }
+
+  /** Store an economy step's result; returns { ok, economy }. */
+  function apply(step, write) {
+    sync();
+    if (step.ok) {
+      data.econ = step.economy;
+      if (write) persist();
+    }
+    return { ok: step.ok, economy: clone(data.econ) };
   }
 
   sync();
@@ -498,6 +514,63 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       }
       persist();
       return clone(u);
+    },
+
+    // --- Coins, power-ups, looks and the duel rank (js/core/economy.js) ---------------------
+
+    getEconomy() {
+      sync();
+      return clone(data.econ);
+    },
+
+    /** What duel opponents see of this player (cleanCard). */
+    getCard() {
+      sync();
+      return cardOf(data.econ);
+    },
+
+    /** Coins for a finished game; Oefen and duels count towards the day's cap. Returns { added, coins }. */
+    earnCoins(n, { capped = true } = {}) {
+      sync();
+      const r = earnCoins(data.econ, n, { capped, dayKey: today() });
+      data.econ = r.economy;
+      if (r.added) persist();
+      return { added: r.added, coins: data.econ.coins };
+    },
+
+    buyPowerup(id) {
+      return apply(buyPowerup(data.econ, id), true);
+    },
+
+    usePowerup(id) {
+      return apply(usePowerup(data.econ, id), true);
+    },
+
+    buyCosmetic(kind, id) {
+      return apply(buyCosmetic(data.econ, kind, id), true);
+    },
+
+    wearCosmetic(kind, id) {
+      return apply(wearCosmetic(data.econ, kind, id), true);
+    },
+
+    /** The Daily Tower's free Fondamentblok: true the first time for `dateKey`, then false. */
+    takeFreeFoundation(dateKey) {
+      sync();
+      if (!dateKey || data.econ.freeFoundation === dateKey) return false;
+      data.econ.freeFoundation = dateKey;
+      persist();
+      return true;
+    },
+
+    /** A finished duel moves the season's rank points. Returns { points, delta, rank, up, reward }. */
+    recordDuelRank({ outcome, live = false } = {}) {
+      sync();
+      const r = rankAfterMatch(data.econ.rank, { outcome, live, season: seasonOf(today()) });
+      data.econ.rank = r.rank;
+      data.econ = grantRankLooks(data.econ, r.rank.best, { badge: r.reward });
+      persist();
+      return { points: r.rank.points, delta: r.delta, rank: r.rank.best, up: r.up, reward: r.reward };
     },
 
     recordPractice(result) {

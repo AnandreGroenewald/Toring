@@ -28,6 +28,7 @@ const PRECACHE = [
   'js/core/visitorplan.js',
   'js/core/visitorrules.js',
   'js/core/duel.js',
+  'js/core/economy.js',
   'js/core/storage.js',
   'js/core/share.js',
   'js/core/nameRules.js',
