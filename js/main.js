@@ -778,16 +778,29 @@ function releaseBackGuard() {
   }
 }
 
+// The website's Back button (the app's comes through app/shim.js) goes one step back in the game, like
+// Esc: a sheet closes, a tower pauses, a screen goes home. Only on the bare menu does it leave the page:
+// everywhere else one history entry of ours stands in front of it.
+let guardTimer = 0;
+function syncBackGuard() {
+  if (IN_APP) return;
+  clearTimeout(guardTimer);
+  guardTimer = setTimeout(() => {
+    const v = ui.view();
+    if (v.screen !== 'menu' || v.modal) armBackGuard();
+    else releaseBackGuard();
+  }, 0);
+}
+bus.on('ui:view', syncBackGuard);
+
 window.addEventListener('popstate', () => {
   if (ignorePop) {
     ignorePop = false;
     return;
   }
   backGuard = false;
-  if (run.mode === 'daily' && run.started && !run.over) {
-    pauseGame();
-    armBackGuard();
-  }
+  window.dispatchEvent(new CustomEvent('stapel:back', { cancelable: true }));
+  syncBackGuard();
 });
 
 // ---------------------------------------------------------------------------
@@ -1287,7 +1300,6 @@ bus.on('game:started', (partial) => {
   if (run.mode === 'daily' && partial && partial.dateKey) {
     store.startDaily(partial.dateKey, partial, { owner: TAB_ID });
     startHeartbeat();
-    armBackGuard();
   }
 });
 bus.on('game:progress', (partial) => {
@@ -1321,7 +1333,6 @@ function finalize(result) {
   if (run.final) return run.final;
   run.over = true;
   stopHeartbeat();
-  releaseBackGuard();
   if (result.mode === 'duel') {
     // a match keeps its own wins and losses (recorded by js/duel.js once it is decided)
     run.final = { result, stats: null, isNewBest: false, aborted: false };

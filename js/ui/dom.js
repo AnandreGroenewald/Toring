@@ -258,6 +258,7 @@ export function createUI(bus) {
 
   function showScreen(name) {
     st.screen = name;
+    bus.emit('ui:view');
     for (const [k, el] of Object.entries(screens)) {
       setOn(el, k === name);
       if (k === name && st.modal) el.inert = true;   // stays visible under an open sheet
@@ -284,6 +285,7 @@ export function createUI(bus) {
     if (st.modal && st.modal !== name) setOn(modals[st.modal], false);
     st.modal = name;
     syncTutor();
+    bus.emit('ui:view');
     st.modalReturn = doc.activeElement;
     setOn(modals[name], true);
     const scr = screens[st.screen];
@@ -302,6 +304,7 @@ export function createUI(bus) {
     if (!name) return;
     st.modal = null;
     syncTutor();
+    bus.emit('ui:view');
     setOn(modals[name], false);
     const scr = screens[st.screen];
     if (scr) setOn(scr, true);
@@ -1850,6 +1853,8 @@ export function createUI(bus) {
     setResultsBoard,
     setDuelWaitNote,
     showTutor,
+    /** Which screen and sheet show ({ screen, modal }): the website's Back button follows them. */
+    view: () => ({ screen: st.screen, modal: st.modal }),
     setReminderInfo,
     showReminder,
     setBoardOn,
