@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.7.7';
+export const VERSION = '1.7.8';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -213,7 +213,7 @@ export const DUEL = {
   marks: [10, 20, 30, 40], // whoever reaches a mark first chooses a punishment for the other tower
   punishments: ['monkey', 'thief', 'fog', 'heat'], // Blouaap, Skelm Sakkie, Mis, Hittegolf
   attackFor: { 10: 'monkey', 20: 'thief', 30: 'monkey', 40: 'thief' }, // sent when nobody chooses in time
-  chooseMs: 5000,          // time to choose (the server waits a little longer, then sends the default)
+  chooseMs: 7000,          // time to choose, while the tower keeps going (the server waits a little longer, then sends the default)
   weatherAttackBlocks: 3,  // Mis / Hittegolf last this many blocks
   ghostPenaltyM: { monkey: 3, thief: 4, fog: 2, heat: 2 }, // what a punishment takes off a recording's tower
   sampleMs: 1000,          // a recording keeps the height once a second

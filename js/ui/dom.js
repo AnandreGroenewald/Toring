@@ -77,6 +77,7 @@ function icon(name) {
   return span.firstChild;
 }
 
+const PUNISH_GUARD_MS = 400;   // Uitdagersreeks: a tap this soon after the choice appears was meant for the tower
 const emo = (ch, cls = '') => h('span', { class: `emoji ${cls}`.trim(), 'aria-hidden': 'true', text: ch });
 
 const hex = (n) => '#' + (n >>> 0).toString(16).padStart(6, '0');
@@ -151,8 +152,11 @@ export function createUI(bus) {
     },
   }, h('span', null, icon('pause')));
   const toastBox = h('div', { class: 'toasts', role: 'status', 'aria-live': 'polite' });
-  // Uitdagersreeks: choose a punishment for the other tower (the game keeps running underneath)
+  // Uitdagersreeks: choose a punishment for the other tower. It sits over the score strip at the top,
+  // away from the taps that drop blocks, and only its buttons take taps: the game keeps running.
   const punishBar = h('div', { class: 'punish', role: 'group', 'aria-label': S.duelChooseLabel, hidden: true });
+  let punishAt = 0;        // when the strip appeared (a tap right after it was meant for the tower)
+  let punishPick = null;   // (n) => choose option n (keys 1-4) while the strip is up
 
   root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, pauseBtn, punishBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
@@ -320,6 +324,8 @@ export function createUI(bus) {
     const key = e.key;
     if (key === 'Escape' || key === 'Esc') {
       goBack();
+    } else if (punishPick && !e.repeat && key >= '1' && key <= '4') {
+      punishPick(Number(key) - 1);
     } else if ((key === 'p' || key === 'P') && !e.repeat && !st.modal) {
       if (st.screen === 'game' && guard()) bus.emit('ui:pause');
       else if (st.screen === 'pause' && guard()) bus.emit('ui:resume');
@@ -1192,28 +1198,34 @@ export function createUI(bus) {
   }
 
   /** "Eerste by 20 m! Kies ’n straf vir Anna:" and the four punishments; DUEL.chooseMs to pick one. */
-  function showPunish({ m, opp, options = [], ms = 5000 } = {}) {
+  function showPunish({ m, opp, options = [], ms = 7000 } = {}) {
     if (st.screen !== 'game') return;
-    const btns = options.filter((k) => PUNISH_INFO[k]).map((k) => {
+    const kinds = options.filter((k) => PUNISH_INFO[k]);
+    const pick = (k) => {
+      if (performance.now() - punishAt < PUNISH_GUARD_MS) return;
+      audio.play('click');
+      bus.emit('ui:duel-punish', { m, kind: k });
+    };
+    const btns = kinds.map((k) => {
       const info = PUNISH_INFO[k];
-      return h('button', {
-        type: 'button', class: 'punish-btn',
-        onclick: () => {
-          audio.play('click');
-          bus.emit('ui:duel-punish', { m, kind: k });
-        },
-      }, emo(info.emoji), h('b', { text: info.name }), h('small', { text: info.what }));
+      return h('button', { type: 'button', class: 'punish-btn', 'aria-label': `${info.name}: ${info.what}`, onclick: () => pick(k) },
+        emo(info.emoji), h('b', { text: info.name }), h('small', { text: info.what }));
     });
     punishBar.replaceChildren(
       h('p', { class: 'punish-title', text: S.duelChoose(m, opp || S.duelSomeone) }),
       h('div', { class: 'punish-btns' }, btns),
       h('div', { class: 'punish-time', vars: { '--ms': `${ms}ms` } }));
+    punishAt = performance.now();
+    punishPick = (n) => {
+      if (kinds[n]) pick(kinds[n]);
+    };
     punishBar.hidden = false;
   }
 
   function hidePunish() {
     punishBar.hidden = true;
     punishBar.replaceChildren();
+    punishPick = null;
   }
 
   function toast(text, ms = 2200) {

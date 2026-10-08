@@ -234,6 +234,12 @@ Later the owner added (decisions are final unless they say otherwise):
   - the menu checked at 412×915 and 360×640: no card, nothing else moved;
   - the app ships its own `sponsors.json`, so 1.7.7 is rebuilt for Play internal testing too;
   - Play Console still says the app "contains ads" (sponsors are planned), which is the owner's call.
+- **The punishment choice out of the way (version `1.7.8`, 8 Oct 2026)**, after friends and family tested ("They like it so far ... the pop-ups for sabotaging, there needs to be a easier way to click it without interfering"; and "Please do not make it that it pause first"):
+  - the choice is a strip over the score at the top, not a bar over the bottom of the screen, where thumbs tap;
+  - only its four buttons take taps (`pointer-events`), so a tap anywhere else still drops a block;
+  - taps in the first 0,4 s are ignored (`PUNISH_GUARD_MS`), and keys 1–4 choose;
+  - the game never pauses, so the time to choose went up from 5 s to 7 s (`DUEL.chooseMs`), and the server waits 8,5 s (Worker redeployed);
+  - headless at 412×915 and 360×640: the strip clears the pause button, a tap mid-screen drops a block while it is up, an early tap is ignored, and a later tap or key 3 picks; zero console errors.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
