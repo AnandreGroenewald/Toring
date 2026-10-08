@@ -660,6 +660,16 @@ svg.ic {
   text-wrap: balance;
   text-shadow: 0 calc(3 * var(--u)) 0 rgba(29, 43, 69, 0.42), 0 0 calc(16 * var(--u)) rgba(29, 43, 69, 0.28);
 }
+/* English: what the Afrikaans saying of the day means */
+.saying-meaning {
+  margin: 0;
+  font-size: calc(23 * var(--u));
+  font-weight: 700;
+  line-height: 1.25;
+  opacity: 0.92;
+  text-wrap: balance;
+  text-shadow: 0 calc(2 * var(--u)) 0 rgba(29, 43, 69, 0.42);
+}
 .saying-line {
   margin: 0;
   font-size: calc(26 * var(--u));
@@ -1908,3 +1918,43 @@ svg.ic {
 #ui.compact .city-sm { margin-top: calc(10 * var(--u)); }
 #ui.compact .city-sm .city-strip { height: calc(92 * var(--u)); padding-top: calc(26 * var(--u)); }
 #ui.compact .city-sm .city-line { font-size: max(12px, calc(22 * var(--u))); }
+
+/* 1.9 language: the menu's 🌐 button (top left, clear of the logo) and the Afrikaans / English picker */
+.lang-chip {
+  position: absolute;
+  top: calc(var(--sat) + 14 * var(--u));
+  left: calc(var(--sal) + 16 * var(--u));
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6 * var(--u));
+  min-height: 36px;
+  padding: calc(6 * var(--u)) calc(16 * var(--u)) calc(6 * var(--u)) calc(12 * var(--u));
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  font: inherit;
+  font-size: max(13px, calc(24 * var(--u)));
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  box-shadow: 0 calc(6 * var(--u)) calc(14 * var(--u)) rgba(10, 34, 78, 0.2);
+  cursor: pointer;
+  z-index: 2;
+}
+.lang-chip .emoji { font-size: 1.15em; }
+.lang-sheet .sheet-head h2 { font-size: calc(36 * var(--u)); text-wrap: balance; }
+.lang-btns { display: grid; gap: calc(16 * var(--u)); padding: calc(10 * var(--u)) 0 calc(6 * var(--u)); }
+.lang-btn {
+  min-height: 56px;
+  padding: calc(22 * var(--u));
+  border: calc(4 * var(--u)) solid transparent;
+  border-radius: calc(28 * var(--u));
+  background: #eef6ff;
+  color: var(--ink);
+  font: inherit;
+  font-size: max(18px, calc(40 * var(--u)));
+  font-weight: 900;
+  cursor: pointer;
+}
+.lang-btn.on { border-color: var(--jakaranda-d, #5b3fa8); background: #fff; }
+.lang-btn:focus-visible { outline: 3px solid var(--jakaranda-d, #5b3fa8); outline-offset: 2px; }

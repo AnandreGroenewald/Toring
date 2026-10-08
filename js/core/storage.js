@@ -190,6 +190,8 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
   // The wallet (coins, power-ups, looks, rank: js/core/economy.js) has a key of its own. A page still
   // running an older version rebuilds the main blob from the keys it knows, which would drop it.
   const econKey = `${key}.econ`;
+  // The language ('af' / 'en') too: js/core/langboot.js reads it before anything else loads.
+  const langKey = `${key}.lang`;
   let data = defaultData();
   let econ = defaultEconomy();
   let lastRaw = null;
@@ -544,6 +546,29 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     getEconomy() {
       sync();
       return clone(econ);
+    },
+
+    /** The player's language ('af' or 'en'), or null before they have chosen. */
+    getLang() {
+      const v = readRaw(langKey);
+      return v === 'af' || v === 'en' ? v : null;
+    },
+
+    /** Keep the player's language; false for anything but 'af' / 'en' (or when storage refuses). */
+    setLang(lang) {
+      if (lang !== 'af' && lang !== 'en') return false;
+      try {
+        be.setItem(langKey, lang);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
+    /** Has this player played before (a daily, Oefen, a match, or the first-game hints)? */
+    hasPlayed() {
+      sync();
+      return data.tutorialSeen || data.stats.played > 0 || data.practice.played > 0 || data.duel.played > 0;
     },
 
     /** What duel opponents see of this player (cleanCard), with this month's rank. */

@@ -302,6 +302,43 @@ Later the owner added (decisions are final unless they say otherwise):
     - the daily is still identical for everyone (two runs with different randomness);
     - the monkey's four cases, Hanswors's flush cement blocks, and the crane are unchanged from 1.7.9;
     - a review agent read the whole change. All six of its findings, and both small ones, are fixed (in the points above).
+- **English (version `1.9.0`, 8 Oct 2026)**, at the owner's request ("And I think to make it english, what do you think?"). Most South African phones are set to English, even for Afrikaans speakers, so the owner chose a one-time picker over following the phone's language.
+  - **The text:**
+    - `js/core/strings.js` stays the Afrikaans source;
+    - `js/core/strings.en.js` has the same keys and shapes in English;
+    - `tests/i18n.test.js` checks the shapes, that every English text is filled in, and that none reads as Afrikaans;
+    - `js/core/i18n.js` lays the English over the Afrikaans in place (`setLanguage`), so the code keeps reading `S.x` as before.
+  - **Start-up:** `js/core/langboot.js` is the first thing `js/main.js` imports. It reads the saved language before any other module loads (some keep text from when they load) and sets it. Changing the language reloads the page, because drawn text and textures keep their words.
+  - **Where it's kept:** the choice has its own key, `stapel.v1.lang`, like the wallet, so a tab on an older version can't drop it.
+  - **First start:**
+    - a new player sees "Kies jou taal · Choose your language" (Afrikaans / English) once; Back keeps the language shown;
+    - players from before 1.9 (anything played, or the first-game hints seen) stay in Afrikaans and are never asked;
+    - a challenge link waits for the choice, and survives the reload into English;
+    - `?lang=en` (or `af`) previews a language for one visit; a new player who arrives with it keeps it.
+  - **Switching later:** the menu's 🌐 button (top left) opens the same picker.
+  - **What stays Afrikaans:**
+    - the characters' names (Blouaap, Hanswors, Skelm Sakkie, Robot Rikus) and "Bouer" in default nicknames;
+    - the sayings: English shows each with its meaning (`SAYING_MEANINGS`), e.g. "Aanhouer wen. (Perseverance wins.)". The menu shows the meaning on a line of its own.
+  - **Numbers and dates:** English uses a decimal point (37.5 m) and English day and month names (`js/core/format.js`).
+  - **Not translated yet:** the sponsor pages, `privaatheid.html` and `terme.html`. An English privacy page would suit the English store listing. The store texts in `app/store/` mention both languages.
+  - **Switching:** the address carries the new language (`?lang=`, which comes off the address at start-up like the challenge links), so a switch works even where nothing can be saved. A double tap can't start a second reload. The page title follows the language.
+  - **A review agent read the change.** Fixed from it:
+    - no storage, a `?lang=` link with 🌐, a double tap on the first picker;
+    - "50.0 m" on the duel flag and the ruler (`fmtMShort`);
+    - the title, and the house ad's label;
+    - the saying toasts stay longer when the meaning makes them long;
+    - hearts everywhere (not lives); "vs <naam>!"; plainer English in places;
+    - short meanings for the sayings ("Dit staan soos ’n paal bo water" means there's no doubt about it).
+  - **Checked** (8 Oct 2026):
+    - `npm test` 246 pass;
+    - headless, at 360×640 and 412×915, with zero console errors:
+      - the first-start picker; English everywhere (menu, game, HUD, results, shop, the Challenger Series, the link screen);
+      - 🌐 back to Afrikaans; a player from before 1.9 not asked; Afrikaans chosen without a reload;
+      - a challenge link kept through the reload, even with a double tap;
+      - no storage; a `?lang=en` link followed by 🌐; "🏁 50 m";
+    - all the 1.8 checks again in Afrikaans (24 runs, both sizes);
+    - the daily is still identical for everyone.
+  - **Seen, not changed:** if a player drops just as Blouaap's 10 s run out and the block misses, the strike's grace covers that miss too (no heart lost). This has been so since 1.7.9, and is rare.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
@@ -324,7 +361,7 @@ Each step should end green (`npm test`, `cd server && npm test`, a headless play
 - ~~T5. In-game sponsor integration~~ **Done** (see section 2). It also reworded the code comments that named other games and added the README section.
 - ~~**T6. Final pass.**~~ **Done** (see section 2); only the owner's checklist in section 4 remains. Original brief: Full playtest plus screenshots. Confirm the **game payload** (what a player downloads: `index.html`, `lib/`, `js/` without `js/pages/`, `css/style.css`, `icons/`, `manifest`, `sw.js`) stays under 3 MB. It was about 1.8 MB after T5 (that count includes `sponsors.json`); `docs/`, `server/` and `tests/` are never loaded by the game. Check the README's sponsorship section is still accurate, then hand the owner the checklist in section 4.
 
-**All of T1–T6 are done**, and so are the visitors (`docs/CHARACTERS-SPEC.md`, version `1.6.0`), the Uitdagersreeks (`docs/CHALLENGE-SPEC.md`) and coins, power-ups and ranks (`1.8.0`). Agreed next with the owner: an English option (the phone's language picks Afrikaans or English, with a switch in Settings; character names stay), then production on Google Play. Later: biomes (height bands and a daily world), sponsor sales through PayFast, and iOS. What is left beyond that is section 4 (owner-only steps). If the owner asks for more, start with the medium and low findings in `docs/review-findings.md` that were not re-checked one by one, or tune the visitors (`VISITOR` in `js/config.js`) after playtests on real phones.
+**All of T1–T6 are done**, and so are the visitors (`docs/CHARACTERS-SPEC.md`, version `1.6.0`), the Uitdagersreeks (`docs/CHALLENGE-SPEC.md`) and coins, power-ups and ranks (`1.8.0`). English is done (`1.9.0`). Next with the owner: production on Google Play (an English store listing, and maybe an English privacy page, first). Later: biomes (height bands and a daily world), sponsor sales through PayFast, and iOS. What is left beyond that is section 4 (owner-only steps). If the owner asks for more, start with the medium and low findings in `docs/review-findings.md` that were not re-checked one by one, or tune the visitors (`VISITOR` in `js/config.js`) after playtests on real phones.
 <!-- TODO-END -->
 
 ## 4. Things only the owner can do

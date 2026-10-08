@@ -7,7 +7,7 @@ import {
 } from '../config.js';
 import { bus } from '../core/bus.js';
 import { S, VISITOR_INFO, WEATHER_INFO } from '../core/strings.js';
-import { fmtM } from '../core/format.js';
+import { fmtM, fmtMShort } from '../core/format.js';
 import { createSequence } from '../core/sequence.js';
 import { audio, haptics } from '../audio.js';
 import { Block, ensureTexture, getGeometry, releaseNamedTextures } from '../game/blocks.js';
@@ -16,6 +16,7 @@ import { createBlockNamer } from '../core/sponsors.js';
 import { createTally, tallyShow } from '../core/audience.js';
 import { createCoach } from '../core/coach.js';
 import { milestoneSaying, MILESTONE_STEP_M } from '../core/sayings.js';
+import { glossSaying } from '../core/i18n.js';
 import { SPONSOR } from '../sponsorConfig.js';
 import { Weather } from '../game/weather.js';
 import { Crane } from '../game/crane.js';
@@ -1000,7 +1001,7 @@ export class GameScene extends Phaser.Scene {
     this.goalLine = this.add.image(GAME_W / 2, y, '__WHITE').setDisplaySize(GAME_W, 6)
       .setTintFill(0xffd23f).setAlpha(0.9).setDepth(DEPTH.fxWorld + 1);
     // tag left of the HUD's race track (and clear of the pause button when the line is near the top)
-    this.goalTag = this.add.text(GAME_W - 46, y - 6, `🏁 ${fmtM(DUEL.goalM).replace(',0', '')}`, {
+    this.goalTag = this.add.text(GAME_W - 46, y - 6, `🏁 ${fmtMShort(DUEL.goalM)}`, {
       fontFamily: FONT, fontSize: '26px', fontStyle: 'bold', color: '#ffffff',
       stroke: '#8a5a00', strokeThickness: 6, resolution: 1,
     }).setOrigin(1, 1).setDepth(DEPTH.fxWorld + 2);
@@ -1987,7 +1988,7 @@ export class GameScene extends Phaser.Scene {
       hit = this.nextMilestoneM;
       this.nextMilestoneM += MILESTONE_STEP_M;
     }
-    if (hit) bus.emit('hud:saying', { text: `${hit}\u00a0m — ${milestoneSaying(this.seed, hit)}` });
+    if (hit) bus.emit('hud:saying', { text: `${hit}\u00a0m — ${glossSaying(milestoneSaying(this.seed, hit))}` });
   }
 
   updateFriction() {
@@ -2472,7 +2473,7 @@ export class GameScene extends Phaser.Scene {
     for (let m = step; m <= this.maxHeightM; m += step) {
       const y = LAYOUT.baseTopY - m * PX_PER_M;
       g.lineBetween(x0, y, x0 + 26 / z, y);
-      this.add.text(x0 + 32 / z, y, fmtM(m).replace(',0', ''), style).setOrigin(0, 0.5).setDepth(DEPTH.fxWorld + 3);
+      this.add.text(x0 + 32 / z, y, fmtMShort(m), style).setOrigin(0, 0.5).setDepth(DEPTH.fxWorld + 3);
     }
     // dashed line at the best height, flag on the right
     g.lineStyle(4 / z, 0xffe38c, 0.95);

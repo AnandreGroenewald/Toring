@@ -37,7 +37,10 @@
   <link rel="modulepreload" href="js/audio.js">
   <link rel="modulepreload" href="js/core/bus.js">
   <link rel="modulepreload" href="js/core/format.js">
+  <link rel="modulepreload" href="js/core/langboot.js">
+  <link rel="modulepreload" href="js/core/i18n.js">
   <link rel="modulepreload" href="js/core/strings.js">
+  <link rel="modulepreload" href="js/core/strings.en.js">
   <link rel="modulepreload" href="js/core/rng.js">
   <link rel="modulepreload" href="js/core/daily.js">
   <link rel="modulepreload" href="js/core/sequence.js">
@@ -87,7 +90,7 @@
   </div>
 
   <noscript>
-    <div class="nojs">Stapel het JavaScript nodig. Skakel dit asseblief aan en laai die bladsy weer.</div>
+    <div class="nojs">Stapel het JavaScript nodig. Skakel dit asseblief aan en laai die bladsy weer.<br>Stapel needs JavaScript. Please turn it on and reload the page.</div>
   </noscript>
 
   <script>
@@ -101,8 +104,8 @@
         shown = true;
         var box = document.createElement('div');
         box.className = 'nojs';
-        box.innerHTML = '<div><p style="margin:0 0 18px">Stapel wil nie laai nie.</p>'
-          + '<button type="button" style="font:900 20px/1 inherit;padding:14px 28px;border:0;border-radius:999px;background:#1d2b45;color:#fff">Herlaai</button></div>';
+        box.innerHTML = '<div><p style="margin:0 0 18px">Stapel wil nie laai nie.<br>Stapel won’t load.</p>'
+          + '<button type="button" style="font:900 20px/1 inherit;padding:14px 28px;border:0;border-radius:999px;background:#1d2b45;color:#fff">Herlaai · Reload</button></div>';
         box.querySelector('button').onclick = function () {
           var done = function () { location.reload(); };
           var jobs = [];

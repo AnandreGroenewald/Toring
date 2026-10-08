@@ -1,5 +1,6 @@
-// Alle Afrikaanse teks vir Stapel. Keep every player-facing string here.
-// Use the typographic ’n (U+2019) for the indefinite article.
+// Alle Afrikaanse teks vir Stapel. Keep every player-facing string here, and its English twin in
+// js/core/strings.en.js (same keys and shapes; tests/i18n.test.js checks). js/core/i18n.js swaps the
+// tables in place, so code keeps reading S.x as always. Use the typographic ’n (U+2019).
 
 export const S = {
   title: 'Stapel',
@@ -280,6 +281,10 @@ export const S = {
   duelLinkTitle: (name) => `${name} daag jou uit!`,
   duelLinkSub: (height) => `Bou dieselfde toring kop-aan-kop teen hul rondte (${height}).`,
   duelLinkPlay: 'Aanvaar die uitdaging',
+  // --- Taal (1.9; js/core/i18n.js) ---
+  language: 'Taal',
+  langPick: 'Kies jou taal · Choose your language',
+  langNames: { af: 'Afrikaans', en: 'English' },
 };
 
 /** Weather display info. Keys match WEATHER_TYPES in config.js. */

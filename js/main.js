@@ -1,5 +1,7 @@
 // Stapel — boot + wiring: Phaser game, storage, DOM UI, audio, bus events,
 // pause/visibility, settings, service worker and debug hooks.
+// First of all: the language, before any other module reads a string (js/core/langboot.js).
+import { SAVED_LANG, PREVIEW_LANG } from './core/langboot.js';
 import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL } from './config.js';
 import { bus } from './core/bus.js';
 import { S, POWERUP_INFO, COSMETIC_INFO, RANK_INFO } from './core/strings.js';
@@ -22,6 +24,7 @@ import { loadSponsors } from './sponsorsFeed.js';
 import { sendStats, dailyPercentile } from './audience.js';
 import { SPONSOR_API_URL, salesEnabled, matchApiUrl } from './sponsorConfig.js';
 import { createUI } from './ui/dom.js';
+import { getLanguage, isLang } from './core/i18n.js';
 import { audio, haptics } from './audio.js';
 import { BgScene } from './scenes/BgScene.js';
 import { GameScene } from './scenes/GameScene.js';
@@ -33,6 +36,9 @@ import { HudScene } from './scenes/HudScene.js';
 // real daily, streak or stats, and nobody can autoplay a daily they share.
 // ---------------------------------------------------------------------------
 const params = new URLSearchParams(location.search);
+// the address as opened (challenge links are taken off it below): a new player who picks English
+// starts again in English with the same link
+const BOOT_URL = location.pathname + location.search + location.hash;
 const DEBUG = params.get('debug') === '1';
 // The Android app (Capacitor, app/): the game files ship inside it, so no service worker there.
 const IN_APP = !!globalThis.Capacitor?.isNativePlatform?.();
@@ -92,6 +98,14 @@ function nextDayFor(dateKey) {
 // ---------------------------------------------------------------------------
 const store = createStore(undefined, DEBUG ? { key: `${STORAGE_KEY}.debug` } : {});
 let settings = store.getSettings();
+// Afrikaans or English (1.9). Someone who played before there was a choice stays in Afrikaans; a new
+// player is asked once (onReady), unless a ?lang= link already said which.
+let askLanguage = false;
+if (!SAVED_LANG) {
+  if (store.hasPlayed()) store.setLang('af');
+  else if (PREVIEW_LANG) store.setLang(PREVIEW_LANG);
+  else askLanguage = true;
+}
 audio.setEnabled(settings.sound);
 haptics.setEnabled(settings.vibration);
 
@@ -662,6 +676,25 @@ bus.on('ui:home', () => {
   }
   showMenu();
 });
+// Afrikaans or English. The same language: carry on. A new one: start again in it (drawn text and
+// textures keep the words they were made with). The address says which (?lang=), so it works where
+// nothing can be saved too; the first start goes back to the address it was opened with (its link).
+let langSwitching = false;
+bus.on('ui:lang', (lang) => {
+  if (!isLang(lang) || langSwitching) return;
+  store.setLang(lang);
+  const first = askLanguage;
+  askLanguage = false;
+  if (lang !== getLanguage()) {
+    langSwitching = true;   // a second tap must not start a second (link-less) reload
+    const u = new URL(first ? BOOT_URL : location.href, location.href);
+    u.searchParams.set('lang', lang);
+    location.replace(u.pathname + u.search + u.hash);
+    return;
+  }
+  ui.closeModal();
+  if (first) openDuelLink();
+});
 bus.on('ui:settings', (partial) => {
   settings = store.setSettings(partial || {});
   audio.setEnabled(settings.sound);
@@ -690,15 +723,17 @@ const duel = createDuel({
     duelReward = { coins: awardCoins({ mode: 'duel', outcome, live }), rank: store.recordDuelRank({ outcome, live }) };
   },
 });
-// A friend's run (?teen=...) or live room (?kamer=CODE) from the link this page was opened with. They
-// are taken off the address straight away, so a reload or a shared screenshot doesn't repeat them.
+// A friend's run (?teen=...) or live room (?kamer=CODE) from the link this page was opened with, and a
+// language from the address (?lang=, already applied by js/core/langboot.js). They are taken off the
+// address straight away, so a reload or a shared screenshot doesn't repeat them.
 let duelLink = parseChallengeQuery(location.search);
 let duelRoom = parseRoomQuery(location.search);
-if (params.has('teen') || params.has('kamer')) {
+if (params.has('teen') || params.has('kamer') || params.has('lang')) {
   try {
     const q = new URLSearchParams(location.search);
     q.delete('teen');
     q.delete('kamer');
+    q.delete('lang');
     const rest = q.toString();
     history.replaceState(history.state, '', location.pathname + (rest ? `?${rest}` : '') + location.hash);
   } catch {
@@ -1120,7 +1155,9 @@ function onReady() {
   const recoveredCoins = payRecovered(recovered);
   startIdle();
   showMenu();
-  openDuelLink();
+  // a new player chooses a language first; a challenge link waits for that choice
+  if (askLanguage) ui.showLanguage({ first: true });
+  else openDuelLink();
   ui.setLoading(false);
   if (recovered.length) ui.toast(recoveredCoins ? `${S.unfinished} +${recoveredCoins} 🪙` : S.unfinished, 3600);
   else if (liveElsewhere(todayKey())) ui.toast(S.otherTab, 3000);

@@ -23,6 +23,7 @@ A free Afrikaans block-stacking phone game that runs in the browser.
 | **Uitdagersreeks** | Head-to-head: two players build the same tower at the same time. Whoever reaches a 10 m mark first chooses a punishment for the other tower (Blouaap, Skelm Sakkie, fog or a heat wave), and the first to 50 m wins. Random opponents play live through the Worker (a recording of a real match or the computer, *Robot Rikus*, when nobody is around). Friends join a live room by link (`?kamer=CODE`), or play your run later from the results' challenge link (`?teen=…`, no server needed). |
 | **Coins and the Winkel** | Games pay 🪙 coins (earned only; nothing is sold for money yet): Oefen for height and Perfeks, the daily tower for height, playing and the streak, a match for playing (more for a win). Oefen and matches stop paying at 150 coins a day; the daily always pays. The *Winkel* sells power-ups for Oefen (🧱 Fondamentblok, 🐢 Stadige hyskraan, 🛡️ Skild, ❤️ Ekstra hartjie) and looks for the Uitdagersreeks (a frame, a badge, a title, a win celebration and a visitor style). In the daily, everyone gets one free Fondamentblok at 55 m; matches have no power-ups. Rules: `js/core/economy.js`. |
 | **Ranks and seasons** | Matches move your rank (🥉 Brons to 💎 Diamant). A season is a month: the points halve and your best rank leaves a season badge. Your opponent sees your player card on "Teen <naam>!", your badge on the race track, your style on the visitors you send and your celebration when you win. |
+| **Afrikaans or English** | A new player chooses once ("Kies jou taal · Choose your language"); the 🌐 button on the menu switches later. The characters keep their Afrikaans names, and the Afrikaans sayings stay, with their meaning in English. English text: `js/core/strings.en.js`; the switch: `js/core/i18n.js`. |
 | **Come-back hooks** | *Jou Stapelstad*: every finished Daaglikse Toring becomes a building in your own skyline (on the shore behind the game and on the results). A shared link (`?klop=<dm>&d=<date>`) challenges a friend to beat your height that day, the results tease tomorrow's weather, and an install button offers the home screen. |
 
 Share line example:
@@ -85,6 +86,7 @@ js/scenes/            BgScene (sky, Tafelberg, clouds), GameScene (core loop), H
 js/audience.js        anonymous counts + daily percentile (network side; only with SPONSOR_API_URL)
 js/duel.js            Uitdagersreeks on the device: finding an opponent, the match, the race track (rules: js/core/duel.js)
 js/core/economy.js    coins, power-ups, looks, ranks and seasons (pure rules; the wallet is in the store)
+js/core/i18n.js       Afrikaans / English: lays js/core/strings.en.js over js/core/strings.js (langboot.js picks it first)
 js/ui/dom.js          menu, how-to, stats, pause and results overlays
 sw.js, manifest.webmanifest, icons/   offline support and home-screen install
 tests/                node unit tests for the core logic

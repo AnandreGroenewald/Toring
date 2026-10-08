@@ -64,7 +64,7 @@ The rules and numbers are in `js/core/economy.js` (tested in `tests/economy.test
 - **Searching screen**: "Soek ’n teenstander…" with a countdown and a cancel button. On a match: "Teen <naam>!" with both player cards (theirs big, yours small), then a 3-2-1 count and play.
 - **In the game**: a race track on the right edge (0–50 m, with the marks), you and your opponent as two markers, and their badge, name and height. When you reach a mark first, a strip slides down over the score at the top ("Eerste by 10 m! Kies ’n straf vir Rikus:") with the four punishments and a 7-second timer. The game never pauses, and only the four buttons take taps: a tap anywhere else still drops a block. Taps in the first 0,4 s are ignored, since a drop tap may already be on its way. Keys 1–4 choose on a computer. (1.7.6 had a bar at the bottom of the screen, right where thumbs tap; testers said it got in the way.) Punishments come with the visitor or weather banner ("Rikus stuur Mis!"). One you send shows a toast ("Jy stuur Skelm Sakkie na Rikus! 🦹"). A Blouaap or Skelm Sakkie wears the sender's visitor style (🧢 🕶️ 🎩 👑) on the other tower.
 - **Results**: "Jy het gewen! 🏆" or "Jy het verloor", and why. The winner's celebration rains down: yours with a fanfare, or theirs with "<naam> vier!". Coins and rank points for the match. Both heights, then the buttons `Nog ’n wedstryd`, `Daag ’n vriend uit` (your run as a link) and `Tuis`. The WhatsApp text says who won and includes the challenge link.
-- All Afrikaans text goes in `js/core/strings.js`.
+- All Afrikaans text goes in `js/core/strings.js`, with its English twin in `js/core/strings.en.js` (same key; `tests/i18n.test.js` checks).
 
 ## Testing and definition of done
 

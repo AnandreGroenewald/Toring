@@ -6,10 +6,11 @@
 import { GAME_W, PALETTE, RATING_EMOJI, computeGameHeight } from '../config.js';
 import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO, COSMETIC_INFO } from '../core/strings.js';
 import { COIN, RANKS, RANK_POINTS, rankFor, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic } from '../core/economy.js';
-import { fmtM, fmtInt, fmtClock, fmtDuration, DAYS_AF, MONTHS_AF } from '../core/format.js';
+import { fmtM, fmtInt, fmtClock, fmtDuration, dayName, monthName } from '../core/format.js';
 import { shareResult } from '../core/share.js';
 import { visitorResultLine } from '../core/visitorrules.js';
 import { sayingOfTheDay, resultSaying, pauseSaying } from '../core/sayings.js';
+import { getLanguage, glossSaying, sayingMeaning } from '../core/i18n.js';
 import { audio, haptics } from '../audio.js';
 
 const GRID_COLS = 10;
@@ -89,7 +90,7 @@ const hex = (n) => '#' + (n >>> 0).toString(16).padStart(6, '0');
 function dayAbbr(dateKey) {
   const [y, m, d] = String(dateKey).split('-').map(Number);
   const dow = new Date(Date.UTC(y, (m || 1) - 1, d || 1)).getUTCDay();
-  return (DAYS_AF[dow] || '').slice(0, 2);
+  return dayName(dow).slice(0, 2);
 }
 
 function prefersReducedMotion() {
@@ -145,6 +146,7 @@ export function createUI(bus) {
     howto: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-howto-title', tabindex: '-1' }),
     stats: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-stats-title', tabindex: '-1' }),
     shop: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-shop-title', tabindex: '-1' }),
+    lang: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-lang-title', tabindex: '-1' }),
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -164,7 +166,7 @@ export function createUI(bus) {
   // 1.8 power-ups: round buttons on the right edge; only the buttons take taps (the rest drops a block)
   const powerTray = h('div', { class: 'power-tray', role: 'group', 'aria-label': S.powerups, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, pauseBtn, punishBar, powerTray, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, pauseBtn, punishBar, powerTray, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // Measures env(safe-area-inset-*) so layout() can work out how much of each
@@ -311,7 +313,9 @@ export function createUI(bus) {
    * screen with nothing open (the app then closes).
    */
   function goBack() {
-    if (st.modal) {
+    if (st.modal === 'lang' && st.langFirst) {
+      bus.emit('ui:lang', getLanguage());   // the first-start choice can't be skipped: back keeps the language shown
+    } else if (st.modal) {
       closeModal();
     } else if (st.screen === 'pause') {
       if (guard()) bus.emit('ui:resume');
@@ -681,14 +685,26 @@ export function createUI(bus) {
     // "Spreekwoord van die dag" lives inside the spacer (absolutely placed): it never adds height, so
     // it can't push the play button down; fitSaying() hides it when the gap is too small for it.
     const saying = m.dateKey ? sayingOfTheDay(m.dateKey) : '';
+    const meaning = sayingMeaning(saying);   // English: what the Afrikaans saying means
     const gap = h('div', { class: saying ? 'spacer has-saying' : 'spacer' }, saying
       ? h('div', { class: 'saying-day' },
         h('div', { class: 'saying-inner' },
           h('span', { class: 'saying-label', text: S.sayingOfDay }),
-          h('p', { class: 'saying-text', text: saying })))
+          h('p', { class: 'saying-text', text: saying }),
+          meaning ? h('p', { class: 'saying-meaning', text: meaning }) : null))
       : null);
+    // 🌐 Afrikaans or English (the same picker a new player sees once)
+    const lang = getLanguage();
+    const langChip = h('button', {
+      type: 'button', class: 'lang-chip', 'aria-label': `${S.language}: ${S.langNames[lang]}`, title: S.language,
+      onclick: () => {
+        if (!guard()) return;
+        audio.play('click');
+        showLanguage({ current: lang });
+      },
+    }, emo('🌐'), h('span', { text: lang.toUpperCase() }));
     screens.menu.replaceChildren(brand, gap,
-      h('div', { class: 'menu-stack' }, card, playRow, dock, adSlot));
+      h('div', { class: 'menu-stack' }, card, playRow, dock, adSlot), langChip);
     // the gap shrinks when the sponsor feed adds the ad card later, so re-check whenever it resizes
     if (saying && typeof ResizeObserver === 'function') {
       if (!st.sayingRO) st.sayingRO = new ResizeObserver(() => fitSaying());
@@ -717,7 +733,8 @@ export function createUI(bus) {
     const house = ad && ad.house;
     const kids = [];
     if (house && house.title && /^https:\/\//i.test(house.url || '')) {
-      const label = house.label || S.adLabel;
+      // the label is the game's own word in English (the feed's label is Afrikaans); the ad itself is the advertiser's
+      const label = getLanguage() === 'en' ? S.adLabel : house.label || S.adLabel;
       kids.push(h('a', {
         class: 'house-ad',
         href: house.url,
@@ -784,6 +801,27 @@ export function createUI(bus) {
   function showHowTo() {
     renderHowTo();
     openModal('howto');
+  }
+
+  /**
+   * Afrikaans or English: once at the first start (`first`: no way round it), and from the menu's 🌐
+   * button. A choice comes back as 'ui:lang'; main.js keeps it (a new language reloads the page).
+   */
+  function showLanguage({ current = getLanguage(), first = false } = {}) {
+    const pick = (lang) => h('button', {
+      type: 'button', class: `lang-btn${!first && lang === current ? ' on' : ''}`, lang,
+      'aria-pressed': String(!first && lang === current),
+      onclick: () => {
+        audio.play('click');
+        bus.emit('ui:lang', lang);
+      },
+    }, h('b', { text: S.langNames[lang] }));
+    st.langFirst = first;
+    modals.lang.replaceChildren(h('div', { class: 'card sheet lang-sheet' },
+      first ? null : h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); } }, icon('close')),
+      h('div', { class: 'sheet-head' }, emo('🌍'), h('h2', { id: 'stapel-lang-title', text: S.langPick })),
+      h('div', { class: 'lang-btns' }, pick('af'), pick('en'))));
+    openModal('lang');
   }
 
   // ---------------------------------------------------------------------------
@@ -973,7 +1011,7 @@ export function createUI(bus) {
     const card = h('div', { class: 'card pause-card' },
       h('div', { class: 'pause-ic', 'aria-hidden': 'true' }, icon('pause')),
       h('h2', { text: S.paused }),
-      h('p', { class: 'saying-line', text: pauseSaying() }),
+      h('p', { class: 'saying-line', text: glossSaying(pauseSaying()) }),
       // before the first drop nothing counts yet, so no warning
       mode === 'daily' && started ? h('p', { class: 'warn' }, emo('⚠️'), h('span', { text: S.quitWarnDaily })) : null,
       button('btn-big btn-green', [icon('play'), h('span', { text: S.resume })], () => bus.emit('ui:resume')),
@@ -1042,7 +1080,7 @@ export function createUI(bus) {
     const pct = next ? Math.round((100 * Math.max(0, r.points - info.min)) / span) : 100;
     return h('div', { class: 'rank-box' },
       h('div', { 'data-my-card': '' }, playerCard({ name, card: { ...card, rank: r.rank } })),
-      month ? h('p', { class: 'rank-season', text: S.season(MONTHS_AF[month - 1], year) }) : null,
+      month ? h('p', { class: 'rank-season', text: S.season(monthName(month - 1), year) }) : null,
       h('div', { class: 'rank-now' }, emo(info.emoji), h('b', { text: RANK_INFO[info.id].name }), h('span', { text: S.rankPoints(r.points) })),
       h('div', {
         class: 'rank-bar', role: 'progressbar', 'aria-label': S.rankPoints(r.points),
@@ -1278,7 +1316,7 @@ export function createUI(bus) {
       h('h2', { class: 'res-title' }, emo(isNewBest ? '🏆' : why.emoji), h('span', { text: isNewBest ? S.newRecord : why.title })),
       h('p', { class: 'res-sub', text: isNewBest ? `${why.emoji} ${why.title}` : why.sub }),
       // a saying for the outcome (same for everyone with the same daily seed and outcome); not part of the share text
-      h('p', { class: 'saying-line res-saying', text: resultSaying(r, isNewBest) }));
+      h('p', { class: 'saying-line res-saying', text: glossSaying(resultSaying(r, isNewBest)) }));
     const empty = !(r.blocksDropped > 0);
 
     const bigM = h('div', { class: 'big-m', text: fmtM(r.heightM || 0) });
@@ -1517,6 +1555,8 @@ export function createUI(bus) {
     setMenuAd,
     showMenu,
     showHowTo,
+    showLanguage,
+    closeModal,
     showStats,
     showPause,
     showResults,

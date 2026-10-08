@@ -2,7 +2,7 @@
 // the network first so a new version reaches players on their next visit.
 // Bump VERSION (and VERSION in js/config.js) when shipping; old caches are deleted on activate.
 
-const VERSION = 'stapel-v1.8.0';
+const VERSION = 'stapel-v1.9.0';
 
 const PRECACHE = [
   './',
@@ -21,6 +21,9 @@ const PRECACHE = [
   'js/core/bus.js',
   'js/core/format.js',
   'js/core/strings.js',
+  'js/core/strings.en.js',
+  'js/core/i18n.js',
+  'js/core/langboot.js',
   'js/core/rng.js',
   'js/core/daily.js',
   'js/core/sequence.js',

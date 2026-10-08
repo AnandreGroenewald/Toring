@@ -31,6 +31,7 @@ const BANNER_HOLD_MS = 2200;   // at least; a longer banner or toast stays until
 const TOAST_HOLD_MS = 2200;
 const READ_MAX_MS = 4200;
 const SAYING_HOLD_MS = 3800;   // a saying toast stays a little longer: it is meant to be read
+const SAYING_MAX_MS = 5200;    // ...and longer still with its English meaning
 const SAYING_RETRY_MS = 500;   // how often a waiting saying checks whether banner, hint and toast are clear
 const SAYING_MAX_WAIT_MS = 9000; // then it is skipped: the tower has moved on
 /** How long a message stays: long enough to read (about 20 characters a second), at least `min`. */
@@ -833,7 +834,8 @@ export class HudScene extends Phaser.Scene {
       return;
     }
     this.pendingSaying = null;
-    this.showToast({ text: t.text, color: '#ffe38c', size: 26, ms: SAYING_HOLD_MS });
+    // a saying with its English meaning runs longer: up to SAYING_MAX_MS to read it
+    this.showToast({ text: t.text, color: '#ffe38c', size: 26, ms: Math.max(SAYING_HOLD_MS, Math.min(SAYING_MAX_MS, 900 + String(t.text || '').length * 55)) });
   }
 
   showHint(h) {
