@@ -7,7 +7,7 @@ Stack blocks as high as you can. A new tower every day, the same for everyone!
 FULL DESCRIPTION (max 4000)
 Stapel is a free, colourful tower-stacking game, made in Afrikaans.
 
-The crane swings the block back and forth. Tap at the right moment, drop it and build your tower as high as you dare. Land a block exactly on top of the last one for a Perfek, build a combo and score extra points.
+The crane swings the block back and forth, faster the higher you build. Tap at the right moment, drop it and build your tower as high as you dare. Land a block exactly on top of the last one for a Perfek, build a combo and score extra points.
 
 🏗️ DAILY TOWER
 One new tower every day: the same blocks and the same weather for everyone, one try a day. See how many players you beat today, share your result on WhatsApp and see who builds highest.
@@ -16,13 +16,13 @@ One new tower every day: the same blocks and the same weather for everyone, one 
 Wind pushes your blocks, rain makes everything slippery, a heat wave makes the crane race, hail hits your tower and fog hides the landing. After the rain a rainbow may bring double points.
 
 🐒 VISITORS
-Blouaap the monkey throws blocks into the sea, Skelm Sakkie tries to steal blocks and Hanswors the clown builds you a new foundation. Tap quickly to chase them off!
+Blouaap the monkey waits for your next block: land it Perfek, or he throws blocks into the sea. Skelm Sakkie tries to steal blocks – tap him quickly to catch him. And Hanswors the clown builds you a new foundation.
 
 🌊 THE FLOOD
 The water rises while you build. Stay above the flood line!
 
 ⚔️ CHALLENGER SERIES
-Head-to-head on exactly the same tower. Whoever reaches 10, 20, 30 and 40 metres first sends a visitor to the other tower, and the first to 50 metres wins. Find an opponent and play live, challenge a friend with a link, or play Robot Rikus.
+Head-to-head on exactly the same tower. Whoever reaches 10, 20, 30 and 40 metres first chooses a punishment for the other tower (the monkey, the thief, fog or a heat wave), and the first to 50 metres wins. Find an opponent and play live, challenge a friend with a link, or play Robot Rikus.
 
 🧱 PRACTICE
 Practise as much as you like. It doesn't count.
