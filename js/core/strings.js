@@ -293,6 +293,9 @@ export const S = {
   boardAs: (name) => `Jy verskyn as “${name}”. Verander jou bynaam in die Uitdagersreeks.`,
   boardYou: 'Jy',
   boardHiddenNote: 'Jy is versteek: ander sien jou nie, maar jy sien jou plek.',
+  boardSaving: 'Stoor…',
+  boardRetry: 'Nog nie gestoor nie: ons probeer weer sodra jy aanlyn is.',
+  boardTitleYesterday: 'Gister se ranglys',
   // --- Taal (1.9; js/core/i18n.js) ---
   language: 'Taal',
   langPick: 'Kies jou taal · Choose your language',

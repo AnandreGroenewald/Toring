@@ -287,6 +287,9 @@ export const S_EN = {
   boardAs: (name) => `You appear as “${name}”. Change your nickname in the Challenger Series.`,
   boardYou: 'You',
   boardHiddenNote: 'You’re hidden: others don’t see you, but you see your place.',
+  boardSaving: 'Saving…',
+  boardRetry: 'Not saved yet: we’ll try again once you’re online.',
+  boardTitleYesterday: 'Yesterday’s leaderboard',
   // --- Language (1.9) ---
   language: 'Language',
   langPick: 'Kies jou taal · Choose your language',

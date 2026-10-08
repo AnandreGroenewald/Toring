@@ -192,8 +192,9 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
   const econKey = `${key}.econ`;
   // The language ('af' / 'en') too: js/core/langboot.js reads it before anything else loads.
   const langKey = `${key}.lang`;
-  // The daily leaderboard (js/board.js): this phone's random player number, whether to show it, and
-  // the last day whose result was posted. Its own key too (an older version would drop it).
+  // The daily leaderboard (js/board.js): this phone's random player number, whether to show it, the
+  // last day whose result was posted, and whether a name or hiding change hasn't reached the server
+  // yet. Its own key too (an older version would drop it).
   const boardKey = `${key}.board`;
   const PLAYER_RE = /^[a-z0-9]{12,32}$/;
   function readBoard() {
@@ -203,9 +204,10 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
         player: typeof v?.player === 'string' && PLAYER_RE.test(v.player) ? v.player : null,
         hidden: v?.hidden === true,
         posted: isDateKey(v?.posted) ? v.posted : null,
+        pending: v?.pending === true,
       };
     } catch {
-      return { player: null, hidden: false, posted: null };
+      return { player: null, hidden: false, posted: null, pending: false };
     }
   }
   function writeBoard(b) {
@@ -621,6 +623,17 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       if (!isDateKey(dateKey)) return;
       const b = readBoard();
       b.posted = dateKey;
+      writeBoard(b);
+    },
+
+    /** A name or hiding change the server hasn't confirmed yet (it goes with the next board request). */
+    getBoardPending() {
+      return readBoard().pending;
+    },
+
+    setBoardPending(pending) {
+      const b = readBoard();
+      b.pending = !!pending;
       writeBoard(b);
     },
 

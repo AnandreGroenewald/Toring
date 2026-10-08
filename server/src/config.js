@@ -79,8 +79,9 @@ export function loadConfig(env) {
       // network can put many players behind one address.
       statsPerHour: int(e.RATE_LIMIT_STATS_PER_HOUR, 120, 1),
       scorePerHour: int(e.RATE_LIMIT_SCORE_PER_HOUR, 60, 1),
-      // the daily leaderboard: a few entries an hour per address (a household shares one), reads more
-      boardPostPerHour: int(e.RATE_LIMIT_BOARD_POST_PER_HOUR, 12, 1),
+      // the daily leaderboard: a player posts once or twice a day, but a school or a mobile network
+      // puts many players behind one address (as for /score)
+      boardPostPerHour: int(e.RATE_LIMIT_BOARD_POST_PER_HOUR, 60, 1),
       boardGetPerHour: int(e.RATE_LIMIT_BOARD_GET_PER_HOUR, 240, 1),
       // Wrong admin tokens per hashed address and hour before even the right one is refused.
       adminFailsPerHour: int(e.RATE_LIMIT_ADMIN_FAILS_PER_HOUR, 20, 1),

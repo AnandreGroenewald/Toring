@@ -225,6 +225,12 @@ export function defaultNickname(rand = Math.random) {
   return 'Bouer';
 }
 
+/** The same default nickname every visit for one player number (the phone's leaderboard number). */
+export function defaultNicknameFor(player) {
+  const n = typeof player === 'string' ? parseInt(player.slice(0, 6), 36) : NaN;
+  return Number.isFinite(n) ? defaultNickname(() => n / 36 ** 6) : defaultNickname();
+}
+
 // ---------------------------------------------------------------------------------- challenge links
 // "?teen=<payload>": a whole run in the link, so a friend can play against it later without any
 // server. Payload: "1.<seed>.<nickname, base64url>.<data, base64url>", where data is

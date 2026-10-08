@@ -1496,19 +1496,20 @@ export function createUI(bus) {
     box.querySelector('.res-board')?.remove();
     box.append(h('div', { class: 'res-board', role: 'status' },
       emo('🏆'), h('span', { text: S.boardPlace(board.you.rank, board.players) }),
-      h('button', { type: 'button', class: 'res-board-btn', text: S.board, onclick: () => { audio.play('click'); bus.emit('ui:board'); } })));
+      h('button', { type: 'button', class: 'res-board-btn', text: S.board, onclick: () => { audio.play('click'); bus.emit('ui:board', dateKey); } })));
   }
 
   /**
-   * Today's leaderboard: the top 10 (medals for the first three), your own row (also when you're not in
+   * A day's leaderboard: the top 10 (medals for the first three), your own row (also when you're not in
    * the top, or hidden), and the "show me" switch. `board` null with `loading` while it comes, null
-   * without it when the server can't be reached.
+   * without it when the server can't be reached. `state`: 'saving' while a change is on its way,
+   * 'retry' when it didn't arrive (it goes again later). `title` names the day (today's by default).
    */
-  function showBoard({ board = null, loading = false, name = '', hidden = false, refresh = false } = {}) {
+  function showBoard({ board = null, loading = false, name = '', hidden = false, state = null, title = '', refresh = false } = {}) {
     if (refresh && st.modal !== 'board') return;   // an answer that came after the sheet was closed
     const MEDAL = ['🥇', '🥈', '🥉'];
     const row = (t) => h('li', { class: `board-row${t.you ? ' is-you' : ''}` },
-      h('span', { class: 'board-rank' }, t.rank <= 3 ? emo(MEDAL[t.rank - 1]) : h('b', { text: `#${t.rank}` })),
+      h('span', { class: 'board-rank' }, t.rank <= 3 ? [emo(MEDAL[t.rank - 1]), h('span', { class: 'sr', text: `#${t.rank}` })] : h('b', { text: `#${t.rank}` })),
       h('span', { class: 'board-name', text: t.you ? `${t.name} (${S.boardYou})` : t.name }),
       h('b', { class: 'board-h', text: fmtM(t.heightM) }));
     let body;
@@ -1527,6 +1528,11 @@ export function createUI(bus) {
       });
       body = h('ol', { class: 'board-list' }, rows);
     }
+    // the note says what the server has: a change on its way, one that didn't arrive, or the board's own word
+    const hiddenNow = board?.you ? board.you.hidden : hidden;
+    const note = state === 'saving' ? S.boardSaving : state === 'retry' ? S.boardRetry : hiddenNow ? S.boardHiddenNote : S.boardAs(name);
+    // a rebuilt sheet keeps the keyboard where it was
+    const focused = modals.board.contains(document.activeElement) ? ['board-check', 'close'].find((c) => document.activeElement.classList.contains(c)) : null;
     const toggle = h('input', { type: 'checkbox', class: 'board-check' });
     toggle.checked = !hidden;
     toggle.addEventListener('change', () => {
@@ -1535,13 +1541,14 @@ export function createUI(bus) {
     });
     modals.board.replaceChildren(h('div', { class: 'card sheet board-sheet' },
       h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); } }, icon('close')),
-      h('div', { class: 'sheet-head' }, emo('🏆'), h('h2', { id: 'stapel-board-title', text: S.boardTitle })),
+      h('div', { class: 'sheet-head' }, emo('🏆'), h('h2', { id: 'stapel-board-title', text: title || S.boardTitle })),
       h('div', { class: 'sheet-body' }, body),
       h('div', { class: 'sheet-foot board-foot' },
         h('label', { class: 'board-toggle' }, toggle, h('span', { text: S.boardShowMe })),
-        h('p', { class: 'note', text: hidden ? S.boardHiddenNote : S.boardAs(name) }),
+        h('p', { class: 'note', role: 'status', text: note }),
         button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false }))));
     if (st.modal !== 'board') openModal('board');
+    else if (focused) modals.board.querySelector(`.${focused}`)?.focus();
   }
 
   /**

@@ -7,10 +7,10 @@ import { bus } from './core/bus.js';
 import { S, POWERUP_INFO, COSMETIC_INFO, RANK_INFO } from './core/strings.js';
 import { fmtDateKey, fmtM } from './core/format.js';
 import { createStore } from './core/storage.js';
-import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate } from './core/daily.js';
+import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate, isDateKey, addDays } from './core/daily.js';
 import { createSequence } from './core/sequence.js';
 import { buildShareText, buildDuelShareText } from './core/share.js';
-import { parseChallengeQuery, parseRoomQuery, defaultNickname } from './core/duel.js';
+import { parseChallengeQuery, parseRoomQuery, defaultNicknameFor } from './core/duel.js';
 import { coinsForGame, cosmetic, POWERUP_IDS } from './core/economy.js';
 import { createDuel } from './duel.js';
 import { loadChallenge, shareUrlFor } from './core/challenge.js';
@@ -222,61 +222,133 @@ bus.on('game:audience', (a) => {
   }
 });
 
-// The daily leaderboard (js/board.js): with the match server, outside debug unless ?board=1 (tests).
-const BOARD_ON = !!matchApiUrl() && (!DEBUG || params.get('board') === '1');
+// The daily leaderboard (js/board.js): with the match server. A debug session stays off the real board
+// (its autoplay and ?date= would post); ?board=1 lets a test on this computer use a local server.
+const LOCAL_PAGE = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+const BOARD_ON = !!matchApiUrl() && (!DEBUG || (params.get('board') === '1' && LOCAL_PAGE));
 ui.setBoardOn(BOARD_ON);
-let boardLast = null;   // { dateKey, board }: the last answer, so the sheet opens on it at once
+const BOARD_FRESH_MS = 60 * 1000;   // an answer this recent is shown again without asking the server
+let boardLast = null;   // { dateKey, board, at }: the last answer, so the sheet opens on it at once
+let boardDate = null;   // the day the Ranglys sheet shows
+let boardBusy = Promise.resolve();   // board requests go one after the other, each with the latest choice
+let boardChanges = 0;   // name or hiding changes this visit (one made while a post is out stays pending)
+let boardSaving = 0;    // changes on their way to the server
+
+/** A day's finished daily, as the board takes it (null when that day has none). */
+function boardResult(dateKey) {
+  const e = store.getDaily(dateKey);
+  return e?.status === 'done' && e.result ? { ...e.result, mode: 'daily', dateKey } : null;
+}
 
 /**
- * A daily's results: the first time a day's result is seen it goes on the leaderboard (POST); after
- * that, revisits only read it (GET). The card then shows "Jy is #23 van 140 vandag".
+ * One board request for a day, queued behind any other. The day's result is posted when it hasn't
+ * reached the server yet, or a name or hiding change hasn't (the server keeps the first height and
+ * takes the rest); otherwise the board is only read. Resolves with the answer, or null.
+ */
+function syncBoard(dateKey) {
+  const task = async () => {
+    const player = store.getBoardPlayer();
+    const result = boardResult(dateKey);
+    const posted = store.getBoardPosted() === dateKey;
+    let board;
+    if (result && (!posted || store.getBoardPending())) {
+      const sent = boardChanges;
+      board = await postBoard({ apiUrl: matchApiUrl(), result, player, name: duelNick(), hidden: store.getBoardHidden() });
+      if (board?.you) {
+        store.setBoardPosted(dateKey);
+        if (boardChanges === sent) store.setBoardPending(false);
+      }
+    } else {
+      board = await getBoard({ apiUrl: matchApiUrl(), dateKey, player });
+    }
+    if (board) boardLast = { dateKey, board, at: Date.now() };
+    return board;
+  };
+  const run = boardBusy.then(task, task);
+  boardBusy = run.catch(() => null);
+  return run.catch(() => null);
+}
+
+/** Is the last answer for this day recent, with nothing left to send? */
+function boardFresh(dateKey) {
+  return boardLast?.dateKey === dateKey && Date.now() - boardLast.at < BOARD_FRESH_MS && !store.getBoardPending();
+}
+
+/**
+ * A daily's results: its result goes on the leaderboard (the first time), and the card then shows
+ * "Jy is #23 van 140 vandag".
  */
 function showBoardPlace(result) {
   if (!BOARD_ON || !result || result.mode !== 'daily' || !result.dateKey) return;
-  const player = store.getBoardPlayer();
-  const posted = store.getBoardPosted() === result.dateKey;
-  const job = posted
-    ? getBoard({ apiUrl: matchApiUrl(), dateKey: result.dateKey, player })
-    : postBoard({ apiUrl: matchApiUrl(), result, player, name: duelNick(), hidden: store.getBoardHidden() });
+  const dateKey = result.dateKey;
+  const job = boardFresh(dateKey) ? Promise.resolve(boardLast.board) : syncBoard(dateKey);
   job.then((board) => {
-    if (!board) return;
-    if (!posted && board.you) store.setBoardPosted(result.dateKey);
-    boardLast = { dateKey: result.dateKey, board };
-    if (screen === 'results') ui.setResultsBoard(result.dateKey, board);
-  }, () => {});
+    if (board && screen === 'results') ui.setResultsBoard(dateKey, board);
+  });
 }
 
-/** Today's posted result goes again: the server keeps its height and takes the new name or hiding. */
-function repostBoard(hidden = store.getBoardHidden()) {
-  const dateKey = todayKey();
-  const e = store.getDaily(dateKey);
-  if (!BOARD_ON || store.getBoardPosted() !== dateKey || e?.status !== 'done' || !e.result) return Promise.resolve(null);
-  return postBoard({ apiUrl: matchApiUrl(), result: { ...e.result, mode: 'daily', dateKey }, player: store.getBoardPlayer(), name: duelNick(), hidden })
-    .then((board) => {
-      if (board) boardLast = { dateKey, board };
-      return board;
-    }, () => null);
+/** The Ranglys sheet as it stands: the last answer for its day, the player's choice, and any change on its way. */
+function renderBoard({ loading = false, refresh = true } = {}) {
+  if (!boardDate) return;
+  const last = boardLast?.dateKey === boardDate ? boardLast.board : null;
+  const mine = store.getBoardPosted() === boardDate;
+  ui.showBoard({
+    board: last,
+    loading: loading && !last,
+    name: duelNick(),
+    hidden: store.getBoardHidden(),
+    state: boardSaving > 0 ? 'saving' : mine && store.getBoardPending() ? 'retry' : null,
+    title: boardDate === todayKey() ? S.boardTitle : boardDate === addDays(todayKey(), -1) ? S.boardTitleYesterday : S.dailyN(dayNumber(boardDate)),
+    refresh,
+  });
 }
 
-/** The Ranglys sheet: today's top 10 and your place (from the results card or the statistics). */
-function openBoard() {
+/** The Ranglys sheet: a day's top 10 and your place (the results card's day, or today from the statistics). */
+function openBoard(dateKey) {
   if (!BOARD_ON) return;
-  const dateKey = todayKey();
-  const look = () => ({ name: duelNick(), hidden: store.getBoardHidden() });
-  ui.showBoard(boardLast?.dateKey === dateKey ? { board: boardLast.board, ...look() } : { loading: true, ...look() });
-  getBoard({ apiUrl: matchApiUrl(), dateKey, player: store.getBoardPlayer() }).then((board) => {
-    if (board) boardLast = { dateKey, board };
-    ui.showBoard({ board: board || (boardLast?.dateKey === dateKey ? boardLast.board : null), ...look(), refresh: true });
-  }, () => {});
+  boardDate = isDateKey(dateKey) ? dateKey : todayKey();
+  renderBoard({ loading: true, refresh: false });
+  if (boardFresh(boardDate)) return;
+  const day = boardDate;
+  syncBoard(day).then(() => {
+    if (boardDate === day) renderBoard();
+  });
 }
+
+/**
+ * A new nickname or "show me" choice: the latest result on the board (today's or yesterday's) takes it
+ * at once. Until the server has it, the change waits and goes with the next board request, also on a
+ * later visit, and the sheet says so.
+ */
+function boardChanged() {
+  const day = store.getBoardPosted();
+  if (!BOARD_ON || !day || day < addDays(todayKey(), -1)) {
+    renderBoard();
+    return;
+  }
+  boardChanges++;
+  store.setBoardPending(true);
+  boardSaving++;
+  renderBoard();
+  syncBoard(day).then(() => {
+    boardSaving--;
+    renderBoard();
+  });
+}
+
 bus.on('ui:board', openBoard);
 bus.on('ui:board-hide', (hide) => {
   store.setBoardHidden(!!hide);
-  const dateKey = todayKey();
-  repostBoard(!!hide).then((board) => {
-    ui.showBoard({ board: board || (boardLast?.dateKey === dateKey ? boardLast.board : null), name: duelNick(), hidden: !!hide, refresh: true });
-  });
+  boardChanged();
 });
+
+/** At start: a change that didn't reach the server last time goes now (one about an older day is let go). */
+function retryBoard() {
+  if (!BOARD_ON || !store.getBoardPending()) return;
+  const day = store.getBoardPosted();
+  if (day && day >= addDays(todayKey(), -1)) syncBoard(day);
+  else store.setBoardPending(false);
+}
 
 /** The results card learns how the player did against everyone else today, when (if) the server answers. */
 function showPercentile(result) {
@@ -765,7 +837,9 @@ bus.on('ui:day-rollover', () => {
 // ---------------------------------------------------------------------------
 // Uitdagersreeks (head-to-head): js/duel.js runs the match; these are the screens around it.
 // ---------------------------------------------------------------------------
-const sessionNick = defaultNickname();
+// without a nickname of their own a player is "Bouer 123": the same number every visit (from the
+// phone's random leaderboard number), so the board and the Uitdagersreeks show one name
+const sessionNick = defaultNicknameFor(store.getBoardPlayer());
 const duelNick = () => store.getDuel().name || sessionNick;
 let duelReward = null;   // the decided match's coins and rank points, for its results card
 const duel = createDuel({
@@ -909,7 +983,7 @@ bus.on('duel:chosen', () => ui.hidePunish());
 bus.on('ui:duel-name', (text) => {
   const saved = store.setDuelName(text);
   ui.setDuelName(saved);
-  if (saved?.ok) repostBoard();   // today's leaderboard row takes the new name
+  if (saved?.ok) boardChanged();   // the latest leaderboard row takes the new name
 });
 bus.on('ui:duel-bot', () => versus(duel.startBot()));
 bus.on('ui:duel-random', searchOpponent);
@@ -1217,6 +1291,7 @@ function onReady() {
   const recoveredCoins = payRecovered(recovered);
   startIdle();
   showMenu();
+  retryBoard();
   // a new player chooses a language first; a challenge link waits for that choice
   if (askLanguage) ui.showLanguage({ first: true });
   else openDuelLink();

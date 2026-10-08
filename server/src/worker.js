@@ -176,8 +176,10 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
     if (path === '/admin/stats') return method === 'GET' ? stats.adminStats(url, ctx) : methodNotAllowed('GET');
     if (path === '/admin/events') return method === 'GET' ? admin.listEvents(url, ctx) : methodNotAllowed('GET');
     if (path === '/admin/board') {
-      // hide one leaderboard entry: { dateKey, player }
-      return method === 'POST' ? board.adminHideEntry(ctx, await readJsonObject(request, 1024)) : methodNotAllowed('POST');
+      // a day's top with player numbers; block, unblock or remove one entry: { dateKey, player, unblock?, remove? }
+      if (method === 'GET') return board.adminListBoard(url, ctx);
+      if (method === 'POST') return board.adminBlockEntry(ctx, await readJsonObject(request, 1024));
+      return methodNotAllowed('GET, POST');
     }
     if (path === '/admin/runs') {
       if (method === 'GET') return admin.listRuns(ctx);
@@ -262,7 +264,12 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
       const at = now();
       const job = runRetention(env.DB, at)
         .then(async (counts) => {
-          await board.pruneBoard(env.DB, at);   // the leaderboard keeps BOARD_DAYS days
+          // the leaderboard keeps BOARD_DAYS days; its trouble (say the table isn't there yet) stays its own
+          try {
+            Object.assign(counts, await board.pruneBoard(env.DB, at));
+          } catch (err) {
+            log('error', 'board_prune_failed', { message: String(err?.message || err) });
+          }
           // Once the owner switched to a live key, sponsors "paid" with test cards lose that time.
           if (cfg.paystackMode === 'live') {
             const ctx = { db: env.DB, cfg, now: at };

@@ -2007,3 +2007,5 @@ canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 
 .board-foot .note { margin: 0; text-align: center; }
 .board-toggle { display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u)); min-height: 40px; font-weight: 800; cursor: pointer; }
 .board-check { width: 22px; height: 22px; accent-color: #2f8f3a; }
+/* read by screen readers, not shown (the place behind a medal) */
+.sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanBoard, postBoard, getBoard } from '../js/board.js';
 import { createStore, memoryBackend } from '../js/core/storage.js';
+import { defaultNicknameFor, cleanNickname } from '../js/core/duel.js';
 
 const API = 'https://borge.example/';
 const daily = { mode: 'daily', dateKey: '2026-10-08', dayNumber: 3, heightM: 37.46, blocksDropped: 20, durationMs: 90321 };
@@ -69,8 +70,25 @@ test('the store: one random player number per phone, kept apart; hiding and the 
   store.setBoardPosted('2026-10-08');
   store.setBoardPosted('nope');
   assert.equal(store.getBoardPosted(), '2026-10-08');
+  // a name or hiding change the server hasn't confirmed waits, also over a restart
+  assert.equal(store.getBoardPending(), false);
+  store.setBoardPending(true);
+  assert.equal(createStore(backend).getBoardPending(), true);
+  assert.equal(createStore(backend).getBoardHidden(), true, 'the other fields stay');
+  store.setBoardPending(false);
+  assert.equal(store.getBoardPending(), false);
   assert.ok(backend.getItem('stapel.v1.board'), 'its own key');
   // an older version rewriting the main blob leaves it alone
   backend.setItem('stapel.v1', JSON.stringify({ v: 1 }));
   assert.equal(createStore(backend).getBoardPlayer(), id);
+});
+
+test('without a nickname of their own a player is "Bouer 123", the same every visit', () => {
+  const a = defaultNicknameFor('abcdefghijklmnop');
+  assert.match(a, /^Bouer \d{3}$/);
+  assert.equal(defaultNicknameFor('abcdefghijklmnop'), a, 'the same number, the same name');
+  assert.equal(cleanNickname(a), a, 'it passes the name rules');
+  const names = new Set(['0000001234567890', 'zzzzzz1234567890', 'k3j9x0aaaaaaaaaa', 'q8w7e6r5t4y3u2i1'].map(defaultNicknameFor));
+  assert.ok(names.size >= 3, 'other phones mostly get other numbers');
+  assert.match(defaultNicknameFor(null), /^Bouer \d{3}$/, 'no number yet: still a name');
 });

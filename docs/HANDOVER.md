@@ -361,24 +361,29 @@ Later the owner added (decisions are final unless they say otherwise):
   - **Coins on the Winkel button** show as a coin pill ("🪙 30"), not a notification-style count.
   - **English sayings:** an English saying for each Afrikaans one (see 1.9.0).
 - **The daily leaderboard (version `1.9.2`, 8 Oct 2026)**, at the owner's request ("to confirm who has the highest tower?" — "Yes please").
-  - **Server:** `server/src/board.js`, the `daily_board` table (`migrations/0003_board.sql`, also in `schema.sql`), routes `POST /board` and `GET /board`, and the admin route `POST /admin/board` (hide an entry).
+  - **Server:** `server/src/board.js`, the tables `daily_board`, `daily_board_days` and `daily_board_hist` (`migrations/0003_board.sql`, also in `schema.sql`), routes `POST /board` and `GET /board`, and the admin route `/admin/board` (`GET` lists a day's top 50 with player numbers; `POST` blocks, unblocks or removes an entry).
     - One row per player per day: a random player number made on the phone, linked to nothing; the nickname, through the name rules; the height; and the blocks and seconds, which only feed the plausibility check.
-    - The first post of a day is kept; later posts change only the name or the hiding.
-    - Impossible towers are refused with 422.
-    - Places are true places: a hidden player keeps theirs.
-    - Kept 30 days (cron). Rate limits per hashed address.
-  - **Game:** `js/board.js` (post and get, answers checked) and the store's own key `stapel.v1.board` (player number, hidden, last posted day).
-    - After a daily, the results card shows "🏆 Jy is #23 van 140 vandag" with a Ranglys button.
-    - The sheet shows the top 10 (🥇🥈🥉), your own row in its place, and a "Wys my op die ranglys" switch.
-    - Statistiek has the button too.
-    - Changing your nickname or hiding re-posts today's result.
-    - Only with the match server, and not in debug unless `?board=1`.
-  - **Privacy page:** a new section 2c (the leaderboard: what is sent, who sees it, hiding, 30 days). Section 7 got the 30 days; section 11 got `stapel.v1.econ`, `.lang` and `.board`. The keys from 1.8 and 1.9 had been missing.
+    - The first post of a day is kept; later posts change only the name or the hiding. An entry the owner **blocked** stays hidden whatever the player posts later.
+    - Impossible towers are refused with 422: more than 4 m a block (+8 blocks Hanswors brings), more than a block per 0,7 s, or a climb faster than 2 m/s after 10 m. Real games: about 1,7 m a block, under 1 m/s. A forger who stays inside these limits can still get on the list: block them with `/admin/board`.
+    - A day's result is taken only while it is that day somewhere on earth (UTC+14 to UTC-12), or up to 6 hours after.
+    - Places are true places: a hidden or blocked player keeps theirs.
+    - **D1 rows read** (the free plan allows 5 million a day): no answer reads a whole day. The top is read in order and stops after 40 rows; the number of players is a counter; a place below that adds up a count per whole metre and reads only its own metre's rows. Measured in local D1: at most about 90 rows an answer with 100 players, 160 with 1 000, 260 with 3 000 (was about 7 per player).
+    - Kept 30 days (cron; a failure there is logged as `board_prune_failed` and doesn't stop the rest of the nightly job). Rate limits per hashed address: 60 posts and 240 reads an hour.
+  - **Game:** `js/board.js` (post and get, answers checked) and the store's own key `stapel.v1.board` (player number, hidden, last posted day, a change not yet confirmed).
+    - After a daily, the results card shows "🏆 Jy is #23 van 140 vandag" with a Ranglys button; that button opens the board of the result's own day (a game that ran past midnight).
+    - The sheet shows the top 10 (🥇🥈🥉, with the place for screen readers), your own row in its place, and a "Wys my op die ranglys" switch.
+    - Statistiek has the button too (today's board).
+    - Changing your nickname or hiding re-posts the latest result. The sheet says "Stoor…" while it goes, and "Nog nie gestoor nie: ons probeer weer…" when it didn't arrive; the change then goes with the next board request or the next start. Requests go one after the other, each with the latest choice.
+    - A player without a nickname is "Bouer 123" with the same number every visit (from the board number), on the board and in the Uitdagersreeks.
+    - An answer less than a minute old is shown again without asking the server.
+    - Only with the match server. A debug session never posts on the live site; `?board=1` works only on localhost (tests).
+  - **Privacy page:** a new section 2c (the leaderboard: what is sent, who sees it, hiding, removal on request, 30 days). Section 2 now says which player information is kept (nickname and random number) and asks players not to use their full name. Section 5 says who sees the board, section 6 names it under Cloudflare, and section 7 has the 30 days. Section 11 says what leaves the phone and lists `stapel.v1.econ`, `.lang` and `.board` (the keys from 1.8 and 1.9 had been missing).
+  - **Review:** a review agent found 9 problems before anything went live, all fixed: the hide switch could fail silently; an admin hide came undone with the next post; forged towers up to about 1 000 m passed; every answer read the whole day; 12 posts an hour per address was too few; debug sessions could post; a cron failure skipped the rest; the default name changed every visit; and past midnight the button opened the wrong day.
   - **Checked:**
-    - server tests: ranking, ties, hiding, re-posts, impossible towers, names, the top size, the origin, rate limits, admin hiding, pruning;
+    - server tests: ranking, ties, hiding, re-posts, impossible towers and real ones, the day window, names, the top size, the origin, rate limits, places far below the top against a full sort (150 players), the owner's block after a re-post, unblock and remove, pruning all three tables, and the cron going on when the board's cleanup fails;
     - game tests;
     - end to end in the browser against `wrangler dev --local` (requests to the live Worker re-routed to it): a real daily posted, the place shown, the sheet, hiding and showing, both sizes, Afrikaans and English.
-  - **To go live:** run the migration once on the live database, deploy the Worker, push, and upload the app (asked first).
+  - **To go live:** run the migration once on the live database, deploy the Worker, push, update Play's Data safety form (the nickname and the random player number now leave the phone), and upload the app (asked first).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

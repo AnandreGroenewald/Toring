@@ -133,7 +133,10 @@ CREATE INDEX IF NOT EXISTS idx_alerts_open ON alerts (resolved_at, created_at);
 
 -- Die daaglikse ranglys (POST/GET /board, src/board.js): one row per player per day. `player` is a
 -- random number made on the phone (linked to nothing else); `name` the Uitdagersreeks nickname (name
--- rules applied); `blocks` and `duration_s` only serve the plausibility check. Kept 30 days (cron).
+-- rules applied); `blocks` and `duration_s` only serve the plausibility check; `hidden` is the player's
+-- own choice, `blocked` the owner's (a post can't undo it). Kept 30 days (cron), like the two tables
+-- after it: the number of players a day, and how many results each whole metre holds (so a place far
+-- below the top is added up without reading every row: D1 counts rows read).
 CREATE TABLE IF NOT EXISTS daily_board (
   date_key TEXT NOT NULL,
   player TEXT NOT NULL,
@@ -142,8 +145,21 @@ CREATE TABLE IF NOT EXISTS daily_board (
   blocks INTEGER NOT NULL,
   duration_s INTEGER NOT NULL,
   hidden INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1)),
+  blocked INTEGER NOT NULL DEFAULT 0 CHECK (blocked IN (0, 1)),
   created_at INTEGER NOT NULL,
   PRIMARY KEY (date_key, player)
 );
 
-CREATE INDEX IF NOT EXISTS idx_daily_board_rank ON daily_board (date_key, hidden, height_dm DESC, created_at);
+CREATE INDEX IF NOT EXISTS idx_daily_board_rank ON daily_board (date_key, height_dm DESC, created_at, player);
+
+CREATE TABLE IF NOT EXISTS daily_board_days (
+  date_key TEXT PRIMARY KEY,
+  players INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS daily_board_hist (
+  date_key TEXT NOT NULL,
+  metre INTEGER NOT NULL,
+  n INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (date_key, metre)
+);
