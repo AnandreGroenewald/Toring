@@ -39,21 +39,31 @@ The computer's run comes from the match seed: it climbs at about 0,30–0,42 m/s
 - The server keeps recordings (seed, nickname, heights) for up to 7 days, to give lonely players an opponent. It stores no IP addresses or device data. `privaatheid.html` gets a paragraph about this.
 - Origins are checked on every WebSocket, with a limit of 10 messages a second per player.
 
+## Ranks, seasons and looks (1.8.0)
+
+The rules and numbers are in `js/core/economy.js` (tested in `tests/economy.test.js`).
+
+- **Rank points**: a live win +25, a live loss −10; against Robot Rikus or a recording +10 / −5. Never below 0. Ranks: 🥉 Brons 0, 🥈 Silwer 100, 🥇 Goud 250, 💠 Platinum 450, 💎 Diamant 700.
+- **Seasons**: a season is a calendar month. When a new month starts (at the first match, or when the Uitdagersreeks screen opens), the points halve and the old season's best rank leaves a season badge. Reaching Diamant also unlocks the Diamant frame. Rank looks are never sold.
+- **Coins for a match**: 15 for a live win, 5 for a live loss; 8 and 2 otherwise. They count towards the day cap (150) with Oefen.
+- **Looks** (bought with coins in the Winkel; they never make anyone stronger): a frame, a badge, a title, a win celebration and a visitor style. No power-ups in a match.
+
 ## Server (Cloudflare Worker + Durable Objects, free plan)
 
 - `MatchLobby` (one instance) pairs players who are looking and keeps the pool of recent recordings.
 - `MatchRoom` (one per match) relays heights, decides height marks and the result, and hands both runs to the lobby when the match ends.
 - Routes: `GET /match/lobby` (WebSocket), `POST /match/room` (new friend room, returns the code), `GET /match/room/<CODE>` (WebSocket), `GET /match/ghost` (a recent recording).
 - The punishment choice (protocol 2, from 1.7.6): the room asks the first player to a mark (`{t:'choose', m, def}`), the game answers `{t:'punish', m, kind}`, and the room sends `{t:'attack', m, kind}` to the other player and `{t:'sent', m, kind}` back. Without an answer within 8,5 s (the game's own timer is 7 s) the default goes. The game says its protocol in its hello (`v`). A game older than 1.7.6 (protocol 1) is never asked, and only ever receives the mark's default, so old and new versions can still play each other.
+- Player cards (from 1.8.0, still protocol 2): the hello carries the player's card, `{t:'hello', v:2, name, card:{frame, badge, title, celebration, style, rank}}`. The room keeps known ids only (`cleanCard` in `js/core/economy.js`; anything else becomes the default) and passes it on in the start, `{t:'start', seed, you, opp:{name, card}}`. A game before 1.8.0 sends no card (the other player sees the default) and ignores the one it gets. Ranks live on the phone, so a card's rank is the player's own claim; looks are show-off only and never change the match.
 - Both classes are SQLite-backed (`new_sqlite_classes`), which the Workers Free plan allows, and use WebSocket hibernation, so an idle match costs nothing. The free tier is 100 000 requests a day, and incoming WebSocket messages count 20:1, so a 2-minute match costs about 20.
 
 ## Screens and text
 
 - **Menu**: an `⚔️ Uitdagersreeks` button beside `Oefen`.
-- **Uitdagersreeks screen**: a one-line explanation, the nickname, the three ways to play, and wins and losses.
-- **Searching screen**: "Soek ’n teenstander…" with a countdown and a cancel button. On a match: "Teen <naam>!", then a 3-2-1 count and play.
-- **In the game**: a race track on the right edge (0–50 m, with the marks), you and your opponent as two markers, and their name and height. When you reach a mark first, a strip slides down over the score at the top ("Eerste by 10 m! Kies ’n straf vir Rikus:") with the four punishments and a 7-second timer. The game never pauses, and only the four buttons take taps: a tap anywhere else still drops a block. Taps in the first 0,4 s are ignored, since a drop tap may already be on its way. Keys 1–4 choose on a computer. (1.7.6 had a bar at the bottom of the screen, right where thumbs tap; testers said it got in the way.) Punishments come with the visitor or weather banner ("Rikus stuur Mis!"). One you send shows a toast ("Jy stuur Skelm Sakkie na Rikus! 🦹").
-- **Results**: "Jy het gewen! 🏆" or "Jy het verloor", and why. Both heights, then the buttons `Nog ’n wedstryd`, `Daag ’n vriend uit` (your run as a link) and `Tuis`. The WhatsApp text says who won and includes the challenge link.
+- **Uitdagersreeks screen**: a one-line explanation; your player card with this season (the month), your rank and points and a bar to the next rank; the nickname; the three ways to play; wins and losses; how points work, your season badges and a button to the shop's looks.
+- **Searching screen**: "Soek ’n teenstander…" with a countdown and a cancel button. On a match: "Teen <naam>!" with both player cards (theirs big, yours small), then a 3-2-1 count and play.
+- **In the game**: a race track on the right edge (0–50 m, with the marks), you and your opponent as two markers, and their badge, name and height. When you reach a mark first, a strip slides down over the score at the top ("Eerste by 10 m! Kies ’n straf vir Rikus:") with the four punishments and a 7-second timer. The game never pauses, and only the four buttons take taps: a tap anywhere else still drops a block. Taps in the first 0,4 s are ignored, since a drop tap may already be on its way. Keys 1–4 choose on a computer. (1.7.6 had a bar at the bottom of the screen, right where thumbs tap; testers said it got in the way.) Punishments come with the visitor or weather banner ("Rikus stuur Mis!"). One you send shows a toast ("Jy stuur Skelm Sakkie na Rikus! 🦹"). A Blouaap or Skelm Sakkie wears the sender's visitor style (🧢 🕶️ 🎩 👑) on the other tower.
+- **Results**: "Jy het gewen! 🏆" or "Jy het verloor", and why. The winner's celebration rains down: yours with a fanfare, or theirs with "<naam> vier!". Coins and rank points for the match. Both heights, then the buttons `Nog ’n wedstryd`, `Daag ’n vriend uit` (your run as a link) and `Tuis`. The WhatsApp text says who won and includes the challenge link.
 - All Afrikaans text goes in `js/core/strings.js`.
 
 ## Testing and definition of done

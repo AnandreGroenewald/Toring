@@ -263,6 +263,45 @@ Later the owner added (decisions are final unless they say otherwise):
     - register the Information Officer with the Information Regulator (inforegulator.org.za, eServices);
     - delete former sponsors' contact details by hand within 24 months (admin page "Skrap"); the server doesn't do it;
   - `terme.html` (sponsor terms) is still a template, until sponsor sales (PayFast) open.
+- **Coins, power-ups, the Winkel, duel looks, ranks and seasons (version `1.8.0`, 8 Oct 2026)**, at the owner's request ("I need powerups that is part of a point system, for example, a foundation block that is implemented after lets say 55 Meters then you can press it then its a long black that drops, then people can buy coins to get powerups"; on matches: "What can we do for people to want to buy stuff in duals, that is the challnging part."). The owner chose earned coins first (no real money yet) and all four match extras (player card, win celebration, punishment looks, ranks and seasons). Production on Google Play waits for this release.
+  - **The rules** are one pure module, `js/core/economy.js` (tested in `tests/economy.test.js`).
+  - **The wallet** has its own localStorage key, `stapel.v1.econ` (`stapel.v1.debug.econ` with `debug=1`), sanitised on every read like the rest. An older version still open in a tab rebuilds `stapel.v1` from the keys it knows, so the wallet must never live in it. Every purchase reads the latest wallet first, so two tabs can't undo each other's coins.
+  - **Coins 🪙** (earned only):
+    - Oefen: 1 per 5 m and 1 per 5 Perfeks;
+    - the daily: 1 per 4 m, +10 for playing and +2 per streak day (up to +14), never capped;
+    - a match: 15 for a live win, 5 for a live loss; 8 and 2 against Robot Rikus or a recording;
+    - Oefen and matches stop paying at 150 a day (`EARN.dayCap`);
+    - the results card shows what a game paid and your total;
+    - a daily cut short (the page closed, the app killed or crashed mid-game) counts as it stood and pays on the next start (`payRecovered` in `js/main.js`; the "onderbreek" toast shows the coins).
+  - **Power-ups (Oefen only)**, bought in the Winkel and used from a tray in the game:
+    - 🧱 Fondamentblok (40): the next block is a long dark slab that lands flush, sets everything under it like cement and counts as `F` in the grid;
+    - 🐢 Stadige hyskraan (25): 5 blocks at 60 % speed (counted at each drop, so it's 5 whenever it's switched on);
+    - 🛡️ Skild (30): the next Blouaap or Skelm Sakkie bounces off. It is used up at the bounce, so a thief caught by hand first leaves it on;
+    - ❤️ Ekstra hartjie (35): a heart back (only below the maximum).
+  - **The daily stays fair:** no bought power-ups, but everyone gets one free Fondamentblok at 55 m (a toast and the 🧱 button; once per daily). No power-ups in matches.
+  - **The Winkel** (a dock button showing your coins): power-ups with what's in your bag, and looks with your player card as a preview. A new look is worn at once, and the celebration has a "Wys" preview.
+  - **Match looks** (show-off only, never strength): a frame, a badge, a title, a win celebration and a visitor style.
+    - Your card goes out with the hello. The server keeps known ids only (`cleanCard`) and passes it on at the start (`docs/CHALLENGE-SPEC.md`). Robot Rikus has his own card (`BOT_CARD`); recordings and links show the default.
+    - The opponent sees your card on "Teen <naam>!", your badge on the race track, your style on the Blouaap or Skelm Sakkie you send (🧢 🕶️ 🎩 👑, `ACC_FIT` in `js/game/visitors.js`), and your celebration when you win ("<naam> vier!", without the fanfare).
+    - Vuurwerk is 🧨: 🎆 falls as square picture tiles.
+  - **Ranks and seasons:**
+    - Brons 0, Silwer 100, Goud 250, Platinum 450, Diamant 700 points; a live win +25 / loss −10, otherwise +10 / −5;
+    - a season is a calendar month. At the first match or the first visit to the Uitdagersreeks screen in a new month, the points halve and the old season's best rank leaves a badge (🥉🥈🥇💠💎, with a toast). Diamant also unlocks the Diamant frame. Only a later month counts: a phone clock set back changes nothing. The card sent to opponents already uses the new month's rank;
+    - the Uitdagersreeks screen shows the card, the season, the rank, the points, a bar to the next rank, how points work, the badges and a button to the looks;
+    - ranks live on the phone (no accounts), so a determined cheat could fake theirs. It's a show-off only.
+  - The duel screens now centre their card only while it fits (`margin: auto`, not `justify-content: center`), so a long card on a small phone scrolls from the top.
+  - **Checked** (8 Oct 2026):
+    - `npm test` 240 pass; `cd server && npm test` 158 pass, 1 skipped;
+    - headless at 360×640 and 412×915, with zero console errors:
+      - power-ups: the Fondamentblok lands flush, frozen and level, with its 🧱 cell on the results; the slow crane runs at ×0,6 for exactly 5 blocks, switched on with or without a block on the hook; the shield bounces a monkey, and a thief caught by hand leaves it on; the heart works only below the maximum;
+      - the daily's free Fondamentblok comes once at 55 m; no tray in matches;
+      - the Winkel: buy, wear, too poor;
+      - coins on the results (Oefen, daily, match); a daily cut short by a reload paid +15 🪙;
+      - against Robot Rikus: player cards, the badge on the race track, every style on both visitors (close-ups), and both celebrations;
+      - the rank screen: September's 300 points became October's 150 with the 🥇 badge, once;
+    - the daily is still identical for everyone (two runs with different randomness);
+    - the monkey's four cases, Hanswors's flush cement blocks, and the crane are unchanged from 1.7.9;
+    - a review agent read the whole change. All six of its findings, and both small ones, are fixed (in the points above).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
@@ -285,7 +324,7 @@ Each step should end green (`npm test`, `cd server && npm test`, a headless play
 - ~~T5. In-game sponsor integration~~ **Done** (see section 2). It also reworded the code comments that named other games and added the README section.
 - ~~**T6. Final pass.**~~ **Done** (see section 2); only the owner's checklist in section 4 remains. Original brief: Full playtest plus screenshots. Confirm the **game payload** (what a player downloads: `index.html`, `lib/`, `js/` without `js/pages/`, `css/style.css`, `icons/`, `manifest`, `sw.js`) stays under 3 MB. It was about 1.8 MB after T5 (that count includes `sponsors.json`); `docs/`, `server/` and `tests/` are never loaded by the game. Check the README's sponsorship section is still accurate, then hand the owner the checklist in section 4.
 
-**All of T1–T6 are done**, and so are the visitors (`docs/CHARACTERS-SPEC.md`, version `1.6.0`). What is left is section 4 (owner-only steps). If the owner asks for more, start with the medium and low findings in `docs/review-findings.md` that were not re-checked one by one, or tune the visitors (`VISITOR` in `js/config.js`) after playtests on real phones.
+**All of T1–T6 are done**, and so are the visitors (`docs/CHARACTERS-SPEC.md`, version `1.6.0`), the Uitdagersreeks (`docs/CHALLENGE-SPEC.md`) and coins, power-ups and ranks (`1.8.0`). Agreed next with the owner: an English option (the phone's language picks Afrikaans or English, with a switch in Settings; character names stay), then production on Google Play. Later: biomes (height bands and a daily world), sponsor sales through PayFast, and iOS. What is left beyond that is section 4 (owner-only steps). If the owner asks for more, start with the medium and low findings in `docs/review-findings.md` that were not re-checked one by one, or tune the visitors (`VISITOR` in `js/config.js`) after playtests on real phones.
 <!-- TODO-END -->
 
 ## 4. Things only the owner can do

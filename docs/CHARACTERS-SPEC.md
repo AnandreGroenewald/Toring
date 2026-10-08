@@ -45,6 +45,8 @@ Use **emoji as the character sprites**: big Phaser Text objects (around 72–96 
   - "gevang" fanfare when caught
 - **Forecast teaser:** the menu's daily forecast and the results' "Môre:" teaser may show visitor emoji too ("Besoekers vandag: 🐒🤡"). This is a strong come-back hook.
 - **Reduced motion:** simpler moves, no screen shake.
+- **Skild (1.8.0, a power-up in Oefen):** with the shield on, the next Blouaap or Skelm Sakkie arrives, bounces off with a 🛡️ and leaves (outcome `blocked`); the shield is used up.
+- **Visitor styles (1.8.0, Uitdagersreeks):** a Blouaap or Skelm Sakkie sent by the other player wears that player's style on top of the emoji: 🧢 pet, 🕶️ sonbril, 🎩 hoed or 👑 kroon (`ACC_FIT` in `js/game/visitors.js` places each one per visitor). It turns, squashes and flips with him.
 - **Text:** all new Afrikaans strings go in `js/core/strings.js`, with natural, playful copy.
 
 ## Testing and definition of done
