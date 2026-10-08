@@ -99,7 +99,7 @@ export const S_EN = {
   howToSteps: [
     { icon: '👆', text: 'Tap anywhere on the screen to drop the block from the crane. The white outline on the tower shows where it will land.' },
     { icon: '🎯', text: 'Land the block right in the middle for a Perfect! Perfect landings in a row build a combo for extra points.' },
-    { icon: '🧱', text: 'Low in the tower the blocks set like cement — up top the tower stays wobbly. A Perfect sets the blocks under it at once.' },
+    { icon: '🧱', text: 'Low in the tower the blocks set like cement — up top the tower stays wobbly. A Perfect sets the blocks under it at once. The Balance meter on the left shows how close the loose top is to toppling; the arrow points to the heavy side, so put your next block on the other side.' },
     { icon: '📈', text: 'The tower starts calm. The higher you build, the tougher it gets: each new stage says “Tougher!”.' },
     { icon: '🌦️', text: 'The weather strikes while you build: wind, rain, lightning, hail, fog and more.' },
     { icon: '🌊', text: 'The water rises. Keep your tower above the flood line!' },
@@ -146,7 +146,7 @@ export const S_EN = {
   highContrast: 'Contrast',
   peek: 'Tower',
   peekBack: 'Result',
-  wobbleTitle: 'Wobble',
+  wobbleTitle: 'Balance',
 
   // --- Sponsors ---
   adLabel: 'Advert',

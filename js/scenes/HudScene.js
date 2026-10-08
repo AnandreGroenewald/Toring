@@ -276,10 +276,13 @@ export class HudScene extends Phaser.Scene {
     this.wmTick = add(this.add.image(10 + WOBBLE_W / 2, wmTop + wmH * (1 - 0.6), 'fx_px').setDisplaySize(WOBBLE_W + 6, 3));
     this.wmLbl = add(text(this, 10 + WOBBLE_W / 2, wmTop - 12, S.wobbleTitle, 20, { strokeMul: 0.22, shadow: false })
       .setOrigin(0, 0.5).setAngle(-90));
+    // the heavy side, under the meter: place the next block on the other side to balance it
+    this.wmSide = add(text(this, 10 + WOBBLE_W / 2, wmTop + wmH + 22, '', 26, { strokeMul: 0.2 }).setOrigin(0.5).setVisible(false));
+    this.wmSideNow = 0;
     this.wmVal = -1;
     this.buildTrack(add);
     this.wmAlpha = 0.7;
-    this.wmParts = [this.wmBg, this.wmFill, this.wmTick, this.wmLbl];
+    this.wmParts = [this.wmBg, this.wmFill, this.wmTick, this.wmLbl, this.wmSide];
     for (const o of this.wmParts) o.setAlpha(this.wmAlpha);
     this.drawWobble(0);
 
@@ -423,9 +426,12 @@ export class HudScene extends Phaser.Scene {
     this.setWeather(s.weather);
     this.setWater(s.waterDistM, time);
     if (this.track) this.updateTrack();
-    this.drawWobble(s.wobble || 0);
-    // the meter steps forward when the tower actually moves (with hysteresis)
-    const wob = s.wobble || 0;
+    // the balance meter: how near the loose top is to tipping (its lean), or moving (its wobble)
+    const lean = s.lean || 0;
+    const wob = Math.max(s.wobble || 0, Math.min(1, Math.abs(lean)));
+    this.drawWobble(wob);
+    this.drawSide(lean);
+    // the meter steps forward when the tower is in some trouble (with hysteresis)
     const wa = wob > 0.15 ? 1 : wob < 0.08 ? 0.7 : this.wmAlpha;
     if (wa !== this.wmAlpha) {
       this.wmAlpha = wa;
@@ -654,6 +660,15 @@ export class HudScene extends Phaser.Scene {
   }
 
   /** Crops a pre-drawn gradient bar (no Graphics re-tessellation per frame). */
+  /** The arrow under the balance meter: the side the loose top leans to (none while it's about centred). */
+  drawSide(lean) {
+    const side = lean > 0.3 ? 1 : lean < -0.3 ? -1 : Math.abs(lean) > 0.2 ? this.wmSideNow : 0;
+    if (side === this.wmSideNow) return;
+    this.wmSideNow = side;
+    this.wmSide.setVisible(side !== 0);
+    if (side) this.wmSide.setText(side < 0 ? '◀' : '▶').setColor(Math.abs(lean) > 0.7 ? '#ff6b5e' : '#ffc56e');
+  }
+
   drawWobble(v) {
     const q = Math.round(Math.min(1, Math.max(0, v)) * 60) / 60;
     if (q === this.wmVal) return;

@@ -363,6 +363,7 @@ export class GameScene extends Phaser.Scene {
     this.slowT = 0;
     this.playMs = 0;
     this.wobble = 0;
+    this.lean = 0;
     this.lastCreak = -1e9;
     this.lastLandAt = -1e9;
     this.lastWobbleShake = -1e9;
@@ -2296,7 +2297,59 @@ export class GameScene extends Phaser.Scene {
   // -------------------------------------------------------------------------
   // Wobble, HUD, registry
   // -------------------------------------------------------------------------
+  /**
+   * How near the loose top of the tower (the blocks that aren't cement yet) is to tipping, and to which
+   * side: for each loose block, the centre of mass of it and everything above it against the part of
+   * the block under it (or the cement, or the base) it stands on. 0 is centred, ±1 the edge (it tips
+   * there); the worst level counts, its sign is the heavy side. A player counters it with the next block.
+   */
+  towerLean() {
+    const loose = this.leanBlocks || (this.leanBlocks = []);
+    loose.length = 0;
+    for (const b of this.tower) {
+      if (b.state === 'frozen' || b.state === 'lost' || b.state === 'falling' || b.destroyed || !b.body) continue;
+      loose.push(b);
+    }
+    if (!loose.length) return 0;
+    loose.sort((a, b) => b.bottom - a.bottom);   // lowest first
+    const sup = this.frozenTopBlock && !this.frozenTopBlock.destroyed ? this.frozenTopBlock : null;
+    let worst = 0;
+    for (let i = 0; i < loose.length; i++) {
+      const b = loose[i];
+      // what it stands on: the nearest block below that it overlaps (loose, then the cement, then the base)
+      let l = BASE_CX - BASE_HALF_W;
+      let r = BASE_CX + BASE_HALF_W;
+      let found = false;
+      for (let j = i - 1; j >= 0 && !found; j--) {
+        const u = loose[j];
+        if (u.left < b.right && u.right > b.left) {
+          l = u.left;
+          r = u.right;
+          found = true;
+        }
+      }
+      if (!found && sup && sup.left < b.right && sup.right > b.left) {
+        l = sup.left;
+        r = sup.right;
+      }
+      l = Math.max(l, b.left);
+      r = Math.min(r, b.right);
+      let m = 0;
+      let mx = 0;
+      for (let k = i; k < loose.length; k++) {
+        m += loose[k].body.mass;
+        mx += loose[k].body.mass * loose[k].body.position.x;
+      }
+      const lean = r - l < 2 ? (mx / m < (l + r) / 2 ? -1.5 : 1.5) : clamp((mx / m - (l + r) / 2) / ((r - l) / 2), -1.5, 1.5);
+      if (Math.abs(lean) > Math.abs(worst)) worst = lean;
+    }
+    return worst;
+  }
+
   updateWobble(dtS) {
+    // the balance meter (HUD): the lean, eased, so a landing's jolt doesn't flick it
+    const lean = this.towerLean();
+    this.lean += (lean - this.lean) * (1 - Math.exp(-dtS * 6));
     let w = 0;
     const dyn = this.dyn;
     // A landing jolts the whole stack for a moment; only sustained motion is wobble.
@@ -2341,6 +2394,7 @@ export class GameScene extends Phaser.Scene {
     }
     s.waterDistM = this.water.rising ? (this.water.surfaceY - this.towerTopY) / PX_PER_M : null;
     s.wobble = this.wobble;
+    s.lean = this.lean;
     bus.emit('hud:state', s);
   }
 

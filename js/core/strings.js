@@ -98,7 +98,7 @@ export const S = {
   howToSteps: [
     { icon: '👆', text: 'Tik enige plek op die skerm om die blok van die hyskraan te laat val. Die wit vorm op die toring wys waar dit gaan land.' },
     { icon: '🎯', text: 'Laat die blok reg in die middel land vir ’n Perfek! Perfekte landings op ’n ry bou ’n kombo vir ekstra punte.' },
-    { icon: '🧱', text: 'Onder in die toring word die blokke hard soos sement — bo bly die toring wankelrig. ’n Perfek laat die blokke daaronder dadelik vassit.' },
+    { icon: '🧱', text: 'Onder in die toring word die blokke hard soos sement — bo bly die toring wankelrig. ’n Perfek laat die blokke daaronder dadelik vassit. Die Balans-meter links wys hoe naby die los bokant aan omval is; die pyltjie wys die swaar kant, so sit jou volgende blok aan die ander kant.' },
     { icon: '📈', text: 'Die toring begin rustig. Hoe hoër jy bou, hoe moeiliker word dit: elke nuwe vlak sê “Moeiliker!”.' },
     { icon: '🌦️', text: 'Die weer slaan toe terwyl jy bou: wind, reën, weerlig, hael, mis en meer.' },
     { icon: '🌊', text: 'Die water styg. Hou jou toring bo die vloedlyn!' },
@@ -146,7 +146,7 @@ export const S = {
   highContrast: 'Kontras',
   peek: 'Toring',
   peekBack: 'Uitslag',
-  wobbleTitle: 'Wankel',
+  wobbleTitle: 'Balans',
 
   // --- Borge (sponsors) ---
   adLabel: 'Advertensie',
