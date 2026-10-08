@@ -175,3 +175,69 @@ test('leaving the room (cancel) stops the reconnects', async () => {
   timers.advance(20000);
   assert.equal(sockets.length, 1);
 });
+
+// ------------------------------------------------------------------ the random search (1.10): no time limit
+function setupSearch() {
+  sockets.length = 0;
+  const timers = fakeTimers();
+  const calls = [];
+  const duel = createDuel({
+    bus: new Bus(),
+    apiUrl: 'https://borge.example',
+    nickname: () => 'Anna',
+    WebSocketImpl: FakeSocket,
+    fetchImpl: async () => ({ ok: false, json: async () => ({}) }),   // no recordings: Robot Rikus
+    setTimer: timers.setTimer,
+    clearTimer: timers.clearTimer,
+    now: timers.now,
+  });
+  const cb = {
+    onFound: (m) => calls.push(['found', m.oppName]),
+    onFallback: (m) => calls.push(['fallback', m.kind]),
+    onRetry: () => calls.push(['retry']),
+  };
+  return { duel, timers, calls, cb };
+}
+
+test('the search has no time limit: minutes later it is still looking (and pinging)', async () => {
+  const { duel, timers, calls, cb } = setupSearch();
+  duel.findOpponent(cb);
+  assert.match(sockets[0].url, /\/match\/lobby$/);
+  sockets[0].open();
+  assert.equal(sockets[0].sent[0].t, 'hello');
+  assert.equal(sockets[0].sent[0].rules, DUEL.rules, 'the lobby pairs the same rules');
+  timers.advance(10 * 60 * 1000);
+  assert.deepEqual(calls, [], 'no recording or Robot Rikus by itself');
+  assert.equal(duel.searching, true);
+  assert.ok(sockets[0].sent.some((m) => m.t === 'ping'), 'a quiet ping keeps the line open');
+  // someone comes: the room, then the match
+  sockets[0].hear({ t: 'match', room: 'ABCD23' });
+  assert.equal(duel.searching, false);
+  sockets[1].open();
+  sockets[1].hear({ t: 'wait' });
+  sockets[1].hear({ t: 'start', seed: 'abcdef12', you: 0, opp: { name: 'Bennie' } });
+  assert.deepEqual(calls.at(-1), ['found', 'Bennie']);
+});
+
+test('a dropped search comes back; hidden it waits; "play now" gives Robot Rikus at once', async () => {
+  const { duel, timers, calls, cb } = setupSearch();
+  duel.findOpponent(cb);
+  sockets[0].open();
+  sockets[0].drop();
+  assert.deepEqual(calls.at(-1), ['retry']);
+  timers.advance(1000);
+  assert.equal(sockets.length, 2, 'back in the lobby');
+  sockets[1].open();
+  duel.away();
+  assert.equal(sockets[1].readyState, 3, 'closed while the game is hidden');
+  timers.advance(60000);
+  assert.equal(sockets.length, 2);
+  duel.back();
+  assert.equal(sockets.length, 3, 'looking again at once');
+  duel.playNow();
+  assert.equal(duel.searching, false);
+  await new Promise((r) => setTimeout(r, 0));   // the recording request (none here)
+  assert.deepEqual(calls.at(-1), ['fallback', 'bot']);
+  timers.advance(60000);
+  assert.equal(sockets.length, 3, 'no more lobby after playing now');
+});

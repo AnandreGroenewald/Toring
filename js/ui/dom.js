@@ -183,12 +183,16 @@ export function createUI(bus) {
   // away from the taps that drop blocks, and only its buttons take taps: the game keeps running.
   const punishBar = h('div', { class: 'punish', role: 'group', 'aria-label': S.duelChooseLabel, hidden: true });
   const tutorBar = h('div', { class: 'tutor', role: 'status', 'aria-live': 'polite', hidden: true });
+  const searchChip = h('div', { class: 'search-chip', role: 'status', hidden: true },
+    h('span', { class: 'spinner small', 'aria-hidden': 'true' }),
+    h('span', { class: 'search-txt', text: S.duelSearchChip }),
+    h('button', { type: 'button', class: 'search-stop', 'aria-label': S.duelSearchStop, title: S.duelSearchStop, onclick: () => { audio.play('click'); bus.emit('ui:duel-search-stop'); } }, icon('close')));
   let punishAt = 0;        // when the strip appeared (a tap right after it was meant for the tower)
   let punishPick = null;   // (n) => choose option n (keys 1-4) while the strip is up
   // 1.8 power-ups: round buttons on the right edge; only the buttons take taps (the rest drops a block)
   const powerTray = h('div', { class: 'power-tray', role: 'group', 'aria-label': S.powerups, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, pauseBtn, punishBar, tutorBar, powerTray, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, pauseBtn, punishBar, tutorBar, searchChip, powerTray, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // Measures env(safe-area-inset-*) so layout() can work out how much of each
@@ -279,6 +283,14 @@ export function createUI(bus) {
   /** The lesson's card shows over the game only (it stays in place while a sheet or the pause card is up). */
   function syncTutor() {
     tutorBar.classList.toggle('is-away', st.screen !== 'game' || !!st.modal);
+    // the search chip: over the game and its results only
+    searchChip.hidden = !st.searchOn || !!st.modal || (st.screen !== 'game' && st.screen !== 'results');
+  }
+
+  /** "Soek ’n teenstander…" while an Oefen tower is built during the search (on), or not. */
+  function setSearchChip(on) {
+    st.searchOn = !!on;
+    syncTutor();
   }
 
   function openModal(name) {
@@ -1261,7 +1273,16 @@ export function createUI(bus) {
   function showDuelWait(o = {}) {
     if (st.modal) closeModal();
     const kids = [];
-    if (o.state === 'search') {
+    if (o.state === 'lobby') {
+      // a random opponent (1.10): no time limit; an Oefen tower meanwhile, or play right away
+      kids.push(h('div', { class: 'spinner', 'aria-hidden': 'true' }),
+        h('h2', { text: S.duelSearching }),
+        h('p', { class: 'duel-sub', text: S.duelSearchHint }),
+        h('p', { class: 'duel-count', 'data-duel-count': '' }),
+        button('btn-big btn-green', [emo('🏗️'), h('span', { text: S.duelSearchPractice })], () => bus.emit('ui:duel-practice')),
+        button('btn-teal', [emo('⚡'), h('span', { class: 'btn-txt' }, h('span', { text: S.duelPlayNow }), h('span', { class: 'btn-sub', text: S.duelPlayNowSub }))], () => bus.emit('ui:duel-now')),
+        button('btn-white', [icon('close'), h('span', { text: S.duelCancel })], () => bus.emit('ui:duel-cancel')));
+    } else if (o.state === 'search') {
       kids.push(h('div', { class: 'spinner', 'aria-hidden': 'true' }),
         h('h2', { text: S.duelSearching }),
         h('p', { class: 'duel-sub', text: S.duelSearchHint }),
@@ -1304,7 +1325,7 @@ export function createUI(bus) {
       kids.push(h('a', { class: 'btn btn-white app-open', href: o.appLink, onclick: () => bus.emit('ui:app-open') }, emo('📲'), h('span', { text: S.openInApp })));
     }
     // the ✕ top right does what the screen's own way out does (not during the 3-2-1)
-    const exit = { search: 'ui:duel-cancel', room: 'ui:duel-cancel', link: 'ui:home', error: 'ui:duel' }[o.state];
+    const exit = { lobby: 'ui:duel-cancel', search: 'ui:duel-cancel', room: 'ui:duel-cancel', link: 'ui:home', error: 'ui:duel' }[o.state];
     screens.duelwait.replaceChildren(h('div', { class: 'card duel-wait' }, exit ? closeX(() => bus.emit(exit)) : null, kids));
     showScreen('duelwait');
   }
@@ -1853,6 +1874,7 @@ export function createUI(bus) {
     setResultsBoard,
     setDuelWaitNote,
     showTutor,
+    setSearchChip,
     /** Which screen and sheet show ({ screen, modal }): the website's Back button follows them. */
     view: () => ({ screen: st.screen, modal: st.modal }),
     setReminderInfo,

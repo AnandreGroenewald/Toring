@@ -496,7 +496,11 @@ function startGame(data) {
     lesson = null;
     ui.showTutor(null);
   }
-  if (data.mode !== 'duel') duel.leave();   // a new game of another kind ends any match (and its live room)
+  // a new game of another kind ends any match (and its live room); an Oefen tower keeps a search going
+  if (data.mode !== 'duel' && !(data.mode === 'practice' && duel.searching)) {
+    duel.leave();
+    ui.setSearchChip(false);
+  }
   if (run.paused) {
     audio.resume();
     run.paused = false;
@@ -1049,6 +1053,7 @@ const duel = createDuel({
     duelReward = { coins: awardCoins({ mode: 'duel', outcome, live }), rank: store.recordDuelRank({ outcome, live }) };
   },
 });
+if (DEBUG) window.__stapel.duel = duel;   // tests look at the search and the match
 // A friend's run (?teen=...) or live room (?kamer=CODE) from the link this page was opened with, and a
 // language from the address (?lang=, already applied by js/core/langboot.js). They are taken off the
 // address straight away, so a reload or a shared screenshot doesn't repeat them.
@@ -1089,6 +1094,7 @@ function stopDuelFlow() {
   clearInterval(duelTimer);
   duelTimer = 0;
   duel.cancel();
+  ui.setSearchChip(false);
 }
 
 function showDuelScreen() {
@@ -1164,25 +1170,59 @@ function showDuelResults(r) {
   sleepLoop(RESULTS_SLEEP_MS);
 }
 
-/** A random opponent: the lobby pairs two players; after 20 s a recording or Robot Rikus. */
+/**
+ * A random opponent (1.10): no time limit. Wait on the screen, or build an Oefen tower meanwhile (a chip
+ * at the top says the search goes on); play now against a recording or Robot Rikus at any time. When
+ * someone comes: "Teen <naam>!", 3-2-1, the match.
+ */
 function searchOpponent() {
   stopDuelFlow();
   const flow = duelFlow;
   screen = 'duelwait';
-  ui.showDuelWait({ state: 'search' });
-  const until = Date.now() + DUEL.searchMs;
-  const tick = () => ui.setDuelCount(`${Math.max(0, Math.ceil((until - Date.now()) / 1000))}`);
-  tick();
-  duelTimer = setInterval(tick, 500);
+  ui.showDuelWait({ state: 'lobby' });
   duel.findOpponent({
     onFound: (m) => {
-      if (flow === duelFlow) versus(m);
+      if (flow === duelFlow) opponentFound(m);
     },
     onFallback: (m, note) => {
-      if (flow === duelFlow) versus(m, note);
+      if (flow !== duelFlow) return;
+      ui.setSearchChip(false);
+      versus(m, note);
+    },
+    onRetry: () => {
+      if (flow === duelFlow && screen === 'duelwait') ui.setDuelCount(S.duelReconnecting);
     },
   });
 }
+
+/** Someone came: an Oefen tower built meanwhile stands still (it doesn't count), and the match begins. */
+function opponentFound(m) {
+  ui.setSearchChip(false);
+  if (run.mode === 'practice' && !run.over) {
+    // paused, not restarted: a restart would end the match's connection with it
+    if (game.scene.isActive('Game')) game.scene.pause('Game');
+    if (game.scene.isActive('Hud')) game.scene.pause('Hud');
+  }
+  versus(m);
+}
+
+// "Oefen terwyl jy wag": an Oefen tower while the search goes on
+bus.on('ui:duel-practice', () => {
+  if (!duel.searching) return;
+  resetRun('practice');
+  startGame({ mode: 'practice', seed: SEED_OVERRIDE || randomSeed('oefen'), autoplay: AUTO });
+  screen = 'game';
+  ui.showInGame();
+  renderTray();
+  ui.setSearchChip(true);
+});
+// "Speel dadelik": stop looking, a recording of a real match or Robot Rikus now
+bus.on('ui:duel-now', () => duel.playNow());
+// the chip's ✕: stop looking (the Oefen tower goes on)
+bus.on('ui:duel-search-stop', () => {
+  stopDuelFlow();
+  ui.setSearchChip(false);
+});
 
 bus.on('ui:duel', showDuelScreen);
 // first to a height mark: choose the punishment (js/duel.js times it out with the default)

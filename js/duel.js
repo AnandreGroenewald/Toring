@@ -59,6 +59,7 @@ function wsBase(apiUrl) {
 }
 
 const ROOM_RETRY_MS = [1000, 2000, 4000, 8000];   // a dropped room wait reconnects after these (then every 8 s)
+const SEARCH_PING_MS = 25000;   // a searching phone says something now and then, so its network keeps the line open
 
 /**
  * @param {{ bus, apiUrl?: string, nickname: () => string, card?: () => object, onDecided?: (outcome) => void,
@@ -385,39 +386,71 @@ export function createDuel({
     return typeof document !== 'undefined' && document.visibilityState === 'hidden';
   }
 
-  /** Random opponent: the lobby pairs two players; after DUEL.searchMs a recording or the computer instead. */
-  function findOpponent({ onFound = () => {}, onFallback = () => {} } = {}) {
+  /**
+   * Random opponent: the lobby pairs two players. No time limit (1.10): the search goes on until someone
+   * comes, the player cancels, or chooses to play now (playNow: a recording or Robot Rikus). A dropped
+   * connection comes back (and stays closed while the game is hidden, like a room); `onRetry` meanwhile.
+   * A quiet ping keeps a phone's connection open while nothing happens.
+   */
+  function findOpponent({ onFound = () => {}, onFallback = () => {}, onRetry = () => {} } = {}) {
     stopPending();
     if (!live) {
       fallback(onFallback);
       return;
     }
-    let ws;
-    try {
-      ws = new WebSocketImpl(`${wsUrl}/match/lobby`);
-    } catch {
-      fallback(onFallback);
-      return;
-    }
-    const timer = setTimer(() => {
-      if (pending?.ws !== ws) return;
-      stopPending();
-      fallback(onFallback);
-    }, DUEL.searchMs);
-    pending = { ws, timer };
-    ws.onopen = () => send(ws, hello());
-    ws.onmessage = (e) => {
-      const msg = parse(e.data);
-      if (!msg || msg.t !== 'match' || !isRoomCode(msg.room) || pending?.ws !== ws) return;
-      stopPending();
-      joinRoom(msg.room, { onStart: onFound, onFail: () => fallback(onFallback) });
+    const search = { tries: 0, retry: null, ping: null, away: hidden(), connect: null, onRetry, onFound, onFallback };
+    pending = { ws: null, timer: null, search };
+    const retryLater = () => {
+      if (pending?.search !== search || search.retry || search.away) return;
+      const ms = ROOM_RETRY_MS[Math.min(search.tries, ROOM_RETRY_MS.length - 1)];
+      search.tries++;
+      onRetry();
+      search.retry = setTimer(() => {
+        search.retry = null;
+        if (pending?.search === search && !pending.ws && !search.away) search.connect();
+      }, ms);
     };
-    ws.onclose = () => {
-      if (pending?.ws !== ws) return;
-      stopPending();
-      fallback(onFallback);
+    search.connect = () => {
+      let ws;
+      try {
+        ws = new WebSocketImpl(`${wsUrl}/match/lobby`);
+      } catch {
+        retryLater();
+        return;
+      }
+      pending.ws = ws;
+      ws.onopen = () => {
+        search.tries = 0;
+        send(ws, hello());
+      };
+      ws.onmessage = (e) => {
+        const msg = parse(e.data);
+        if (!msg || msg.t !== 'match' || !isRoomCode(msg.room) || pending?.ws !== ws) return;
+        stopPending();
+        joinRoom(msg.room, { onStart: onFound, onFail: () => findOpponent({ onFound, onFallback, onRetry }) });
+      };
+      ws.onclose = () => {
+        if (pending?.ws !== ws) return;   // stopped, paired, or replaced by a reconnect
+        pending.ws = null;
+        retryLater();
+      };
+      ws.onerror = () => {};
     };
-    ws.onerror = () => {};
+    const ping = () => {
+      if (pending?.search !== search) return;
+      if (pending.ws && pending.ws.readyState === 1) send(pending.ws, { t: 'ping' });
+      search.ping = setTimer(ping, SEARCH_PING_MS);
+    };
+    search.ping = setTimer(ping, SEARCH_PING_MS);
+    if (!search.away) search.connect();
+  }
+
+  /** Stop looking and play now: a recording of a real match, or Robot Rikus (`onFallback` of the search). */
+  function playNow() {
+    const search = pending?.search;
+    const onFallback = search ? search.onFallback : null;
+    stopPending();
+    if (onFallback) fallback(onFallback);
   }
 
   /** Nobody to pair with: a recording of a real match from the server, else Robot Rikus. */
@@ -487,15 +520,32 @@ export function createDuel({
 
   function stopPending() {
     if (!pending) return;
-    const { ws, timer, room } = pending;
+    const { ws, timer, room, search } = pending;
     pending = null;
     clearTimer(timer);
     if (room?.retry) clearTimer(room.retry);
+    if (search?.retry) clearTimer(search.retry);
+    if (search?.ping) clearTimer(search.ping);
     if (ws) close(ws);
+  }
+
+  /** Searching the lobby right now? */
+  function searching() {
+    return !!pending?.search;
   }
 
   /** The game went out of sight: a room still waiting closes its connection (it reopens on back()). */
   function away() {
+    const search = pending?.search;
+    if (search && !search.away) {   // a search waits: its connection closes until the game is back
+      search.away = true;
+      if (search.retry) clearTimer(search.retry);
+      search.retry = null;
+      const ws = pending.ws;
+      pending.ws = null;
+      if (ws) close(ws);
+      return;
+    }
     const room = pending?.room;
     if (!room || room.started || room.away) return;
     room.away = true;
@@ -508,6 +558,13 @@ export function createDuel({
 
   /** The game is back: a waiting room reconnects at once. */
   function back() {
+    const search = pending?.search;
+    if (search && search.away) {
+      search.away = false;
+      search.tries = 0;
+      if (!pending.ws) search.connect();
+      return;
+    }
     const room = pending?.room;
     if (!room || room.started || !room.away) return;
     room.away = false;
@@ -534,6 +591,11 @@ export function createDuel({
     cancel: stopPending,
     away,
     back,
+    playNow,
+    /** Searching the lobby (the waiting screen or Oefen while waiting shows it). */
+    get searching() {
+      return searching();
+    },
     /** Leave the current match (home button, new game): closes a live room. */
     leave() {
       stopPending();

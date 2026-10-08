@@ -1325,6 +1325,28 @@ svg.ic {
 @keyframes record-pop { from { transform: scale(0.2) rotate(-30deg); opacity: 0; } to { transform: rotate(4deg); opacity: 1; } }
 @keyframes cell-in { from { transform: scale(0); opacity: 0; } to { transform: none; opacity: 1; } }
 
+/* The search chip (1.10): an Oefen tower while the Uitdagersreeks looks for an opponent */
+.search-chip {
+  position: absolute;
+  top: calc(var(--sat) + 138 * var(--u));
+  left: calc(var(--sal) + 12 * var(--u));
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(10 * var(--u));
+  padding: calc(6 * var(--u)) calc(6 * var(--u)) calc(6 * var(--u)) calc(14 * var(--u));
+  border-radius: 999px;
+  background: rgba(100, 71, 173, 0.92);
+  color: #fff;
+  font-weight: 800;
+  font-size: max(12px, calc(22 * var(--u)));
+  box-shadow: 0 calc(6 * var(--u)) calc(14 * var(--u)) rgba(5, 15, 35, 0.3);
+  pointer-events: none;
+}
+.search-chip[hidden] { display: none; }
+.search-chip .spinner.small { width: calc(22 * var(--u)); height: calc(22 * var(--u)); border-width: calc(3 * var(--u)); margin: 0; }
+.search-stop { pointer-events: auto; display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.18); color: #fff; cursor: pointer; }
+
 /* ------------------------------------------------------------------------- */
 /* The short lesson (1.10): one card at the top; the game goes on underneath  */
 /* ------------------------------------------------------------------------- */
