@@ -1,11 +1,13 @@
 [
   {
-    "relation": ["delegate_permission/common.handle_all_urls"],
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
     "target": {
       "namespace": "android_app",
       "package_name": "com.lekkerlocal.stapel",
       "sha256_cert_fingerprints": [
-        "PLAY_APP_SIGNING_SHA256",
+        "07:59:B5:9A:47:F9:41:55:95:82:C8:EA:89:AB:55:49:0B:58:B6:2E:89:AC:36:46:E3:5A:54:FD:14:A6:15:EB",
         "77:FE:71:55:76:C6:44:77:B0:F7:FC:09:12:3F:6D:BC:F5:36:36:24:BE:37:12:B9:3F:72:5B:7A:89:4F:1C:F4"
       ]
     }

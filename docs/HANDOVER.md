@@ -419,7 +419,7 @@ Later the owner added (decisions are final unless they say otherwise):
     - **Other places the address lives:**
       - the Worker's `SITE_URL`, and `ALLOWED_ORIGINS` (both addresses);
       - `SITE_URL_FALLBACK`; `app/shim.js`;
-      - the App Links filters (both hosts; assetlinks on both).
+      - the App Links filter (the new host only: old links open in the browser and forward; its assetlinks.json, built from `app/applinks/`, has the app signing key 07:59:B5:9A…15:EB and the upload key 77:FE:71:55…1C:F4).
     - Pages drops `.html`: `/privaatheid.html` answers 308 to `/privaatheid`.
   - **The website's Back button** goes one step back everywhere (a sheet closes, a tower pauses, a screen goes home). It leaves only from the bare menu (`ui:view` → `syncBackGuard`). The app already did this.
   - **Find an opponent without a time limit:**

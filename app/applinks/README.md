@@ -9,7 +9,7 @@ The root is served by a separate GitHub repository, which must be named exactly
 2. Add the two files from this folder: `_config.yml` and `.well-known/assetlinks.json`.
 3. In `assetlinks.json`, replace `PLAY_APP_SIGNING_SHA256` with the SHA-256 of the **app signing key
    certificate** from Play Console → Stapel → Test and release → App integrity → App signing
-   (format `AB:CD:…`). The other fingerprint is the upload key (for the test APKs), already filled in.
+   (format `AB:CD:…`). Both are filled in now (8 Oct 2026): the app signing key 07:59:B5:9A…15:EB and the upload key 77:FE:71:55…1C:F4 (test APKs).
 4. Wait a minute, then open `https://anandregroenewald.github.io/.well-known/assetlinks.json`: it must show
    the file (not a 404).
 5. Install the app version that has the intent filter (1.10.0 or later) **after** that: Android checks the
