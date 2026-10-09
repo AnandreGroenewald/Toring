@@ -18,9 +18,9 @@ export function cleanBoard(json) {
   const top = json.top
     .filter((t) => t && Number.isFinite(t.rank) && typeof t.name === 'string')
     .slice(0, 20)
-    .map((t) => ({ rank: t.rank | 0, name: t.name.slice(0, NAME_MAX), heightM: Math.max(0, Number(t.heightM) || 0), you: t.you === true }));
+    .map((t) => ({ rank: t.rank | 0, name: t.name.slice(0, NAME_MAX), heightM: Math.max(0, Number(t.heightM) || 0), you: t.you === true, retried: t.retried === true }));
   const y = json.you;
-  const you = y && Number.isFinite(y.rank) ? { rank: y.rank | 0, heightM: Math.max(0, Number(y.heightM) || 0), hidden: y.hidden === true } : null;
+  const you = y && Number.isFinite(y.rank) ? { rank: y.rank | 0, heightM: Math.max(0, Number(y.heightM) || 0), hidden: y.hidden === true, retried: y.retried === true } : null;
   return { players: Math.max(0, json.players | 0), top, you };
 }
 
@@ -41,6 +41,7 @@ export async function postBoard({ apiUrl, result, player, name = '', hidden = fa
     blocks: result.blocksDropped | 0,
     durationMs: Math.max(0, Math.round(Number(result.durationMs) || 0)),
     hidden: !!hidden,
+    ...(result.retry === true ? { retry: true } : {}),   // (1.12) "Nog 'n kans": the better of two tries, marked 🔁
   };
   return cleanBoard(await request(`${root}/board`, {
     method: 'POST',

@@ -3,12 +3,111 @@
 // block, and the result), and the checks for what one game tells the other about a turn: where its
 // block was let go, and where the tower's loose blocks came to rest. Pure: the game runs it against
 // Robot Rikus, the server (server/src/match.js) for a live match.
+// 1.12 rondtes: the referee also says which weather or visitor comes with a turn. A round is two
+// back-to-back turns (one each) with exactly the same event; the plan comes from the match seed, so the
+// server and both games agree, and the turn messages carry it (a game never plans its own).
 
 import { TURNS } from '../config.js';
 import { createRng } from './rng.js';
 
 export const SABOTAGES = Object.freeze([...TURNS.sabotages]);
 export const isSabotage = (k) => SABOTAGES.includes(k);
+
+// ------------------------------------------------------------------------------- rondtes (1.12)
+// What a round can bring per stage, and how often (Hanswors stays out: his log isn't a block the turn
+// reports carry; the rainbow too: there is no flood to lower and no points).
+const ROUND_POOLS = Object.freeze({
+  mild: Object.freeze({ wind: 3, rain: 3, fog: 2, heat: 2, monkey: 3 }),
+  all: Object.freeze({ wind: 3, gust: 2.5, rain: 3, storm: 2.5, hail: 2.5, fog: 2, heat: 2, monkey: 3.5, thief: 2.5 }),
+});
+export const ROUND_KINDS = Object.freeze(Object.keys(ROUND_POOLS.all));
+export const ROUND_VISITORS = Object.freeze(['monkey', 'thief']);
+export const isRoundKind = (k) => ROUND_KINDS.includes(k);
+export const isRoundVisitor = (k) => ROUND_VISITORS.includes(k);
+const THIEF_MAX = 3;          // Skelm Sakkie comes in at most this many rounds of a match
+
+/** The stage (0 = the calm start, 1-3 as TURNS.rounds) turn n belongs to. */
+export function roundStage(n) {
+  let k = 0;
+  while (k < TURNS.rounds.length && n >= TURNS.rounds[k].from) k++;
+  return k;
+}
+
+const round2 = (x) => Math.round(x * 100) / 100;
+const oddIn = (rng, [lo, hi]) => {
+  const odds = [];
+  for (let g = lo; g <= hi; g++) if (g % 2) odds.push(g);
+  return odds.length ? rng.pick(odds) : 1;
+};
+
+/**
+ * A match's rounds: [{ n, kind, dir, strength, side, key }] sorted by n (the round's first turn; the
+ * second is n + 1). Rules: none before TURNS.rounds[0].from; an odd number of turns between two rounds
+ * (whoever faced one first faces the next second); never the same kind twice in a row; Skelm Sakkie at
+ * most THIEF_MAX times. Pure: the same seed gives the same plan everywhere.
+ */
+export function turnRounds(seed, maxTurns = TURNS.maxTurns) {
+  const rng = createRng(`${seed}/rondtes`);
+  const out = [];
+  // the first round comes a turn or two after the first stage's banner (both players' turns in it)
+  let n = TURNS.rounds[0].from + 1 + rng.int(0, 1);
+  while (TURNS.rounds.some((st) => st.from === n || st.from === n + 1)) n += 2;
+  let prev = null;
+  let thieves = 0;
+  while (n + 1 <= maxTurns) {
+    const stage = TURNS.rounds[Math.max(0, roundStage(n) - 1)];
+    const items = [];
+    for (const [kind, w] of Object.entries(ROUND_POOLS[stage.pool])) {
+      if (kind === prev || (kind === 'thief' && thieves >= THIEF_MAX)) continue;
+      items.push({ w, v: kind });
+    }
+    const kind = rng.weighted(items);
+    if (kind === 'thief') thieves++;
+    out.push({
+      n, kind,
+      dir: rng.chance(0.5) ? -1 : 1,
+      strength: round2(0.6 + Math.min(0.9, n * 0.02) + rng.float(-0.1, 0.1)),
+      side: rng.chance(0.5) ? -1 : 1,
+      key: `r${out.length + 1}`,
+    });
+    prev = kind;
+    n += 2 + oddIn(rng, stage.gap);
+    // a stage's first turn has its own banner: no round covers it (as in the daily: no weather starts
+    // on a stage's block); moved on by two, so the odd gap and the alternating first player stay
+    while (TURNS.rounds.some((st) => st.from === n || st.from === n + 1)) n += 2;
+  }
+  return out;
+}
+
+/** Turn n's round event ({ kind, dir, strength, side, key, first }: first = its first turn), or null. */
+export function roundFor(plan, n) {
+  for (const r of plan || []) {
+    if (r.n === n || r.n + 1 === n) return { kind: r.kind, dir: r.dir, strength: r.strength, side: r.side, key: r.key, first: r.n === n };
+    if (r.n > n) break;
+  }
+  return null;
+}
+
+/** A round event from a message, cleaned up (or null): { kind, dir, strength, side, key, first }. */
+export function cleanRound(o) {
+  if (!o || typeof o !== 'object' || !isRoundKind(o.kind)) return null;
+  const strength = typeof o.strength === 'number' && Number.isFinite(o.strength) ? Math.min(2, Math.max(0.3, o.strength)) : 1;
+  const key = typeof o.key === 'string' && /^r\d{1,3}$/.test(o.key) ? o.key : null;
+  if (!key) return null;
+  return { kind: o.kind, dir: o.dir === -1 ? -1 : 1, strength, side: o.side === -1 ? -1 : 1, key, first: o.first === true };
+}
+
+/** Did the player beat the round's visitor? Blouaap: a Perfek scares him off; Skelm Sakkie: caught. */
+export const beatVisitor = (kind, r, vis) => (kind === 'monkey' ? r === 'P' : kind === 'thief' ? vis === 'caught' : false);
+
+/** A turn report's visitor outcome ('caught' | 'stole'), or null. */
+export const cleanVis = (v) => (v === 'caught' || v === 'stole' ? v : null);
+
+/** Robot Rikus against Skelm Sakkie (seeded): does he catch him, and when (share of the climb). */
+export function botCatch(seed, n) {
+  const r = createRng(`${seed}/rikus-vang/${n}`);
+  return { catches: r.chance(0.6), at: r.float(0.35, 0.85) };
+}
 const RATINGS = new Set(['P', 'G', 'S', 'X']);
 const SNAP_MAX = 32;          // tower blocks one turn can report (the loose top is TURNS.liveBlocks + 1)
 const COORD_MAX = 1e7;        // px: further than this is not a tower
@@ -17,13 +116,15 @@ const BLOCK_MAX = 5000;
 const seatOk = (s) => s === 0 || s === 1;
 
 /**
- * The referee. `first` is the seat that drops the first block. Events:
- *  { type: 'turn', n, seat, hearts, streaks, sab }  turn n is seat's (sab: a sabotage on this block, or null)
+ * The referee. `first` is the seat that drops the first block; with `rounds` (1.12, both games know
+ * them) and the match `seed`, turns bring the rounds' weather and visitors. Events:
+ *  { type: 'turn', n, seat, hearts, streaks, sab, ev, nx }  turn n is seat's (sab: a sabotage on this block,
+ *      ev: this turn's round event, nx: the round that begins with the next turn (to show it coming))
  *  { type: 'joker', seat }                           seat earned a joker: they choose a sabotage
  *  { type: 'sent', seat, kind }                      seat's sabotage waits for the other player's next block
  *  { type: 'result', winner, reason, hearts }        'hearts' | 'quit' | 'timeout' | 'turns'
  */
-export function createTurnReferee({ first = 0, init = null } = {}) {
+export function createTurnReferee({ first = 0, init = null, seed = null, rounds = false } = {}) {
   const s = init ? clone(init) : {
     first: seatOk(first) ? first : 0,
     n: 0,
@@ -34,15 +135,31 @@ export function createTurnReferee({ first = 0, init = null } = {}) {
     jokers: [0, 0],
     sab: [null, null],    // a sabotage waiting for this seat's next block
     result: null,
+    rounds: !!rounds && typeof seed === 'string' && seed.length > 0,
+    seed: typeof seed === 'string' ? seed : null,
   };
+  let plan = null;
+  const planOf = () => plan || (plan = s.rounds ? turnRounds(s.seed) : []);
+  const evAt = (n) => (s.rounds ? roundFor(planOf(), n) : null);
 
-  const turnEvent = () => ({ type: 'turn', n: s.n, seat: s.seat, hearts: [...s.hearts], streaks: [...s.streak], sab: s.sabNow || null });
+  const turnEvent = () => {
+    const nx = evAt(s.n + 1);
+    return {
+      type: 'turn', n: s.n, seat: s.seat, hearts: [...s.hearts], streaks: [...s.streak], sab: s.sabNow || null,
+      ev: evAt(s.n), nx: nx && nx.first ? nx : null,
+    };
+  };
 
   function next() {
     s.n += 1;
     if (s.n > 1) s.seat = 1 - s.seat;
-    s.sabNow = s.sab[s.seat];
-    s.sab[s.seat] = null;
+    // a sabotage never rides on a round's turn: it waits for that player's next turn without one
+    if (evAt(s.n)) {
+      s.sabNow = null;
+    } else {
+      s.sabNow = s.sab[s.seat];
+      s.sab[s.seat] = null;
+    }
     return turnEvent();
   }
 
@@ -62,10 +179,14 @@ export function createTurnReferee({ first = 0, init = null } = {}) {
      * Seat's turn n ended: `lost` (the turn cost a heart) and `r`, how the dropped block was rated
      * ('P' Perfek, 'G', 'S', 'X' lost). A report out of turn is ignored.
      */
-    settled(seat, { n, lost = false, r = 'S' } = {}) {
+    settled(seat, { n, lost = false, r = 'S', vis = null } = {}) {
       if (s.result || seat !== s.seat || n !== s.n || s.n < 1) return [];
       const events = [];
-      if (lost) s.hearts[seat] = Math.max(0, s.hearts[seat] - 1);
+      // a turn costs at most one heart; beating the round's visitor gives one back (never above the start)
+      const ev = evAt(s.n);
+      const beat = TURNS.visitorHeart && !!ev && beatVisitor(ev.kind, r, cleanVis(vis));
+      s.hearts[seat] = Math.max(0, Math.min(TURNS.hearts, s.hearts[seat] - (lost ? 1 : 0) + (beat ? 1 : 0)));
+      if (beat) s.beats = [...(s.beats || [0, 0])].map((b, k) => (k === seat ? b + 1 : b));
       if (r === 'P') {
         s.perfects[seat] += 1;
         s.streak[seat] += 1;
@@ -113,6 +234,8 @@ export function createTurnReferee({ first = 0, init = null } = {}) {
     get hearts() { return [...s.hearts]; },
     get perfects() { return [...s.perfects]; },
     get streaks() { return [...s.streak]; },
+    get beats() { return [...(s.beats || [0, 0])]; },
+    get rounds() { return s.rounds; },
     get result() { return s.result ? { ...s.result } : null; },
     snapshot() { return clone(s); },
   };

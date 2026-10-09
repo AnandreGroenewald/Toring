@@ -41,7 +41,7 @@ export function buildShareText(result, { url, highContrast = false } = {}) {
   const lines = [];
   const height = fmtM(r.heightM || 0);
   const head = r.mode === 'practice' ? S.sharePracticeHead : S.shareDailyHead(r.dayNumber ?? '?');
-  lines.push(`${head} 🏗️ ${height}`);
+  lines.push(`${head}${r.retry || r.retried ? ' 🔁' : ''} 🏗️ ${height}`);   // (1.12: 🔁 a second try, "Nog 'n kans")
 
   const stats = [`⭐ ${fmtInt(r.score || 0)}`, `🎯 ${fmtInt(r.perfects || 0)}× ${S.perfects}`];
   if ((r.maxCombo || 0) >= 2) stats.push(`🔥 ${fmtInt(r.maxCombo)}`);

@@ -17,8 +17,9 @@ const GAP = STAGES[1].visitors;       // (the first stage's gap; later stages ar
 const THIEF_FROM = STAGES.find((st) => st.thief).from;
 const TYPE_WEIGHTS = { monkey: 4, clown: 3.5, thief: 2.5 };
 const FORECAST_BLOCKS = 45;   // the menu and the teaser name the visitors of about one tower
-const GIFT_SHAPES = ['crate', 'slab', 'brick'];   // (1.9 and before: his 1-4 gift blocks)
-// Hanswors brings one big log: a wide, steady new floor (testers found his narrow gift blocks a nuisance)
+// Hanswors brings one big log (a wide, steady new floor) and then 0-5 gift blocks on it (1.12). Testers found
+// his narrow gift blocks of 1.9 a nuisance, so these are the wide, flat shapes, set level in the middle.
+const GIFT_SHAPES = ['plank', 'slab', 'brick'];
 const LOG_SPEC = Object.freeze({ shape: 'log', scale: 1, color: 0, log: true });
 
 const round2 = (x) => Math.round(x * 100) / 100;
@@ -96,9 +97,15 @@ export function monkeyPlan(r, v) {
   };
 }
 
-/** Hanswors: 1-4 gift blocks (steady shapes) that he stacks on the tower, where they set as a new foundation. */
-export function clownPlan() {
-  return { specs: [{ ...LOG_SPEC }] };
+/**
+ * Hanswors: his big log, then 0-5 gift blocks (wide, flat shapes, set level in the middle), each set as
+ * cement where it lands: a new foundation. How many and which come from the visit's own stream.
+ */
+export function clownPlan(r, v) {   // eslint-disable-line no-unused-vars
+  const specs = [{ ...LOG_SPEC }];
+  const n = r ? r.int(0, VISITOR.giftMax) : 0;
+  for (let k = 0; k < n; k++) specs.push({ shape: r.pick(GIFT_SHAPES), scale: 1, color: 0, level: true });
+  return { specs };
 }
 
 /** Skelm Sakkie: how long the climb (the tap window) takes; a little quicker on later visits. */

@@ -82,64 +82,163 @@ export const DEFAULT_LOOK = Object.freeze({ frame: 'hout', badge: 'geen', title:
 export const cosmetic = (kind, id) => (COSMETICS[kind] || []).find((c) => c.id === id) || null;
 
 // ------------------------------------------------------------------------------- ranks and seasons
-/** A season is a calendar month (South African dates); rank points come from duels. */
+// 1.12 (the owner: "In CSGO you had a rank… one rank for each challenge", "Gold Nova 2 70% till next
+// level, but if you loose to someone you loose points", "there should be a lot of ranks"): each
+// Uitdagersreeks mode (Wedloop, Blok vir Blok) has its own rank on a ladder of 23. A rank is 100 points,
+// shown as a percentage. Only live matches against a person count (the owner: Robot Rikus "Not at
+// all"). A season is a calendar month (South African dates); a new one drops every rank one tier.
+
+/** The five tiers (for looks and season badges) and their emoji. */
 export const RANKS = Object.freeze([
-  { id: 'brons', min: 0, emoji: '🥉' },
-  { id: 'silwer', min: 100, emoji: '🥈' },
-  { id: 'goud', min: 250, emoji: '🥇' },
-  { id: 'platinum', min: 450, emoji: '💠' },
-  { id: 'diamant', min: 700, emoji: '💎' },
+  { id: 'brons', emoji: '🥉' },
+  { id: 'silwer', emoji: '🥈' },
+  { id: 'goud', emoji: '🥇' },
+  { id: 'platinum', emoji: '💠' },
+  { id: 'diamant', emoji: '💎' },
 ]);
 export const RANK_IDS = Object.freeze(RANKS.map((r) => r.id));
-export const RANK_POINTS = Object.freeze({ liveWin: 25, liveLoss: -10, otherWin: 10, otherLoss: -5 });
+export const rankIndex = (id) => Math.max(0, RANK_IDS.indexOf(id));
+export const RANK_STEP = 100;   // points per rank on the ladder (its percentage)
 
-/** The rank for some points, and how far to the next one ({ ...rank, next|null, toNext }). */
-export function rankFor(points) {
-  const p = Math.max(0, Math.floor(Number(points) || 0));
-  let k = 0;
-  while (k + 1 < RANKS.length && p >= RANKS[k + 1].min) k++;
-  const next = RANKS[k + 1] || null;
-  return { ...RANKS[k], next, toNext: next ? next.min - p : 0 };
+const ELITE = [
+  { id: 'meesterbouer', emoji: '🏗️' },
+  { id: 'grootmeester', emoji: '🏰' },
+  { id: 'legende', emoji: '👑' },
+];
+/**
+ * The ladder: Brons I, II, III, Brons Meester, Silwer I … Diamant Meester (div 1-4), then Meesterbouer,
+ * Grootmeester and Stapel-legende (elite: their tier is Diamant for looks). `min` = index x RANK_STEP.
+ */
+export const LADDER = Object.freeze([
+  ...RANKS.flatMap((t, ti) => [1, 2, 3, 4].map((div) => Object.freeze({
+    id: `${t.id}-${div < 4 ? div : 'm'}`, tier: t.id, div, emoji: t.emoji, index: ti * 4 + div - 1, min: (ti * 4 + div - 1) * RANK_STEP,
+  }))),
+  ...ELITE.map((e, k) => Object.freeze({ id: e.id, tier: 'diamant', div: 0, elite: true, emoji: e.emoji, index: 20 + k, min: (20 + k) * RANK_STEP })),
+]);
+export const LADDER_IDS = Object.freeze(LADDER.map((r) => r.id));
+const TOP = LADDER.length - 1;
+export const ladderIndex = (id) => Math.max(0, LADDER_IDS.indexOf(id));
+
+/** How rank points move (live matches only). */
+export const RANK_RULES = Object.freeze({
+  win: 20, winPerRank: 3, winMin: 8, winMax: 40,       // a win: 20, +3 for every rank the opponent is above you
+  loss: 15, lossPerRank: 2, lossMin: 5, lossMax: 30,   // a loss: 15, -2 for every rank they are above you
+  placement: 10, placementMul: 1.5,                    // a new player's first 10 matches: wins count 1.5x
+  seasonDrop: 4 * RANK_STEP,                           // a new month: one tier down (Goud II -> Silwer II)
+  maxPoints: (LADDER.length - 1) * RANK_STEP + RANK_STEP - 1,   // the top of Stapel-legende: points never pile up out of sight
+});
+
+/** The rank at some points: { ...ladder rank, pct (0-99, 100 at the top), next (ladder rank or null), toNext }. */
+export function ladderAt(points) {
+  const p = Math.max(0, Math.min(RANK_RULES.maxPoints, Math.floor(Number(points) || 0)));
+  const k = Math.min(TOP, Math.floor(p / RANK_STEP));
+  const r = LADDER[k];
+  const next = LADDER[k + 1] || null;
+  return { ...r, points: p, pct: next ? p - r.min : 100, next, toNext: next ? next.min - p : 0 };
 }
 
-export const rankIndex = (id) => Math.max(0, RANK_IDS.indexOf(id));
+/** A mode's rank as stored: { season, points, best (ladder id this season), played (rated matches), shield }. */
+export function cleanModeRank(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const points = Math.max(0, Math.min(RANK_RULES.maxPoints, Math.floor(Number(r.points) || 0)));
+  const now = ladderAt(points).id;
+  const best = LADDER_IDS.includes(r.best) && ladderIndex(r.best) >= ladderIndex(now) ? r.best : now;
+  return {
+    season: typeof r.season === 'string' && /^\d{4}-\d{2}$/.test(r.season) ? r.season : null,
+    points,
+    best,
+    played: Math.max(0, Math.min(1e6, Math.floor(Number(r.played) || 0))),
+    shield: r.shield !== false,
+  };
+}
 
 /** 'YYYY-MM' for a date key ('2026-10-08' -> '2026-10'), or null. */
 export const seasonOf = (dateKey) => (isDateKey(dateKey) ? dateKey.slice(0, 7) : null);
 
 /**
- * A new season began: points halve (a head start, not a fresh climb), and the season that ended
- * leaves a badge for the best rank reached in it. Returns { rank, reward } (reward: a badge id or null).
- * Only a later month starts a season: a phone clock set back (or a trip west on the 1st) changes nothing.
+ * A new season began: every rank drops one tier (a fresh climb that keeps most of the progress), and the
+ * season that ended leaves a badge for the best tier reached in it. Returns { rank, reward } (reward: a
+ * badge id or null). Only a later month starts a season: a phone clock set back changes nothing.
  */
 export function rolloverSeason(rank, season) {
-  const r = cleanRank(rank);
+  const r = cleanModeRank(rank);
   if (!season || r.season === season || (r.season && season < r.season)) return { rank: r, reward: null };
-  if (!r.season) return { rank: { ...r, season, best: rankFor(r.points).id }, reward: null };
-  const reward = `s-${r.best}`;
-  const points = Math.floor(r.points / 2);
-  return { rank: { season, points, best: rankFor(points).id }, reward };
+  if (!r.season) return { rank: { ...r, season }, reward: null };
+  const reward = `s-${LADDER[ladderIndex(r.best)].tier}`;
+  const points = Math.max(0, r.points - RANK_RULES.seasonDrop);
+  return { rank: { ...r, season, points, best: ladderAt(points).id, shield: true }, reward };
 }
 
-/** A finished duel: 'won'/'lost', against a live player ('live') or a recording / Robot Rikus. */
-export function rankAfterMatch(rank, { outcome, live, season }) {
+/**
+ * The points a live match moves: `won`, this player's ladder rank id `me`, the opponent's `opp` (from
+ * their card; unknown: the same as yours), `played` (rated matches before this one).
+ */
+export function rankDelta({ won, me, opp = null, played = 0 }) {
+  const R = RANK_RULES;
+  const d = (LADDER_IDS.includes(opp) ? ladderIndex(opp) : ladderIndex(me)) - ladderIndex(me);
+  if (won) {
+    const base = Math.max(R.winMin, Math.min(R.winMax, R.win + R.winPerRank * d));
+    return Math.round(base * (played < R.placement ? R.placementMul : 1));
+  }
+  return -Math.max(R.lossMin, Math.min(R.lossMax, R.loss - R.lossPerRank * d));
+}
+
+/**
+ * A finished live match in one mode: 'won' or 'lost' against an opponent of ladder rank `opp`. A loss
+ * that would drop a rank is caught by the shield once (the rank stays, at 0%); a win brings the shield
+ * back. Never below Brons I. Returns { rank, delta, before, after, up, down, shielded, reward }.
+ */
+export function rankAfterMatch(rank, { outcome, opp = null, season }) {
   const rolled = rolloverSeason(rank, season);
   const r = rolled.rank;
-  const delta = outcome === 'won'
-    ? (live ? RANK_POINTS.liveWin : RANK_POINTS.otherWin)
-    : (live ? RANK_POINTS.liveLoss : RANK_POINTS.otherLoss);
-  const points = Math.max(0, r.points + delta);
-  const now = rankFor(points);
-  const best = rankIndex(now.id) > rankIndex(r.best) ? now.id : r.best;
-  return { rank: { season: r.season, points, best }, delta: points - r.points, reward: rolled.reward, up: now.id !== rankFor(r.points).id && rankIndex(now.id) > rankIndex(rankFor(r.points).id) };
+  const before = ladderAt(r.points);
+  if (outcome !== 'won' && outcome !== 'lost') return { rank: r, delta: 0, before, after: before, up: false, down: false, shielded: false, reward: rolled.reward };
+  const won = outcome === 'won';
+  const delta = rankDelta({ won, me: before.id, opp, played: r.played });
+  let points = Math.max(0, Math.min(RANK_RULES.maxPoints, r.points + delta));
+  let shield = won ? true : r.shield;
+  let shielded = false;
+  if (!won && points < before.min && before.index > 0 && r.shield) {
+    points = before.min;   // the shield: you stay, at 0%
+    shield = false;
+    shielded = true;
+  }
+  const after = ladderAt(points);
+  const best = after.index > ladderIndex(r.best) ? after.id : r.best;
+  return {
+    rank: { season: r.season, points, best, played: r.played + 1, shield },
+    delta: points - r.points,
+    before,
+    after,
+    up: after.index > before.index,
+    down: after.index < before.index,
+    shielded,
+    reward: rolled.reward,
+  };
 }
 
-function cleanRank(raw) {
-  const r = raw && typeof raw === 'object' ? raw : {};
-  const points = Math.max(0, Math.min(99999, Math.floor(Number(r.points) || 0)));
-  const best = RANK_IDS.includes(r.best) ? r.best : rankFor(points).id;
-  return { season: typeof r.season === 'string' && /^\d{4}-\d{2}$/.test(r.season) ? r.season : null, points, best };
+/**
+ * Ranks before 1.12 were one ladder of five (Brons 0, Silwer 100, Goud 250, Platinum 450, Diamant 700
+ * points). A player keeps their tier: it becomes that tier's first rank in both modes.
+ */
+export function migrateOldRank(old) {
+  const o = old && typeof old === 'object' ? old : {};
+  const p = Math.max(0, Math.floor(Number(o.points) || 0));
+  const tier = p >= 700 ? 4 : p >= 450 ? 3 : p >= 250 ? 2 : p >= 100 ? 1 : 0;
+  const best = RANK_IDS.includes(o.best) ? `${o.best}-1` : null;   // (the season's best tier still earns its badge)
+  const one = cleanModeRank({ season: o.season, points: tier * 4 * RANK_STEP, best, played: p > 0 ? RANK_RULES.placement : 0, shield: true });
+  return { race: { ...one }, turns: { ...one } };
 }
+
+/** A rank's short label for the match pills: '🥇II', '💎M', '👑'. */
+export function rankShortOf(id) {
+  if (!LADDER_IDS.includes(id)) return '';
+  const r = LADDER[ladderIndex(id)];
+  return r.elite ? r.emoji : `${r.emoji}${['I', 'II', 'III', 'M'][r.div - 1]}`;
+}
+
+export const RANK_MODES = Object.freeze(['race', 'turns']);
+const modeOf = (m) => (m === 'turns' ? 'turns' : 'race');
 
 // ------------------------------------------------------------------------------- earning coins
 export const EARN = Object.freeze({
@@ -191,7 +290,7 @@ export function defaultEconomy() {
     stock: Object.fromEntries(POWERUP_IDS.map((id) => [id, 0])),
     owned: Object.fromEntries(COSMETIC_KINDS.map((k) => [k, [DEFAULT_LOOK[k]]])),
     look: { ...DEFAULT_LOOK },
-    rank: { season: null, points: 0, best: 'brons' },
+    ranks: { race: cleanModeRank(null), turns: cleanModeRank(null) },   // (1.12) one rank per mode
     freeFoundation: null,   // the daily (date key) whose free Fondamentblok was used
   };
 }
@@ -211,7 +310,12 @@ export function cleanEconomy(raw) {
     const pick = r.look?.[kind];
     e.look[kind] = owned.has(pick) ? pick : DEFAULT_LOOK[kind];
   }
-  e.rank = cleanRank(r.rank);
+  // (1.12) a rank per mode; a wallet from before keeps its tier (migrateOldRank)
+  if (r.ranks && typeof r.ranks === 'object') {
+    for (const m of RANK_MODES) e.ranks[m] = cleanModeRank(r.ranks[m]);
+  } else if (r.rank && typeof r.rank === 'object') {
+    e.ranks = migrateOldRank(r.rank);
+  }
   e.freeFoundation = isDateKey(r.freeFoundation) ? r.freeFoundation : null;
   return e;
 }
@@ -228,6 +332,15 @@ export function earnCoins(eco, n, { capped = true, dayKey = null } = {}) {
   const added = Math.min(want, MAX_COINS - e.coins);
   e.coins += added;
   return { economy: e, added };
+}
+
+/** (1.12) Spend `n` coins on something that isn't a power-up or a look ("Nog 'n kans"): { economy, ok }. */
+export function spendCoins(eco, n) {
+  const e = cleanEconomy(eco);
+  const cost = Math.max(0, Math.floor(Number(n) || 0));
+  if (e.coins < cost) return { economy: e, ok: false };
+  e.coins -= cost;
+  return { economy: e, ok: true };
 }
 
 /** Buy one power-up: { economy, ok }. */
@@ -266,7 +379,15 @@ export function wearCosmetic(eco, kind, id) {
   return { economy: e, ok: true };
 }
 
-/** Unlock looks earned with a rank (a season badge; the Diamant frame). Returns a new economy. */
+/** The best tier this season in either mode (what the rank looks follow). */
+export function bestTier(eco) {
+  const e = cleanEconomy(eco);
+  let k = 0;
+  for (const m of RANK_MODES) k = Math.max(k, rankIndex(LADDER[ladderIndex(e.ranks[m].best)].tier));
+  return RANK_IDS[k];
+}
+
+/** Unlock looks earned with a rank tier (a season badge; the Diamant frame). Returns a new economy. */
 export function grantRankLooks(eco, rankId, { badge = null } = {}) {
   const e = cleanEconomy(eco);
   if (badge && cosmetic('badge', badge) && !e.owned.badge.includes(badge)) e.owned.badge.push(badge);
@@ -288,14 +409,28 @@ export function cleanCard(raw) {
   const out = {};
   for (const kind of COSMETIC_KINDS) out[kind] = cosmetic(kind, r[kind]) ? r[kind] : DEFAULT_LOOK[kind];
   out.rank = RANK_IDS.includes(r.rank) ? r.rank : 'brons';
+  // (1.12) the rank in the mode being played, on the ladder of 23 (a 1.11 card has only the tier), and
+  // both modes' ranks: a friend's link doesn't say the mode until the match starts
+  out.rl = LADDER_IDS.includes(r.rl) ? r.rl : `${out.rank}-1`;
+  const rk = r.rk && typeof r.rk === 'object' ? r.rk : {};
+  out.rk = { race: LADDER_IDS.includes(rk.race) ? rk.race : out.rl, turns: LADDER_IDS.includes(rk.turns) ? rk.turns : out.rl };
   return out;
 }
 
-/** Robot Rikus's card. */
-export const BOT_CARD = Object.freeze(cleanCard({ frame: 'see', badge: 'arend', title: 'hyskraanheld', celebration: 'vuurwerk', style: 'pet', rank: 'silwer' }));
+/** An opponent's card for a match in `mode`: its rank (`rl`, `rank`) is the one in that mode. */
+export function cardForMode(card, mode) {
+  const c = cleanCard(card);
+  const rl = c.rk[modeOf(mode)];
+  return { ...c, rl, rank: LADDER[ladderIndex(rl)].tier };
+}
 
-/** The card for an economy (what this player shows). */
-export function cardOf(eco) {
+/** Robot Rikus's card. */
+export const BOT_CARD = Object.freeze(cleanCard({ frame: 'see', badge: 'arend', title: 'hyskraanheld', celebration: 'vuurwerk', style: 'pet', rank: 'silwer', rl: 'silwer-2', rk: { race: 'silwer-2', turns: 'silwer-2' } }));
+
+/** The card for an economy (what this player shows), with the rank in `mode` ('race' | 'turns'). */
+export function cardOf(eco, mode = 'race') {
   const e = cleanEconomy(eco);
-  return cleanCard({ ...e.look, rank: rankFor(e.rank.points).id });
+  const now = ladderAt(e.ranks[modeOf(mode)].points);
+  const rk = { race: ladderAt(e.ranks.race.points).id, turns: ladderAt(e.ranks.turns.points).id };
+  return cleanCard({ ...e.look, rank: now.tier, rl: now.id, rk });
 }

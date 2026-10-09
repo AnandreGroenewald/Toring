@@ -37,6 +37,9 @@ const HAIL_GROUP = -7;
 const HAIL_R = [8, 10];           // bigger stones read better; density keeps the old mass (r 6-8 at 0.004)
 const HAIL_DENSITY = 0.0024;
 const GUST_PRE = 64;              // gust strengths drawn ahead per event (one per flip)
+const TURN_HAIL_FROM = 300;       // Blok vir Blok: a turn's hail falls this long after the drop...
+const TURN_HAIL_TO = 2600;        // ...until this long after it
+const HAIL_BUSY_SPEED = 1.2;      // px/step: a stone this fast (above the island) keeps a turn going
 
 // Everything that can change the tower (wind strength, gust flips, lightning,
 // hail) runs on the fixed physics step and draws from per-event random streams
@@ -370,7 +373,104 @@ export class Weather {
     return true;
   }
 
-  _startEvent(ev, title = null) {
+  // --- Blok vir Blok (1.12): a turn's weather ----------------------------------
+  // Both games play a turn's weather the same. It starts with the turn and shows while the player aims
+  // (nothing moves then: the tower is held still, so nothing pushes it either); everything that moves
+  // the tower (the wind's breathing, gust flips, lightning, hail) counts from the drop, from exactly
+  // the same state in both games (turnDrop). A round's two turns share the event's seeded stream (key).
+
+  /** A turn begins: the last turn's weather (and hail) is gone; `ev` ({ type, dir, strength, key }) starts. */
+  turnStart(ev, title = null, subtitle = null) {
+    if (this.destroyed) return false;
+    this._turnMode = true;
+    this._held = true;
+    this.clearHail();
+    const s = this._storm;
+    s.phase = 'idle';
+    s.nextAt = null;
+    s.strikes = 0;
+    s.target = null;
+    this._simTime = 0;
+    this._buffet = 0;
+    this._t = 0;
+    if (!ev || !WEATHER_INFO[ev.type]) {
+      if (this._active) this._endEvent();
+      return false;
+    }
+    const strength = Number.isFinite(ev.strength) ? ev.strength : 1;
+    this._startEvent({ type: ev.type, start: this._i, end: this._i + 1, dir: ev.dir === -1 ? -1 : 1, strength, key: ev.key || null, forced: true }, title, subtitle);
+    this._storm.nextAt = null;   // (lightning and hail count from the drop)
+    this._hailPlan.length = 0;
+    return true;
+  }
+
+  /** A held step (the player aims): the weather fades in and the crane feels the wind; nothing else moves. */
+  holdStep() {
+    if (this.destroyed) return;
+    this._updateLevels(STEP_MS);
+    const w = this._windNow();
+    this._wind = Math.abs(w.target) < 0.05 ? 0 : w.target;
+    this._windMean = w.mean;
+  }
+
+  /** The state a turn's weather starts from at the drop (full strength, every clock at zero). */
+  _dropState() {
+    const ev = this._active;
+    const type = ev ? ev.type : null;
+    const lw = type === 'wind' ? 1 : 0;
+    const lg = type === 'gust' ? 1 : 0;
+    const gDir = ev?.dir || 1;
+    let w = 0;
+    if (type === 'wind') w = (ev.dir || 1) * WT.windAccel * ev.strength;   // (breathing at t = 0)
+    else if (type === 'gust') w = gDir * WT.windAccel * ev.strength * WT.gustMul * 0.85;
+    return { w, lw, lg, gDir, type };
+  }
+
+  /** The turn's block was let go: from here both games run the weather from exactly the same state. */
+  turnDrop() {
+    if (this.destroyed || !this._turnMode) return;
+    this._held = false;
+    const ev = this._active;
+    const d = this._dropState();
+    for (const k of LVL_KEYS) this._lvl[k] = k === d.type ? 1 : 0;
+    this._simTime = 0;
+    this._buffet = 0;
+    this._t = 0;
+    const g = this._gust;
+    g.dir = d.gDir;
+    g.timer = 0;
+    g.flips = 0;
+    g.mul = 1;
+    this._wind = d.w;
+    this._windMean = d.type === 'wind' || d.type === 'gust' ? d.w / (d.type === 'gust' ? 0.85 : 1) : 0;
+    this._windBase = d.type === 'wind' || d.type === 'gust' ? this._windMean : 0;
+    const s = this._storm;
+    s.phase = 'idle';
+    s.simT = 0;
+    s.strikes = 0;
+    s.target = null;
+    s.nextAt = d.type === 'storm' ? 0 : null;   // the warning starts with the drop, one strike per turn
+    this._hailPlan.length = 0;
+    if (d.type === 'hail') this._planHail(ev);
+  }
+
+  /** Blok vir Blok: the turn's weather still has something on its way (hail to fall or flying, lightning). */
+  turnBusy() {
+    if (this.destroyed || !this._turnMode || this._held) return false;
+    if (this._is('hail') && this._hailPlan.length) return true;
+    const s = this._storm;
+    if (s.phase === 'warn' || (this._is('storm') && s.nextAt !== null)) return true;
+    for (const h of this._hail) if (h.body.speed > HAIL_BUSY_SPEED && h.body.position.y < LAYOUT.baseTopY) return true;
+    return false;
+  }
+
+  /** Every hailstone goes (Blok vir Blok: at the end of each turn, the same in both games). */
+  clearHail() {
+    for (let k = this._hail.length - 1; k >= 0; k--) this._removeHail(k);
+    this._hailPlan.length = 0;
+  }
+
+  _startEvent(ev, title = null, subtitle = null) {
     if (this._active) this._endEvent();
     this._active = ev;
     this._t = 0;
@@ -380,7 +480,7 @@ export class Weather {
 
     const info = WEATHER_INFO[ev.type];
     if (info && this.bus) {
-      this.bus.emit('hud:banner', { emoji: info.emoji, title: title || info.name, subtitle: info.desc(ev.dir), type: ev.type });
+      this.bus.emit('hud:banner', { emoji: info.emoji, title: title || info.name, subtitle: subtitle || info.desc(ev.dir), type: ev.type });
     }
     this._play('banner');
     const snd = TYPE_SOUND[ev.type];
@@ -501,6 +601,22 @@ export class Weather {
     }
   }
 
+  /** The wind right now without moving the clock: { target, mean, base } (Blok vir Blok's held steps and drop). */
+  _windNow() {
+    const ev = this._active;
+    const t = this._simTime / 1000;
+    if (ev && ev.type === 'wind') {
+      const base = (ev.dir || 1) * WT.windAccel * ev.strength;
+      return { base, mean: base * this._lvl.wind, target: base * (1 + 0.05 * Math.sin(t * 1.3) + 0.03 * Math.sin(t * 3.7)) * this._lvl.wind };
+    }
+    if (ev && ev.type === 'gust') {
+      const g = this._gust;
+      const base = g.dir * WT.windAccel * ev.strength * WT.gustMul;
+      return { base: base * g.mul, mean: base * this._lvl.gust, target: base * g.mul * (0.85 + 0.15 * Math.sin(t * 7)) * this._lvl.gust };
+    }
+    return { base: this._windBase, mean: 0, target: this._windBase * Math.max(this._lvl.wind, this._lvl.gust) };
+  }
+
   _updateWind(dt) {
     const ev = this._active;
     const t = this._simTime / 1000;
@@ -555,6 +671,15 @@ export class Weather {
     let gDir = this._gust.dir;
     let gFlips = this._gust.flips;
     let gMul = this._gust.mul;
+    if (this._turnMode && this._held) {
+      // Blok vir Blok, aiming: the block will fall in the weather as turnDrop() sets it
+      const d = this._dropState();
+      ({ w, lw, lg, gDir } = d);
+      time = 0;
+      gTimer = 0;
+      gFlips = 0;
+      gMul = 1;
+    }
     for (let s = 0; s < n; s++) {
       out[s] = Math.abs(w) < 0.5 ? 0 : w;   // beforeStep() skips tiny winds
       time += STEP_MS;
@@ -1007,7 +1132,7 @@ export class Weather {
     s.simT = 0;
     s.target = null;
     s.strikes++;
-    if (this._is('storm') && s.strikes < 2) s.nextAt = this._t + STRIKE_SECOND_MS;
+    if (this._is('storm') && s.strikes < 2 && !this._turnMode) s.nextAt = this._t + STRIKE_SECOND_MS;
 
     const hit = target || null;
     const wx = hit ? hit.centerX : GAME_W / 2;
@@ -1105,8 +1230,9 @@ export class Weather {
 
   /** The whole hail shower is drawn from the event's seeded stream when it starts. */
   _planHail(ev) {
+    // (Blok vir Blok: the shower comes sooner and quicker, while the turn's block lands)
     this._hailPlan = hailPlan(this._evRng || eventRng(this._seed, ev), ev, {
-      count: WT.hailCount, from: HAIL_SPAWN_FROM, to: HAIL_SPAWN_TO, width: GAME_W, radius: HAIL_R,
+      count: WT.hailCount, from: this._turnMode ? TURN_HAIL_FROM : HAIL_SPAWN_FROM, to: this._turnMode ? TURN_HAIL_TO : HAIL_SPAWN_TO, width: GAME_W, radius: HAIL_R,
     });
   }
 

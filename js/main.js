@@ -11,7 +11,8 @@ import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate, isDat
 import { createSequence } from './core/sequence.js';
 import { buildShareText, buildDuelShareText } from './core/share.js';
 import { parseChallengeQuery, parseRoomQuery, defaultNicknameFor } from './core/duel.js';
-import { coinsForGame, cosmetic, POWERUP_IDS } from './core/economy.js';
+import { coinsForGame, cosmetic, POWERUP_IDS, rankShortOf } from './core/economy.js';
+import { DAILY_RETRY } from './config.js';
 import { weekView, WEEK } from './core/week.js';
 
 const WEEK_COINS = WEEK.coins;
@@ -240,8 +241,8 @@ let boardSaving = 0;    // changes on their way to the server
 
 /** A day's finished daily, as the board takes it (null when that day has none). */
 function boardResult(dateKey) {
-  const e = store.getDaily(dateKey);
-  return e?.status === 'done' && e.result ? { ...e.result, mode: 'daily', dateKey } : null;
+  const best = store.getDailyBest(dateKey);   // (1.12) the better of two tries, `retried` when there were two
+  return best ? { ...best, mode: 'daily', dateKey, retry: best.retried === true } : null;
 }
 
 /**
@@ -388,6 +389,11 @@ function menuModel() {
     forecast: sequenceFor(dateKey).forecast(4),   // about as many as a typical tower meets
     visitors: sequenceFor(dateKey).visitorForecast(),   // "Besoekers vandag: 🐒 🤡"
     today: store.getDaily(dateKey),
+    best: store.getDailyBest(dateKey),      // (1.12) the try that counts (the better of two)
+    boardOn: BOARD_ON,                       // (1.12) the 🏆 on the daily card, with today's place once known
+    boardPlace: boardLast?.dateKey === dateKey && boardLast.board?.you ? boardLast.board.you.rank : null,
+    retry: store.getDailyRetry(dateKey),    // (1.12) "Nog 'n kans": the day's second try, if bought
+    retryPrice: DAILY_RETRY.price,
     stats: store.getStats(dateKey),
     settings,
     nextDayAt: nextDayTimestamp(),
@@ -405,14 +411,14 @@ function menuModel() {
 // ---------------------------------------------------------------------------
 function shopModel() {
   const e = store.getEconomy();
-  return { coins: e.coins, stock: e.stock, owned: e.owned, look: e.look, card: store.getCard(), name: duelNick(), week: store.getWeek() };
+  return { coins: e.coins, stock: e.stock, owned: e.owned, look: e.look, card: store.getCard(duelMode()), name: duelNick(), week: store.getWeek() };
 }
 
 bus.on('ui:shop', (tab) => ui.showShop(shopModel(), typeof tab === 'string' ? tab : undefined));
 /** A new look from the shop shows at once on the Uitdagersreeks card underneath. */
 function lookChanged() {
   if (screen !== 'duel') return;
-  const card = store.getCard();
+  const card = store.getCard(duelMode());
   ui.setDuelCard(card, card.rank);
 }
 bus.on('ui:shop-buy', ({ kind, id } = {}) => {
@@ -523,12 +529,14 @@ function startGame(data) {
 function resetRun(mode, dateKey = null) {
   pw.effects = {};
   pw.free = false;
+  if (mode !== 'duel') ui.setEmotes(null);   // (1.12) emojis belong to a match
   run.mode = mode;
   run.dateKey = dateKey;
   run.dayNumber = dateKey ? dayNumber(dateKey) : null;
   run.over = false;
   run.started = false;
   run.final = null;
+  run.retry = false;   // (1.12) this daily run is the day's second try ("Nog 'n kans")
 }
 
 // ---------------------------------------------------------------------------
@@ -590,6 +598,7 @@ function startIdle() {
   startGame({ mode: 'idle', seed: randomSeed('idle') });
 }
 
+let boardAskedFor = null;   // (1.12) the day whose place the menu's 🏆 asked for this session
 function showMenu() {
   screen = 'menu';
   pushSkyline();
@@ -597,6 +606,14 @@ function showMenu() {
   wakeLoop();
   armMenuSleep();
   requestAnimationFrame(updateMenuAnchor);
+  // (1.12) the 🏆 shows today's place: asked once a session, after the day's daily was played
+  const dk = todayKey();
+  if (BOARD_ON && store.getDailyBest(dk) && !boardFresh(dk) && boardAskedFor !== dk) {
+    boardAskedFor = dk;
+    syncBoard(dk).then((b) => {
+      if (b?.you && screen === 'menu') ui.setBoardPlace(b.you.rank);
+    });
+  }
 }
 
 /** Tells the attract tower where the menu card starts (game px), so it stays in view above it. */
@@ -629,7 +646,27 @@ function playDaily() {
     entry = store.getDaily(dateKey);
   }
   if (entry && entry.status === 'done') {
-    showDoneResults(dateKey, entry.result);
+    // (1.12) "Nog 'n kans": a second try bought and not played yet starts now; one cut short in a tab
+    // that is gone counts as it stood (like the first try)
+    let rt = store.getDailyRetry(dateKey);
+    if (rt && rt.status === 'playing' && !(run.mode === 'daily' && run.retry && !run.over)) {
+      if (rt.owner !== TAB_ID && Number.isFinite(rt.beatAt) && Date.now() - rt.beatAt < STALE_MS) {
+        ui.toast(S.otherTab, 3000);
+        return;
+      }
+      store.recoverUnfinished(dateKey);
+      rt = store.getDailyRetry(dateKey);
+    }
+    if (rt && rt.status === 'ready') {
+      resetRun('daily', dateKey);
+      run.retry = true;
+      startGame({ mode: 'daily', seed: seedFor(dateKey), dayNumber: run.dayNumber, dateKey, autoplay: AUTO, challenge: 0 });
+      screen = 'game';
+      ui.showInGame();
+      renderTray();
+      return;
+    }
+    showDoneResults(dateKey, store.getDailyBest(dateKey) || entry.result);
     return;
   }
   resetRun('daily', dateKey);
@@ -698,6 +735,12 @@ function pauseGame() {
   saveProgressNow();
   screen = 'pause';
   ui.showPause({ mode: run.mode, started: run.started });
+  // (1.12, the owner: "If i pause while looking for an opponent make it stop looking") a pause, or the
+  // game out of sight, ends the search: nobody is paired with a player who isn't there
+  if (duel.searching) {
+    stopDuelFlow();
+    ui.toast(S.searchStoppedPause, 2600);
+  }
   sleepLoop(120);
 }
 
@@ -725,7 +768,8 @@ function saveProgressNow() {
   const gs = gameScene();
   if (!gs || !gs.buildResult || gs.over) return;
   try {
-    store.saveDailyProgress(run.dateKey, gs.buildResult('quit'));
+    if (run.retry) store.saveDailyRetryProgress(run.dateKey, gs.buildResult('quit'));
+    else store.saveDailyProgress(run.dateKey, gs.buildResult('quit'));
   } catch {
     // best effort
   }
@@ -1041,17 +1085,25 @@ bus.on('ui:day-rollover', () => {
 const sessionNick = defaultNicknameFor(store.getBoardPlayer());
 const duelNick = () => store.getDuel().name || sessionNick;
 let duelReward = null;   // the decided match's coins and rank points, for its results card
+const RANK_MIN_MS = 25000;   // (1.12) a live match must last this long to move a rank when it ends by a quit
 const duel = createDuel({
   bus,
   apiUrl: matchApiUrl(),
   nickname: duelNick,
-  card: () => store.getCard(),
+  card: (mode) => store.getCard(mode),
   onDecided: (outcome) => {
     if (outcome !== 'won' && outcome !== 'lost') return;
     store.recordDuel(outcome);
-    // a live opponent counts for more than a recording or Robot Rikus (js/core/economy.js)
-    const live = duel.match?.kind === 'live';
-    duelReward = { coins: awardCoins({ mode: 'duel', outcome, live }), rank: store.recordDuelRank({ outcome, live }) };
+    // (1.12) only a live opponent moves this mode's rank, by their rank (js/core/economy.js rankAfterMatch);
+    // a match that ended by someone leaving within its first RANK_MIN_MS doesn't (no farming by closing a tab)
+    const m = duel.match;
+    const quick = (m?.reason === 'quit' || m?.reason === 'timeout') && Date.now() - (m?.startedAt || 0) < RANK_MIN_MS;
+    const live = m?.kind === 'live' && !quick;
+    ui.setEmotes(null);
+    duelReward = {
+      coins: awardCoins({ mode: 'duel', outcome, live }),
+      rank: store.recordDuelRank({ outcome, live, mode: m?.mode, opp: m?.oppCard?.rl }),
+    };
   },
 });
 if (DEBUG) window.__stapel.duel = duel;   // tests look at the search and the match
@@ -1104,12 +1156,16 @@ function stopDuelFlow() {
 function showDuelScreen() {
   stopDuelFlow();
   screen = 'duel';
-  // the season first: a new month halves the points and hands out last month's badge
-  const rank = store.getSeasonRank();
-  ui.showDuel({ live: duel.live, duel: store.getDuel(), placeholder: sessionNick, rank, card: store.getCard(), mode: duelMode() });
+  // the season first: a new month drops each rank a tier and hands out last month's badge (1.12: per mode)
+  const mode = duelMode();
+  const rank = store.getSeasonRank(mode);
+  ui.showDuel({ live: duel.live, duel: store.getDuel(), placeholder: sessionNick, rank, card: store.getCard(mode), mode });
   seasonToast(rank.reward);
 }
-bus.on('ui:duel-mode', (mode) => ui.setDuelMode(store.setDuelMode(mode)));
+bus.on('ui:duel-mode', (mode) => {
+  ui.setDuelMode(store.setDuelMode(mode));
+  ui.setDuelRank(store.getSeasonRank(duelMode()), store.getCard(duelMode()));   // (1.12) each mode its own rank
+});
 
 /** A new month began: "Nuwe seisoen! Jy hou ’n Goud-kenteken 🥇" (the badge of the season that ended). */
 function seasonToast(reward) {
@@ -1128,7 +1184,7 @@ function versus(m, note = '') {
   screen = 'duelwait';
   // Blok vir Blok: who drops the first block
   const first = m.mode === 'turns' && m.turn ? (m.turn.seat === m.you ? S.turnsYouStart : S.turnsTheyStart(m.oppName)) : '';
-  ui.showDuelWait({ state: 'versus', oppName: m.oppName, oppCard: m.oppCard, youName: duelNick(), youCard: store.getCard(), note, mode: lastDuelMode, first });
+  ui.showDuelWait({ state: 'versus', oppName: m.oppName, oppCard: m.oppCard, youName: duelNick(), youCard: store.getCard(lastDuelMode), note, mode: lastDuelMode, first });
   let n = Math.max(1, Math.round(DUEL.countdownMs / 1000));
   ui.setDuelCount(String(n));
   duelTimer = setInterval(() => {
@@ -1151,10 +1207,14 @@ function versus(m, note = '') {
 function startDuelGame(m) {
   duelReward = null;
   resetRun('duel');
+  // (1.12) emoji reactions in a live match or against Robot Rikus (a recording or a friend's link can't see them)
+  ui.setEmotes(m.kind === 'live' || m.kind === 'bot' ? {} : null);
   startGame({
     mode: 'duel',
     seed: m.seed,
-    duel: { name: m.oppName, youName: duelNick(), mode: m.mode, you: m.you, bot: m.kind !== 'live' },
+    duel: { name: m.oppName, youName: duelNick(), mode: m.mode, you: m.you, bot: m.kind !== 'live', oppGo: m.kind === 'live' && (m.oppV || 1) >= 4, rounds: m.rounds === true,
+      // (1.12) both ranks in this mode, in front of the names at the top ('🥇II'); a recording has none
+      oppRank: m.kind === 'live' || m.kind === 'bot' ? rankShortOf(m.oppCard?.rl) : '', youRank: rankShortOf(store.getCard(m.mode).rl) },
     autoplay: AUTO,
   });
   screen = 'game';
@@ -1164,6 +1224,7 @@ function startDuelGame(m) {
 
 function showDuelResults(r) {
   if (screen === 'results' || run.mode !== 'duel') return;
+  ui.setEmotes(null);
   const d = duel.summary() || {};
   if (!d.outcome) d.outcome = 'none';
   // Wedloop: the share link is your run (a friend races it); Blok vir Blok: the game itself
@@ -1241,6 +1302,9 @@ bus.on('ui:duel-search-stop', () => {
 });
 
 bus.on('ui:duel', showDuelScreen);
+// (1.12) the emoji button follows its match: the cooldown after a send, muting, and gone with the match
+bus.on('duel:emotes', (s) => ui.updateEmotes({ left: s?.left || 0, spent: !!s?.spent }));
+bus.on('duel:emote-muted', (muted) => ui.updateEmotes({ muted: !!muted }));
 // first to a height mark: choose the punishment (js/duel.js times it out with the default)
 bus.on('duel:choose', (c) => ui.showPunish(c));
 bus.on('duel:chosen', () => ui.hidePunish());
@@ -1360,12 +1424,34 @@ bus.on('game:started', (partial) => {
   if (run.mode === 'idle') return;
   run.started = true;
   if (run.mode === 'daily' && partial && partial.dateKey) {
-    store.startDaily(partial.dateKey, partial, { owner: TAB_ID });
+    if (run.retry) store.startDailyRetry(partial.dateKey, partial, { owner: TAB_ID });
+    else store.startDaily(partial.dateKey, partial, { owner: TAB_ID });
     startHeartbeat();
   }
 });
 bus.on('game:progress', (partial) => {
-  if (run.mode === 'daily' && partial && partial.dateKey && !run.over) store.saveDailyProgress(partial.dateKey, partial);
+  if (run.mode !== 'daily' || !partial || !partial.dateKey || run.over) return;
+  if (run.retry) store.saveDailyRetryProgress(partial.dateKey, partial);
+  else store.saveDailyProgress(partial.dateKey, partial);
+});
+
+// (1.12) "See your result" on the daily card: the try that counts, never a second try's start
+bus.on('ui:daily-results', () => {
+  const dateKey = todayKey();
+  const best = store.getDailyBest(dateKey);
+  if (best) showDoneResults(dateKey, best);
+  else playDaily();
+});
+// (1.12) "Nog 'n kans": buy the day's second try with coins, and play it at once
+bus.on('ui:daily-retry', () => {
+  const dateKey = todayKey();
+  const r = store.buyDailyRetry(dateKey);
+  if (!r.ok) {
+    ui.toast(r.reason === 'coins' ? S.retryNeed(DAILY_RETRY.price - r.coins) : S.retryOnce, 2600);
+    return;
+  }
+  ui.toast(S.retryBought, 2400);
+  playDaily();
 });
 
 /** Coins for a finished game (js/core/economy.js): { added, total, short } (short: the day's cap held some back). */
@@ -1404,7 +1490,18 @@ function finalize(result) {
   let stats = null;
   let isNewBest = false;
   let aborted = false;
-  if (result.mode === 'daily' && result.dateKey) {
+  if (result.mode === 'daily' && result.dateKey && run.retry) {
+    // (1.12) the second try: left before its first drop, it's still there; else the better try counts
+    if (result.blocksDropped === 0 && store.getDailyRetry(result.dateKey)?.status === 'ready') {
+      aborted = true;
+    } else {
+      stats = store.finishDailyRetry(result.dateKey, result);
+      pushSkyline();
+      isNewBest = !!(stats.applied && (stats.isNewBestHeight || stats.isNewBestScore));
+      shown = { ...result, retry: true };
+      store.setBoardPending(true);   // the better of the two goes on the board, marked 🔁
+    }
+  } else if (result.mode === 'daily' && result.dateKey) {
     if (result.blocksDropped === 0 && !store.getDaily(result.dateKey)) {
       aborted = true;   // left before the first drop: nothing was played, the try is still there
     } else {
@@ -1424,7 +1521,7 @@ function finalize(result) {
   // coins: the daily tower pays in full (once); Oefen counts towards the day's cap
   let coins = null;
   let week = null;
-  if (result.mode === 'daily' && stats?.applied) {
+  if (result.mode === 'daily' && stats?.applied && !run.retry) {   // (the second try was bought: it pays nothing)
     coins = awardCoins({ mode: 'daily', heightM: shown.heightM, perfects: shown.perfects, streak: stats.currentStreak });
     week = store.openWeekBox(result.dateKey);   // the day's box of the weekkis
     if (week) coins = { ...coins, total: week.total };

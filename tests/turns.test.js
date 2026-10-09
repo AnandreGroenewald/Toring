@@ -3,7 +3,10 @@
 // and the first out of hearts loses.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, isSabotage, botSabotage, SABOTAGES } from '../js/core/turns.js';
+import {
+  createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, isSabotage, botSabotage, SABOTAGES,
+  turnRounds, roundFor, roundStage, cleanRound, beatVisitor, cleanVis, botCatch, ROUND_KINDS,
+} from '../js/core/turns.js';
 import { TURNS } from '../js/config.js';
 
 const types = (ev) => ev.map((e) => e.type);
@@ -11,7 +14,7 @@ const types = (ev) => ev.map((e) => e.type);
 test('turns alternate from the first seat; hearts and streaks travel with every turn', () => {
   const ref = createTurnReferee({ first: 1 });
   const [t1] = ref.start();
-  assert.deepEqual(t1, { type: 'turn', n: 1, seat: 1, hearts: [TURNS.hearts, TURNS.hearts], streaks: [0, 0], sab: null });
+  assert.deepEqual(t1, { type: 'turn', n: 1, seat: 1, hearts: [TURNS.hearts, TURNS.hearts], streaks: [0, 0], sab: null, ev: null, nx: null });
   assert.deepEqual(ref.start(), [], 'only once');
   const [t2] = ref.settled(1, { n: 1, r: 'G' });
   assert.equal(t2.n, 2);
@@ -156,4 +159,142 @@ test('a turn\'s report must fit the turn: no blocks not dropped yet; its block l
   assert.equal(snapFits(snap([0, 1], [2]), 3, 'P'), false, 'a lost block is not a Perfek');
   assert.equal(snapFits(snap([0, 1, 2], []), 3, 'X'), false, 'an X that stands');
   assert.equal(snapFits(null, 3, 'G'), false);
+});
+
+// ------------------------------------------------------------------------------- rondtes (1.12)
+const MILD = ['wind', 'rain', 'fog', 'heat', 'monkey'];
+
+test('rondtes: the same plan from the same seed; a calm start; odd gaps, so who faces a round first takes turns', () => {
+  for (const seed of ['abcdef12', 'zz99yy88', 'q1w2e3r4', 'mmmmmmmm']) {
+    const plan = turnRounds(seed);
+    assert.deepEqual(turnRounds(seed), plan, 'pure');
+    assert.ok(plan.length >= 20, `a long match has many rounds (${plan.length})`);
+    assert.ok(plan[0].n >= TURNS.rounds[0].from, 'nothing in the calm start');
+    for (let k = 1; k < plan.length; k++) {
+      const gap = plan[k].n - plan[k - 1].n - 2;
+      assert.ok(gap >= 1 && gap % 2 === 1, `odd gap between rounds (${gap})`);
+      assert.notEqual(plan[k].n % 2, plan[k - 1].n % 2, 'the other player faces the next round first');
+      assert.notEqual(plan[k].kind, plan[k - 1].kind, 'never the same twice in a row');
+    }
+    assert.ok(plan.filter((r) => r.kind === 'thief').length <= 3, 'Skelm Sakkie at most three times');
+    for (const r of plan) {
+      assert.ok(ROUND_KINDS.includes(r.kind));
+      if (roundStage(r.n) === 1) assert.ok(MILD.includes(r.kind), `the first stage is mild (${r.kind} at ${r.n})`);
+      assert.ok(r.strength >= 0.5 && r.strength <= 1.6);
+      assert.ok(r.n + 1 <= TURNS.maxTurns);
+    }
+  }
+  assert.notDeepEqual(turnRounds('abcdef12'), turnRounds('zz99yy88'), 'another match, other rounds');
+});
+
+test('rondtes: both turns of a round get exactly the same event', () => {
+  const plan = turnRounds('abcdef12');
+  const r = plan[3];
+  const a = roundFor(plan, r.n);
+  const b = roundFor(plan, r.n + 1);
+  assert.equal(a.first, true);
+  assert.equal(b.first, false);
+  assert.deepEqual({ ...a, first: null }, { ...b, first: null });
+  assert.equal(roundFor(plan, r.n - 1)?.key === r.key, false);
+  assert.equal(roundFor(plan, 1), null);
+});
+
+test('rondtes: turns carry the round and the one coming; a sabotage waits past a round', () => {
+  const seed = 'abcdef12';
+  const plan = turnRounds(seed);
+  const ref = createTurnReferee({ first: 0, seed, rounds: true });
+  let [t] = ref.start();
+  const seen = [];
+  while (t && t.type === 'turn' && t.n < plan[2].n + 2) {
+    seen.push(t);
+    const evs = ref.settled(t.seat, { n: t.n, r: 'G' });
+    t = evs.find((e) => e.type === 'turn');
+  }
+  const r1 = plan[0];
+  assert.equal(seen[r1.n - 2].nx.key, r1.key, 'the turn before a round shows it coming');
+  assert.equal(seen[r1.n - 1].ev.key, r1.key);
+  assert.equal(seen[r1.n].ev.key, r1.key, 'the other player gets the same');
+  assert.notEqual(seen[r1.n - 1].seat, seen[r1.n].seat, 'a turn each');
+  assert.equal(seen[r1.n].nx, null, 'nothing coming while the round is on');
+  // a sabotage sent just before a round waits for that player's next turn without one
+  const ref2 = createTurnReferee({ first: 0, seed, rounds: true });
+  [t] = ref2.start();
+  while (t.n < r1.n - 1) t = ref2.settled(t.seat, { n: t.n, r: 'G' }).find((e) => e.type === 'turn');
+  const victim = roundFor(plan, r1.n) ? (t.seat === 0 ? 1 : 0) : 0;
+  const s = ref2.snapshot();
+  s.jokers[1 - victim] = 1;
+  const ref3 = createTurnReferee({ init: s });
+  ref3.joker(1 - victim, 'fog');
+  let next = ref3.settled(t.seat, { n: t.n, r: 'G' }).find((e) => e.type === 'turn');
+  const got = [];
+  while (next && next.n <= r1.n + 4) {
+    if (next.sab) got.push(next.n);
+    next = ref3.settled(next.seat, { n: next.n, r: 'G' }).find((e) => e.type === 'turn');
+  }
+  assert.equal(got.length, 1, 'the sabotage comes once');
+  assert.ok(!roundFor(plan, got[0]), `never on a round's turn (turn ${got[0]})`);
+});
+
+test('rondtes: beating the visitor gives a heart back (never above the start); a loss in the same turn evens it', () => {
+  const seed = 'abcdef12';
+  const plan = turnRounds(seed);
+  const monkey = plan.find((r) => r.kind === 'monkey');
+  const play = (r, report) => {
+    const ref = createTurnReferee({ first: 0, seed, rounds: true });
+    let [t] = ref.start();
+    const who = r.n % 2 ? 0 : 1;   // (first: 0 plays the odd turns) the round's player loses one heart first
+    let lostOne = false;
+    while (t.n < r.n) {
+      const lose = t.seat === who && !lostOne;
+      if (lose) lostOne = true;
+      t = ref.settled(t.seat, { n: t.n, lost: lose, r: lose ? 'X' : 'G' }).find((e) => e.type === 'turn');
+    }
+    const before = ref.hearts[t.seat];
+    ref.settled(t.seat, { n: t.n, ...report });
+    return { before, after: ref.hearts[t.seat], beats: ref.beats[t.seat] };
+  };
+  const p = play(monkey, { r: 'P' });
+  assert.equal(p.after, Math.min(TURNS.hearts, p.before + 1), 'a Perfek scares Blouaap off: a heart back');
+  assert.equal(p.beats, 1);
+  const g = play(monkey, { r: 'G' });
+  assert.equal(g.after, g.before, 'not a Perfek: no heart, none lost (his doing)');
+  const both = play(monkey, { r: 'P', lost: true });
+  assert.equal(both.after, both.before, 'a Perfek and a lost block: even');
+  assert.equal(beatVisitor('thief', 'G', 'caught'), true);
+  assert.equal(beatVisitor('thief', 'P', 'stole'), false);
+  assert.equal(beatVisitor('wind', 'P', null), false);
+  assert.equal(cleanVis('caught'), 'caught');
+  assert.equal(cleanVis('x'), null);
+  // at full hearts nothing changes
+  const ref = createTurnReferee({ first: 0, seed, rounds: true });
+  let [t] = ref.start();
+  while (t.n < monkey.n) t = ref.settled(t.seat, { n: t.n, r: 'G' }).find((e) => e.type === 'turn');
+  ref.settled(t.seat, { n: t.n, r: 'P' });
+  assert.equal(ref.hearts[t.seat], TURNS.hearts);
+});
+
+test('rondtes: off without the flag or a seed (a 1.11 game in the match); the plan survives a snapshot', () => {
+  const ref = createTurnReferee({ first: 0, seed: 'abcdef12' });
+  let [t] = ref.start();
+  for (let k = 0; k < 40; k++) {
+    assert.equal(t.ev, null);
+    assert.equal(t.nx, null);
+    t = ref.settled(t.seat, { n: t.n, r: 'G' }).find((e) => e.type === 'turn');
+  }
+  const on = createTurnReferee({ first: 0, seed: 'abcdef12', rounds: true });
+  on.start();
+  const again = createTurnReferee({ init: on.snapshot() });
+  assert.equal(again.rounds, true);
+  assert.equal(createTurnReferee({ first: 0, rounds: true }).rounds, false, 'no seed: no rounds');
+});
+
+test('rondtes: a round from a message is checked; Robot Rikus catches Skelm Sakkie by the seed', () => {
+  assert.deepEqual(cleanRound({ kind: 'gust', dir: -1, strength: 1.2, side: 1, key: 'r4', first: true }), { kind: 'gust', dir: -1, strength: 1.2, side: 1, key: 'r4', first: true });
+  assert.equal(cleanRound({ kind: 'clown', key: 'r1' }), null, 'Hanswors is no round');
+  assert.equal(cleanRound({ kind: 'wind', key: 'x' }), null);
+  assert.equal(cleanRound({ kind: 'wind', key: 'r1', strength: 99 }).strength, 2);
+  assert.equal(cleanRound(null), null);
+  assert.deepEqual(botCatch('abcdef12', 9), botCatch('abcdef12', 9));
+  const c = botCatch('abcdef12', 9);
+  assert.ok(c.at >= 0.35 && c.at <= 0.85);
 });

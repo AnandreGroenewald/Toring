@@ -76,6 +76,7 @@ export function validateEntry(body, now) {
     blocks,
     durationS: Math.round(durationS),
     hidden: body.hidden === true,
+    retry: body.retry === true,   // (1.12) "Nog 'n kans": the better of two tries, marked
   };
 }
 
@@ -86,20 +87,20 @@ const metre = (heightDm) => Math.floor(heightDm / 10);
 export async function boardOf(db, dateKey, player = null) {
   // places are true places: a hidden or blocked player keeps theirs (the list skips it), so numbers never clash
   const scan = await db.prepare(
-    `SELECT player, name, height_dm, hidden, blocked FROM daily_board WHERE date_key = ?1
+    `SELECT player, name, height_dm, hidden, blocked, retried FROM daily_board WHERE date_key = ?1
      ORDER BY height_dm DESC, created_at ASC, player ASC LIMIT ?2`,
   ).bind(dateKey, TOP_SCAN).all();
   const rows = scan.results || [];
   const top = [];
   rows.forEach((r, k) => {
     if (top.length < BOARD_TOP && !r.hidden && !r.blocked) {
-      top.push({ rank: k + 1, name: r.name, heightM: r.height_dm / 10, you: r.player === player });
+      top.push({ rank: k + 1, name: r.name, heightM: r.height_dm / 10, you: r.player === player, retried: r.retried === 1 });
     }
   });
   const day = await db.prepare('SELECT players FROM daily_board_days WHERE date_key = ?1').bind(dateKey).first();
   let you = null;
   if (player) {
-    const me = await db.prepare('SELECT height_dm, created_at, hidden, blocked FROM daily_board WHERE date_key = ?1 AND player = ?2')
+    const me = await db.prepare('SELECT height_dm, created_at, hidden, blocked, retried FROM daily_board WHERE date_key = ?1 AND player = ?2')
       .bind(dateKey, player).first();
     if (me) {
       const k = rows.findIndex((r) => r.player === player);
@@ -115,7 +116,7 @@ export async function boardOf(db, dateKey, player = null) {
         ).bind(dateKey, m * 10, m * 10 + 9, me.height_dm, me.created_at, player).first();
         rank = (higher?.n || 0) + (same?.n || 0) + 1;
       }
-      you = { rank, heightM: me.height_dm / 10, hidden: me.hidden === 1 || me.blocked === 1 };
+      you = { rank, heightM: me.height_dm / 10, hidden: me.hidden === 1 || me.blocked === 1, retried: me.retried === 1 };
     }
   }
   return {
@@ -126,15 +127,42 @@ export async function boardOf(db, dateKey, player = null) {
   };
 }
 
-/** POST /board — the first post of a day stores the result; later ones may only change the name or hiding. */
+/**
+ * POST /board — the first post of a day stores the result; later ones may only change the name or hiding.
+ * (1.12) One `retry` post a day ("Nog 'n kans", bought with coins in the game) keeps the better of the two
+ * heights and marks the entry for good, so the list shows it was a second try.
+ */
 export async function postBoard(request, ctx) {
   checkOrigin(request, ctx.cfg);
   await limit(ctx, request, 'board-post', ctx.cfg.rate.boardPostPerHour);
   const e = validateEntry(await readBatch(request), ctx.now);
+  if (e.retry) {
+    const row = await ctx.db.prepare('SELECT height_dm, retried, blocked FROM daily_board WHERE date_key = ?1 AND player = ?2')
+      .bind(e.dateKey, e.player).first();
+    if (row) {
+      if (row.blocked) return json(200, await boardOf(ctx.db, e.dateKey, e.player));
+      const better = !row.retried && e.heightDm > row.height_dm;
+      const stmts = [better
+        ? ctx.db.prepare('UPDATE daily_board SET retried = 1, name = ?3, hidden = ?4, height_dm = ?5, blocks = ?6, duration_s = ?7 WHERE date_key = ?1 AND player = ?2')
+          .bind(e.dateKey, e.player, e.name, e.hidden ? 1 : 0, e.heightDm, e.blocks, e.durationS)
+        : ctx.db.prepare('UPDATE daily_board SET retried = 1, name = ?3, hidden = ?4 WHERE date_key = ?1 AND player = ?2')
+          .bind(e.dateKey, e.player, e.name, e.hidden ? 1 : 0)];
+      if (better && metre(e.heightDm) !== metre(row.height_dm)) {
+        stmts.push(
+          ctx.db.prepare('UPDATE daily_board_hist SET n = MAX(n - 1, 0) WHERE date_key = ?1 AND metre = ?2').bind(e.dateKey, metre(row.height_dm)),
+          ctx.db.prepare('INSERT INTO daily_board_hist (date_key, metre, n) VALUES (?1, ?2, 1) ON CONFLICT (date_key, metre) DO UPDATE SET n = n + 1')
+            .bind(e.dateKey, metre(e.heightDm)),
+        );
+      }
+      await ctx.db.batch(stmts);
+      return json(200, await boardOf(ctx.db, e.dateKey, e.player));
+    }
+    // (the first try never reached the server: this one is the day's, marked)
+  }
   const added = await ctx.db.prepare(
-    `INSERT INTO daily_board (date_key, player, name, height_dm, blocks, duration_s, hidden, created_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT (date_key, player) DO NOTHING`,
-  ).bind(e.dateKey, e.player, e.name, e.heightDm, e.blocks, e.durationS, e.hidden ? 1 : 0, ctx.now).run();
+    `INSERT INTO daily_board (date_key, player, name, height_dm, blocks, duration_s, hidden, created_at, retried)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) ON CONFLICT (date_key, player) DO NOTHING`,
+  ).bind(e.dateKey, e.player, e.name, e.heightDm, e.blocks, e.durationS, e.hidden ? 1 : 0, ctx.now, e.retry ? 1 : 0).run();
   if ((added.meta?.changes ?? 0) > 0) {
     await ctx.db.batch([
       ctx.db.prepare('INSERT INTO daily_board_days (date_key, players) VALUES (?1, 1) ON CONFLICT (date_key) DO UPDATE SET players = players + 1')
@@ -178,7 +206,7 @@ export async function adminListBoard(url, ctx) {
   const dateKey = url.searchParams.get('dateKey') || new Date(ctx.now).toISOString().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) throw new HttpError(400, 'invalid_field', { field: 'dateKey' });
   const r = await ctx.db.prepare(
-    `SELECT player, name, height_dm, blocks, duration_s, hidden, blocked, created_at FROM daily_board WHERE date_key = ?1
+    `SELECT player, name, height_dm, blocks, duration_s, hidden, blocked, created_at, retried FROM daily_board WHERE date_key = ?1
      ORDER BY height_dm DESC, created_at ASC, player ASC LIMIT ?2`,
   ).bind(dateKey, ADMIN_LIST).all();
   const day = await ctx.db.prepare('SELECT players FROM daily_board_days WHERE date_key = ?1').bind(dateKey).first();
@@ -195,6 +223,7 @@ export async function adminListBoard(url, ctx) {
       mPerBlock: e.blocks ? Math.round((e.height_dm / e.blocks)) / 10 : null,
       hidden: e.hidden === 1,
       blocked: e.blocked === 1,
+      retried: e.retried === 1,
       at: e.created_at,
     })),
   });

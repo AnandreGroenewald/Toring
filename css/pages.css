@@ -1012,7 +1012,7 @@ select.input {
 .owner-note {
   margin: 8px 0 12px;
   padding: 10px 14px;
-  border-left: 5px solid var(--karoo);
+  border: 1px solid #f6d79a;   /* (1.12: a soft frame, not a thick side stripe) */
   border-radius: 8px;
   background: #fff8e8;
   color: #5c3d00;

@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS daily_board (
   hidden INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1)),
   blocked INTEGER NOT NULL DEFAULT 0 CHECK (blocked IN (0, 1)),
   created_at INTEGER NOT NULL,
+  retried INTEGER NOT NULL DEFAULT 0 CHECK (retried IN (0, 1)),   -- 1.12: a second try (migrations/0004_board_retry.sql)
   PRIMARY KEY (date_key, player)
 );
 

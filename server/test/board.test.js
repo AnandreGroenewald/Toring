@@ -16,9 +16,9 @@ test('a result goes on the board; the top shows names and heights; the poster se
   const h = createHarness();
   const r = await h.request('POST', '/board', { body: entry() });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json.top, [{ rank: 1, name: 'Anna', heightM: 37.5, you: true }]);
+  assert.deepEqual(r.json.top, [{ rank: 1, name: 'Anna', heightM: 37.5, you: true, retried: false }]);
   assert.equal(r.json.players, 1);
-  assert.deepEqual(r.json.you, { rank: 1, heightM: 37.5, hidden: false });
+  assert.deepEqual(r.json.you, { rank: 1, heightM: 37.5, hidden: false, retried: false });
   const g = await h.request('GET', `/board?dateKey=${TODAY}`);
   assert.equal(g.status, 200);
   assert.equal(g.json.you, null, 'no player asked');
@@ -34,7 +34,7 @@ test('ranking: taller first, a tie goes to who was first; hidden players keep th
   await h.request('POST', '/board', { body: entry({ player: P(3), name: 'Carla', heightM: 45 }), ip: '198.51.100.3' });
   h.clock.now += 1000;
   const hid = await h.request('POST', '/board', { body: entry({ player: P(4), name: 'Dawie', heightM: 60, hidden: true }), ip: '198.51.100.4' });
-  assert.deepEqual(hid.json.you, { rank: 1, heightM: 60, hidden: true }, 'hidden, but first');
+  assert.deepEqual(hid.json.you, { rank: 1, heightM: 60, hidden: true, retried: false }, 'hidden, but first');
   assert.deepEqual(hid.json.top.map((t) => [t.rank, t.name]), [[2, 'Bennie'], [3, 'Carla'], [4, 'Anna']], 'true places: #1 is hidden');
   assert.equal(hid.json.players, 4);
   const anna = await h.request('GET', `/board?dateKey=${TODAY}&player=${P(1)}`);
@@ -46,11 +46,11 @@ test('one result a day: a second post can change the name or hide it, never the 
   await h.request('POST', '/board', { body: entry({ heightM: 20 }) });
   const again = await h.request('POST', '/board', { body: entry({ heightM: 90, blocks: 40, durationMs: 300000, name: 'Anna B', hidden: true }) });
   assert.equal(again.status, 200);
-  assert.deepEqual(again.json.you, { rank: 1, heightM: 20, hidden: true });
+  assert.deepEqual(again.json.you, { rank: 1, heightM: 20, hidden: true, retried: false });
   assert.equal(again.json.top.length, 0, 'hidden now');
   assert.equal(again.json.players, 1, 'still one player');
   const back = await h.request('POST', '/board', { body: entry({ heightM: 90, name: 'Anna B' }) });
-  assert.deepEqual(back.json.top, [{ rank: 1, name: 'Anna B', heightM: 20, you: true }]);
+  assert.deepEqual(back.json.top, [{ rank: 1, name: 'Anna B', heightM: 20, you: true, retried: false }]);
 });
 
 test('impossible towers are refused; real games pass; malformed posts too; rude names become Bouer', async () => {
@@ -143,7 +143,7 @@ test("the owner's block sticks: a later post can't show the entry again; unblock
   assert.equal(r.json.changed, 1);
   // the player posts again, showing themselves, with a new name: still blocked, the name as it was
   const again = await h.request('POST', '/board', { body: entry({ player: P(2), name: 'Nuwe naam', heightM: 50, hidden: false }), ip: '198.51.100.2' });
-  assert.deepEqual(again.json.you, { rank: 1, heightM: 50, hidden: true });
+  assert.deepEqual(again.json.you, { rank: 1, heightM: 50, hidden: true, retried: false });
   assert.deepEqual(again.json.top.map((t) => t.name), ['Anna']);
   assert.equal((await h.admin('GET', `/admin/board?dateKey=${TODAY}`)).json.entries[0].name, 'Snaakse naam');
   // unblocked, it shows again
@@ -154,7 +154,7 @@ test("the owner's block sticks: a later post can't show the entry again; unblock
   assert.equal(gone.json.changed, 1);
   const after = await h.request('GET', `/board?dateKey=${TODAY}&player=${P(1)}`);
   assert.equal(after.json.players, 1);
-  assert.deepEqual(after.json.you, { rank: 1, heightM: 30, hidden: false });
+  assert.deepEqual(after.json.you, { rank: 1, heightM: 30, hidden: false, retried: false });
   assert.equal((await h.admin('POST', '/admin/board', { dateKey: TODAY, player: P(1) }, 'wrong-token-that-is-long-enough-123456')).status, 401);
   assert.ok(ADMIN);
 });
@@ -177,4 +177,27 @@ test("the leaderboard's cleanup can fail on its own: the nightly retention still
   assert.ok(h.logs.some((l) => l.event === 'board_prune_failed'));
   assert.ok(h.logs.some((l) => l.event === 'retention'), 'the rest of the retention ran');
   assert.ok(!h.logs.some((l) => l.event === 'retention_failed'));
+});
+
+test('1.12 "Nog \'n kans": one retry post keeps the better height and marks the entry for good', async () => {
+  const h = createHarness();
+  await h.request('POST', '/board', { body: entry({ player: P(1), name: 'Anna', heightM: 30 }), ip: '198.51.100.1' });
+  await h.request('POST', '/board', { body: entry({ player: P(2), name: 'Bennie', heightM: 40 }), ip: '198.51.100.2' });
+  // a worse second try: the first height stays, but the entry is marked
+  let r = await h.request('POST', '/board', { body: entry({ player: P(1), name: 'Anna', heightM: 25, retry: true }), ip: '198.51.100.1' });
+  assert.deepEqual(r.json.you, { rank: 2, heightM: 30, hidden: false, retried: true });
+  assert.deepEqual(r.json.top.map((t) => [t.name, t.retried]), [['Bennie', false], ['Anna', true]]);
+  // a third post (a second retry) changes no height
+  r = await h.request('POST', '/board', { body: entry({ player: P(1), name: 'Anna', heightM: 50, blocks: 30, durationMs: 200000, retry: true }), ip: '198.51.100.1' });
+  assert.equal(r.json.you.heightM, 30, 'one retry a day');
+  // a better second try for another player moves them up (and the day's counts stay right)
+  r = await h.request('POST', '/board', { body: entry({ player: P(2), name: 'Bennie', heightM: 62.5, blocks: 30, durationMs: 200000, retry: true }), ip: '198.51.100.2' });
+  assert.deepEqual(r.json.you, { rank: 1, heightM: 62.5, hidden: false, retried: true });
+  assert.equal(r.json.players, 2);
+  const list = await h.admin('GET', `/admin/board?dateKey=${TODAY}`);
+  assert.deepEqual(list.json.entries.map((e) => [e.name, e.heightM, e.retried]), [['Bennie', 62.5, true], ['Anna', 30, true]]);
+  // a retry that is the day's first post (the first try never got through) counts, marked
+  r = await h.request('POST', '/board', { body: entry({ player: P(3), name: 'Carla', heightM: 10, retry: true }), ip: '198.51.100.3' });
+  assert.deepEqual(r.json.you, { rank: 3, heightM: 10, hidden: false, retried: true });
+  assert.equal(r.json.players, 3);
 });

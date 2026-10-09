@@ -120,10 +120,11 @@ test('room: init once, two players, hello -> both start with the same seed and e
   await say(room, a, { t: 'hello', name: 'Anna', card: { frame: 'goud', badge: 'leeu', title: '<b>baas</b>', celebration: 'braai', style: 'kroon', rank: 'goud', extra: 'x' } });
   assert.equal(a.of('start').length, 0, 'not before both said hello');
   await say(room, b, { t: 'hello', name: 'kak' });   // refused by the name rules -> the default
-  assert.deepEqual(a.last('start'), { t: 'start', seed: 'seedabc123', you: 0, opp: { name: 'Bouer', card: cleanCard(null) } });
+  // (1.12: opp.v, the other game's protocol; a hello without one is protocol 1)
+  assert.deepEqual(a.last('start'), { t: 'start', seed: 'seedabc123', you: 0, opp: { name: 'Bouer', card: cleanCard(null), v: 1 } });
   assert.deepEqual(b.last('start'), {
     t: 'start', seed: 'seedabc123', you: 1,
-    opp: { name: 'Anna', card: { frame: 'goud', badge: 'leeu', title: 'bouer', celebration: 'braai', style: 'kroon', rank: 'goud' } },
+    opp: { name: 'Anna', card: { frame: 'goud', badge: 'leeu', title: 'bouer', celebration: 'braai', style: 'kroon', rank: 'goud', rl: 'goud-1', rk: { race: 'goud-1', turns: 'goud-1' } }, v: 1 },
   });
   // a third player, or anyone after the start, is turned away
   const c = fakeSocket();

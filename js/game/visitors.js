@@ -328,6 +328,89 @@ export class Visitors {
     return true;
   }
 
+  // --- Blok vir Blok (1.12): a round's visitor ---------------------------------
+  // A round's visitor comes with the turn, on both games, and plays out the same: Blouaap waits on his
+  // rope for the turn's block (a Perfek scares him off; no time limit), Skelm Sakkie climbs while the
+  // block waits on the crane (it can't drop until he's caught or gone). The game that watches has a
+  // "puppet" Skelm Sakkie: he climbs and waits at the top for what the player's game says happened
+  // (caught or stole, and at which moment of the visit), so both games show exactly the same.
+
+  /** A round's visitor arrives with the turn: { type, key, side, strength, title, sub }; puppet on the watching game. */
+  turnVisit(v, { puppet = false } = {}) {
+    if (this.dead || this.ended || this.attract || !v || (v.type !== 'monkey' && v.type !== 'thief')) return false;
+    this.clearTurn();
+    this._start({ type: v.type, at: v.key || 'r', side: v.side < 0 ? -1 : 1, strength: Number.isFinite(v.strength) ? v.strength : 1, turn: true, puppet: !!puppet, title: v.title || null, sub: v.sub || null }, false);
+    return true;
+  }
+
+  /** The last turn's visitor (leaving, or still waiting) goes at once: each turn starts clean in both games. */
+  clearTurn() {
+    if (this.cur && this.cur.v?.turn) this._finish();
+    this.queue = this.queue.filter((q) => !q.turn);
+  }
+
+  /** Blok vir Blok: the turn's block can't drop while Skelm Sakkie climbs (catch him first). */
+  blocksDrop() {
+    const c = this.cur;
+    return !!c && !this.dead && !!c.v?.turn && c.type === 'thief' && !c.gone;
+  }
+
+  /** Blok vir Blok: the round's visitor is still doing something to the tower. */
+  turnBusy() {
+    const c = this.cur;
+    return !!c && !this.dead && !!c.v?.turn && !c.gone;
+  }
+
+  /** The watching game hears what Skelm Sakkie did in the player's game: { what: 'caught'|'stole', at, idx }. */
+  turnOutcome(o) {
+    const c = this.cur;
+    if (!c || this.dead || !c.v?.puppet || c.type !== 'thief' || c.out || !o) return;
+    c.out = { what: o.what, at: Number(o.at) || 0, idx: Array.isArray(o.idx) ? o.idx : [] };
+  }
+
+  /**
+   * The watching game is about to drop the player's block: their Skelm Sakkie was caught or had stolen
+   * before they could drop (the drop waits for him there), so here it happens now if it hasn't yet, and
+   * a theft's grab is over.
+   */
+  flushTurnOutcome() {
+    const c = this.cur;
+    if (!c || this.dead || !c.v?.puppet || c.type !== 'thief') return;
+    if (c.phase === 'climb' && c.out) c.t = Math.max(c.t, c.out.at);   // (step() acts on it at once)
+    if (c.phase === 'climb' && c.out) this.step();
+    if (c.phase === 'grab' && !c.gone) {
+      this._play('escape');
+      this._leave(c, 'leave');
+    }
+  }
+
+  /** Robot Rikus catches Skelm Sakkie (no tap needed). */
+  catchNow() {
+    const c = this.cur;
+    if (!c || this.dead || this.ended || c.gone || c.type !== 'thief' || c.phase !== 'climb') return false;
+    this._caught(c);
+    return true;
+  }
+
+  /** The visit's climb time (the bot's catch is timed by it). */
+  climbMs() {
+    return this.cur?.plan?.climbMs ?? VISITOR.thiefClimbMs;
+  }
+
+  /** Skelm Sakkie is caught: he leaves with a hand on his collar (and a round's player may get a heart back). */
+  _caught(c) {
+    c.rec.outcome = 'caught';
+    this._leave(c, 'caught');
+    this._play('caught');
+    this.actions.toast?.(S.thiefCaught, '#c9ffb8');
+    c.hand = emojiText(this.scene, '✋', 56);
+    c.objs.push(c.hand);
+    if (c.v?.turn) {
+      if (!c.v.puppet) this.actions.turnOutcome?.('caught', c.t, []);
+      this.actions.beaten?.('thief');
+    }
+  }
+
   /**
    * A reward: SCORING.rewardStreak Perfeks in a row bring Hanswors with his log, now or right after the
    * visitor on screen (in every mode, also the Uitdagersreeks). Its plan is keyed by the reward's number,
@@ -420,8 +503,8 @@ export class Visitors {
     if (this.bus) {
       this.bus.emit('hud:banner', {
         emoji: info.emoji,
-        title: v.from ? S.duelAttackIn(v.from, info.name) : v.reward ? S.clownRewardTitle(v.reward) : `${info.name}!`,
-        subtitle: v.reward ? S.clownRewardSub : coach || info.hint,
+        title: v.title || (v.from ? S.duelAttackIn(v.from, info.name) : v.reward ? S.clownRewardTitle(v.reward) : `${info.name}!`),
+        subtitle: v.sub || (v.reward ? S.clownRewardSub : coach || info.hint),
         type: c.type,
         kind: 'visitor',
         ms: coach ? 2600 : 0,
@@ -481,11 +564,13 @@ export class Visitors {
       // wees!"), anything else (or no landing within monkeyWaitMs) and he jumps onto the tower.
       if (c.phase === 'swing') {
         const reacted = c.verdict && c.t - c.verdictAt >= (c.verdict === 'perfect' ? REACT_PERFECT_MS : REACT_STRIKE_MS);
-        if (since >= ENTER_MS && (reacted || (!c.verdict && since >= VISITOR.monkeyWaitMs))) {
+        // (a round's monkey waits for the turn's block, however long its player aims)
+        if (since >= ENTER_MS && (reacted || (!c.verdict && !c.v.turn && since >= VISITOR.monkeyWaitMs))) {
           if (c.verdict === 'perfect') {
             c.rec.outcome = 'shooed';
             this._leave(c, 'sulk');
             this._play('monkey');
+            if (c.v.turn) this.actions.beaten?.('monkey');
           } else {
             this._phase(c, 'leap');
           }
@@ -524,10 +609,24 @@ export class Visitors {
       } else if (c.phase === 'gap' && since >= VISITOR.giftGapMs) {
         this._phase(c, 'wait');
       }
+    } else if (c.phase === 'climb' && c.v.puppet) {
+      // the watching game: he does what the player's game says, at the same moment of his visit
+      const o = c.out;
+      if (o && c.t >= o.at) {
+        if (o.what === 'caught') this._caught(c);
+        else {
+          const loot = this.actions.steal ? this.actions.steal(VISITOR.thiefMax, o.idx) : [];
+          c.rec.outcome = 'stole';
+          c.rec.n = loot.length;
+          this._grab(c, loot);
+          this._phase(c, 'grab');
+        }
+      }
     } else if (c.phase === 'climb' && since >= c.plan.climbMs) {
       const loot = this.actions.steal ? this.actions.steal(VISITOR.thiefMax) : [];
       c.rec.outcome = 'stole';
       c.rec.n = loot.length;
+      if (c.v.turn) this.actions.turnOutcome?.('stole', c.t, loot.idx || []);
       this._grab(c, loot);
       this._phase(c, 'grab');
     } else if (c.phase === 'grab' && since >= VISITOR.thiefGrabMs) {
@@ -622,13 +721,8 @@ export class Visitors {
     if (!alive(c.sprite) || !c.sprite.visible) return false;
     if ((wx - c.x) ** 2 + (wy - c.y) ** 2 > VISITOR.hitR * VISITOR.hitR) return false;
     if (c.type === 'thief') {
-      if (c.phase !== 'climb') return false;
-      c.rec.outcome = 'caught';
-      this._leave(c, 'caught');
-      this._play('caught');
-      this.actions.toast?.(S.thiefCaught, '#c9ffb8');
-      c.hand = emojiText(this.scene, '✋', 56);
-      c.objs.push(c.hand);
+      if (c.phase !== 'climb' || c.v.puppet) return false;   // (the watching game only shows what happened)
+      this._caught(c);
       return true;
     }
     // the clown is a gift: tapping him only makes him honk and juggle

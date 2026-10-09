@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.11.0';
+export const VERSION = '1.12.0';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -104,7 +104,7 @@ export const SCORING = {
   heartEvery: 4,         // every 4th Perfek (not necessarily in a row) while a heart is missing brings it back (1.10: 3rd)
   rewardStreak: 5,       // every 5 Perfeks in a row bring Hanswors with a big log (a new foundation)
 };
-export const LIVES = 4;
+export const LIVES = 3;          // (1.12: was 4; the owner: "4 lifes is a little too much")
 export const FREEZE_DEPTH = 8;   // all but the newest 8 settled blocks set like cement (become static)
 
 // Rating codes used in the result grid (GIFT: the clown's bonus block, not a drop of the player's)
@@ -195,7 +195,9 @@ export const VISITOR = {
   clownArriveMs: 1200,     // floats in, honking (tapping him only makes him honk and juggle)
   clownTossMs: 420,        // each gift block flies onto the tower top and sets there as cement
   clownLeaveMs: 1100,
-  giftMax: 1,              // he brings one big log: a new foundation (the tower under it sets too)
+  giftMax: 5,              // he brings his big log (a new foundation; the tower under it sets too) and then
+                           // 0-5 gift blocks on it, level, each set as cement (1.12; the owner: "make him
+                           // bring anything from 0-5 blocks")
   giftGapMs: 300,          // between two of his blocks
   giftPoints: 50,
   thiefClimbMs: 2000,      // tap window: he sneaks up the side of the tower
@@ -237,7 +239,7 @@ export function stageAt(i) {
 // ---------------------------------------------------------------------------
 export const DUEL = {
   goalM: 50,               // the first to 50 m wins
-  rules: 111,              // the game's rules (stages, blocks, visitors, physics: 1.11): the lobby pairs only the same
+  rules: 112,              // the game's rules (stages, blocks, visitors, physics, hearts: 1.12 three hearts): the lobby pairs only the same
   marks: [10, 20, 30, 40], // whoever reaches a mark first chooses a punishment for the other tower
   punishments: ['monkey', 'thief', 'fog', 'heat'], // Blouaap, Skelm Sakkie, Mis, Hittegolf
   attackFor: { 10: 'monkey', 20: 'thief', 30: 'monkey', 40: 'thief' }, // sent when nobody chooses in time
@@ -258,12 +260,23 @@ export const DUEL = {
 // Blok vir Blok (1.11): two players build ONE tower, a block each in turn. A turn that loses blocks
 // (yours missed, or knocked the top off) costs that player a heart; the first out of hearts loses.
 // Five Perfeks in a row (your own) earn a joker: you choose a sabotage for the other player's next
-// block. No weather, visitors or flood of its own: everything that happens, a player did.
+// block. No flood. 1.12 rondtes: after a calm start the same weather or visitor comes to BOTH players,
+// on back-to-back turns (a turn each, exactly the same), and who faces it first takes turns; testers
+// found the mode "a little boring" without anything happening.
 export const TURNS = {
   rules: 1,               // this mode's own rules (the lobby pairs only the same)
   hearts: 3,
   turnMs: 10000,          // aiming time; then the block drops by itself
   settleMaxMs: 6000,      // a turn ends at the latest this long after its drop (a tower that keeps rocking)
+  // Rondtes by turn number (js/core/turns.js plans them from the match seed): each stage's kinds and the
+  // turns between two rounds (always odd, so whoever faced the last round first goes second in the next)
+  rounds: Object.freeze([
+    Object.freeze({ from: 7, pool: 'mild', gap: [3, 5] }),   // Moeiliker: wind, reën, mis, hittegolf, Blouaap
+    Object.freeze({ from: 19, pool: 'all', gap: [1, 3] }),   // Nog moeiliker: + rukwinde, storms, hael, Skelm Sakkie
+    Object.freeze({ from: 35, pool: 'all', gap: [1, 1] }),   // Op sy moeilikste
+  ]),
+  roundSettleMaxMs: 9000, // a turn with a round ends at the latest this long after its drop (hail, lightning)
+  visitorHeart: true,     // beat the round's visitor (a Perfek scares Blouaap off, Skelm Sakkie caught): a heart back
   liveBlocks: 5,          // at the end of each turn all but the newest 5 tower blocks set as cement
   jokerStreak: 5,         // Perfeks in a row (your own blocks) for a joker
   sabotages: ['fog', 'heat', 'rain'],   // Mis, Hittegolf, Reën: on the other player's next block
@@ -271,6 +284,17 @@ export const TURNS = {
   maxTurns: 160,          // then the most hearts win, then the most Perfeks, then whoever went second
   serverTurnMs: 45000,    // the server ends a match whose turn doesn't end in this long (that player is gone)
 };
+
+// Emoji reactions in a match (1.12; the owner: "Emoji reaction while in game but you can't spam it"): a
+// small, kind set; one every cooldownMs, perMatch in a match; the server passes on at most one every
+// serverGapMs and serverMax in a match, whatever a game sends.
+export const EMOTES = Object.freeze({ lag: '😂', vuur: '🔥', skrik: '😱', klap: '👏', koel: '😎', oeps: '🙈' });
+export const EMOTE = Object.freeze({ cooldownMs: 5000, perMatch: 12, serverGapMs: 3000, serverMax: 20, botAnswer: 0.5 });
+
+// "Nog 'n kans" (1.12; the owner: "What if you can use coins to buy another chance?"): one more Daaglikse
+// Toring try a day, for coins. The leaderboard keeps the better of the two, marked 🔁 (the owner's choice);
+// the second try earns no coins, streak or week box (the first try did).
+export const DAILY_RETRY = Object.freeze({ price: 50 });
 
 // ---------------------------------------------------------------------------
 // Daily tower

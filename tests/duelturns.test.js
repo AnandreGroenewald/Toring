@@ -70,7 +70,7 @@ test('a friend room in Blok vir Blok: the mode goes to the server; the start car
   assert.deepEqual(JSON.parse(posts[0].body), { mode: 'turns' });
   sockets[0].open();
   assert.equal(sockets[0].sent[0].t, 'hello');
-  assert.equal(sockets[0].sent[0].v, 3, 'protocol 3: a game that plays Blok vir Blok');
+  assert.equal(sockets[0].sent[0].v, 4, 'protocol 4 (1.12): Blok vir Blok with go and the report\'s steps');
   sockets[0].hear({ t: 'wait' });
   sockets[0].hear({ t: 'start', seed: 'abcdef12', you: 0, opp: { name: 'Bennie' }, mode: 'turns', turn: T1 });
   assert.equal(started.mode, 'turns');
@@ -79,7 +79,7 @@ test('a friend room in Blok vir Blok: the mode goes to the server; the start car
   sockets[0].hear({ t: 'drop', n: 1, p: POSE });
   assert.equal(of('turns:turn').length + of('turns:drop').length, 0);
   bus.emit('turns:ready');
-  assert.deepEqual(of('turns:turn')[0], { ...T1, mine: false, you: 0, names: ['', 'Bennie'], bot: false });
+  assert.deepEqual(of('turns:turn')[0], { ...T1, ev: null, nx: null, mine: false, you: 0, names: ['', 'Bennie'], bot: false });
   assert.deepEqual(of('turns:drop')[0], { n: 1, p: POSE, ct: null }, 'then what came meanwhile, in order');
 });
 
@@ -199,4 +199,51 @@ test('against Robot Rikus the referee runs here: turns follow the reports, his j
   assert.equal(of('turns:turn').filter((t) => t.sab && !t.mine).length, 0);
   assert.equal(duel.summary().youHearts, 0);
   assert.ok(duel.summary().oppPerfects >= TURNS.jokerStreak);
+});
+
+// ------------------------------------------------------------------------------- emoji reactions (1.12)
+import { EMOTES, EMOTE } from '../js/config.js';
+
+test('emoji reactions: shown here and sent live; one every few seconds and a handful a match; muting hides theirs', async () => {
+  let t = 1000;
+  const sockets2 = [];
+  const bus = new Bus();
+  const shown = [];
+  bus.on('hud:emote', (e) => shown.push(e));
+  class Sock extends FakeSocket { constructor(u) { super(u); sockets2.push(this); } }
+  const duel = createDuel({
+    bus, apiUrl: 'https://borge.example', nickname: () => 'Anna', WebSocketImpl: Sock, now: () => t,
+    fetchImpl: async () => ({ ok: true, json: async () => ({ code: 'ABCD23' }) }),
+    setTimer: (fn) => 0, clearTimer: () => {},
+  });
+  await duel.createRoom({ mode: 'turns', onStart: () => {} });
+  const ws = sockets2.at(-1);
+  ws.open();
+  ws.hear({ t: 'wait' });
+  ws.hear({ t: 'start', seed: 'abcdef12', you: 0, opp: { name: 'Bennie', v: 4 }, mode: 'turns', turn: { n: 1, seat: 0, hearts: [3, 3], streaks: [0, 0], sab: null } });
+  bus.emit('turns:ready');   // (the match scene is up: messages are no longer held back)
+  bus.emit('ui:emote', 'lag');
+  assert.deepEqual(shown.at(-1), { side: 'you', emoji: EMOTES.lag });
+  assert.deepEqual(ws.sent.filter((m) => m.t === 'emote'), [{ t: 'emote', e: 'lag' }]);
+  bus.emit('ui:emote', 'vuur');
+  assert.equal(ws.sent.filter((m) => m.t === 'emote').length, 1, 'not again within the cooldown');
+  bus.emit('ui:emote', 'nope');
+  t += EMOTE.cooldownMs;
+  bus.emit('ui:emote', 'vuur');
+  assert.equal(ws.sent.filter((m) => m.t === 'emote').length, 2);
+  for (let k = 0; k < EMOTE.perMatch + 3; k++) {
+    t += EMOTE.cooldownMs;
+    bus.emit('ui:emote', 'klap');
+  }
+  assert.equal(ws.sent.filter((m) => m.t === 'emote').length, EMOTE.perMatch, 'a handful a match');
+  assert.equal(duel.emoteState().spent, true);
+  // theirs: shown, unless muted; an unknown one never
+  ws.hear({ t: 'emote', e: 'koel' });
+  assert.deepEqual(shown.at(-1), { side: 'them', emoji: EMOTES.koel });
+  ws.hear({ t: 'emote', e: '<b>' });
+  assert.deepEqual(shown.at(-1), { side: 'them', emoji: EMOTES.koel });
+  bus.emit('ui:emote-mute');
+  const n = shown.length;
+  ws.hear({ t: 'emote', e: 'oeps' });
+  assert.equal(shown.length, n, 'muted');
 });

@@ -8,9 +8,11 @@ import { dateKeyFor, dayNumber, addDays, daysBetween, isDateKey } from './daily.
 import { cleanVisits } from './visitorrules.js';
 import { cleanNickname } from './duel.js';
 import { WEEK, cleanWeek, openBox, addShield } from './week.js';
+import { DAILY_RETRY } from '../config.js';
 import {
-  defaultEconomy, cleanEconomy, earnCoins, buyPowerup, usePowerup, buyCosmetic, wearCosmetic, grantRankLooks,
-  rankAfterMatch, rolloverSeason, rankFor, seasonOf, cardOf,
+  defaultEconomy, cleanEconomy, earnCoins, buyPowerup, usePowerup, buyCosmetic, wearCosmetic, grantRankLooks, spendCoins,
+  rankAfterMatch, rolloverSeason, seasonOf, cardOf, ladderAt, bestTier, RANK_MODES, RANK_RULES, cleanModeRank,
+  rankIndex,
 } from './economy.js';
 
 const SCHEMA = 1;
@@ -192,6 +194,12 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
   // The wallet (coins, power-ups, looks, rank: js/core/economy.js) has a key of its own. A page still
   // running an older version rebuilds the main blob from the keys it knows, which would drop it.
   const econKey = `${key}.econ`;
+  // (1.12) The ranks per mode have a key of their own too: a page still on 1.11 rebuilds the wallet from
+  // what it knows and would write the old single rank back over them.
+  const ranksKey = `${key}.ranks`;
+  // (1.12) "Nog 'n kans": the second daily tries, a key of their own too (an older version rebuilding the
+  // main blob would drop them): { [dateKey]: { status: 'ready'|'playing'|'done', result, ... } }
+  const retryKey = `${key}.retry`;
   // The language ('af' / 'en') too: js/core/langboot.js reads it before anything else loads.
   const langKey = `${key}.lang`;
   // The daily leaderboard (js/board.js): this phone's random player number, whether to show it, the
@@ -252,6 +260,9 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
   let econ = defaultEconomy();
   let lastRaw = null;
   let lastEconRaw = null;
+  let lastRanksRaw = null;
+  let retries = {};
+  let lastRetryRaw = null;
 
   function readRaw(k = storeKey) {
     try {
@@ -274,13 +285,104 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       }
     }
     const er = readRaw(econKey);
+    let reloaded = false;
     if (er !== undefined && er !== lastEconRaw) {
       lastEconRaw = er;
+      reloaded = true;
       try {
         econ = cleanEconomy(er === null ? null : JSON.parse(er));
       } catch {
         econ = defaultEconomy();
       }
+    }
+    const tr = readRaw(retryKey);
+    if (tr !== undefined && tr !== lastRetryRaw) {
+      lastRetryRaw = tr;
+      retries = cleanRetries(tr);
+    }
+    // the ranks' own key wins over whatever the wallet blob says (a missing key: the wallet's, kept from now on)
+    const rr = readRaw(ranksKey);
+    if (rr === undefined || (!reloaded && rr === lastRanksRaw)) return;
+    lastRanksRaw = rr;
+    if (rr === null) {
+      persistRanks();
+      return;
+    }
+    try {
+      const o = JSON.parse(rr);
+      econ.ranks = { race: cleanModeRank(o?.race), turns: cleanModeRank(o?.turns) };
+    } catch {
+      persistRanks();
+    }
+  }
+
+  function cleanRetries(raw) {
+    const out = {};
+    let o = null;
+    try {
+      o = raw ? JSON.parse(raw) : null;
+    } catch {
+      o = null;
+    }
+    if (!o || typeof o !== 'object') return out;
+    for (const [k, r] of Object.entries(o)) {
+      if (!isDateKey(k) || !r || !['ready', 'playing', 'done'].includes(r.status)) continue;
+      out[k] = {
+        status: r.status,
+        result: r.status === 'ready' ? null : normalizeResult(r.result, k),
+        startedAt: num(r.startedAt, null),
+        finishedAt: num(r.finishedAt, null),
+        beatAt: num(r.beatAt, null),
+        owner: typeof r.owner === 'string' ? r.owner : null,
+      };
+    }
+    return out;
+  }
+
+  function persistRetry() {
+    const raw = JSON.stringify(retries);
+    try {
+      be.setItem(retryKey, raw);
+      lastRetryRaw = raw;
+    } catch {
+      // Quota / private mode: keep playing from memory.
+    }
+  }
+
+  /** The better of two results (height first, then points). */
+  const better = (a, b) => (!b ? a : !a ? b : (b.heightM > a.heightM || (b.heightM === a.heightM && b.score > a.score)) ? b : a);
+
+  /** A day's result that counts: the better of the first try and a finished second one ({ ...result, retried }). */
+  function bestOf(dateKey) {
+    const e = data.daily[dateKey];
+    if (!e || e.status !== 'done' || !e.result) return null;
+    const r = retries[dateKey];
+    const second = r && r.status === 'done' ? r.result : null;
+    return { ...better(e.result, second), retried: !!second };
+  }
+
+  /** The second try ends: it joins the day (the better one counts), its records count; no streak, no coins. */
+  function finishRetryEntry(dateKey, result) {
+    const r = retries[dateKey];
+    if (!r || r.status === 'done') return { applied: false, flags: { height: false, score: false } };
+    const merged = normalizeResult({ ...(r.result || {}), ...(result || {}) }, dateKey);
+    merged.mode = 'daily';
+    const s = data.stats;
+    const flags = { height: merged.heightM > s.bestHeightM, score: merged.score > s.bestScore };
+    s.totalPerfects += merged.perfects;
+    s.bestHeightM = Math.max(s.bestHeightM, merged.heightM);
+    s.bestScore = Math.max(s.bestScore, merged.score);
+    retries[dateKey] = { ...r, status: 'done', result: merged, finishedAt: now(), owner: null };
+    return { applied: true, flags };
+  }
+
+  function persistRanks() {
+    const raw = JSON.stringify(econ.ranks);
+    try {
+      be.setItem(ranksKey, raw);
+      lastRanksRaw = raw;
+    } catch {
+      // Quota / private mode: keep playing from memory.
     }
   }
 
@@ -302,6 +404,7 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     } catch {
       // Quota / private mode: keep playing from memory.
     }
+    persistRanks();
   }
 
   const today = () => dateKeyFor(new Date(now()));
@@ -311,13 +414,12 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     const history = [];
     for (let k = HISTORY_DAYS - 1; k >= 0; k--) {
       const key = addDays(todayKey, -k);
-      const e = data.daily[key];
-      const done = e && e.status === 'done';
+      const best = bestOf(key);   // (1.12: the better of two tries)
       history.push({
         dateKey: key,
         dayNumber: dayNumber(key),
-        heightM: done ? e.result.heightM : null,
-        score: done ? e.result.score : null,
+        heightM: best ? best.heightM : null,
+        score: best ? best.score : null,
       });
     }
     return {
@@ -336,6 +438,14 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     for (const [key, e] of Object.entries(data.daily)) {
       if (e.status === 'done' && daysBetween(key, refKey) > KEEP_DAILY_DAYS) delete data.daily[key];
     }
+    let gone = false;
+    for (const key of Object.keys(retries)) {
+      if (daysBetween(key, refKey) > KEEP_DAILY_DAYS) {
+        delete retries[key];
+        gone = true;
+      }
+    }
+    if (gone) persistRetry();
   }
 
   /** Consecutive finished days ending at `key` (bounded by the kept history). */
@@ -404,8 +514,42 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     return { ok: r.ok, economy: clone(econ) };
   }
 
-  /** The rank as this month sees it: a new month halves the points and leaves last season's badge (`reward`). */
-  const seasonNow = () => rolloverSeason(econ.rank, seasonOf(today()));
+  /** (1.12) A mode's rank as this month sees it: a new month drops it a tier and leaves last season's badge (`reward`). */
+  const modeOf = (m) => (m === 'turns' ? 'turns' : 'race');
+  const seasonNow = (mode) => rolloverSeason(econ.ranks[modeOf(mode)], seasonOf(today()));
+  /** A new month for both modes, kept (the badges and looks handed out); returns the first badge earned, or null. */
+  const rollSeasons = () => {
+    let reward = null;
+    let changed = false;
+    for (const m of RANK_MODES) {
+      const rolled = seasonNow(m);
+      if (rolled.rank.season !== econ.ranks[m].season || rolled.rank.points !== econ.ranks[m].points) {
+        econ.ranks[m] = rolled.rank;
+        changed = true;
+      }
+      if (rolled.reward) {
+        econ = grantRankLooks(econ, null, { badge: rolled.reward });
+        // (the toast names the best badge of the two modes)
+        if (!reward || rankIndex(rolled.reward.slice(2)) > rankIndex(reward.slice(2))) reward = rolled.reward;
+      }
+    }
+    if (changed) {
+      econ = grantRankLooks(econ, bestTier(econ));
+      persistEcon();
+    }
+    return reward;
+  };
+  /** What the screens show of a mode's rank. */
+  const rankView = (mode, extra = {}) => {
+    const r = econ.ranks[modeOf(mode)];
+    const now = ladderAt(r.points);
+    return {
+      mode: modeOf(mode), season: r.season, points: r.points, id: now.id, tier: now.tier, div: now.div, elite: !!now.elite,
+      emoji: now.emoji, pct: now.pct, next: now.next ? now.next.id : null, toNext: now.toNext, best: r.best,
+      played: r.played, placementLeft: Math.max(0, RANK_RULES.placement - r.played), shield: r.shield,
+      badges: econ.owned.badge.filter((b) => b.startsWith('s-')), ...extra,
+    };
+  };
 
   sync();
 
@@ -449,10 +593,76 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       const ref = isDateKey(todayKey) ? todayKey : today();
       for (let k = 0; k < days; k++) {
         const key = addDays(ref, -k);
-        const e = data.daily[key];
-        if (e && e.status === 'done' && e.result && e.result.heightM > 0) out[key] = e.result.heightM;
+        const best = bestOf(key);
+        if (best && best.heightM > 0) out[key] = best.heightM;
       }
       return out;
+    },
+
+    // --- "Nog 'n kans" (1.12): one more try at a day's tower, bought with coins ----------------------
+    /** A day's second try: { status: 'ready' | 'playing' | 'done', result } or null. */
+    getDailyRetry(dateKey) {
+      sync();
+      return retries[dateKey] ? clone(retries[dateKey]) : null;
+    },
+
+    /** The day's result that counts (the better try), with `retried`; null before the first try is done. */
+    getDailyBest(dateKey) {
+      sync();
+      const b = bestOf(dateKey);
+      return b ? clone(b) : null;
+    },
+
+    /** Buy the day's second try: { ok, coins, reason } ('done' first, 'once' a day, 'coins'). */
+    buyDailyRetry(dateKey) {
+      sync();
+      const e = data.daily[dateKey];
+      if (!isDateKey(dateKey) || !e || e.status !== 'done') return { ok: false, reason: 'done', coins: econ.coins };
+      if (retries[dateKey]) return { ok: false, reason: 'once', coins: econ.coins };
+      const r = spendCoins(econ, DAILY_RETRY.price);
+      if (!r.ok) return { ok: false, reason: 'coins', coins: econ.coins };
+      econ = r.economy;
+      persistEcon();
+      retries[dateKey] = { status: 'ready', result: null, startedAt: null, finishedAt: null, beatAt: null, owner: null };
+      persistRetry();
+      return { ok: true, coins: econ.coins };
+    },
+
+    /** The second try's first drop. */
+    startDailyRetry(dateKey, partialResult, { owner = null } = {}) {
+      sync();
+      const r = retries[dateKey];
+      if (!r || r.status !== 'ready') return r ? clone(r) : null;
+      retries[dateKey] = {
+        status: 'playing',
+        result: normalizeResult({ ...(partialResult || {}), mode: 'daily' }, dateKey),
+        startedAt: now(),
+        finishedAt: null,
+        beatAt: now(),
+        owner: typeof owner === 'string' ? owner : null,
+      };
+      persistRetry();
+      return clone(retries[dateKey]);
+    },
+
+    saveDailyRetryProgress(dateKey, partialResult) {
+      sync();
+      const r = retries[dateKey];
+      if (!r || r.status !== 'playing') return;
+      r.result = normalizeResult({ ...r.result, ...(partialResult || {}), mode: 'daily' }, dateKey);
+      r.beatAt = now();
+      persistRetry();
+    },
+
+    /** The second try ended: the better try counts (`applied` false if it already had). */
+    finishDailyRetry(dateKey, result) {
+      sync();
+      const { applied, flags } = finishRetryEntry(dateKey, result);
+      if (applied) {
+        persist();
+        persistRetry();
+      }
+      return { ...statsFor(laterKey(dateKey, today())), isNewBestHeight: applied && flags.height, isNewBestScore: applied && flags.score, applied };
     },
 
     /**
@@ -494,6 +704,12 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     touchDaily(dateKey) {
       if (!isDateKey(dateKey)) return;
       sync();
+      const r = retries[dateKey];
+      if (r && r.status === 'playing') {   // (1.12) the second try's heartbeat
+        r.beatAt = now();
+        persistRetry();
+        return;
+      }
       const e = data.daily[dateKey];
       if (!e || e.status !== 'playing') return;
       e.beatAt = now();
@@ -541,8 +757,17 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
         finishEntry(key, { ...data.daily[key].result, reason: 'quit' });
         out.push(clone(data.daily[key].result));
       }
-      if (out.length) {
-        prune(laterKey(keys[keys.length - 1], isDateKey(todayKey) ? todayKey : today()));
+      // (1.12) a second try cut short counts as it stood too (it pays nothing, so it isn't in `out`)
+      let retried = false;
+      for (const [key, r] of Object.entries(retries)) {
+        if (r.status !== 'playing') continue;
+        if (staleMs > 0 && Number.isFinite(r.beatAt) && !(owner && r.owner === owner) && t - r.beatAt < staleMs) continue;
+        finishRetryEntry(key, { ...(r.result || {}), reason: 'quit' });
+        retried = true;
+      }
+      if (retried) persistRetry();
+      if (out.length || retried) {
+        if (out.length) prune(laterKey(keys[keys.length - 1], isDateKey(todayKey) ? todayKey : today()));
         persist();
       }
       return out;
@@ -737,10 +962,10 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       return data.tutorialSeen || data.stats.played > 0 || data.practice.played > 0 || data.duel.played > 0;
     },
 
-    /** What duel opponents see of this player (cleanCard), with this month's rank. */
-    getCard() {
+    /** What duel opponents see of this player (cleanCard), with this month's rank in `mode`. */
+    getCard(mode = 'race') {
       sync();
-      return cardOf({ ...econ, rank: seasonNow().rank });
+      return cardOf({ ...econ, ranks: { ...econ.ranks, [modeOf(mode)]: seasonNow(mode).rank } }, mode);
     },
 
     /** Coins for a finished game; Oefen and duels count towards the day's cap. Returns { added, coins }. */
@@ -778,48 +1003,32 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     },
 
     /**
-     * A finished duel moves the season's rank points. Returns { points, delta, rank, up, reward, halved }:
-     * `reward` is last season's badge and `halved` the points before the halving, when this match began a new month.
+     * (1.12) A finished duel in `mode`: only a live match against a person moves the rank (by the opponent's
+     * rank `opp`, from their card). Returns the screen's view with { counted, delta, before, up, down,
+     * shielded, reward } (`reward`: last season's badge, when this match began a new month).
      */
-    recordDuelRank({ outcome, live = false } = {}) {
+    recordDuelRank({ outcome, live = false, mode = 'race', opp = null } = {}) {
       sync();
-      const before = econ.rank.points;
-      const r = rankAfterMatch(econ.rank, { outcome, live, season: seasonOf(today()) });
-      econ.rank = r.rank;
-      econ = grantRankLooks(econ, r.rank.best, { badge: r.reward });
+      const reward = rollSeasons();
+      const m = modeOf(mode);
+      if (!live || (outcome !== 'won' && outcome !== 'lost')) return rankView(m, { counted: false, delta: 0, reward });
+      const r = rankAfterMatch(econ.ranks[m], { outcome, opp, season: seasonOf(today()) });
+      econ.ranks[m] = r.rank;
+      econ = grantRankLooks(econ, bestTier(econ));
       persistEcon();
-      return {
-        points: r.rank.points, delta: r.delta, rank: rankFor(r.rank.points).id, up: r.up, reward: r.reward,
-        halved: r.reward ? before : null,
-      };
+      return rankView(m, {
+        counted: true, delta: r.delta, before: { id: r.before.id, pct: r.before.pct }, up: r.up, down: r.down, shielded: r.shielded, reward,
+      });
     },
 
     /**
-     * This season's rank for the Uitdagersreeks screen. A new month starts the new season here too
-     * (points halve, the old season's badge is handed out: `reward`), so the screen is never a month behind.
+     * This season's rank in `mode` for the Uitdagersreeks screen. A new month starts the new season here too
+     * (a tier down, the old season's badge handed out: `reward`), so the screen is never a month behind.
      */
-    getSeasonRank() {
+    getSeasonRank(mode = 'race') {
       sync();
-      const rolled = seasonNow();
-      if (rolled.rank.season !== econ.rank.season) {
-        econ.rank = rolled.rank;
-        econ = grantRankLooks(econ, rolled.rank.best, { badge: rolled.reward });
-        persistEcon();
-      }
-      const r = econ.rank;
-      const now = rankFor(r.points);
-      return {
-        season: r.season,
-        points: r.points,
-        rank: now.id,
-        min: now.min,
-        next: now.next ? now.next.id : null,
-        nextMin: now.next ? now.next.min : null,
-        toNext: now.toNext,
-        best: r.best,
-        badges: econ.owned.badge.filter((b) => b.startsWith('s-')),
-        reward: rolled.reward,
-      };
+      const reward = rollSeasons();
+      return rankView(mode, { reward });
     },
 
     recordPractice(result) {

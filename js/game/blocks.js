@@ -9,7 +9,9 @@ import { SHAPE_NAMES } from '../core/strings.js';
 const PAD = 3;             // transparent texture padding around the shape
 const CORNER_R = 6;        // visual corner radius (physics corners stay sharp)
 const CELL = 44;           // L / J / T cell size
-const FROZEN_TINT = 0xd6d6d6;
+// Cement: a set block is drawn a little darker and cooler, so it is plain which part of the tower can
+// still move (1.12; the owner: "something does not add up" about a leaning tower that never fell)
+export const FROZEN_TINT = 0xb9c1cc;
 
 // Texture cache housekeeping: textures not used by a live block and not
 // requested recently are dropped once the cache grows past TEX_CACHE_MAX.

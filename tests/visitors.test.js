@@ -125,7 +125,7 @@ test('each visit draws from its own stream: same values for everyone, independen
   assert.deepEqual(clownPlan(visitRng('x', c), c), clownPlan(visitRng('x', c), c));
 });
 
-test('plan ranges: a hurled top block and a 1-2 block stamp, one big log, a ~2 s climb', () => {
+test('plan ranges: a hurled top block and a 1-2 block stamp, a big log and 0-5 gifts, a ~2 s climb', () => {
   let twos = 0;
   const gifts = new Set();
   for (const seed of DAYS.slice(0, 120)) {
@@ -141,11 +141,15 @@ test('plan ranges: a hurled top block and a 1-2 block stamp, one big log, a ~2 s
         assert.ok(p.hurlSpin >= VISITOR.monkeyHurlSpin[0] - 0.001 && p.hurlSpin <= VISITOR.monkeyHurlSpin[1] + 0.001, `hurlSpin ${p.hurlSpin}`);
         assert.ok(p.hurl > p.kick * 1.4, 'the top block goes much faster than the stamped ones: it lands in the sea');
       } else if (v.type === 'clown') {
-        // Hanswors brings one big log (testers found his narrow gift blocks a nuisance)
+        // Hanswors brings his big log, then 0-5 gift blocks (1.12): wide, flat shapes, set level
         const p = clownPlan(r, v);
-        gifts.add(p.specs.length);
-        assert.deepEqual(p.specs, [{ shape: 'log', scale: 1, color: 0, log: true }]);
+        gifts.add(p.specs.length - 1);
+        assert.deepEqual(p.specs[0], { shape: 'log', scale: 1, color: 0, log: true });
         assert.ok(SHAPES.log.w > SHAPES.plank.w, 'wider than any block: a new floor to build on');
+        for (const g of p.specs.slice(1)) {
+          assert.ok(['plank', 'slab', 'brick'].includes(g.shape), `a wide, flat gift (${g.shape})`);
+          assert.equal(g.level, true, 'set level, like the log');
+        }
       } else {
         const p = thiefPlan(r, v);
         assert.ok(p.climbMs >= 1700 && p.climbMs <= 2300, `climb ${p.climbMs}`);
@@ -153,8 +157,9 @@ test('plan ranges: a hurled top block and a 1-2 block stamp, one big log, a ~2 s
     }
   }
   assert.ok(twos > 10, 'the monkey sometimes stamps on two blocks');
-  assert.deepEqual([...gifts], [1], 'the clown brings one log');
-  assert.equal(VISITOR.giftMax, 1);
+  assert.ok([...gifts].every((n) => n >= 0 && n <= VISITOR.giftMax), `0-${VISITOR.giftMax} gift blocks after the log`);
+  assert.ok(gifts.size >= 4, `the number of gifts varies (${[...gifts].sort()})`);
+  assert.equal(VISITOR.giftMax, 5);
 });
 
 // ---------------------------------------------------------------------------------- tower rules
@@ -250,7 +255,7 @@ test('results line: the most memorable visit (thief, then monkey, then clown)', 
   assert.equal(line({ type: 'clown', outcome: 'gift' }), S.resClownGift(1));
   assert.equal(line({ type: 'clown', outcome: 'gift', n: 3 }), S.resClownGift(3));
   assert.equal(line({ type: 'clown', outcome: 'gift', n: 3 }, { type: 'clown', outcome: 'gift', n: 1 }), S.resClownGift(4));
-  assert.match(S.resClownGift(3), /3 boomstamme/);
+  assert.match(S.resClownGift(3), /3 geskenke/);   // (1.12: his log and gift blocks)
   assert.equal(line({ type: 'clown', outcome: 'came' }), '');
   assert.equal(line({ type: 'thief', outcome: 'came' }, { type: 'clown', outcome: 'came' }), '', 'nothing happened yet');
   assert.equal(visitorResultLine([]), '');

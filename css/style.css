@@ -76,7 +76,7 @@ body {
 
 /* letterboxed column on desktop: lift the game off the backdrop */
 @media (hover: hover) and (pointer: fine) {
-  #game canvas { box-shadow: 0 0 80px rgba(6, 20, 50, 0.45); }
+  #game canvas { box-shadow: 0 24px 60px rgba(6, 20, 50, 0.35); }   /* (1.12: a plain drop shadow, not a glow) */
 }
 
 .emoji {
@@ -362,7 +362,7 @@ svg.ic {
     0 calc(-2 * var(--u)) 0 var(--cd);
   transform-origin: 50% 100%;
   transform: translateY(var(--y)) rotate(var(--r));
-  animation: lb-wobble var(--dur, 3s) ease-in-out var(--delay, 0s) infinite;
+  animation: lb-wobble calc(var(--dur, 3s) * 1.6) ease-in-out var(--delay, 0s) infinite;
 }
 
 .lb > span { transform: translateY(calc(-3 * var(--u))); }
@@ -405,9 +405,10 @@ svg.ic {
   border: calc(3 * var(--u)) solid #2b2b2b;
 }
 
+/* (1.12, quieter: a gentle sway, slower, not a wobble) */
 @keyframes lb-wobble {
-  0%, 100% { transform: translateY(var(--y)) rotate(calc(var(--r) - 1.6deg)); }
-  50% { transform: translateY(var(--y)) rotate(calc(var(--r) + 1.6deg)); }
+  0%, 100% { transform: translateY(var(--y)) rotate(calc(var(--r) - 0.7deg)); }
+  50% { transform: translateY(var(--y)) rotate(calc(var(--r) + 0.7deg)); }
 }
 
 @keyframes lb-swing {
@@ -547,18 +548,20 @@ svg.ic {
   opacity: 0.55;
 }
 .wk-cell.is-done { opacity: 1; background: var(--bosveld); color: #fff; box-shadow: none; font-weight: 900; }
-.wk-cell.is-today { opacity: 1; box-shadow: inset 0 0 0 calc(3 * var(--u)) var(--karoo); animation: wk-pulse 1.6s ease-in-out infinite; }
+.wk-cell.is-today { opacity: 1; box-shadow: inset 0 0 0 calc(3 * var(--u)) var(--karoo); animation: wk-pulse 2.4s ease-in-out infinite; }
 .wk-cell.is-big { width: calc(42 * var(--u)); }
 .wk-line, .wk-shield { font-size: max(12px, calc(21 * var(--u))); }
-@keyframes wk-pulse { 50% { transform: scale(1.1); } }
+@keyframes wk-pulse { 50% { transform: scale(1.05); } }
 @media (prefers-reduced-motion: reduce) { .wk-cell.is-today { animation: none; } }
 .rm .wk-cell.is-today { animation: none; }
 
 .daily-head {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: calc(18 * var(--u));
-  margin-bottom: calc(22 * var(--u));
+  margin-bottom: calc(16 * var(--u));
+  text-align: center;
 }
 .daily-badge {
   flex: none;
@@ -584,6 +587,22 @@ svg.ic {
   box-shadow: inset 0 calc(-5 * var(--u)) 0 #f6cf9c, 0 calc(8 * var(--u)) calc(16 * var(--u)) rgba(10, 34, 78, 0.22);
   transform: rotate(3deg);
 }
+/* (1.12) today's leaderboard: the streak's mirror on the left */
+.daily-card > .board-chip {
+  position: absolute;
+  top: calc(-26 * var(--u));
+  left: calc(26 * var(--u));
+  height: calc(58 * var(--u));
+  min-height: 44px;
+  padding: 0 calc(20 * var(--u)) 0 calc(14 * var(--u));
+  border: 0;
+  background: linear-gradient(180deg, #fffbe8, #ffefb3);
+  color: #7a5600;
+  box-shadow: inset 0 calc(-5 * var(--u)) 0 #f2d77a, 0 calc(8 * var(--u)) calc(16 * var(--u)) rgba(10, 34, 78, 0.22);
+  transform: rotate(-3deg);
+  cursor: pointer;
+}
+.daily-card > .board-chip:has(span:only-child) { padding-right: calc(14 * var(--u)); }
 .daily-card > .streak.is-zero { background: #fff; color: var(--muted); box-shadow: inset 0 calc(-5 * var(--u)) 0 #d5e2f2, 0 calc(8 * var(--u)) calc(16 * var(--u)) rgba(10, 34, 78, 0.18); }
 
 .forecast {
@@ -639,6 +658,21 @@ svg.ic {
 }
 .fc-who .emoji { font-size: calc(32 * var(--u)); line-height: 1; }
 
+/* (1.12) today's weather and visitors: one quiet line of pictures */
+.fc-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: calc(6 * var(--u)) calc(12 * var(--u));
+  margin: calc(10 * var(--u)) 0 calc(22 * var(--u));
+  font-size: max(12px, calc(22 * var(--u)));
+  font-weight: 800;
+  color: var(--muted);
+}
+.fc-line .fc-pic .emoji { font-size: calc(40 * var(--u)); line-height: 1; }
+.fc-line .fc-sep { color: var(--muted); opacity: 0.6; }
+
 .note {
   margin: calc(16 * var(--u)) 0 calc(22 * var(--u));
   text-align: center;
@@ -648,6 +682,13 @@ svg.ic {
 }
 
 .note.nudge { margin-top: calc(-8 * var(--u)); color: var(--ink-soft); font-weight: 800; }
+
+/* (1.12) "Nog 'n kans": a small second button under "See your result", and its one-line note */
+.retry-row { display: grid; justify-items: center; gap: calc(6 * var(--u)); margin-top: calc(14 * var(--u)); }
+.retry-buy .retry-price { display: inline-flex; align-items: center; gap: calc(4 * var(--u)); margin-left: calc(10 * var(--u)); }
+.retry-buy.is-short { opacity: 0.7; }
+.retry-note { margin: 0; text-align: center; font-size: max(11px, calc(20 * var(--u))); font-weight: 700; color: var(--muted); }
+.retry-see { margin: calc(12 * var(--u)) auto 0; }
 
 /* Afrikaanse spreekwoorde: "Spreekwoord van die dag" (menu), one line on results and pause.
    The menu one is absolutely placed in the spacer gap, so it never adds height (dom.js fitSaying()
@@ -1051,8 +1092,14 @@ svg.ic {
 .rank-now .emoji { font-size: 1.3em; }
 .rank-now span { font-weight: 700; color: var(--ink-soft); font-size: 0.8em; }
 .rank-bar { height: calc(16 * var(--u)); min-height: 8px; border-radius: 999px; background: rgba(20, 28, 48, 0.12); overflow: hidden; }
-.rank-bar i { display: block; height: 100%; width: var(--p, 0%); border-radius: inherit; background: linear-gradient(90deg, #f5b833, #f08c2b); }
+.rank-bar i { display: block; height: 100%; width: var(--p, 0%); border-radius: inherit; background: linear-gradient(90deg, #f5b833, #f08c2b); transition: width 1s cubic-bezier(0.25, 1, 0.5, 1); }
 .rank-next { margin: 0; font-size: max(12px, calc(22 * var(--u))); font-weight: 800; color: var(--ink-soft); }
+.rank-note { margin: 0; font-size: max(11px, calc(20 * var(--u))); font-weight: 700; color: var(--muted); }
+/* (1.12) the rank's bar on the results, under its line */
+.res-reward .rw-rank:has(.rw-bar) { flex-wrap: wrap; justify-content: center; border-radius: calc(22 * var(--u)); }
+.res-reward .rw-rank .rw-bar { display: block; flex-basis: 100%; margin-top: calc(4 * var(--u)); }
+.res-reward .rw-rank.is-down { background: #eef1f6; color: var(--ink-soft); }
+.res-reward .rw-rank.is-quiet { background: #f1f4f8; color: var(--muted); }
 .season-notes { display: grid; gap: calc(10 * var(--u)); justify-items: center; }
 .season-notes p { margin: 0; }
 .rank-badges { display: flex; align-items: center; justify-content: center; gap: calc(8 * var(--u)); font-weight: 800; color: var(--ink-soft); }
@@ -1611,6 +1658,53 @@ canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 
   pointer-events: none;
 }
 .power-tray[hidden] { display: none; }
+
+/* (1.12) emoji reactions in a match: bottom-left, the tray opens upward along the edge */
+.emote-bar {
+  position: absolute;
+  left: calc(var(--sal) + 16 * var(--u));
+  bottom: calc(var(--sab) + 24 * var(--u));
+  z-index: 4;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: calc(10 * var(--u));
+  pointer-events: none;
+}
+.emote-bar[hidden] { display: none; }
+.emote-btn, .emote-pick {
+  pointer-events: auto;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: calc(76 * var(--u));
+  height: calc(76 * var(--u));
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: calc(3 * var(--u)) solid #fff;
+  border-radius: 50%;
+  background: rgba(29, 43, 69, 0.78);
+  font-size: calc(40 * var(--u));
+  line-height: 1;
+  overflow: hidden;
+}
+.emote-btn:disabled { opacity: 0.45; }
+/* the cooldown: a dark sweep that drains away */
+.emote-btn.is-cool::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(rgba(10, 16, 32, 0.62) var(--sweep, 100%), transparent 0);
+  animation: emote-cool var(--cool, 5000ms) linear forwards;
+}
+@property --sweep { syntax: '<percentage>'; inherits: false; initial-value: 100%; }
+@keyframes emote-cool { from { --sweep: 100%; } to { --sweep: 0%; } }
+.emote-tray { display: none; flex-direction: column-reverse; gap: calc(10 * var(--u)); }
+.emote-bar.open .emote-tray { display: flex; }
+.emote-pick { background: rgba(255, 255, 255, 0.95); border-color: rgba(29, 43, 69, 0.15); }
+.emote-mute { background: rgba(29, 43, 69, 0.78); border-color: #fff; font-size: calc(32 * var(--u)); }
 .power-btn {
   position: relative;
   display: grid;

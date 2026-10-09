@@ -10,7 +10,8 @@ const WEEK_COINS = WEEK.coins;
 const WEEK_SHIELD_MAX = WEEK.shieldMax;
 const WEEK_SHIELD_PRICE = WEEK.shieldPrice;
 import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO, COSMETIC_INFO } from '../core/strings.js';
-import { COIN, RANKS, RANK_POINTS, rankFor, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic } from '../core/economy.js';
+import { COIN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic } from '../core/economy.js';
+import { EMOTES } from '../config.js';
 import { fmtM, fmtInt, fmtClock, fmtDuration, dayName, monthName } from '../core/format.js';
 import { shareResult } from '../core/share.js';
 import { visitorResultLine } from '../core/visitorrules.js';
@@ -59,6 +60,8 @@ const ICONS = {
   contrastOn: `<circle ${STROKE} stroke-width="2.4" cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 0 1 0 17.2z"/>`,
   contrastOff: `<circle ${STROKE} stroke-width="2.4" cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 0 1 0 17.2z" opacity=".35"/>`,
   external: `<g ${STROKE} stroke-width="2.4"><path d="M13.5 4.5h6v6M19.3 4.7l-8.6 8.6"/><path d="M18 14.2v4.3c0 .8-.7 1.5-1.5 1.5H5.5c-.8 0-1.5-.7-1.5-1.5V7.5C4 6.7 4.7 6 5.5 6h4.3"/></g>`,
+  // (1.12) the Uitdagersreeks: two crossed swords, drawn like the other icons (it was the ⚔️ emoji)
+  vs: '<path d="M3 3h3l10 10-3 3L3 6V3zm11.2 14.6 3.4-3.4 1.4 1.4-3.4 3.4-1.4-1.4zm3.3 1.3 1.4-1.4 2.1 2.1-1.4 1.4-2.1-2.1zM21 3h-3L8 13l3 3L21 6V3zM9.8 17.6l-3.4-3.4-1.4 1.4 3.4 3.4 1.4-1.4zm-3.3 1.3-1.4-1.4L3 19.6 4.4 21l2.1-2.1z"/>',
   eye: `<path ${STROKE} stroke-width="2.3" d="M2.5 12s3.6-6.4 9.5-6.4S21.5 12 21.5 12s-3.6 6.4-9.5 6.4S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3.2"/>`,
 };
 
@@ -191,8 +194,11 @@ export function createUI(bus) {
   let punishPick = null;   // (n) => choose option n (keys 1-4) while the strip is up
   // 1.8 power-ups: round buttons on the right edge; only the buttons take taps (the rest drops a block)
   const powerTray = h('div', { class: 'power-tray', role: 'group', 'aria-label': S.powerups, hidden: true });
+  // 1.12 emoji reactions in a match: a round button bottom-left, its tray opens above it (only the
+  // buttons take taps: a tap anywhere else still drops a block)
+  const emoteBar = h('div', { class: 'emote-bar', role: 'group', 'aria-label': S.emoteLabel, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, pauseBtn, punishBar, tutorBar, searchChip, powerTray, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, pauseBtn, punishBar, tutorBar, searchChip, powerTray, emoteBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // Measures env(safe-area-inset-*) so layout() can work out how much of each
@@ -272,6 +278,7 @@ export function createUI(bus) {
       hidePunish();
       setPowerups(null);
     }
+    renderEmotes();   // (the emoji button belongs to a match on screen; it comes back after a pause)
     syncTutor();
     if (name && screens[name]) {
       screens[name].scrollTop = 0;
@@ -689,45 +696,66 @@ export function createUI(bus) {
 
     const brand = h('header', { class: 'brand' }, logo(), h('p', { class: 'tagline' }, h('span', { text: S.tagline })));
 
+    // (1.12, quieter: no icon box; "one try, the same for everyone" rides on the date line)
     const head = h('div', { class: 'daily-head' },
-      h('div', { class: 'daily-badge' }, emo('🏗️')),
       h('div', null,
         h('h2', { class: 'daily-title', text: S.dailyN(m.dayNumber ?? '?') }),
-        h('p', { class: 'daily-date', text: m.dateLabel || '' })));
+        h('p', { class: 'daily-date', text: done ? m.dateLabel || '' : [m.dateLabel, S.oneTry].filter(Boolean).join(' · ') })));
 
+    // (1.12) today's leaderboard: a small 🏆 top-left (the streak's mirror), with your place once you played
+    const trophy = m.boardOn ? h('button', {
+      type: 'button', class: 'chip board-chip',
+      'aria-label': m.boardPlace ? `${S.boardTitle}: #${m.boardPlace}` : S.boardTitle, title: S.boardTitle,
+      onclick: () => { audio.play('click'); bus.emit('ui:board'); },
+    }, emo('🏆'), m.boardPlace ? h('span', { text: `#${m.boardPlace}` }) : null) : null;
     // a brand-new player sees no grey "🔥 0" before they have played
-    const card = h('div', { class: 'card daily-card' }, (stats.played | 0) > 0 ? streakChip(stats.currentStreak) : null, head, weekStrip(m.week));
+    const card = h('div', { class: 'card daily-card' }, trophy, (stats.played | 0) > 0 ? streakChip(stats.currentStreak) : null, head, weekStrip(m.week));
     if (done) {
-      const r = entry.result || {};
+      // (1.12) the try that counts (the better of two, 🔁 when there were two), and "Nog 'n kans"
+      const r = m.best || entry.result || {};
+      const rt = m.retry;
+      const price = m.retryPrice || 50;
       card.append(
         h('div', { class: 'done-box' },
           h('div', { class: 'done-title' }, emo('✅'), h('span', { text: S.doneToday })),
           h('div', { class: 'done-stats' },
             emo('🏗️'), ' ', fmtM(r.heightM || 0),
             h('span', { class: 'sep', 'aria-hidden': 'true', text: '·' }),
-            emo('⭐'), ' ', fmtInt(r.score || 0)),
-          countdownEl()),
-        button('btn-big btn-green', [icon('chart'), h('span', { text: S.seeResult })], () => bus.emit('ui:play-daily')));
+            emo('⭐'), ' ', fmtInt(r.score || 0),
+            r.retried ? h('span', { class: 'done-retry', title: S.retryMark, 'aria-label': S.retryMark, text: ' 🔁' }) : null),
+          countdownEl()));
+      if (rt && rt.status === 'ready') {
+        // bought, not played yet: it's the big button now
+        card.append(
+          button('btn-big btn-green', [icon('play'), h('span', { text: S.retryPlay })], () => bus.emit('ui:play-daily')),
+          button('btn-white btn-mini retry-see', [icon('chart'), h('span', { text: S.seeResult })], () => bus.emit('ui:daily-results'), { nav: false }));
+      } else {
+        card.append(button('btn-big btn-green', [icon('chart'), h('span', { text: S.seeResult })], () => bus.emit('ui:daily-results')));
+        if (!rt) {
+          const short = Math.max(0, price - (m.coins | 0));
+          card.append(h('div', { class: 'retry-row' },
+            button(`btn-white btn-mini retry-buy${short ? ' is-short' : ''}`,
+              [h('span', { text: S.retryBtn }), h('span', { class: 'retry-price' }, emo(COIN), h('b', { text: String(price) }))],
+              () => bus.emit('ui:daily-retry'), { nav: false, attrs: { 'aria-label': `${S.retryBtn}: ${price}` } }),
+            h('p', { class: 'retry-note', text: short ? S.retryNeed(short) : S.retryHow })));
+        }
+      }
     } else {
       const fc = (m.forecast || []).slice(0, 4).filter((t) => WEATHER_INFO[t]).map((t) => ({ key: t, ...WEATHER_INFO[t] }));
       // today's visitors, each once ("Besoekers vandag: 🐒 🤡"): same for everyone, like the weather
       const who = (m.visitors || []).filter((t) => VISITOR_INFO[t]).map((t) => VISITOR_INFO[t]);
-      if (fc.length) {
-        card.append(h('div', { class: who.length ? 'forecast has-visitors' : 'forecast' },
-          h('h3', { class: 'label', text: S.forecast }),
-          h('ol', { class: 'fc-strip' }, fc.map((w) => h('li', { class: 'fc-item' },
-            h('span', { class: 'fc-emo', 'data-wx': w.key }, emo(w.emoji)),
-            h('span', { class: 'fc-name', text: w.name })))),
-          who.length
-            ? h('p', { class: 'fc-visitors', 'aria-label': `${S.visitorsToday}: ${who.map((x) => x.name).join(', ')}` },
-              h('span', { class: 'fc-vlabel', text: `${S.visitorsToday}:` }),
-              who.map((x) => h('span', { class: 'fc-who', title: x.name }, emo(x.emoji))))
-            : null));
+      // (1.12, quieter: today's weather and visitors on one line of pictures; their names on touch / for screen readers)
+      if (fc.length || who.length) {
+        const names = [...fc.map((w) => w.name), ...who.map((x) => x.name)].join(', ');
+        card.append(h('p', { class: 'fc-line', role: 'img', 'aria-label': `${S.forecast}: ${names}` },
+          h('span', { class: 'fc-vlabel', text: S.todayLabel }),
+          fc.map((w) => h('span', { class: 'fc-pic', 'data-wx': w.key, title: w.name }, emo(w.emoji))),
+          fc.length && who.length ? h('span', { class: 'fc-sep', 'aria-hidden': 'true', text: '·' }) : null,
+          who.map((x) => h('span', { class: 'fc-pic', title: x.name }, emo(x.emoji)))));
       }
       // a friend's challenge (from a shared link, today's date only): text only, never markup
       if (m.challenge && m.challenge.text) card.append(h('p', { class: 'challenge-chip', role: 'status', text: m.challenge.text }));
       put(card,
-        h('p', { class: 'note', text: S.sameForAll }),
         // first visit: no pop-up, just a friendly line (the game itself coaches the first tower)
         m.newPlayer ? h('p', { class: 'note nudge', text: S.firstNudge }) : null,
         button('btn-big', [icon('play'), h('span', { text: S.playToday })], () => bus.emit('ui:play-daily')));
@@ -738,7 +766,7 @@ export function createUI(bus) {
       () => bus.emit('ui:play-practice'), { attrs: { 'aria-label': `${S.practice}: ${S.practiceSub}` } });
     // Uitdagersreeks (head-to-head) beside practice: two equal buttons in one row, no extra height
     const duelBtn = button('btn-purple btn-practice btn-duel',
-      [emo('⚔️'), h('span', { class: 'btn-txt' }, h('span', { text: S.duel }), h('span', { class: 'btn-sub', text: S.duelSubShort }))],
+      [icon('vs'), h('span', { class: 'btn-txt' }, h('span', { text: S.duel }), h('span', { class: 'btn-sub', text: S.duelSubShort }))],
       () => bus.emit('ui:duel'), { attrs: { 'aria-label': `${S.duel}: ${S.duelSub}` } });
     const playRow = h('div', { class: 'play-row' }, practice, duelBtn);
 
@@ -958,18 +986,25 @@ export function createUI(bus) {
   // ---------------------------------------------------------------------------
   const LOOK_KINDS = ['frame', 'badge', 'title', 'celebration', 'style'];
 
-  /** What an opponent sees of a player: frame, badge, nickname, title and rank. */
+  /** (1.12) A ladder rank's name: "Goud II", "Diamant Meester", "Stapel-legende". */
+  function rankName(id) {
+    const r = LADDER[ladderIndex(id)];
+    return r.elite ? S.rankElite[r.id] : `${RANK_INFO[r.tier].name} ${S.rankDiv[r.div - 1]}`;
+  }
+
+  /** What an opponent sees of a player: frame, badge, nickname, title and rank (in the mode being played). */
   function playerCard({ name = '', card = null, compact = false } = {}) {
     const c = card || {};
     const frame = cosmetic('frame', c.frame) ? c.frame : 'hout';
     const badge = cosmetic('badge', c.badge)?.emoji || '';
-    const rank = RANKS.find((r) => r.id === c.rank) || RANKS[0];
+    const rl = LADDER_IDS.includes(c.rl) ? c.rl : `${c.rank || 'brons'}-1`;
+    const rank = LADDER[ladderIndex(rl)];
     return h('div', { class: `pcard frame-${frame}${compact ? ' is-compact' : ''}` },
       badge ? h('span', { class: 'pc-badge' }, emo(badge)) : null,
       h('span', { class: 'pc-main' },
         h('b', { class: 'pc-name', text: name }),
         h('span', { class: 'pc-title', text: (COSMETIC_INFO.title[c.title] || COSMETIC_INFO.title.bouer).name })),
-      h('span', { class: 'pc-rank' }, emo(rank.emoji), h('span', { text: RANK_INFO[rank.id].name })));
+      h('span', { class: 'pc-rank' }, emo(rank.emoji), h('span', { text: rankName(rank.id) })));
   }
 
   function lookPreview(kind, item) {
@@ -1259,21 +1294,47 @@ export function createUI(bus) {
    * Your card and this season's rank (js/core/economy.js): the rank, the points, a bar to the next
    * rank. `r` is the store's getSeasonRank().
    */
+  /**
+   * (1.12) This mode's rank: "🥇 Goud II · 70%", the bar to the next rank, and a quiet line for a new
+   * player's placement matches or the shield near the bottom of a rank.
+   */
   function rankBox(r, card, name) {
-    const info = RANKS.find((x) => x.id === r.rank) || RANKS[0];
-    const next = RANKS.find((x) => x.id === r.next) || null;
     const [year, month] = String(r.season || '').split('-').map(Number);
-    const span = next ? Math.max(1, next.min - info.min) : 1;
-    const pct = next ? Math.round((100 * Math.max(0, r.points - info.min)) / span) : 100;
-    return h('div', { class: 'rank-box' },
-      h('div', { 'data-my-card': '' }, playerCard({ name, card: { ...card, rank: r.rank } })),
-      month ? h('p', { class: 'rank-season', text: S.season(monthName(month - 1), year) }) : null,
-      h('div', { class: 'rank-now' }, emo(info.emoji), h('b', { text: RANK_INFO[info.id].name }), h('span', { text: S.rankPoints(r.points) })),
+    const next = r.next ? LADDER[ladderIndex(r.next)] : null;
+    const note = r.placementLeft > 0 ? S.rankPlacement(r.placementLeft)
+      : r.shield && r.pct < 20 && ladderIndex(r.id) > 0 ? S.rankShieldOn : '';
+    return h('div', { class: 'rank-box', 'data-rank-box': '' },
+      h('div', { 'data-my-card': '' }, playerCard({ name, card })),
+      h('p', { class: 'rank-season', text: month ? `${S.rankModeLabel(r.mode)} · ${S.season(monthName(month - 1), year)}` : S.rankModeLabel(r.mode) }),
+      h('div', { class: 'rank-now' }, emo(r.emoji), h('b', { text: rankName(r.id) }), next ? h('span', { text: `${r.pct}%` }) : null),
       h('div', {
-        class: 'rank-bar', role: 'progressbar', 'aria-label': S.rankPoints(r.points),
-        'aria-valuemin': String(info.min), 'aria-valuemax': String(next ? next.min : r.points), 'aria-valuenow': String(r.points),
-      }, h('i', { vars: { '--p': `${pct}%` } })),
-      h('p', { class: 'rank-next', text: next ? S.rankToNext(r.toNext, `${RANK_INFO[next.id].name} ${next.emoji}`) : S.rankTop }));
+        class: 'rank-bar', role: 'progressbar', 'aria-label': `${rankName(r.id)}: ${r.pct}%`,
+        'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(r.pct),
+      }, h('i', { vars: { '--p': `${r.pct}%` } })),
+      h('p', { class: 'rank-next', text: next ? S.rankPct(r.toNext, `${rankName(next.id)} ${next.emoji}`) : S.rankTop }),
+      note ? h('p', { class: 'rank-note', text: note }) : null);
+  }
+
+  /** (1.12) Today's place came: the menu's 🏆 shows it ("🏆 #2"). */
+  function setBoardPlace(rank) {
+    const chip = screens.menu.querySelector('.board-chip');
+    if (!chip || !Number.isFinite(rank)) return;
+    let n = chip.querySelector('span:not(.emoji)');
+    if (!n) {
+      n = h('span');
+      chip.append(n);
+    }
+    n.textContent = `#${rank}`;
+    chip.setAttribute('aria-label', `${S.boardTitle}: #${rank}`);
+  }
+
+  /** (1.12) The mode changed on the Uitdagersreeks screen: its own rank shows. */
+  function setDuelRank(rank, card) {
+    if (st.screen !== 'duel' || !rank) return;
+    const box = screens.duel.querySelector('[data-rank-box]');
+    if (!box) return;
+    const name = box.querySelector('.pc-name')?.textContent || st.duelPlaceholder || '';
+    box.replaceWith(rankBox(rank, card, name));
   }
 
   /** Under the buttons: how the points work, the season badges kept, and the way to the looks. */
@@ -1281,7 +1342,7 @@ export function createUI(bus) {
     const badges = (r.badges || []).map((b) => cosmetic('badge', b)).filter(Boolean);
     return h('div', { class: 'season-notes' },
       badges.length ? h('p', { class: 'rank-badges' }, h('span', { text: S.seasonBadges }), ...badges.map((b) => emo(b.emoji))) : null,
-      h('p', { class: 'note rank-how', text: S.rankHow(RANK_POINTS) }),
+      h('p', { class: 'note rank-how', text: S.rankHow(RANK_RULES) }),
       button('btn-white btn-mini', [emo('🛍️'), h('span', { text: S.changeLook })], () => bus.emit('ui:shop', 'looks'), { nav: false }));
   }
 
@@ -1546,7 +1607,7 @@ export function createUI(bus) {
 
     // a new record is the headline, whatever ended the run
     const head = duel ? duelHead(duel) : h('div', { class: 'res-head' },
-      h('div', { class: 'chip' }, emo(daily ? '🏗️' : '🧱'), h('span', { text: daily ? S.dailyN(r.dayNumber ?? '?') : S.practiceLabel })),
+      h('div', { class: 'chip' }, emo(daily ? '🏗️' : '🧱'), h('span', { text: daily ? `${S.dailyN(r.dayNumber ?? '?')}${r.retry || r.retried ? ` · 🔁 ${S.retryHead}` : ''}` : S.practiceLabel })),
       h('h2', { class: 'res-title' }, emo(isNewBest ? '🏆' : why.emoji), h('span', { text: isNewBest ? S.newRecord : why.title })),
       h('p', { class: 'res-sub', text: isNewBest ? `${why.emoji} ${why.title}` : why.sub }),
       // a saying for the outcome (same for everyone with the same daily seed and outcome); not part of the share text
@@ -1676,11 +1737,23 @@ export function createUI(bus) {
       kids.push(h('span', { class: 'rw-coins' }, emo(COIN), h('b', { text: `+${fmtInt(c.added)}` }),
         h('span', { class: 'rw-sub', text: c.short ? S.coinsCapped : S.coinsTotal(fmtInt(c.total)) })));
     }
-    if (rk && RANK_INFO[rk.rank]) {
-      const r = RANKS.find((x) => x.id === rankFor(rk.points).id) || RANKS[0];
-      kids.push(h('span', { class: `rw-rank${rk.up ? ' is-up' : ''}` }, emo(r.emoji),
-        h('b', { text: rk.up ? S.rankUp(RANK_INFO[r.id].name) : RANK_INFO[r.id].name }),
-        h('span', { class: 'rw-sub', text: S.rankPointsDelta(rk.delta) })));
+    if (rk && LADDER_IDS.includes(rk.id)) {
+      // (1.12) the mode's rank: up, down, saved by the shield, or not counted (Robot Rikus, a recording)
+      const name = rankName(rk.id);
+      if (!rk.counted) {
+        kids.push(h('span', { class: 'rw-rank is-quiet' }, emo(rk.emoji), h('b', { text: name }),
+          h('span', { class: 'rw-sub', text: S.rankNotCounted })));
+      } else {
+        const title = rk.up ? S.rankUp(name) : rk.down ? S.rankDown(name) : rk.shielded ? S.rankShield(name) : name;
+        // the bar moves from where it was to the new percentage (a new rank starts it from empty)
+        const from = rk.up ? 0 : rk.down ? 100 : rk.before?.pct ?? rk.pct;
+        const fill = h('i', { vars: { '--p': `${from}%` } });
+        requestAnimationFrame(() => requestAnimationFrame(() => fill.style.setProperty('--p', `${rk.pct}%`)));
+        kids.push(h('span', { class: `rw-rank${rk.up ? ' is-up' : ''}${rk.down ? ' is-down' : ''}` }, emo(rk.emoji),
+          h('b', { text: title }),
+          h('span', { class: 'rw-sub', text: `${S.rankPctDelta(rk.delta)} · ${rk.pct}%` }),
+          h('span', { class: 'rank-bar rw-bar', 'aria-hidden': 'true' }, fill)));
+      }
     }
     return h('div', { class: 'res-reward', role: 'status' }, kids);
   }
@@ -1739,7 +1812,7 @@ export function createUI(bus) {
     const MEDAL = ['🥇', '🥈', '🥉'];
     const row = (t) => h('li', { class: `board-row${t.you ? ' is-you' : ''}` },
       h('span', { class: 'board-rank' }, t.rank <= 3 ? [emo(MEDAL[t.rank - 1]), h('span', { class: 'sr', text: `#${t.rank}` })] : h('b', { text: `#${t.rank}` })),
-      h('span', { class: 'board-name', text: t.you ? `${t.name} (${S.boardYou})` : t.name }),
+      h('span', { class: 'board-name', text: `${t.you ? `${t.name} (${S.boardYou})` : t.name}${t.retried ? ' 🔁' : ''}`, title: t.retried ? S.retryMark : null }),
       h('b', { class: 'board-h', text: fmtM(t.heightM) }));
     let body;
     if (loading) body = h('p', { class: 'board-msg', text: S.boardLoading });
@@ -1835,6 +1908,78 @@ export function createUI(bus) {
       if (kinds[n]) pick(kinds[n]);
     };
     punishBar.hidden = false;
+  }
+
+  /**
+   * (1.12) The emoji button in a match: { muted, left (ms of cooldown), spent } (null: no emojis in this
+   * match). updateEmotes() merges a change (after a send, or muting).
+   */
+  function setEmotes(o) {
+    clearTimeout(st.emoteTimer);
+    st.emotes = o ? { muted: false, left: 0, spent: false, ...o } : null;
+    emoteBar.classList.remove('open');
+    renderEmotes();
+  }
+
+  function updateEmotes(o) {
+    if (!st.emotes || !o) return;
+    Object.assign(st.emotes, o);
+    clearTimeout(st.emoteTimer);
+    if (st.emotes.left > 0) {
+      const left = st.emotes.left;
+      st.emoteTimer = setTimeout(() => updateEmotes({ left: 0 }), left);
+    }
+    renderEmotes();
+  }
+
+  function renderEmotes() {
+    const o = st.emotes;
+    if (!o || st.screen !== 'game') {
+      emoteBar.hidden = true;
+      return;
+    }
+    const open = emoteBar.classList.contains('open');
+    const tap = (fn) => (ev) => {
+      ev.stopPropagation();
+      audio.play('click');
+      fn();
+    };
+    const picks = Object.entries(EMOTES).map(([id, e]) => h('button', {
+      type: 'button', class: 'emote-pick', 'aria-label': e,
+      onclick: tap(() => {
+        emoteBar.classList.remove('open');
+        bus.emit('ui:emote', id);
+      }),
+    }, emo(e)));
+    const mute = h('button', {
+      type: 'button', class: 'emote-pick emote-mute', 'aria-label': o.muted ? S.emoteUnmute : S.emoteMute, title: o.muted ? S.emoteUnmute : S.emoteMute,
+      onclick: tap(() => bus.emit('ui:emote-mute')),
+    }, emo(o.muted ? '🔇' : '🔊'));
+    const cool = o.left > 0;
+    const main = h('button', {
+      type: 'button',
+      class: `emote-btn${cool ? ' is-cool' : ''}${o.spent ? ' is-spent' : ''}`,
+      vars: cool ? { '--cool': `${o.left}ms` } : null,
+      disabled: o.spent,
+      'aria-expanded': String(open && !cool && !o.spent),
+      'aria-label': o.spent ? S.emoteLimit : S.emoteLabel,
+      title: o.spent ? S.emoteLimit : S.emoteLabel,
+      onclick: tap(() => {
+        if (cool) return;
+        emoteBar.classList.toggle('open');
+        // (it closes by itself after a moment: open, it stands over the balance meter)
+        clearTimeout(st.emoteClose);
+        if (emoteBar.classList.contains('open')) {
+          st.emoteClose = setTimeout(() => {
+            emoteBar.classList.remove('open');
+            renderEmotes();
+          }, 4000);
+        }
+        renderEmotes();
+      }),
+    }, emo('😀'));
+    emoteBar.replaceChildren(h('div', { class: 'emote-tray' }, picks, mute), main);
+    emoteBar.hidden = false;
   }
 
   /**
@@ -1969,6 +2114,10 @@ export function createUI(bus) {
     setMenuCoins,
     celebrate,
     setDuelCard,
+    setDuelRank,
+    setBoardPlace,
+    setEmotes,
+    updateEmotes,
     playerCard,
     toast,
     setLoading,

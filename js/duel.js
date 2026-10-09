@@ -12,21 +12,24 @@
 // other player's drop and report ('turns:drop', 'turns:settled') and the result. Against Robot Rikus
 // the game plays his turns too, and the referee runs here.
 
-import { DUEL, TURNS, LIVES } from './config.js';
+import { DUEL, TURNS, LIVES, EMOTES, EMOTE } from './config.js';
 import { S, PUNISH_INFO, WEATHER_INFO } from './core/strings.js';
 import {
   createReferee, createRecorder, createGhost, botRun, newMatchSeed, isMatchSeed, decodeChallenge,
   encodeChallenge, isRoomCode, cleanNickname, attackFor, PUNISHMENTS, isPunishment, botPunishment,
 } from './core/duel.js';
-import { cleanCard, cosmetic, BOT_CARD } from './core/economy.js';
+import { cleanCard, cardForMode, cosmetic, BOT_CARD } from './core/economy.js';
 import {
   createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, isSabotage, botSabotage, firstSeat, SABOTAGES,
+  cleanRound, cleanVis,
 } from './core/turns.js';
 
 const YOU = 0;
 const THEM = 1;
 const RESULT_WAIT_MS = 2500;   // live: after our tower fell, wait this long for the server's verdict
-const PROTOCOL = 3;            // 2: the first to a height mark chooses the punishment ('choose' / 'punish'); 3: Blok vir Blok
+const PROTOCOL = 4;            // 2: the first to a height mark chooses the punishment ('choose' / 'punish'); 3: Blok vir Blok;
+                              // 4 (1.12): Blok vir Blok 'go' (a turn began) and the report's step count, for a smooth replay;
+                              // the rondtes (weather and visitors in the turn messages) and 'visit' (Skelm Sakkie's outcome)
 const DEFAULT_CARD = cleanCard(null);   // a recording or a link carries no card
 const round1 = (v) => Math.round(v * 10) / 10;
 const num = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(DUEL.maxHeightM, Number(v))) : 0);
@@ -86,26 +89,31 @@ export function createDuel({
   let pending = null;   // { ws, timer } while searching or waiting in a room
   const hud = { you: 0, them: 0, name: '', badge: '', claimed: {}, lives: null, youLives: null };
   const hello = (mode) => ({
-    t: 'hello', v: PROTOCOL, rules: DUEL.rules, ...(mode === 'turns' ? { mode } : {}), name: nickname() || '', card: cleanCard(card()),
+    t: 'hello', v: PROTOCOL, rules: DUEL.rules, ...(mode === 'turns' ? { mode } : {}), name: nickname() || '', card: cleanCard(card(mode)),
   });
 
   // ------------------------------------------------------------------------------- a match
-  function newMatch({ kind, seed, oppName, oppCard = null, run = null, ws = null, you = YOU, mode = 'race', turn = null }) {
+  function newMatch({ kind, seed, oppName, oppCard = null, run = null, ws = null, you = YOU, mode = 'race', turn = null, oppV = null, rounds = false }) {
     if (match) dropChoice(match);
     const turns = mode === 'turns';
     match = {
       kind, seed, ws, you,
       mode: turns ? 'turns' : 'race',
+      oppV,   // the other game's protocol (live: from the room's start)
       // Blok vir Blok: the referee (Robot Rikus: here; live: the server's, whose events come as messages),
       // the turn on now, the hearts, and the game's events held back until the scene is up
-      tref: turns && kind !== 'live' ? createTurnReferee({ first: firstSeat() }) : null,
+      // (rondtes: against Robot Rikus always; live when the room says both games know them)
+      tref: turns && kind !== 'live' ? createTurnReferee({ first: firstSeat(), seed, rounds: true }) : null,
+      rounds: turns && (kind !== 'live' || rounds === true),
       turn: turns ? turn : null,
       hearts: turns ? [TURNS.hearts, TURNS.hearts] : null,
       perfects: [0, 0],
       sceneReady: false,
       queue: [],
+      emotes: { at: -Infinity, sent: 0, muted: false, botAt: -Infinity },   // (1.12) emoji reactions
+      startedAt: now(),   // (1.12) a match decided by a quit within its first moments doesn't move a rank
       oppName: oppName || S.duelSomeone,
-      oppCard: oppCard ? cleanCard(oppCard) : DEFAULT_CARD,
+      oppCard: cardForMode(oppCard || DEFAULT_CARD, turns ? 'turns' : 'race'),   // (1.12: their rank in this mode)
       youName: nickname() || '',
       referee: kind === 'live' || turns ? null : createReferee(),
       ghost: run ? createGhost(run) : null,
@@ -315,7 +323,14 @@ export function createDuel({
       hearts: pair(e.hearts, TURNS.hearts) || [TURNS.hearts, TURNS.hearts],
       streaks: pair(e.streaks, 1e4) || [0, 0],
       sab: isSabotage(e.sab) ? e.sab : null,
+      ev: cleanRound(e.ev),   // (1.12) this turn's round: the weather or visitor both players get
+      nx: cleanRound(e.nx),   // ...and the round the next turn begins (shown coming)
     };
+  }
+
+  /** A report's physics steps from the drop to the tower at rest, or null. */
+  function stepsOf(k) {
+    return Number.isInteger(k) && k >= 0 && k <= 100000 ? k : null;
   }
 
   /** A turn begins: the game hears whose it is (and the sabotage on this block, if any). */
@@ -377,6 +392,19 @@ export function createDuel({
         m.turnShown = m.turn?.n === msg.n ? m.turnShown : false;
         startTurn(m, turnOf(msg));
         break;
+      case 'emote':
+        theirEmote(m, msg.e);
+        break;
+      case 'go':   // their turn began on their screen (it shows here a moment later)
+        if (theirs) bus.emit('turns:go', { n: msg.n });
+        break;
+      case 'visit': {   // their round's Skelm Sakkie: caught or stole (at that moment of their visit)
+        const what = cleanVis(msg.what);
+        const at = typeof msg.at === 'number' && Number.isFinite(msg.at) && msg.at >= 0 && msg.at <= 120000 ? msg.at : null;
+        const idx = Array.isArray(msg.idx) ? msg.idx.filter((i) => Number.isInteger(i) && i >= 0 && i <= 5000).slice(0, 8) : [];
+        if (theirs && what && at !== null) bus.emit('turns:visit', { n: msg.n, what, at, idx });
+        break;
+      }
       case 'drop': {
         const p = cleanPose(msg.p);
         const ct = typeof msg.ct === 'number' && msg.ct >= 0 && msg.ct <= 120000 ? msg.ct : null;
@@ -388,7 +416,7 @@ export function createDuel({
         const r = cleanRating(msg.r);
         if (!snap || !theirs || !snapFits(snap, msg.n, r)) break;
         if (r === 'P') m.perfects[m.turn.seat] += 1;
-        bus.emit('turns:settled', { n: msg.n, lost: msg.lost === true, r, snap });
+        bus.emit('turns:settled', { n: msg.n, lost: msg.lost === true, r, snap, ...(stepsOf(msg.k) !== null ? { k: stepsOf(msg.k) } : {}) });
         break;
       }
       case 'choose':
@@ -428,6 +456,65 @@ export function createDuel({
     m.turnShown = false;
     startTurn(m, m.turn);
     for (const msg of m.queue.splice(0)) onTurnsMessage(m, msg);
+    // (1.12) the other player's game is older: this match has no rondtes (said once, at the start)
+    if (m.kind === 'live' && !m.rounds && m.oppV !== null && m.oppV < 4) bus.emit('hud:toast', { text: S.turnsNoRounds(m.oppName), color: '#cfe9ff' });
+  });
+
+  // our turn began on this screen: the other game shows it from now, a moment behind
+  bus.on('turns:mygo', (d) => {
+    const m = match;
+    if (!m || m.mode !== 'turns' || m.outcome || m.kind !== 'live' || !d) return;
+    if (m.turn && d.n === m.turn.n && m.turn.seat === m.you) send(m.ws, { t: 'go', n: d.n });
+  });
+
+  // ------------------------------------------------------------------------------- emoji reactions (1.12)
+  /** Can this player send an emoji now? { ok, left (ms of cooldown), spent (the match's allowance is used up) }. */
+  function emoteState(m) {
+    const e = m?.emotes;
+    if (!e || m.outcome || m.kind === 'ghost' || m.kind === 'link') return { ok: false, left: 0, spent: false };
+    const left = Math.max(0, EMOTE.cooldownMs - (now() - e.at));
+    const spent = e.sent >= EMOTE.perMatch;
+    return { ok: !left && !spent, left, spent };
+  }
+
+  /** The other player's emoji (none while muted, an unknown one, or after the match). */
+  function theirEmote(m, id) {
+    if (!m || m.outcome || m.emotes?.muted || !Object.hasOwn(EMOTES, id)) return;
+    bus.emit('hud:emote', { side: 'them', emoji: EMOTES[id] });
+  }
+
+  // this player sends an emoji: shown at once here, passed on live; Robot Rikus sometimes answers
+  bus.on('ui:emote', (id) => {
+    const m = match;
+    if (!m || !Object.hasOwn(EMOTES, id) || !emoteState(m).ok) return;
+    m.emotes.at = now();
+    m.emotes.sent += 1;
+    bus.emit('hud:emote', { side: 'you', emoji: EMOTES[id] });
+    bus.emit('duel:emotes', emoteState(m));
+    if (m.kind === 'live') send(m.ws, { t: 'emote', e: id });
+    else if (m.kind === 'bot' && now() - m.emotes.botAt > EMOTE.cooldownMs && Math.random() < EMOTE.botAnswer) {
+      m.emotes.botAt = now();
+      const answer = ['klap', 'koel', 'lag', 'oeps'][Math.floor(Math.random() * 4)];
+      setTimer(() => { if (match === m) theirEmote(m, answer); }, 900 + Math.random() * 900);
+    }
+  });
+  // their emojis hidden (or shown again) for the rest of the match
+  bus.on('ui:emote-mute', () => {
+    const m = match;
+    if (!m || !m.emotes) return;
+    m.emotes.muted = !m.emotes.muted;
+    bus.emit('duel:emote-muted', m.emotes.muted);
+  });
+
+  // our round's Skelm Sakkie was caught or stole: the other game shows the same, at the same moment
+  bus.on('turns:myvisit', (d) => {
+    const m = match;
+    if (!m || m.mode !== 'turns' || m.outcome || m.kind !== 'live' || !d) return;
+    const what = cleanVis(d.what);
+    const idx = Array.isArray(d.idx) ? d.idx.filter((i) => Number.isInteger(i) && i >= 0 && i <= 5000).slice(0, 8) : [];
+    if (what && Number.isFinite(d.at) && m.turn && d.n === m.turn.n && m.turn.seat === m.you) {
+      send(m.ws, { t: 'visit', n: d.n, what, at: Math.round(d.at), idx });
+    }
   });
 
   // our block was let go: the other game drops it from the same spot
@@ -447,11 +534,13 @@ export function createDuel({
     if (!snap) return;
     const r = cleanRating(d.r);
     if (r === 'P') m.perfects[m.turn.seat] += 1;
+    const vis = cleanVis(d.vis);
     if (m.kind === 'live') {
-      if (m.turn.seat === m.you) send(m.ws, { t: 'settled', n: d.n, lost: d.lost === true, r, snap });
+      const k = stepsOf(d.k);
+      if (m.turn.seat === m.you) send(m.ws, { t: 'settled', n: d.n, lost: d.lost === true, r, snap, ...(k !== null ? { k } : {}), ...(vis ? { vis } : {}) });
       return;
     }
-    turnEvents(m, m.tref.settled(m.turn.seat, { n: d.n, lost: d.lost === true, r }));
+    turnEvents(m, m.tref.settled(m.turn.seat, { n: d.n, lost: d.lost === true, r, vis }));
   });
 
   // ------------------------------------------------------------------------------- live socket
@@ -461,6 +550,9 @@ export function createDuel({
       return;
     }
     switch (msg.t) {
+      case 'emote':
+        theirEmote(m, msg.e);
+        break;
       case 'opp':
         m.oppH = num(msg.h);
         m.oppBest = Math.max(m.oppBest, num(msg.best));
@@ -564,7 +656,8 @@ export function createDuel({
             pending = null;
             const m = newMatch({
               kind: 'live', seed: msg.seed, oppName: cleanNickname(msg.opp?.name) || S.duelSomeone, oppCard: msg.opp?.card, ws, you: msg.you,
-              mode: turns ? 'turns' : 'race', turn,
+              // (oppV: null from a Worker older than 1.12, which doesn't say)
+              mode: turns ? 'turns' : 'race', turn, oppV: Number.isFinite(msg.opp?.v) ? Math.max(1, Math.min(99, Math.floor(msg.opp.v))) : null, rounds: msg.rounds === true,
             });
             onStart(m);
           }
@@ -820,6 +913,10 @@ export function createDuel({
     back,
     playNow,
     /** Searching the lobby (the waiting screen or Oefen while waiting shows it). */
+    /** (1.12) Can this player send an emoji now (and is the match's allowance used up)? */
+    emoteState() {
+      return emoteState(match);
+    },
     get searching() {
       return searching();
     },

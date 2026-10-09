@@ -1,5 +1,10 @@
 // The rising flood (vloed): translucent cartoon sea in world space, drawn above
 // the tower so submerged blocks look underwater. Only objects move per frame.
+// 1.12 (the owner: "the water needs to indicate clearly that blocks are beneath the sea, then the
+// physics will make more sense"): the sea near the surface is clearer, so the tower under it reads as
+// a tower standing on the island rather than ghosts; the blocks below the waterline take a blue,
+// darker-with-depth tint (underwaterTint, per corner, so the waterline crosses a block cleanly);
+// bubbles rise off the drowned tower and now and then a fish swims past.
 import { DEPTH, GAME_W, WATER } from '../config.js';
 import { canvasTexture, ensureFxTextures, clamp, lerpColor } from './effects.js';
 
@@ -12,9 +17,18 @@ const BODY_H = 900;            // gradient part of the water body below the wave
 const TS_W = 1024;             // TileSprites are kept small and scaled (their canvas is width × height)
 
 // Water colours (r, g, b, a). The wave strip ends exactly in TOP so the seam is invisible.
-const TOP = [52, 148, 222, 0.7];
-const MID = [30, 110, 190, 0.8];
-const DEEP = [14, 64, 124, 0.87];
+// (1.12: clearer near the top, so the drowned tower shows; as deep and dark as before further down)
+const TOP = [52, 148, 222, 0.42];
+const MID = [30, 110, 190, 0.6];
+const DEEP = [14, 64, 124, 0.86];
+// Underwater tint of a block (multiplied with its own colour): just under the waterline, and at
+// UNDER_DEEP_PX below it (and deeper)
+const UNDER_TOP = 0xb4dcff;
+const UNDER_DEEP = 0x4f78b8;
+const UNDER_DEEP_PX = 320;
+const BUBBLE_SPEED = 120;      // px/s up
+const FISH = ['🐟', '🐠', '🐡'];
+const FISH_EVERY_S = [9, 18];  // a fish swims past this often (looks only)
 const rgba = ([r, g, b, a], aMul = 1) => `rgba(${r},${g},${b},${a * aMul})`;
 const DEEP_HEX = (DEEP[0] << 16) | (DEEP[1] << 8) | DEEP[2];
 
@@ -119,6 +133,18 @@ function ensureWaterTextures(scene) {
       }
     }
   });
+  // A bubble: a ring with a glint.
+  canvasTexture(scene, 'water_bubble', 16, 16, (ctx) => {
+    ctx.strokeStyle = 'rgba(235,248,255,0.9)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(8, 8, 5.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath();
+    ctx.arc(6, 6, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  });
   // Flood line marker: red/white dashes.
   canvasTexture(scene, 'water_flood', 64, 16, (ctx) => {
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
@@ -186,6 +212,19 @@ export class Water {
     this.ring = scene.add.image(0, 0, 'fx_ring').setDepth(DEPTH.water + 0.45).setVisible(false);
     this.ringTween = null;
     this.tintKey = 0;
+    // bubbles rise off the drowned tower to the surface (looks only: the lifespan reaches the waterline)
+    this.bubbleRise = 1000;
+    this.bubbles = scene.add.particles(0, 0, 'water_bubble', {
+      emitting: false,
+      lifespan: { onEmit: () => this.bubbleRise },
+      speedY: { min: -BUBBLE_SPEED * 1.1, max: -BUBBLE_SPEED * 0.9 },
+      speedX: { min: -8, max: 8 },
+      scale: { start: 0.55, end: 1.05 },
+      alpha: { start: 0.85, end: 0.35 },
+      maxAliveParticles: 40,
+    }).setDepth(DEPTH.water + 0.15);
+    this.fish = null;
+    this.fishAt = FISH_EVERY_S[0] + Math.random() * 4;
 
     this._layout(0);
   }
@@ -225,6 +264,50 @@ export class Water {
     this.t += dt;
     this._layout(dt);
     this._stormTint();
+    this._swimFish(dt);
+  }
+
+  /** A bubble from a drowned block at world (x, y): it rises to the waterline and is gone there. */
+  bubbleAt(x, y) {
+    if (this.destroyed) return;
+    const depth = y - this.displayY;
+    if (depth < 24) return;
+    this.bubbleRise = Math.max(120, ((depth - 8) / BUBBLE_SPEED) * 1000);
+    this.bubbles.emitParticleAt(x, y, 1);
+  }
+
+  /** Now and then a fish swims past under the waterline (looks only; never in front of the HUD's numbers). */
+  _swimFish(dt) {
+    const cam = this.scene.cameras?.main;
+    if (!cam || this.scene.idle) return;
+    const f = this.fish;
+    if (f) {
+      f.x += f.v * dt;
+      f.y = this.displayY + f.swimDepth + Math.sin(this.t * 2.2 + f.phase) * 6;
+      if (f.x < -120 || f.x > GAME_W + 120) {
+        f.destroy();
+        this.fish = null;
+        this.fishAt = this.t + FISH_EVERY_S[0] + Math.random() * (FISH_EVERY_S[1] - FISH_EVERY_S[0]);
+      }
+      return;
+    }
+    if (this.t < this.fishAt) return;
+    // only when the sea is on screen, with room under the waterline
+    const viewBottom = cam.scrollY + cam.height / (cam.zoom || 1);
+    if (this.displayY > viewBottom - 90) {
+      this.fishAt = this.t + 3;
+      return;
+    }
+    const fromLeft = Math.random() < 0.5;
+    const depth = Math.min(viewBottom - this.displayY - 50, 50 + Math.random() * 140);
+    const txt = this.scene.add.text(fromLeft ? -90 : GAME_W + 90, this.displayY + depth, FISH[Math.floor(Math.random() * FISH.length)], {
+      fontSize: '46px', fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
+    }).setOrigin(0.5).setDepth(DEPTH.water + 0.12).setAlpha(0.8);
+    if (fromLeft) txt.setFlipX(true);   // (the emoji faces left)
+    txt.v = (fromLeft ? 1 : -1) * (70 + Math.random() * 50);
+    txt.swimDepth = depth;   // (not .depth: that is the draw order)
+    txt.phase = Math.random() * 6;
+    this.fish = txt;
   }
 
   // Storms grey the sea a little, in step with the sky (BgScene reads the same key).
@@ -293,6 +376,43 @@ export class Water {
     if (this.destroyed) return;
     this.destroyed = true;
     if (this.ringTween) this.ringTween.stop();
-    for (const o of [this.back, this.body, this.deep, this.shimmer, this.front, this.flood, this.drops, this.ring]) o.destroy();
+    for (const o of [this.back, this.body, this.deep, this.shimmer, this.front, this.flood, this.drops, this.ring, this.bubbles]) o.destroy();
+    if (this.fish) this.fish.destroy();
   }
+}
+
+/**
+ * A block's underwater look (1.12): each corner's tint by how far it is under the waterline (`surfaceY`),
+ * multiplied with the block's own tint (`base`: white, or the cement grey). Returns true when the block
+ * is (partly) under water. Cheap: four colour blends; the caller skips blocks well above the sea.
+ */
+export function underwaterTint(img, surfaceY, base = 0xffffff, out = null) {
+  const w = img.displayWidth;
+  const h = img.displayHeight;
+  const ox = img.originX * w;
+  const oy = img.originY * h;
+  const c = Math.cos(img.rotation);
+  const s = Math.sin(img.rotation);
+  const tint = (lx, ly) => {
+    const y = img.y + lx * s + ly * c;   // the corner's world y
+    const d = y - surfaceY;
+    if (d <= 0) return base;
+    return mulColor(lerpColor(UNDER_TOP, UNDER_DEEP, Math.min(1, d / UNDER_DEEP_PX)), base);
+  };
+  const tl = tint(-ox, -oy);
+  const tr = tint(w - ox, -oy);
+  const bl = tint(-ox, h - oy);
+  const br = tint(w - ox, h - oy);
+  img.setTint(tl, tr, bl, br);
+  if (out) {
+    out.under = tl !== base || tr !== base || bl !== base || br !== base;
+    return out.under;
+  }
+  return tl !== base || tr !== base || bl !== base || br !== base;
+}
+
+function mulColor(a, b) {
+  if (b === 0xffffff) return a;
+  const ch = (x, sh) => (x >> sh) & 255;
+  return (((ch(a, 16) * ch(b, 16)) / 255) << 16) | (((ch(a, 8) * ch(b, 8)) / 255) << 8) | ((ch(a, 0) * ch(b, 0)) / 255);
 }

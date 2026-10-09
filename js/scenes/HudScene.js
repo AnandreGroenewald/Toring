@@ -356,6 +356,7 @@ export class HudScene extends Phaser.Scene {
       bus.on('hud:coach', (c) => this.showCoach(c)),
       bus.on('hud:hide', (o) => this.hideAll(o)),
       bus.on('hud:duel', (d) => { this.duelState = d; }),
+      bus.on('hud:emote', (e) => this.showEmote(e)),
       // the results card takes over from the big height
       bus.on('game:over', () => this.tweens.add({ targets: this.heightTxt, alpha: 0, duration: 250 })),
     );
@@ -557,9 +558,9 @@ export class HudScene extends Phaser.Scene {
   }
 
   /** One player's pill: "Anna ♥♥♡" (their turn in Blok vir Blok: gold). Redrawn only when it changes. */
-  setPill(p, { name, lives, max, active = false, extra = '' }) {
+  setPill(p, { name, rank = '', lives, max, active = false, extra = '' }) {
     const shown = Number.isInteger(lives);
-    const key = `${name}|${shown ? lives : '-'}|${max}|${active}|${extra}`;
+    const key = `${rank}|${name}|${shown ? lives : '-'}|${max}|${active}|${extra}`;
     if (key === p.key) return;
     const lost = shown && p.lives != null && lives < p.lives;
     p.key = key;
@@ -570,7 +571,8 @@ export class HudScene extends Phaser.Scene {
     // each pill has half the row (a long, wide name gets shorter until it fits)
     const maxW = Math.floor((this.duelHud.right - 16) / 2) - 8;
     let len = Math.min(name.length, PILL_NAME_MAX);
-    const fit = (n) => (n < name.length ? `${name.slice(0, Math.max(1, n - 1))}…` : name);
+    // (1.12: the rank in front, '🥇II Anna'; only the name gets shorter)
+    const fit = (n) => `${rank ? `${rank} ` : ''}${n < name.length ? `${name.slice(0, Math.max(1, n - 1))}…` : name}`;
     p.name.setText(fit(len));
     while (len > 3 && 16 + p.name.width + (shown ? 10 + heartsW : 0) + extraW + 12 > maxW) p.name.setText(fit(--len));
     const w = Math.ceil((16 + p.name.width + (shown ? 10 + heartsW : 0) + extraW + 12) / 8) * 8;
@@ -599,6 +601,9 @@ export class HudScene extends Phaser.Scene {
   updateDuelHud(s, time) {
     const hud = this.duelHud;
     const game = this.scene.get('Game');
+    // (1.12) each player's rank in this mode in front of their name ('🥇II Anna')
+    const youRank = game?.duel?.youRank || '';
+    const oppRank = game?.duel?.oppRank || '';
     const youName = game?.duel?.youName || S.hudYou;
     if (hud.turns) {
       const t = s.turns;
@@ -608,16 +613,28 @@ export class HudScene extends Phaser.Scene {
       // a run of Perfeks shows (5 in a row earn a joker)
       const streak = (k) => (t.streaks?.[k] >= 2 ? `🔥${t.streaks[k]}` : '');
       const active = (k) => t.n > 0 && t.seat === k;
-      this.setPill(hud.you, { name: t.names?.[t.you] || youName, lives: t.hearts[t.you], max: hud.max, active: active(t.you), extra: streak(t.you) });
-      this.setPill(hud.them, { name: oppName, lives: t.hearts[them], max: hud.max, active: active(them), extra: streak(them) });
+      this.setPill(hud.you, { name: t.names?.[t.you] || youName, rank: youRank, lives: t.hearts[t.you], max: hud.max, active: active(t.you), extra: streak(t.you) });
+      this.setPill(hud.them, { name: oppName, rank: oppRank, lives: t.hearts[them], max: hud.max, active: active(them), extra: streak(them) });
       this.setTurnPill(t, oppName);
       return;
     }
     // Wedloop: your hearts from the game, theirs from the match (a recording or Robot Rikus: full until it fell)
     const d = this.duelState;
-    this.setPill(hud.you, { name: youName, lives: s.lives, max: hud.max });
-    this.setPill(hud.them, { name: d?.name || game?.duel?.name || S.duelSomeone, lives: d && Number.isInteger(d.lives) ? Math.min(d.lives, hud.max) : null, max: hud.max });
+    this.setPill(hud.you, { name: youName, rank: youRank, lives: s.lives, max: hud.max });
+    this.setPill(hud.them, { name: d?.name || game?.duel?.name || S.duelSomeone, rank: oppRank, lives: d && Number.isInteger(d.lives) ? Math.min(d.lives, hud.max) : null, max: hud.max });
     if (d) this.updateRaceTrack(d, time);
+  }
+
+  /** (1.12) An emoji reaction: big, under the sender's pill (you left, them right), for a moment. */
+  showEmote({ side, emoji } = {}) {
+    const hud = this.duelHud;
+    if (!hud || this.hidden || typeof emoji !== 'string') return;
+    const p = side === 'you' ? hud.you : hud.them;
+    const x = side === 'you' ? 96 : this.W - EDGE - PAUSE_BTN - 96;
+    const y = this.st + ROW3 + 110;   // (under the crane's jib: never over the height or the hearts)
+    const t = text(this, x, y, emoji, 92, { emoji: true, stroke: false }).setOrigin(0.5).setDepth(60).setScale(0.4).setAlpha(0);
+    this.tweens.add({ targets: t, scale: 1, alpha: 1, duration: 260, ease: 'Cubic.easeOut' });
+    this.tweens.add({ targets: t, y: y + 36, alpha: 0, delay: 1500, duration: 450, ease: 'Quad.easeIn', onComplete: () => t.destroy() });
   }
 
   /** Blok vir Blok: "🎯 Jou beurt! 7" (gold) or "⏳ Anna se beurt…". */
@@ -625,7 +642,9 @@ export class HudScene extends Phaser.Scene {
     const tp = this.duelHud.turn;
     if (!t || t.n < 1) return;
     const mine = t.seat === t.you;
-    const str = mine ? `🎯 ${S.turnsYourTurn}${t.left != null ? `  ${t.left}` : ''}` : `⏳ ${S.turnsTheirTurn(oppName)}`;
+    // (1.12) a round on this turn: its weather or visitor rides along in the pill
+    const ev = t.ev ? (WEATHER_INFO[t.ev] || VISITOR_INFO[t.ev])?.emoji || '' : '';
+    const str = `${mine ? `🎯 ${S.turnsYourTurn}${t.left != null ? `  ${t.left}` : ''}` : `⏳ ${S.turnsTheirTurn(oppName)}`}${ev ? `  ${ev}` : ''}`;
     const key = `${t.n}|${str}`;
     if (key === tp.key) return;
     const newTurn = tp.key.split('|')[0] !== String(t.n);
@@ -929,6 +948,11 @@ export class HudScene extends Phaser.Scene {
 
   showBanner(b) {
     if (!b || this.hidden) return;
+    // (1.12) a height zone's banner waits for a visitor's or the weather's on screen (it says how to play it)
+    if (b.wait && this.banner.visible && this.bannerTimer) {
+      this.pendingBanner = b;
+      return;
+    }
     if (b.emoji) this.bannerEmoji.setTexture(this.emojiTexture(b.emoji, 72));
     this.bannerEmoji.setVisible(!!b.emoji);
     this.bannerTitle.setText(b.title || '').setScale(1);
@@ -974,6 +998,9 @@ export class HudScene extends Phaser.Scene {
           c.setVisible(false);
           this.bannerTween = null;
           if (!visitor && this.wxBg.visible) this.pulse(this.wxEmoji, 1.25);
+          const nb = this.pendingBanner;
+          this.pendingBanner = null;
+          if (nb) this.time.delayedCall(250, () => this.showBanner({ ...nb, wait: false }));
           const t = this.pendingToast;
           this.pendingToast = null;
           if (t) this.showToast(t);
@@ -989,12 +1016,12 @@ export class HudScene extends Phaser.Scene {
     if (!t || !t.text || this.hidden) return;
     // Never stack a toast on the event banner: show it once the banner has gone. A visitor's banner
     // makes way at once instead (the toast says how the visit went: "Gevang!", "Sjoe! Weg is hy!").
-    const y0 = this.H - this.sb - 150;
+    let y0 = this.H - this.sb - 150;
     if (t.visitor && this.banner.visible && this.bannerKind === 'visitor' && this.bannerTimer) this.dismissBanner();
-    if (this.banner.visible && Math.abs(y0 - this.banner.y) < BANNER_H / 2 + 40) {
-      this.pendingToast = t;
-      return;
-    }
+    // (1.12) a banner on screen: the toast shows just above it at once (Blok vir Blok says a lot at a
+    // turn's start; a toast that waited for the banner arrived a turn late, over the next banner)
+    // (a banner that appeared this very moment counts: it is still fading in)
+    const onBanner = this.banner.visible && Math.abs(y0 - this.banner.y) < BANNER_H / 2 + 40;
     this.toastTxt.setFontSize(t.size || 30);
     this.toastTxt.setWordWrapWidth(this.W - 130, true);   // a long saying wraps instead of leaving the screen
     this.toastTxt.setAlign('center');
@@ -1003,6 +1030,7 @@ export class HudScene extends Phaser.Scene {
     const pw = Math.min(this.W - 48, Math.ceil((this.toastTxt.width + 56) / 16) * 16);
     const ph = Math.max(62, Math.ceil((this.toastTxt.height + 24) / 8) * 8);
     this.toastBg.setTexture(panelTexture(this, pw, ph, NAVY, 0.85, { rim: 0.25 }));
+    if (onBanner) y0 = Math.round(this.banner.y - BANNER_H / 2 - ph / 2 - 14);
     if (this.toastTween) this.toastTween.stop();
     if (this.toastTimer) this.toastTimer.remove(false);
     const c = this.toast;

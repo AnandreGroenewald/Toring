@@ -9,9 +9,9 @@ import { createRng } from './rng.js';
 
 export const GUST_MUL = [0.75, 1.25];
 
-/** The stream for one weather event of a sequence. */
+/** The stream for one weather event of a sequence (a Blok vir Blok round's by its key: both turns the same). */
 export function eventRng(seed, ev) {
-  return createRng(`${seed}/weather-fx`).fork(`${ev.type}@${ev.start}`);
+  return createRng(`${seed}/weather-fx`).fork(ev.key ? `${ev.type}#${ev.key}` : `${ev.type}@${ev.start}`);
 }
 
 /** Gust strength multiplier for flip n (1-based) of an event. */

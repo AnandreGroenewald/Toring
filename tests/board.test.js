@@ -7,7 +7,7 @@ import { defaultNicknameFor, cleanNickname } from '../js/core/duel.js';
 
 const API = 'https://borge.example/';
 const daily = { mode: 'daily', dateKey: '2026-10-08', dayNumber: 3, heightM: 37.46, blocksDropped: 20, durationMs: 90321 };
-const answer = { players: 3, top: [{ rank: 1, name: 'Anna', heightM: 45, you: false }, { rank: 2, name: 'Bennie', heightM: 37.5, you: true }], you: { rank: 2, heightM: 37.5, hidden: false } };
+const answer = { players: 3, top: [{ rank: 1, name: 'Anna', heightM: 45, you: false, retried: true }, { rank: 2, name: 'Bennie', heightM: 37.5, you: true, retried: false }], you: { rank: 2, heightM: 37.5, hidden: false, retried: false } };
 
 function fakeFetch(reply, seen = []) {
   return async (url, init) => {
@@ -42,6 +42,10 @@ test('posting a daily: the right fields, as plain text (no preflight); practice 
   assert.equal(await postBoard({ apiUrl: API, result: { ...daily, blocksDropped: 0 }, player: 'abcdefghijklmnop', fetchImpl: fakeFetch(answer, none) }), null);
   assert.equal(await postBoard({ apiUrl: '', result: daily, player: 'abcdefghijklmnop', fetchImpl: fakeFetch(answer, none) }), null);
   assert.equal(none.length, 0);
+  // (1.12) a second try ("Nog 'n kans") says so: the server keeps the better one and marks it 🔁
+  const again = [];
+  await postBoard({ apiUrl: API, result: { ...daily, retry: true }, player: 'abcdefghijklmnop', name: 'Bennie', fetchImpl: fakeFetch(answer, again) });
+  assert.equal(JSON.parse(again[0].init.body).retry, true);
 });
 
 test('reading the board: with or without the player; offline is null', async () => {

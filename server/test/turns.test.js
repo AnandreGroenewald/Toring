@@ -84,8 +84,8 @@ const say = (room, ws, o) => room.onMessage(ws, JSON.stringify(o));
 const POSE = [360.125, -812.5, 0.0314, 120.5, -3.25];
 const snap = (i, r = 'G') => (r === 'X' ? { blocks: [], lost: [i] } : { blocks: [[i, 360 + i, 400 - 40 * i, 0.001, 0, r]], lost: [] });
 
-/** A Blok vir Blok room with two players who said hello. Returns sockets by seat. */
-async function turnsRoom({ fresh = false } = {}) {
+/** A Blok vir Blok room with two players who said hello (protocol v: 3 = 1.11, 4 = 1.12). Returns sockets by seat. */
+async function turnsRoom({ fresh = false, v = [3, 3] } = {}) {
   const clk = clock();
   const state = fakeState();
   let room = new MatchRoom(state, {}, { now: clk.now, upgrade });
@@ -94,8 +94,8 @@ async function turnsRoom({ fresh = false } = {}) {
   const b = fakeSocket();
   await room.join(a);
   await room.join(b);
-  await say(room, a, { t: 'hello', name: 'Anna', v: 3 });
-  await say(room, b, { t: 'hello', name: 'Bennie', v: 3 });
+  await say(room, a, { t: 'hello', name: 'Anna', v: v[0] });
+  await say(room, b, { t: 'hello', name: 'Bennie', v: v[1] });
   clk.tick(DUEL.countdownMs);
   if (fresh) room = new MatchRoom(state, {}, { now: clk.now, upgrade });   // woken after hibernation
   const first = a.last('start').turn.seat;
@@ -342,4 +342,96 @@ test('turns room: a report that doesn\'t fit the turn is ignored (future blocks;
   assert.equal(them.of('settled').length + them.of('turn').length, 0);
   await say(room, me, { t: 'settled', n: 1, lost: true, r: 'X', snap: { blocks: [], lost: [0] } });
   assert.equal(them.last('turn').hearts[first], TURNS.hearts - 1);
+});
+
+// ------------------------------------------------------------------------------- 1.12
+import { turnRounds } from '../../js/core/turns.js';
+
+test('1.12 turns room: rondtes only when both games know them; the turns carry the round and the one coming', async () => {
+  const old = await turnsRoom({ v: [4, 3] });
+  assert.equal(old.a.last('start').rounds, undefined, 'a 1.11 game in the match: no rounds');
+  assert.equal(old.a.last('start').opp.v, 3, 'each game hears the other\'s protocol');
+  const { room, a, b, first, bySeat } = await turnsRoom({ v: [4, 4] });
+  assert.equal(a.last('start').rounds, true);
+  assert.equal(b.last('start').rounds, true);
+  const plan = turnRounds('seedabc123');
+  const r1 = plan[0];
+  let seat = first;
+  for (let n = 1; n < r1.n; n++) {
+    await play(room, bySeat[seat], n);
+    seat = 1 - seat;
+  }
+  const before = a.of('turn').find((t) => t.n === r1.n - 1);
+  assert.deepEqual(before.nx, { kind: r1.kind, dir: r1.dir, strength: r1.strength, side: r1.side, key: r1.key, first: true }, 'shown coming');
+  const t1 = a.of('turn').find((t) => t.n === r1.n);
+  assert.equal(t1.ev.key, r1.key);
+  assert.deepEqual(b.of('turn').find((t) => t.n === r1.n), t1, 'both hear the same');
+  await play(room, bySeat[seat], r1.n);
+  const t2 = a.of('turn').find((t) => t.n === r1.n + 1);
+  assert.equal(t2.ev.key, r1.key, 'the other player gets the same round');
+  assert.equal(t2.ev.first, false);
+  assert.notEqual(t2.seat, t1.seat);
+});
+
+test('1.12 turns room: go, the report\'s steps and Skelm Sakkie\'s outcome pass on only from the player whose turn it is', async () => {
+  const { room, first, bySeat } = await turnsRoom({ v: [4, 4] });
+  const me = bySeat[first];
+  const them = bySeat[1 - first];
+  await say(room, them, { t: 'go', n: 1 });
+  await say(room, me, { t: 'go', n: 2 });
+  assert.equal(me.of('go').length + them.of('go').length, 0);
+  await say(room, me, { t: 'go', n: 1 });
+  assert.deepEqual(them.last('go'), { t: 'go', n: 1 });
+  room.now.tick?.(1000);
+  await say(room, me, { t: 'visit', n: 1, what: 'stole', at: 2100.4, idx: [3, 4, 'x', -1, 99999] });
+  assert.deepEqual(them.last('visit'), { t: 'visit', n: 1, what: 'stole', at: 2100, idx: [3, 4] });
+  await say(room, me, { t: 'visit', n: 1, what: 'ate', at: 1 });
+  await say(room, them, { t: 'visit', n: 1, what: 'caught', at: 1 });
+  assert.equal(them.of('visit').length, 1, 'a strange outcome, or out of turn: not passed on');
+  await say(room, me, { t: 'drop', n: 1, p: POSE });
+  await say(room, me, { t: 'settled', n: 1, r: 'G', snap: snap(0), k: 131 });
+  assert.equal(them.last('settled').k, 131, 'the steps from the drop to the report');
+  assert.equal(me.of('visit').length, 0, 'not echoed back');
+});
+
+test('1.12 turns room: beating the round\'s visitor gives a heart back on the server too', async () => {
+  const seed = 'seedabc123';
+  const plan = turnRounds(seed);
+  const thief = plan.find((r) => r.kind === 'thief');
+  const { room, a, first, bySeat } = await turnsRoom({ v: [4, 4] });
+  let seat = first;
+  const who = thief.n % 2 ? first : 1 - first;
+  let lostOne = false;
+  for (let n = 1; n < thief.n; n++) {
+    const lose = seat === who && !lostOne;
+    if (lose) lostOne = true;
+    await play(room, bySeat[seat], n, lose ? { r: 'X', lost: true } : {});
+    seat = 1 - seat;
+  }
+  assert.equal(seat, who);
+  const hearts = a.last('turn').hearts[who];
+  assert.equal(hearts, TURNS.hearts - 1);
+  room.now.tick?.(1000);
+  await say(room, bySeat[seat], { t: 'drop', n: thief.n, p: POSE });
+  await say(room, bySeat[seat], { t: 'settled', n: thief.n, r: 'G', snap: snap(thief.n - 1), vis: 'caught' });
+  assert.equal(a.last('turn').hearts[who], TURNS.hearts, 'caught: a heart back');
+});
+
+test('1.12 emoji reactions: passed on in either mode, a known one only, at most one every few seconds', async () => {
+  const { EMOTE } = await import('../../js/config.js');
+  const { room, first, bySeat } = await turnsRoom({ v: [4, 4] });
+  const me = bySeat[first];
+  const them = bySeat[1 - first];
+  await say(room, me, { t: 'emote', e: 'lag' });
+  assert.deepEqual(them.last('emote'), { t: 'emote', e: 'lag' });
+  await say(room, me, { t: 'emote', e: 'vuur' });
+  assert.equal(them.of('emote').length, 1, 'too soon');
+  room.now.tick?.(EMOTE.serverGapMs);
+  await say(room, me, { t: 'emote', e: '<script>' });
+  assert.equal(them.of('emote').length, 1, 'unknown');
+  await say(room, me, { t: 'emote', e: 'vuur' });
+  assert.equal(them.of('emote').length, 2);
+  await say(room, them, { t: 'emote', e: 'klap' });
+  assert.deepEqual(me.last('emote'), { t: 'emote', e: 'klap' }, 'either player, whoever\'s turn it is');
+  assert.equal(me.of('emote').length, 1);
 });
