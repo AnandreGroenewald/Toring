@@ -438,7 +438,7 @@ Later the owner added (decisions are final unless they say otherwise):
     - A first visit without test switches works: the how-to, the menu with the week chest, the shop and the board closing on Back, and the service worker at `stapel-v1.10.0`.
     - The old address forwards a player's progress. `assetlinks.json` has both keys.
     - Tests: 271 and 171 (+1 skipped) pass.
-  - **1.10.1, committed but NOT live (`d302efe`; the owner said "Not yet", 9 Oct):** a copy of the old address that was added to a home screen showed the game with a browser bar ("Address bar + ✕"). The forward to the new address leaves the installed app's own address. The fix:
+  - **1.10.1 (`d302efe`; went live with 1.11.0 on 9 Oct, after the owner's "push once done"):** a copy of the old address that was added to a home screen showed the game with a browser bar ("Address bar + ✕"). The forward to the new address leaves the installed app's own address. The fix:
     - `js/moved.js` leaves an installed copy where it is (display-mode standalone, fullscreen or minimal-ui, or iPhone's `navigator.standalone`);
     - `siteUrl()` gives the new address there, so shared links never carry the old name.
     - Tested headless: an installed copy stays, with its coins, and its room link is `https://stapelspel.pages.dev/?kamer=…`; a normal tab still forwards; `move110` still passes.
@@ -459,6 +459,14 @@ Later the owner added (decisions are final unless they say otherwise):
   - **Results:** after a tower, "Oefen" and "Uitdagersreeks — Speel nou teen iemand" side by side after the card (they no longer float over the city and the streak).
   - **Review** (agent, before release): 13 findings, the real ones fixed: a connection lost in the 3-2-1, the other player's Perfeks, the combo badge after a match, the aim time after a pause (moved on; live capped at 38 s), slides stopped by the report, hearts flicker, Robot Rikus and fog, a report that doesn't fit the turn (checked on both sides, `snapFits`), one storage write per turn.
   - **Deploy order:** the Worker first (an old lobby or room would ignore `mode` and play Wedloop), then the site.
+  - **Live 9 Oct 2026 ~11:50:** Worker deployed, pushed (with 1.10.1), Pages deployed (`stapel-v1.11.0`). Checked live:
+    - a Blok vir Blok friend match (6 turns, both towers identical, quitting);
+    - random pairing per mode (Blok vir Blok players paired, never with Wedloop);
+    - Wedloop hearts live ("Elsa 3/4");
+    - new-player invites (af/en, in the match in ~4 s);
+    - a first visit.
+  - **The app:** 1.11.0 (11100) is built (`~/Desktop/Stapel app (Google Play)/Stapel-1.11.0.aab` and `-toets.apk`) but not uploaded: the owner decides. The closed test's 1.10.0 was still in Google's review.
+  - **Testing note:** `wrangler dev` hangs at "Starting local server" in this environment (and the miniflare smoke test is skipped). Two-player tests ran the real `server/src/match.js` in node behind real WebSockets instead (a scratch `matchhost.mjs`: in-memory DO state, the alarm on a timer).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
