@@ -438,6 +438,11 @@ Later the owner added (decisions are final unless they say otherwise):
     - A first visit without test switches works: the how-to, the menu with the week chest, the shop and the board closing on Back, and the service worker at `stapel-v1.10.0`.
     - The old address forwards a player's progress. `assetlinks.json` has both keys.
     - Tests: 271 and 171 (+1 skipped) pass.
+  - **1.10.1, committed but NOT live (`d302efe`; the owner said "Not yet", 9 Oct):** a copy of the old address that was added to a home screen showed the game with a browser bar ("Address bar + ✕"). The forward to the new address leaves the installed app's own address. The fix:
+    - `js/moved.js` leaves an installed copy where it is (display-mode standalone, fullscreen or minimal-ui, or iPhone's `navigator.standalone`);
+    - `siteUrl()` gives the new address there, so shared links never carry the old name.
+    - Tested headless: an installed copy stays, with its coins, and its room link is `https://stapelspel.pages.dev/?kamer=…`; a normal tab still forwards; `move110` still passes.
+    - To go live: push, then deploy Pages. The Play app is unaffected.
   - **Left to tidy:**
     - wrangler's leftovers in the repo root (the `package.json` change, `package-lock.json`, `wrangler.jsonc`, `node_modules/`), from the first `pages project create`: delete them, never commit them;
     - the worktree `~/Desktop/Toring-search` (branch `claude/search-practice`, merged). **Keep** `.claude/worktrees/agent-a1516b63df4322d9e`: it holds the parked PayFast branch (`dd2163d`, not merged).
