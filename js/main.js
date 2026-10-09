@@ -85,8 +85,9 @@ const TAB_ID = (() => {
 })();
 
 function siteUrl() {
-  // links shared from a file:// copy or the app (https://localhost) point at the website
-  if (location.protocol === 'file:' || IN_APP) return SITE_URL_FALLBACK;
+  // links shared from a file:// copy, the app (https://localhost) or a home-screen copy of the old
+  // address (js/moved.js leaves those there) point at the website
+  if (location.protocol === 'file:' || IN_APP || location.hostname === 'anandregroenewald.github.io') return SITE_URL_FALLBACK;
   return location.origin + location.pathname.replace(/index\.html$/, '');
 }
 

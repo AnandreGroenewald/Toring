@@ -4,14 +4,28 @@
 //    hand over the player's progress in the link's # (the browser keeps it per address, so it would
 //    otherwise stay behind);
 //  - on the new address: keep what was handed over wherever nothing is kept yet, then tidy the address.
-// Anywhere else (the app, a test on this computer) it does nothing.
+// Anywhere else (the app, a test on this computer) it does nothing. Nor does it on the old address when
+// that was added to a home screen as an app: there, going to another address would leave the app's own
+// window, and the phone then shows the page with a browser bar. The game is the same there, and the
+// links it shares already use the new address (siteUrl in js/main.js).
 (function () {
   var OLD_HOST = 'anandregroenewald.github.io';
   var NEW_SITE = 'https://stapelspel.pages.dev/';
   var KEY_RE = /^stapel\./;
   var SKIP = { 'stapel.sponsors.v1': 1 };   // a cache: the new address fetches its own
+  function installed() {
+    try {
+      if (navigator.standalone === true) return true;   // iPhone: "Add to Home Screen"
+      return ['standalone', 'fullscreen', 'minimal-ui'].some(function (m) {
+        return window.matchMedia('(display-mode: ' + m + ')').matches;
+      });
+    } catch (e) {
+      return false;
+    }
+  }
   try {
     if (location.hostname === OLD_HOST) {
+      if (installed()) return;
       var data = {};
       var n = 0;
       try {
