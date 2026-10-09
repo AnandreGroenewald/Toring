@@ -299,6 +299,7 @@ svg.ic {
 .btn-purple { --bg: var(--jakaranda); --bg-l: var(--jakaranda-l); --bg-d: var(--jakaranda-d); }
 .btn-blue   { --bg: #2f74cf; --bg-l: var(--hemel); --bg-d: var(--hemel-d); }
 .btn-wa     { --bg: #128c4a; --bg-l: #25d366; --bg-d: #0c6434; }
+.btn-klei   { --bg: var(--klei); --bg-l: var(--klei-l); --bg-d: var(--klei-d); }
 
 .btn-row { display: flex; gap: calc(18 * var(--u)); }
 .btn-row > .btn { flex: 1 1 0; min-width: 0; padding-left: calc(18 * var(--u)); padding-right: calc(18 * var(--u)); white-space: nowrap; }
@@ -2189,6 +2190,30 @@ canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 
 .remind-times { display: grid; gap: calc(12 * var(--u)); }
 .remind-times .btn.is-on { box-shadow: 0 0 0 calc(4 * var(--u)) var(--sonneblom); }
 .app-open { text-decoration: none; }
+
+/* Bêre jou vordering (1.13): Sign in with Google */
+.account-why, .account-ask { margin: 0 0 calc(18 * var(--u)); font-weight: 700; line-height: 1.4; }
+.account-google { display: flex; justify-content: center; min-height: 44px; margin: 0 0 calc(14 * var(--u)); }
+.account-keeps { margin: 0; font-size: max(12px, calc(22 * var(--u))); font-weight: 600; line-height: 1.4; color: var(--ink-soft); }
+.account-in { display: flex; align-items: center; gap: calc(10 * var(--u)); margin: 0 0 calc(8 * var(--u)); font-weight: 900; }
+.account-tick { display: inline-grid; place-items: center; width: 1.5em; height: 1.5em; border-radius: 50%; background: var(--bosveld); color: #fff; font-size: 0.9em; }
+.account-line { margin: 0; font-weight: 700; color: var(--ink-soft); }
+.account-msg { margin: calc(12 * var(--u)) 0; font-weight: 700; line-height: 1.4; color: var(--klei-d); }
+.account-foot { display: flex; flex-direction: column; gap: calc(12 * var(--u)); }
+.account-delete {
+  appearance: none; border: 0; background: none; padding: 8px; margin: 0; align-self: center;
+  font: inherit; font-size: max(13px, calc(24 * var(--u))); font-weight: 700; color: var(--klei-d);
+  text-decoration: underline; cursor: pointer;
+}
+/* the app's own sign-in button, drawn like Google's (light theme: white, a grey line, the G on the left) */
+.gsi-native {
+  display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+  min-height: 44px; padding: 0 20px 0 14px; border: 1px solid #747775; border-radius: 22px;
+  background: #fff; color: #1f1f1f; font: 500 15px/20px Roboto, system-ui, sans-serif; cursor: pointer;
+}
+.gsi-native:active { background: #f1f1f1; }
+.gsi-native:focus-visible { outline: 3px solid var(--hemel-d); outline-offset: 2px; }
+.gsi-g { width: 20px; height: 20px; flex: none; }
 
 /* the version under the statistics (testers can say which one they have) */
 .version-note { margin: 0; text-align: center; font-size: max(11px, calc(20 * var(--u))); font-weight: 700; color: var(--ink-soft); opacity: 0.8; }

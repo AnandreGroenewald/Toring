@@ -12,7 +12,7 @@ import { createSequence } from './core/sequence.js';
 import { buildShareText, buildDuelShareText } from './core/share.js';
 import { parseChallengeQuery, parseRoomQuery, defaultNicknameFor } from './core/duel.js';
 import { coinsForGame, cosmetic, POWERUP_IDS, rankShortOf } from './core/economy.js';
-import { DAILY_RETRY } from './config.js';
+import { DAILY_RETRY, AUTH } from './config.js';
 import { weekView, WEEK } from './core/week.js';
 
 const WEEK_COINS = WEEK.coins;
@@ -27,6 +27,7 @@ import { tutorialDone } from './core/coach.js';
 import { loadSponsors } from './sponsorsFeed.js';
 import { sendStats, dailyPercentile } from './audience.js';
 import { postBoard, getBoard } from './board.js';
+import { createAccount } from './account.js';
 import { SPONSOR_API_URL, salesEnabled, matchApiUrl } from './sponsorConfig.js';
 import { createUI } from './ui/dom.js';
 import { getLanguage, isLang } from './core/i18n.js';
@@ -231,6 +232,65 @@ bus.on('game:audience', (a) => {
 // (its autoplay and ?date= would post); ?board=1 lets a test on this computer use a local server.
 const LOCAL_PAGE = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 const BOARD_ON = !!matchApiUrl() && (!DEBUG || (params.get('board') === '1' && LOCAL_PAGE));
+
+// (1.13) Sign in with Google: the saved progress (js/account.js). Off until js/config.js has Google's client
+// ID. A debug session uses it only on this computer, with ?cloud=1 (and ?gcid= a test client ID): never the
+// real accounts. A sync never runs while a tower is being built; it waits for the tower to end.
+const ACCOUNT_ON = !DEBUG || (params.get('cloud') === '1' && LOCAL_PAGE);
+const account = createAccount({
+  store,
+  bus,
+  apiUrl: ACCOUNT_ON ? matchApiUrl() : '',
+  clientId: DEBUG && params.get('gcid') ? params.get('gcid') : AUTH.googleClientId,
+  storageKey: DEBUG ? `${STORAGE_KEY}.debug` : STORAGE_KEY,
+  today: todayKey,
+  canApply: () => screen !== 'game' && screen !== 'pause',
+});
+ui.setAccount(account.status());
+if (DEBUG) window.__stapel.account = account;
+
+bus.on('account:changed', ({ why } = {}) => {
+  ui.setAccount(account.status());
+  // the account brought progress here (or this device started over): the menu shows it at once
+  if ((why === 'merged' || why === 'signed-out' || why === 'deleted') && screen === 'menu') showMenu();
+});
+function signedIn(err, out) {
+  if (!err) {
+    ui.setAccountNote(null);
+    // signed in, but the first save hasn't gone through yet (no internet): it goes as soon as it can
+    ui.toast(out === 'saved' || out === 'same' ? S.accountWelcome : S.accountWelcomeLater, 2800);
+    if (screen === 'menu') showMenu();
+    return;
+  }
+  ui.setAccountNote(err.message === 'canceled' ? null : err.message === 'out' ? S.accountOut : S.accountErr(err.message));
+}
+bus.on('ui:account', () => {
+  ui.showAccount(account.status());
+  account.wake();
+});
+// the website: Google's own button in the sheet
+bus.on('ui:account-slot', (slot) => {
+  account.renderButton(slot, { lang: getLanguage(), onDone: signedIn }).catch(() => ui.setAccountNote(S.accountErr('offline')));
+});
+// the app: the phone's own Google sign-in
+bus.on('ui:account-native', () => {
+  ui.setAccountNote(null, { working: true });
+  account.signInNative().then((out) => signedIn(null, out), signedIn);
+});
+bus.on('ui:account-signout', () => {
+  ui.setAccountNote(null, { working: true });
+  account.signOut().then(() => {
+    ui.closeModal();
+    ui.toast(S.accountBye, 3000);
+  }, (err) => ui.setAccountNote(err.message === 'out' ? S.accountOut : S.accountErr(err.message)));
+});
+bus.on('ui:account-delete', () => {
+  ui.setAccountNote(null, { working: true });
+  account.deleteAccount().then(() => {
+    ui.closeModal();
+    ui.toast(S.accountDeleted, 3000);
+  }, (err) => ui.setAccountNote(err.message === 'out' ? S.accountOut : S.accountErr(err.message)));
+});
 ui.setBoardOn(BOARD_ON);
 const BOARD_FRESH_MS = 60 * 1000;   // an answer this recent is shown again without asking the server
 let boardLast = null;   // { dateKey, board, at }: the last answer, so the sheet opens on it at once
@@ -345,6 +405,7 @@ bus.on('ui:board', openBoard);
 bus.on('ui:board-hide', (hide) => {
   store.setBoardHidden(!!hide);
   boardChanged();
+  account.soon();
 });
 
 /** At start: a change that didn't reach the server last time goes now (one about an older day is let go). */
@@ -440,6 +501,7 @@ bus.on('ui:shop-buy', ({ kind, id } = {}) => {
   }
   ui.showShop(shopModel());
   if (r.ok && kind !== 'powerup') lookChanged();
+  if (r.ok) account.soon();
 });
 bus.on('ui:shop-wear', ({ kind, id } = {}) => {
   store.wearCosmetic(kind, id);
@@ -603,6 +665,7 @@ function showMenu() {
   screen = 'menu';
   pushSkyline();
   ui.showMenu(menuModel());
+  account.soon();
   wakeLoop();
   armMenuSleep();
   requestAnimationFrame(updateMenuAnchor);
@@ -855,7 +918,22 @@ window.addEventListener('popstate', () => {
 // ---------------------------------------------------------------------------
 // Bus wiring
 // ---------------------------------------------------------------------------
-bus.on('ui:play-daily', playDaily);
+// (1.13) signed in: the towers played on another device come in first (a short wait at most), so this one never
+// builds today's tower again or restarts the weekkis on an old copy
+let dailyWaiting = false;
+bus.on('ui:play-daily', () => {
+  if (!account.stale()) {
+    playDaily();
+    return;
+  }
+  if (dailyWaiting) return;
+  dailyWaiting = true;
+  ui.toast(S.accountWaiting, 1600);
+  account.settle(3000).then(() => {
+    dailyWaiting = false;
+    if (screen === 'menu') playDaily();
+  });
+});
 bus.on('ui:install', async () => {
   await promptInstall();
   ui.setInstall(installMode());
@@ -925,6 +1003,11 @@ window.addEventListener('stapel:link', (e) => {
   try {
     q = new URL(String(e.detail)).search;
   } catch {
+    return;
+  }
+  // (1.13) ?rekening (the privacy page's deletion link) opened the app: the account sheet
+  if (/[?&]rekening(?:[=&#]|$)/.test(q) && account.on) {
+    ui.showAccount(account.status());
     return;
   }
   const klop = /[?&]klop=/.test(q) ? loadChallenge(q, todayKey()) : null;
@@ -1059,8 +1142,15 @@ bus.on('ui:lang', (lang) => {
     return;
   }
   ui.closeModal();
-  if (first && !openDuelLink()) firstVisit();
+  if (first && !openAccountLink() && !openDuelLink()) firstVisit();
 });
+
+/** (1.13) ?rekening (the privacy page's "delete your account" link, for those without the app): the account sheet. */
+function openAccountLink() {
+  if (!params.has('rekening') || !account.on) return false;
+  ui.showAccount(account.status());
+  return true;
+}
 
 /** A new player's first visit (no link): "Hoe speel ek?" opens by itself, once; its "Kom ons bou!" starts the lesson. */
 function firstVisit() {
@@ -1223,6 +1313,7 @@ function startDuelGame(m) {
 }
 
 function showDuelResults(r) {
+  account.soon();   // (1.13) the match's coins and rank go to the account
   if (screen === 'results' || run.mode !== 'duel') return;
   ui.setEmotes(null);
   const d = duel.summary() || {};
@@ -1316,6 +1407,7 @@ bus.on('ui:duel-name', (text) => {
   if (saved?.ok) {
     clearTimeout(nameBoardTimer);
     nameBoardTimer = setTimeout(boardChanged, NAME_BOARD_MS);   // the latest leaderboard row takes the new name
+    account.soon();
   }
 });
 bus.on('ui:duel-bot', () => versus(duel.startBot(duelMode())));
@@ -1568,6 +1660,7 @@ bus.on('game:over', (result) => {
   });
   showPercentile(r);
   sleepLoop(RESULTS_SLEEP_MS);
+  account.soon();   // (1.13) the tower goes to the account (a finished daily: done on the other devices too)
   if (r.mode === 'daily') {
     planReminders();   // today is built: no reminder today
     if (REMIND && !store.getReminder().asked) setTimeout(askReminder, 2600);
@@ -1582,10 +1675,12 @@ document.addEventListener('visibilitychange', () => {
     duel.away();
     if (canPause()) pauseGame();
     else audio.suspend();
+    account.sync();   // (1.13) what was done here goes to the account (a tower in progress waits)
   } else {
     duel.back();
     planReminders();
     if (!run.paused) audio.resume();
+    account.wake();
   }
 });
 window.addEventListener('pagehide', saveProgressNow);
@@ -1690,11 +1785,12 @@ function onReady() {
   const recoveredCoins = payRecovered(recovered);
   startIdle();
   showMenu();
+  account.sync();   // (1.13) signed in: the account's latest at once
   retryBoard();
   planReminders();
   // a new player chooses a language first; a challenge link waits for that choice
   if (askLanguage) ui.showLanguage({ first: true });
-  else if (!openDuelLink()) firstVisit();
+  else if (!openAccountLink() && !openDuelLink()) firstVisit();
   ui.setLoading(false);
   if (recovered.length) ui.toast(recoveredCoins ? `${S.unfinished} +${recoveredCoins} 🪙` : S.unfinished, 3600);
   else if (liveElsewhere(todayKey())) ui.toast(S.otherTab, 3000);

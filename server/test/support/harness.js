@@ -118,9 +118,12 @@ export function createHarness(envOverrides = {}) {
   const key = envOverrides.PAYSTACK_SECRET_KEY ?? SECRET;
   const paystack = fakePaystack(key);
   const logs = [];
+  // (1.13) a test may set `google` (test/support/google.js) to answer Google's key requests
+  const outside = { google: null };
+  const isGoogle = (input) => String(typeof input === 'string' ? input : input?.url).startsWith('https://www.googleapis.com/');
   const worker = createWorker({
     now: () => clock.now,
-    fetch: (...a) => paystack.fetch(...a),
+    fetch: (input, init) => (outside.google && isGoogle(input) ? outside.google.fetch(input, init) : paystack.fetch(input, init)),
     log: (level, event, fields) => logs.push({ level, event, ...fields }),
   });
   const env = baseEnv(db, envOverrides);
@@ -159,7 +162,7 @@ export function createHarness(envOverrides = {}) {
     });
   }
 
-  return { db, clock, paystack, logs, worker, env, request, admin, webhook };
+  return { db, clock, paystack, logs, worker, env, request, admin, webhook, outside };
 }
 
 export function signupBody(overrides = {}) {

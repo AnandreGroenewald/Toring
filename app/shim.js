@@ -61,16 +61,36 @@
     },
   };
 
+  // (1.13) Sign in with Google: the phone's own Google sign-in (StapelGooglePlugin, registered in MainActivity),
+  // because Google doesn't allow its web sign-in inside an app. js/account.js gets only Google's ID token,
+  // which the game's server checks. A failure comes back as an Error whose message is its code
+  // ('canceled', 'no_account' or 'error').
+  window.stapelApp.google = {
+    signIn: function (opts) {
+      return cap.nativePromise('StapelGoogle', 'signIn', { clientId: (opts && opts.clientId) || '' }).then(function (r) {
+        if (!r || typeof r.idToken !== 'string' || !r.idToken) throw new Error('error');
+        return { idToken: r.idToken };
+      }, function (err) {
+        throw new Error((err && err.code) || 'error');
+      });
+    },
+    signOut: function () {
+      return cap.nativePromise('StapelGoogle', 'signOut', {}).catch(function () {});
+    },
+  };
+
   // Challenge links (AndroidManifest: App Links): a friend's room (?kamer=), run (?teen=) or daily height
   // (?klop=). One that started the app reloads the game with its query (read at start), once: Android
   // hands the same link again when the app comes back from Recents, so a link opened in the last
   // LAUNCH_ONCE_MS is let go. One that comes while the game runs is handed over as 'stapel:link' (no
   // reload: a tower in progress stays); the starting link, which Capacitor also hands over, isn't.
   var LAUNCH_ONCE_MS = 12 * 60 * 60 * 1000;
+  // (1.13: ?rekening, the privacy page's deletion link, opens the account sheet)
+  var LINK_RE = /[?&](?:(?:kamer|teen|klop)=|rekening(?:[=&#]|$))/;
   function linkQuery(url) {
     try {
       var q = new URL(url).search;
-      return /[?&](kamer|teen|klop)=/.test(q) ? q : '';
+      return LINK_RE.test(q) ? q : '';
     } catch (err) {
       return '';
     }
@@ -80,7 +100,7 @@
     launchUrl = (r && r.url) || null;
     return launchUrl;
   }, function () { return null; });
-  if (!/[?&](kamer|teen|klop)=/.test(location.search)) {
+  if (!LINK_RE.test(location.search)) {
     launched.then(function (url) {
       var q = url ? linkQuery(url) : '';
       if (!q) return;

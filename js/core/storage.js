@@ -181,6 +181,64 @@ function sanitize(raw) {
 const clone = (x) => (x == null ? x : JSON.parse(JSON.stringify(x)));
 const laterKey = (a, b) => (!a ? b : !b ? a : daysBetween(a, b) > 0 ? b : a);
 
+/** (1.12) The second daily tries, checked: { [dateKey]: { status: 'ready'|'playing'|'done', result, ... } }. */
+function cleanRetryMap(o) {
+  const out = {};
+  if (!o || typeof o !== 'object') return out;
+  for (const [k, r] of Object.entries(o)) {
+    if (!isDateKey(k) || !r || !['ready', 'playing', 'done'].includes(r.status)) continue;
+    out[k] = {
+      status: r.status,
+      result: r.status === 'ready' ? null : normalizeResult(r.result, k),
+      startedAt: num(r.startedAt, null),
+      finishedAt: num(r.finishedAt, null),
+      beatAt: num(r.beatAt, null),
+      owner: typeof r.owner === 'string' ? r.owner : null,
+    };
+  }
+  return out;
+}
+
+const PLAYER_ID_RE = /^[a-z0-9]{12,32}$/;
+const sortedMap = (o) => Object.fromEntries(Object.keys(o).sort().map((k) => [k, o[k]]));
+
+// --- The saved progress (1.13: Sign in with Google) ------------------------------------------------------
+// What an account keeps of a player: the finished towers and their stats, Oefen's best, the Uitdagersreeks
+// name and record, the wallet (coins, power-ups, looks, ranks), the second tries, the weekkis and the
+// leaderboard number. Not kept: this device's settings, language and reminder, and a tower being played
+// right now (another device must never finish it). js/core/cloudsave.js merges two of these.
+export const SAVE_V = 1;
+
+/** A save, checked (every part rebuilt as the store would; day maps in date order, so equal saves compare equal). */
+export function cleanSave(raw) {
+  const s = raw && typeof raw === 'object' ? raw : {};
+  const d = sanitize({ ...(s.main && typeof s.main === 'object' ? s.main : {}), settings: {} });
+  const daily = {};
+  for (const [k, e] of Object.entries(d.daily)) {
+    if (e.status !== 'done') continue;
+    daily[k] = { status: 'done', result: e.result, startedAt: e.startedAt, finishedAt: e.finishedAt, ...(e.newBest ? { newBest: e.newBest } : {}) };
+  }
+  const retry = {};
+  for (const [k, r] of Object.entries(cleanRetryMap(s.retry))) {
+    if (r.status === 'playing') continue;
+    retry[k] = { status: r.status, result: r.result, startedAt: r.startedAt, finishedAt: r.finishedAt };
+  }
+  const b = s.board && typeof s.board === 'object' ? s.board : {};
+  return {
+    v: SAVE_V,
+    main: { tutorialSeen: d.tutorialSeen, daily: sortedMap(daily), stats: d.stats, practice: d.practice, duel: d.duel },
+    econ: cleanEconomy(s.econ),
+    retry: sortedMap(retry),
+    week: cleanWeek(s.week),
+    board: {
+      player: typeof b.player === 'string' && PLAYER_ID_RE.test(b.player) ? b.player : null,
+      hidden: b.hidden === true,
+      // (the leaderboard numbers this account's devices used before they joined it: the newest 8)
+      past: [...new Set((Array.isArray(b.past) ? b.past : []).filter((p) => typeof p === 'string' && PLAYER_ID_RE.test(p)))].slice(-8),
+    },
+  };
+}
+
 // --- Store -----------------------------------------------------------------------
 
 /**
@@ -317,26 +375,11 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
   }
 
   function cleanRetries(raw) {
-    const out = {};
-    let o = null;
     try {
-      o = raw ? JSON.parse(raw) : null;
+      return cleanRetryMap(raw ? JSON.parse(raw) : null);
     } catch {
-      o = null;
+      return {};
     }
-    if (!o || typeof o !== 'object') return out;
-    for (const [k, r] of Object.entries(o)) {
-      if (!isDateKey(k) || !r || !['ready', 'playing', 'done'].includes(r.status)) continue;
-      out[k] = {
-        status: r.status,
-        result: r.status === 'ready' ? null : normalizeResult(r.result, k),
-        startedAt: num(r.startedAt, null),
-        finishedAt: num(r.finishedAt, null),
-        beatAt: num(r.beatAt, null),
-        owner: typeof r.owner === 'string' ? r.owner : null,
-      };
-    }
-    return out;
   }
 
   function persistRetry() {
@@ -1029,6 +1072,50 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       sync();
       const reward = rollSeasons();
       return rankView(mode, { reward });
+    },
+
+    // --- The saved progress (1.13: Sign in with Google; js/account.js) -----------------------------------
+    /** This device's progress as a save (js/core/storage.js cleanSave). */
+    exportSave() {
+      sync();
+      return cleanSave({ main: data, econ, retry: retries, week: readWeek(), board: readBoard() });
+    },
+
+    /**
+     * Take a (merged) save as this device's progress. This device's settings stay, and so does a tower being
+     * played here right now (a second try still being played too, unless the save has it done).
+     */
+    importSave(raw) {
+      sync();
+      const save = cleanSave(raw);
+      const playing = Object.entries(data.daily).filter(([, e]) => e.status === 'playing');
+      data = sanitize({ ...save.main, settings: data.settings });
+      for (const [k, e] of playing) if (!data.daily[k]) data.daily[k] = e;
+      const playingTries = Object.entries(retries).filter(([, r]) => r.status === 'playing');
+      retries = cleanRetryMap(save.retry);
+      for (const [k, r] of playingTries) if (!retries[k] || retries[k].status === 'ready') retries[k] = r;
+      econ = cleanEconomy(save.econ);
+      persist();
+      persistEcon();
+      persistRetry();
+      writeWeek(save.week);
+      const b = readBoard();
+      writeBoard({ ...b, player: save.board.player || b.player, hidden: save.board.hidden });
+    },
+
+    /** Signed out (or the account deleted): this device starts over. Its settings, language and reminder stay. */
+    resetProgress() {
+      sync();
+      const settings = data.settings;
+      data = defaultData();
+      data.settings = settings;
+      econ = defaultEconomy();
+      retries = {};
+      persist();
+      persistEcon();
+      persistRetry();
+      writeWeek(cleanWeek(null));
+      writeBoard({ player: null, hidden: false, posted: null, pending: false });
     },
 
     recordPractice(result) {

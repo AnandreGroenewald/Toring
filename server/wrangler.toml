@@ -2,6 +2,7 @@
 # This file is safe to commit: it holds NO secrets. Secrets are set with
 #   npx wrangler secret put PAYSTACK_SECRET_KEY
 #   npx wrangler secret put ADMIN_TOKEN
+#   npx wrangler secret put AUTH_SECRET        (1.13, Sign in with Google)
 # See README.md for the full step-by-step setup.
 
 name = "stapel-borge"
@@ -62,3 +63,7 @@ AUTO_APPROVE = "true"
 GRACE_DAYS = "3"
 # Set to "true" to also require webhooks to come from Paystack's published IP addresses.
 PAYSTACK_IP_ALLOWLIST = "false"
+# (1.13) Sign in with Google: the web client ID from Google Cloud (Google Auth Platform > Clients > "Stapel
+# web"; public, not a secret). Empty = sign-in off. It also needs the secret AUTH_SECRET (at least 32
+# characters), set once with:  ./wr.sh secret put AUTH_SECRET   (never change it: account numbers come from it)
+GOOGLE_CLIENT_ID = ""

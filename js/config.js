@@ -296,6 +296,11 @@ export const EMOTE = Object.freeze({ cooldownMs: 5000, perMatch: 12, serverGapMs
 // the second try earns no coins, streak or week box (the first try did).
 export const DAILY_RETRY = Object.freeze({ price: 50 });
 
+// (1.13) Sign in with Google (js/account.js): the web client ID from Google Cloud (Google Auth Platform >
+// Clients > "Stapel web"; public, not a secret; the Worker's GOOGLE_CLIENT_ID is the same). Empty: the
+// sign-in stays hidden. The Android app asks Google for tokens for this same ID.
+export const AUTH = Object.freeze({ googleClientId: '' });
+
 // ---------------------------------------------------------------------------
 // Daily tower
 // ---------------------------------------------------------------------------
