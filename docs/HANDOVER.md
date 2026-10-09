@@ -465,7 +465,7 @@ Later the owner added (decisions are final unless they say otherwise):
     - Wedloop hearts live ("Elsa 3/4");
     - new-player invites (af/en, in the match in ~4 s);
     - a first visit.
-  - **The app:** 1.11.0 (11100) is built (`~/Desktop/Stapel app (Google Play)/Stapel-1.11.0.aab` and `-toets.apk`) but not uploaded: the owner decides. The closed test's 1.10.0 was still in Google's review.
+  - **The app:** 1.11.0 (11100) (`~/Desktop/Stapel app (Google Play)/Stapel-1.11.0.aab` and `-toets.apk`). On the owner's "Yes please" it is published on internal testing and sent for Google's review on the closed test (9 Oct ~12:20). Google had approved the 1.10.0 closed test overnight. The closed test's feedback box is empty: the owner's choice; a tester's Gmail had been typed there, and that tester is on the "Family" list.
   - **Testing note:** `wrangler dev` hangs at "Starting local server" in this environment (and the miniflare smoke test is skipped). Two-player tests ran the real `server/src/match.js` in node behind real WebSockets instead (a scratch `matchhost.mjs`: in-memory DO state, the alarm on a timer).
 <!-- STATUS-END -->
 
