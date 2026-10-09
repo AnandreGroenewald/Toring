@@ -137,10 +137,18 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
       const t = now();
       const key = `room:${await stats.addressKey({ cfg, now: t }, request)}`;
       if (!rate.allow(key, ROOMS_PER_HOUR, t)) throw new HttpError(429, 'rate_limited');
+      // the mode: Wedloop, or Blok vir Blok ({ "mode": "turns" }; older games send {})
+      let mode = 'race';
+      try {
+        const body = await readJsonObject(request, 256);
+        if (body && body.mode === 'turns') mode = 'turns';
+      } catch {
+        mode = 'race';
+      }
       for (let tries = 0; tries < 4; tries++) {
         const code = newRoomCode(rand32);
         const res = await env.MATCH_ROOM.get(env.MATCH_ROOM.idFromName(code))
-          .fetch('https://room/init', { method: 'POST', body: JSON.stringify({ kind: 'friend' }) });
+          .fetch('https://room/init', { method: 'POST', body: JSON.stringify({ kind: 'friend', mode }) });
         if (res.status === 200) return json(200, { code });
       }
       throw new HttpError(503, 'busy');

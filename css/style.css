@@ -1011,6 +1011,34 @@ svg.ic {
 .nick-msg { margin: 0; min-height: 1.3em; font-size: max(12px, calc(21 * var(--u))); font-weight: 700; color: var(--muted); }
 .nick-msg.bad { color: var(--klei-d); }
 .duel-btns { display: flex; flex-direction: column; gap: calc(18 * var(--u)); }
+/* Wedloop or Blok vir Blok (1.11): two big choices, what the chosen one is under them */
+.mode-pick { display: grid; gap: calc(10 * var(--u)); }
+.mode-btns { display: grid; grid-template-columns: 1fr 1fr; gap: calc(8 * var(--u)); padding: calc(6 * var(--u)); border-radius: calc(28 * var(--u)); background: var(--panel); }
+.mode-btn {
+  display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u));
+  min-height: 44px; padding: calc(16 * var(--u)) calc(8 * var(--u));
+  border: calc(3 * var(--u)) solid transparent; border-radius: calc(22 * var(--u));
+  background: transparent; color: var(--muted);
+  font: 900 max(14px, calc(28 * var(--u))) / 1.1 var(--font); cursor: pointer;
+}
+.mode-btn .emoji { font-size: 1.2em; }
+.mode-btn[aria-pressed="true"] { background: #fff; color: var(--ink); border-color: var(--jakaranda, #7a5cd6); box-shadow: 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(10, 34, 78, 0.12); }
+.mode-btn:focus-visible { outline: 3px solid var(--jakaranda-d, #5b3fa8); outline-offset: 2px; }
+.mode-what { margin: 0; font-size: max(12px, calc(23 * var(--u))); font-weight: 700; color: var(--ink-soft); line-height: 1.35; }
+.mode-line { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: calc(8 * var(--u)); margin: 0; font-size: max(13px, calc(26 * var(--u))); color: var(--ink-soft); }
+.mode-line b { color: var(--ink); font-weight: 900; }
+.vs-first { margin: 0; font-size: max(15px, calc(32 * var(--u))); font-weight: 900; color: var(--jakaranda-d, #5b3fa8); }
+/* Blok vir Blok results: one row per player */
+.res-vs { display: grid; gap: calc(10 * var(--u)); margin-top: calc(16 * var(--u)); }
+.res-vs-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: calc(14 * var(--u));
+  padding: calc(12 * var(--u)) calc(18 * var(--u)); border-radius: calc(20 * var(--u)); background: var(--panel);
+  font-size: max(14px, calc(28 * var(--u)));
+}
+.res-vs-row b { font-weight: 900; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-vs-row.you b { color: #a36b00; }
+.res-vs-hearts { letter-spacing: 0.06em; }
+.res-vs-p { font-weight: 800; color: var(--ink-soft); font-size: 0.85em; }
 .duel-btns .btn .emoji, .duel-wait .btn .emoji { font-size: 1.05em; }
 .duel-wait .btn:not(.btn-big):not(.btn-mini):not(.btn-wa) { font-size: calc(32 * var(--u)); }
 .duel-note { margin: 0; }
@@ -1888,11 +1916,8 @@ canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 
   border-radius: calc(36 * var(--u));
   background: rgba(12, 32, 66, 0.55);
 }
-.screen-results .btn-row {
-  position: sticky;
-  bottom: calc(10 * var(--u));
-  z-index: 1;
-}
+/* what next sits after the card, in its place (1.11: it used to float over the city and the streak) */
+.screen-results .res-play { margin-top: calc(4 * var(--u)); }
 .foot-cell .btn-new { min-height: calc(80 * var(--u)); font-size: calc(26 * var(--u)); padding: calc(8 * var(--u)) calc(14 * var(--u)); }
 .empty-note { margin: calc(24 * var(--u)) 0 calc(4 * var(--u)); }
 

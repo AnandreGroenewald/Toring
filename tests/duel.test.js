@@ -325,17 +325,22 @@ test('share text after a match: who won and the link to play against your run', 
 
 test('stats: nickname (name rules) and wins/losses with a winning streak', () => {
   const s = createStore(memoryBackend());
-  assert.deepEqual(s.getDuel(), { name: null, played: 0, wins: 0, losses: 0, streak: 0, bestStreak: 0 });
+  assert.deepEqual(s.getDuel(), { name: null, played: 0, wins: 0, losses: 0, streak: 0, bestStreak: 0, mode: 'race' });
   assert.deepEqual(s.setDuelName('  Sannie '), { ok: true, name: 'Sannie' });
   assert.deepEqual(s.setDuelName('kak'), { ok: false, name: 'Sannie' });
   s.recordDuel('won');
   s.recordDuel('won');
   s.recordDuel('lost');
   s.recordDuel('won');
-  assert.deepEqual(s.getDuel(), { name: 'Sannie', played: 4, wins: 3, losses: 1, streak: 1, bestStreak: 2 });
+  assert.deepEqual(s.getDuel(), { name: 'Sannie', played: 4, wins: 3, losses: 1, streak: 1, bestStreak: 2, mode: 'race' });
   assert.deepEqual(s.setDuelName(''), { ok: true, name: null });
   // junk in storage is cleaned on load
   const be = memoryBackend();
   be.setItem('stapel.v1', JSON.stringify({ v: 1, duel: { name: 'kak', played: -3, wins: 2, losses: 'x', streak: 5, bestStreak: 1 } }));
-  assert.deepEqual(createStore(be).getDuel(), { name: null, played: 2, wins: 2, losses: 0, streak: 5, bestStreak: 5 });
+  assert.deepEqual(createStore(be).getDuel(), { name: null, played: 2, wins: 2, losses: 0, streak: 5, bestStreak: 5, mode: 'race' });
+  // the way to play last chosen (1.11): Blok vir Blok kept, anything else is Wedloop
+  const s2 = createStore(be);
+  assert.equal(s2.setDuelMode('turns'), 'turns');
+  assert.equal(createStore(be).getDuel().mode, 'turns');
+  assert.equal(s2.setDuelMode('chess'), 'race');
 });

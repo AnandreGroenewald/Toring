@@ -10,14 +10,15 @@ const DAILY1 = createSequence(seedFor('2026-10-06'));
 const GUST = DAILY1.events.find((e) => e.type === 'gust');
 const STORM = DAILY1.events.find((e) => e.type === 'storm');
 
-// 1.10: the stages moved daily #1's first gust from block 17 to 49 (its own stream, so new values)
+// 1.10: the stages moved daily #1's first gust from block 17 to 49; 1.11 (a quarter harder) to 25 (its
+// own stream, so new values)
 test('golden: daily #1 gust strengths and first lightning strike (changing this changes every tower)', () => {
-  assert.deepEqual({ type: GUST.type, start: GUST.start }, { type: 'gust', start: 49 });
+  assert.deepEqual({ type: GUST.type, start: GUST.start }, { type: 'gust', start: 25 });
   const r = eventRng(DAILY1.seed, GUST);
-  assert.deepEqual([1, 2, 3, 4].map((n) => Number(gustMul(r, n).toFixed(6))), [1.028815, 1.170769, 0.889318, 0.893384]);
+  assert.deepEqual([1, 2, 3, 4].map((n) => Number(gustMul(r, n).toFixed(6))), [1.004838, 0.93985, 1.152682, 0.91576]);
   const s = strikePlan(eventRng(DAILY1.seed, STORM), 1);
-  assert.equal(Number(s.kick.toFixed(6)), 1.890232);
-  assert.equal(s.spin, -1);
+  assert.equal(Number(s.kick.toFixed(6)), 1.878703);
+  assert.equal(s.spin, 1);
 });
 
 test('values do not depend on call order or on other draws', () => {

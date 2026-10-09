@@ -5,19 +5,28 @@
 // are js/core/duel.js; for a live match the server runs the same referee (server/src/match.js).
 // Both players' cards (js/core/economy.js: frame, badge, title, celebration, visitor style, rank) travel
 // with the hello and the start, so each side sees the other's looks.
+// Two modes (1.11): Wedloop ('race', all of the above) and Blok vir Blok ('turns'): one tower, a block
+// each in turn (js/core/turns.js). In a Blok vir Blok match the game whose turn it is plays the block and
+// tells the other game where it was let go ('turns:mydrop') and where the tower came to rest
+// ('turns:mysettled'); this passes those on, and tells the game whose turn it is ('turns:turn'), the
+// other player's drop and report ('turns:drop', 'turns:settled') and the result. Against Robot Rikus
+// the game plays his turns too, and the referee runs here.
 
-import { DUEL } from './config.js';
-import { S, PUNISH_INFO } from './core/strings.js';
+import { DUEL, TURNS, LIVES } from './config.js';
+import { S, PUNISH_INFO, WEATHER_INFO } from './core/strings.js';
 import {
   createReferee, createRecorder, createGhost, botRun, newMatchSeed, isMatchSeed, decodeChallenge,
   encodeChallenge, isRoomCode, cleanNickname, attackFor, PUNISHMENTS, isPunishment, botPunishment,
 } from './core/duel.js';
 import { cleanCard, cosmetic, BOT_CARD } from './core/economy.js';
+import {
+  createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, isSabotage, botSabotage, firstSeat, SABOTAGES,
+} from './core/turns.js';
 
 const YOU = 0;
 const THEM = 1;
 const RESULT_WAIT_MS = 2500;   // live: after our tower fell, wait this long for the server's verdict
-const PROTOCOL = 2;            // 2: the first to a height mark chooses the punishment ('choose' / 'punish')
+const PROTOCOL = 3;            // 2: the first to a height mark chooses the punishment ('choose' / 'punish'); 3: Blok vir Blok
 const DEFAULT_CARD = cleanCard(null);   // a recording or a link carries no card
 const round1 = (v) => Math.round(v * 10) / 10;
 const num = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(DUEL.maxHeightM, Number(v))) : 0);
@@ -75,18 +84,30 @@ export function createDuel({
   const live = !!wsUrl && typeof WebSocketImpl === 'function';
   let match = null;
   let pending = null;   // { ws, timer } while searching or waiting in a room
-  const hud = { you: 0, them: 0, name: '', badge: '', claimed: {} };
-  const hello = () => ({ t: 'hello', v: PROTOCOL, rules: DUEL.rules, name: nickname() || '', card: cleanCard(card()) });
+  const hud = { you: 0, them: 0, name: '', badge: '', claimed: {}, lives: null, youLives: null };
+  const hello = (mode) => ({
+    t: 'hello', v: PROTOCOL, rules: DUEL.rules, ...(mode === 'turns' ? { mode } : {}), name: nickname() || '', card: cleanCard(card()),
+  });
 
   // ------------------------------------------------------------------------------- a match
-  function newMatch({ kind, seed, oppName, oppCard = null, run = null, ws = null, you = YOU }) {
+  function newMatch({ kind, seed, oppName, oppCard = null, run = null, ws = null, you = YOU, mode = 'race', turn = null }) {
     if (match) dropChoice(match);
+    const turns = mode === 'turns';
     match = {
       kind, seed, ws, you,
+      mode: turns ? 'turns' : 'race',
+      // Blok vir Blok: the referee (Robot Rikus: here; live: the server's, whose events come as messages),
+      // the turn on now, the hearts, and the game's events held back until the scene is up
+      tref: turns && kind !== 'live' ? createTurnReferee({ first: firstSeat() }) : null,
+      turn: turns ? turn : null,
+      hearts: turns ? [TURNS.hearts, TURNS.hearts] : null,
+      perfects: [0, 0],
+      sceneReady: false,
+      queue: [],
       oppName: oppName || S.duelSomeone,
       oppCard: oppCard ? cleanCard(oppCard) : DEFAULT_CARD,
       youName: nickname() || '',
-      referee: kind === 'live' ? null : createReferee(),
+      referee: kind === 'live' || turns ? null : createReferee(),
       ghost: run ? createGhost(run) : null,
       recorder: createRecorder(),
       claimed: {},
@@ -102,6 +123,13 @@ export function createDuel({
     hud.claimed = match.claimed;
     hud.you = 0;
     hud.them = 0;
+    hud.lives = null;
+    hud.youLives = null;
+    if (match.tref) {
+      const [e] = match.tref.start();
+      match.turn = turnOf(e);
+    }
+    if (match.turn) match.hearts = [...match.turn.hearts];
     return match;
   }
 
@@ -111,7 +139,7 @@ export function createDuel({
     dropChoice(m);
     m.outcome = outcome;
     m.reason = reason;
-    if (!m.recorder.ended) m.recorder.finish(m.lastT, m.youBest >= DUEL.goalM ? 'goal' : 'stop');
+    if (!m.recorder.ended) m.recorder.finish(m.lastT, m.mode === 'race' && m.youBest >= DUEL.goalM ? 'goal' : 'stop');
     onDecided(outcome, m);
     if (!m.over) bus.emit('duel:end', { outcome });   // the tower stops here (won, or the other one got there first)
     if (m.kind === 'live') setTimer(() => { if (match === m) close(m.ws); }, 1500);
@@ -158,16 +186,21 @@ export function createDuel({
   }
 
   // ------------------------------------------------------------------------- choosing a punishment
-  /** We were first to height mark `mark`: the player chooses, or gets the default after DUEL.chooseMs. */
+  /**
+   * We were first to height mark `mark` (Wedloop), or earned a joker (Blok vir Blok: mark 0): the player
+   * chooses, or gets the default after the choosing time. The game goes on meanwhile.
+   */
   function askChoice(m, mark) {
     if (m.choice) {
       m.choiceQueue.push(mark);
       return;
     }
-    const def = attackFor(mark) || PUNISHMENTS[0];
-    const timer = setTimer(() => choose(mark, def), DUEL.chooseMs);
-    m.choice = { mark, def, timer };
-    bus.emit('duel:choose', { m: mark, opp: m.oppName, def, options: [...PUNISHMENTS], ms: DUEL.chooseMs });
+    const joker = m.mode === 'turns';
+    const def = joker ? SABOTAGES[0] : attackFor(mark) || PUNISHMENTS[0];
+    const ms = joker ? TURNS.chooseMs : DUEL.chooseMs;
+    const timer = setTimer(() => choose(mark, def), ms);
+    m.choice = { mark, def, timer, joker };
+    bus.emit('duel:choose', { m: mark, opp: m.oppName, def, options: joker ? [...SABOTAGES] : [...PUNISHMENTS], ms, ...(joker ? { joker } : {}) });
   }
 
   /** The player's pick (or the default): to the server, or straight onto the recording. */
@@ -177,6 +210,16 @@ export function createDuel({
     if (!c || c.mark !== mark) return;
     clearTimer(c.timer);
     m.choice = null;
+    if (c.joker) {
+      const k = isSabotage(kind) ? kind : c.def;
+      bus.emit('duel:chosen', { m: mark, kind: k });
+      if (!m.outcome) {
+        if (m.kind === 'live') send(m.ws, { t: 'joker', kind: k });   // the server answers 'sent'
+        else turnEvents(m, m.tref.joker(m.you, k));
+      }
+      nextChoice(m);
+      return;
+    }
     const k = isPunishment(kind) ? kind : c.def;
     bus.emit('duel:chosen', { m: mark, kind: k });
     if (!m.outcome) {
@@ -205,8 +248,9 @@ export function createDuel({
   // The scene's height, every frame (sim ms since the tower started; tower top and best height in m).
   bus.on('duel:self', (s) => {
     const m = match;
-    if (!m || m.over || !s) return;
+    if (!m || m.over || !s || m.mode !== 'race') return;
     m.lastT = s.t;
+    if (Number.isInteger(s.lives)) hud.youLives = s.lives;
     m.youH = s.h;
     m.youBest = Math.max(m.youBest, s.best);
     // the recording keeps the best height (the results' number), not the top: that counts a block still in the air
@@ -216,7 +260,7 @@ export function createDuel({
         const t = now();
         const crossed = [...DUEL.marks, DUEL.goalM].some((mk) => m.youBest >= mk && m.sentBest < mk);
         if (crossed || t - m.lastSent >= DUEL.stateEveryMs) {
-          send(m.ws, { t: 'state', h: round1(s.h), best: round1(m.youBest) });
+          send(m.ws, { t: 'state', h: round1(s.h), best: round1(m.youBest), ...(Number.isInteger(s.lives) ? { lives: s.lives } : {}) });
           m.lastSent = t;
           m.sentBest = m.youBest;
         }
@@ -224,6 +268,8 @@ export function createDuel({
         const g = m.ghost.step(s.t);
         m.oppH = g.h;
         m.oppBest = g.best;
+        // a recording (or Robot Rikus) shows full hearts, and none once its tower fell
+        hud.lives = g.over === 'lives' || g.over === 'flood' ? 0 : LIVES;
         handle(m.referee.report(YOU, { h: m.youBest }));
         if (!m.outcome) handle(m.referee.report(THEM, { h: g.best, over: g.over }));
       }
@@ -242,6 +288,12 @@ export function createDuel({
     const reason = o && typeof o.reason === 'string' ? o.reason : 'quit';
     if (!m.recorder.ended) m.recorder.finish(o?.t ?? m.lastT, reason);
     if (m.outcome) return;
+    if (m.mode === 'turns') {
+      // Blok vir Blok ends by itself only when the player quits: a loss (the server hands it on)
+      if (m.kind === 'live') send(m.ws, { t: 'over', reason: 'quit' });
+      decide('lost', 'quit');
+      return;
+    }
     if (m.kind === 'live') {
       send(m.ws, { t: 'over', reason, best: round1(m.youBest) });
       // quitting is always a loss; otherwise the server says (whoever fell first loses)
@@ -252,12 +304,167 @@ export function createDuel({
     }
   });
 
+  // ------------------------------------------------------------------------------- Blok vir Blok
+  /** A referee's 'turn' event (or the server's 'turn' message) as the game takes it; null if malformed. */
+  function turnOf(e) {
+    if (!e || !Number.isInteger(e.n) || e.n < 1) return null;
+    const pair = (a, max) => (Array.isArray(a) && a.length === 2 ? a.map((v) => Math.max(0, Math.min(max, Math.floor(Number(v)) || 0))) : null);
+    return {
+      n: e.n,
+      seat: e.seat === 1 ? 1 : 0,
+      hearts: pair(e.hearts, TURNS.hearts) || [TURNS.hearts, TURNS.hearts],
+      streaks: pair(e.streaks, 1e4) || [0, 0],
+      sab: isSabotage(e.sab) ? e.sab : null,
+    };
+  }
+
+  /** A turn begins: the game hears whose it is (and the sabotage on this block, if any). */
+  function startTurn(m, t) {
+    if (!t || (m.turn && m.turn.n > t.n) || (m.turn && m.turn.n === t.n && m.turnShown)) return;
+    m.turn = t;
+    m.turnShown = true;
+    m.hearts = [...t.hearts];
+    bus.emit('turns:turn', { ...t, mine: t.seat === m.you, you: m.you, names: namesOf(m), bot: m.kind !== 'live' });
+  }
+
+  /** [seat 0's name, seat 1's name] as this game shows them ('' for this player: "Jy"). */
+  function namesOf(m) {
+    const n = ['', ''];
+    n[1 - m.you] = m.oppName;
+    return n;
+  }
+
+  /** Events of a referee that runs here (Robot Rikus): turns, jokers, sabotages and the result. */
+  function turnEvents(m, events) {
+    for (const e of events) {
+      if (e.type === 'turn') {
+        m.turnShown = false;
+        startTurn(m, turnOf(e));
+      } else if (e.type === 'joker') {
+        if (e.seat === m.you) askChoice(m, 0);
+        else turnEvents(m, m.tref.joker(e.seat, botSabotage(m.seed, m.tref.n)));   // Robot Rikus doesn't wait
+      } else if (e.type === 'sent') {
+        if (e.seat === m.you) sabotageOut(m, e.kind);
+        else sabotageIn(m, e.kind);
+      } else if (e.type === 'result') {
+        m.hearts = [...e.hearts];
+        decide(e.winner === m.you ? 'won' : 'lost', e.reason);
+      }
+    }
+  }
+
+  /** Our joker's sabotage is on its way to the other player's next block. */
+  function sabotageOut(m, kind) {
+    const info = WEATHER_INFO[kind];
+    if (info) bus.emit('hud:toast', { text: S.turnsSabotageOut(`${info.emoji} ${info.name}`, m.oppName), color: '#ffe38c', visitor: true });
+  }
+
+  /** The other player's sabotage comes with our next block (a heads-up now; the banner when it comes). */
+  function sabotageIn(m, kind) {
+    const info = WEATHER_INFO[kind];
+    if (info) bus.emit('hud:toast', { text: S.turnsSabotageIn(m.oppName, `${info.emoji} ${info.name}`), color: '#ffb0a8', visitor: true });
+  }
+
+  /** A live Blok vir Blok message (held back until the scene is up: the first may come during the 3-2-1). */
+  function onTurnsMessage(m, msg) {
+    if (!m.sceneReady) {
+      m.queue.push(msg);
+      return;
+    }
+    const theirs = m.turn && m.turn.seat !== m.you && msg.n === m.turn.n;
+    switch (msg.t) {
+      case 'turn':
+        m.turnShown = m.turn?.n === msg.n ? m.turnShown : false;
+        startTurn(m, turnOf(msg));
+        break;
+      case 'drop': {
+        const p = cleanPose(msg.p);
+        const ct = typeof msg.ct === 'number' && msg.ct >= 0 && msg.ct <= 120000 ? msg.ct : null;
+        if (p && theirs) bus.emit('turns:drop', { n: msg.n, p, ct });
+        break;
+      }
+      case 'settled': {
+        const snap = cleanSnap(msg.snap);
+        const r = cleanRating(msg.r);
+        if (!snap || !theirs || !snapFits(snap, msg.n, r)) break;
+        if (r === 'P') m.perfects[m.turn.seat] += 1;
+        bus.emit('turns:settled', { n: msg.n, lost: msg.lost === true, r, snap });
+        break;
+      }
+      case 'choose':
+        askChoice(m, 0);
+        break;
+      case 'sent':
+        if (isSabotage(msg.kind)) {
+          if (m.choice && m.choice.joker) {
+            clearTimer(m.choice.timer);
+            m.choice = null;
+            bus.emit('duel:chosen', { m: 0, kind: msg.kind });
+          }
+          sabotageOut(m, msg.kind);
+        }
+        break;
+      case 'sabotage':
+        if (isSabotage(msg.kind)) sabotageIn(m, msg.kind);
+        break;
+      case 'result':
+        if (Array.isArray(msg.hearts) && msg.hearts.length === 2) m.hearts = msg.hearts.map((h) => Math.max(0, Math.floor(Number(h)) || 0));
+        if (msg.winner === 0 || msg.winner === 1) decide(msg.winner === m.you ? 'won' : 'lost', String(msg.reason || ''));
+        break;
+      default:
+        break;
+    }
+  }
+
+  // the scene is up: the first turn, then whatever came meanwhile
+  bus.on('turns:ready', () => {
+    const m = match;
+    if (!m || m.mode !== 'turns' || m.sceneReady) return;
+    m.sceneReady = true;
+    if (m.lostConn && !m.outcome) {   // the connection went during the 3-2-1
+      bus.emit('duel:end', { outcome: 'none' });
+      return;
+    }
+    m.turnShown = false;
+    startTurn(m, m.turn);
+    for (const msg of m.queue.splice(0)) onTurnsMessage(m, msg);
+  });
+
+  // our block was let go: the other game drops it from the same spot
+  bus.on('turns:mydrop', (d) => {
+    const m = match;
+    if (!m || m.mode !== 'turns' || m.outcome || m.kind !== 'live' || !d) return;
+    const p = cleanPose(d.p);
+    const ct = typeof d.ct === 'number' && d.ct >= 0 && d.ct <= 120000 ? Math.round(d.ct) : null;
+    if (p && m.turn && d.n === m.turn.n && m.turn.seat === m.you) send(m.ws, { t: 'drop', n: d.n, p, ...(ct !== null ? { ct } : {}) });
+  });
+
+  // a turn ended (ours; against Robot Rikus his too): where the tower came to rest, a heart, the rating
+  bus.on('turns:mysettled', (d) => {
+    const m = match;
+    if (!m || m.mode !== 'turns' || m.outcome || !d || !m.turn || d.n !== m.turn.n) return;
+    const snap = cleanSnap(d.snap);
+    if (!snap) return;
+    const r = cleanRating(d.r);
+    if (r === 'P') m.perfects[m.turn.seat] += 1;
+    if (m.kind === 'live') {
+      if (m.turn.seat === m.you) send(m.ws, { t: 'settled', n: d.n, lost: d.lost === true, r, snap });
+      return;
+    }
+    turnEvents(m, m.tref.settled(m.turn.seat, { n: d.n, lost: d.lost === true, r }));
+  });
+
   // ------------------------------------------------------------------------------- live socket
   function onRoomMessage(m, msg) {
+    if (m.mode === 'turns') {
+      onTurnsMessage(m, msg);
+      return;
+    }
     switch (msg.t) {
       case 'opp':
         m.oppH = num(msg.h);
         m.oppBest = Math.max(m.oppBest, num(msg.best));
+        if (Number.isInteger(msg.lives) && msg.lives >= 0 && msg.lives <= 9) hud.lives = msg.lives;
         break;
       case 'choose':   // we were first to a height mark: the player chooses what to send
         if (DUEL.marks.includes(msg.m) && claim(m, msg.m, true)) askChoice(m, msg.m);
@@ -348,11 +555,16 @@ export function createDuel({
             stopPending();
             onFail(S.duelRoomGone);
           } else if (msg.t === 'start' && isMatchSeed(msg.seed) && (msg.you === 0 || msg.you === 1)) {
+            // Blok vir Blok: the room drew who drops first; that turn comes with the start
+            const turns = msg.mode === 'turns';
+            const turn = turns ? turnOf(msg.turn) : null;
+            if (turns && !turn) return;
             room.started = true;
             clearTimer(pending?.timer);
             pending = null;
             const m = newMatch({
               kind: 'live', seed: msg.seed, oppName: cleanNickname(msg.opp?.name) || S.duelSomeone, oppCard: msg.opp?.card, ws, you: msg.you,
+              mode: turns ? 'turns' : 'race', turn,
             });
             onStart(m);
           }
@@ -373,7 +585,15 @@ export function createDuel({
           return;
         }
         const m = match;
-        if (m && m.ws === ws && !m.outcome) m.lostConn = true;
+        if (m && m.ws === ws && !m.outcome) {
+          m.lostConn = true;
+          // a Wedloop tower carries on alone; Blok vir Blok can't (the other half of the tower is theirs).
+          // During the 3-2-1 there is no match scene yet: it ends the moment there is ('turns:ready').
+          if (m.mode === 'turns' && !m.over) {
+            dropChoice(m);
+            if (m.sceneReady) bus.emit('duel:end', { outcome: 'none' });
+          }
+        }
       };
       ws.onerror = () => {};
     };
@@ -392,13 +612,13 @@ export function createDuel({
    * connection comes back (and stays closed while the game is hidden, like a room); `onRetry` meanwhile.
    * A quiet ping keeps a phone's connection open while nothing happens.
    */
-  function findOpponent({ onFound = () => {}, onFallback = () => {}, onRetry = () => {} } = {}) {
+  function findOpponent({ onFound = () => {}, onFallback = () => {}, onRetry = () => {}, mode = 'race' } = {}) {
     stopPending();
     if (!live) {
-      fallback(onFallback);
+      fallback(onFallback, mode);
       return;
     }
-    const search = { tries: 0, retry: null, ping: null, away: hidden(), connect: null, onRetry, onFound, onFallback };
+    const search = { tries: 0, retry: null, ping: null, away: hidden(), connect: null, onRetry, onFound, onFallback, mode };
     pending = { ws: null, timer: null, search };
     const retryLater = () => {
       if (pending?.search !== search || search.retry || search.away) return;
@@ -421,13 +641,13 @@ export function createDuel({
       pending.ws = ws;
       ws.onopen = () => {
         search.tries = 0;
-        send(ws, hello());
+        send(ws, hello(mode));
       };
       ws.onmessage = (e) => {
         const msg = parse(e.data);
         if (!msg || msg.t !== 'match' || !isRoomCode(msg.room) || pending?.ws !== ws) return;
         stopPending();
-        joinRoom(msg.room, { onStart: onFound, onFail: () => findOpponent({ onFound, onFallback, onRetry }) });
+        joinRoom(msg.room, { onStart: onFound, onFail: () => findOpponent({ onFound, onFallback, onRetry, mode }) });
       };
       ws.onclose = () => {
         if (pending?.ws !== ws) return;   // stopped, paired, or replaced by a reconnect
@@ -449,12 +669,18 @@ export function createDuel({
   function playNow() {
     const search = pending?.search;
     const onFallback = search ? search.onFallback : null;
+    const mode = search ? search.mode : 'race';
     stopPending();
-    if (onFallback) fallback(onFallback);
+    if (onFallback) fallback(onFallback, mode);
   }
 
-  /** Nobody to pair with: a recording of a real match from the server, else Robot Rikus. */
-  async function fallback(onFallback) {
+  /** Nobody to pair with: a recording of a real match from the server, else Robot Rikus (Blok vir Blok: him). */
+  async function fallback(onFallback, mode = 'race') {
+    if (mode === 'turns') {
+      startBot('turns');
+      onFallback(match, S.duelNobodyBot);
+      return;
+    }
     let rec = null;
     if (httpUrl && fetchImpl) {
       try {
@@ -477,7 +703,7 @@ export function createDuel({
   }
 
   /** A friend room: the server makes a code; the host waits in the room until the friend comes. */
-  async function createRoom({ onCode = () => {}, onStart = () => {}, onFail = () => {}, onWait = () => {}, onRetry = () => {} } = {}) {
+  async function createRoom({ onCode = () => {}, onStart = () => {}, onFail = () => {}, onWait = () => {}, onRetry = () => {}, mode = 'race' } = {}) {
     stopPending();
     if (!live || !fetchImpl) {
       onFail(S.duelOffline);
@@ -486,7 +712,7 @@ export function createDuel({
     let code = null;
     try {
       const res = await fetchImpl(`${httpUrl}/match/room`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', credentials: 'omit',
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mode === 'turns' ? { mode } : {}), credentials: 'omit',
       });
       const body = res.ok ? await res.json() : null;
       code = isRoomCode(body?.code) ? body.code : null;
@@ -507,8 +733,9 @@ export function createDuel({
     }
   }
 
-  function startBot() {
+  function startBot(mode = 'race') {
     const seed = newMatchSeed();
+    if (mode === 'turns') return newMatch({ kind: 'bot', seed, oppName: S.duelBotName, oppCard: BOT_CARD, mode: 'turns' });
     return newMatch({ kind: 'bot', seed, oppName: S.duelBotName, oppCard: BOT_CARD, run: botRun(seed) });
   }
 
@@ -609,17 +836,24 @@ export function createDuel({
       if (!m) return null;
       if (!m.recorder.ended) m.recorder.finish(m.lastT, 'stop');
       const run = m.recorder.run();
+      const turns = m.mode === 'turns';
       return {
         kind: m.kind,
+        mode: m.mode,
         outcome: m.outcome || (m.lostConn ? 'none' : null),
         reason: m.reason,
         oppName: m.oppName,
         oppCard: m.oppCard,
         oppBest: round1(m.oppBest),
         youBest: round1(m.youBest),
+        // Blok vir Blok: the hearts left and the Perfeks of each player (no run to race later)
+        youHearts: turns ? m.hearts[m.you] : null,
+        oppHearts: turns ? m.hearts[1 - m.you] : null,
+        youPerfects: turns ? m.perfects[m.you] : null,
+        oppPerfects: turns ? m.perfects[1 - m.you] : null,
         lostConn: m.lostConn,
         seed: m.seed,
-        challenge: encodeChallenge({ seed: m.seed, name: nickname() || '', run }),
+        challenge: turns ? null : encodeChallenge({ seed: m.seed, name: nickname() || '', run }),
       };
     },
     /** Live: waits (up to RESULT_WAIT_MS) for the server's verdict after our tower fell. */

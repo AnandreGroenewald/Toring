@@ -86,7 +86,7 @@ test('schedule rules: none in the warm-up, apart by stage, never with a weather 
   for (const t of VISITOR_TYPES) assert.ok(types[t] > 200, `${t} too rare (${types[t]})`);
 });
 
-test('a typical tower (45 blocks) meets about 2 visitors, after a calm start; many days bring the thief', () => {
+test('a typical tower (45 blocks) meets about 2.5 visitors (1.10: 2), after a calm start; many days bring the thief', () => {
   let n = 0;
   let thief = 0;
   for (const seed of DAYS) {
@@ -94,7 +94,7 @@ test('a typical tower (45 blocks) meets about 2 visitors, after a calm start; ma
     n += early.length;
     if (early.some((v) => v.type === 'thief')) thief++;
   }
-  assert.ok(n / DAYS.length > 1.7 && n / DAYS.length < 2.6, `per tower ${n / DAYS.length}`);
+  assert.ok(n / DAYS.length > 2.2 && n / DAYS.length < 2.9, `per tower ${n / DAYS.length}`);
   assert.ok(thief / DAYS.length > 0.3, `thief days ${thief / DAYS.length}`);
 });
 
@@ -262,9 +262,10 @@ test('every visitor has its sounds', () => {
 
 // Golden snapshot of Daaglikse Toring #1's first visitors (seed 'stapel-2026-10-06'), added in 1.6.0.
 // 1.10: the stages (a calm warm-up, then "Moeiliker!") moved every day's visitors later
+// 1.11: the stages start a quarter sooner and visitors come about a fifth more often (STAGES)
 const GOLDEN_VISITORS = [
-  { type: 'clown', at: 20, side: -1, strength: 0.99 },
-  { type: 'monkey', at: 37, side: 1, strength: 1.06 },
-  { type: 'clown', at: 58, side: -1, strength: 0.93 },
-  { type: 'monkey', at: 72, side: 1, strength: 0.98 },
+  { type: 'clown', at: 17, side: -1, strength: 0.96 },
+  { type: 'monkey', at: 32, side: 1, strength: 1.06 },
+  { type: 'clown', at: 49, side: -1, strength: 0.93 },
+  { type: 'monkey', at: 61, side: 1, strength: 0.98 },
 ];

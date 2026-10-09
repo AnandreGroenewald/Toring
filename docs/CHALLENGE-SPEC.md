@@ -11,6 +11,21 @@ The owner asked for a "challenger series": you are put against someone random, y
 | **Winning** | The first to **50 m** wins. If your tower falls first (hearts gone or the flood), the other player wins. Quitting counts as a loss. The referee takes reports in the order they arrive, so there are no draws. |
 | **Pausing** | Your own tower pauses as usual, but the other player keeps building. |
 
+## Two modes (1.11): Wedloop and Blok vir Blok
+
+Testers said they didn't notice they were playing someone. 1.11 shows both players at the top in either mode (name and hearts: you left, them right) and adds a second mode; the screen above the buttons chooses one, and the choice is kept (`stapel.v1` `duel.mode`).
+
+- **Wedloop** (`'race'`): the match above. The race track on the right edge is back, a little bigger than in 1.9, with both names and how far each is to 50 m (a percentage), and "Jy is voor!" / "Anna is voor jou!" when the lead changes. A height report carries the player's hearts (`state.lives`, relayed as `opp.lives`; older games send none and their pill shows only the name).
+- **Blok vir Blok** (`'turns'`, the owner's "you drop one, I drop one"): **one tower, a block each in turn**.
+
+| | Rule |
+| --- | --- |
+| **Turns** | The room draws who starts. Each turn has 10 s to aim (then the block drops where it is). The crane starts each turn's swing from the same state in both games. |
+| **Hearts** | 3 each. A turn that loses blocks (the dropped one missed, or it knocked the top off) costs that player one heart, at most one per turn. No hearts come back. The first out of hearts loses; quitting, or a turn that never ends (45 s on the server), loses too. After 160 turns: the most hearts, then the most Perfeks, then whoever went second. |
+| **Joker** | 5 Perfeks in a row of your own blocks (the other player's in between don't count) earn a joker: choose a sabotage for the other player's next block: Mis 🌫️, Hittegolf ☀️ or Reën 🌧️ (7 s, then Mis). It comes with their first block put on the crane after the choice. There is no other weather, no visitors, no flood and no Hanswors log: everything that happens, a player did. |
+| **Sync** | The game whose turn it is plays the block (authority). It sends where the block was let go (`drop`: exact numbers, plus the crane's swing time) so the other game shows the same fall, and when the tower is at rest a report (`settled`) of every block that wasn't cement: exact position and angle, which of them set as cement now (all but the newest 5), ratings, and the blocks lost. Both games apply that report the same way (`GameScene.applySnapshot`) and hold the tower still until the next drop, so every drop starts from the same tower in both. A block one game lost but the report has comes back; the other way round, it goes. |
+| **Referee** | `js/core/turns.js`: on the server for a live match, in the game against Robot Rikus (who plays by autoplay, with a think time, and picks his sabotage at once). Games older than protocol 3 are told a Blok vir Blok room is gone. |
+
 ## Opponents
 
 1. **Random, live** (`🎲 Soek ’n teenstander`): the server pairs two players who are looking. It searches for up to 20 s. If nobody is there, the player gets a **recording** of a real player's recent match (the same seed they played), or the computer when there is no recording.

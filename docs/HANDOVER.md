@@ -446,6 +446,19 @@ Later the owner added (decisions are final unless they say otherwise):
   - **Left to tidy:**
     - wrangler's leftovers in the repo root (the `package.json` change, `package-lock.json`, `wrangler.jsonc`, `node_modules/`), from the first `pages project create`: delete them, never commit them;
     - the worktree `~/Desktop/Toring-search` (branch `claude/search-practice`, merged). **Keep** `.claude/worktrees/agent-a1516b63df4322d9e`: it holds the parked PayFast branch (`dd2163d`, not merged).
+- **1.11.0 (9 Oct 2026): Blok vir Blok, both players' hearts, real tipping, a quarter harder.** The owner passed on: players "do not even know that they are playing against someone"; then a "you drop one, I drop one" mode (named Blok vir Blok, after Kop-aan-kop and Stapelstryd); "the hearts needs to be visible for both sides" (you top left with your name, them top right); the joker = "the feature that sabotages the other player"; then testers: "the physics aren't working", "a little too forgiving now… up the ante by about 25%", and a lone "Oefen" button after a tower.
+  - **Two modes** on the Uitdagersreeks screen, kept in `stapel.v1` `duel.mode`: **Wedloop** (`'race'`, the existing match) and **Blok vir Blok** (`'turns'`). See `docs/CHALLENGE-SPEC.md` "Two modes". The lobby pairs only the same mode; friend rooms carry it (POST `/match/room` `{mode}`); the game's protocol is 3 (older games are told a Blok vir Blok room is gone).
+  - **Blok vir Blok** (`js/core/turns.js`, the referee; `server/src/match.js` `onTurnMessage`; `js/duel.js`; `GameScene` "Blok vir Blok" section):
+    - one tower, a block each in turn, 10 s to aim, 3 hearts each (a turn that loses blocks costs one), no weather, visitors, flood or log;
+    - 5 Perfeks in a row (your own) earn a joker: Mis, Hittegolf or Reën on the other player's next block;
+    - the game whose turn it is plays it and reports the tower (`drop` with the exact start state and the crane's swing time, then `settled` with every loose block exactly); both games apply the report the same way and hold the tower still between drops. Checked live through the real server code: 34 turns, both towers identical after every turn (difference 0.0);
+    - Robot Rikus plays it locally (think time, aim error, more errors under a sabotage).
+  - **HUD:** in both modes each player's name and hearts at the top; Wedloop's race track on the right is back, a little bigger, with names and percentages and "X is voor!"; Blok vir Blok's "Jou beurt! 10" pill. Wedloop height reports carry hearts (`state.lives` -> `opp.lives`).
+  - **Physics:** Matter let a slowly tipping stack fall asleep, so a tower leaning past its edge could hang there. Every 4 physics steps the blocks whose load is past the edge of their support (the balance meter's numbers, `towerLean`) are woken (`wakeTipping`), and neither a Perfek's cement nor the deep cement sets such a block.
+  - **A quarter harder** (measured over a year of dailies, first 45 blocks: weather +23%, visitors +24%): stages from blocks 9 / 23 / 41 (were 12 / 30 / 55), weather gaps [4,6] / [3,5] / [2,3], visitors [12,18] / [11,17] / [9,17]; a heart back every 4th Perfek (was 3rd). `DUEL.rules` 111. Golden tests updated.
+  - **Results:** after a tower, "Oefen" and "Uitdagersreeks — Speel nou teen iemand" side by side after the card (they no longer float over the city and the streak).
+  - **Review** (agent, before release): 13 findings, the real ones fixed: a connection lost in the 3-2-1, the other player's Perfeks, the combo badge after a match, the aim time after a pause (moved on; live capped at 38 s), slides stopped by the report, hearts flicker, Robot Rikus and fog, a report that doesn't fit the turn (checked on both sides, `snapFits`), one storage write per turn.
+  - **Deploy order:** the Worker first (an old lobby or room would ignore `mode` and play Wedloop), then the site.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

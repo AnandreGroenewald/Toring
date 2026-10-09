@@ -267,11 +267,12 @@ test('block() tolerates odd indices', () => {
 const GOLDEN_BLOCKS = 'plank:1:0 slab:1.01:1 plank:1.1:6 plank:1.04:0 wedge:1.08:1 plank:0.94:7 '
   + 'arch:1:3 brick:1.06:1 arch:1:6 slab:0.93:5 slab:1.07:7 plank:0.96:6';
 // 1.10: the stages (calm warm-up, then "Moeiliker!") moved every day's weather later and further apart
+// 1.11: the stages start a quarter sooner, weather comes about a fifth more often (STAGES in config.js)
 const GOLDEN_EVENTS = [
-  { type: 'rain', start: 14, end: 18, dir: 1, strength: 0.78 },
-  { type: 'rainbow', start: 19, end: 22, dir: 1, strength: 0.97 },
-  { type: 'wind', start: 29, end: 33, dir: -1, strength: 1.09 },
-  { type: 'storm', start: 40, end: 43, dir: 1, strength: 1.4 },
+  { type: 'rain', start: 11, end: 15, dir: 1, strength: 0.72 },
+  { type: 'rainbow', start: 16, end: 19, dir: 1, strength: 0.91 },
+  { type: 'gust', start: 25, end: 29, dir: -1, strength: 1.01 },
+  { type: 'storm', start: 33, end: 36, dir: 1, strength: 1.26 },
 ];
 
 test('stages: calm first, then each stage harder; every block belongs to one', () => {

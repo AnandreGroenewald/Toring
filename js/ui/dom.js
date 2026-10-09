@@ -3,7 +3,7 @@
 // and real buttons lives here, positioned exactly over the canvas by layout().
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
-import { GAME_W, PALETTE, RATING_EMOJI, VERSION, computeGameHeight } from '../config.js';
+import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, computeGameHeight } from '../config.js';
 import { WEEK } from '../core/week.js';
 
 const WEEK_COINS = WEEK.coins;
@@ -1202,7 +1202,8 @@ export function createUI(bus) {
     const card = h('div', { class: 'card duel-card' },
       closeX(() => bus.emit('ui:home')),
       h('div', { class: 'duel-head' }, emo('⚔️'), h('h2', { text: S.duel })),
-      h('p', { class: 'duel-intro', text: S.duelIntro }),
+      h('p', { class: 'duel-intro', text: S.duelIntroModes }),
+      modePicker(m.mode),
       m.rank ? rankBox(m.rank, m.card, d.name || st.duelPlaceholder) : null,
       h('div', { class: 'nick' }, h('span', { class: 'label', text: S.duelNick }), input, msg),
       h('div', { class: 'duel-btns' },
@@ -1216,6 +1217,42 @@ export function createUI(bus) {
       button('btn-white', [icon('home'), h('span', { text: S.back })], () => bus.emit('ui:home'))));
     st.duelMsg = msg;
     showScreen('duel');
+  }
+
+  /**
+   * Wedloop or Blok vir Blok (1.11): two big buttons and what the chosen one is. The choice is kept
+   * ('ui:duel-mode' -> setDuelMode) and the buttons below start that kind of match.
+   */
+  function modePicker(mode) {
+    const opt = (id, emoji, name) => h('button', {
+      type: 'button', class: 'mode-btn', 'data-mode': id, 'aria-pressed': String(mode === id),
+      onclick: () => {
+        audio.play('click');
+        bus.emit('ui:duel-mode', id);
+      },
+    }, emo(emoji), h('span', { text: name }));
+    return h('div', { class: 'mode-pick' },
+      h('div', { class: 'mode-btns', role: 'group', 'aria-label': S.modeChoose },
+        opt('race', '🏁', S.modeRace),
+        opt('turns', '🧱', S.modeTurns)),
+      h('p', { class: 'mode-what', 'aria-live': 'polite', text: mode === 'turns' ? S.modeTurnsWhat : S.modeRaceWhat }));
+  }
+
+  /** The chosen way to play changed: the buttons and the description follow. */
+  function setDuelMode(mode) {
+    const box = screens.duel.querySelector('.mode-pick');
+    if (!box) return;
+    for (const b of box.querySelectorAll('.mode-btn')) b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
+    const what = box.querySelector('.mode-what');
+    if (what) what.textContent = mode === 'turns' ? S.modeTurnsWhat : S.modeRaceWhat;
+  }
+
+  /** "🏁 Wedloop · eerste tot 50 m wen" (on the waiting and versus screens). */
+  function modeLine(mode) {
+    if (mode !== 'turns' && mode !== 'race') return null;
+    const turns = mode === 'turns';
+    return h('p', { class: 'mode-line' }, emo(turns ? '🧱' : '🏁'),
+      h('b', { text: turns ? S.modeTurns : S.modeRace }), h('span', { text: ` · ${turns ? S.modeTurnsTag : S.modeRaceTag}` }));
   }
 
   /**
@@ -1277,6 +1314,7 @@ export function createUI(bus) {
       // a random opponent (1.10): no time limit; an Oefen tower meanwhile, or play right away
       kids.push(h('div', { class: 'spinner', 'aria-hidden': 'true' }),
         h('h2', { text: S.duelSearching }),
+        modeLine(o.mode),
         h('p', { class: 'duel-sub', text: S.duelSearchHint }),
         h('p', { class: 'duel-count', 'data-duel-count': '' }),
         button('btn-big btn-green', [emo('🏗️'), h('span', { text: S.duelSearchPractice })], () => bus.emit('ui:duel-practice')),
@@ -1293,6 +1331,7 @@ export function createUI(bus) {
       linkBox.value = o.link || '';
       kids.push(h('div', { class: 'spinner', 'aria-hidden': 'true' }),
         h('h2', { text: S.duelWaitFriend }),
+        modeLine(o.mode),
         h('p', { class: 'duel-sub', text: S.duelWaitHint }),
         linkBox,
         h('div', { class: 'share-row' },
@@ -1304,6 +1343,8 @@ export function createUI(bus) {
       // both player cards: theirs big, ours small underneath
       kids.push(h('p', { class: 'vs-badge' }, emo('⚔️')),
         h('h2', { class: 'vs-title', text: S.duelVs(o.oppName || S.duelSomeone) }),
+        modeLine(o.mode),
+        o.first ? h('p', { class: 'vs-first', text: o.first }) : null,
         o.oppCard ? h('div', { class: 'vs-cards' },
           playerCard({ name: o.oppName || S.duelSomeone, card: o.oppCard }),
           o.youCard ? playerCard({ name: o.youName || S.duelYou, card: o.youCard, compact: true }) : null) : null,
@@ -1447,6 +1488,21 @@ export function createUI(bus) {
     else if (res === 'failed') toast(S.copyFailed);
   }
 
+  /** Blok vir Blok results: "Jy ❤️❤️🤍 · 4 Perfek" and the same for the other player. */
+  function turnsRows(d) {
+    const row = (cls, name, hearts, perfects) => {
+      const left = Math.max(0, Math.min(TURNS.hearts, hearts ?? 0));
+      const icons = '❤️'.repeat(left) + '🤍'.repeat(TURNS.hearts - left);
+      return h('div', { class: `res-vs-row ${cls}` },
+        h('b', { text: name }),
+        h('span', { class: 'emoji res-vs-hearts', role: 'img', 'aria-label': `${left} ${S.turnsHeartsLeft}`, text: icons }),
+        h('span', { class: 'res-vs-p', text: `${fmtInt(perfects ?? 0)} ${S.perfects}` }));
+    };
+    return h('div', { class: 'res-vs' },
+      row('you', S.duelYou, d.youHearts, d.youPerfects),
+      row('them', d.oppName || S.duelSomeone, d.oppHearts, d.oppPerfects));
+  }
+
   /** Uitdagersreeks results: who won and why. */
   function duelHead(d) {
     const won = d.outcome === 'won';
@@ -1458,6 +1514,12 @@ export function createUI(bus) {
       title = S.duelLost;
       badge = '📡';
       why = S.duelConnLost;
+    } else if (d.mode === 'turns') {
+      // Blok vir Blok: out of hearts, left, too slow, or the match's last turn
+      const r = d.reason;
+      why = r === 'turns' ? S.turnsWhyTurns
+        : won ? (r === 'quit' ? S.duelWhyTheyQuit(name) : r === 'timeout' ? S.turnsWhyTimeout(name) : S.turnsWhyTheyOut(name))
+          : (r === 'quit' ? S.duelWhyYouQuit : r === 'timeout' ? S.turnsWhyTimeout(S.hudYou) : S.turnsWhyYouOut);
     } else if (won) {
       why = d.reason === 'goal' ? S.duelWhyGoal
         : d.reason === 'left' ? S.duelWhyTheyLeft(name)
@@ -1465,8 +1527,9 @@ export function createUI(bus) {
     } else {
       why = d.reason === 'goal' ? S.duelWhyTheyGoal(name) : d.reason === 'quit' ? S.duelWhyYouQuit : S.duelWhyYouFell;
     }
+    const turns = d.mode === 'turns';
     return h('div', { class: 'res-head' },
-      h('div', { class: 'chip' }, emo('⚔️'), h('span', { text: S.duel })),
+      h('div', { class: 'chip' }, emo(turns ? '🧱' : '⚔️'), h('span', { text: `${S.duel} · ${turns ? S.modeTurns : S.modeRace}` })),
       h('h2', { class: 'res-title' }, emo(badge), h('span', { text: d.outcome === 'none' ? S.duel : title })),
       h('p', { class: 'res-sub', text: why }));
   }
@@ -1497,7 +1560,10 @@ export function createUI(bus) {
         h('div', { class: 'label' }, emo('🏗️'), h('span', { text: S.height })),
         bigM,
         r.durationMs > 0 ? h('div', { class: 'res-time', text: `${S.duration}: ${fmtDuration(r.durationMs)}` }) : null),
-      duel
+      duel && duel.mode === 'turns'
+        // Blok vir Blok: one tower; each player's hearts left and Perfeks, one row each
+        ? turnsRows(duel)
+        : duel
         // the two towers side by side, then points and Perfeks
         ? h('div', { class: 'res-stats' },
           tile(fmtM(duel.youBest || 0), S.duelYou, 'tile-you'),
@@ -1550,10 +1616,17 @@ export function createUI(bus) {
       const inst = empty ? null : installRow(install);
       if (inst) wrap.append(inst);
     }
-    wrap.append(h('div', { class: 'btn-row' },
-      duel
-        ? button('btn-purple btn-duel-again', h('span', { text: S.duelAgain }), () => bus.emit('ui:duel-again'))
-        : button('btn-teal', [icon('again'), h('span', { text: daily ? S.practice : S.practiceAgain })], () => bus.emit('ui:play-practice'))));
+    // what next: another match; or (after a tower) the two ways to keep playing, side by side as on the
+    // start screen (testers: a lone "Oefen" floating over the card looked like the only thing left)
+    wrap.append(duel
+      ? h('div', { class: 'btn-row' }, button('btn-purple btn-duel-again', h('span', { text: S.duelAgain }), () => bus.emit('ui:duel-again')))
+      : h('div', { class: 'play-row res-play' },
+        button('btn-teal btn-practice',
+          [icon('again'), h('span', { class: 'btn-txt' }, h('span', { text: daily ? S.practice : S.practiceAgain }), h('span', { class: 'btn-sub', text: S.practiceSubShort }))],
+          () => bus.emit('ui:play-practice'), { attrs: { 'aria-label': `${daily ? S.practice : S.practiceAgain}: ${S.practiceSub}` } }),
+        button('btn-purple btn-practice btn-duel',
+          [emo('⚔️'), h('span', { class: 'btn-txt' }, h('span', { text: S.duel }), h('span', { class: 'btn-sub', text: S.playSomeoneNow }))],
+          () => bus.emit('ui:duel'), { attrs: { 'aria-label': `${S.duel}: ${S.duelSub}` } })));
 
     // peek: hide the card to look at (and screenshot) the whole tower
     const peek = h('button', {
@@ -1735,21 +1808,26 @@ export function createUI(bus) {
   }
 
   /** "Eerste by 20 m! Kies ’n straf vir Anna:" and the four punishments; DUEL.chooseMs to pick one. */
-  function showPunish({ m, opp, options = [], ms = 7000 } = {}) {
+  function showPunish({ m, opp, options = [], ms = 7000, joker = false } = {}) {
     if (st.screen !== 'game') return;
-    const kinds = options.filter((k) => PUNISH_INFO[k]);
+    // Wedloop: a punishment for the other tower; Blok vir Blok's joker: a sabotage on their next block
+    const infoOf = (k) => (joker
+      ? WEATHER_INFO[k] && { emoji: WEATHER_INFO[k].emoji, name: WEATHER_INFO[k].name, what: S.sabotageWhat[k] || '' }
+      : PUNISH_INFO[k]);
+    const kinds = options.filter((k) => infoOf(k));
     const pick = (k) => {
       if (performance.now() - punishAt < PUNISH_GUARD_MS) return;
       audio.play('click');
       bus.emit('ui:duel-punish', { m, kind: k });
     };
     const btns = kinds.map((k) => {
-      const info = PUNISH_INFO[k];
+      const info = infoOf(k);
       return h('button', { type: 'button', class: 'punish-btn', 'aria-label': `${info.name}: ${info.what}`, onclick: () => pick(k) },
         emo(info.emoji), h('b', { text: info.name }), h('small', { text: info.what }));
     });
+    punishBar.setAttribute('aria-label', joker ? S.turnsChooseLabel : S.duelChooseLabel);
     punishBar.replaceChildren(
-      h('p', { class: 'punish-title', text: S.duelChoose(m, opp || S.duelSomeone) }),
+      h('p', { class: 'punish-title', text: joker ? S.turnsChoose(opp || S.duelSomeone) : S.duelChoose(m, opp || S.duelSomeone) }),
       h('div', { class: 'punish-btns' }, btns),
       h('div', { class: 'punish-time', vars: { '--ms': `${ms}ms` } }));
     punishAt = performance.now();
@@ -1866,6 +1944,7 @@ export function createUI(bus) {
     showPause,
     showResults,
     showDuel,
+    setDuelMode,
     setDuelName,
     showDuelWait,
     setDuelCount,

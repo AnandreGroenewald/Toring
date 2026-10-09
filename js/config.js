@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.10.1';
+export const VERSION = '1.11.0';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -101,7 +101,7 @@ export const SCORING = {
   perfectBonus: 15,      // x combo (combo 1 => 15, 2 => 30, ...)
   goodBonus: 5,
   comboCap: 10,
-  heartEvery: 3,         // every 3rd Perfek (not necessarily in a row) while a heart is missing brings it back
+  heartEvery: 4,         // every 4th Perfek (not necessarily in a row) while a heart is missing brings it back (1.10: 3rd)
   rewardStreak: 5,       // every 5 Perfeks in a row bring Hanswors with a big log (a new foundation)
 };
 export const LIVES = 4;
@@ -212,15 +212,17 @@ export const VISITOR = {
 // for everyone on a day): core/sequence.js plans the weather and core/visitorplan.js the visitors
 // with these rules; GameScene announces each stage when its first block is on the crane.
 // ---------------------------------------------------------------------------
+// 1.11: about a quarter harder than 1.10 (testers: "a little too forgiving now"): each stage starts a
+// quarter sooner and its weather and visitors come about a fifth more often.
 export const STAGES = Object.freeze([
-  // warm-up: no bad weather, no visitors (about the first 20 m)
+  // warm-up: no bad weather, no visitors (about the first 15 m)
   Object.freeze({ from: 0, weather: null, gap: null, visitors: null, thief: false, emoji: '🌤️' }),
   // Moeiliker: the mild weather, Blouaap and Hanswors, with room to breathe between them
-  Object.freeze({ from: 12, weather: 'mild', gap: [5, 8], visitors: [14, 20], thief: false, emoji: '🌦️' }),
+  Object.freeze({ from: 9, weather: 'mild', gap: [4, 6], visitors: [12, 18], thief: false, emoji: '🌦️' }),
   // Nog moeiliker: storms, hail and gusts too, and Skelm Sakkie
-  Object.freeze({ from: 30, weather: 'all', gap: [3, 6], visitors: [12, 20], thief: true, emoji: '⛈️' }),
-  // Op sy moeilikste: as often as every tower was before 1.10
-  Object.freeze({ from: 55, weather: 'all', gap: [2, 4], visitors: [10, 20], thief: true, emoji: '🔥' }),
+  Object.freeze({ from: 23, weather: 'all', gap: [3, 5], visitors: [11, 17], thief: true, emoji: '⛈️' }),
+  // Op sy moeilikste: as often as every tower was before 1.10, and the visitors more often
+  Object.freeze({ from: 41, weather: 'all', gap: [2, 3], visitors: [9, 17], thief: true, emoji: '🔥' }),
 ]);
 
 /** The stage (index into STAGES) block `i` belongs to. */
@@ -235,7 +237,7 @@ export function stageAt(i) {
 // ---------------------------------------------------------------------------
 export const DUEL = {
   goalM: 50,               // the first to 50 m wins
-  rules: 110,              // the game's rules (stages, blocks, visitors: 1.10): the lobby pairs only the same
+  rules: 111,              // the game's rules (stages, blocks, visitors, physics: 1.11): the lobby pairs only the same
   marks: [10, 20, 30, 40], // whoever reaches a mark first chooses a punishment for the other tower
   punishments: ['monkey', 'thief', 'fog', 'heat'], // Blouaap, Skelm Sakkie, Mis, Hittegolf
   attackFor: { 10: 'monkey', 20: 'thief', 30: 'monkey', 40: 'thief' }, // sent when nobody chooses in time
@@ -251,6 +253,23 @@ export const DUEL = {
   countdownMs: 3000,
   stateEveryMs: 400,       // live: how often a tower sends its height
   nameMax: 16,
+};
+
+// Blok vir Blok (1.11): two players build ONE tower, a block each in turn. A turn that loses blocks
+// (yours missed, or knocked the top off) costs that player a heart; the first out of hearts loses.
+// Five Perfeks in a row (your own) earn a joker: you choose a sabotage for the other player's next
+// block. No weather, visitors or flood of its own: everything that happens, a player did.
+export const TURNS = {
+  rules: 1,               // this mode's own rules (the lobby pairs only the same)
+  hearts: 3,
+  turnMs: 10000,          // aiming time; then the block drops by itself
+  settleMaxMs: 6000,      // a turn ends at the latest this long after its drop (a tower that keeps rocking)
+  liveBlocks: 5,          // at the end of each turn all but the newest 5 tower blocks set as cement
+  jokerStreak: 5,         // Perfeks in a row (your own blocks) for a joker
+  sabotages: ['fog', 'heat', 'rain'],   // Mis, Hittegolf, Reën: on the other player's next block
+  chooseMs: 7000,         // time to choose the sabotage (the game goes on meanwhile), then the first one
+  maxTurns: 160,          // then the most hearts win, then the most Perfeks, then whoever went second
+  serverTurnMs: 45000,    // the server ends a match whose turn doesn't end in this long (that player is gone)
 };
 
 // ---------------------------------------------------------------------------

@@ -1,20 +1,27 @@
 // Uitdagersreeks live matches (docs/CHALLENGE-SPEC.md). MatchLobby (one instance) pairs players who are
-// looking and keeps recent runs for players nobody is around to play; MatchRoom (one per match, named
-// by its code) relays the heights, decides the height marks and the winner with the game's own
-// referee (js/core/duel.js) and hands both runs to the lobby at the end.
+// looking (the same mode and rules) and keeps recent runs for players nobody is around to play;
+// MatchRoom (one per match, named by its code) runs one of two modes:
+//  - Wedloop ('race'): relays the heights, decides the height marks and the winner with the game's own
+//    referee (js/core/duel.js) and hands both runs to the lobby at the end;
+//  - Blok vir Blok ('turns', 1.11): one tower, a block each in turn. The game whose turn it is plays
+//    the block and reports where the tower came to rest; the room passes that on and keeps the score
+//    with js/core/turns.js (whose turn, hearts, jokers, the result), and ends a match whose turn
+//    never comes back.
 //
 // Both use WebSocket hibernation, so a quiet room costs nothing, and both keep the match in memory
 // while it runs, saving only at the moments that matter (start, a height mark, the result, and at
 // most every few seconds): the Workers Free plan allows 100 000 storage writes a day.
 
-import { DUEL } from '../../js/config.js';
+import { DUEL, TURNS } from '../../js/config.js';
 import {
   createReferee, cleanNickname, cleanReport, decodeChallenge, encodeChallenge, heightDm, isMatchSeed, newMatchSeed, newRoomCode,
   isPunishment,
 } from '../../js/core/duel.js';
 import { cleanCard } from '../../js/core/economy.js';
+import { createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, firstSeat, SABOTAGES } from '../../js/core/turns.js';
 
-const MSG_MAX = 512;                   // characters per message
+const MSG_MAX = 512;                   // characters per message (the lobby)
+const ROOM_MSG_MAX = 2048;             // in a room: a Blok vir Blok turn's report carries the loose top
 const MSG_PER_SEC = 10;                // per player
 const RANDOM_ROOM_TTL_MS = 2 * 60 * 1000;
 const DONE_TTL_MS = 60 * 1000;         // a finished room says goodbye and is cleared after this
@@ -29,6 +36,7 @@ const SEAT_KEY_RE = /^[a-z0-9]{8,32}$/;   // a game's own key for one room (a re
 // in time (or a game older than protocol 2, which never asks) gets the mark's default punishment.
 const CHOOSE_WAIT_MS = DUEL.chooseMs + 1500;
 const PROTOCOL_CHOOSE = 2;
+const PROTOCOL_TURNS = 3;   // a game older than this can't play Blok vir Blok: such a room is "gone" for it
 
 export const rand32 = () => crypto.getRandomValues(new Uint32Array(1))[0];
 const randFloat = () => rand32() / 4294967296;
@@ -50,8 +58,8 @@ function closeWs(ws, reason = '') {
   }
 }
 
-function parseMsg(data) {
-  if (typeof data !== 'string' || data.length > MSG_MAX) return null;
+function parseMsg(data, max = MSG_MAX) {
+  if (typeof data !== 'string' || data.length > max) return null;
   try {
     const o = JSON.parse(data);
     return o && typeof o === 'object' && !Array.isArray(o) ? o : null;
@@ -151,13 +159,14 @@ export class MatchRoom {
     return response;
   }
 
-  /** A new room (from the lobby or POST /match/room): its seed and how long it waits for players. */
-  async init({ seed, kind } = {}) {
+  /** A new room (from the lobby or POST /match/room): its seed, its mode and how long it waits for players. */
+  async init({ seed, kind, mode } = {}) {
     if (await this.load()) return json(409, { error: 'exists' });
     const now = this.now();
     this.m = {
       seed: isMatchSeed(seed) ? seed : newMatchSeed(randFloat),
       kind: kind === 'random' ? 'random' : 'friend',
+      mode: mode === 'turns' ? 'turns' : 'race',
       createdAt: now,
       names: [null, null],
       started: false,
@@ -170,7 +179,7 @@ export class MatchRoom {
     };
     await this.save();
     await this.state.storage.setAlarm(now + (this.m.kind === 'random' ? RANDOM_ROOM_TTL_MS : DUEL.roomWaitMs));
-    return json(200, { ok: true, seed: this.m.seed });
+    return json(200, { ok: true, seed: this.m.seed, mode: this.m.mode });
   }
 
   /** A player's socket: a free seat, or "gone" (no such room, full, started or over). */
@@ -206,10 +215,11 @@ export class MatchRoom {
   async onMessage(ws, data) {
     const now = this.now();
     if (!this.allow(ws, now)) return;
-    const msg = parseMsg(data);
+    const msg = parseMsg(data, ROOM_MSG_MAX);
     const m = await this.load();
     let seat = seatOf(ws);
     if (!msg || !m || m.done) return;
+    if (m.mode !== 'turns' && data.length > MSG_MAX) return;   // only a Blok vir Blok report is that long
 
     if (msg.t === 'hello') {
       if (m.started || att(ws).replaced) return;
@@ -230,6 +240,12 @@ export class MatchRoom {
         return;
       }
       const v = Math.max(1, Math.min(99, Math.floor(Number(msg.v)) || 1));
+      if (m.mode === 'turns' && v < PROTOCOL_TURNS) {   // (1.10 and older would start a Wedloop here)
+        ws.serializeAttachment({ ...att(ws), seat: -1, hello: false });
+        sendJson(ws, { t: 'gone' });
+        closeWs(ws, 'old');
+        return;
+      }
       // the player card (looks and rank, js/core/economy.js) goes to the other player as known ids only
       ws.serializeAttachment({ seat, hello: true, name: cleanNickname(msg.name) || DEFAULT_NAME, v, card: cleanCard(msg.card), key });
       const both = [this.socketFor(0), this.socketFor(1)];
@@ -238,6 +254,10 @@ export class MatchRoom {
     }
     if (seat < 0) return;
     if (!m.started || m.result) return;
+    if (m.mode === 'turns') {
+      await this.onTurnMessage(seat, msg, now);
+      return;
+    }
     // a choice nobody made in time gets the default (checked whenever either player says anything)
     if (await this.expireChoices(now)) await this.save();
     if (msg.t === 'punish') {
@@ -263,7 +283,9 @@ export class MatchRoom {
     // the recording keeps the best height (what decides the race), not the top with a block in the air
     this.record(seat, now, ref.best(seat));
     const other = this.socketFor(1 - seat);
-    if (other && msg.t === 'state') sendJson(other, { t: 'opp', h: round1(h), best: round1(ref.best(seat)) });
+    // (1.11: the player's hearts too, so the other one sees them; older games send none)
+    const lives = Number.isInteger(msg.lives) && msg.lives >= 0 && msg.lives <= 9 ? msg.lives : null;
+    if (other && msg.t === 'state') sendJson(other, { t: 'opp', h: round1(h), best: round1(ref.best(seat)), ...(lives !== null ? { lives } : {}) });
     let important = false;
     for (const e of events) {
       if (e.type === 'attack') {
@@ -311,6 +333,16 @@ export class MatchRoom {
     const m = await this.load();
     const seat = seatOf(ws);
     if (!m || seat < 0) return;
+    if (m.mode === 'turns') {
+      if (m.started && !m.result) {
+        const ref = createTurnReferee({ init: m.tref });
+        const [e] = ref.leave(seat);
+        m.tref = ref.snapshot();
+        if (e) await this.decidedTurns(e, this.now());
+        await this.save();
+      }
+      return;
+    }
     if (m.started && !m.result) {
       const ref = createReferee({ init: m.ref });
       const [e] = ref.leave(seat);
@@ -327,12 +359,90 @@ export class MatchRoom {
     m.started = true;
     m.startAt = now + DUEL.countdownMs;
     for (const k of [0, 1]) m.names[k] = att(this.socketFor(k)).name || DEFAULT_NAME;
+    // Blok vir Blok: who drops first is drawn here; the first turn goes with the start
+    let turn = null;
+    if (m.mode === 'turns') {
+      const ref = createTurnReferee({ first: firstSeat(randFloat) });
+      const [e] = ref.start();
+      m.tref = ref.snapshot();
+      m.deadline = m.startAt + TURNS.serverTurnMs;
+      turn = { n: e.n, seat: e.seat, hearts: e.hearts, streaks: e.streaks, sab: e.sab };
+    }
     for (const s of this.sockets()) {
       const k = seatOf(s);
-      if (k >= 0) sendJson(s, { t: 'start', seed: m.seed, you: k, opp: { name: m.names[1 - k], card: cleanCard(att(this.socketFor(1 - k)).card) } });
+      if (k < 0) continue;
+      const msg = { t: 'start', seed: m.seed, you: k, opp: { name: m.names[1 - k], card: cleanCard(att(this.socketFor(1 - k)).card) } };
+      if (turn) Object.assign(msg, { mode: 'turns', turn });
+      sendJson(s, msg);
     }
     await this.save();
-    await this.state.storage.setAlarm(now + DUEL.maxRunMs + DUEL.countdownMs);
+    await this.state.storage.setAlarm(turn ? m.deadline : now + DUEL.maxRunMs + DUEL.countdownMs);
+  }
+
+  /**
+   * Blok vir Blok: 'drop' (where the block was let go: passed on so the other game shows the same fall),
+   * 'settled' (where the tower came to rest, whether the turn cost a heart, how the block landed: passed
+   * on, then scored), 'joker' (the chosen sabotage) and 'over' (quitting). Only the player whose turn
+   * it is can drop or end it.
+   */
+  async onTurnMessage(seat, msg, now) {
+    const m = this.m;
+    const ref = createTurnReferee({ init: m.tref });
+    const other = this.socketFor(1 - seat);
+    let events;
+    if (msg.t === 'drop') {
+      const p = cleanPose(msg.p);
+      // ct: how far the crane had swung this turn (ms), so the other game shows the block let go there
+      const ct = typeof msg.ct === 'number' && msg.ct >= 0 && msg.ct <= 120000 ? msg.ct : null;
+      if (p && seat === ref.seat && msg.n === ref.n && other) sendJson(other, { t: 'drop', n: ref.n, p, ...(ct !== null ? { ct } : {}) });
+      return;
+    }
+    if (msg.t === 'settled') {
+      const snap = cleanSnap(msg.snap);
+      if (!snap || seat !== ref.seat || msg.n !== ref.n) return;
+      const lost = msg.lost === true;
+      const r = cleanRating(msg.r);
+      if (!snapFits(snap, ref.n, r)) return;   // blocks not dropped yet, or a lost block rated otherwise
+      if (other) sendJson(other, { t: 'settled', n: ref.n, lost, r, snap });
+      events = ref.settled(seat, { n: ref.n, lost, r });
+    } else if (msg.t === 'joker') {
+      events = ref.joker(seat, msg.kind);
+    } else if (msg.t === 'over') {
+      events = ref.leave(seat);
+    } else {
+      return;
+    }
+    if (!events.length) return;
+    m.tref = ref.snapshot();
+    for (const e of events) {
+      if (e.type === 'turn') {
+        m.deadline = now + TURNS.serverTurnMs;
+        for (const s of this.sockets()) {
+          if (seatOf(s) >= 0) sendJson(s, { t: 'turn', n: e.n, seat: e.seat, hearts: e.hearts, streaks: e.streaks, sab: e.sab });
+        }
+      } else if (e.type === 'joker') {
+        const s = this.socketFor(e.seat);
+        if (s) sendJson(s, { t: 'choose', options: [...SABOTAGES], def: SABOTAGES[0] });
+      } else if (e.type === 'sent') {
+        const s = this.socketFor(e.seat);
+        if (s) sendJson(s, { t: 'sent', kind: e.kind });
+        const o = this.socketFor(1 - e.seat);
+        if (o) sendJson(o, { t: 'sabotage', kind: e.kind });   // a heads-up: it comes with their next block
+      } else if (e.type === 'result') {
+        await this.decidedTurns(e, now);
+      }
+    }
+    // (the alarm set at the start fires at the first deadline and moves itself on to the latest one)
+    await this.save();
+  }
+
+  /** Blok vir Blok is decided: everyone hears it, and the room closes soon (no recordings: it needs two). */
+  async decidedTurns(e, now) {
+    const m = this.m;
+    m.result = { winner: e.winner, reason: e.reason };
+    m.done = true;
+    for (const s of this.sockets()) sendJson(s, { t: 'result', winner: e.winner, reason: e.reason, hearts: e.hearts });
+    await this.state.storage.setAlarm(now + DONE_TTL_MS);
   }
 
   record(seat, now, h) {
@@ -365,9 +475,25 @@ export class MatchRoom {
     await this.state.storage.setAlarm(now + DONE_TTL_MS);
   }
 
-  /** Time is up: a room nobody joined says "gone"; a finished one closes and forgets everything. */
+  /**
+   * Time is up: a room nobody joined says "gone"; a finished one closes and forgets everything. In a
+   * Blok vir Blok match it is the turn's deadline: a turn that never ends loses the match for that player.
+   */
   async alarm() {
     const m = await this.load();
+    if (m && m.mode === 'turns' && m.started && !m.done) {
+      const now = this.now();
+      if (now < (m.deadline || 0)) {
+        await this.state.storage.setAlarm(m.deadline);
+        return;
+      }
+      const ref = createTurnReferee({ init: m.tref });
+      const [e] = ref.timeout();
+      m.tref = ref.snapshot();
+      if (e) await this.decidedTurns(e, now);
+      await this.save();
+      return;
+    }
     for (const s of this.sockets()) {
       if (!m || !m.started) sendJson(s, { t: 'gone' });
       closeWs(s, 'done');
@@ -417,18 +543,20 @@ export class MatchLobby {
     if (!msg || msg.t !== 'hello') return;
     const me = att(ws);
     if (me.hello) return;
-    // the same game rules only (stages, blocks and visitors change between versions; older games send none)
+    // the same mode (Wedloop or Blok vir Blok; older games send none: Wedloop) and the same game rules
+    // only (stages, blocks and visitors change between versions; older games send none)
     const rules = Number.isInteger(msg.rules) && msg.rules > 0 && msg.rules < 100000 ? msg.rules : 0;
-    ws.serializeAttachment({ ...me, hello: true, rules });
+    const mode = msg.mode === 'turns' ? 'turns' : 'race';
+    ws.serializeAttachment({ ...me, hello: true, rules, mode });
     const waiting = this.state.getWebSockets('wait')
-      .filter((s) => s !== ws && att(s).hello && !att(s).paired && (att(s).rules || 0) === rules)
+      .filter((s) => s !== ws && att(s).hello && !att(s).paired && (att(s).rules || 0) === rules && (att(s).mode || 'race') === mode)
       .sort((a, b) => (att(a).at || 0) - (att(b).at || 0));
     const other = waiting[0];
     if (!other) {
       sendJson(ws, { t: 'wait' });
       return;
     }
-    const room = await this.newRoom();
+    const room = await this.newRoom(mode);
     if (!room) {
       sendJson(ws, { t: 'wait' });
       return;
@@ -440,11 +568,11 @@ export class MatchLobby {
     }
   }
 
-  async newRoom() {
+  async newRoom(mode = 'race') {
     for (let tries = 0; tries < 4; tries++) {
       const code = this.roomCode();
       const stub = this.env.MATCH_ROOM.get(this.env.MATCH_ROOM.idFromName(code));
-      const res = await stub.fetch('https://room/init', { method: 'POST', body: JSON.stringify({ kind: 'random', seed: newMatchSeed(randFloat) }) });
+      const res = await stub.fetch('https://room/init', { method: 'POST', body: JSON.stringify({ kind: 'random', seed: newMatchSeed(randFloat), mode }) });
       if (res.status === 200) return code;
     }
     return null;

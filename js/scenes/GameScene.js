@@ -1,9 +1,13 @@
 // The core loop: crane, drop, fixed-step Matter physics, landing ratings
 // (Perfek snap + combo), lives, settle + cement freeze, rising flood, weather,
 // camera follow, landing ghost, wobble, idle attract mode and the game-over reveal.
+// Blok vir Blok (1.11, `this.turns`): one tower for two players, a block each in turn. The game whose
+// turn it is plays the block; the other game drops the same block from the same spot and, when the
+// turn's report comes, puts the tower exactly where the first one says it came to rest. Between drops
+// the tower stands still, so both games start every drop from the same tower.
 import {
   GAME_W, LAYOUT, PX_PER_M, PHYSICS, CRANE, SCORING, LIVES, FREEZE_DEPTH, WATER, DEPTH, FONT, COACH,
-  VISITOR, VISITOR_TYPES, RATING, DUEL, WEATHER_TUNING, STAGES,
+  VISITOR, VISITOR_TYPES, RATING, DUEL, WEATHER_TUNING, STAGES, TURNS,
 } from '../config.js';
 import { bus } from '../core/bus.js';
 import { S, VISITOR_INFO, WEATHER_INFO } from '../core/strings.js';
@@ -48,6 +52,7 @@ const GHOST_MISS_DROP = 120;     // a ghost for a drop that misses the tower is 
 const PREWARM_AHEAD = 2;         // block textures drawn ahead while a block falls (see prewarmTextures)
 const FLOOD_TAG_MS = 1000;       // the flood tag's text redraws at most this often (each redraw is a canvas + upload)
 const COLLAPSE_MS = 1500;        // tower blocks lost this soon after another loss are the same collapse: one life
+const TIP_LEAN = 1.02;           // a block whose load is this far past the middle of its support (1 = the edge) tips
 const SET_AFTER_MS = 1500;       // a deep block still stirred by wind sets this long after landing...
 const SET_MAX_SPEED = 0.3;       // ...if it moves slower than this (px/step)
 const SET_MAX_SPIN = 0.01;       // ...and turns slower than this (rad/step)
@@ -69,6 +74,15 @@ const GHOST_PAD = 8;
 const GHOST_MISS_TINT = 0xff6b6b;
 const HALF_PI = Math.PI / 2;
 const TWO_PI = Math.PI * 2;
+
+// Blok vir Blok
+const BOT_AIM_ERROR = 0.32;      // Robot Rikus misses the middle this often (autoplay's aim error)
+const BOT_THINK_MS = [900, 2200]; // ...after looking at the swing this long
+const BOT_SABOTAGED_ERROR = { fog: 0.85, heat: 0.6, rain: 0.45 };   // ...and this often with a sabotage on his block
+/** Wall-clock ms (a turn's aiming time runs on it, so a paused game has used it up when it comes back). */
+const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+const TURN_BACK_MS = 3000;       // back from a pause or another app: at least this long to aim
+const TURN_LIVE_MAX_MS = 38000;  // a live turn's aim time never runs past this (the server waits TURNS.serverTurnMs)
 
 // Autoplay / idle attract mode
 const AUTO_WAIT_MS = 420;
@@ -310,7 +324,20 @@ export class GameScene extends Phaser.Scene {
     this.challengeM = this.mode === 'daily' && Number.isFinite(d.challenge) && d.challenge > 0 && d.challenge <= 2000 ? d.challenge : 0;
     this.challengeWon = false;
     // Uitdagersreeks (js/duel.js runs the match; the scene reports its height and takes attacks)
-    this.duel = this.mode === 'duel' ? { name: typeof d.duel?.name === 'string' ? d.duel.name : '' } : null;
+    this.duel = this.mode === 'duel' ? {
+      name: typeof d.duel?.name === 'string' ? d.duel.name : '',
+      youName: typeof d.duel?.youName === 'string' ? d.duel.youName : '',
+      mode: d.duel?.mode === 'turns' ? 'turns' : 'race',
+    } : null;
+    // Blok vir Blok: whose turn is told by js/duel.js ('turns:turn'); `you` is this player's seat, `bot`
+    // that the other seat is Robot Rikus (this game plays his blocks)
+    this.turns = this.duel?.mode === 'turns'
+      ? {
+        you: d.duel.you === 1 ? 1 : 0, bot: d.duel.bot === true, names: ['', ''], hearts: [TURNS.hearts, TURNS.hearts], streaks: [0, 0], cur: null,
+        myAuto: this.autoplay,   // (tests: ?auto= plays this player's turns too)
+        hud: { n: 0, seat: 0, you: 0, mine: false, names: ['', ''], hearts: [0, 0], streaks: [0, 0], left: null, phase: 'wait' },
+      }
+      : null;
     // Debug only (?debug=1&visitor=thief, see main.js): this visitor comes as soon as there is a tower.
     this.debug = d.debug === true;
     this.forceVisitor = this.debug && !this.idle && VISITOR_TYPES.includes(d.visitor) ? d.visitor : null;
@@ -389,6 +416,11 @@ export class GameScene extends Phaser.Scene {
     this.visitorGraceStart = -1e9;   // sim ms: when that visitor's push came
     this.visitorBlame = null;        // ...which visitor
     this.graceToast = false;         // the "not your fault" toast was shown for this push
+    this.turnHold = false;           // Blok vir Blok: the tower stands still between drops
+    this.tipTick = 0;                // physics steps, for wakeTipping (every 4th)
+    this.leanNow = 0;                // the tower's lean as wakeTipping last measured it
+    if (this.tipping) this.tipping.clear();
+    this.turnCraneMs = 0;            // ...and how far this turn's crane has swung
   }
 
   create() {
@@ -477,7 +509,7 @@ export class GameScene extends Phaser.Scene {
     // Friend challenge: one thin line across the world at the height to beat, with a flag label (cheap, world space).
     this.challengeLine = null;
     this.challengeTag = null;
-    if (this.duel) this.buildGoalLine();
+    if (this.duel && !this.turns) this.buildGoalLine();
     if (this.challengeM > 0) {
       const cy = LAYOUT.baseTopY - this.challengeM * PX_PER_M;
       this.challengeLine = this.add.image(GAME_W / 2, cy, '__WHITE').setDisplaySize(GAME_W, 5)
@@ -537,11 +569,18 @@ export class GameScene extends Phaser.Scene {
       bus.on('duel:end', (e) => {
         if (this.duel) this.endGame(e?.outcome === 'won' ? 'won' : 'lost');
       }),
+      // Blok vir Blok (js/duel.js): a new turn, the other player's drop and their turn's report
+      bus.on('turns:turn', (t) => this.onTurn(t)),
+      bus.on('turns:drop', (d) => this.onRemoteDrop(d)),
+      bus.on('turns:settled', (d) => this.onRemoteSettled(d)),
       bus.on('weather:rainbow', () => this.onRainbow()),
       bus.on('hud:ready', () => this.onHudReady()),
     );
     this.game.events.on('visible', this.resetClock, this);
     this.events.on('resume', this.resetClock, this);
+    // Blok vir Blok: the time to aim waits while the game is paused or out of sight
+    this.game.events.on('hidden', this.markAway, this);
+    this.events.on('pause', this.markAway, this);
     this.events.once('shutdown', this.cleanup, this);
 
     const reg = this.registry;
@@ -556,18 +595,27 @@ export class GameScene extends Phaser.Scene {
     if (!this.idle) this.scene.launch('Hud');
 
     this.prewarmTextures(0, PREWARM_AHEAD + 2);   // the first blocks, while the screen changes anyway
-    this.spawnBlock(0);
+    if (this.turns) {
+      this.hintPending = false;
+      this.turnHold = true;
+    } else {
+      this.spawnBlock(0);
+    }
     if (this.hintPending) bus.emit('hud:hint', { text: this.hintText() });
 
     if (typeof window !== 'undefined') {
       window.__stapel = window.__stapel || {};
       window.__stapel.scene = this;
     }
+    // Blok vir Blok: ready for the first turn (js/duel.js sends it now, and whatever came meanwhile)
+    if (this.turns) bus.emit('turns:ready');
   }
 
   buildWeather() {
     try {
-      return new Weather(this, this.sequence, {
+      // Blok vir Blok has no weather of its own: only a sabotage (weather.force) on one player's block
+      const seq = this.turns ? { seed: this.sequence.seed ?? this.seed, eventAt: () => null } : this.sequence;
+      return new Weather(this, seq, {
         effects: this.effects, audio, haptics, bus, reducedMotion: this.reducedMotion,
       });
     } catch (err) {
@@ -646,6 +694,8 @@ export class GameScene extends Phaser.Scene {
     this.spawnDue = null;
     this.game.events.off('visible', this.resetClock, this);
     this.events.off('resume', this.resetClock, this);
+    this.game.events.off('hidden', this.markAway, this);
+    this.events.off('pause', this.markAway, this);
     this.input.off('pointerdown', this.onPointerDown, this);
     if (this.input.keyboard) {
       this.input.keyboard.off('keydown-SPACE', this.onKeyDrop, this);
@@ -683,6 +733,22 @@ export class GameScene extends Phaser.Scene {
     this.acc = 0;
     this.skipFrame = true;
     this.frameTime = 0;
+    // Blok vir Blok: this player's time to aim moves on by the time away (against Robot Rikus all of
+    // it; live at most until TURN_LIVE_MAX_MS after the turn began, well within the server's patience),
+    // and is never less than TURN_BACK_MS on coming back
+    const c = this.turns?.cur;
+    if (c && this.awayAt && c.mine && !c.dropped) {
+      const now = nowMs();
+      let deadline = c.deadline + (now - this.awayAt);
+      if (!this.turns.bot) deadline = Math.min(deadline, c.startedWall + TURN_LIVE_MAX_MS);
+      c.deadline = Math.max(deadline, Math.min(now + TURN_BACK_MS, this.turns.bot ? Infinity : c.startedWall + TURN_LIVE_MAX_MS));
+    }
+    this.awayAt = 0;
+  }
+
+  /** The game was paused or hidden (resetClock moves the aim time on when it comes back). */
+  markAway() {
+    if (!this.awayAt) this.awayAt = nowMs();
   }
 
   delay(ms, fn) {
@@ -770,8 +836,9 @@ export class GameScene extends Phaser.Scene {
     this.curSpec = spec;
     this.curGeom = getGeometry(spec);
     if (!this.idle) this.emitPowerups();
-    // a new stage begins with this block: say so (no weather or visitor starts on this block)
-    if (!this.idle) {
+    // a new stage begins with this block: say so (no weather or visitor starts on this block; Blok vir
+    // Blok has neither)
+    if (!this.idle && !this.turns) {
       const k = STAGES.findIndex((st) => st.from === i);
       if (k > 0) {
         bus.emit('hud:banner', { emoji: STAGES[k].emoji, title: S.stageTitle(k), subtitle: S.stageSub(k), kind: 'stage' });
@@ -864,6 +931,9 @@ export class GameScene extends Phaser.Scene {
     if (this.idle && !fromAuto) return false;
     if (!this.crane.hasBlock() || !this.curSpec) return false;
     if (!this.sys.isActive()) return false;
+    // Blok vir Blok: only on this player's turn (and Robot Rikus's, by autoplay), once
+    const turn = this.turns?.cur;
+    if (this.turns && (!turn || turn.dropped || (!turn.mine && !(turn.botTurn && fromAuto)))) return false;
 
     const pose = this.crane.release(lagMs);
     const cam = this.cameras.main;
@@ -874,9 +944,26 @@ export class GameScene extends Phaser.Scene {
     const g = 1000 * PHYSICS.gravityY;
     const vx = pose.vx * CRANE.carry;
     const vy = pose.vy * CRANE.carry;
-    const block = new Block(this, this.curSpec, pose.x - vx * d, pose.y + cam.scrollY - vy * d + 0.5 * g * d * d, pose.angle, this.curName);
+    const p = [pose.x - vx * d, pose.y + cam.scrollY - vy * d + 0.5 * g * d * d, pose.angle, vx, vy - g * d];
+    if (turn) {
+      turn.dropped = true;
+      turn.dropAt = this.now;
+      this.turnHold = false;
+      // the other game drops the same block from the same spot (its crane shows the swing up to here)
+      if (turn.mine) bus.emit('turns:mydrop', { n: turn.n, p, ct: this.turnCraneMs + Math.max(0, lagMs) });
+    }
+    this.launchBlock(p);
+    return true;
+  }
+
+  /**
+   * The hanging block is let go: [x, y, angle, vx, vy] (world px, px/s) is its state at the first physics
+   * step. A tap (tryDrop), or in Blok vir Blok the other player's tap, passed on exactly (onRemoteDrop).
+   */
+  launchBlock([x, y, angle, vx, vy]) {
+    const block = new Block(this, this.curSpec, x, y, angle, this.curName);
     block.special = this.curSpec.foundation ? 'foundation' : null;
-    block.setVelocityPxS(vx, vy - g * d);
+    block.setVelocityPxS(vx, vy);
     block.setFriction(this.weather.frictionMul);
     block.state = 'falling';
     block.droppedAt = this.now;
@@ -914,7 +1001,7 @@ export class GameScene extends Phaser.Scene {
         bus.emit('game:started', this.buildResult('quit'));
       }
     }
-    return true;
+    return block;
   }
 
   /** Schedules the next block exactly once per dropped block. */
@@ -966,7 +1053,11 @@ export class GameScene extends Phaser.Scene {
       }
     }
     if (this.spawnDue !== null && this.now >= this.spawnDue && !this.over) {
-      if (this.now >= this.calmCap || this.towerCalm()) {
+      if (this.turns) {
+        // Blok vir Blok: the turn ends once the tower is at rest (the next block comes with the next turn)
+        this.spawnDue = null;
+        this.turnSettled();
+      } else if (this.now >= this.calmCap || this.towerCalm()) {
         this.spawnDue = null;
         this.spawnBlock(this.i + 1);
       }
@@ -994,6 +1085,7 @@ export class GameScene extends Phaser.Scene {
     opts.windAccel = w.windAccel;
     opts.heat = w.heatLevel;
     this.crane.update(dt, opts);
+    if (this.turns) this.turnClock(dt);
 
     // 2. Fixed-step physics; everything that can change the outcome runs per step
     this.acc += dt;
@@ -1027,7 +1119,7 @@ export class GameScene extends Phaser.Scene {
     this.updateGhostAndAutoplay();
     this.updateWobble(dtS);
     this.emitHud();
-    if (this.duel && !this.over) this.emitDuel();
+    if (this.duel && !this.turns && !this.over) this.emitDuel();
     this.writeRegistry();
   }
 
@@ -1049,7 +1141,302 @@ export class GameScene extends Phaser.Scene {
     s.t = this.now;
     s.h = Math.max(0, LAYOUT.baseTopY - this.towerTopY) / PX_PER_M;
     s.best = this.maxHeightM;
+    s.lives = this.lives;   // (the other player sees your hearts, 1.11)
     bus.emit('duel:self', s);
+  }
+
+  // -------------------------------------------------------------------------
+  // Blok vir Blok (1.11): one tower, a block each in turn
+  // -------------------------------------------------------------------------
+  /** A turn begins (js/duel.js): its block on the crane with a fresh swing, whose it is, a sabotage on it. */
+  onTurn(t) {
+    const T = this.turns;
+    if (!T || this.over || !t || !Number.isInteger(t.n) || t.n < 1) return;
+    if (T.cur && t.n <= T.cur.n) return;
+    // the last turn ended without its report reaching this game: the tower stays as it is here
+    if (T.cur && !T.cur.ended) this.closeTurn();
+    if (Array.isArray(t.names)) T.names = t.names;
+    T.hearts = [...t.hearts];
+    T.streaks = [...(t.streaks || [0, 0])];
+    const seat = t.seat;
+    const mine = seat === T.you;
+    const botTurn = T.bot && !mine;
+    T.cur = {
+      n: t.n, seat, mine, botTurn, dropped: false, ended: false, dropAt: 0,
+      startedWall: nowMs(), deadline: nowMs() + TURNS.turnMs, livesAt: t.hearts[seat], lost: [],
+    };
+    this.awayAt = 0;
+    // a new turn is its own collapse (the last one's can't cost this player)
+    this.collapseUntil = -1e9;
+    this.lastTowerLossAt = -1e9;
+    // the game's own heart rules count for this turn's player
+    this.lives = t.hearts[seat];
+    this.combo = T.streaks[seat];
+    this.turnHold = true;
+    this.spawnDue = null;
+    this.turnCraneMs = 0;
+    // who aims: this player, Robot Rikus (autoplay, after a look at the swing; a sabotage on his block
+    // throws him off, as it would a player), or the other game
+    this.autoplay = botTurn ? (t.sab ? BOT_SABOTAGED_ERROR[t.sab] ?? BOT_AIM_ERROR : BOT_AIM_ERROR) : T.myAuto;
+    this.autoOn = botTurn || (mine && T.myAuto > 0);
+    if (this.crane.hasBlock()) this.crane.release(0);
+    this.spawnBlock(t.n - 1);
+    this.crane.resetSwing(this.amplitudeFor(t.n - 1));
+    if (botTurn) this.autoReadyAt = this.now + BOT_THINK_MS[0] + Math.random() * (BOT_THINK_MS[1] - BOT_THINK_MS[0]);
+    // a sabotage rides on this block (both games show it)
+    const sab = t.sab && WEATHER_INFO[t.sab] ? t.sab : null;
+    if (sab) {
+      const info = WEATHER_INFO[sab];
+      const title = mine ? S.duelAttackIn(T.names[1 - seat] || this.duel.name, info.name) : S.duelAttackOut(info.name, T.names[seat] || this.duel.name, info.emoji);
+      safely(() => this.weather.force(sab, 1, title));
+    }
+    if (mine) {
+      audio.play('banner');
+      haptics.tap();
+    }
+  }
+
+  /** Per frame: the turn's crane time (the other game replays the swing to it) and this player's time to aim. */
+  turnClock(dt) {
+    const c = this.turns.cur;
+    if (!c || c.dropped || this.over) return;
+    this.turnCraneMs += dt;
+    // time's up: the block drops where it is
+    if (c.mine && nowMs() >= c.deadline && this.crane.hasBlock()) this.tryDrop(true);
+  }
+
+  /** The other player let their block go: the same block falls from the same spot here. */
+  onRemoteDrop(d) {
+    const c = this.turns?.cur;
+    if (!c || c.mine || c.botTurn || c.dropped || c.ended || this.over || !d || d.n !== c.n || !Array.isArray(d.p)) return;
+    if (!this.crane.hasBlock() || !this.curSpec) return;
+    c.dropped = true;
+    c.dropAt = this.now;
+    // the crane shows the swing up to the moment it was let go
+    if (Number.isFinite(d.ct)) this.crane.replaySwing(d.ct, this.craneOpts);
+    this.crane.release(0);
+    this.turnHold = false;
+    this.launchBlock(d.p);
+  }
+
+  /** The other player's turn is over: the tower as their game says it came to rest. */
+  onRemoteSettled(d) {
+    const c = this.turns?.cur;
+    if (!c || c.mine || c.botTurn || c.ended || this.over || !d || d.n !== c.n || !d.snap) return;
+    if (!c.dropped) {   // the report came before the drop: the block leaves the crane here and now
+      c.dropped = true;
+      if (this.crane.hasBlock()) this.crane.release(0);
+    }
+    c.ended = true;
+    this.applySnapshot(d.snap, c.n - 1, d.r);
+    this.turnHold = true;
+    this.spawnDue = null;
+    if (d.lost) this.lives = Math.min(this.lives, c.livesAt - 1);   // (the next turn brings the referee's count)
+  }
+
+  /** Every loose tower block at rest for a while (and nothing still falling past the tower). */
+  turnCalm() {
+    if (this.falling || this.eases.length) return false;
+    if (this.dynDirty) this.rebuildDyn();
+    for (let k = 0; k < this.dyn.length; k++) {
+      const b = this.dyn[k];
+      if (b.quietSteps < SETTLE.steps && !b.body.isSleeping) return false;
+    }
+    const surf = this.water.surfaceY;
+    for (let k = 0; k < this.active.length; k++) {
+      const b = this.active[k];
+      if (b.state === 'lost' && !b.destroyed && b.top < surf) return false;
+    }
+    return true;
+  }
+
+  /**
+   * The turn's block has done what it does (the step timers ask once it landed or fell): this game's
+   * turn (or Robot Rikus's) ends when the tower is calm, at the latest TURNS.settleMaxMs after the drop.
+   */
+  turnSettled() {
+    const c = this.turns?.cur;
+    if (!c || c.ended || this.over) return;
+    if (!c.mine && !c.botTurn) {   // the other game's turn: its report decides; nothing moves meanwhile
+      if (this.turnCalm() || this.now >= c.dropAt + TURNS.settleMaxMs) this.turnHold = true;
+      else this.spawnDue = this.now + FIXED;
+      return;
+    }
+    if (!this.turnCalm() && this.now < c.dropAt + TURNS.settleMaxMs) {
+      this.spawnDue = this.now + FIXED;   // ask again next step
+      return;
+    }
+    c.ended = true;
+    const blk = this.gridBlocks[c.n - 1];
+    const snap = this.turnSnapshot();
+    const r = !blk || snap.lost.includes(c.n - 1) || !snap.blocks.some((e) => e[0] === c.n - 1) ? 'X' : blk.rating || 'S';
+    if (r === 'X' && !snap.lost.includes(c.n - 1)) snap.lost.push(c.n - 1);
+    this.applySnapshot(snap, c.n - 1, r);   // exactly what the other game does with it
+    this.turnHold = true;
+    bus.emit('turns:mysettled', { n: c.n, lost: this.lives < c.livesAt, r, snap });
+  }
+
+  /** A turn that ended without its report (it came out of order): drop what's on the crane and hold still. */
+  closeTurn() {
+    const c = this.turns.cur;
+    c.ended = true;
+    c.dropped = true;
+    if (this.crane.hasBlock()) this.crane.release(0);
+    if (this.falling) this.removeQuietly(this.falling);
+    this.turnHold = true;
+    this.spawnDue = null;
+  }
+
+  /**
+   * Where this turn left the tower: every block that wasn't cement (only those can have moved), the
+   * newest TURNS.liveBlocks staying loose and the rest set as cement now, and the blocks it lost.
+   */
+  turnSnapshot() {
+    const ok = (b) => Number.isFinite(b.body.position.x) && Number.isFinite(b.body.position.y) && Number.isFinite(b.body.angle);
+    const loose = this.tower.filter((b) => b.state !== 'frozen' && !b.destroyed && ok(b)).sort((a, b) => a.index - b.index);
+    const cement = Math.max(0, loose.length - TURNS.liveBlocks);
+    const blocks = loose.map((b, k) => {
+      const p = b.body.position;
+      return [b.index, p.x, p.y, b.body.angle, k < cement ? 1 : 0, b.rating || null];
+    });
+    const standing = new Set(loose.map((b) => b.index));
+    // lost: what fell this turn, a block still in the air when it ended, and one whose numbers broke
+    const gone = [...this.turns.cur.lost];
+    if (this.falling && !this.falling.destroyed) gone.push(this.falling.index);
+    for (const b of this.tower) if (b.state !== 'frozen' && !b.destroyed && !ok(b)) gone.push(b.index);
+    const lost = [...new Set(gone)].filter((i) => !standing.has(i));
+    return { blocks, lost };
+  }
+
+  /**
+   * The tower as a turn's report says it came to rest (both games do exactly this with it): each block
+   * in it there, at rest, loose or set as cement; the blocks it lost gone. A block this game lost but
+   * the report has comes back; one it kept that the report doesn't have goes.
+   */
+  applySnapshot(snap, turnIndex, r) {
+    const M = this.M;
+    this.eases.length = 0;   // a Goed or rain slide still going here stops where the report has the block
+    const listed = new Set(snap.blocks.map((e) => e[0]));
+    for (const b of [...this.tower]) if (b.state !== 'frozen' && !listed.has(b.index)) this.removeQuietly(b);
+    if (this.falling && !listed.has(this.falling.index)) this.removeQuietly(this.falling);
+    // blocks already lost but still on their way down: they were counted, they go now
+    for (const b of this.active) if (b.state === 'lost' && !b.destroyed) b.destroy();
+    for (const [i, x, y, a, f, rating] of snap.blocks) {
+      let b = this.gridBlocks[i];
+      if (!b || b.destroyed || b.state === 'lost') b = this.restoreBlock(i, x, y, a);
+      else if (b.state === 'falling') this.landQuietly(b);
+      if (b.state !== 'frozen') {
+        M.Sleeping.set(b.body, false);
+        M.Body.setPosition(b.body, { x, y });
+        M.Body.setAngle(b.body, a);
+        M.Body.setVelocity(b.body, { x: 0, y: 0 });
+        M.Body.setAngularVelocity(b.body, 0);
+        b.quietSteps = SETTLE.steps;
+        if (b.state === 'landed') b.state = 'settled';
+        b.sync();
+      }
+      const rr = rating || (i === turnIndex ? r : null);
+      if (rr && !b.rating) {
+        b.rating = rr;
+        b.pendingRate = false;
+      }
+      if (b.rating && (this.grid[i] === PENDING || this.grid[i] === undefined)) this.grid[i] = b.rating;
+      if (f === 1 && b.state !== 'frozen') this.freezeBlock(b, true);
+    }
+    for (const i of snap.lost) {
+      const b = this.gridBlocks[i];
+      if (b && !b.destroyed && b.state !== 'lost') this.removeQuietly(b);
+      if (this.grid[i] === undefined || this.grid[i] === PENDING || i === turnIndex) this.grid[i] = 'X';
+    }
+    // the contacts' remembered pushes go too, and the tipping check counts again from here: the next drop
+    // starts from the same physics state in both games
+    safely(() => M.Pairs.clear(this.matter.world.engine.pairs));
+    this.tipTick = 0;
+    this.dynDirty = true;
+    this.rebuildDyn();
+    this.updateTowerHeight();
+  }
+
+  /** A block the turn's report says was lost: gone, without a heart or a splash (both were counted there). */
+  removeQuietly(b) {
+    if (b === this.falling) {
+      this.falling = null;
+      this.stepCtx.falling = null;
+    }
+    const k = this.tower.indexOf(b);
+    if (k >= 0) {
+      this.tower.splice(k, 1);
+      this.dynDirty = true;
+    }
+    this.cancelStep(b.waitTimer);
+    b.waitTimer = null;
+    b.advanced = true;
+    b.lostMarked = true;
+    b.state = 'lost';
+    if (!b.rating) b.rating = 'X';
+    b.destroy();
+  }
+
+  /** A block still falling here that the report has at rest: it joins the tower (placed by applySnapshot). */
+  landQuietly(b) {
+    if (b === this.falling) {
+      this.falling = null;
+      this.stepCtx.falling = null;
+    }
+    this.cancelStep(b.waitTimer);
+    b.waitTimer = null;
+    b.advanced = true;
+    b.state = 'settled';
+    b.landedAt = this.now;
+    b.shielded = false;
+    if (!this.tower.includes(b)) {
+      this.tower.push(b);
+      this.landedCount++;
+    }
+    this.dynDirty = true;
+  }
+
+  /** A block this game lost that the report has standing: it comes back, where the report says. */
+  restoreBlock(i, x, y, a) {
+    const old = this.gridBlocks[i];
+    if (old && !old.destroyed) old.destroy();
+    const spec = this.sequence.block(i);
+    const b = new Block(this, spec, x, y, a, this.nameFor(spec));
+    b.special = null;
+    b.state = 'settled';
+    b.droppedAt = this.now;
+    b.landedAt = this.now;
+    b.advanced = true;
+    b.lostMarked = false;
+    b.splashed = false;
+    b.pendingRate = false;
+    b.waitTimer = null;
+    b.quietSteps = SETTLE.steps;
+    b.setFriction(this.weather.frictionMul);
+    this.tower.push(b);
+    this.active.push(b);
+    this.gridBlocks[i] = b;
+    this.dynDirty = true;
+    return b;
+  }
+
+  /** The HUD's view of the match: whose turn, both players' hearts (this turn's loss at once), the time left. */
+  turnsHud() {
+    const T = this.turns;
+    const o = T.hud;
+    const c = T.cur;
+    o.n = c ? c.n : 0;
+    o.seat = c ? c.seat : 0;
+    o.you = T.you;
+    o.mine = !!c && c.mine;
+    o.names = T.names;
+    o.hearts[0] = T.hearts[0];
+    o.hearts[1] = T.hearts[1];
+    if (c) o.hearts[c.seat] = Math.min(T.hearts[c.seat], this.lives);   // (a loss shows at once, until the next turn's count)
+    o.streaks = T.streaks;
+    o.left = c && c.mine && !c.dropped ? Math.max(0, Math.ceil((c.deadline - nowMs()) / 1000)) : null;
+    o.phase = !c ? 'wait' : !c.dropped ? 'aim' : c.ended ? 'wait' : 'drop';
+    return o;
   }
 
   updateFloodTag(time) {
@@ -1093,7 +1480,8 @@ export class GameScene extends Phaser.Scene {
     } catch (err) {
       this.visitorsFailed(err);
     }
-    this.matter.world.step(FIXED * this.timeScale);
+    // Blok vir Blok: between drops nothing moves, so both games start the next drop from the same tower
+    if (!this.turnHold) this.matter.world.step(FIXED * this.timeScale);
     const dyn = this.dyn;
     for (let k = 0; k < dyn.length; k++) {
       const b = dyn[k];
@@ -1102,6 +1490,8 @@ export class GameScene extends Phaser.Scene {
       else b.quietSteps = 0;
     }
     this.processCollisions();
+    // (counted on steps that move the world: Blok vir Blok's two games count from the same report)
+    if (!this.idle && !this.turnHold && (++this.tipTick & 3) === 0) this.wakeTipping();
     this.now += FIXED;
     if (this.started && !this.over) this.playMs += FIXED;
     this.checkBlocks();
@@ -1262,7 +1652,7 @@ export class GameScene extends Phaser.Scene {
       const size = clamp((width * (f.bottom - f.top)) / (200 * 48), 0.25, 1);
       audio.play('land', { intensity, size });
       // the flood starts quietly; the toast comes once it is actually getting close (updateWater)
-      if (this.landedCount >= WATER.startAfterBlocks && !this.water.rising && !this.over) {
+      if (this.landedCount >= WATER.startAfterBlocks && !this.water.rising && !this.over && !this.turns) {
         this.water.start();
         this.coachSay(this.coach.water(), COACH.landingDelayMs);
       }
@@ -1361,7 +1751,8 @@ export class GameScene extends Phaser.Scene {
     block.rating = r;
     block.pendingRate = false;
     if (this.over) return;   // blocks still tumbling during the reveal don't score
-    if (r === 'P') this.lockBelow(block);
+    // (Blok vir Blok sets its cement at the end of each turn, the same in both games)
+    if (r === 'P' && !this.turns) this.lockBelow(block);
     if (this.idle) {
       this.combo = r === 'P' ? this.combo + 1 : 0;
       this.effects.rating(block, r, this.combo);
@@ -1375,8 +1766,8 @@ export class GameScene extends Phaser.Scene {
       this.perfects++;
       this.maxCombo = Math.max(this.maxCombo, this.combo);
       pts += Math.round(SCORING.perfectBonus * Math.min(this.combo, SCORING.comboCap) * this.weather.perfectMul);
-      // every few Perfeks (in a row or not) win back a lost heart
-      if (this.lives < LIVES && ++this.heartPerfects >= SCORING.heartEvery) {
+      // every few Perfeks (in a row or not) win back a lost heart (not in Blok vir Blok: hearts are the score)
+      if (!this.turns && this.lives < LIVES && ++this.heartPerfects >= SCORING.heartEvery) {
         this.heartPerfects = 0;
         this.lives = Math.min(LIVES, this.lives + 1);
         heart = true;
@@ -1408,8 +1799,9 @@ export class GameScene extends Phaser.Scene {
       this.effects.floatText(block.centerX, block.top - 170, S.extraLife, { color: '#ff8fb0', size: 42 });
       audio.play('heart');
     }
-    // a run of Perfeks brings Hanswors with his log (every SCORING.rewardStreak in a row, in every mode)
-    if (r === 'P' && this.combo % SCORING.rewardStreak === 0) {
+    // a run of Perfeks brings Hanswors with his log (every SCORING.rewardStreak in a row; Blok vir Blok's
+    // run earns a joker instead, js/core/turns.js)
+    if (r === 'P' && !this.turns && this.combo % SCORING.rewardStreak === 0) {
       try {
         this.visitors.reward?.(this.combo);
       } catch (err) {
@@ -1431,6 +1823,7 @@ export class GameScene extends Phaser.Scene {
       if (o.index > block.index || o.centerY <= block.centerY) continue;
       const body = o.body;
       if (body.speed > LOCK_MAX_SPEED || body.angularSpeed > LOCK_MAX_SPIN) continue;
+      if (this.tipping?.has(o)) continue;   // a stack past its edge is never set in cement (it must tip)
       if (o.pendingRate && !o.rating) this.applyRating(o, 'S');
       if (o.state === 'landed') o.state = 'settled';
       this.freezeBlock(o, n > 0);
@@ -1479,7 +1872,10 @@ export class GameScene extends Phaser.Scene {
       this.collapseUntil = this.now + COLLAPSE_MS;
       this.lastTowerLossAt = this.now;
     }
-    if (!free) this.lives = Math.max(0, this.lives - 1);
+    // Blok vir Blok: a turn costs its player one heart at most (the referee's rule, js/core/turns.js)
+    const turn = this.turns?.cur;
+    if (turn) turn.lost.push(block.index);
+    if (!free && !(turn && this.lives < turn.livesAt)) this.lives = Math.max(0, this.lives - 1);
     if (this.lives >= LIVES) this.heartPerfects = 0;
     if (!free && this.lives > 0) this.coachSay(this.coach.lost());
     this.grid[block.index] = 'X';
@@ -1488,7 +1884,7 @@ export class GameScene extends Phaser.Scene {
     audio.play('lost');
     haptics.lost();
     this.emitProgress();
-    if (this.lives <= 0) this.endGame('lives');
+    if (this.lives <= 0 && !this.turns) this.endGame('lives');
   }
 
   /** A lost block a visitor is to blame for: it costs height, nothing else. */
@@ -1902,10 +2298,21 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Cement: a block with >= FREEZE_DEPTH newer tower blocks above it sets (one per frame).
-    // Wind keeps a stack gently rocking, so "quiet" can't be required there: a deep block
-    // that has stood for a while and isn't really moving sets anyway, or the wobbly top
-    // part would grow without limit during a wind event.
+    // Cement: a block with >= FREEZE_DEPTH newer tower blocks above it sets (one per frame). Blok vir
+    // Blok sets its cement at the end of each turn instead (turnSettled), the same in both games.
+    if (!this.turns) this.setCement();
+
+    // Deep, drowned cement no longer needs a physics body.
+    if (this.frozen.length && (++this.pruneTick & 7) === 0) this.pruneFrozenBodies();
+  }
+
+  /**
+   * Cement: a block with >= FREEZE_DEPTH newer tower blocks above it sets (one per frame).
+   * Wind keeps a stack gently rocking, so "quiet" can't be required there: a deep block
+   * that has stood for a while and isn't really moving sets anyway, or the wobbly top
+   * part would grow without limit during a wind event.
+   */
+  setCement() {
     const tower = this.tower;
     let count = 0;
     let frozenRun = 0;
@@ -1925,12 +2332,10 @@ export class GameScene extends Phaser.Scene {
       }
       count++;
     }
-
-    // Deep, drowned cement no longer needs a physics body.
-    if (this.frozen.length && (++this.pruneTick & 7) === 0) this.pruneFrozenBodies();
   }
 
   canSet(b) {
+    if (this.tipping?.has(b)) return false;   // past its edge: it tips, it doesn't set
     const body = b.body;
     if (b.state === 'settled' && (b.quietSteps >= SETTLE.steps || body.isSleeping)) return true;
     return this.now - b.landedAt >= SET_AFTER_MS && body.speed < SET_MAX_SPEED && body.angularSpeed < SET_MAX_SPIN;
@@ -2312,6 +2717,9 @@ export class GameScene extends Phaser.Scene {
    */
   towerLean() {
     const loose = this.leanBlocks || (this.leanBlocks = []);
+    // blocks past their edge, with everything standing on them: they must tip (wakeTipping)
+    const tipping = this.tipping || (this.tipping = new Set());
+    tipping.clear();
     loose.length = 0;
     for (const b of this.tower) {
       if (b.state === 'frozen' || b.state === 'lost' || b.state === 'falling' || b.destroyed || !b.body) continue;
@@ -2346,6 +2754,9 @@ export class GameScene extends Phaser.Scene {
       let mx = b.body.mass * b.body.position.x;
       let over0 = b.left;
       let over1 = b.right;
+      const group = this.leanGroup || (this.leanGroup = []);
+      group.length = 0;
+      group.push(b);
       for (let k = i + 1; k < loose.length; k++) {
         const o = loose[k];
         if (o.right <= over0 || o.left >= over1) continue;
@@ -2353,16 +2764,33 @@ export class GameScene extends Phaser.Scene {
         mx += o.body.mass * o.body.position.x;
         over0 = Math.min(over0, o.left);
         over1 = Math.max(over1, o.right);
+        group.push(o);
       }
       const lean = r - l < 2 ? (mx / m < (l + r) / 2 ? -1.5 : 1.5) : clamp((mx / m - (l + r) / 2) / ((r - l) / 2), -1.5, 1.5);
       if (Math.abs(lean) > Math.abs(worst)) worst = lean;
+      if (Math.abs(lean) > TIP_LEAN) for (let k = 0; k < group.length; k++) tipping.add(group[k]);
     }
     return worst;
   }
 
+  /**
+   * Real physics for a leaning tower (1.11, testers: "the physics aren't working"): a block whose weight,
+   * with everything on it, is past the edge of what holds it up must tip. Matter lets a body that hardly
+   * moves fall asleep, so a stack that starts to tip slowly could hang there, leaning, for good. Every
+   * few physics steps (on the physics clock: the same in every game) such blocks are woken, so gravity
+   * finishes the job. The balance meter reads the same numbers.
+   */
+  wakeTipping() {
+    this.leanNow = this.towerLean();
+    if (!this.tipping.size) return;
+    const Sl = this.M.Sleeping;
+    for (const b of this.tipping) if (b.body.isSleeping) Sl.set(b.body, false);
+  }
+
   updateWobble(dtS) {
-    // the balance meter (HUD): the lean, eased, so a landing's jolt doesn't flick it
-    const lean = this.towerLean();
+    // the balance meter (HUD): the lean (measured on the physics clock, wakeTipping), eased, so a
+    // landing's jolt doesn't flick it
+    const lean = this.idle ? this.towerLean() : this.leanNow;
     this.lean += (lean - this.lean) * (1 - Math.exp(-dtS * 6));
     let w = 0;
     const dyn = this.dyn;
@@ -2409,6 +2837,7 @@ export class GameScene extends Phaser.Scene {
     s.waterDistM = this.water.rising ? (this.water.surfaceY - this.towerTopY) / PX_PER_M : null;
     s.wobble = this.wobble;
     s.lean = this.lean;
+    s.turns = this.turns ? this.turnsHud() : null;
     bus.emit('hud:state', s);
   }
 
@@ -2656,6 +3085,10 @@ export class GameScene extends Phaser.Scene {
       visitor: this.visitorState(),
       visitors: this.visitors ? this.visitors.log() : [],
       gifts: this.gifts.length,
+      turns: this.turns ? {
+        n: this.turns.cur?.n ?? 0, seat: this.turns.cur?.seat ?? null, mine: !!this.turns.cur?.mine,
+        dropped: !!this.turns.cur?.dropped, ended: !!this.turns.cur?.ended, hearts: [...this.turnsHud().hearts], hold: this.turnHold,
+      } : null,
     };
   }
 

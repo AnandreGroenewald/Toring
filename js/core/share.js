@@ -68,9 +68,17 @@ export function buildShareText(result, { url, highContrast = false } = {}) {
  * The WhatsApp text after an Uitdagersreeks match: who won, then the link that lets a friend play the
  * same tower against your run.
  */
-export function buildDuelShareText({ outcome, youBest = 0, oppName = '', oppBest = 0, link = '' } = {}) {
+export function buildDuelShareText({ outcome, youBest = 0, oppName = '', oppBest = 0, link = '', mode = 'race' } = {}) {
   const lines = [S.duelShareHead];
-  if (outcome === 'won' || outcome === 'lost') {
+  const decided = outcome === 'won' || outcome === 'lost';
+  if (mode === 'turns') {
+    // Blok vir Blok: who won, and the game to come and play (no run to race: it needs two)
+    if (decided) lines.push(S.turnsShareLine(oppName || S.duelSomeone, outcome === 'won'));
+    if (link) lines.push(S.turnsShareInvite, String(link));
+    lines.push(S.tagline);
+    return lines.join('\n');
+  }
+  if (decided) {
     lines.push(S.duelShareLine(fmtM(youBest), oppName || S.duelSomeone, fmtM(oppBest), outcome === 'won'));
   }
   if (link) lines.push(S.duelShareInvite, String(link));

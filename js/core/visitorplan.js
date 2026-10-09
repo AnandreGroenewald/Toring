@@ -11,8 +11,8 @@ import { VISITOR, VISITOR_TYPES, STAGES, stageAt } from '../config.js';
 const HORIZON = 300;          // visitors are planned for block indices 0..299, like the weather
 // The stages (config.js STAGES) set the pace: nobody in the warm-up, then a visitor every STAGES[k].visitors
 // blocks, the thief only from the stage that brings him (he needs a tower worth robbing anyway).
-const FIRST_AT = STAGES[1].from + 4;   // nobody visits before block 16...
-const FIRST_SPREAD = 4;               // ...and the first visitor comes by block 20
+const FIRST_AT = STAGES[1].from + 4;   // nobody visits before block 13...
+const FIRST_SPREAD = 4;               // ...and the first visitor comes by block 17
 const GAP = STAGES[1].visitors;       // (the first stage's gap; later stages are quicker)
 const THIEF_FROM = STAGES.find((st) => st.thief).from;
 const TYPE_WEIGHTS = { monkey: 4, clown: 3.5, thief: 2.5 };

@@ -1,7 +1,7 @@
 // In-game HUD (screen space): height + points, next block, hearts, weather chip,
 // combo badge, flood distance, wobble meter, event banners, toasts and the tap hint.
 // Driven entirely by bus events from GameScene; texts re-render only on change.
-import { LAYOUT, LIVES, FONT, COLORS, WATER, PX_PER_M, SCORING, COACH, STAGES } from '../config.js';
+import { LAYOUT, LIVES, FONT, COLORS, WATER, PX_PER_M, SCORING, COACH, STAGES, DUEL, TURNS } from '../config.js';
 import { bus } from '../core/bus.js';
 import { S, WEATHER_INFO, VISITOR_INFO } from '../core/strings.js';
 import { fmtM, fmtInt } from '../core/format.js';
@@ -16,7 +16,7 @@ const EDGE = 6;
 // The HUD lives in its own band above the crane jib (two rows), so it never hides the trolley or hook.
 const ROW1 = 37;           // centre of row 1 (height, weather chip, hearts)
 const ROW2 = 107;          // centre of row 2 (points, combo, next block)
-const ROW3 = 160;          // centre of row 3 (Uitdagersreeks: the other player's height), above the jib
+const ROW3 = 160;          // centre of row 3 (Uitdagersreeks: the weather chip, or whose turn it is), above the jib
 const NEXT_BOX_W = 96;
 const NEXT_BOX_H = 66;
 const NEXT_FIT_W = 80;
@@ -39,6 +39,20 @@ const SAYING_MAX_WAIT_MS = 9000; // then it is skipped: the tower has moved on
 const readMs = (text, min) => Math.min(READ_MAX_MS, Math.max(min, 900 + String(text || '').length * 55));
 const WOBBLE_W = 18;
 const COACH_W = 620;        // widest first-game hint pill
+// Uitdagersreeks (1.11): each player's name and hearts at the top (you left, them right), Wedloop's race
+// track on the right edge (a little bigger than 1.9's, with both names and how far to 50 m), and Blok vir
+// Blok's "whose turn" pill.
+const PILL_H = 46;
+const PILL_NAME_PX = 22;
+const PILL_NAME_MAX = 10;   // characters of a name in a pill (then "…")
+const PILL_HEART = 0.56;    // heart scale in a pill
+const PILL_GAP = 25;        // between hearts
+const TRACK_W = 26;         // Wedloop: the race track on the right edge (1.9 had 18)
+const TRACK_DOT = 40;       // a player's marker on it
+const YOU_TINT = 0xffc23d;
+const THEM_TINT = 0x4fb3ff;
+const LEAD_M = 1;           // Wedloop: who leads changes by this much before it's said
+const LEAD_EVERY_MS = 5000; // ...and at most this often
 const COACH_BELOW_TOP = 250; // hint centre: this far below the tower-top line (clear of the landing spot)
 
 const rgba = (c, a) => `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${a})`;
@@ -204,6 +218,7 @@ export class HudScene extends Phaser.Scene {
     this.heightHome = { x: 20, y: y1 };
 
     // --- Row 2: points + combo (left) ---------------------------------------------
+    this.comboAnchor = null;   // (a match puts the combo beside the height: the scene is reused)
     this.dispScore = 0;
     this.scoreStr = `⭐ ${fmtInt(0)}`;
     this.scoreTxt = add(text(this, 24, y2, this.scoreStr, 30, { emoji: true }).setOrigin(0, 0.5));
@@ -280,7 +295,7 @@ export class HudScene extends Phaser.Scene {
     this.wmSide = add(text(this, 10 + WOBBLE_W / 2, wmTop + wmH + 22, '', 26, { strokeMul: 0.2 }).setOrigin(0.5).setVisible(false));
     this.wmSideNow = 0;
     this.wmVal = -1;
-    this.buildTrack(add);
+    this.buildDuelHud(add);
     this.wmAlpha = 0.7;
     this.wmParts = [this.wmBg, this.wmFill, this.wmTick, this.wmLbl, this.wmSide];
     for (const o of this.wmParts) o.setAlpha(this.wmAlpha);
@@ -358,7 +373,7 @@ export class HudScene extends Phaser.Scene {
     const game = this.scene.get('Game');
     const mode = game && game.mode;
     if (mode === 'daily') return `🏗️ ${S.dailyN(game.dayNumber ?? '?')}`;
-    if (mode === 'duel') return `⚔️ ${S.duelVs(game.duel?.name || S.duelSomeone)}`;
+    if (mode === 'duel') return `${game.turns ? '🧱' : '🏁'} ${S.duelVs(game.duel?.name || S.duelSomeone)}`;
     return `🧱 ${S.practiceLabel}`;
   }
 
@@ -419,13 +434,17 @@ export class HudScene extends Phaser.Scene {
       if (this.dispScore === s.score) this.pulse(this.scoreTxt, 1.12);
     }
 
-    if (s.lives !== this.lives) this.setLives(s.lives, s.maxLives || LIVES);
-    this.setPips(s.lives < (s.maxLives || LIVES) ? s.heartProgress || 0 : -1);
-    if (s.combo !== this.combo) this.setCombo(s.combo);
+    if (!this.duelHud) {
+      if (s.lives !== this.lives) this.setLives(s.lives, s.maxLives || LIVES);
+      this.setPips(s.lives < (s.maxLives || LIVES) ? s.heartProgress || 0 : -1);
+    }
+    // (Blok vir Blok: each player's run shows in their own pill)
+    const combo = this.duelHud?.turns ? 0 : s.combo;
+    if (combo !== this.combo) this.setCombo(combo);
     this.setNext(s.next);
-    this.setWeather(s.weather);
+    this.setWeather(this.duelHud?.turns ? null : s.weather);   // (Blok vir Blok: whose turn has row 3)
     this.setWater(s.waterDistM, time);
-    if (this.track) this.updateTrack();
+    if (this.duelHud) this.updateDuelHud(s, time);
     // the balance meter: how near the loose top is to tipping (its lean), or moving (its wobble)
     const lean = s.lean || 0;
     const wob = Math.max(s.wobble || 0, Math.min(1, Math.abs(lean)));
@@ -441,33 +460,241 @@ export class HudScene extends Phaser.Scene {
   }
 
   // -------------------------------------------------------------------------
-  // Uitdagersreeks: the other player's name and height on one small line under the points (testers
-  // found the race track on the right edge in the way; the marks are announced by the banners anyway).
+  // Uitdagersreeks (1.11): both players at the top (name and hearts: you left, them right), so it is
+  // plain there is someone on the other side. Wedloop: the race track on the right edge, a little
+  // bigger than before, both markers named with how far each is to 50 m, and "X is voor!" when the lead
+  // changes. Blok vir Blok: whose turn it is (and your time to aim) under the top rows.
   // -------------------------------------------------------------------------
-  buildTrack(add) {
-    this.track = null;
+  buildDuelHud(add) {
+    this.duelHud = null;
     this.duelState = null;   // the scene is reused: never show the last match's heights
     const game = this.scene.get('Game');
     if (!game || !game.duel) return;
-    const y = this.st + ROW3;
-    const bg = add(this.add.image(16, y, '__WHITE').setOrigin(0, 0.5).setVisible(false));
-    const label = add(text(this, 30, y - 1, '', 24, { emoji: true, strokeMul: 0.2 }).setOrigin(0, 0.5).setVisible(false));
-    this.track = { bg, label, labelStr: '', lead: null };
+    const turns = !!game.turns;
+    const y1 = this.st + ROW1;
+    const y2 = this.st + ROW2;
+    // the height moves down to row 2 (the points don't decide a match); the solo hearts pill goes
+    this.heightTxt.setPosition(20, y2);
+    this.heightHome = { x: 20, y: y2 };
+    this.scoreTxt.setVisible(false);
+    this.comboAnchor = this.heightTxt;
+    for (const o of [this.heartBg, ...this.hearts, ...this.pips]) o.setVisible(false);
+    // the weather chip goes to row 3 (Blok vir Blok shows whose turn there instead: its only weather is
+    // a sabotage, which has its banner)
+    this.wxY = this.st + ROW3;
+    const max = turns ? TURNS.hearts : LIVES;
+    const right = this.W - EDGE - PAUSE_BTN - 8;
+    const pill = (side) => {
+      const bg = add(this.add.image(0, y1, '__WHITE').setOrigin(side === 'left' ? 0 : 1, 0.5));
+      const name = add(text(this, 0, y1 - 1, '', PILL_NAME_PX, { strokeMul: 0.2, emoji: true }).setOrigin(0, 0.5));
+      const hearts = [];
+      for (let k = 0; k < max; k++) hearts.push(add(this.add.image(0, y1, 'hud_heart').setScale(PILL_HEART)));
+      const extra = add(text(this, 0, y1 - 1, '', 20, { strokeMul: 0.2, emoji: true }).setOrigin(0, 0.5).setVisible(false));
+      return { side, bg, name, hearts, extra, key: '' };
+    };
+    const hud = {
+      turns, max, right,
+      you: pill('left'),
+      them: pill('right'),
+      track: null,
+      turn: null,
+      lead: null,
+      leadAt: -1e9,
+    };
+    if (turns) {
+      const y = this.st + ROW3;
+      const bg = add(this.add.image(this.W / 2, y, '__WHITE').setVisible(false));
+      const label = add(text(this, this.W / 2, y - 1, '', 28, { strokeMul: 0.18, emoji: true }).setOrigin(0.5).setVisible(false));
+      hud.turn = { bg, label, key: '' };
+    } else {
+      hud.track = this.buildRaceTrack(add);
+    }
+    this.duelHud = hud;
   }
 
-  updateTrack() {
+  /** Wedloop: 0-50 m on the right edge, the height marks (gold once you got there first, blue them), both markers. */
+  buildRaceTrack(add) {
+    const H = this.H;
+    const top = Math.round(H * 0.25);
+    const bottom = Math.round(H * 0.52);   // (clear of the island's sign at the start)
+    const x = this.W - 10 - TRACK_W / 2;
+    const dot = (key, fill, label) => {
+      if (this.textures.exists(key)) return key;
+      const tex = this.textures.createCanvas(key, TRACK_DOT + 4, TRACK_DOT + 4);
+      const ctx = tex.getContext();
+      const c = (TRACK_DOT + 4) / 2;
+      ctx.beginPath();
+      ctx.arc(c, c, TRACK_DOT / 2 - 2, 0, Math.PI * 2);
+      ctx.fillStyle = rgba(fill, 1);
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#1d2b45';
+      ctx.stroke();
+      ctx.fillStyle = '#1d2b45';
+      ctx.font = `900 ${Math.round(TRACK_DOT * 0.42)}px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, c, c + 1);
+      tex.refresh();
+      return key;
+    };
+    const bg = add(this.add.image(x, (top + bottom) / 2, panelTexture(this, TRACK_W, bottom - top + 18, NAVY, 0.55, { radius: 12, rim: 0.4 })));
+    const ticks = DUEL.marks.map((m) => add(this.add.image(x, this.trackY(m, top, bottom), 'fx_px').setDisplaySize(TRACK_W + 10, 5).setAlpha(0.8)));
+    const flag = add(text(this, x - 2, top - 24, '🏁', 34, { emoji: true, stroke: false }).setOrigin(0.5));
+    const them = add(this.add.image(x, bottom, dot('hud_dot_them2', THEM_TINT, '')));
+    const you = add(this.add.image(x, bottom, dot('hud_dot_you2', YOU_TINT, '')));
+    // each marker's name and how far to the finish ride along beside it
+    const themLabel = add(text(this, x - TRACK_DOT / 2 - 6, bottom, '', 24, { strokeMul: 0.22, emoji: true }).setOrigin(1, 0.5));
+    const youLabel = add(text(this, x - TRACK_DOT / 2 - 6, bottom, '', 24, { strokeMul: 0.22 }).setOrigin(1, 0.5));
+    const t = { x, top, bottom, bg, ticks, flag, them, you, themLabel, youLabel, youY: bottom, themY: bottom, youStr: '', themStr: '', claimed: '' };
+    for (const o of [bg, ...ticks, flag, them, you, themLabel, youLabel]) o.setAlpha(0.95);
+    return t;
+  }
+
+  trackY(m, top, bottom) {
+    const k = Math.max(0, Math.min(1, m / DUEL.goalM));
+    return Math.round(bottom - k * (bottom - top));
+  }
+
+  /** One player's pill: "Anna ♥♥♡" (their turn in Blok vir Blok: gold). Redrawn only when it changes. */
+  setPill(p, { name, lives, max, active = false, extra = '' }) {
+    const shown = Number.isInteger(lives);
+    const key = `${name}|${shown ? lives : '-'}|${max}|${active}|${extra}`;
+    if (key === p.key) return;
+    const lost = shown && p.lives != null && lives < p.lives;
+    p.key = key;
+    p.lives = shown ? lives : null;
+    p.extra.setText(extra).setVisible(!!extra);
+    const heartsW = shown ? max * PILL_GAP : 0;
+    const extraW = extra ? p.extra.width + 8 : 0;
+    // each pill has half the row (a long, wide name gets shorter until it fits)
+    const maxW = Math.floor((this.duelHud.right - 16) / 2) - 8;
+    let len = Math.min(name.length, PILL_NAME_MAX);
+    const fit = (n) => (n < name.length ? `${name.slice(0, Math.max(1, n - 1))}…` : name);
+    p.name.setText(fit(len));
+    while (len > 3 && 16 + p.name.width + (shown ? 10 + heartsW : 0) + extraW + 12 > maxW) p.name.setText(fit(--len));
+    const w = Math.ceil((16 + p.name.width + (shown ? 10 + heartsW : 0) + extraW + 12) / 8) * 8;
+    const x0 = p.side === 'left' ? 16 : this.duelHud.right - w;
+    const y = p.bg.y;
+    p.bg.setTexture(panelTexture(this, w, PILL_H, active ? 0x9a6a00 : NAVY, active ? 0.92 : 0.72, { rim: active ? 0.55 : 0.3 }))
+      .setPosition(p.side === 'left' ? x0 : x0 + w, y);
+    p.name.setPosition(x0 + 16, y - 1).setColor(p.side === 'left' ? '#ffe38c' : '#cfe9ff');
+    let hx = x0 + 16 + p.name.width + 10 + PILL_GAP / 2;
+    for (let k = 0; k < p.hearts.length; k++) {
+      const h = p.hearts[k];
+      h.setVisible(shown && k < max).setPosition(hx + k * PILL_GAP, y);
+      h.setTexture(shown && k < lives ? 'hud_heart' : 'hud_heart_empty');
+    }
+    p.extra.setPosition(x0 + 16 + p.name.width + (shown ? 10 + heartsW : 0) + 4, y - 1);
+    if (lost) {
+      const h = p.hearts[Math.min(lives, p.hearts.length - 1)];
+      if (h) {
+        h.setScale(PILL_HEART * 1.6);
+        this.tweens.add({ targets: h, scale: PILL_HEART, duration: 420, ease: 'Back.easeOut' });
+      }
+      this.pulse(p.bg, 1.06);
+    }
+  }
+
+  updateDuelHud(s, time) {
+    const hud = this.duelHud;
+    const game = this.scene.get('Game');
+    const youName = game?.duel?.youName || S.hudYou;
+    if (hud.turns) {
+      const t = s.turns;
+      if (!t) return;
+      const them = 1 - t.you;
+      const oppName = t.names?.[them] || game?.duel?.name || S.duelSomeone;
+      // a run of Perfeks shows (5 in a row earn a joker)
+      const streak = (k) => (t.streaks?.[k] >= 2 ? `🔥${t.streaks[k]}` : '');
+      const active = (k) => t.n > 0 && t.seat === k;
+      this.setPill(hud.you, { name: t.names?.[t.you] || youName, lives: t.hearts[t.you], max: hud.max, active: active(t.you), extra: streak(t.you) });
+      this.setPill(hud.them, { name: oppName, lives: t.hearts[them], max: hud.max, active: active(them), extra: streak(them) });
+      this.setTurnPill(t, oppName);
+      return;
+    }
+    // Wedloop: your hearts from the game, theirs from the match (a recording or Robot Rikus: full until it fell)
     const d = this.duelState;
-    const t = this.track;
-    if (!d || !t) return;
-    const str = `${d.badge || '⚔️'} ${d.name} ${fmtM(d.them)}`;
-    const lead = d.you > d.them + 0.05 ? 'you' : d.them > d.you + 0.05 ? 'them' : 'even';
-    if (str === t.labelStr && lead === t.lead) return;
-    t.labelStr = str;
-    t.lead = lead;
-    // their height in blue; the pill turns gold while you're ahead
-    t.label.setText(str).setColor('#cfe9ff').setVisible(true);
-    const w = Math.ceil((t.label.width + 30) / 8) * 8;
-    t.bg.setTexture(panelTexture(this, w, 40, lead === 'you' ? 0x7a5a12 : NAVY, 0.72, { radius: 20, rim: 0.3 })).setVisible(true);
+    this.setPill(hud.you, { name: youName, lives: s.lives, max: hud.max });
+    this.setPill(hud.them, { name: d?.name || game?.duel?.name || S.duelSomeone, lives: d && Number.isInteger(d.lives) ? Math.min(d.lives, hud.max) : null, max: hud.max });
+    if (d) this.updateRaceTrack(d, time);
+  }
+
+  /** Blok vir Blok: "🎯 Jou beurt! 7" (gold) or "⏳ Anna se beurt…". */
+  setTurnPill(t, oppName) {
+    const tp = this.duelHud.turn;
+    if (!t || t.n < 1) return;
+    const mine = t.seat === t.you;
+    const str = mine ? `🎯 ${S.turnsYourTurn}${t.left != null ? `  ${t.left}` : ''}` : `⏳ ${S.turnsTheirTurn(oppName)}`;
+    const key = `${t.n}|${str}`;
+    if (key === tp.key) return;
+    const newTurn = tp.key.split('|')[0] !== String(t.n);
+    tp.key = key;
+    tp.label.setText(str).setVisible(true);
+    const w = Math.ceil((tp.label.width + 44) / 8) * 8;
+    tp.bg.setTexture(panelTexture(this, w, 52, mine ? 0xc98a00 : NAVY, mine ? 0.95 : 0.75, { rim: mine ? 0.6 : 0.3 })).setVisible(true);
+    if (newTurn) {
+      for (const o of [tp.bg, tp.label]) {
+        if (o.__pop) o.__pop.stop();
+        o.setScale(mine ? 1.3 : 1.1);
+        o.__pop = this.tweens.add({ targets: o, scale: 1, duration: 360, ease: 'Back.easeOut' });
+      }
+    } else if (mine && t.left != null && t.left <= 3) {
+      this.pulse(tp.label, 1.12);
+    }
+  }
+
+  updateRaceTrack(d, time) {
+    const t = this.duelHud.track;
+    if (!t) return;
+    const ease = 1 - Math.exp(-16 / 140);
+    t.youY += (this.trackY(d.you, t.top, t.bottom) - t.youY) * ease;
+    t.themY += (this.trackY(d.them, t.top, t.bottom) - t.themY) * ease;
+    t.you.y = t.youY;
+    t.them.y = t.themY;
+    // the labels keep apart when the markers are close (yours above, theirs below)
+    const gap = 30;
+    let ly = t.youY;
+    let lt = t.themY;
+    if (Math.abs(ly - lt) < gap) {
+      const mid = (ly + lt) / 2;
+      const youAbove = d.you >= d.them;
+      ly = mid + (youAbove ? -gap / 2 : gap / 2);
+      lt = mid + (youAbove ? gap / 2 : -gap / 2);
+    }
+    t.youLabel.y = ly;
+    t.themLabel.y = lt;
+    const pct = (h) => `${Math.max(0, Math.min(100, Math.floor((100 * h) / DUEL.goalM)))}%`;
+    const youStr = `${S.hudYou} ${pct(d.you)}`;
+    const themName = d.name.length > PILL_NAME_MAX ? `${d.name.slice(0, PILL_NAME_MAX - 1)}…` : d.name;
+    const themStr = `${d.badge ? `${d.badge} ` : ''}${themName} ${pct(d.them)}`;
+    if (youStr !== t.youStr) {
+      t.youStr = youStr;
+      t.youLabel.setText(youStr).setColor('#ffe38c');
+    }
+    if (themStr !== t.themStr) {
+      t.themStr = themStr;
+      t.themLabel.setText(themStr).setColor('#cfe9ff');
+    }
+    const claimed = DUEL.marks.map((m) => d.claimed?.[m] || '-').join('');
+    if (claimed !== t.claimed) {
+      t.claimed = claimed;
+      DUEL.marks.forEach((m, k) => {
+        const who = d.claimed?.[m];
+        t.ticks[k].setTint(who === 'you' ? YOU_TINT : who === 'them' ? THEM_TINT : 0xffffff);
+      });
+    }
+    // who leads: said when it changes (by LEAD_M at least, not too often, once both are going)
+    const hud = this.duelHud;
+    const lead = d.you > d.them + LEAD_M ? 'you' : d.them > d.you + LEAD_M ? 'them' : hud.lead;
+    if (lead && lead !== hud.lead) {
+      const first = hud.lead === null;
+      hud.lead = lead;
+      if (!first && Math.max(d.you, d.them) >= 3 && time - hud.leadAt >= LEAD_EVERY_MS) {
+        hud.leadAt = time;
+        this.showToast({ text: lead === 'you' ? S.raceLeadYou : S.raceLeadThem(d.name), color: lead === 'you' ? '#ffe38c' : '#cfe9ff' });
+      }
+    }
   }
 
   /** Quick scale pop (no text re-render). */
@@ -533,7 +760,8 @@ export class HudScene extends Phaser.Scene {
   }
 
   placeCombo() {
-    const x = this.scoreTxt.x + this.scoreTxt.width + 14;
+    const a = this.comboAnchor || this.scoreTxt;
+    const x = a.x + a.width + 14;
     this.comboBg.x = x;
     this.comboTxt.x = x + 60 + 3;
   }
@@ -595,8 +823,9 @@ export class HudScene extends Phaser.Scene {
     const textW = Math.max(this.wxName.width, this.wxLeft.width);
     const w2 = Math.min(CHIP_MAX_W, Math.ceil((16 + 40 + 8 + textW + 18) / 8) * 8);
     this.wxBg.setTexture(panelTexture(this, w2, 56, NAVY, 0.6, { radius: 22 }));
-    this.wxBg.setPosition(CHIP_CX, this.wxY);
-    const x0 = CHIP_CX - w2 / 2;
+    const cx = this.duelHud ? this.W / 2 : CHIP_CX;   // (in a match the chip has row 3 to itself)
+    this.wxBg.setPosition(cx, this.wxY);
+    const x0 = cx - w2 / 2;
     this.wxEmoji.setPosition(x0 + 16 + 20, this.wxY);
     const hasLeft = this.wxLeft.text !== '';
     this.wxName.setPosition(x0 + 16 + 40 + 8, hasLeft ? this.wxY - 11 : this.wxY);
@@ -738,7 +967,7 @@ export class HudScene extends Phaser.Scene {
       // banner just fades where it is: the visitor itself is on screen
       const out = visitor
         ? { y: y0 + 24, scale: 0.92, alpha: 0, duration: 280, ease: 'Quad.easeIn' }
-        : { x: CHIP_CX, y: this.wxY, scale: 0.3, alpha: 0, duration: 320, ease: 'Cubic.easeIn' };
+        : { x: this.duelHud ? this.W / 2 : CHIP_CX, y: this.wxY, scale: 0.3, alpha: 0, duration: 320, ease: 'Cubic.easeIn' };
       this.bannerTween = this.tweens.add({
         targets: c, ...out,
         onComplete: () => {

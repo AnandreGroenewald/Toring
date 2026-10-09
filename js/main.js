@@ -1089,6 +1089,9 @@ if (params.has('teen') || params.has('kamer') || params.has('lang')) {
 let duelFlow = 0;        // bumps on every new search or cancel, so a late answer can't start a stale match
 let duelTimer = 0;
 let lastDuelKind = null;
+let lastDuelMode = 'race';
+/** The way to play chosen on the Uitdagersreeks screen: 'race' (Wedloop) or 'turns' (Blok vir Blok, 1.11). */
+const duelMode = () => (store.getDuel().mode === 'turns' ? 'turns' : 'race');
 
 function stopDuelFlow() {
   duelFlow++;
@@ -1103,9 +1106,10 @@ function showDuelScreen() {
   screen = 'duel';
   // the season first: a new month halves the points and hands out last month's badge
   const rank = store.getSeasonRank();
-  ui.showDuel({ live: duel.live, duel: store.getDuel(), placeholder: sessionNick, rank, card: store.getCard() });
+  ui.showDuel({ live: duel.live, duel: store.getDuel(), placeholder: sessionNick, rank, card: store.getCard(), mode: duelMode() });
   seasonToast(rank.reward);
 }
+bus.on('ui:duel-mode', (mode) => ui.setDuelMode(store.setDuelMode(mode)));
 
 /** A new month began: "Nuwe seisoen! Jy hou ’n Goud-kenteken 🥇" (the badge of the season that ended). */
 function seasonToast(reward) {
@@ -1120,8 +1124,11 @@ function versus(m, note = '') {
   clearInterval(duelTimer);
   const flow = ++duelFlow;
   lastDuelKind = m.kind;
+  lastDuelMode = m.mode === 'turns' ? 'turns' : 'race';
   screen = 'duelwait';
-  ui.showDuelWait({ state: 'versus', oppName: m.oppName, oppCard: m.oppCard, youName: duelNick(), youCard: store.getCard(), note });
+  // Blok vir Blok: who drops the first block
+  const first = m.mode === 'turns' && m.turn ? (m.turn.seat === m.you ? S.turnsYouStart : S.turnsTheyStart(m.oppName)) : '';
+  ui.showDuelWait({ state: 'versus', oppName: m.oppName, oppCard: m.oppCard, youName: duelNick(), youCard: store.getCard(), note, mode: lastDuelMode, first });
   let n = Math.max(1, Math.round(DUEL.countdownMs / 1000));
   ui.setDuelCount(String(n));
   duelTimer = setInterval(() => {
@@ -1144,7 +1151,12 @@ function versus(m, note = '') {
 function startDuelGame(m) {
   duelReward = null;
   resetRun('duel');
-  startGame({ mode: 'duel', seed: m.seed, duel: { name: m.oppName }, autoplay: AUTO });
+  startGame({
+    mode: 'duel',
+    seed: m.seed,
+    duel: { name: m.oppName, youName: duelNick(), mode: m.mode, you: m.you, bot: m.kind !== 'live' },
+    autoplay: AUTO,
+  });
   screen = 'game';
   ui.showInGame();
   renderTray();
@@ -1154,14 +1166,15 @@ function showDuelResults(r) {
   if (screen === 'results' || run.mode !== 'duel') return;
   const d = duel.summary() || {};
   if (!d.outcome) d.outcome = 'none';
-  const link = d.challenge ? `${siteUrl()}?teen=${d.challenge}` : '';
+  // Wedloop: the share link is your run (a friend races it); Blok vir Blok: the game itself
+  const link = d.challenge ? `${siteUrl()}?teen=${d.challenge}` : d.mode === 'turns' ? siteUrl() : '';
   screen = 'results';
   ui.showResults({
     result: r,
     mode: 'duel',
     duel: d,
     reward: duelReward,
-    shareText: buildDuelShareText({ outcome: d.outcome, youBest: d.youBest, oppName: d.oppName, oppBest: d.oppBest, link }),
+    shareText: buildDuelShareText({ outcome: d.outcome, youBest: d.youBest, oppName: d.oppName, oppBest: d.oppBest, link, mode: d.mode }),
     nextDayAt: 0,
   });
   // the winner's celebration (js/core/economy.js): ours with the fanfare, or theirs as they see it
@@ -1180,8 +1193,10 @@ function searchOpponent() {
   stopDuelFlow();
   const flow = duelFlow;
   screen = 'duelwait';
-  ui.showDuelWait({ state: 'lobby' });
+  const mode = duelMode();
+  ui.showDuelWait({ state: 'lobby', mode });
   duel.findOpponent({
+    mode,
     onFound: (m) => {
       if (flow === duelFlow) opponentFound(m);
     },
@@ -1239,22 +1254,25 @@ bus.on('ui:duel-name', (text) => {
     nameBoardTimer = setTimeout(boardChanged, NAME_BOARD_MS);   // the latest leaderboard row takes the new name
   }
 });
-bus.on('ui:duel-bot', () => versus(duel.startBot()));
+bus.on('ui:duel-bot', () => versus(duel.startBot(duelMode())));
 bus.on('ui:duel-random', searchOpponent);
 bus.on('ui:duel-friend', () => {
+  const mode = duelMode();
   if (!duel.live) {
-    // no server yet: play a round first; its results carry the link for the friend
-    versus(duel.startBot(), S.duelFriendLater);
+    // no server yet: play a round first; its results carry the link for the friend (Wedloop: a run to
+    // race; Blok vir Blok needs two, so it's simply a game against Robot Rikus)
+    versus(duel.startBot(mode), mode === 'turns' ? S.turnsBotNow : S.duelFriendLater);
     return;
   }
   stopDuelFlow();
   const flow = duelFlow;
   duel.createRoom({
+    mode,
     onCode: (code) => {
       if (flow !== duelFlow) return;
       const link = `${siteUrl()}?kamer=${code}`;
       screen = 'duelwait';
-      ui.showDuelWait({ state: 'room', link, shareText: S.duelRoomText(duelNick(), link) });
+      ui.showDuelWait({ state: 'room', link, shareText: S.duelRoomText(duelNick(), link, mode), mode });
     },
     onStart: (m) => {
       if (flow === duelFlow) versus(m);
@@ -1275,7 +1293,8 @@ bus.on('ui:duel-friend', () => {
 });
 bus.on('ui:duel-later', () => {
   stopDuelFlow();
-  versus(duel.startBot(), S.duelFriendLater);
+  const mode = duelMode();
+  versus(duel.startBot(mode), mode === 'turns' ? S.turnsBotNow : S.duelFriendLater);
 });
 bus.on('ui:duel-cancel', showDuelScreen);
 bus.on('ui:duel-accept', () => {
@@ -1286,8 +1305,10 @@ bus.on('ui:duel-accept', () => {
 });
 bus.on('ui:duel-again', () => {
   duel.leave();
+  // the same way to play as the match just played
+  store.setDuelMode(lastDuelMode);
   if (duel.live && lastDuelKind !== 'bot') searchOpponent();
-  else versus(duel.startBot());
+  else versus(duel.startBot(lastDuelMode));
 });
 
 /** Opened from a friend's link: their run (play it now?) or their live room (join it). */

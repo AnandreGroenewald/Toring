@@ -350,6 +350,41 @@ export class Crane {
     return pose;
   }
 
+  /**
+   * Blok vir Blok: each turn's swing starts from the same state in both players' games (the block just
+   * hung on, the trolley in the middle, at this block's amplitude), so the other game can show the swing
+   * up to the moment the block was let go (replaySwing) instead of wherever its own crane had got to.
+   */
+  resetSwing(amplitude = this.amplitude) {
+    if (this.destroyed) return;
+    this.phase = 0;
+    this.amplitude = amplitude;
+    this.tx = GAME_W / 2;
+    this.tv = 0;
+    this.theta = 0;
+    this.thetaV = (this.spec?.i ?? 0) % 2 ? 0.035 : -0.035;   // setBlock's small jiggle
+    this.acc = 0;
+    this.spring = 0;
+    this.springV = 0;
+    if (this._hasBlock) {
+      this.reel = 0;
+      this.reelT = 0;
+    }
+    this._layout();
+  }
+
+  /** The swing from resetSwing, `ms` later (integrated as update() would; the block stays on). */
+  replaySwing(ms, opts = {}) {
+    if (this.destroyed) return;
+    this.resetSwing(opts.amplitude ?? this.amplitude);
+    let left = clamp(Number(ms) || 0, 0, 120000);
+    while (left > 0) {
+      const d = Math.min(100, left);
+      this.update(d, opts);
+      left -= d;
+    }
+  }
+
   /** `amplitude` is a target: the swing eases towards it. */
   update(dtMs, { omega = this.omega, amplitude = CRANE.amplitude, windAccel = 0, heat = 0 } = {}) {
     if (this.destroyed) return;

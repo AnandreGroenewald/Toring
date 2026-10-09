@@ -110,7 +110,7 @@ function defaultData() {
       played: 0, streak: 0, maxStreak: 0, bestScore: 0, bestHeightM: 0, totalPerfects: 0, lastDateKey: null,
     },
     practice: { played: 0, heightM: 0, score: 0 },
-    duel: { name: null, played: 0, wins: 0, losses: 0, streak: 0, bestStreak: 0 },
+    duel: { name: null, played: 0, wins: 0, losses: 0, streak: 0, bestStreak: 0, mode: 'race' },
   };
 }
 
@@ -168,6 +168,7 @@ function sanitize(raw) {
       losses: int(u.losses),
       streak: int(u.streak),
       bestStreak: int(u.bestStreak),
+      mode: u.mode === 'turns' ? 'turns' : 'race',   // the last way chosen: Wedloop or Blok vir Blok (1.11)
     };
     d.duel.played = Math.max(d.duel.played, d.duel.wins + d.duel.losses);
     d.duel.bestStreak = Math.max(d.duel.bestStreak, d.duel.streak);
@@ -577,6 +578,14 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       data.duel.name = name;
       persist();
       return { ok: true, name };
+    },
+
+    /** The way to play the Uitdagersreeks last chosen: 'race' (Wedloop) or 'turns' (Blok vir Blok). */
+    setDuelMode(mode) {
+      sync();
+      data.duel.mode = mode === 'turns' ? 'turns' : 'race';
+      persist();
+      return data.duel.mode;
     },
 
     /** A finished match: 'won' or 'lost' (a winning streak counts wins in a row). */
