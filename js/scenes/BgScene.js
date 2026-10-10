@@ -26,7 +26,7 @@ const SKY_STOPS = [
 const EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
 // Flyers by height (m): what, from-to, seconds between two, how fast (px/s), size
 const FLYERS = [
-  { kind: 'balloon', from: 42, to: 190, every: [5, 10], speed: [10, 18], size: [0.55, 0.95] },
+  { kind: 'balloon', from: 42, to: 190, every: [5, 10], speed: [10, 18], size: [0.49, 0.85] },
   { kind: 'para', from: 45, to: 130, every: [9, 16], speed: [26, 38], size: [40, 52], emoji: '🪂' },
   { kind: 'plane', from: 92, to: 270, every: [6, 11], speed: [130, 190], size: [0.6, 0.9] },
   { kind: 'heli', from: 88, to: 190, every: [14, 24], speed: [55, 75], size: [44, 54], emoji: '🚁' },
@@ -305,6 +305,267 @@ function drawSkyline(ctx, w, h, sky) {
   }
 }
 
+// (1.12.1, the owner: "The air balloons look cheap") a hot-air balloon: panels that curve with the round envelope,
+// a crown and a band with a zigzag edge, light from the upper left and a darker rim, then the skirt, four cables,
+// the burner and a wicker basket; three looks from the game's palette. The image turns around the envelope's widest
+// line (BALLOON_EQ), so the basket swings under it, and the burner's flame is its own image behind it (it shows in
+// the gap under the skirt; its top goes into the balloon's mouth).
+const BALLOON_W = 112;
+const BALLOON_H = 170;
+const BALLOON_EQ = 52;       // texture y of the envelope's widest line
+const BALLOON_BURNER = 136;  // texture y of the burner (the flame's foot)
+const BALLOON_LOOKS = [
+  { a: '#d9483b', b: '#f7c948', band: '#3d8beb', dot: '#ffffff', skirt: '#9e2c22' },   // klei and sonneblom
+  { a: '#2fb5b0', b: '#fdf6e3', band: '#f25c84', dot: '#ffe38c', skirt: '#1d817d' },   // oseaan and white
+  { a: '#8e6ce0', b: '#f39a2b', band: '#5bbf5a', dot: '#ffffff', skirt: '#6447ad' },   // jakaranda and karoo
+];
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawBalloon(ctx, look) {
+  const cx = BALLOON_W / 2;
+  const top = 4;
+  const eq = BALLOON_EQ;
+  const throat = 116;
+  const R = 50;
+  const rT = 11;
+  // half the envelope's width at height y: a round dome down to the widest line, then a soft taper to the throat
+  const hw = (y) => {
+    if (y <= eq) {
+      const t = (eq - y) / (eq - top);
+      return R * Math.sqrt(Math.max(0, 1 - t * t));
+    }
+    const t = Math.min(1, (y - eq) / (throat - eq));
+    return rT + (R - rT) * Math.pow(Math.cos((t * Math.PI) / 2), 1.15);
+  };
+  const envelope = () => {
+    ctx.beginPath();
+    for (let y = top; y <= throat; y += 1) ctx.lineTo(cx + hw(y), y);
+    for (let y = throat; y >= top; y -= 1) ctx.lineTo(cx - hw(y), y);
+    ctx.closePath();
+  };
+  // a line around the balloon at height y: it dips a little in the middle (the balloon is round)
+  const around = (y, x) => {
+    const w = hw(y);
+    const u = w > 0 ? (x - cx) / w : 1;
+    return y + 3 * Math.sqrt(Math.max(0, 1 - u * u));
+  };
+  const N = 8;   // panels on the side we see; the outer ones narrow as the envelope turns away
+  const seam = (j, y) => cx + hw(y) * Math.sin(-Math.PI / 2 + (j * Math.PI) / N);
+
+  ctx.save();
+  envelope();
+  ctx.clip();
+  for (let k = 0; k < N; k++) {
+    ctx.beginPath();
+    for (let y = top; y <= throat; y += 1) ctx.lineTo(seam(k, y), y);
+    for (let y = throat; y >= top; y -= 1) ctx.lineTo(seam(k + 1, y), y);
+    ctx.closePath();
+    ctx.fillStyle = k % 2 ? look.b : look.a;
+    ctx.fill();
+  }
+  // the crown, and the band with its zigzag edge and dots
+  ctx.fillStyle = look.band;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(BALLOON_W, 0);
+  for (let x = BALLOON_W; x >= 0; x -= 2) ctx.lineTo(x, around(14, x));
+  ctx.closePath();
+  ctx.fill();
+  const bandTop = 72;
+  const bandBot = 79;
+  ctx.beginPath();
+  for (let x = 0; x <= BALLOON_W; x += 2) ctx.lineTo(x, around(bandTop, x));
+  for (let x = BALLOON_W; x >= 0; x -= 2) ctx.lineTo(x, around(bandBot, x));
+  ctx.closePath();
+  ctx.fill();
+  const Z = 12;
+  for (let i = 0; i < Z; i++) {
+    const a = -Math.PI / 2 + ((i + 0.5) * Math.PI) / Z;
+    const w = hw(bandBot);
+    const x = cx + w * Math.sin(a);
+    const half = Math.max(0.5, ((w * Math.PI) / Z / 2) * Math.cos(a));
+    const y = around(bandBot, x);
+    ctx.beginPath();
+    ctx.moveTo(x - half, y - 0.5);
+    ctx.lineTo(x + half, y - 0.5);
+    ctx.lineTo(x, y + 1 + 4.5 * Math.cos(a));
+    ctx.closePath();
+    ctx.fillStyle = look.band;
+    ctx.fill();
+    const wm = hw((bandTop + bandBot) / 2);
+    const xd = cx + wm * Math.sin(a);
+    ctx.beginPath();
+    ctx.ellipse(xd, around((bandTop + bandBot) / 2, xd), Math.max(0.4, 1.5 * Math.cos(a)), 1.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = look.dot;
+    ctx.fill();
+  }
+  // the seams between the panels
+  ctx.strokeStyle = 'rgba(40,24,60,0.2)';
+  ctx.lineWidth = 1;
+  for (let j = 1; j < N; j++) {
+    ctx.beginPath();
+    for (let y = top + 2; y <= throat; y += 2) ctx.lineTo(seam(j, y), y);
+    ctx.stroke();
+  }
+  // light from the upper left, a darker rim, a darker throat and a soft shine
+  const lit = ctx.createRadialGradient(cx - 18, 30, 2, cx - 18, 30, 62);
+  lit.addColorStop(0, 'rgba(255,255,255,0.42)');
+  lit.addColorStop(0.5, 'rgba(255,255,255,0.1)');
+  lit.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = lit;
+  ctx.fillRect(0, 0, BALLOON_W, throat + 2);
+  const rim = ctx.createRadialGradient(cx - 10, 44, 24, cx - 6, 50, 76);
+  rim.addColorStop(0, 'rgba(14,22,52,0)');
+  rim.addColorStop(0.55, 'rgba(14,22,52,0)');
+  rim.addColorStop(1, 'rgba(14,22,52,0.42)');
+  ctx.fillStyle = rim;
+  ctx.fillRect(0, 0, BALLOON_W, throat + 2);
+  const low = ctx.createLinearGradient(0, 84, 0, throat);
+  low.addColorStop(0, 'rgba(14,22,52,0)');
+  low.addColorStop(1, 'rgba(14,22,52,0.28)');
+  ctx.fillStyle = low;
+  ctx.fillRect(0, 84, BALLOON_W, throat - 82);
+  ctx.save();
+  ctx.translate(cx - 22, 28);
+  ctx.rotate(-0.3);
+  ctx.scale(1, 2.1);
+  const shine = ctx.createRadialGradient(0, 0, 0, 0, 0, 8);
+  shine.addColorStop(0, 'rgba(255,255,255,0.75)');
+  shine.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = shine;
+  ctx.beginPath();
+  ctx.arc(0, 0, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.restore();
+  envelope();
+  ctx.strokeStyle = 'rgba(29,43,69,0.6)';
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+
+  // the skirt
+  const skirtBot = throat + 7;
+  ctx.beginPath();
+  ctx.moveTo(cx - rT, throat - 1);
+  ctx.lineTo(cx + rT, throat - 1);
+  ctx.lineTo(cx + 8.5, skirtBot);
+  ctx.lineTo(cx - 8.5, skirtBot);
+  ctx.closePath();
+  ctx.fillStyle = look.skirt;
+  ctx.fill();
+  const sk = ctx.createLinearGradient(cx - rT, 0, cx + rT, 0);
+  sk.addColorStop(0, 'rgba(255,255,255,0.18)');
+  sk.addColorStop(1, 'rgba(14,22,52,0.35)');
+  ctx.fillStyle = sk;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(29,43,69,0.6)';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  // four cables down to the basket
+  const basketTop = 146;
+  ctx.strokeStyle = 'rgba(52,38,28,0.85)';
+  ctx.lineWidth = 1.1;
+  for (const [x0, x1] of [[-8, -10.5], [-3, -4], [3, 4], [8, 10.5]]) {
+    ctx.beginPath();
+    ctx.moveTo(cx + x0, skirtBot);
+    ctx.lineTo(cx + x1, basketTop);
+    ctx.stroke();
+  }
+  // the burner on its frame
+  ctx.fillStyle = '#4a4f5c';
+  ctx.fillRect(cx - 10.5, 139.5, 21, 1.8);
+  roundRect(ctx, cx - 4.5, 133, 9, 6.5, 2);
+  ctx.fillStyle = '#7b8494';
+  ctx.fill();
+  ctx.fillStyle = 'rgba(230,236,244,0.8)';
+  ctx.fillRect(cx - 3, 133.8, 6, 1);
+  // the wicker basket
+  const bt = basketTop;
+  const bb = 165;
+  const basket = () => {
+    ctx.beginPath();
+    ctx.moveTo(cx - 11.5, bt);
+    ctx.lineTo(cx + 11.5, bt);
+    ctx.lineTo(cx + 10, bb - 2.5);
+    ctx.quadraticCurveTo(cx + 9.8, bb, cx + 7.5, bb);
+    ctx.lineTo(cx - 7.5, bb);
+    ctx.quadraticCurveTo(cx - 9.8, bb, cx - 10, bb - 2.5);
+    ctx.closePath();
+  };
+  basket();
+  const wick = ctx.createLinearGradient(0, bt, 0, bb);
+  wick.addColorStop(0, '#d39a5c');
+  wick.addColorStop(0.5, '#b07940');
+  wick.addColorStop(1, '#8a5a2c');
+  ctx.fillStyle = wick;
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(92,56,24,0.45)';
+  ctx.lineWidth = 1;
+  for (let y = bt + 5; y < bb; y += 3.5) {
+    ctx.beginPath();
+    ctx.moveTo(cx - 12, y);
+    ctx.lineTo(cx + 12, y);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(255,232,196,0.28)';
+  for (let x = cx - 10; x <= cx + 10; x += 4) {
+    ctx.beginPath();
+    ctx.moveTo(x, bt + 4);
+    ctx.lineTo(x, bb);
+    ctx.stroke();
+  }
+  const bs = ctx.createLinearGradient(cx - 12, 0, cx + 12, 0);
+  bs.addColorStop(0, 'rgba(255,255,255,0.12)');
+  bs.addColorStop(1, 'rgba(14,22,52,0.3)');
+  ctx.fillStyle = bs;
+  ctx.fillRect(cx - 12, bt, 24, bb - bt);
+  ctx.restore();
+  basket();
+  ctx.strokeStyle = 'rgba(58,34,14,0.85)';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  roundRect(ctx, cx - 12.5, bt - 1, 25, 4.5, 2);
+  ctx.fillStyle = '#6e4320';
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,214,160,0.7)';
+  ctx.fillRect(cx - 10.5, bt - 0.4, 21, 1);
+}
+
+/** The burner's flame (its foot at the bottom middle), with a warm glow around it. */
+function drawBalloonFlame(ctx, w, h) {
+  const cx = w / 2;
+  const glow = ctx.createRadialGradient(cx, h - 8, 1, cx, h - 10, w / 2 + 2);
+  glow.addColorStop(0, 'rgba(255,200,80,0.6)');
+  glow.addColorStop(1, 'rgba(255,140,40,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, w, h);
+  const tongue = (half, tip, c0, c1) => {
+    ctx.beginPath();
+    ctx.moveTo(cx, h - 2);
+    ctx.bezierCurveTo(cx - half, h - 4, cx - half * 0.7, tip + 7, cx, tip);
+    ctx.bezierCurveTo(cx + half * 0.7, tip + 7, cx + half, h - 4, cx, h - 2);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, tip, 0, h);
+    g.addColorStop(0, c0);
+    g.addColorStop(1, c1);
+    ctx.fillStyle = g;
+    ctx.fill();
+  };
+  tongue(6, 2, 'rgba(255,120,40,0.9)', '#ffb02e');
+  tongue(3.5, 9, '#ffd23f', '#fff6cf');
+}
+
 function ensureBgTextures(scene) {
   canvasTexture(scene, 'bg_mountains', MTN_W, MTN_H, drawMountains);
   canvasTexture(scene, 'bg_tablecloth', 216, 100, drawTablecloth);
@@ -456,41 +717,9 @@ function drawZoneTextures(scene) {
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
   });
-  // a striped hot-air balloon with its basket
-  canvasTexture(scene, 'bg_balloon', 96, 140, (ctx) => {
-    const cx = 48;
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(cx, 98);
-    ctx.bezierCurveTo(6, 74, 2, 40, cx - 2, 6);
-    ctx.bezierCurveTo(cx + 26, 2, 94, 40, cx, 98);
-    ctx.closePath();
-    ctx.clip();
-    const cols = ['#ff5a5f', '#ffd23f', '#3d8beb', '#ff5a5f', '#ffd23f', '#3d8beb'];
-    for (let k = 0; k < cols.length; k++) {
-      ctx.fillStyle = cols[k];
-      ctx.fillRect(4 + k * 15, 0, 15, 100);
-    }
-    const shade = ctx.createLinearGradient(0, 0, 96, 0);
-    shade.addColorStop(0, 'rgba(255,255,255,0.35)');
-    shade.addColorStop(0.5, 'rgba(255,255,255,0)');
-    shade.addColorStop(1, 'rgba(0,0,40,0.3)');
-    ctx.fillStyle = shade;
-    ctx.fillRect(0, 0, 96, 100);
-    ctx.restore();
-    ctx.strokeStyle = 'rgba(29,43,69,0.7)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(cx - 9, 98);
-    ctx.lineTo(cx - 8, 116);
-    ctx.moveTo(cx + 9, 98);
-    ctx.lineTo(cx + 8, 116);
-    ctx.stroke();
-    ctx.fillStyle = '#9a6b3c';
-    ctx.fillRect(cx - 11, 114, 22, 16);
-    ctx.fillStyle = '#7a5129';
-    ctx.fillRect(cx - 11, 114, 22, 4);
-  });
+  // (1.12.1) hot-air balloons in three looks, and the burner's flame
+  BALLOON_LOOKS.forEach((look, k) => canvasTexture(scene, `bg_balloon${k}`, BALLOON_W, BALLOON_H, (ctx) => drawBalloon(ctx, look)));
+  canvasTexture(scene, 'bg_balloon_flame', 18, 28, drawBalloonFlame);
   // a side-on aeroplane, nose to the right
   canvasTexture(scene, 'bg_plane', 120, 44, (ctx) => {
     ctx.fillStyle = '#f4f7fb';
@@ -739,6 +968,7 @@ export class BgScene extends Phaser.Scene {
       this.flyerNext[k] = f.every[0] + Math.random() * (f.every[1] - f.every[0]);
       this._spawnFlyer(f, alt);
     }
+    const calm = !!this.scene.get('Game')?.reducedMotion;   // "Minder beweging": no sway, a steady flame
     for (let k = this.flyers.length - 1; k >= 0; k--) {
       const o = this.flyers[k];
       o.x += o.vx * dt;
@@ -746,12 +976,41 @@ export class BgScene extends Phaser.Scene {
       const y = o.y0 + (alt - o.alt0) * PX_PER_M * FLYER_PARALLAX + (o.bob ? Math.sin(this.t * 0.9 + o.phase) * o.bob : 0);
       o.img.setPosition(o.x, y);
       if (o.trail) o.trail.setPosition(o.x - o.dir * o.img.displayWidth * 0.45, y + 2);
+      if (o.flame) this._balloon(o, dt, y, calm);
       if (o.x < -260 || o.x > W + 260 || y > H + 160 || y < -200) {
         o.img.destroy();
         if (o.trail) o.trail.destroy();
+        if (o.flame) o.flame.destroy();
         this.flyers.splice(k, 1);
       }
     }
+  }
+
+  /**
+   * (1.12.1) A hot-air balloon's life: a gentle sway (the basket swings under the envelope) and now and then a
+   * burst of the burner, which lifts it a little; the flame sits on the burner as the balloon turns.
+   */
+  _balloon(o, dt, y, calm) {
+    const rot = calm ? 0 : Math.sin(this.t * 0.8 + o.phase) * 0.035 + Math.sin(this.t * 2.1 + o.phase * 1.7) * 0.008;
+    o.img.setRotation(rot);
+    o.burnIn -= dt;
+    if (o.burnLeft <= 0 && o.burnIn <= 0) {
+      o.burnFor = 0.7 + Math.random() * 0.7;
+      o.burnLeft = o.burnFor;
+      o.burnIn = o.burnFor + 3 + Math.random() * 5;
+    }
+    let a = 0;
+    if (o.burnLeft > 0) {
+      o.burnLeft -= dt;
+      if (!calm) o.y0 -= 7 * dt;
+      a = clamp(Math.min((o.burnFor - o.burnLeft) / 0.12, o.burnLeft / 0.15), 0, 1);
+    }
+    const s = o.img.scaleX;
+    const d = (BALLOON_BURNER - BALLOON_EQ) * s;
+    const flick = calm ? 1 : 0.85 + Math.random() * 0.3;
+    o.flame.setVisible(a > 0.02).setAlpha(a * o.img.alpha).setRotation(rot)
+      .setPosition(o.x - Math.sin(rot) * d, y + Math.cos(rot) * d)
+      .setScale(s * (calm ? 1 : 0.9 + Math.random() * 0.2), s * flick);
   }
 
   _spawnFlyer(f, alt) {
@@ -766,6 +1025,7 @@ export class BgScene extends Phaser.Scene {
     let trail = null;
     let vy = 0;
     let bob = 0;
+    let flame = null;
     if (f.emoji) {
       // (1.12.1) one image per emoji (drawn once at its biggest size), scaled: not a new text for every flyer
       img = this.add.image(x, y0, emojiTexture(this, f.emoji, f.size[1], { font: EMOJI_FONT })).setOrigin(0.5).setScale(size / f.size[1]);
@@ -782,8 +1042,13 @@ export class BgScene extends Phaser.Scene {
       if (f.kind === 'ufo') bob = 14;
       if (f.kind === 'sat') vy = (Math.random() - 0.5) * 12;
     } else if (f.kind === 'balloon') {
-      img = this.add.image(x, y0, 'bg_balloon').setScale(size);
-      bob = 7;
+      img = this.add.image(x, y0, `bg_balloon${Math.floor(Math.random() * BALLOON_LOOKS.length)}`)
+        .setOrigin(0.5, BALLOON_EQ / BALLOON_H).setScale(size)
+        // further away (smaller) a little hazier
+        .setAlpha(0.8 + 0.2 * clamp((size - f.size[0]) / (f.size[1] - f.size[0]), 0, 1));
+      flame = this.add.image(x, y0, 'bg_balloon_flame').setOrigin(0.5, 26 / 28).setVisible(false).setDepth(1.49);
+      bob = 6;
+      vy = 1.2;   // between the burner's bursts it sinks very slowly
     } else if (f.kind === 'plane') {
       img = this.add.image(x, y0, 'bg_plane').setScale(size).setFlipX(dir < 0);
       trail = this.add.image(x, y0, 'bg_trail').setOrigin(1, 0.5).setScale(1.4 * size * 2, 1).setFlipX(dir < 0).setAlpha(0.75);
@@ -797,7 +1062,7 @@ export class BgScene extends Phaser.Scene {
     // (space flyers just over the sky and stars, behind everything else; the others among the clouds)
     img.setDepth(f.kind === 'comet' || f.kind === 'sat' || f.kind === 'ufo' || f.kind === 'rocket' ? 0.003 : 1.5);
     if (trail) trail.setDepth(1.45);
-    this.flyers.push({ img, trail, x, y0, vx: dir * speed, vy, alt0: alt, dir, bob, phase: Math.random() * 6 });
+    this.flyers.push({ img, trail, flame, x, y0, vx: dir * speed, vy, alt0: alt, dir, bob, phase: Math.random() * 6, burnIn: 1 + Math.random() * 4, burnLeft: 0, burnFor: 0 });
   }
 
   update(time, delta) {

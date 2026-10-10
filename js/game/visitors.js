@@ -102,34 +102,63 @@ const rand = (a, b) => a + Math.random() * (b - a);   // looks only
 // Props, drawn once per game
 // ---------------------------------------------------------------------------
 function makeTextures(scene) {
+  // (1.12.1, the owner: "The air balloons look cheap") three party balloons: a round top that narrows to a knot,
+  // light from the upper left with a darker edge, a shine, and wavy strings that meet in his hand (bottom middle)
   canvasTexture(scene, 'vis_balloons', 112, 132, (ctx) => {
-    const balloons = [[30, 40, '#ff5a5f', '#ffb3b5'], [82, 36, '#3d8beb', '#a9cdfa'], [56, 26, '#ffd23f', '#fff0a8']];
-    ctx.lineWidth = 1.6;
-    ctx.strokeStyle = 'rgba(40,40,60,0.7)';
+    const balloons = [[30, 42, '#ff5a5f', '#b8322f'], [82, 38, '#3d8beb', '#2563b0'], [56, 27, '#ffd23f', '#c39a1c']];
+    const rx = 22;
+    const ry = 26;
     for (const [x, y] of balloons) {
       ctx.beginPath();
-      ctx.moveTo(x, y + 30);
-      ctx.quadraticCurveTo((x + 56) / 2 + 4, 100, 56, 130);
+      ctx.moveTo(x, y + ry + 4);
+      ctx.bezierCurveTo(x + 7, y + ry + 26, 52, 98, 56, 130);
+      ctx.lineWidth = 1.3;
+      ctx.strokeStyle = 'rgba(60,60,84,0.75)';
       ctx.stroke();
     }
-    for (const [x, y, fill, shine] of balloons) {
+    for (const [x, y, fill, dark] of balloons) {
+      const shape = () => {
+        ctx.beginPath();
+        ctx.moveTo(x, y + ry);
+        ctx.bezierCurveTo(x - rx * 0.55, y + ry * 0.75, x - rx, y + ry * 0.25, x - rx, y - ry * 0.15);
+        ctx.bezierCurveTo(x - rx, y - ry * 0.75, x - rx * 0.55, y - ry, x, y - ry);
+        ctx.bezierCurveTo(x + rx * 0.55, y - ry, x + rx, y - ry * 0.75, x + rx, y - ry * 0.15);
+        ctx.bezierCurveTo(x + rx, y + ry * 0.25, x + rx * 0.55, y + ry * 0.75, x, y + ry);
+        ctx.closePath();
+      };
+      // the knot
       ctx.beginPath();
-      ctx.ellipse(x, y, 22, 27, 0, 0, Math.PI * 2);
-      ctx.fillStyle = fill;
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = 'rgba(29,43,69,0.55)';
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(x - 4, y + 27);
-      ctx.lineTo(x + 4, y + 27);
-      ctx.lineTo(x, y + 33);
+      ctx.moveTo(x - 3.5, y + ry + 4.5);
+      ctx.lineTo(x + 3.5, y + ry + 4.5);
+      ctx.lineTo(x + 1.2, y + ry - 1);
+      ctx.lineTo(x - 1.2, y + ry - 1);
       ctx.closePath();
+      ctx.fillStyle = dark;
+      ctx.fill();
+      shape();
       ctx.fillStyle = fill;
       ctx.fill();
+      ctx.save();
+      ctx.clip();
+      const g = ctx.createRadialGradient(x - rx * 0.35, y - ry * 0.4, 0, x - rx * 0.2, y - ry * 0.2, ry * 1.5);
+      g.addColorStop(0, 'rgba(255,255,255,0.45)');
+      g.addColorStop(0.35, 'rgba(255,255,255,0.1)');
+      g.addColorStop(0.68, 'rgba(255,255,255,0)');
+      g.addColorStop(1, 'rgba(20,24,64,0.38)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - rx - 2, y - ry - 2, rx * 2 + 4, ry * 2 + 4);
+      ctx.restore();
+      shape();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(29,43,69,0.5)';
+      ctx.stroke();
+      // the shine
       ctx.beginPath();
-      ctx.ellipse(x - 8, y - 10, 5, 8, -0.5, 0, Math.PI * 2);
-      ctx.fillStyle = shine;
+      ctx.ellipse(x - rx * 0.4, y - ry * 0.4, 3.6, 7.5, 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x - rx * 0.12, y - ry * 0.72, 1.7, 0, Math.PI * 2);
       ctx.fill();
     }
   });
