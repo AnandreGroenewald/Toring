@@ -381,6 +381,7 @@ export class GameScene extends Phaser.Scene {
     this.tower = [];           // landed/settled/frozen blocks in drop order
     this.dyn = [];             // landed/settled (dynamic tower blocks)
     this.frozen = [];          // frozen blocks in freeze order
+    this.kicked = [];          // blocks showing a landing's squash or rock (synced until it is over, cement too)
     this.dynDirty = true;
     this.frozenTopY = Infinity;
     this.frozenTopBlock = null;
@@ -750,6 +751,7 @@ export class GameScene extends Phaser.Scene {
     this.tower = [];
     this.dyn.length = 0;
     this.frozen = [];
+    this.kicked = [];
     this.falling = null;
     this.colN = 0;
     this.colQueue.length = 0;
@@ -1153,6 +1155,7 @@ export class GameScene extends Phaser.Scene {
 
     // 3. Visuals that read the new physics state
     this.syncBlocks();
+    this.syncKicked();
     this.water.update(dt);
     this.updateUnderwater(dt);
     if (this.billboard) this.billboard.float(this.water.displayY, this.now);
@@ -2032,6 +2035,16 @@ export class GameScene extends Phaser.Scene {
       }
     }
     if (rating) this.applyRating(f, rating);
+    // (1.12.1, option A "weight and wobble") its weight, drawn only (the physics never change): a squash onto what it
+    // landed on (which gives a little), and a rock when it landed off centre
+    const hard = clamp(q.speed / 13, 0.3, 1);
+    let rock = 0;
+    if (topHit && rating !== 'P') {
+      const t = this.supportTop(sup);
+      rock = clamp((f.centerX - t.x) / Math.max(20, t.w / 2), -1, 1);
+    }
+    this.kick(f, hard, rock);
+    if (sup) this.kick(sup, hard * 0.45);
     this.emitProgress();
   }
 
@@ -2620,6 +2633,23 @@ export class GameScene extends Phaser.Scene {
     for (let k = 0; k < act.length; k++) {
       const b = act[k];
       if (!b.destroyed && b.state !== 'frozen') b.sync();
+    }
+  }
+
+  /** A landing's weight (drawn only): the block squashes and rocks, what it landed on gives a little. */
+  kick(b, squash, rock = 0) {
+    if (this.reducedMotion || !b || b.destroyed) return;
+    b.kick(squash, rock);
+    if (!this.kicked.includes(b)) this.kicked.push(b);
+  }
+
+  /** Blocks still showing a kick are drawn every frame (cement too), then once more at rest. */
+  syncKicked() {
+    const k = this.kicked;
+    for (let i = k.length - 1; i >= 0; i--) {
+      const b = k[i];
+      if (!b.destroyed) b.sync();
+      if (b.destroyed || b.kickAt === undefined) k.splice(i, 1);
     }
   }
 

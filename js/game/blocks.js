@@ -161,6 +161,11 @@ export function shapeColor(spec) {
 // Physics body
 // ---------------------------------------------------------------------------
 
+// (1.12.1, the owner: "The physics is not there yet", option A "weight and wobble") a landing's weight, drawn only
+const KICK_S = 0.6;        // how long a landing's squash and rock last (s; see Block.kick)
+const KICK_SQUASH = 0.12;  // the hardest landing squashes the block this much (it springs back once, then rests)
+const KICK_ROCK = 0.035;   // rad: the rock of a landing right at the edge (less the nearer the middle)
+
 let detectorPatched = false;
 
 /**
@@ -1116,12 +1121,51 @@ export class Block {
       .setDepth(DEPTH.tower);
   }
 
-  /** Copy the body pose onto the image. */
+  /**
+   * A landing's weight, drawn only (the physics body never changes): the block squashes onto what it landed on
+   * and springs back, and an off-centre landing rocks it a little before it settles. `squash` 0..1 (how hard),
+   * `rock` -1..1 (which way, and how far off centre). The scene keeps syncing it until it is over (GameScene.kick).
+   */
+  kick(squash, rock = 0) {
+    if (this.destroyed) return;
+    this.kickAt = this.scene.time.now;
+    this.kickSquash = squash;
+    this.kickRock = rock;
+  }
+
+  /** Copy the body pose onto the image (and a landing's squash and rock while it lasts). */
   sync() {
     if (this.destroyed) return;
     const b = this.body;
-    this.image.setPosition(b.position.x, b.position.y);
-    this.image.rotation = b.angle;
+    let x = b.position.x;
+    let y = b.position.y;
+    let a = b.angle;
+    let sx = 1;
+    let sy = 1;
+    if (this.kickAt !== undefined) {
+      const t = (this.scene.time.now - this.kickAt) / 1000;
+      if (t >= KICK_S) {
+        this.kickAt = undefined;
+      } else {
+        const q = this.kickSquash * Math.exp(-t / 0.075) * Math.cos((t * 2 * Math.PI) / 0.2);
+        sy = 1 - KICK_SQUASH * q;
+        sx = 1 + KICK_SQUASH * 0.5 * q;
+        const r = this.kickRock * KICK_ROCK * Math.exp(-t / 0.18) * Math.sin((t * 2 * Math.PI) / 0.3);
+        // the bottom stays where it is: the squash shrinks the image towards its centroid (move it down by what
+        // the bottom rose), and the rock turns it about the middle of its bottom (the centroid moves sideways)
+        const hb = this.geom.h - this.geom.cy;
+        const down = (1 - sy) * hb;
+        const side = hb * Math.sin(r);
+        const sin = Math.sin(a);
+        const cos = Math.cos(a);
+        x += cos * side - sin * down;
+        y += sin * side + cos * down;
+        a += r;
+      }
+    }
+    this.image.setPosition(x, y);
+    this.image.rotation = a;
+    if (this.image.scaleX !== sx || this.image.scaleY !== sy) this.image.setScale(sx, sy);
   }
 
   /** Tight axis-aligned bounds from the hull vertices (Matter's own bounds include a velocity sweep). */
