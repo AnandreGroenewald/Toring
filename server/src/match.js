@@ -722,7 +722,8 @@ export class MatchRoom {
     const relay = async (kind, out) => {
       if (seat !== ref.seat || msg.n !== ref.n || !this.firstRelay(kind, ref.n)) return;
       this.tell(1 - seat, out);
-      if ((m.v?.[1 - seat] || 1) >= PROTOCOL_V5) await this.save();
+      // (kept in storage only while the other game is away: else the turn's report saves it, about 1 write a turn)
+      if (m.away?.[1 - seat]) await this.save();
     };
     if (msg.t === 'go') {   // (1.12) the turn began on that player's screen: the other game shows it from now
       await relay('go', { t: 'go', n: ref.n });

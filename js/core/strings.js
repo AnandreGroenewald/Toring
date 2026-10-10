@@ -413,8 +413,8 @@ export const S = {
   connOppLost: (name) => `📶 ${name} se verbinding is weg… wag ’n bietjie`,
   connOppBack: (name) => `✓ ${name} is terug`,
   // (1.12.1) a friend match: a pause stops both games
-  pauseBothMine: (left) => `Albei speletjies wag. Pouses oor: ${left}`,
-  pauseBothTheirs: (name) => `${name} het die wedstryd gepouseer. Speel verder wanneer julle reg is.`,
+  pauseBothMine: (left) => `Albei speletjies wag, tot 1 minuut. Pouses oor: ${left}`,
+  pauseBothTheirs: (name) => `${name} het die wedstryd gepouseer. Oor ’n minuut gaan dit vanself aan, of tik Speel verder as julle reg is.`,
   pauseAsking: 'Pouseer vir albei…',
   pauseNoneLeft: (name) => `Jou pouses is op: ${name} speel aan.`,
   pauseOnlyMine: (name) => `Net jou spel wag: ${name} speel aan.`,
@@ -460,6 +460,7 @@ export const S = {
   nameChange: 'Verander jou bynaam',
   nameHint: (dflt) => `Op die ranglys en vir jou teenstanders (hoogstens 16 letters). Leeg: “${dflt}”.`,
   nameSave: 'Stoor',
+  nameRules: 'Kies ’n speelnaam, nie jou regte naam nie. Geen vloekwoorde, haat of ander mense se name nie: ons haal onvanpaste name af. Deur te stoor, stem jy in.',
   nameDefault: (dflt) => `Jy speel weer as “${dflt}”.`,
   boardYou: 'Jy',
   boardHiddenNote: 'Jy is versteek: ander sien jou nie, maar jy sien jou plek.',

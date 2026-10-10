@@ -873,10 +873,11 @@ bus.on('duel:resumed', (e) => {
 // first grey blocks this player ever sees: once, a moment later (after a first game's own hint, if any)
 let cementTipAt = 0;
 bus.on('game:cement', () => {
-  if (settings.cementSeen || run.mode === 'idle' || cementTipAt) return;
+  // (read from storage each time: another tab may have shown it already)
+  if (store.getSettings().cementSeen || run.mode === 'idle' || cementTipAt) return;
   cementTipAt = setTimeout(() => {
     cementTipAt = 0;
-    if (settings.cementSeen || screen !== 'game' || run.paused || run.over || run.mode === 'idle') return;
+    if (store.getSettings().cementSeen || screen !== 'game' || run.paused || run.over || run.mode === 'idle') return;
     settings = store.setSettings({ cementSeen: true });
     bus.emit('hud:toast', { text: S.cementTip, color: '#e3eaf3' });
   }, 2600);

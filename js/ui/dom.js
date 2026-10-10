@@ -1043,7 +1043,7 @@ export function createUI(bus) {
     // the daily reminder (only in the Android app)
     if (st.remindOn) sheet.querySelector('.stats-foot').prepend(button('btn-white', [emo('🔔'), h('span', { text: S.remindButton(st.remindTime) })], () => bus.emit('ui:remind'), { nav: false }));
     // (1.12.1) your nickname (the ranglys and your opponents see it)
-    sheet.querySelector('.stats-foot').prepend(button('btn-white', [emo('✏️'), h('span', { text: S.nameChange })], () => bus.emit('ui:name', 'stats'), { nav: false }));
+    sheet.querySelector('.stats-foot').prepend(button('btn-white btn-mini', [emo('✏️'), h('span', { text: S.nameChange })], () => bus.emit('ui:name', 'stats'), { nav: false }));
     // today's leaderboard (only when the game can reach the server)
     if (st.boardOn) sheet.querySelector('.stats-foot').prepend(button('btn-blue', [emo('🏆'), h('span', { text: S.board })], () => bus.emit('ui:board'), { nav: false }));
     modals.stats.replaceChildren(sheet);
@@ -1340,7 +1340,8 @@ export function createUI(bus) {
       h('p', { class: 'duel-intro', text: S.duelIntroModes }),
       modePicker(m.mode),
       m.rank ? rankBox(m.rank, m.card, d.name || st.duelPlaceholder) : null,
-      h('div', { class: 'nick' }, h('span', { class: 'label', text: S.duelNick }), input, msg),
+      // (1.12.1) the name rules where a nickname is typed (Google Play's user content policy)
+      h('div', { class: 'nick' }, h('span', { class: 'label', text: S.duelNick }), input, msg, h('p', { class: 'name-rules', text: S.nameRules })),
       h('div', { class: 'duel-btns' },
         m.live ? button('btn-big btn-green', [emo('🎲'), h('span', { text: S.duelRandom })], () => bus.emit('ui:duel-random')) : null,
         button(m.live ? 'btn-purple' : 'btn-big btn-purple', [emo('📲'), h('span', { text: S.duelFriend })], () => bus.emit('ui:duel-friend')),
@@ -1912,7 +1913,7 @@ export function createUI(bus) {
     modals.name.replaceChildren(h('div', { class: 'card sheet name-sheet' },
       closeX(() => closeName()),
       h('div', { class: 'sheet-head' }, emo('✏️'), h('h2', { id: 'stapel-name-title', text: S.duelNick })),
-      h('div', { class: 'sheet-body' }, h('div', { class: 'nick' }, input, msg)),
+      h('div', { class: 'sheet-body' }, h('div', { class: 'nick' }, input, msg, h('p', { class: 'name-rules', text: S.nameRules }))),
       h('div', { class: 'sheet-foot name-foot' },
         button('btn-blue', h('span', { text: S.nameSave }), save, { nav: false }),
         button('btn-white', h('span', { text: S.close }), () => closeName(), { nav: false }))));

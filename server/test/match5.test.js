@@ -517,3 +517,19 @@ test('a "Sorry, besig nou" kept while the host was away goes to the host only, n
   await say(room, back, { t: 'hello', name: 'Anna', v: 5, key: KEYS[0] });
   assert.deepEqual(back.of('declined'), [{ t: 'declined', name: 'Bennie' }]);
 });
+
+test('Blok vir Blok with two 1.12.1 games: about one storage write a turn (the free plan\'s daily writes)', async () => {
+  const { room, a, b, clk, state } = await room5({ mode: 'turns' });
+  const first = a.last('start').turn.seat;
+  const socks = first === 0 ? [a, b] : [b, a];
+  const w0 = state.writes;
+  for (let n = 1; n <= 6; n++) {
+    const mover = socks[(n - 1) % 2];
+    await say(room, mover, { t: 'go', n });
+    await say(room, mover, { t: 'drop', n, p: POSE, ct: 900 });
+    clk.tick(2000);
+    await say(room, mover, { t: 'settled', n, lost: false, r: 'G', snap: snap(n - 1) });
+  }
+  const perTurn = (state.writes - w0) / 6;
+  assert.ok(perTurn <= 1.2, `writes a turn: ${perTurn}`);
+});

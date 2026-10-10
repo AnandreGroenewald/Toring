@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = join(root, 'pages-dist');
-const FILES = ['index.html', 'admin.html', 'adverteer.html', 'privaatheid.html', 'privacy.html', 'terme.html', 'manifest.webmanifest', 'sponsors.json', 'sw.js'];
+// (1.12.1) adverteer.html and terme.html stay out until sponsor sales open: terme.html is still a template
+const FILES = ['index.html', 'admin.html', 'privaatheid.html', 'privacy.html', 'manifest.webmanifest', 'sponsors.json', 'sw.js'];
 const DIRS = ['css', 'js', 'lib', 'icons'];
 
 rmSync(out, { recursive: true, force: true });

@@ -693,7 +693,8 @@ svg.ic {
 .retry-row { display: grid; justify-items: center; gap: calc(6 * var(--u)); margin-top: calc(14 * var(--u)); }
 .retry-buy .retry-price { display: inline-flex; align-items: center; gap: calc(4 * var(--u)); margin-left: calc(10 * var(--u)); }
 .retry-buy.is-short { opacity: 0.7; }
-.retry-note { margin: 0; text-align: center; font-size: max(11px, calc(20 * var(--u))); font-weight: 700; color: var(--muted); }
+/* (1.12.1: under the big button with room, like the price row: it sat half under the button) */
+.retry-note { margin: calc(16 * var(--u)) 0 0; text-align: center; font-size: max(11px, calc(20 * var(--u))); font-weight: 700; color: var(--muted); }
 .retry-see { margin: calc(12 * var(--u)) auto 0; }
 
 /* Afrikaanse spreekwoorde: "Spreekwoord van die dag" (menu), one line on results and pause.
@@ -1060,6 +1061,8 @@ svg.ic {
 .nick-input:focus, .link-box:focus { outline: none; border-color: var(--hemel); }
 .nick-msg { margin: 0; min-height: 1.3em; font-size: max(12px, calc(21 * var(--u))); font-weight: 700; color: var(--muted); }
 .nick-msg.bad { color: var(--klei-d); }
+/* (1.12.1) the name rules under a nickname box */
+.name-rules { margin: calc(4 * var(--u)) 0 0; font-size: max(11px, calc(19 * var(--u))); font-weight: 700; line-height: 1.3; color: var(--muted); }
 .duel-btns { display: flex; flex-direction: column; gap: calc(18 * var(--u)); }
 /* Wedloop or Blok vir Blok (1.11): two big choices, what the chosen one is under them */
 .mode-pick { display: grid; gap: calc(10 * var(--u)); }

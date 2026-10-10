@@ -33,6 +33,19 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.once('listening', r));
 const BASE = `http://127.0.0.1:${server.address().port}/`;
 
+// (1.12.1) Emoji as Android draws them, and art we may show in a store picture: Google's Noto Color Emoji (SIL OFL
+// 1.1) stands in for this Mac's Apple Color Emoji, whose artwork has no licence for marketing. The game's emoji font
+// lists name Apple's first, so that name points at Noto here. The font files are fetched once and served from
+// memory, and all of them are loaded before a picture's game starts (the game draws each emoji once and keeps it).
+const UA = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36';
+const notoCss = (await (await fetch('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=block', { headers: { 'User-Agent': UA } })).text())
+  .replaceAll("'Noto Color Emoji'", "'Apple Color Emoji'");
+const fontFiles = new Map();
+for (const url of new Set(notoCss.match(/https:\/\/fonts\.gstatic\.com\/[^)]+/g) || [])) {
+  fontFiles.set(url, Buffer.from(await (await fetch(url)).arrayBuffer()));
+}
+if (!fontFiles.size) throw new Error('no Noto Color Emoji files: the store pictures would show Apple emoji');
+
 const browser = await chromium.launch({
   executablePath: CHROME, headless: true,
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--mute-audio'],
@@ -42,12 +55,36 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function open(query) {
   const ctx = await browser.newContext({ viewport: { width: 360, height: 640 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
+  await ctx.route('https://fonts.gstatic.com/**', (route) => {
+    const body = fontFiles.get(route.request().url());
+    return body ? route.fulfill({ status: 200, contentType: 'font/woff2', body, headers: { 'Access-Control-Allow-Origin': '*' } }) : route.abort();
+  });
+  await ctx.addInitScript(`(() => {
+    const add = () => {
+      const st = document.createElement('style');
+      st.textContent = ${JSON.stringify(notoCss)};
+      (document.head || document.documentElement).appendChild(st);
+      for (const f of document.fonts) if (f.family.includes('Apple Color Emoji')) f.load().catch(() => {});
+    };
+    if (document.documentElement) add();
+    else new MutationObserver((_, o) => { if (document.documentElement) { o.disconnect(); add(); } }).observe(document, { childList: true });
+  })();`);
   const page = await ctx.newPage();
   page.on('pageerror', (e) => problems.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') problems.push(m.text()); });
   await page.goto(`${BASE}index.html?nosw=1&debug=1&lang=${LANG}&${query}`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__stapel && window.__stapel.booted === true, null, { timeout: 30000 });
-  await page.evaluate(() => { if (document.querySelector('.modal.on')) window.__stapel.ui.closeModal(); });
+  // every Noto file in place before anything is played (an emoji drawn before its file came would stay Apple's)
+  const faces = await page.evaluate(async () => {
+    const list = [...document.fonts].filter((f) => f.family.includes('Apple Color Emoji'));
+    await Promise.all(list.map((f) => f.load().catch(() => null)));
+    return list.map((f) => f.status);
+  });
+  if (!faces.length || faces.some((x) => x !== 'loaded')) throw new Error(`Noto Color Emoji not loaded: ${faces}`);
+  await page.evaluate(() => {
+    if (document.querySelector('.modal.on')) window.__stapel.ui.closeModal();
+    window.__stapel.store.setSettings({ cementSeen: true });   // (a player who knows the game: no first-time tips)
+  });
   // no debug fps meter in a store picture
   await page.addStyleTag({ content: 'body > div[style*="monospace"] { display: none !important; }' });
   return page;

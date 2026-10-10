@@ -107,7 +107,7 @@ export const S_EN = {
     { icon: '🌊', text: 'The water rises. Keep your tower above the flood line.' },
     { icon: '❤️', text: 'Three hearts. A block in the sea costs one, every fourth Perfect brings one back.' },
     { icon: '🐒', text: 'Visitors: a Perfect chases Blouaap off, tap Skelm Sakkie to catch him, and Hanswors brings gifts. They never cost a heart.' },
-    { icon: '🗓️', text: 'One Daily Tower a day, the same for everyone. Another chance costs coins. Practise as much as you like.' },
+    { icon: '🗓️', text: 'One Daily Tower a day, the same for everyone. One more try costs coins. Practise as much as you like.' },
   ],
   lessonTry: 'Try the short lesson',
   lesson1: 'Tap anywhere to drop the block.',
@@ -396,8 +396,8 @@ export const S_EN = {
   connOppLost: (name) => `📶 ${name}’s connection dropped… hold on`,
   connOppBack: (name) => `✓ ${name} is back`,
   // (1.12.1) a friend match: a pause stops both games
-  pauseBothMine: (left) => `Both games are paused. Pauses left: ${left}`,
-  pauseBothTheirs: (name) => `${name} paused the match. Keep playing when you’re both ready.`,
+  pauseBothMine: (left) => `Both games wait, for up to 1 minute. Pauses left: ${left}`,
+  pauseBothTheirs: (name) => `${name} paused the match. It goes on by itself after a minute, or tap Keep playing when you’re both ready.`,
   pauseAsking: 'Pausing for both…',
   pauseNoneLeft: (name) => `No pauses left: ${name} keeps playing.`,
   pauseOnlyMine: (name) => `Only your game is paused: ${name} keeps playing.`,
@@ -441,6 +441,7 @@ export const S_EN = {
   nameChange: 'Change your nickname',
   nameHint: (dflt) => `On the leaderboard and for your opponents (16 letters at most). Empty: “${dflt}”.`,
   nameSave: 'Save',
+  nameRules: 'Pick a game name, not your real name. No swearing, hate or other people’s names: we remove unsuitable names. By saving, you agree.',
   nameDefault: (dflt) => `You play as “${dflt}” again.`,
   boardYou: 'You',
   boardHiddenNote: 'You’re hidden: others don’t see you, but you see your place.',
@@ -471,10 +472,10 @@ export const VISITOR_INFO_EN = {
 };
 
 export const PUNISH_INFO_EN = {
-  monkey: { name: 'Blouaap', what: 'Throws blocks off' },
+  monkey: { name: 'Blouaap', what: 'Throws blocks' },
   thief: { name: 'Skelm Sakkie', what: 'Steals blocks' },
-  fog: { name: 'Fog', what: 'Blind for 3 blocks' },
-  heat: { name: 'Heat wave', what: 'Crane speeds up' },
+  fog: { name: 'Fog', what: '3 blocks blind' },
+  heat: { name: 'Heat wave', what: 'Fast crane' },
 };
 
 export const POWERUP_INFO_EN = {

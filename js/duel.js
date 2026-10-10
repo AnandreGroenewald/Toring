@@ -749,7 +749,10 @@ export function createDuel({
     }
     // `key`: this game's own key for the room; a reconnect brings it, so the server lets it replace our old
     // connection (which may never have closed there) instead of starting a match against it
-    const key = Array.from({ length: 16 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]).join('');
+    // (1.12.1: from the browser's cryptographic random numbers; it holds this player's seat)
+    const ALNUM = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    const bytes = globalThis.crypto?.getRandomValues ? globalThis.crypto.getRandomValues(new Uint8Array(16)) : null;
+    const key = Array.from({ length: 16 }, (_, i) => ALNUM[bytes ? bytes[i] % 36 : Math.floor(Math.random() * 36)]).join('');
     const room = {
       code, key, joined: false, started: false, tries: 0, retry: null, away: hidden(), connect: null, onRetry, onStart, until: now() + DUEL.roomWaitMs,
       accepted: !invite, onInvite, onDeclined,

@@ -102,12 +102,14 @@
       <ul>
         <li><strong>Against the computer or with a link:</strong> nothing is sent to us. A challenge link you share yourself contains your nickname and your tower's height second by second. Whoever gets the link can see it.</li>
         <li><strong>Live matches:</strong> while you play, the server passes your nickname, your player card (your look and rank) and your height on to your opponent; in Blok vir Blok (Block by Block) also every block you drop and how the tower stands afterwards, and in both modes the emojis you send (six fixed pictures, no written messages). After the match it keeps a recording (the nickname and the heights, nothing else) for at most 7 days, so that a player who finds nobody to play against can play against a real match. After that it is deleted automatically.</li>
+        <li><strong>A friend's link:</strong> whoever opens a room link (<code>?kamer=</code>) sees the nickname of the player who invites and the kind of match. If they tap "Sorry, busy right now", the player who invited gets their nickname; the room keeps at most 5 such answers until that player's game is back, and forgets everything when the room closes (at most a few minutes after the match).</li>
+        <li><strong>Back after a dropped connection:</strong> the game sends a random code that only works for that one room, so you get your own seat back. It is used nowhere else and disappears with the room.</li>
         <li><strong>What is never stored:</strong> your IP address, device ID, cookies or anything else that points back to you. Your nickname is optional; without one you play as "Bouer" (Builder) with a number.</li>
       </ul>
 
       <h3 id="p2c">Daily leaderboard</h3>
       <ul>
-        <li><strong>What is sent:</strong> when you have finished the Daily Tower, the game sends your nickname (or "Bouer" with a number if you didn't choose one), your tower's height, how many blocks you dropped and how long you played, together with a <strong>random player number</strong>. That number is made once on your device and stays the same until you delete the game's data (section 11). It is linked to nothing else and only serves to know your place on the leaderboard. The server also notes when your result first arrived (with an equal height, the first one is ahead). We use the blocks and the time only to refuse impossible results.</li>
+        <li><strong>What is sent:</strong> when you have finished the Daily Tower, the game sends your nickname (or "Bouer" with a number if you didn't choose one), your tower's height, how many blocks you dropped, how long you played and how many tries you played that day ("One more try"), together with a <strong>random player number</strong>. That number is made once on your device and stays the same until you delete the game's data (section 11). It is linked to nothing else and only serves to know your place on the leaderboard. The server also notes when your result first arrived (with an equal height, the first one is ahead). We use the blocks and the time only to refuse impossible results.</li>
         <li><strong>Who sees it:</strong> the day's top ten are shown with their nickname and height; every player also sees their own place. Switch off "Show me on the leaderboard" and others no longer see you (you still see your place). We may remove an entry with an unsuitable nickname or an impossible result from the list.</li>
         <li><strong>How long:</strong> 30 days, then it is deleted automatically. Your IP address is not stored; only a daily hashed derivative of it is kept briefly in memory to prevent abuse, as with the anonymous counts.</li>
         <li><strong>Deleting it sooner:</strong> send us the date and your nickname (section 9), and we will delete your entry.</li>
@@ -142,7 +144,7 @@
 
       <h2 id="p5">5. What is public</h2>
       <p>Your <strong>business name, tagline and website address</strong> are shown in the game and are part of the public list of sponsors that anyone can download from our server. Your contact person, email, phone number and payment information are <strong>never</strong> part of the public list.</p>
-      <p><strong>Players:</strong> on the daily leaderboard, everyone who plays sees the nickname and height of the day's top ten, except those who switched off "Show me on the leaderboard" (section 2). The random player number is never shown.</p>
+      <p><strong>Players:</strong> on the daily leaderboard, everyone who plays sees the nickname and height of the day's top ten, with a 🔁 and the number of extra tries for those who played "One more try", except those who switched off "Show me on the leaderboard" (section 2). The random player number is never shown.</p>
 
       <h2 id="p6">6. Who else handles your information (operators) and cross-border transfers</h2>
       <p>We use the following service providers ("operators" under POPIA) to make Stapel work. They process information only for our purposes and under their own terms and privacy policies.</p>
@@ -215,7 +217,7 @@
         <dt><code>stapel.v1.board</code></dt>
         <dd>Your random player number for the daily leaderboard (it is sent with your result, section 2), whether you want to be hidden, the last day whose result was sent, and whether a change still has to be sent. Stays until you clear your browser data.</dd>
         <dt><code>stapel.v1.ranks</code>, <code>stapel.v1.retry</code></dt>
-        <dd>Your rank in each Uitdagersreeks mode, and the second tries ("One more try") of the Daily Tower. Not sent. Stays until you clear your browser data.</dd>
+        <dd>Your rank in each Uitdagersreeks mode, and the extra tries ("One more try") of the Daily Tower. The rank goes on your player card to your opponent in a live match, and the number of tries with your result to the daily leaderboard (section 2). Stays until you clear your browser data.</dd>
         <dt><code>stapel.v1.week</code></dt>
         <dd>Your week chest: which day's chest you opened last, how many streak shields you have and how many full weeks you played. Not sent. Stays until you clear your browser data.</dd>
         <dt><code>stapel.v1.remind</code></dt>
