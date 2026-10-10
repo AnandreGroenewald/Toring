@@ -402,6 +402,7 @@ export const S_EN = {
   pauseNoneLeft: (name) => `No pauses left: ${name} keeps playing.`,
   pauseOnlyMine: (name) => `Only your game is paused: ${name} keeps playing.`,
   pauseResuming: 'Here we go again…',
+  pauseGoesOn: (t) => `Goes on in ${t}`,
   // (1.12.1) "Play again" after a friend match: the same friend, in the same room
   againAsk: (name) => `🔁 Play ${name} again`,
   againWait: (name) => `Waiting for ${name}…`,
@@ -441,7 +442,7 @@ export const S_EN = {
   nameChange: 'Change your nickname',
   nameHint: (dflt) => `On the leaderboard and for your opponents (16 letters at most). Empty: “${dflt}”.`,
   nameSave: 'Save',
-  nameRules: 'Pick a game name, not your real name. No swearing, hate or other people’s names: we remove unsuitable names. By saving, you agree.',
+  nameRules: 'Pick a game name, not your real name. No swearing, hate or other people’s names: we remove unsuitable names. By using a nickname, you agree.',
   nameDefault: (dflt) => `You play as “${dflt}” again.`,
   boardYou: 'You',
   boardHiddenNote: 'You’re hidden: others don’t see you, but you see your place.',

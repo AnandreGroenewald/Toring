@@ -38,8 +38,12 @@ const BASE = `http://127.0.0.1:${server.address().port}/`;
 // lists name Apple's first, so that name points at Noto here. The font files are fetched once and served from
 // memory, and all of them are loaded before a picture's game starts (the game draws each emoji once and keeps it).
 const UA = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36';
+// Emoji inside a sentence take the text font (--font, css/style.css), which names no emoji font, so they would come
+// from this Mac's own emoji: the text font gets the Noto name at its end too (round 3 of the panel: a silver coin
+// beside a gold one, two looks of Skelm Sakkie).
 const notoCss = (await (await fetch('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=block', { headers: { 'User-Agent': UA } })).text())
-  .replaceAll("'Noto Color Emoji'", "'Apple Color Emoji'");
+  .replaceAll("'Noto Color Emoji'", "'Apple Color Emoji'")
+  + '\nhtml:root { --font: "Trebuchet MS", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", sans-serif; }\n';
 const fontFiles = new Map();
 for (const url of new Set(notoCss.match(/https:\/\/fonts\.gstatic\.com\/[^)]+/g) || [])) {
   fontFiles.set(url, Buffer.from(await (await fetch(url)).arrayBuffer()));

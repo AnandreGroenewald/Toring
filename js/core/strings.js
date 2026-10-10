@@ -419,6 +419,7 @@ export const S = {
   pauseNoneLeft: (name) => `Jou pouses is op: ${name} speel aan.`,
   pauseOnlyMine: (name) => `Net jou spel wag: ${name} speel aan.`,
   pauseResuming: 'Ons begin weer…',
+  pauseGoesOn: (t) => `Gaan aan oor ${t}`,
   // (1.12.1) "Speel weer" after a friend match: the same friend, in the same room
   againAsk: (name) => `🔁 Speel weer teen ${name}`,
   againWait: (name) => `Wag vir ${name}…`,
@@ -460,7 +461,7 @@ export const S = {
   nameChange: 'Verander jou bynaam',
   nameHint: (dflt) => `Op die ranglys en vir jou teenstanders (hoogstens 16 letters). Leeg: “${dflt}”.`,
   nameSave: 'Stoor',
-  nameRules: 'Kies ’n speelnaam, nie jou regte naam nie. Geen vloekwoorde, haat of ander mense se name nie: ons haal onvanpaste name af. Deur te stoor, stem jy in.',
+  nameRules: 'Kies ’n speelnaam, nie jou regte naam nie. Geen vloekwoorde, haat of ander mense se name nie: ons haal onvanpaste name af. Deur ’n bynaam te gebruik, stem jy in.',
   nameDefault: (dflt) => `Jy speel weer as “${dflt}”.`,
   boardYou: 'Jy',
   boardHiddenNote: 'Jy is versteek: ander sien jou nie, maar jy sien jou plek.',

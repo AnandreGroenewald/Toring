@@ -797,6 +797,7 @@ function pauseLocal() {
 }
 
 function resumeScenes() {
+  pauseClock(0);
   if (!run.paused) return;
   wakeLoop();
   run.paused = false;
@@ -828,10 +829,33 @@ function resumeNow() {
 
 let resumeFallback = 0;
 let resumeCounting = false;
+let pauseTick = 0;
+/**
+ * (1.12.1) A pause for both: the time left until the room goes on by itself, on the pause card ("Gaan aan oor
+ * 0:42"). `ms` from the room's 'paused' (also after coming back from a dropped connection); 0 = hide it.
+ */
+function pauseClock(ms) {
+  clearInterval(pauseTick);
+  pauseTick = 0;
+  ui.setPauseTimer(null);
+  if (!(ms > 0)) return;
+  const endAt = Date.now() + ms;
+  const show = () => {
+    const left = Math.ceil((endAt - Date.now()) / 1000);
+    if (!run.paused || resumeCounting || left <= 0) {
+      pauseClock(0);
+      return false;
+    }
+    ui.setPauseTimer(S.pauseGoesOn(`${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`));
+    return true;
+  };
+  if (show()) pauseTick = setInterval(show, 250);
+}
 /** (1.12.1) The 3-2-1 back after a pause for both (the same moment in both games), then the tower goes on. */
 function resumeCountdown(ms) {
   clearTimeout(resumeFallback);
   if (!run.paused || resumeCounting) return;
+  pauseClock(0);
   resumeCounting = true;
   let n = Math.max(1, Math.round(ms / 1000));
   ui.setPauseCount(String(n));
@@ -861,7 +885,9 @@ function resumeCountdown(ms) {
 bus.on('duel:paused', (e) => {
   if (run.mode !== 'duel' || !e) return;
   if (!run.paused) pauseLocal();
-  if (run.paused) ui.setPauseNote(e.mine ? S.pauseBothMine(e.left) : S.pauseBothTheirs(e.name || S.duelSomeone));
+  if (!run.paused) return;
+  ui.setPauseNote(e.mine ? S.pauseBothMine(e.left) : S.pauseBothTheirs(e.name || S.duelSomeone));
+  pauseClock(e.ms);
 });
 bus.on('duel:nopause', (e) => {
   if (run.paused) ui.setPauseNote(e?.left === 0 ? S.pauseNoneLeft(e?.name || S.duelSomeone) : S.pauseOnlyMine(e?.name || S.duelSomeone));

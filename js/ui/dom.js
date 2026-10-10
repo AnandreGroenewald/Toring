@@ -1251,6 +1251,7 @@ export function createUI(bus) {
       h('h2', { text: S.paused }),
       // (1.12.1) a friend match: whose pause it is (both games wait), and the 3-2-1 back
       h('p', { class: 'pause-note', role: 'status', 'aria-live': 'polite', text: note, hidden: !note }),
+      h('p', { class: 'pause-timer', hidden: true }),
       h('p', { class: 'pause-count', 'aria-live': 'assertive', hidden: true }),
       h('p', { class: 'saying-line', text: localSaying(pauseSaying()) }),
       // before the first drop nothing counts yet, so no warning
@@ -1276,6 +1277,14 @@ export function createUI(bus) {
   /** (1.12.1) The pause card's line: whose pause it is, pauses left (or none). */
   function setPauseNote(text) {
     const el = screens.pause.querySelector('.pause-note');
+    if (!el) return;
+    el.textContent = text || '';
+    el.hidden = !text;
+  }
+
+  /** (1.12.1) A pause for both: how long until it goes on by itself ("Gaan aan oor 0:42"; not read out each second). */
+  function setPauseTimer(text) {
+    const el = screens.pause.querySelector('.pause-timer');
     if (!el) return;
     el.textContent = text || '';
     el.hidden = !text;
@@ -2284,6 +2293,7 @@ export function createUI(bus) {
     setKeyboard,
     setConnChip,
     setPauseNote,
+    setPauseTimer,
     setPauseCount,
     setAgain,
     setBoardOn,
