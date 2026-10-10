@@ -11,12 +11,13 @@ const WEEK_SHIELD_MAX = WEEK.shieldMax;
 const WEEK_SHIELD_PRICE = WEEK.shieldPrice;
 import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO, COSMETIC_INFO } from '../core/strings.js';
 import { COIN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic } from '../core/economy.js';
-import { EMOTES } from '../config.js';
+import { EMOTES, EMOTE_PICKS } from '../config.js';
 import { fmtM, fmtInt, fmtClock, fmtDuration, dayName, monthName } from '../core/format.js';
 import { shareResult } from '../core/share.js';
 import { visitorResultLine } from '../core/visitorrules.js';
 import { sayingOfTheDay, resultSaying, pauseSaying } from '../core/sayings.js';
 import { getLanguage, localSaying } from '../core/i18n.js';
+import { SPONSOR } from '../sponsorConfig.js';
 import { opaqueBox, headOf, accessoryPlace } from '../core/emojifit.js';
 import { audio, haptics } from '../audio.js';
 
@@ -154,6 +155,7 @@ export function createUI(bus) {
     sayingRO: null,      // watches the menu gap that holds the saying of the day
     city: null,          // the Stapelstad skyline model (js/core/skyline.js) of the latest menu/results
     cityIO: null,        // starts the 'rise' animation when the strip scrolls into view
+    kbScroll: null,      // [box, scrollTop] of what moved up for the keyboard (put back when it goes)
   };
 
   // --- Static structure ----------------------------------------------------
@@ -171,6 +173,7 @@ export function createUI(bus) {
     lang: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-lang-title', tabindex: '-1' }),
     board: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-board-title', tabindex: '-1' }),
     remind: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-remind-title', tabindex: '-1' }),
+    name: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-name-title', tabindex: '-1' }),
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -190,6 +193,19 @@ export function createUI(bus) {
     h('span', { class: 'spinner small', 'aria-hidden': 'true' }),
     h('span', { class: 'search-txt', text: S.duelSearchChip }),
     h('button', { type: 'button', class: 'search-stop', 'aria-label': S.duelSearchStop, title: S.duelSearchStop, onclick: () => { audio.play('click'); bus.emit('ui:duel-search-stop'); } }, icon('close')));
+  // (1.12.1, the owner: "when the emoji menu is open it should not take it as a drop") while the tray is open, an
+  // invisible layer over the game takes a tap anywhere else: it closes the tray, and the block stays on the hook
+  const emoteShield = h('div', { class: 'emote-shield', 'aria-hidden': 'true', hidden: true });
+  emoteShield.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    clearTimeout(st.emoteClose);
+    emoteBar.classList.remove('open');
+    renderEmotes();
+  });
+  // (1.12.1) a live match whose connection (or the other player's) went: one line over the game until it is back
+  const connChip = h('div', { class: 'conn-chip', role: 'status', 'aria-live': 'polite', hidden: true },
+    h('span', { class: 'spinner small', 'aria-hidden': 'true' }), h('span', { class: 'conn-txt' }));
   let punishAt = 0;        // when the strip appeared (a tap right after it was meant for the tower)
   let punishPick = null;   // (n) => choose option n (keys 1-4) while the strip is up
   // 1.8 power-ups: round buttons on the right edge; only the buttons take taps (the rest drops a block)
@@ -198,7 +214,7 @@ export function createUI(bus) {
   // buttons take taps: a tap anywhere else still drops a block)
   const emoteBar = h('div', { class: 'emote-bar', role: 'group', 'aria-label': S.emoteLabel, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, pauseBtn, punishBar, tutorBar, searchChip, powerTray, emoteBar, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // Measures env(safe-area-inset-*) so layout() can work out how much of each
@@ -268,6 +284,7 @@ export function createUI(bus) {
 
   function showScreen(name) {
     st.screen = name;
+    if (name) st.revealing = false;
     bus.emit('ui:view');
     for (const [k, el] of Object.entries(screens)) {
       setOn(el, k === name);
@@ -292,6 +309,14 @@ export function createUI(bus) {
     tutorBar.classList.toggle('is-away', st.screen !== 'game' || !!st.modal);
     // the search chip: over the game and its results only
     searchChip.hidden = !st.searchOn || !!st.modal || (st.screen !== 'game' && st.screen !== 'results');
+    connChip.hidden = !st.connText || (st.screen !== 'game' && st.screen !== 'pause');
+  }
+
+  /** (1.12.1) The connection notice over a live match (`text`), or none. */
+  function setConnChip(text) {
+    st.connText = text || null;
+    connChip.querySelector('.conn-txt').textContent = text || '';
+    syncTutor();
   }
 
   /** "Soek ’n teenstander…" while an Oefen tower is built during the search (on), or not. */
@@ -380,7 +405,10 @@ export function createUI(bus) {
     } else if (st.screen === 'results' || st.screen === 'duel') {
       if (guard()) bus.emit('ui:home');
     } else if (st.screen === 'duelwait') {
-      if (guard()) bus.emit('ui:duel-cancel');
+      // the screen's own way out (what its ✕ does); none during the 3-2-1: Back can't leave a match just found
+      if (st.waitExit && guard()) bus.emit(st.waitExit);
+    } else if (!st.screen && st.revealing) {
+      // a fallen tower is being shown and the results come next: Back waits for them (it must not close the app)
     } else {
       return false;
     }
@@ -445,6 +473,43 @@ export function createUI(bus) {
     if (!(width > 0) || !(height > 0)) return;
     st.externalLayout = true;
     applyRect(rect.left ?? rect.x ?? 0, rect.top ?? rect.y ?? 0, width, height);
+  }
+
+  /**
+   * (1.12.1) The keyboard is up (on) or gone. main.js keeps the layout as it was while it is up, so the bottom of
+   * the screen lies under it: the open screen or sheet gets room below (--kb) and the box being typed in scrolls
+   * up into sight. Once the keyboard is gone, everything goes back.
+   */
+  function setKeyboard(on) {
+    if (!on) {
+      root.classList.remove('kb');
+      root.style.setProperty('--kb', '0px');
+      for (const [box, top] of st.kbScroll || []) if (box.isConnected) box.scrollTop = top;
+      st.kbScroll = null;
+      return;
+    }
+    const cover = Math.max(0, Math.round(root.getBoundingClientRect().bottom - window.innerHeight));
+    root.style.setProperty('--kb', `${cover}px`);
+    root.classList.add('kb');
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(intoSight);
+  }
+
+  /** The box being typed in, with its hint below, just above the keyboard: what scrolls around it moves up. */
+  function intoSight() {
+    const el = doc.activeElement;
+    if (!el || !root.contains(el) || !root.classList.contains('kb')) return;
+    const target = el.closest('.nick') || el;
+    const limit = window.innerHeight - 20;
+    for (let box = target.parentElement; box && box !== root; box = box.parentElement) {
+      const over = target.getBoundingClientRect().bottom - limit;
+      if (over <= 0) return;
+      const oy = getComputedStyle(box).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight) {
+        st.kbScroll = st.kbScroll || [];
+        if (!st.kbScroll.some(([b]) => b === box)) st.kbScroll.push([box, box.scrollTop]);
+        box.scrollTop += over;
+      }
+    }
   }
 
   function applyMotionClass() {
@@ -714,7 +779,7 @@ export function createUI(bus) {
       // (1.12) the try that counts (the better of two, 🔁 when there were two), and "Nog 'n kans"
       const r = m.best || entry.result || {};
       const rt = m.retry;
-      const price = m.retryPrice || 50;
+      const price = m.retryPrice;   // (1.12.1) the next extra try's: 50, 100, 200, 400; null once all are used
       card.append(
         h('div', { class: 'done-box' },
           h('div', { class: 'done-title' }, emo('✅'), h('span', { text: S.doneToday })),
@@ -722,7 +787,7 @@ export function createUI(bus) {
             emo('🏗️'), ' ', fmtM(r.heightM || 0),
             h('span', { class: 'sep', 'aria-hidden': 'true', text: '·' }),
             emo('⭐'), ' ', fmtInt(r.score || 0),
-            r.retried ? h('span', { class: 'done-retry', title: S.retryMark, 'aria-label': S.retryMark, text: ' 🔁' }) : null),
+            r.retried ? h('span', { class: 'done-retry', title: S.retryMark((r.tries || 2) - 1), 'aria-label': S.retryMark((r.tries || 2) - 1), text: ` 🔁${(r.tries || 2) > 2 ? r.tries - 1 : ''}` }) : null),
           countdownEl()));
       if (rt && rt.status === 'ready') {
         // bought, not played yet: it's the big button now
@@ -731,7 +796,9 @@ export function createUI(bus) {
           button('btn-white btn-mini retry-see', [icon('chart'), h('span', { text: S.seeResult })], () => bus.emit('ui:daily-results'), { nav: false }));
       } else {
         card.append(button('btn-big btn-green', [icon('chart'), h('span', { text: S.seeResult })], () => bus.emit('ui:daily-results')));
-        if (!rt) {
+        if (!price && m.retryMax) {
+          card.append(h('p', { class: 'retry-note', text: S.retryMax }));   // all four used: "Kom môre terug"
+        } else if (price) {
           const short = Math.max(0, price - (m.coins | 0));
           card.append(h('div', { class: 'retry-row' },
             button(`btn-white btn-mini retry-buy${short ? ' is-short' : ''}`,
@@ -895,7 +962,7 @@ export function createUI(bus) {
         }, { nav: false }),
         st.howtoLesson ? null : h('button', { type: 'button', class: 'sheet-link lesson-link', text: `🎓 ${S.lessonTry}`, onclick: () => { audio.play('click'); closeModal(); bus.emit('ui:lesson'); } }),
         // the privacy policy, linked from inside the game too (Google Play asks for that)
-        h('a', { class: 'sheet-link', href: 'privaatheid.html', target: '_blank', rel: 'noopener', text: S.privacyPolicy })));
+        h('a', { class: 'sheet-link', href: getLanguage() === 'en' ? 'privacy.html' : 'privaatheid.html', target: '_blank', rel: 'noopener', text: S.privacyPolicy })));
     modals.howto.replaceChildren(sheet);
   }
 
@@ -975,6 +1042,8 @@ export function createUI(bus) {
         h('p', { class: 'version-note', text: S.versionNote(VERSION) })));
     // the daily reminder (only in the Android app)
     if (st.remindOn) sheet.querySelector('.stats-foot').prepend(button('btn-white', [emo('🔔'), h('span', { text: S.remindButton(st.remindTime) })], () => bus.emit('ui:remind'), { nav: false }));
+    // (1.12.1) your nickname (the ranglys and your opponents see it)
+    sheet.querySelector('.stats-foot').prepend(button('btn-white', [emo('✏️'), h('span', { text: S.nameChange })], () => bus.emit('ui:name', 'stats'), { nav: false }));
     // today's leaderboard (only when the game can reach the server)
     if (st.boardOn) sheet.querySelector('.stats-foot').prepend(button('btn-blue', [emo('🏆'), h('span', { text: S.board })], () => bus.emit('ui:board'), { nav: false }));
     modals.stats.replaceChildren(sheet);
@@ -1175,11 +1244,14 @@ export function createUI(bus) {
   // ---------------------------------------------------------------------------
   // Pause
   // ---------------------------------------------------------------------------
-  function showPause({ mode, started = true } = {}) {
+  function showPause({ mode, started = true, note = '' } = {}) {
     if (st.modal) closeModal();
     const card = h('div', { class: 'card pause-card' },
       h('div', { class: 'pause-ic', 'aria-hidden': 'true' }, icon('pause')),
       h('h2', { text: S.paused }),
+      // (1.12.1) a friend match: whose pause it is (both games wait), and the 3-2-1 back
+      h('p', { class: 'pause-note', role: 'status', 'aria-live': 'polite', text: note, hidden: !note }),
+      h('p', { class: 'pause-count', 'aria-live': 'assertive', hidden: true }),
       h('p', { class: 'saying-line', text: localSaying(pauseSaying()) }),
       // before the first drop nothing counts yet, so no warning
       mode === 'daily' && started ? h('p', { class: 'warn' }, emo('⚠️'), h('span', { text: S.quitWarnDaily })) : null,
@@ -1188,6 +1260,34 @@ export function createUI(bus) {
       h('div', { class: 'dock' }, toggleBtns({ contrast: true })));
     screens.pause.replaceChildren(card);
     showScreen('pause');
+  }
+
+  /** (1.12.1) "Speel weer" after a friend match: waiting for them, they want to, starting, or they went. */
+  function setAgain(state, name) {
+    const b = screens.results.querySelector('.btn-duel-again');
+    const label = b?.querySelector('span');
+    const text = { asked: S.againWait(name), they: S.againThey(name), both: S.againStarting, gone: S.againGone(name) }[state];
+    if (!b || !label || !text) return;
+    label.textContent = text;
+    b.classList.toggle('is-waiting', state === 'asked' || state === 'both');
+    b.classList.toggle('is-calling', state === 'they');
+  }
+
+  /** (1.12.1) The pause card's line: whose pause it is, pauses left (or none). */
+  function setPauseNote(text) {
+    const el = screens.pause.querySelector('.pause-note');
+    if (!el) return;
+    el.textContent = text || '';
+    el.hidden = !text;
+  }
+
+  /** (1.12.1) The 3-2-1 back on the pause card (a pause for both ends at the same moment in both games). */
+  function setPauseCount(text) {
+    const el = screens.pause.querySelector('.pause-count');
+    if (!el) return;
+    el.textContent = text || '';
+    el.hidden = !text;
+    for (const b of screens.pause.querySelectorAll('.pause-card .btn')) b.disabled = !!text;
   }
 
   // ---------------------------------------------------------------------------
@@ -1356,6 +1456,17 @@ export function createUI(bus) {
 
   /** The nickname was saved (or refused by the name rules). */
   function setDuelName({ ok, name } = {}) {
+    // (1.12.1) the name sheet (from the ranglys or Statistiek): saved, it goes back where it came from
+    if (st.modal === 'name' && st.nameMsg?.isConnected) {
+      if (ok) {
+        toast(name ? `✓ ${S.duelNickSaved}` : S.nameDefault(st.namePlaceholder), 2200);
+        closeName();
+      } else {
+        st.nameMsg.textContent = S.duelNickBad;
+        st.nameMsg.classList.add('bad');
+      }
+      return;
+    }
     const msg = st.duelMsg;
     if (!msg || !msg.isConnected) return;
     msg.textContent = ok ? (name ? `✓ ${S.duelNickSaved}` : S.duelNickHint) : S.duelNickBad;
@@ -1411,6 +1522,14 @@ export function createUI(bus) {
           o.youCard ? playerCard({ name: o.youName || S.duelYou, card: o.youCard, compact: true }) : null) : null,
         o.note ? h('p', { class: 'duel-sub', text: o.note }) : null,
         h('p', { class: 'vs-count', 'data-duel-count': '', 'aria-live': 'assertive' }));
+    } else if (o.state === 'invite') {
+      // (1.12.1) a friend's live link: who invites and which mode, then "Speel" or "Sorry, besig nou"
+      kids.push(h('p', { class: 'vs-badge' }, emo('⚔️')),
+        h('h2', { class: 'vs-title', text: S.duelLinkTitle(o.oppName || S.duelSomeone) }),
+        o.mode ? modeLine(o.mode) : null,
+        h('p', { class: 'duel-sub', text: S.inviteSub }),
+        button('btn-big btn-green', [icon('play'), h('span', { text: S.invitePlay })], () => bus.emit('ui:invite-yes')),
+        button('btn-white btn-busy', [emo('😅'), h('span', { text: S.inviteBusy })], () => bus.emit('ui:invite-no')));
     } else if (o.state === 'link') {
       kids.push(h('p', { class: 'vs-badge' }, emo('⚔️')),
         h('h2', { class: 'vs-title', text: S.duelLinkTitle(o.oppName || S.duelSomeone) }),
@@ -1423,11 +1542,12 @@ export function createUI(bus) {
         button('btn-white', [icon('again'), h('span', { text: S.back })], () => bus.emit('ui:duel')));
     }
     // the website on an Android phone: a challenge link can go on in the app
-    if (o.appLink && (o.state === 'link' || o.state === 'search')) {
+    if (o.appLink && (o.state === 'link' || o.state === 'search' || o.state === 'invite')) {
       kids.push(h('a', { class: 'btn btn-white app-open', href: o.appLink, onclick: () => bus.emit('ui:app-open') }, emo('📲'), h('span', { text: S.openInApp })));
     }
-    // the ✕ top right does what the screen's own way out does (not during the 3-2-1)
-    const exit = { lobby: 'ui:duel-cancel', search: 'ui:duel-cancel', room: 'ui:duel-cancel', link: 'ui:home', error: 'ui:duel' }[o.state];
+    // the ✕ top right (and Back) does what the screen's own way out does (not during the 3-2-1)
+    const exit = o.state === 'versus' ? null : ({ lobby: 'ui:duel-cancel', search: 'ui:duel-cancel', room: 'ui:duel-cancel', link: 'ui:home', invite: 'ui:home' }[o.state] || 'ui:duel');
+    st.waitExit = exit;
     screens.duelwait.replaceChildren(h('div', { class: 'card duel-wait' }, exit ? closeX(() => bus.emit(exit)) : null, kids));
     showScreen('duelwait');
   }
@@ -1595,7 +1715,7 @@ export function createUI(bus) {
       h('p', { class: 'res-sub', text: why }));
   }
 
-  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null } = {}) {
+  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null } = {}) {
     if (st.modal) closeModal();
     const r = result || {};
     const m = mode || r.mode || 'practice';
@@ -1607,7 +1727,7 @@ export function createUI(bus) {
 
     // a new record is the headline, whatever ended the run
     const head = duel ? duelHead(duel) : h('div', { class: 'res-head' },
-      h('div', { class: 'chip' }, emo(daily ? '🏗️' : '🧱'), h('span', { text: daily ? `${S.dailyN(r.dayNumber ?? '?')}${r.retry || r.retried ? ` · 🔁 ${S.retryHead}` : ''}` : S.practiceLabel })),
+      h('div', { class: 'chip' }, emo(daily ? '🏗️' : '🧱'), h('span', { text: daily ? `${S.dailyN(r.dayNumber ?? '?')}${r.tryNo ? ` · 🔁 ${S.retryHead(r.tryNo)}` : r.retry || r.retried ? ` · 🔁 ${S.retryTries(r.tries || 2)}` : ''}` : S.practiceLabel })),
       h('h2', { class: 'res-title' }, emo(isNewBest ? '🏆' : why.emoji), h('span', { text: isNewBest ? S.newRecord : why.title })),
       h('p', { class: 'res-sub', text: isNewBest ? `${why.emoji} ${why.title}` : why.sub }),
       // a saying for the outcome (same for everyone with the same daily seed and outcome); not part of the share text
@@ -1680,7 +1800,7 @@ export function createUI(bus) {
     // what next: another match; or (after a tower) the two ways to keep playing, side by side as on the
     // start screen (testers: a lone "Oefen" floating over the card looked like the only thing left)
     wrap.append(duel
-      ? h('div', { class: 'btn-row' }, button('btn-purple btn-duel-again', h('span', { text: S.duelAgain }), () => bus.emit('ui:duel-again')))
+      ? h('div', { class: 'btn-row' }, button('btn-purple btn-duel-again', h('span', { text: again ? S.againAsk(again.name) : S.duelAgain }), () => bus.emit('ui:duel-again')))
       : h('div', { class: 'play-row res-play' },
         button('btn-teal btn-practice',
           [icon('again'), h('span', { class: 'btn-txt' }, h('span', { text: daily ? S.practice : S.practiceAgain }), h('span', { class: 'btn-sub', text: S.practiceSubShort }))],
@@ -1764,6 +1884,49 @@ export function createUI(bus) {
     st.remindTime = time || null;
   }
 
+  /**
+   * (1.12.1) Your nickname, from the ranglys or Statistiek (before, it could only be changed in the
+   * Uitdagersreeks). `back`: what to show again once it is saved or closed.
+   */
+  function showName({ name = '', placeholder = '', back = null } = {}) {
+    st.nameBack = back;
+    st.namePlaceholder = placeholder;
+    const input = h('input', {
+      class: 'nick-input', type: 'text', maxlength: '16', autocomplete: 'nickname', autocapitalize: 'words',
+      spellcheck: 'false', enterkeyhint: 'done', 'aria-label': S.duelNick, placeholder,
+    });
+    input.value = name || '';
+    const msg = h('p', { class: 'nick-msg', role: 'status', 'aria-live': 'polite', text: S.nameHint(placeholder) });
+    st.nameMsg = msg;
+    const save = () => bus.emit('ui:duel-name', input.value);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        save();
+      }
+    });
+    input.addEventListener('input', () => {
+      msg.textContent = S.nameHint(placeholder);
+      msg.classList.remove('bad');
+    });
+    modals.name.replaceChildren(h('div', { class: 'card sheet name-sheet' },
+      closeX(() => closeName()),
+      h('div', { class: 'sheet-head' }, emo('✏️'), h('h2', { id: 'stapel-name-title', text: S.duelNick })),
+      h('div', { class: 'sheet-body' }, h('div', { class: 'nick' }, input, msg)),
+      h('div', { class: 'sheet-foot name-foot' },
+        button('btn-blue', h('span', { text: S.nameSave }), save, { nav: false }),
+        button('btn-white', h('span', { text: S.close }), () => closeName(), { nav: false }))));
+    openModal('name');
+    setTimeout(() => { if (st.modal === 'name') input.focus(); }, 120);   // the keyboard comes up: it's for typing
+  }
+
+  function closeName() {
+    const back = st.nameBack;
+    st.nameBack = null;
+    closeModal();
+    if (typeof back === 'function') back();
+  }
+
   /** "Moet ek jou elke dag herinner?": three times, and no (or off, once it is on). Emits 'ui:remind-pick'. */
   function showReminder({ time = null } = {}) {
     const pick = (v) => {
@@ -1812,7 +1975,7 @@ export function createUI(bus) {
     const MEDAL = ['🥇', '🥈', '🥉'];
     const row = (t) => h('li', { class: `board-row${t.you ? ' is-you' : ''}` },
       h('span', { class: 'board-rank' }, t.rank <= 3 ? [emo(MEDAL[t.rank - 1]), h('span', { class: 'sr', text: `#${t.rank}` })] : h('b', { text: `#${t.rank}` })),
-      h('span', { class: 'board-name', text: `${t.you ? `${t.name} (${S.boardYou})` : t.name}${t.retried ? ' 🔁' : ''}`, title: t.retried ? S.retryMark : null }),
+      h('span', { class: 'board-name', text: `${t.you ? `${t.name} (${S.boardYou})` : t.name}${t.retried ? ` 🔁${(t.tries || 2) > 2 ? t.tries - 1 : ''}` : ''}`, title: t.retried ? S.retryMark((t.tries || 2) - 1) : null }),
       h('b', { class: 'board-h', text: fmtM(t.heightM) }));
     let body;
     if (loading) body = h('p', { class: 'board-msg', text: S.boardLoading });
@@ -1848,6 +2011,10 @@ export function createUI(bus) {
       h('div', { class: 'sheet-foot board-foot' },
         h('label', { class: 'board-toggle' }, toggle, h('span', { text: S.boardShowMe })),
         h('p', { class: 'note', role: 'status', text: note }),
+        button('btn-white btn-mini board-name-btn', [emo('✏️'), h('span', { text: S.nameChange })], () => bus.emit('ui:name', 'board'), { nav: false }),
+        // (1.12.1) names are public here: a way to report an unsuitable one (Google Play asks for one)
+        SPONSOR.contactEmail ? h('p', { class: 'board-report' }, h('span', { text: `${S.boardReport} ` }),
+          h('a', { href: `mailto:${SPONSOR.contactEmail}?subject=${encodeURIComponent('Stapel ranglys')}`, text: SPONSOR.contactEmail })) : null,
         button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false }))));
     if (st.modal !== 'board') openModal('board');
     else if (focused) modals.board.querySelector(`.${focused}`)?.focus();
@@ -1875,9 +2042,11 @@ export function createUI(bus) {
     showScreen('game');
   }
 
+  /** The game is over and its fall is being shown (the results come next): no screen, and Back waits. */
   function hideAll() {
     if (st.modal) closeModal();
     showScreen(null);
+    st.revealing = true;
   }
 
   /** "Eerste by 20 m! Kies ’n straf vir Anna:" and the four punishments; DUEL.chooseMs to pick one. */
@@ -1936,15 +2105,17 @@ export function createUI(bus) {
     const o = st.emotes;
     if (!o || st.screen !== 'game') {
       emoteBar.hidden = true;
+      emoteShield.hidden = true;
       return;
     }
     const open = emoteBar.classList.contains('open');
+    emoteShield.hidden = !open;
     const tap = (fn) => (ev) => {
       ev.stopPropagation();
       audio.play('click');
       fn();
     };
-    const picks = Object.entries(EMOTES).map(([id, e]) => h('button', {
+    const picks = EMOTE_PICKS.map((id) => [id, EMOTES[id]]).map(([id, e]) => h('button', {
       type: 'button', class: 'emote-pick', 'aria-label': e,
       onclick: tap(() => {
         emoteBar.classList.remove('open');
@@ -1990,8 +2161,13 @@ export function createUI(bus) {
     if (!items || !items.length || st.screen !== 'game') {
       powerTray.hidden = true;
       powerTray.replaceChildren();
+      st.trayKey = null;
       return;
     }
+    // (1.12.1) the same buttons as now: nothing to do (the tray was rebuilt with every new block)
+    const key = JSON.stringify(items);
+    if (key === st.trayKey && !powerTray.hidden) return;
+    st.trayKey = key;
     powerTray.replaceChildren(...items.filter((it) => POWERUP_INFO[it.id]).map((it) => {
       const info = POWERUP_INFO[it.id];
       return h('button', {
@@ -2103,6 +2279,12 @@ export function createUI(bus) {
     view: () => ({ screen: st.screen, modal: st.modal }),
     setReminderInfo,
     showReminder,
+    showName,
+    setKeyboard,
+    setConnChip,
+    setPauseNote,
+    setPauseCount,
+    setAgain,
     setBoardOn,
     showBoard,
     showInGame,

@@ -8,7 +8,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const site = join(here, '..');
 const www = join(here, 'www');
 // no sw.js (the files are in the app), no admin or sponsor-sales pages (those stay on the website)
-const FILES = ['index.html', 'manifest.webmanifest', 'sponsors.json', 'privaatheid.html', 'terme.html'];
+// (1.12.1) the sponsorship terms stay out until sponsor sales open (the page is still a template)
+const FILES = ['index.html', 'manifest.webmanifest', 'sponsors.json', 'privaatheid.html', 'privacy.html'];
 const DIRS = ['css', 'js', 'lib', 'icons'];
 
 rmSync(www, { recursive: true, force: true });

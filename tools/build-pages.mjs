@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = join(root, 'pages-dist');
-const FILES = ['index.html', 'admin.html', 'adverteer.html', 'privaatheid.html', 'terme.html', 'manifest.webmanifest', 'sponsors.json', 'sw.js'];
+const FILES = ['index.html', 'admin.html', 'adverteer.html', 'privaatheid.html', 'privacy.html', 'terme.html', 'manifest.webmanifest', 'sponsors.json', 'sw.js'];
 const DIRS = ['css', 'js', 'lib', 'icons'];
 
 rmSync(out, { recursive: true, force: true });

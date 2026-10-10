@@ -7,7 +7,7 @@ import { defaultNicknameFor, cleanNickname } from '../js/core/duel.js';
 
 const API = 'https://borge.example/';
 const daily = { mode: 'daily', dateKey: '2026-10-08', dayNumber: 3, heightM: 37.46, blocksDropped: 20, durationMs: 90321 };
-const answer = { players: 3, top: [{ rank: 1, name: 'Anna', heightM: 45, you: false, retried: true }, { rank: 2, name: 'Bennie', heightM: 37.5, you: true, retried: false }], you: { rank: 2, heightM: 37.5, hidden: false, retried: false } };
+const answer = { players: 3, top: [{ rank: 1, name: 'Anna', heightM: 45, you: false, retried: true, tries: 3 }, { rank: 2, name: 'Bennie', heightM: 37.5, you: true, retried: false, tries: 1 }], you: { rank: 2, heightM: 37.5, hidden: false, retried: false, tries: 1 } };
 
 function fakeFetch(reply, seen = []) {
   return async (url, init) => {
@@ -25,6 +25,9 @@ test('the server answer is checked: odd fields dropped, names cut, junk refused'
   assert.equal(odd.top[0].name.length, 24);
   assert.equal(odd.top[0].heightM, 0);
   assert.equal(odd.you, null);
+  // (1.12.1) the tries: an older server says only `retried` (2 then); junk counts are ignored
+  const older = cleanBoard({ players: 1, top: [{ rank: 1, name: 'A', heightM: 3, retried: true }, { rank: 2, name: 'B', heightM: 2, tries: 9 }] });
+  assert.deepEqual(older.top.map((t) => t.tries), [2, 1]);
 });
 
 test('posting a daily: the right fields, as plain text (no preflight); practice and empty games are not posted', async () => {
@@ -46,6 +49,10 @@ test('posting a daily: the right fields, as plain text (no preflight); practice 
   const again = [];
   await postBoard({ apiUrl: API, result: { ...daily, retry: true }, player: 'abcdefghijklmnop', name: 'Bennie', fetchImpl: fakeFetch(answer, again) });
   assert.equal(JSON.parse(again[0].init.body).retry, true);
+  assert.equal(JSON.parse(again[0].init.body).tries, 2, 'a second try');
+  // (1.12.1) up to 4 extra tries: how many were played goes along (the server counts them)
+  await postBoard({ apiUrl: API, result: { ...daily, retry: true, tries: 4 }, player: 'abcdefghijklmnop', name: 'Bennie', fetchImpl: fakeFetch(answer, again) });
+  assert.equal(JSON.parse(again[1].init.body).tries, 4);
 });
 
 test('reading the board: with or without the player; offline is null', async () => {

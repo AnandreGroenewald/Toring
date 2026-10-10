@@ -78,6 +78,7 @@ const HALF_PI = Math.PI / 2;
 const TWO_PI = Math.PI * 2;
 
 // Blok vir Blok
+const PROGRESS_EVERY_MS = 1000;   // (1.12.1) a daily's progress is saved at most this often
 const BOT_AIM_ERROR = 0.32;      // Robot Rikus misses the middle this often (autoplay's aim error)
 const BOT_THINK_MS = [900, 2200]; // ...after looking at the swing this long
 const BOT_SABOTAGED_ERROR = { fog: 0.85, heat: 0.6, rain: 0.45 };   // ...and this often with a sabotage on his block
@@ -631,8 +632,10 @@ export class GameScene extends Phaser.Scene {
       window.__stapel = window.__stapel || {};
       window.__stapel.scene = this;
     }
-    // Blok vir Blok: ready for the first turn (js/duel.js sends it now, and whatever came meanwhile)
+    // Blok vir Blok: ready for the first turn (js/duel.js sends it now, and whatever came meanwhile); Wedloop:
+    // ready too (a match decided during the 3-2-1 ends now)
     if (this.turns) bus.emit('turns:ready');
+    else if (this.duel) bus.emit('duel:ready');
   }
 
   buildWeather() {
@@ -1168,6 +1171,7 @@ export class GameScene extends Phaser.Scene {
       this.visitorsFailed(err);
     }
     this.updateFloodTag(time);
+    if (this.progressDue && this.time.now - this.progressAt >= PROGRESS_EVERY_MS) this.emitProgress();
     this.updateGhostAndAutoplay();
     this.updateWobble(dtS);
     this.emitHud();
@@ -2122,7 +2126,7 @@ export class GameScene extends Phaser.Scene {
     block.pendingRate = false;
     if (this.over) return;   // blocks still tumbling during the reveal don't score
     // (Blok vir Blok sets its cement at the end of each turn, the same in both games)
-    if (r === 'P' && !this.turns) this.lockBelow(block);
+    const locked = r === 'P' && !this.turns ? this.lockBelow(block) : 0;
     if (this.idle) {
       this.combo = r === 'P' ? this.combo + 1 : 0;
       this.effects.rating(block, r, this.combo);
@@ -2150,7 +2154,8 @@ export class GameScene extends Phaser.Scene {
     this.visitorRated(block, r);
     bus.emit('game:rated', { rating: r, combo: this.combo });   // (the lesson, main.js)
 
-    this.coachSay(this.coach.landing(r), COACH.landingDelayMs);
+    // (1.12.1: after the first landing's hint, the first Perfek that sets cement says so)
+    this.coachSay(this.coach.landing(r) || (locked > 0 ? this.coach.cement() : null), COACH.landingDelayMs);
     this.effects.rating(block, r, this.combo);
     // beside the block, rising from below its bottom so it never runs into the rating pop above it
     const x = block.right + 64;
@@ -2199,6 +2204,7 @@ export class GameScene extends Phaser.Scene {
       this.freezeBlock(o, n > 0);
       n++;
     }
+    return n;
   }
 
   markLost(block) {
@@ -2738,6 +2744,11 @@ export class GameScene extends Phaser.Scene {
       this.frozenTopBlock = b;
     }
     if (!quiet && !this.idle && !this.over) audio.play('freeze');
+    // (1.12.1) the first grey blocks of a game: main.js says once ever what grey means
+    if (!this.idle && !this.over && !this.cementSaid) {
+      this.cementSaid = true;
+      bus.emit('game:cement');
+    }
   }
 
   /**
@@ -3293,6 +3304,16 @@ export class GameScene extends Phaser.Scene {
 
   emitProgress() {
     if (this.mode !== 'daily' || this.over) return;
+    // (1.12.1) at most once a second, and never in a landing's frame (the busiest): a save is a whole result
+    // built and the store written. One that has to wait goes from update(); pausing, hiding or closing the
+    // game saves at once (main.js saveProgressNow), and the end of the tower saves its result.
+    const t = this.time.now;
+    if (t - (this.progressAt ?? -1e9) < PROGRESS_EVERY_MS) {
+      this.progressDue = true;
+      return;
+    }
+    this.progressAt = t;
+    this.progressDue = false;
     bus.emit('game:progress', this.buildResult('quit'));
   }
 
@@ -3433,25 +3454,28 @@ export class GameScene extends Phaser.Scene {
   buildRuler(z, bestY) {
     if (this.maxHeightM < 2) return;
     const step = this.maxHeightM > 100 ? 20 : this.maxHeightM > 12 ? 10 : 5;
-    const px = Math.round(24 / z);
+    // (1.12.1) the marks are drawn at a modest size and scaled up for the zoom (24 px on screen at the end): drawn
+    // at 24/z px they were up to 160 px each, all made in one frame, a stall that grew with the tower
+    const PX = 36;
+    const scale = 24 / PX / z;
     const x0 = GAME_W / 2 - 340 / z;
     const g = this.add.graphics().setDepth(DEPTH.fxWorld + 3);
     g.lineStyle(3 / z, 0xffffff, 0.85);
     const style = {
-      fontFamily: FONT, fontSize: `${px}px`, fontStyle: 'bold', color: '#ffffff',
-      stroke: '#1d2b45', strokeThickness: Math.max(3, Math.round(px * 0.18)), resolution: 1,
+      fontFamily: FONT, fontSize: `${PX}px`, fontStyle: 'bold', color: '#ffffff',
+      stroke: '#1d2b45', strokeThickness: Math.max(3, Math.round(PX * 0.18)), resolution: 1,
     };
     for (let m = step; m <= this.maxHeightM; m += step) {
       const y = LAYOUT.baseTopY - m * PX_PER_M;
       g.lineBetween(x0, y, x0 + 26 / z, y);
-      this.add.text(x0 + 32 / z, y, fmtMShort(m), style).setOrigin(0, 0.5).setDepth(DEPTH.fxWorld + 3);
+      this.add.text(x0 + 32 / z, y, fmtMShort(m), style).setOrigin(0, 0.5).setScale(scale).setDepth(DEPTH.fxWorld + 3);
     }
     // dashed line at the best height, flag on the right
     g.lineStyle(4 / z, 0xffe38c, 0.95);
     const dash = 22 / z;
     for (let x = x0; x < GAME_W / 2 + 300 / z; x += dash * 2) g.lineBetween(x, bestY, x + dash, bestY);
-    this.add.text(GAME_W / 2 + 300 / z, bestY, '🏁', { fontSize: `${Math.round(40 / z)}px`, resolution: 1 })
-      .setOrigin(0.5, 1).setDepth(DEPTH.fxWorld + 3);
+    this.add.text(GAME_W / 2 + 300 / z, bestY, '🏁', { fontSize: '60px', resolution: 1 })
+      .setOrigin(0.5, 1).setScale(40 / 60 / z).setDepth(DEPTH.fxWorld + 3);
   }
 
   // -------------------------------------------------------------------------

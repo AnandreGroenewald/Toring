@@ -11,6 +11,11 @@
 // Both use WebSocket hibernation, so a quiet room costs nothing, and both keep the match in memory
 // while it runs, saving only at the moments that matter (start, a height mark, the result, and at
 // most every few seconds): the Workers Free plan allows 100 000 storage writes a day.
+//
+// Protocol 5 (1.12.1): a game whose connection went (Wi-Fi to mobile data) keeps its seat for DUEL.rejoinMs and
+// comes back on a new connection (?rejoin=1, its key), and gets what it missed again; a friend who opens the
+// link sees who invites and may answer "Sorry, besig nou" ('decline'); a finished friend match starts again
+// when both say "Speel weer" ('again'); and in a friend match a pause stops both games ('pause' / 'resume').
 
 import { DUEL, TURNS, EMOTES, EMOTE } from '../../js/config.js';
 import {
@@ -38,6 +43,7 @@ const CHOOSE_WAIT_MS = DUEL.chooseMs + 1500;
 const PROTOCOL_CHOOSE = 2;
 const PROTOCOL_TURNS = 3;   // a game older than this can't play Blok vir Blok: such a room is "gone" for it
 const PROTOCOL_ROUNDS = 4;  // 1.12: Blok vir Blok rondtes (weather and visitors), only when both games know them
+const PROTOCOL_V5 = 5;      // 1.12.1: back after a dropped connection, "Sorry, besig nou", "Speel weer", a pause for both
 
 export const rand32 = () => crypto.getRandomValues(new Uint32Array(1))[0];
 const randFloat = () => rand32() / 4294967296;
@@ -142,6 +148,8 @@ export class MatchRoom {
 
   async load() {
     if (!this.m) this.m = (await this.state.storage.get('m')) || null;
+    // (a room saved before 1.12.1: its Wedloop ends as it always did)
+    if (this.m && this.m.started && this.m.mode !== 'turns' && !this.m.endAt) this.m.endAt = this.m.startAt + DUEL.maxRunMs;
     return this.m;
   }
 
@@ -172,7 +180,7 @@ export class MatchRoom {
     }
     if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') return json(426, { error: 'websocket_expected' });
     const [response, server] = this.upgrade();
-    await this.join(server);
+    await this.join(server, { rejoin: url.searchParams.get('rejoin') === '1' });
     return response;
   }
 
@@ -199,12 +207,19 @@ export class MatchRoom {
     return json(200, { ok: true, seed: this.m.seed, mode: this.m.mode });
   }
 
-  /** A player's socket: a free seat, or "gone" (no such room, full, started or over). */
-  async join(ws) {
+  /**
+   * A player's socket: a free seat, or "gone" (no such room, full, started or over). (1.12.1) A game back
+   * after its connection went (`rejoin`) waits for its hello: its key says which seat is its own.
+   */
+  async join(ws, { rejoin = false } = {}) {
     const m = await this.load();
     const taken = new Set(this.sockets().filter((s) => s !== ws).map(seatOf));
     const seat = !taken.has(0) ? 0 : !taken.has(1) ? 1 : -1;
     this.state.acceptWebSocket(ws);
+    if (rejoin && m && m.started) {
+      ws.serializeAttachment({ seat: -1, hello: false, name: null, rejoin: true });
+      return;
+    }
     if (!m || m.started || m.done) {
       sendJson(ws, { t: 'gone' });
       closeWs(ws, 'gone');
@@ -214,7 +229,8 @@ export class MatchRoom {
     // Both seats taken: this may be a player back on a new connection while their old one still counts
     // (a network change closes it on the phone, not here); their hello's key decides (onMessage).
     ws.serializeAttachment({ seat, hello: false, name: null });
-    sendJson(ws, { t: 'wait' });
+    // (1.12.1) a friend room says who invites, so the friend's game can ask "Speel" or "Sorry, besig nou"
+    sendJson(ws, m.kind === 'friend' && m.host ? { t: 'wait', host: { name: m.host.name, mode: m.mode } } : { t: 'wait' });
   }
 
   async webSocketMessage(ws, data) {
@@ -235,11 +251,24 @@ export class MatchRoom {
     const msg = parseMsg(data, ROOM_MSG_MAX);
     const m = await this.load();
     let seat = seatOf(ws);
-    if (!msg || !m || m.done) return;
+    if (!msg || !m) return;
+    // a finished match hears only "Speel weer" and a game back on a new connection (1.12.1)
+    if (m.done && msg.t !== 'again' && !(msg.t === 'hello' && att(ws).rejoin)) return;
     if (m.mode !== 'turns' && data.length > MSG_MAX) return;   // only a Blok vir Blok report is that long
 
     if (msg.t === 'hello') {
-      if (m.started || att(ws).replaced) return;
+      if (att(ws).rejoin) {
+        await this.rejoin(ws, msg, now);
+        return;
+      }
+      if (m.started || att(ws).replaced) {
+        // (1.12.1) a friend who read the invite while someone else took the seat: the room is gone for them
+        if (m.started && !att(ws).replaced && seatOf(ws) < 0) {
+          sendJson(ws, { t: 'gone' });
+          closeWs(ws, 'gone');
+        }
+        return;
+      }
       // A player back on a new connection (the game's key for this room is the same): their old
       // connection goes and can never start the match, whether or not it ever closed here.
       const key = typeof msg.key === 'string' && SEAT_KEY_RE.test(msg.key) ? msg.key : null;
@@ -250,6 +279,11 @@ export class MatchRoom {
           s.serializeAttachment({ ...att(s), seat: -1, hello: false, key: null, replaced: true });
           closeWs(s, 'replaced');
         }
+      }
+      // (1.12.1) a friend who read the invite first holds no seat yet: a free one now, if there is one
+      if (seat < 0) {
+        const held = new Set(this.sockets().filter((s) => s !== ws).map(seatOf));
+        seat = !held.has(0) ? 0 : !held.has(1) ? 1 : -1;
       }
       if (seat < 0) {   // both seats are someone else's
         sendJson(ws, { t: 'gone' });
@@ -265,12 +299,43 @@ export class MatchRoom {
       }
       // the player card (looks and rank, js/core/economy.js) goes to the other player as known ids only
       ws.serializeAttachment({ seat, hello: true, name: cleanNickname(msg.name) || DEFAULT_NAME, v, card: cleanCard(msg.card), key });
+      // (1.12.1) a friend room: who invites (the friend's game shows it), and a "Sorry, besig nou" that came
+      // while the host's game was away (sharing the link) is passed on now
+      const isHost = !!key && m.host?.key === key;
+      if (m.kind === 'friend' && (!m.host || (m.declines?.length && isHost && v >= PROTOCOL_V5))) {
+        if (!m.host) m.host = { name: cleanNickname(msg.name) || DEFAULT_NAME, key };
+        else {
+          for (const name of m.declines || []) sendJson(ws, { t: 'declined', name });
+          m.declines = [];
+        }
+        await this.save();
+      }
       const both = [this.socketFor(0), this.socketFor(1)];
       if (both.every((s) => s && att(s).hello)) await this.start(now);
       return;
     }
+    if (msg.t === 'decline') {
+      await this.decline(ws, msg);
+      return;
+    }
+    if (msg.t === 'look') {   // (1.12.1) a friend reading the invite: no seat until "Speel" (the link may be a group's)
+      if (!m.started && !att(ws).hello) ws.serializeAttachment({ ...att(ws), seat: -1, look: true });
+      return;
+    }
     if (seat < 0) return;
+    if (msg.t === 'again') {
+      await this.again(seat, now);
+      return;
+    }
     if (!m.started || m.result) return;
+    if (msg.t === 'pause') {
+      await this.pause(seat, now);
+      return;
+    }
+    if (msg.t === 'resume') {
+      if (m.paused) await this.resume(now);
+      return;
+    }
     if (msg.t === 'emote') {   // (1.12) an emoji reaction, in either mode
       this.onEmote(seat, msg, now);
       return;
@@ -306,7 +371,11 @@ export class MatchRoom {
     const other = this.socketFor(1 - seat);
     // (1.11: the player's hearts too, so the other one sees them; older games send none)
     const lives = Number.isInteger(msg.lives) && msg.lives >= 0 && msg.lives <= 9 ? msg.lives : null;
-    if (other && msg.t === 'state') sendJson(other, { t: 'opp', h: round1(h), best: round1(ref.best(seat)), ...(lives !== null ? { lives } : {}) });
+    const opp = { t: 'opp', h: round1(h), best: round1(ref.best(seat)), ...(lives !== null ? { lives } : {}) };
+    if (msg.t === 'state') {
+      if (other) sendJson(other, opp);
+      (m.last ||= [null, null])[seat] = opp;   // (1.12.1) what the other game is told again when it comes back
+    }
     let important = false;
     for (const e of events) {
       if (e.type === 'attack') {
@@ -314,9 +383,11 @@ export class MatchRoom {
         important = true;
         const c = { m: e.m, seat: e.from, def: e.kind, at: now };
         const from = this.socketFor(e.from);
-        if (from && version(from) >= PROTOCOL_CHOOSE) {
+        // (1.12.1: a game away for a moment chooses when it's back, within the same time)
+        const asks = from ? version(from) >= PROTOCOL_CHOOSE : !!m.away?.[e.from] && (m.v?.[e.from] || 1) >= PROTOCOL_V5;
+        if (asks) {
           (m.pending ||= []).push(c);
-          sendJson(from, { t: 'choose', m: e.m, def: e.kind });
+          this.tell(e.from, { t: 'choose', m: e.m, def: e.kind });
         } else {
           this.punish(c, e.kind);   // an older game never asks: the default goes at once
         }
@@ -347,6 +418,37 @@ export class MatchRoom {
     if (other) sendJson(other, { t: 'emote', e });
   }
 
+  /**
+   * (1.12.1) A message for a seat. To a game that can come back on a new connection (protocol 5) it is also
+   * kept, and sent again when it does: everything that matters in a Wedloop (choose, attack, sent, the
+   * result); in Blok vir Blok the messages of this turn and the one before (a report carries the tower).
+   */
+  tell(seat, msg, { quiet = false } = {}) {
+    const m = this.m;
+    if ((m.v?.[seat] || 1) >= PROTOCOL_V5) {
+      const log = (m.log ||= [[], []]);
+      const n = Number.isInteger(msg.n) ? msg.n : m.tref?.n || 0;
+      log[seat].push({ n, msg });
+      if (m.mode === 'turns') log[seat] = log[seat].filter((x) => x.n >= (m.tref?.n || 0) - 1);
+    }
+    const s = quiet ? null : this.socketFor(seat);   // (quiet: kept only, it went with the start)
+    if (s) sendJson(s, msg);
+  }
+
+  /** (1.12.1) The turn a joker message belongs to, for a game of protocol 5 (older ones get the message as before). */
+  turnTag(seat, n) {
+    return (this.m.v?.[seat] || 1) >= PROTOCOL_V5 ? { n } : {};
+  }
+
+  /** (1.12.1) True the first time a turn's 'go', 'drop' or 'visit' is passed on (a game back sends its own again). */
+  firstRelay(kind, n) {
+    const m = this.m;
+    if (!m.relayed || m.relayed.n !== n) m.relayed = { n };
+    if (m.relayed[kind]) return false;
+    m.relayed[kind] = true;
+    return true;
+  }
+
   /** The chooser's punishment goes to the other player ('attack'), and back to them as 'sent'. */
   punish(c, kind) {
     const m = this.m;
@@ -355,8 +457,8 @@ export class MatchRoom {
     const from = this.socketFor(c.seat);
     // a game older than protocol 2 only takes the mark's default (and the chooser hears what went)
     const k = !to || kind === c.def || version(to) >= PROTOCOL_CHOOSE ? kind : c.def;
-    if (to) sendJson(to, { t: 'attack', m: c.m, kind: k });
-    if (from) sendJson(from, { t: 'sent', m: c.m, kind: k });
+    this.tell(1 - c.seat, { t: 'attack', m: c.m, kind: k });
+    this.tell(c.seat, { t: 'sent', m: c.m, kind: k });
   }
 
   /** Choices older than CHOOSE_WAIT_MS get their default. True when something changed. */
@@ -370,25 +472,191 @@ export class MatchRoom {
     const m = await this.load();
     const seat = seatOf(ws);
     if (!m || seat < 0) return;
-    if (m.mode === 'turns') {
-      if (m.started && !m.result) {
-        const ref = createTurnReferee({ init: m.tref });
-        const [e] = ref.leave(seat);
-        m.tref = ref.snapshot();
-        if (e) await this.decidedTurns(e, this.now());
+    const now = this.now();
+    if (m.started && !m.result) {
+      // (1.12.1) a game that can come back (protocol 5) keeps its seat a while: a network change, a tunnel.
+      // The other game hears it; a Blok vir Blok turn of theirs waits for them.
+      if (version(ws) >= PROTOCOL_V5) {
+        (m.away ||= [0, 0])[seat] = now + DUEL.rejoinMs;
+        const other = this.socketFor(1 - seat);
+        if (other && version(other) >= PROTOCOL_V5) sendJson(other, { t: 'away' });
+        if (m.mode === 'turns' && m.tref?.seat === seat) m.deadline = Math.max(m.deadline || 0, m.away[seat] + 1000);
         await this.save();
+        await this.armAlarm(now);
+        return;
       }
+      await this.leaveSeat(seat, now);
+      await this.save();
       return;
     }
-    if (m.started && !m.result) {
-      const ref = createReferee({ init: m.ref });
+    // (1.12.1) a finished friend match: the other game hears this player went (no "Speel weer" with them)
+    if (m.result && m.kind === 'friend') {
+      if (m.again) m.again[seat] = false;
+      const other = this.socketFor(1 - seat);
+      if (other && version(other) >= PROTOCOL_V5) sendJson(other, { t: 'bye' });
+    }
+  }
+
+  /** A player left the match (or didn't come back in time): the other one wins. */
+  async leaveSeat(seat, now) {
+    const m = this.m;
+    if (m.mode === 'turns') {
+      const ref = createTurnReferee({ init: m.tref });
       const [e] = ref.leave(seat);
-      m.ref = ref.snapshot();
-      m.ends[seat] = 'quit';
-      m.ends[1 - seat] = 'stop';
-      if (e) await this.decided(ref, e, this.now());
+      m.tref = ref.snapshot();
+      if (e) await this.decidedTurns(e, now);
+      return;
+    }
+    const ref = createReferee({ init: m.ref });
+    const [e] = ref.leave(seat);
+    m.ref = ref.snapshot();
+    m.ends[seat] = 'quit';
+    m.ends[1 - seat] = 'stop';
+    if (e) await this.decided(ref, e, now);
+  }
+
+  /**
+   * (1.12.1) A game back on a new connection (its key): its seat again, where the match is now, and what it
+   * may have missed. Its old connection, if this room never heard it close, goes (and never counts as leaving).
+   */
+  async rejoin(ws, msg, now) {
+    const m = this.m;
+    const key = typeof msg.key === 'string' && SEAT_KEY_RE.test(msg.key) ? msg.key : null;
+    const seat = key && Array.isArray(m.keys) ? m.keys.indexOf(key) : -1;
+    const v = Math.max(1, Math.min(99, Math.floor(Number(msg.v)) || 1));
+    if (seat < 0 || v < PROTOCOL_V5 || (m.done && !m.result)) {
+      ws.serializeAttachment({ ...att(ws), rejoin: false });
+      sendJson(ws, { t: 'gone' });
+      closeWs(ws, 'gone');
+      return;
+    }
+    for (const s of this.sockets()) {
+      if (s === ws || seatOf(s) !== seat) continue;
+      s.serializeAttachment({ ...att(s), seat: -1, hello: false, key: null, replaced: true });
+      closeWs(s, 'replaced');
+    }
+    ws.serializeAttachment({ seat, hello: true, name: m.names[seat] || DEFAULT_NAME, v, card: cleanCard(msg.card), key });
+    const wasAway = !!m.away?.[seat];
+    if (m.away) m.away[seat] = 0;
+    const other = this.socketFor(1 - seat);
+    if (wasAway && !m.result && other && version(other) >= PROTOCOL_V5) sendJson(other, { t: 'back' });
+    const state = { t: 'rejoined', you: seat };
+    if (m.mode !== 'turns') state.opp = m.last?.[1 - seat] || null;
+    else if (!m.result && m.tref?.seat === seat) m.deadline = Math.max(m.deadline || 0, now + TURNS.serverTurnMs);
+    if (m.paused) state.paused = { by: m.paused.by, ms: Math.max(0, m.paused.until - now), left: m.pauses?.[seat] ?? 0 };
+    sendJson(ws, state);
+    for (const x of m.log?.[seat] || []) sendJson(ws, x.msg);
+    await this.save();
+    await this.armAlarm(now);
+  }
+
+  /**
+   * (1.12.1) The friend who opened the link answered "Sorry, besig nou": whoever waits in the room hears it
+   * (or hears it when their game is back), and the room stays open for anyone else the link went to.
+   */
+  async decline(ws, msg) {
+    const m = this.m;
+    if (m.started || m.kind !== 'friend' || att(ws).hello) return;
+    const name = cleanNickname(msg.name) || DEFAULT_NAME;
+    let told = false;
+    for (const s of this.sockets()) {   // (the one who invited only: not another friend already in)
+      if (s === ws || !att(s).hello || !m.host?.key || att(s).key !== m.host.key) continue;
+      sendJson(s, { t: 'declined', name });
+      if (version(s) >= PROTOCOL_V5) told = true;
+    }
+    if (!told) {
+      m.declines = [...(m.declines || []), name].slice(-5);
       await this.save();
     }
+    ws.serializeAttachment({ ...att(ws), seat: -1 });
+    closeWs(ws, 'declined');
+  }
+
+  /** (1.12.1) "Speel weer" after a friend match: once both said it, a new match in the same room. */
+  async again(seat, now) {
+    const m = this.m;
+    if (!m.result || m.kind !== 'friend') return;
+    const me = this.socketFor(seat);
+    const other = this.socketFor(1 - seat);
+    if (!other || version(other) < PROTOCOL_V5) {
+      if (me) sendJson(me, { t: 'bye' });
+      return;
+    }
+    (m.again ||= [false, false])[seat] = true;
+    if (m.again[1 - seat]) {
+      await this.restart(now);
+      return;
+    }
+    sendJson(other, { t: 'again' });
+    await this.save();
+  }
+
+  /** A new match in this room: a new seed, the same mode and players (their sockets carry name, card and key). */
+  async restart(now) {
+    const old = this.m;
+    this.m = {
+      seed: newMatchSeed(randFloat), kind: old.kind, mode: old.mode, createdAt: now, names: [null, null], started: false,
+      startAt: 0, ref: null, samples: [[], []], ends: [null, null], result: null, done: false, host: old.host || null,
+      declines: [], round: (old.round || 1) + 1,
+    };
+    this.emoteState = null;
+    await this.start(now);
+  }
+
+  /**
+   * (1.12.1) A friend match: a pause stops both games (each player DUEL.pauses times, at most DUEL.pauseMs
+   * each). Not while one of them is away, and not with a game that doesn't know it: then 'nopause'.
+   */
+  async pause(seat, now) {
+    const m = this.m;
+    const socks = [this.socketFor(0), this.socketFor(1)];
+    const pauses = (m.pauses ||= [DUEL.pauses, DUEL.pauses]);
+    const ok = m.kind === 'friend' && !m.paused && now >= m.startAt && pauses[seat] > 0
+      && socks.every((s) => s && version(s) >= PROTOCOL_V5) && !(m.away || []).some(Boolean);
+    if (!ok) {
+      if (socks[seat]) sendJson(socks[seat], { t: 'nopause', left: pauses[seat] });
+      return;
+    }
+    pauses[seat] -= 1;
+    m.paused = { by: seat, at: now, until: now + DUEL.pauseMs };
+    socks.forEach((s, k) => sendJson(s, { t: 'paused', by: seat, ms: DUEL.pauseMs, left: pauses[k] }));
+    await this.save();
+    await this.armAlarm(now);
+  }
+
+  /** Either player goes on (or the pause ran out): a 3-2-1 in both games; the match's clocks skip the pause. */
+  async resume(now) {
+    const m = this.m;
+    const p = m.paused;
+    if (!p) return;
+    m.paused = null;
+    const gap = Math.max(0, now - p.at) + DUEL.resumeMs;
+    if (m.mode === 'turns') m.deadline = (m.deadline || now) + gap;
+    else {
+      m.startAt += gap;
+      m.endAt = (m.endAt || now) + gap;
+    }
+    for (const c of m.pending || []) c.at += gap;
+    for (const s of this.sockets()) {
+      if (seatOf(s) >= 0) sendJson(s, { t: 'resumed', ms: DUEL.resumeMs });
+    }
+    await this.save();
+    await this.armAlarm(now);
+  }
+
+  /** (1.12.1) The room's one alarm at the first thing due: a turn's deadline or the race's end, a seat kept for a game that went, a pause's end; a finished room's close. */
+  async armAlarm(now) {
+    const m = this.m;
+    if (!m || !m.started) return;
+    const due = [];
+    if (m.done) due.push(m.closeAt || now + DONE_TTL_MS);
+    else {
+      // (while paused the turn's deadline and the race's end wait: resume() moves them on)
+      if (m.paused) due.push(m.paused.until);
+      else due.push(m.mode === 'turns' ? m.deadline || now + TURNS.serverTurnMs : m.endAt || now + DUEL.maxRunMs);
+      for (const a of m.away || []) if (a) due.push(a);
+    }
+    await this.state.storage.setAlarm(Math.max(now + 1, Math.min(...due)));
   }
 
   async start(now) {
@@ -396,6 +664,16 @@ export class MatchRoom {
     m.started = true;
     m.startAt = now + DUEL.countdownMs;
     for (const k of [0, 1]) m.names[k] = att(this.socketFor(k)).name || DEFAULT_NAME;
+    // (1.12.1) each game's key and protocol: a game back on a new connection is known by its key
+    m.keys = [0, 1].map((k) => att(this.socketFor(k)).key || null);
+    m.v = [0, 1].map((k) => version(this.socketFor(k)));
+    m.away = [0, 0];
+    m.log = [[], []];
+    m.last = [null, null];
+    m.paused = null;
+    m.pauses = [DUEL.pauses, DUEL.pauses];
+    m.again = [false, false];
+    if (m.mode !== 'turns') m.endAt = m.startAt + DUEL.maxRunMs;
     // Blok vir Blok: who drops first is drawn here; the first turn goes with the start
     let turn = null;
     if (m.mode === 'turns') {
@@ -413,7 +691,16 @@ export class MatchRoom {
       // (opp.v: the other game's protocol; 1.12 shows the other player's Blok vir Blok turn behind their 'go')
       const msg = { t: 'start', seed: m.seed, you: k, opp: { name: m.names[1 - k], card: cleanCard(att(this.socketFor(1 - k)).card), v: version(this.socketFor(1 - k)) } };
       if (turn) Object.assign(msg, { mode: 'turns', turn, ...(m.rounds ? { rounds: true } : {}) });
+      // (1.12.1) to a game of protocol 5: this room's protocol and kind (a friend room: "Speel weer", pauses)
+      if (version(s) >= PROTOCOL_V5) Object.assign(msg, { sv: PROTOCOL_V5, room: m.kind });
       sendJson(s, msg);
+    }
+    if (turn) for (const k of [0, 1]) this.tell(k, { t: 'turn', ...turn }, { quiet: true });
+    // (1.12.1) anyone else still reading the invite: someone else plays now
+    for (const s of this.sockets()) {
+      if (seatOf(s) >= 0 || att(s).rejoin) continue;
+      sendJson(s, { t: 'gone' });
+      closeWs(s, 'gone');
     }
     await this.save();
     await this.state.storage.setAlarm(turn ? m.deadline : now + DUEL.maxRunMs + DUEL.countdownMs);
@@ -430,20 +717,27 @@ export class MatchRoom {
     const ref = createTurnReferee({ init: m.tref });
     const other = this.socketFor(1 - seat);
     let events;
+    // (1.12.1) each is passed on once a turn (a game back on a new connection sends its turn's again), and kept
+    // for the other game in case its connection went meanwhile
+    const relay = async (kind, out) => {
+      if (seat !== ref.seat || msg.n !== ref.n || !this.firstRelay(kind, ref.n)) return;
+      this.tell(1 - seat, out);
+      if ((m.v?.[1 - seat] || 1) >= PROTOCOL_V5) await this.save();
+    };
     if (msg.t === 'go') {   // (1.12) the turn began on that player's screen: the other game shows it from now
-      if (seat === ref.seat && msg.n === ref.n && other) sendJson(other, { t: 'go', n: ref.n });
+      await relay('go', { t: 'go', n: ref.n });
       return;
     }
     if (msg.t === 'visit') {   // (1.12) the round's Skelm Sakkie was caught or stole (the other game shows the same)
       const v = cleanVisitMsg(msg);
-      if (v && seat === ref.seat && msg.n === ref.n && other) sendJson(other, { t: 'visit', n: ref.n, ...v });
+      if (v) await relay('visit', { t: 'visit', n: ref.n, ...v });
       return;
     }
     if (msg.t === 'drop') {
       const p = cleanPose(msg.p);
       // ct: how far the crane had swung this turn (ms), so the other game shows the block let go there
       const ct = typeof msg.ct === 'number' && msg.ct >= 0 && msg.ct <= 120000 ? msg.ct : null;
-      if (p && seat === ref.seat && msg.n === ref.n && other) sendJson(other, { t: 'drop', n: ref.n, p, ...(ct !== null ? { ct } : {}) });
+      if (p) await relay('drop', { t: 'drop', n: ref.n, p, ...(ct !== null ? { ct } : {}) });
       return;
     }
     if (msg.t === 'settled') {
@@ -454,7 +748,7 @@ export class MatchRoom {
       if (!snapFits(snap, ref.n, r)) return;   // blocks not dropped yet, or a lost block rated otherwise
       // k (1.12): physics steps from the drop to this report (the other game applies it at that step)
       const k = Number.isInteger(msg.k) && msg.k >= 0 && msg.k <= 100000 ? msg.k : null;
-      if (other) sendJson(other, { t: 'settled', n: ref.n, lost, r, snap, ...(k !== null ? { k } : {}) });
+      this.tell(1 - seat, { t: 'settled', n: ref.n, lost, r, snap, ...(k !== null ? { k } : {}) });
       events = ref.settled(seat, { n: ref.n, lost, r, vis: cleanVis(msg.vis) });
     } else if (msg.t === 'joker') {
       events = ref.joker(seat, msg.kind);
@@ -468,18 +762,17 @@ export class MatchRoom {
     for (const e of events) {
       if (e.type === 'turn') {
         m.deadline = now + TURNS.serverTurnMs;
+        // (1.12.1) the player whose turn it is now is away for a moment: the turn waits for them
+        if (m.away?.[e.seat]) m.deadline = Math.max(m.deadline, m.away[e.seat] + 1000);
         const tm = { t: 'turn', ...turnMsg(e) };
-        for (const s of this.sockets()) {
-          if (seatOf(s) >= 0) sendJson(s, tm);
-        }
+        for (const k of [0, 1]) this.tell(k, tm);
       } else if (e.type === 'joker') {
-        const s = this.socketFor(e.seat);
-        if (s) sendJson(s, { t: 'choose', options: [...SABOTAGES], def: SABOTAGES[0] });
+        // (n, to a 1.12.1 game: back on a new connection it hears these again, and knows them by the turn)
+        this.tell(e.seat, { t: 'choose', options: [...SABOTAGES], def: SABOTAGES[0], ...this.turnTag(e.seat, ref.n) });
       } else if (e.type === 'sent') {
-        const s = this.socketFor(e.seat);
-        if (s) sendJson(s, { t: 'sent', kind: e.kind });
-        const o = this.socketFor(1 - e.seat);
-        if (o) sendJson(o, { t: 'sabotage', kind: e.kind });   // a heads-up: it comes with their next block
+        this.tell(e.seat, { t: 'sent', kind: e.kind, ...this.turnTag(e.seat, ref.n) });
+        // a heads-up: it comes with their next block
+        this.tell(1 - e.seat, { t: 'sabotage', kind: e.kind, ...this.turnTag(1 - e.seat, ref.n) });
       } else if (e.type === 'result') {
         await this.decidedTurns(e, now);
       }
@@ -493,8 +786,16 @@ export class MatchRoom {
     const m = this.m;
     m.result = { winner: e.winner, reason: e.reason };
     m.done = true;
-    for (const s of this.sockets()) sendJson(s, { t: 'result', winner: e.winner, reason: e.reason, hearts: e.hearts });
-    await this.state.storage.setAlarm(now + DONE_TTL_MS);
+    m.paused = null;
+    for (const k of [0, 1]) this.tell(k, { t: 'result', winner: e.winner, reason: e.reason, hearts: e.hearts });
+    m.closeAt = now + this.doneTtl();
+    await this.state.storage.setAlarm(m.closeAt);
+  }
+
+  /** How long a finished room stays: a friend match of two 1.12.1 games waits for "Speel weer". */
+  doneTtl() {
+    const m = this.m;
+    return m.kind === 'friend' && (m.v || []).length === 2 && m.v.every((v) => v >= PROTOCOL_V5) ? DUEL.againMs : DONE_TTL_MS;
   }
 
   record(seat, now, h) {
@@ -511,7 +812,8 @@ export class MatchRoom {
     m.result = { winner: e.winner, reason: e.reason };
     m.pending = [];   // the match is over: no more punishments
     m.done = true;
-    for (const s of this.sockets()) sendJson(s, { t: 'result', winner: e.winner, reason: e.reason, best: [round1(ref.best(0)), round1(ref.best(1))] });
+    m.paused = null;
+    for (const k of [0, 1]) this.tell(k, { t: 'result', winner: e.winner, reason: e.reason, best: [round1(ref.best(0)), round1(ref.best(1))] });
     const dur = Math.max(0, now - m.startAt);
     if (dur >= MIN_RUN_MS && this.env?.MATCH_LOBBY) {
       const payloads = [0, 1]
@@ -524,7 +826,8 @@ export class MatchRoom {
         // the recordings are a bonus
       }
     }
-    await this.state.storage.setAlarm(now + DONE_TTL_MS);
+    m.closeAt = now + this.doneTtl();
+    await this.state.storage.setAlarm(m.closeAt);
   }
 
   /**
@@ -533,17 +836,38 @@ export class MatchRoom {
    */
   async alarm() {
     const m = await this.load();
-    if (m && m.mode === 'turns' && m.started && !m.done) {
-      const now = this.now();
-      if (now < (m.deadline || 0)) {
-        await this.state.storage.setAlarm(m.deadline);
+    const now = this.now();
+    if (m && m.started && !m.done) {
+      let changed = false;
+      // (1.12.1) a pause that ran out: the match goes on; a player who didn't come back in time: as if they left
+      if (m.paused && now >= m.paused.until) {
+        await this.resume(now);
+        changed = true;
+      }
+      for (const k of [0, 1]) {
+        if (!m.done && m.away?.[k] && now >= m.away[k]) {
+          m.away[k] = 0;
+          await this.leaveSeat(k, now);
+          changed = true;
+        }
+      }
+      if (!m.done && m.mode === 'turns' && !m.paused && now >= (m.deadline || 0)) {
+        const ref = createTurnReferee({ init: m.tref });
+        const [e] = ref.timeout();
+        m.tref = ref.snapshot();
+        if (e) await this.decidedTurns(e, now);
+        changed = true;
+      }
+      // a Wedloop at its longest closes (below); anything else still running waits for what is due next
+      if (m.done || m.mode === 'turns' || m.paused || now < (m.endAt || 0)) {
+        if (changed) await this.save();
+        if (!m.done) await this.armAlarm(now);
         return;
       }
-      const ref = createTurnReferee({ init: m.tref });
-      const [e] = ref.timeout();
-      m.tref = ref.snapshot();
-      if (e) await this.decidedTurns(e, now);
-      await this.save();
+    }
+    // (1.12.1) a finished friend room (two 1.12.1 games) waits for "Speel weer" until its time is up
+    if (m && m.done && now < (m.closeAt || 0) && this.doneTtl() > DONE_TTL_MS) {
+      await this.armAlarm(now);
       return;
     }
     for (const s of this.sockets()) {

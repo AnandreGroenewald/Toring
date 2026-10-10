@@ -10,22 +10,25 @@ Stapel is a free, colourful tower-stacking game from South Africa, in Afrikaans 
 The crane swings the block back and forth, faster the higher you build. Tap at the right moment, drop it and build your tower as high as you dare. Land a block exactly on top of the last one for a Perfect, build a combo and score extra points.
 
 🏗️ DAILY TOWER
-One new tower every day: the same blocks and the same weather for everyone, one try a day. See how many players you beat today, share your result on WhatsApp and see who builds highest.
+One new tower every day: the same blocks and the same weather for everyone. See where you stand on the day's leaderboard, how many players you beat, and share your result on WhatsApp. Want another go? Buy "Nog 'n kans" (one more chance) with coins, up to four times a day – the leaderboard keeps your best tower.
 
 ⛅ WEATHER YOU CAN FEEL
 Wind pushes your blocks, rain makes everything slippery, a heat wave speeds up the crane, hail hits your tower and fog hides the landing. After the rain a rainbow may bring double points.
 
 🐒 VISITORS
-Blouaap the monkey waits for your next block: land it Perfect, or he throws blocks into the sea. Skelm Sakkie tries to steal blocks – tap him quickly to catch him. And Hanswors the clown builds you a new foundation.
+Blouaap the monkey waits for your next block: land it Perfect, or he throws blocks into the sea. Skelm Sakkie tries to steal blocks – tap him quickly to catch him. And five Perfects in a row bring Hanswors the clown with gifts: a big log that sets your tower solid.
 
-🌊 THE FLOOD
-The water rises while you build. Stay above the flood line!
+☁️ HIGHER AND HIGHER
+At 50 metres you're above the clouds, at 100 metres the aeroplanes fly by, at 200 metres you see the curve of the Earth – and then space and the stars. The water rises while you build: stay above the flood line!
 
 ⚔️ CHALLENGER SERIES
-Head-to-head on exactly the same tower. Whoever reaches 10, 20, 30 and 40 metres first chooses a punishment for the other tower (the monkey, the thief, fog or a heat wave), and the first to 50 metres wins. Find an opponent and play live, challenge a friend with a link, or play Robot Rikus. Climb from Bronze to Diamond in monthly seasons, and show off your own frame, badge, title and win celebration.
+Play another player, a friend or Robot Rikus, in two ways:
+• Race: you build at the same time with the same blocks. Whoever reaches 10, 20, 30 and 40 metres first chooses a punishment for the other tower (the monkey, the thief, fog or a heat wave). First to 50 metres wins!
+• Block by Block: one tower, a block each in turn, three hearts each. Later come rounds with the same weather or visitor for both of you, and five Perfects in a row earn you a sabotage for the other player.
+Challenge a friend with a link on WhatsApp (busy? one tap says "Sorry, busy right now"), pause together, play the same friend again and tease each other with an emoji 😂😛. If your connection drops, the game reconnects by itself. Climb the ranks every month from Bronze to Stapel Legend 👑, in each mode separately.
 
-🪙 COINS AND POWER-UPS
-Earn coins with every tower and buy power-ups for Practice in the Shop: a Foundation block that sets everything under it like cement, a slow crane, a shield against the monkey and the thief, and an extra heart. In the Daily Tower everyone gets a free Foundation block at 55 metres.
+🪙 COINS, THE WEEKLY CHEST AND THE SHOP
+Earn coins with every tower and every match, and open your weekly chest every day. In the Shop you buy power-ups for Practice – a Foundation block that sets everything under it like cement, a slow crane, a shield against the monkey and the thief, and an extra heart – and your own frame, badge, title and win celebration. In the Daily Tower everyone gets a free Foundation block at 55 metres.
 
 🧱 PRACTICE
 Practise as much as you like. It doesn't count.
@@ -33,7 +36,7 @@ Practise as much as you like. It doesn't count.
 • Free
 • Play in Afrikaans or English
 • No sign-up
-• Works offline (only live matches need internet)
+• Plays offline (only the leaderboard and live matches need internet)
 • Your progress stays on your phone
 
 Stapel hoog. Staan sterk. (Stack high. Stand strong.)

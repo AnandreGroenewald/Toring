@@ -13,6 +13,8 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- (1.12.1) the sky behind the see-through bars until the game draws (not the theme's grey or black) -->
+        <item name="android:windowBackground">@color/splash_background</item>
     </style>
 
 

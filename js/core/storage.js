@@ -16,7 +16,7 @@ import {
 } from './economy.js';
 
 const SCHEMA = 1;
-const SETTING_KEYS = ['sound', 'vibration', 'reducedMotion', 'highContrast', 'howtoSeen'];
+const SETTING_KEYS = ['sound', 'vibration', 'reducedMotion', 'highContrast', 'howtoSeen', 'cementSeen'];
 const HISTORY_DAYS = 7;
 const KEEP_DAILY_DAYS = 90; // older finished entries are pruned (stats are aggregated separately) to keep writes cheap
 
@@ -327,13 +327,21 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     if (!o || typeof o !== 'object') return out;
     for (const [k, r] of Object.entries(o)) {
       if (!isDateKey(k) || !r || !['ready', 'playing', 'done'].includes(r.status)) continue;
+      // (1.12.1) up to 4 a day: `n` the tries bought (1-4), `paid` the last one's price (a refund gives that
+      // back), `best` the best finished extra try (an entry from 1.12.0 is one try, its result the best)
+      const maxN = DAILY_RETRY.prices.length;
+      const n = Number.isInteger(r.n) && r.n >= 1 && r.n <= maxN ? r.n : 1;
+      const result = r.status === 'ready' ? null : normalizeResult(r.result, k);
       out[k] = {
         status: r.status,
-        result: r.status === 'ready' ? null : normalizeResult(r.result, k),
+        result,
         startedAt: num(r.startedAt, null),
         finishedAt: num(r.finishedAt, null),
         beatAt: num(r.beatAt, null),
         owner: typeof r.owner === 'string' ? r.owner : null,
+        n,
+        paid: Number.isInteger(r.paid) && r.paid >= 0 && r.paid <= 100000 ? r.paid : DAILY_RETRY.prices[n - 1],
+        best: r.best && typeof r.best === 'object' ? normalizeResult(r.best, k) : r.status === 'done' ? result : null,
       };
     }
     return out;
@@ -352,16 +360,22 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
   /** The better of two results (height first, then points). */
   const better = (a, b) => (!b ? a : !a ? b : (b.heightM > a.heightM || (b.heightM === a.heightM && b.score > a.score)) ? b : a);
 
-  /** A day's result that counts: the better of the first try and a finished second one ({ ...result, retried }). */
+  /** Extra tries finished on a day (the one being played or not yet played doesn't count yet). */
+  const extraDone = (r) => (!r ? 0 : r.status === 'done' ? r.n : r.n - 1);
+
+  /**
+   * A day's result that counts: the better of the first try and the best finished extra one ({ ...result,
+   * retried, tries }: `tries` the tries played that day, 1-5).
+   */
   function bestOf(dateKey) {
     const e = data.daily[dateKey];
     if (!e || e.status !== 'done' || !e.result) return null;
     const r = retries[dateKey];
-    const second = r && r.status === 'done' ? r.result : null;
-    return { ...better(e.result, second), retried: !!second };
+    const extra = r && extraDone(r) > 0 ? r.best : null;
+    return { ...better(e.result, extra), retried: !!extra, tries: 1 + (extra ? extraDone(r) : 0) };
   }
 
-  /** The second try ends: it joins the day (the better one counts), its records count; no streak, no coins. */
+  /** An extra try ends: it joins the day (the best try counts), its records count; no streak, no coins. */
   function finishRetryEntry(dateKey, result) {
     const r = retries[dateKey];
     if (!r || r.status === 'done') return { applied: false, flags: { height: false, score: false } };
@@ -372,7 +386,7 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     s.totalPerfects += merged.perfects;
     s.bestHeightM = Math.max(s.bestHeightM, merged.heightM);
     s.bestScore = Math.max(s.bestScore, merged.score);
-    retries[dateKey] = { ...r, status: 'done', result: merged, finishedAt: now(), owner: null };
+    retries[dateKey] = { ...r, status: 'done', result: merged, best: better(r.best, merged), finishedAt: now(), owner: null };
     return { applied: true, flags };
   }
 
@@ -613,19 +627,65 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       return b ? clone(b) : null;
     },
 
-    /** Buy the day's second try: { ok, coins, reason } ('done' first, 'once' a day, 'coins'). */
+    /**
+     * The next extra try's price for the day (50, 100, 200, 400), or null when all of them are used (or the first
+     * try isn't done, or an extra try is still waiting to be played).
+     */
+    nextRetryPrice(dateKey) {
+      sync();
+      const e = data.daily[dateKey];
+      if (!isDateKey(dateKey) || !e || e.status !== 'done') return null;
+      const r = retries[dateKey];
+      if (r && r.status !== 'done') return null;
+      const k = r ? r.n : 0;
+      return k < DAILY_RETRY.prices.length ? DAILY_RETRY.prices[k] : null;
+    },
+
+    /**
+     * Buy the day's next extra try: { ok, coins, price, n, reason } (reason: 'done' the first try comes first,
+     * 'busy' one bought is still to be played, 'max' all four used, 'coins' too few; `price` the one asked).
+     */
     buyDailyRetry(dateKey) {
       sync();
       const e = data.daily[dateKey];
       if (!isDateKey(dateKey) || !e || e.status !== 'done') return { ok: false, reason: 'done', coins: econ.coins };
-      if (retries[dateKey]) return { ok: false, reason: 'once', coins: econ.coins };
-      const r = spendCoins(econ, DAILY_RETRY.price);
-      if (!r.ok) return { ok: false, reason: 'coins', coins: econ.coins };
+      const prev = retries[dateKey];
+      if (prev && prev.status !== 'done') return { ok: false, reason: 'busy', coins: econ.coins };
+      const k = prev ? prev.n : 0;
+      if (k >= DAILY_RETRY.prices.length) return { ok: false, reason: 'max', coins: econ.coins };
+      const price = DAILY_RETRY.prices[k];
+      const r = spendCoins(econ, price);
+      if (!r.ok) return { ok: false, reason: 'coins', coins: econ.coins, price };
       econ = r.economy;
       persistEcon();
-      retries[dateKey] = { status: 'ready', result: null, startedAt: null, finishedAt: null, beatAt: null, owner: null };
+      retries[dateKey] = {
+        status: 'ready', result: null, startedAt: null, finishedAt: null, beatAt: null, owner: null,
+        n: k + 1, paid: price, best: prev ? prev.best : null,
+      };
       persistRetry();
-      return { ok: true, coins: econ.coins };
+      return { ok: true, coins: econ.coins, price, n: k + 1 };
+    },
+
+    /**
+     * (1.12.1) Second tries bought for a day that is over and never played: their coins come back (the try can't
+     * be played any more). Returns the coins refunded (0 when none).
+     */
+    refundOldRetries(todayKey = today()) {
+      sync();
+      if (!isDateKey(todayKey)) return 0;
+      let back = 0;
+      for (const [k, r] of Object.entries(retries)) {
+        if (r.status !== 'ready' || daysBetween(k, todayKey) <= 0) continue;
+        back += r.paid;
+        // the tries played that day stay (the best of them still counts); a day with none left goes
+        if (r.n > 1) retries[k] = { ...r, status: 'done', n: r.n - 1, result: r.best, paid: DAILY_RETRY.prices[r.n - 2] };
+        else delete retries[k];
+      }
+      if (!back) return 0;
+      econ = earnCoins(econ, back, { capped: false }).economy;
+      persistEcon();
+      persistRetry();
+      return back;
     },
 
     /** The second try's first drop. */
@@ -634,6 +694,7 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       const r = retries[dateKey];
       if (!r || r.status !== 'ready') return r ? clone(r) : null;
       retries[dateKey] = {
+        ...r,
         status: 'playing',
         result: normalizeResult({ ...(partialResult || {}), mode: 'daily' }, dateKey),
         startedAt: now(),

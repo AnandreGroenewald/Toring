@@ -7,6 +7,7 @@
 // bubbles rise off the drowned tower and now and then a fish swims past.
 import { DEPTH, GAME_W, WATER } from '../config.js';
 import { canvasTexture, ensureFxTextures, clamp, lerpColor } from './effects.js';
+import { emojiImage } from './emojitex.js';
 
 const SPAN_SIDE = 4000;        // extend this far beyond the play width (camera zoom 0.25 at game over)
 const DEPTH_PX = 6000;         // and this far down
@@ -300,9 +301,10 @@ export class Water {
     }
     const fromLeft = Math.random() < 0.5;
     const depth = Math.min(viewBottom - this.displayY - 50, 50 + Math.random() * 140);
-    const txt = this.scene.add.text(fromLeft ? -90 : GAME_W + 90, this.displayY + depth, FISH[Math.floor(Math.random() * FISH.length)], {
-      fontSize: '46px', fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
-    }).setOrigin(0.5).setDepth(DEPTH.water + 0.12).setAlpha(0.8);
+    // (1.12.1) an image drawn once a session (js/game/emojitex.js), not a new text for every fish
+    const txt = emojiImage(this.scene, fromLeft ? -90 : GAME_W + 90, this.displayY + depth, FISH[Math.floor(Math.random() * FISH.length)], 46, {
+      font: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
+    }).setDepth(DEPTH.water + 0.12).setAlpha(0.8);
     if (fromLeft) txt.setFlipX(true);   // (the emoji faces left)
     txt.v = (fromLeft ? 1 : -1) * (70 + Math.random() * 50);
     txt.swimDepth = depth;   // (not .depth: that is the draw order)

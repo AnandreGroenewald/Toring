@@ -8,6 +8,7 @@
 // from 500 m. Flyers are a handful of images at a time, each drawn once.
 import { GAME_W, LAYOUT, PX_PER_M, WATER } from '../config.js';
 import { canvasTexture, clamp, lerpColor } from '../game/effects.js';
+import { emojiTexture } from '../game/emojitex.js';
 
 const HORIZON0 = LAYOUT.dropLineY + WATER.startOffsetPx - 8;   // screen y of the bay horizon at 0 m
 const SCENERY_PARALLAX = 0.12;
@@ -766,7 +767,8 @@ export class BgScene extends Phaser.Scene {
     let vy = 0;
     let bob = 0;
     if (f.emoji) {
-      img = this.add.text(x, y0, f.emoji, { fontSize: `${Math.round(size)}px`, fontFamily: EMOJI_FONT }).setOrigin(0.5);
+      // (1.12.1) one image per emoji (drawn once at its biggest size), scaled: not a new text for every flyer
+      img = this.add.image(x, y0, emojiTexture(this, f.emoji, f.size[1], { font: EMOJI_FONT })).setOrigin(0.5).setScale(size / f.size[1]);
       // (the emoji face left, or up-right: turned to fly the way they go)
       if (f.kind === 'heli' || f.kind === 'para' || f.kind === 'sat' || f.kind === 'ufo') img.setFlipX(dir > 0 && f.kind === 'heli');
       if (f.kind === 'rocket') {

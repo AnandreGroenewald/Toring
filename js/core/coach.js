@@ -32,6 +32,10 @@ export function createCoach(enabled) {
     landing(rating) {
       return once('land', rating === 'P' ? S.coachPerfect : S.coachMiddle);
     },
+    /** (1.12.1) The first Perfek that set blocks under it as cement (testers didn't know a Perfek does that). */
+    cement() {
+      return once('cement', S.coachCement);
+    },
     /** The first time the water starts to rise. */
     water() {
       return once('water', S.coachWater);

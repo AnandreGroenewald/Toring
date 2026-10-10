@@ -185,6 +185,7 @@ export function installPhysicsPatch() {
   if (!D || typeof D.collisions !== 'function' || typeof collides !== 'function') return;
   detectorPatched = true;
   patchSleeping(M);
+  patchResolver(M);
   D.collisions = function stapelCollisions(detector) {
     const pairs = detector.pairs;
     const bodies = detector.bodies;
@@ -229,6 +230,44 @@ export function installPhysicsPatch() {
     }
     if (collisions.length !== count) collisions.length = count;
     return collisions;
+  };
+}
+
+/**
+ * (1.12.1) The solver only works on contacts that can move something. A pair whose two bodies are both static
+ * (cement, the island) or asleep gets no impulse in any of Matter's apply steps, and its stored impulses don't
+ * change (both bodies stand still), so leaving it out changes nothing, to the last bit, while it saves 10
+ * position and 50 velocity passes over it every step: most of the tower's contacts, once it rests. The live
+ * pairs are picked once a step in preSolvePosition (after the step's wake-ups; nothing sleeps or wakes again
+ * before the velocity passes).
+ */
+function patchResolver(M) {
+  const R = M && M.Resolver;
+  if (!R || R.stapelLive) return;
+  const pre = R.preSolvePosition;
+  const pos = R.solvePosition;
+  const preV = R.preSolveVelocity;
+  const vel = R.solveVelocity;
+  if ([pre, pos, preV, vel].some((f) => typeof f !== 'function')) return;
+  const live = [];
+  const inert = (b) => b.isStatic || b.isSleeping;
+  R.stapelLive = live;
+  R.preSolvePosition = function stapelPreSolvePosition(pairs) {
+    live.length = 0;
+    for (let i = 0; i < pairs.length; i++) {
+      const c = pairs[i].collision;
+      if (!inert(c.parentA) || !inert(c.parentB)) live.push(pairs[i]);
+    }
+    return pre.call(this, live);
+  };
+  R.solvePosition = function stapelSolvePosition(pairs, ...rest) {
+    return pos.call(this, live, ...rest);
+  };
+  R.preSolveVelocity = function stapelPreSolveVelocity() {
+    return preV.call(this, live);
+  };
+  R.solveVelocity = function stapelSolveVelocity(pairs, ...rest) {
+    return vel.call(this, live, ...rest);
   };
 }
 

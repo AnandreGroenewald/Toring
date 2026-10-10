@@ -12,6 +12,7 @@ import { S, VISITOR_INFO } from '../core/strings.js';
 import { visitRng, monkeyPlan, clownPlan, thiefPlan } from '../core/visitorplan.js';
 import { getGeometry, ensureTexture } from './blocks.js';
 import { canvasTexture, clamp, lerp } from './effects.js';
+import { emojiTexture, warmEmoji } from './emojitex.js';
 import { cosmetic } from '../core/economy.js';
 import { opaqueBox, headOf, accessoryPlace } from '../core/emojifit.js';
 
@@ -41,14 +42,17 @@ function accessoryFit(type, style, sprite, acc) {
   if (accCache.has(key)) return accCache.get(key);
   let fit = null;
   try {
-    const read = (t) => t.canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, t.canvas.width, t.canvas.height);
+    const read = (t) => {
+      const cv = canvasOf(t);
+      return cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, cv.width, cv.height);
+    };
     const head = headOf(read(sprite));
     const box = opaqueBox(read(acc));
     const place = accessoryPlace(style, head, box);
     if (place && Number.isFinite(place.scale) && place.scale > 0) {
       fit = {
-        dx: place.cx - sprite.canvas.width / 2 - (box.l + box.w / 2 - acc.canvas.width / 2) * place.scale,
-        dy: place.cy - sprite.canvas.height / 2 - (box.t + box.h / 2 - acc.canvas.height / 2) * place.scale,
+        dx: place.cx - canvasOf(sprite).width / 2 - (box.l + box.w / 2 - canvasOf(acc).width / 2) * place.scale,
+        dy: place.cy - canvasOf(sprite).height / 2 - (box.t + box.h / 2 - canvasOf(acc).height / 2) * place.scale,
         scale: place.scale,
       };
     }
@@ -222,10 +226,16 @@ function drawBubble(ctx, tailX, text) {
   ctx.fillText(text, w / 2, (y0 + y1) / 2 + 2);
 }
 
+const EMOJI_OPTS = { font: EMOJI_FONT, padding: { x: 8, y: 12 } };
+
+/** (1.12.1) An image of the emoji (drawn once a session: js/game/emojitex.js), not a new text at every visit. */
 function emojiText(scene, str, size = VISITOR.size) {
-  return scene.add.text(0, 0, str, {
-    fontFamily: EMOJI_FONT, fontSize: `${size}px`, padding: { x: 8, y: 12 }, resolution: 1,
-  }).setOrigin(0.5).setDepth(DEPTH.visitor).setVisible(false);
+  return scene.add.image(0, 0, emojiTexture(scene, str, size, EMOJI_OPTS)).setOrigin(0.5).setDepth(DEPTH.visitor).setVisible(false);
+}
+
+/** The canvas an emoji image (or an older text) was drawn on. */
+function canvasOf(o) {
+  return o.canvas || o.texture.getSourceImage();
 }
 
 const alive = (o) => !!o && !!o.scene;
@@ -255,6 +265,11 @@ export class Visitors {
     this.reduced = !!reducedMotion;
     this.actions = actions;
     this.seed = sequence && sequence.seed != null ? String(sequence.seed) : 'visitors';
+    // (1.12.1) the visitors' emoji drawn ahead of need, in the game's first quiet seconds
+    warmEmoji(scene, [
+      ...Object.values(VISITOR_INFO).map((i) => [i.emoji, VISITOR.size, EMOJI_OPTS]),
+      ['💨', 34, EMOJI_OPTS], ['💨', 30, EMOJI_OPTS], ['✋', 56, EMOJI_OPTS],
+    ]);
     this.records = [];     // one { type, outcome, n } per visit, for the result
     this.cur = null;       // the visit on screen
     this.pending = null;   // a scheduled visitor that found another one still on screen

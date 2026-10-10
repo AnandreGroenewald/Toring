@@ -148,7 +148,8 @@ test('room: a player back on a new connection replaces the old one (the same key
   assert.equal(back.of('start').length, 0, 'no match against herself');
   const friend = fakeSocket();
   await room.join(friend);
-  assert.deepEqual(friend.sent, [{ t: 'wait' }]);
+  // (1.12.1: a friend room says who invites, so the friend's game can ask "Speel" or "Sorry, besig nou")
+  assert.deepEqual(friend.sent, [{ t: 'wait', host: { name: 'Anna', mode: 'race' } }]);
   await say(room, friend, { t: 'hello', name: 'Bennie', key: 'bennie123456' });
   assert.equal(back.last('start').opp.name, 'Bennie');
   assert.equal(friend.last('start').opp.name, 'Anna');

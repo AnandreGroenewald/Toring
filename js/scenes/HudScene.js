@@ -1,7 +1,7 @@
 // In-game HUD (screen space): height + points, next block, hearts, weather chip,
 // combo badge, flood distance, wobble meter, event banners, toasts and the tap hint.
 // Driven entirely by bus events from GameScene; texts re-render only on change.
-import { LAYOUT, LIVES, FONT, COLORS, WATER, PX_PER_M, SCORING, COACH, STAGES, DUEL, TURNS } from '../config.js';
+import { LAYOUT, LIVES, FONT, COLORS, WATER, PX_PER_M, SCORING, COACH, STAGES, DUEL, TURNS, EMOTES } from '../config.js';
 import { bus } from '../core/bus.js';
 import { S, WEATHER_INFO, VISITOR_INFO } from '../core/strings.js';
 import { fmtM, fmtInt } from '../core/format.js';
@@ -183,6 +183,8 @@ function text(scene, x, y, str, px, opts = {}) {
   return t;
 }
 
+const SCORE_DRAW_MS = 70;   // (1.12.1) the score's count-up redraws its text at most this often
+
 export class HudScene extends Phaser.Scene {
   constructor() {
     super({ key: 'Hud', active: false });
@@ -261,7 +263,8 @@ export class HudScene extends Phaser.Scene {
     // frame a weather banner appeared it stalled that frame, just as the new block arrives and the player
     // starts to aim. The weather and visitor emoji are drawn ahead, one per frame (update).
     this.emojiQueue = [...Object.values(WEATHER_INFO), ...Object.values(VISITOR_INFO)].flatMap((i) => [[i.emoji, 72], [i.emoji, 32]])
-      .concat(STAGES.slice(1).map((st) => [st.emoji, 72]));   // the stage banners' too
+      .concat(STAGES.slice(1).map((st) => [st.emoji, 72]))   // the stage banners' too
+      .concat(Object.values(EMOTES).map((e) => [e, 92]));    // (1.12.1) and the emoji reactions'
     this.wxEmoji = add(this.add.image(0, this.wxY, '__WHITE').setOrigin(0.5));
     this.wxName = add(text(this, 0, this.wxY - 11, '', 22, { strokeMul: 0.2 }).setOrigin(0, 0.5));
     this.wxLeft = add(text(this, 0, this.wxY + 14, '', 20, { color: '#d9ecff', strokeMul: 0.22, shadow: false }).setOrigin(0, 0.5));
@@ -273,6 +276,9 @@ export class HudScene extends Phaser.Scene {
     this.waterY = H - sb - 64;
     this.waterBg = add(this.add.image(W / 2, this.waterY, '__WHITE'));
     this.waterTxt = add(text(this, W / 2, this.waterY - 1, '', 26, { emoji: true, strokeMul: 0.18 }).setOrigin(0.5));
+    // (1.12.1) the 🌊 is an image of its own (drawn once): inside the text it was drawn again with every update
+    this.waterIcon = add(this.add.image(W / 2, this.waterY - 1, this.emojiTexture('🌊', 26)).setOrigin(0.5));
+    this.waterIcon.setVisible(false);
     this.waterLevel = -1;
     this.waterStr = '';
     this.waterAt = -1e9;
@@ -338,6 +344,9 @@ export class HudScene extends Phaser.Scene {
     this.toast = this.add.container(W / 2, H - sb - 150).setVisible(false);
     this.toastBg = this.add.image(0, 0, '__WHITE');
     this.toastTxt = text(this, 0, -1, '', 30, { strokeMul: 0.18, emoji: true }).setOrigin(0.5);
+    // (1.12.1) set once: each of these redraws the whole text in Phaser, so per toast only the words change
+    this.toastTxt.setWordWrapWidth(W - 130, true);   // a long saying wraps instead of leaving the screen
+    this.toastTxt.setAlign('center');
     this.toast.add([this.toastBg, this.toastTxt]);
     this.root.add(this.toast);
     this.toastTween = null;
@@ -412,19 +421,27 @@ export class HudScene extends Phaser.Scene {
     const dt = Math.min(delta, 100);
 
     // height
-    const hs = fmtM(s.heightM);
-    if (hs !== this.hStr) {
-      const up = s.heightM > this.lastHeight;
-      this.hStr = hs;
-      this.heightTxt.setText(hs);
-      if (up) this.pulse(this.heightTxt, 1.08);
+    // (1.12.1) the top block rocks in wind: the number follows only a move of 0.15 m or more (it flickered between
+    // two values, a whole text redraw each time)
+    if (this.hShownM === undefined || Math.abs(s.heightM - this.hShownM) >= 0.15) {
+      const hs = fmtM(s.heightM);
+      if (hs !== this.hStr) {
+        const up = this.hShownM !== undefined && s.heightM > this.hShownM;
+        this.hStr = hs;
+        this.heightTxt.setText(hs);
+        if (up) this.pulse(this.heightTxt, 1.08);
+      }
+      this.hShownM = s.heightM;
     }
     this.lastHeight = s.heightM;
 
-    // points (count up)
-    if (this.dispScore !== s.score) {
+    // points (count up). The text is redrawn at most every SCORE_DRAW_MS while counting (each redraw is a whole
+    // canvas text with its shadow, uploaded again: every frame of the count-up, right after a landing, was a lot)
+    this.scoreDrawIn = (this.scoreDrawIn || 0) - dt;
+    if (this.dispScore !== s.score && (this.scoreDrawIn <= 0 || Math.abs(s.score - this.dispScore) <= 1)) {
+      this.scoreDrawIn = SCORE_DRAW_MS;
       const diff = s.score - this.dispScore;
-      const step = Math.sign(diff) * Math.max(1, Math.ceil(Math.abs(diff) * Math.min(1, dt / 90)));
+      const step = Math.sign(diff) * Math.max(1, Math.ceil(Math.abs(diff) * Math.min(1, Math.max(dt, SCORE_DRAW_MS) / 90)));
       this.dispScore = Math.abs(step) >= Math.abs(diff) ? s.score : this.dispScore + step;
       const str = `⭐ ${fmtInt(this.dispScore)}`;
       if (str !== this.scoreStr) {
@@ -580,7 +597,9 @@ export class HudScene extends Phaser.Scene {
     const y = p.bg.y;
     p.bg.setTexture(panelTexture(this, w, PILL_H, active ? 0x9a6a00 : NAVY, active ? 0.92 : 0.72, { rim: active ? 0.55 : 0.3 }))
       .setPosition(p.side === 'left' ? x0 : x0 + w, y);
-    p.name.setPosition(x0 + 16, y - 1).setColor(p.side === 'left' ? '#ffe38c' : '#cfe9ff');
+    p.name.setPosition(x0 + 16, y - 1);
+    const nameColor = p.side === 'left' ? '#ffe38c' : '#cfe9ff';
+    if (p.name.style.color !== nameColor) p.name.setColor(nameColor);   // (once: each setColor redraws the text)
     let hx = x0 + 16 + p.name.width + 10 + PILL_GAP / 2;
     for (let k = 0; k < p.hearts.length; k++) {
       const h = p.hearts[k];
@@ -632,7 +651,8 @@ export class HudScene extends Phaser.Scene {
     const p = side === 'you' ? hud.you : hud.them;
     const x = side === 'you' ? 96 : this.W - EDGE - PAUSE_BTN - 96;
     const y = this.st + ROW3 + 110;   // (under the crane's jib: never over the height or the hearts)
-    const t = text(this, x, y, emoji, 92, { emoji: true, stroke: false }).setOrigin(0.5).setDepth(60).setScale(0.4).setAlpha(0);
+    // (1.12.1) the emoji as an image drawn once (emojiTexture), not a new 92 px text per reaction
+    const t = this.add.image(x, y, this.emojiTexture(emoji, 92)).setOrigin(0.5).setDepth(60).setScale(0.4).setAlpha(0);
     this.tweens.add({ targets: t, scale: 1, alpha: 1, duration: 260, ease: 'Cubic.easeOut' });
     this.tweens.add({ targets: t, y: y + 36, alpha: 0, delay: 1500, duration: 450, ease: 'Quad.easeIn', onComplete: () => t.destroy() });
   }
@@ -689,11 +709,13 @@ export class HudScene extends Phaser.Scene {
     const themStr = `${d.badge ? `${d.badge} ` : ''}${themName} ${pct(d.them)}`;
     if (youStr !== t.youStr) {
       t.youStr = youStr;
-      t.youLabel.setText(youStr).setColor('#ffe38c');
+      t.youLabel.setText(youStr);
+      if (t.youLabel.style.color !== '#ffe38c') t.youLabel.setColor('#ffe38c');
     }
     if (themStr !== t.themStr) {
       t.themStr = themStr;
-      t.themLabel.setText(themStr).setColor('#cfe9ff');
+      t.themLabel.setText(themStr);
+      if (t.themLabel.style.color !== '#cfe9ff') t.themLabel.setColor('#cfe9ff');
     }
     const claimed = DUEL.marks.map((m) => d.claimed?.[m] || '-').join('');
     if (claimed !== t.claimed) {
@@ -865,6 +887,7 @@ export class HudScene extends Phaser.Scene {
       if (this.waterBg.visible) {
         this.waterBg.setVisible(false);
         this.waterTxt.setVisible(false);
+        this.waterIcon.setVisible(false);
       }
       return;
     }
@@ -878,20 +901,26 @@ export class HudScene extends Phaser.Scene {
     const wasHidden = !this.waterBg.visible;
     if (str !== this.waterStr || level !== this.waterLevel) {
       this.waterStr = str;
-      this.waterTxt.setText(str);
+      this.waterTxt.setText(str.replace(/^\p{Extended_Pictographic}\uFE0F?\s*/u, ''));
       const fill = level === 2 ? 0xe5483b : level === 1 ? 0xf39a2b : 0x1f6fb2;
-      const pw = Math.ceil((this.waterTxt.width + 40) / 16) * 16;
+      // the icon, a gap and the words, centred together in the pill
+      const iw = this.waterIcon.width;
+      const inner = iw + 8 + this.waterTxt.width;
+      const pw = Math.ceil((inner + 40) / 16) * 16;
       this.waterBg.setTexture(panelTexture(this, pw, 52, fill, 0.9));
+      this.waterIcon.x = this.W / 2 - inner / 2 + iw / 2;
+      this.waterTxt.x = this.W / 2 - inner / 2 + iw + 8 + this.waterTxt.width / 2;
       if (level !== this.waterLevel) {
         if (this.waterPulse) {
           this.waterPulse.stop();
           this.waterPulse = null;
           this.waterBg.setScale(1);
           this.waterTxt.setScale(1);
+          this.waterIcon.setScale(1);
         }
         if (level === 2) {
           this.waterPulse = this.tweens.add({
-            targets: [this.waterBg, this.waterTxt], scale: 1.08, duration: 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+            targets: [this.waterBg, this.waterTxt, this.waterIcon], scale: 1.08, duration: 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
           });
         }
         this.waterLevel = level;
@@ -900,10 +929,12 @@ export class HudScene extends Phaser.Scene {
     if (wasHidden) {
       this.waterBg.setVisible(true);
       this.waterTxt.setVisible(true);
+      this.waterIcon.setVisible(true);
       this.waterBg.y = this.waterY + 40;
       this.waterTxt.y = this.waterY + 39;
+      this.waterIcon.y = this.waterY + 39;
       this.tweens.add({ targets: this.waterBg, y: this.waterY, duration: 320, ease: 'Back.easeOut' });
-      this.tweens.add({ targets: this.waterTxt, y: this.waterY - 1, duration: 320, ease: 'Back.easeOut' });
+      this.tweens.add({ targets: [this.waterTxt, this.waterIcon], y: this.waterY - 1, duration: 320, ease: 'Back.easeOut' });
     }
   }
 
@@ -911,12 +942,22 @@ export class HudScene extends Phaser.Scene {
   /** The arrow under the balance meter: the side the loose top leans to (none while it's about centred). */
   drawSide(lean) {
     const side = lean > 0.3 ? 1 : lean < -0.3 ? -1 : Math.abs(lean) > 0.2 ? this.wmSideNow : 0;
-    const hot = Math.abs(lean) > 0.7;   // red near the tipping point, amber before
+    // red near the tipping point, amber before (and back to amber only below 0.6: no flicker at the line)
+    const hot = Math.abs(lean) > 0.7 || (this.wmSideHot && Math.abs(lean) > 0.6);
     if (side === this.wmSideNow && hot === this.wmSideHot) return;
     this.wmSideNow = side;
     this.wmSideHot = hot;
     this.wmSide.setVisible(side !== 0);
-    if (side) this.wmSide.setText(side < 0 ? '◀' : '▶').setColor(hot ? '#ff6b5e' : '#ffc56e');
+    if (side) {
+      // one redraw: the colour into the style, then the arrow (the same arrow: only the colour)
+      const arrow = side < 0 ? '◀' : '▶';
+      const color = hot ? '#ff6b5e' : '#ffc56e';
+      if (this.wmSide.text === arrow) this.wmSide.setColor(color);
+      else {
+        this.wmSide.style.color = color;
+        this.wmSide.setText(arrow);
+      }
+    }
   }
 
   drawWobble(v) {
@@ -937,6 +978,10 @@ export class HudScene extends Phaser.Scene {
     const key = `hud_emo_${px}_${[...String(emoji)].map((ch) => ch.codePointAt(0).toString(16)).join('_')}`;
     if (this.textures.exists(key)) return key;
     const t = text(this, 0, 0, emoji, px, { emoji: true, stroke: false });
+    // (1.12.1) Android's emoji (Noto) reach up to 8% of their size below the letters' line that sizes the text,
+    // and the shadow 6% lower; Apple's are a little wider than their advance: all were cut off (a tester: "the
+    // emoji's is cut off")
+    t.setPadding(Math.ceil(px * 0.05), Math.ceil(px * 0.16));
     const tex = this.textures.createCanvas(key, Math.max(1, t.canvas.width), Math.max(1, t.canvas.height));
     if (tex) {
       tex.context.drawImage(t.canvas, 0, 0);
@@ -1023,10 +1068,14 @@ export class HudScene extends Phaser.Scene {
     // (a banner that appeared this very moment counts: it is still fading in)
     const onBanner = this.banner.visible && Math.abs(y0 - this.banner.y) < BANNER_H / 2 + 40;
     this.toastTxt.setFontSize(t.size || 30);
-    this.toastTxt.setWordWrapWidth(this.W - 130, true);   // a long saying wraps instead of leaving the screen
-    this.toastTxt.setAlign('center');
-    this.toastTxt.setText(t.text);
-    this.toastTxt.setColor(t.color || '#ffffff');
+    // one redraw: the colour goes into the style and setText draws it (the same words again: only the colour)
+    const color = t.color || '#ffffff';
+    if (this.toastTxt.text === t.text) {
+      if (this.toastTxt.style.color !== color) this.toastTxt.setColor(color);
+    } else {
+      this.toastTxt.style.color = color;
+      this.toastTxt.setText(t.text);
+    }
     const pw = Math.min(this.W - 48, Math.ceil((this.toastTxt.width + 56) / 16) * 16);
     const ph = Math.max(62, Math.ceil((this.toastTxt.height + 24) / 8) * 8);
     this.toastBg.setTexture(panelTexture(this, pw, ph, NAVY, 0.85, { rim: 0.25 }));

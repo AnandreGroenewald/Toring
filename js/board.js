@@ -9,6 +9,9 @@ import { dayNumber, isDateKey } from './core/daily.js';
 const TEXT = 'text/plain;charset=UTF-8';   // a "simple" request: no CORS preflight
 const NAME_MAX = 24;
 
+/** (1.12.1) The tries a row's player played that day (1-5; an older server says only `retried`). */
+const triesOf = (t) => (Number.isInteger(t.tries) && t.tries >= 1 && t.tries <= 5 ? t.tries : t.retried === true ? 2 : 1);
+
 /**
  * The server's answer, checked: { players, top: [{ rank, name, heightM, you }], you: { rank, heightM,
  * hidden } | null }, or null when it isn't one.
@@ -18,9 +21,9 @@ export function cleanBoard(json) {
   const top = json.top
     .filter((t) => t && Number.isFinite(t.rank) && typeof t.name === 'string')
     .slice(0, 20)
-    .map((t) => ({ rank: t.rank | 0, name: t.name.slice(0, NAME_MAX), heightM: Math.max(0, Number(t.heightM) || 0), you: t.you === true, retried: t.retried === true }));
+    .map((t) => ({ rank: t.rank | 0, name: t.name.slice(0, NAME_MAX), heightM: Math.max(0, Number(t.heightM) || 0), you: t.you === true, retried: t.retried === true, tries: triesOf(t) }));
   const y = json.you;
-  const you = y && Number.isFinite(y.rank) ? { rank: y.rank | 0, heightM: Math.max(0, Number(y.heightM) || 0), hidden: y.hidden === true, retried: y.retried === true } : null;
+  const you = y && Number.isFinite(y.rank) ? { rank: y.rank | 0, heightM: Math.max(0, Number(y.heightM) || 0), hidden: y.hidden === true, retried: y.retried === true, tries: triesOf(y) } : null;
   return { players: Math.max(0, json.players | 0), top, you };
 }
 
@@ -41,7 +44,8 @@ export async function postBoard({ apiUrl, result, player, name = '', hidden = fa
     blocks: result.blocksDropped | 0,
     durationMs: Math.max(0, Math.round(Number(result.durationMs) || 0)),
     hidden: !!hidden,
-    ...(result.retry === true ? { retry: true } : {}),   // (1.12) "Nog 'n kans": the better of two tries, marked 🔁
+    // (1.12) "Nog 'n kans": the best of the tries, marked 🔁 (1.12.1: and how many tries, 2-5)
+    ...(result.retry === true ? { retry: true, tries: Number.isInteger(result.tries) && result.tries >= 2 && result.tries <= 5 ? result.tries : 2 } : {}),
   };
   return cleanBoard(await request(`${root}/board`, {
     method: 'POST',

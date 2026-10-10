@@ -18,23 +18,26 @@ function setup(coins = 80) {
   return { backend, store, t };
 }
 
-test('Nog \'n kans: only after the first try, once a day, and only with the coins', () => {
+test('Nog \'n kans: only after the first try, and only with the coins; the bought try is played before the next', () => {
   const { store } = setup(80);
   assert.deepEqual(store.buyDailyRetry(DAY), { ok: false, reason: 'done', coins: 80 }, 'the first try comes first');
+  assert.equal(store.nextRetryPrice(DAY), null);
   store.startDaily(DAY, result(0, 0));
   store.finishDaily(DAY, result(31.3, 415));
   const streak = store.getStats(DAY).currentStreak;
+  assert.equal(store.nextRetryPrice(DAY), DAILY_RETRY.prices[0]);
   const bought = store.buyDailyRetry(DAY);
-  assert.deepEqual(bought, { ok: true, coins: 80 - DAILY_RETRY.price });
-  assert.equal(store.getEconomy().coins, 80 - DAILY_RETRY.price);
+  assert.deepEqual(bought, { ok: true, coins: 80 - DAILY_RETRY.prices[0], price: DAILY_RETRY.prices[0], n: 1 });
+  assert.equal(store.getEconomy().coins, 80 - DAILY_RETRY.prices[0]);
   assert.equal(store.getDailyRetry(DAY).status, 'ready');
-  assert.equal(store.buyDailyRetry(DAY).reason, 'once', 'once a day');
+  assert.equal(store.buyDailyRetry(DAY).reason, 'busy', 'one bought is played first');
+  assert.equal(store.nextRetryPrice(DAY), null);
   const poor = setup(20).store;
   poor.startDaily(DAY, result(0, 0));
   poor.finishDaily(DAY, result(10, 100));
-  assert.deepEqual(poor.buyDailyRetry(DAY), { ok: false, reason: 'coins', coins: 20 });
+  assert.deepEqual(poor.buyDailyRetry(DAY), { ok: false, reason: 'coins', coins: 20, price: DAILY_RETRY.prices[0] });
   assert.equal(poor.getDailyRetry(DAY), null);
-  // the second try plays and ends: the better try counts, no second streak day, the day's played count stays
+  // the extra try plays and ends: the better try counts, no second streak day, the day's played count stays
   store.startDailyRetry(DAY, result(0, 0), { owner: 'tab' });
   assert.equal(store.getDailyRetry(DAY).status, 'playing');
   const s = store.finishDailyRetry(DAY, result(45.5, 700));
@@ -42,9 +45,48 @@ test('Nog \'n kans: only after the first try, once a day, and only with the coin
   assert.equal(s.isNewBestHeight, true);
   assert.equal(s.currentStreak, streak, 'no extra streak');
   assert.equal(s.played, 1, 'still one day played');
-  assert.deepEqual([store.getDailyBest(DAY).heightM, store.getDailyBest(DAY).retried], [45.5, true]);
+  assert.deepEqual([store.getDailyBest(DAY).heightM, store.getDailyBest(DAY).retried, store.getDailyBest(DAY).tries], [45.5, true, 2]);
   assert.equal(store.getDailyHeights(DAY)[DAY], 45.5, 'the skyline shows the better try');
-  assert.equal(store.finishDailyRetry(DAY, result(99, 999)).applied, false, 'once');
+  assert.equal(store.finishDailyRetry(DAY, result(99, 999)).applied, false, 'once per try');
+});
+
+test('1.12.1 Nog \'n kans four times a day: 50, 100, 200, 400 coins, then "Kom môre terug"; the best try counts', () => {
+  const { store } = setup(1000);
+  store.startDaily(DAY, result(0, 0));
+  store.finishDaily(DAY, result(20, 200));
+  const heights = [26, 18, 33, 30];
+  let spent = 0;
+  for (let k = 0; k < DAILY_RETRY.prices.length; k++) {
+    assert.equal(store.nextRetryPrice(DAY), DAILY_RETRY.prices[k]);
+    const b = store.buyDailyRetry(DAY);
+    assert.deepEqual([b.ok, b.price, b.n], [true, DAILY_RETRY.prices[k], k + 1]);
+    spent += b.price;
+    store.startDailyRetry(DAY, result(0, 0));
+    store.finishDailyRetry(DAY, result(heights[k], heights[k] * 10));
+    const best = store.getDailyBest(DAY);
+    assert.deepEqual([best.heightM, best.tries], [Math.max(20, ...heights.slice(0, k + 1)), k + 2]);
+  }
+  assert.deepEqual(DAILY_RETRY.prices, [50, 100, 200, 400]);
+  assert.equal(store.getEconomy().coins, 1000 - spent);
+  assert.equal(store.nextRetryPrice(DAY), null, 'all four used');
+  assert.deepEqual(store.buyDailyRetry(DAY), { ok: false, reason: 'max', coins: 1000 - spent });
+  assert.equal(store.getStats(DAY).bestHeightM, 33);
+});
+
+test('1.12.1 an extra try bought and never played comes back the next day: its own price; the tries played stay', () => {
+  const { store } = setup(400);
+  store.startDaily(DAY, result(0, 0));
+  store.finishDaily(DAY, result(20, 200));
+  store.buyDailyRetry(DAY);
+  store.startDailyRetry(DAY, result(0, 0));
+  store.finishDailyRetry(DAY, result(28, 280));
+  store.buyDailyRetry(DAY);   // the second extra try: 100, never played
+  assert.equal(store.getEconomy().coins, 400 - 50 - 100);
+  assert.equal(store.refundOldRetries('2026-10-10'), 100);
+  assert.equal(store.getEconomy().coins, 400 - 50);
+  const best = store.getDailyBest(DAY);
+  assert.deepEqual([best.heightM, best.retried, best.tries], [28, true, 2], 'the extra try played still counts');
+  assert.equal(store.refundOldRetries('2026-10-10'), 0);
 });
 
 test('Nog \'n kans: a worse second try leaves the first standing (still marked as two tries)', () => {
@@ -74,4 +116,25 @@ test('Nog \'n kans: a second try cut short counts as it stood; a 1.11 page can\'
   later.recoverUnfinished(DAY, { staleMs: 60 * 1000 });
   assert.equal(later.getDailyRetry(DAY).status, 'done');
   assert.equal(later.getDailyBest(DAY).heightM, 26);
+});
+
+test('Nog \'n kans bought and never played: the next day its coins come back (once)', () => {
+  const { store } = setup(80);
+  store.startDaily(DAY, result(0, 0));
+  store.finishDaily(DAY, result(20, 200));
+  store.buyDailyRetry(DAY);
+  assert.equal(store.getEconomy().coins, 80 - DAILY_RETRY.price);
+  assert.equal(store.refundOldRetries(DAY), 0, 'not on the same day: it can still be played');
+  assert.equal(store.refundOldRetries('2026-10-10'), DAILY_RETRY.price);
+  assert.equal(store.getEconomy().coins, 80);
+  assert.equal(store.getDailyRetry(DAY), null);
+  assert.equal(store.refundOldRetries('2026-10-10'), 0, 'once');
+  // a played (or playing) second try is never refunded
+  const b = setup(80).store;
+  b.startDaily(DAY, result(0, 0));
+  b.finishDaily(DAY, result(20, 200));
+  b.buyDailyRetry(DAY);
+  b.startDailyRetry(DAY, result(0, 0));
+  b.finishDailyRetry(DAY, result(25, 250));
+  assert.equal(b.refundOldRetries('2026-10-10'), 0);
 });

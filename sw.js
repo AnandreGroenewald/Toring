@@ -2,7 +2,7 @@
 // the network first so a new version reaches players on their next visit.
 // Bump VERSION (and VERSION in js/config.js) when shipping; old caches are deleted on activate.
 
-const VERSION = 'stapel-v1.12.0';
+const VERSION = 'stapel-v1.12.1';
 
 const PRECACHE = [
   './',
@@ -56,6 +56,7 @@ const PRECACHE = [
   'js/game/crane.js',
   'js/game/water.js',
   'js/game/effects.js',
+  'js/game/emojitex.js',
   'js/game/island.js',
   'js/game/billboard.js',
   'js/scenes/BgScene.js',

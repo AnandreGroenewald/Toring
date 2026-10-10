@@ -1,6 +1,7 @@
 // Google Play phone screenshots (1080 × 1920) of the game as the app ships it (app/www, so run
 // build-www.mjs first), played by the game's own debug autoplay in headless Chrome.
-// usage: node tools/screenshots.mjs        (from app/; writes store/screenshots/*.png)
+// usage: node tools/screenshots.mjs [numbers...]   (from app/; Afrikaans: store/screenshots/*.png)
+//        LANG=en node tools/screenshots.mjs        (English: store/screenshots-en/*.png)
 import { chromium } from 'playwright-core';
 import { createServer } from 'node:http';
 import { mkdirSync, readFileSync } from 'node:fs';
@@ -10,7 +11,8 @@ import { fileURLToPath } from 'node:url';
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const here = dirname(fileURLToPath(import.meta.url));
 const www = join(here, '../www');
-const out = join(here, '../store/screenshots');
+const LANG = process.env.LANG === 'en' ? 'en' : 'af';
+const out = join(here, LANG === 'en' ? '../store/screenshots-en' : '../store/screenshots');
 mkdirSync(out, { recursive: true });
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
@@ -43,8 +45,9 @@ async function open(query) {
   const page = await ctx.newPage();
   page.on('pageerror', (e) => problems.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') problems.push(m.text()); });
-  await page.goto(`${BASE}index.html?nosw=1&debug=1&${query}`, { waitUntil: 'load' });
+  await page.goto(`${BASE}index.html?nosw=1&debug=1&lang=${LANG}&${query}`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__stapel && window.__stapel.booted === true, null, { timeout: 30000 });
+  await page.evaluate(() => { if (document.querySelector('.modal.on')) window.__stapel.ui.closeModal(); });
   // no debug fps meter in a store picture
   await page.addStyleTag({ content: 'body > div[style*="monospace"] { display: none !important; }' });
   return page;
@@ -57,9 +60,15 @@ const shot = async (page, name) => {
 };
 const until = (page, fn, arg, ms = 240000) => page.waitForFunction(fn, arg, { timeout: ms, polling: 250 });
 
-// 1. the start screen
+// 1. the start screen, as a player who has played a while sees it (coins, a name)
 if (want(1)) {
   const page = await open('seed=winkel1');
+  await page.evaluate(() => {
+    const s = window.__stapel.store;
+    s.markTutorialSeen();
+    s.earnCoins(460, { capped: false });
+    window.__stapel.bus.emit('ui:home');
+  });
   await sleep(2500);
   await shot(page, '1-tuis');
   await page.context().close();
@@ -91,8 +100,27 @@ if (want(3)) {
   await shot(page, '3-blouaap');
   await page.context().close();
 }
-// 4. the Uitdagersreeks against Robot Rikus
+// 4. Blok vir Blok against Robot Rikus: one tower, a block each, both players' hearts at the top
 if (want(4)) {
+  for (const seed of ['winkel8', 'winkel9', 'winkel10']) {
+    const page = await open(`seed=${seed}&auto=0.05`);
+    await page.evaluate(() => {
+      window.__stapel.bus.emit('ui:duel-mode', 'turns');
+      window.__stapel.bus.emit('ui:duel-bot');
+    });
+    await until(page, () => window.__stapel.scene && window.__stapel.scene.mode === 'duel');
+    await until(page, () => window.__stapel.scene.tower.length >= 9 || window.__stapel.scene.over);
+    const ok = await page.evaluate(() => !window.__stapel.scene.over);
+    if (ok) {
+      await sleep(1200);
+      await shot(page, '4-blokvirblok');
+    }
+    await page.context().close();
+    if (ok) break;
+  }
+}
+// 5. Wedloop against Robot Rikus
+if (want(5)) {
   // past the 30 m mark: its attack toast shows, and the 50 m finish line crosses the open sky
   // (an autoplay tower can fall first: then the next seed)
   for (const seed of ['winkel4', 'winkel5', 'winkel6', 'winkel7']) {
@@ -103,19 +131,19 @@ if (want(4)) {
     const ok = await page.evaluate(() => !window.__stapel.scene.over);
     if (ok) {
       await sleep(300);
-      await shot(page, '4-uitdagersreeks');
+      await shot(page, '5-wedloop');
     }
     await page.context().close();
     if (ok) break;
   }
 }
-// 5. the daily tower's results
-if (want(5)) {
+// 6. the daily tower's results
+if (want(6)) {
   const page = await open('date=2026-10-21&auto=0.08');
   await page.evaluate(() => window.__stapel.bus.emit('ui:play-daily'));
   await until(page, () => !!document.querySelector('.screen-results.on .res-card'), null, 600000);
   await sleep(2200);
-  await shot(page, '5-uitslag');
+  await shot(page, '6-uitslag');
   await page.context().close();
 }
 

@@ -103,7 +103,7 @@
   document.addEventListener('click', function (e) {
     var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
     var href = a ? a.getAttribute('href') || '' : '';
-    if (/^(adverteer|privaatheid|terme)\.html/.test(href)) {
+    if (/^(adverteer|privaatheid|privacy|terme)\.html/.test(href)) {
       e.preventDefault();
       window.location.href = SITE + href;
     }

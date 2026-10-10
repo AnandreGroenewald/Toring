@@ -56,6 +56,9 @@ const FORCE_VISITOR = DEBUG ? params.get('visitor') : null;
 
 const HEARTBEAT_MS = 4000;     // a running daily says "still here" this often...
 const STALE_MS = 15000;        // ...and another tab takes it over only after this long
+// (1.12.1) the Android app has one game only: a tower 'being played' by another page there is the app's own, from
+// before it was closed, so it counts as it stood at once (the website waits STALE_MS for a real second tab)
+const STALE_AFTER_MS = IN_APP ? 0 : STALE_MS;
 const RESULTS_SLEEP_MS = 1500; // results/pause: stop rendering the (static) game behind the card
 const MENU_SLEEP_MS = 45000;   // menu left alone: let the attract tower rest
 
@@ -358,7 +361,8 @@ function retryBoard() {
 /** The results card learns how the player did against everyone else today, when (if) the server answers. */
 function showPercentile(result) {
   showBoardPlace(result);
-  if (!AUDIENCE_ON || !result || result.mode !== 'daily') return;
+  // (1.12.1) not after a second try: the day's count holds the first try's height, so the line would describe that one
+  if (!AUDIENCE_ON || !result || result.mode !== 'daily' || run.retry) return;
   dailyPercentile(result, { apiUrl: matchApiUrl(), storageKey: DEBUG ? `${STORAGE_KEY}.debug` : STORAGE_KEY })
     .then((answer) => {
       const line = percentileLine(answer);
@@ -392,8 +396,9 @@ function menuModel() {
     best: store.getDailyBest(dateKey),      // (1.12) the try that counts (the better of two)
     boardOn: BOARD_ON,                       // (1.12) the 🏆 on the daily card, with today's place once known
     boardPlace: boardLast?.dateKey === dateKey && boardLast.board?.you ? boardLast.board.you.rank : null,
-    retry: store.getDailyRetry(dateKey),    // (1.12) "Nog 'n kans": the day's second try, if bought
-    retryPrice: DAILY_RETRY.price,
+    retry: store.getDailyRetry(dateKey),    // (1.12) "Nog 'n kans": the day's extra try, if bought
+    retryPrice: store.nextRetryPrice(dateKey),   // (1.12.1) 50, 100, 200, 400; null: none to buy now
+    retryMax: (store.getDailyRetry(dateKey)?.n || 0) >= DAILY_RETRY.prices.length,
     stats: store.getStats(dateKey),
     settings,
     nextDayAt: nextDayTimestamp(),
@@ -464,6 +469,8 @@ function sleepLoop(afterMs = 0) {
     if (loopAsleep || !game.loop || !game.loop.running) return;
     loopAsleep = true;
     game.loop.sleep();
+    // (1.12.1) the page's own animations rest too (the logo, the weekkis): the screen can stop redrawing
+    document.documentElement.classList.add('zzz');
   }, afterMs);
 }
 
@@ -472,6 +479,7 @@ function wakeLoop() {
   sleepTimer = 0;
   if (!loopAsleep) return;
   loopAsleep = false;
+  document.documentElement.classList.remove('zzz');
   game.loop.wake();
   game.loop.resetDelta();
   const gs = gameScene();
@@ -480,6 +488,35 @@ function wakeLoop() {
 
 function armMenuSleep() {
   if (screen === 'menu') sleepLoop(MENU_SLEEP_MS);
+}
+
+// (1.12.1) A 120 Hz (or 144 Hz) screen drew every frame twice as often as the physics moves (60 a second): half
+// the work and the battery for nothing. Measured once after the start; a 60 or 90 Hz screen keeps its rate.
+function capFrames() {
+  if (typeof requestAnimationFrame !== 'function') return;
+  const deltas = [];
+  let last = 0;
+  const probe = (t) => {
+    if (last) deltas.push(t - last);
+    last = t;
+    if (deltas.length < 40) {
+      requestAnimationFrame(probe);
+      return;
+    }
+    deltas.sort((a, b) => a - b);
+    const hz = 1000 / deltas[deltas.length >> 1];
+    const limit = hz >= 110 && hz <= 130 ? 61 : hz >= 135 && hz <= 150 ? 73 : 0;   // (61, not 60: two 8.3 ms frames)
+    const loop = game.loop;
+    if (!limit || !loop) return;
+    loop.fpsLimit = limit;
+    loop.hasFpsLimit = true;
+    loop._limitRate = 1000 / limit;
+    if (loop.running && !loopAsleep) {   // the loop picks its step function when it starts
+      loop.sleep();
+      loop.wake();
+    }
+  };
+  requestAnimationFrame(probe);
 }
 
 for (const type of ['pointerdown', 'keydown']) {
@@ -629,7 +666,7 @@ function updateMenuAnchor() {
 /** Today's daily is being played in another tab right now (fresh heartbeat). */
 function liveElsewhere(dateKey) {
   const e = store.getDaily(dateKey);
-  return !!e && e.status === 'playing' && e.owner !== TAB_ID && Number.isFinite(e.beatAt) && Date.now() - e.beatAt < STALE_MS;
+  return !!e && e.status === 'playing' && e.owner !== TAB_ID && Number.isFinite(e.beatAt) && Date.now() - e.beatAt < STALE_AFTER_MS;
 }
 
 function playDaily() {
@@ -650,7 +687,7 @@ function playDaily() {
     // that is gone counts as it stood (like the first try)
     let rt = store.getDailyRetry(dateKey);
     if (rt && rt.status === 'playing' && !(run.mode === 'daily' && run.retry && !run.over)) {
-      if (rt.owner !== TAB_ID && Number.isFinite(rt.beatAt) && Date.now() - rt.beatAt < STALE_MS) {
+      if (rt.owner !== TAB_ID && Number.isFinite(rt.beatAt) && Date.now() - rt.beatAt < STALE_AFTER_MS) {
         ui.toast(S.otherTab, 3000);
         return;
       }
@@ -725,9 +762,23 @@ function canPause() {
 }
 
 function pauseGame() {
-  if (!canPause()) return;
+  if (!pauseLocal()) return;
+  // (1.12.1, the owner: "pause from both sides if you play against a friend") a friend match: the pause stops
+  // both games (the room answers both); with none left, or an older game on the other side, only this one
+  if (run.mode !== 'duel') return;
+  if (duel.canPauseBoth()) {
+    duel.pauseBoth();
+    ui.setPauseNote(S.pauseAsking);
+  } else if (duel.match?.roomKind === 'friend' && duel.match.pausesLeft === 0 && !duel.match.outcome) {
+    ui.setPauseNote(S.pauseNoneLeft(duel.match.oppName));
+  }
+}
+
+/** This game's tower stops and the pause card shows (true when it did). */
+function pauseLocal() {
+  if (!canPause()) return false;
   const gs = gameScene();
-  if (!gs || !gs.sys.isActive()) return;
+  if (!gs || !gs.sys.isActive()) return false;
   run.paused = true;
   game.scene.pause('Game');
   if (game.scene.isActive('Hud')) game.scene.pause('Hud');
@@ -742,6 +793,7 @@ function pauseGame() {
     ui.toast(S.searchStoppedPause, 2600);
   }
   sleepLoop(120);
+  return true;
 }
 
 function resumeScenes() {
@@ -754,13 +806,96 @@ function resumeScenes() {
 }
 
 function resumeGame() {
-  if (!run.paused) return;
+  if (!run.paused || resumeCounting) return;   // (during the 3-2-1 both games go on together: no head start)
   if (landscape()) return;   // still sideways: stay on the pause card
+  // (1.12.1) a pause for both: either player goes on; the room starts the 3-2-1 in both games ('duel:resumed').
+  // No answer (the connection): it goes on here after a moment.
+  if (run.mode === 'duel' && duel.pausedBoth && duel.resumeBoth()) {
+    ui.setPauseNote(S.pauseResuming);
+    clearTimeout(resumeFallback);
+    resumeFallback = setTimeout(() => resumeCountdown(DUEL.resumeMs), 4000);
+    return;
+  }
+  resumeNow();
+}
+
+function resumeNow() {
   resumeScenes();
   screen = 'game';
   ui.showInGame();
   renderTray();
 }
+
+let resumeFallback = 0;
+let resumeCounting = false;
+/** (1.12.1) The 3-2-1 back after a pause for both (the same moment in both games), then the tower goes on. */
+function resumeCountdown(ms) {
+  clearTimeout(resumeFallback);
+  if (!run.paused || resumeCounting) return;
+  resumeCounting = true;
+  let n = Math.max(1, Math.round(ms / 1000));
+  ui.setPauseCount(String(n));
+  const tick = () => {
+    n -= 1;
+    if (!run.paused) {
+      resumeCounting = false;
+      ui.setPauseCount(null);
+      return;
+    }
+    if (n > 0) {
+      ui.setPauseCount(String(n));
+      setTimeout(tick, 1000);
+      return;
+    }
+    resumeCounting = false;
+    ui.setPauseCount(null);
+    ui.setPauseNote(null);
+    // out of sight, or sideways: this game stays on its pause card ("Speel verder" goes on here alone)
+    if (document.hidden || landscape()) return;
+    resumeNow();
+  };
+  setTimeout(tick, 1000);
+}
+
+// (1.12.1) a pause for both: the other player paused (this game waits too), or ours took; the room's 3-2-1 back
+bus.on('duel:paused', (e) => {
+  if (run.mode !== 'duel' || !e) return;
+  if (!run.paused) pauseLocal();
+  if (run.paused) ui.setPauseNote(e.mine ? S.pauseBothMine(e.left) : S.pauseBothTheirs(e.name || S.duelSomeone));
+});
+bus.on('duel:nopause', (e) => {
+  if (run.paused) ui.setPauseNote(e?.left === 0 ? S.pauseNoneLeft(e?.name || S.duelSomeone) : S.pauseOnlyMine(e?.name || S.duelSomeone));
+});
+bus.on('duel:resumed', (e) => {
+  if (run.mode === 'duel') resumeCountdown(e?.ms || DUEL.resumeMs);
+});
+// (1.12.1, the owner: "the bloks that goes grey is pretty good but it needs to mention something about it") the
+// first grey blocks this player ever sees: once, a moment later (after a first game's own hint, if any)
+let cementTipAt = 0;
+bus.on('game:cement', () => {
+  if (settings.cementSeen || run.mode === 'idle' || cementTipAt) return;
+  cementTipAt = setTimeout(() => {
+    cementTipAt = 0;
+    if (settings.cementSeen || screen !== 'game' || run.paused || run.over || run.mode === 'idle') return;
+    settings = store.setSettings({ cementSeen: true });
+    bus.emit('hud:toast', { text: S.cementTip, color: '#e3eaf3' });
+  }, 2600);
+});
+
+// (1.12.1) the match was decided during a pause (the other player chose "Hou op"): its result shows now
+bus.on('duel:end', () => {
+  if (run.mode === 'duel' && run.paused && !document.hidden && !landscape()) resumeNow();
+});
+// (1.12.1) a live match's connection went (ours: the game comes back to its room) or the other player's
+bus.on('duel:conn', (e) => {
+  if (!e) return;
+  if (e.state === 'lost') {
+    ui.setConnChip(e.mine ? S.connLost : S.connOppLost(e.name || S.duelSomeone));
+    return;
+  }
+  ui.setConnChip(null);
+  if (e.state === 'back') ui.toast(e.mine ? S.connBack : S.connOppBack(e.name || S.duelSomeone), 1800);
+});
 
 /** Snapshot of a running daily straight into storage (tab hidden, page closing). */
 function saveProgressNow() {
@@ -796,7 +931,9 @@ function stopHeartbeat() {
 // The finished (or recovered) daily was written by another tab: end this one and show what counts.
 window.addEventListener('storage', () => {
   if (run.mode !== 'daily' || run.over || !run.started || !run.dateKey) return;
-  const e = store.getDaily(run.dateKey);
+  // (1.12.1) a second try ("Nog 'n kans") ends only when that try was finished elsewhere: the day's first try is
+  // always done by then, and any storage write from another tab used to stop the paid try
+  const e = run.retry ? store.getDailyRetry(run.dateKey) : store.getDaily(run.dateKey);
   if (e && e.status === 'done') {
     if (run.paused) resumeScenes();
     screen = 'game';
@@ -841,6 +978,10 @@ function syncBackGuard() {
   }, 0);
 }
 bus.on('ui:view', syncBackGuard);
+// (1.12.1) a waiting screen (search, friend room, versus) shown from the results: the page wakes (its spinner moves)
+bus.on('ui:view', () => {
+  if (screen === 'duelwait') wakeLoop();
+});
 
 window.addEventListener('popstate', () => {
   if (ignorePop) {
@@ -963,8 +1104,10 @@ function reminderList(time, now = new Date()) {
   const [hh, mm] = time.split(':').map(Number);
   const today = todayKey();
   const week = store.getWeek();
-  // the week chest's box every other day (the strongest reason to come back), the others in turn
-  const texts = (day, coins, n) => (n % 2 === 0 ? S.remind2(day, coins) : [S.remind1, S.remind3, S.remind4][Math.floor(n / 2) % 3]);
+  // the week chest's box every other day (the strongest reason to come back), the others in turn (1.12.1: a
+  // friend challenge among them: a live win pays 15 coins)
+  const others = [S.remind1, S.remind5, S.remind3, S.remind4];
+  const texts = (day, coins, n) => (n % 2 === 0 ? S.remind2(day, coins) : others[Math.floor(n / 2) % others.length]);
   const list = [];
   for (let k = 0; k < REMIND_DAYS; k++) {
     const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + k, hh, mm, 0, 0);
@@ -1014,7 +1157,12 @@ bus.on('ui:remind-pick', (time) => {
 bus.on('ui:pause', pauseGame);
 bus.on('ui:resume', resumeGame);
 bus.on('ui:quit', () => {
-  if (run.mode === 'idle' || run.over) return;
+  if (run.mode === 'idle') return;
+  // (1.12.1) the match was decided while paused: "Hou op" goes on to its result, like "Speel verder"
+  if (run.over) {
+    if (run.paused) resumeGame();
+    return;
+  }
   resumeScenes();
   screen = 'game';
   ui.showInGame();
@@ -1074,8 +1222,15 @@ bus.on('ui:settings', (partial) => {
   haptics.setEnabled(settings.vibration);
 });
 bus.on('ui:day-rollover', () => {
+  refundRetries();
   if (screen === 'menu') showMenu();
 });
+
+/** (1.12.1) A second try bought yesterday and never played: its coins come back, and the player hears so. */
+function refundRetries() {
+  const back = store.refundOldRetries(todayKey());
+  if (back) ui.toast(S.retryRefund(back), 3200);
+}
 
 // ---------------------------------------------------------------------------
 // Uitdagersreeks (head-to-head): js/duel.js runs the match; these are the screens around it.
@@ -1142,6 +1297,7 @@ let duelFlow = 0;        // bumps on every new search or cancel, so a late answe
 let duelTimer = 0;
 let lastDuelKind = null;
 let lastDuelMode = 'race';
+let lastDuelRoom = null;   // (1.12.1) 'friend' or 'random' for a live match
 /** The way to play chosen on the Uitdagersreeks screen: 'race' (Wedloop) or 'turns' (Blok vir Blok, 1.11). */
 const duelMode = () => (store.getDuel().mode === 'turns' ? 'turns' : 'race');
 
@@ -1181,6 +1337,8 @@ function versus(m, note = '') {
   const flow = ++duelFlow;
   lastDuelKind = m.kind;
   lastDuelMode = m.mode === 'turns' ? 'turns' : 'race';
+  lastDuelRoom = m.roomKind || null;
+  ui.setConnChip(null);
   screen = 'duelwait';
   // Blok vir Blok: who drops the first block
   const first = m.mode === 'turns' && m.turn ? (m.turn.seat === m.you ? S.turnsYouStart : S.turnsTheyStart(m.oppName)) : '';
@@ -1199,13 +1357,13 @@ function versus(m, note = '') {
     ui.setDuelCount(S.duelGo);
     audio.play('banner');
     setTimeout(() => {
-      if (flow === duelFlow) startDuelGame(m);
+      if (flow === duelFlow && duel.match === m) startDuelGame(m);   // (the match must still be the one shown)
     }, 450);
   }, 1000);
 }
 
 function startDuelGame(m) {
-  duelReward = null;
+  if (!m.outcome) duelReward = null;   // (a match decided during the 3-2-1 keeps its coins for the results)
   resetRun('duel');
   // (1.12) emoji reactions in a live match or against Robot Rikus (a recording or a friend's link can't see them)
   ui.setEmotes(m.kind === 'live' || m.kind === 'bot' ? {} : null);
@@ -1230,10 +1388,12 @@ function showDuelResults(r) {
   // Wedloop: the share link is your run (a friend races it); Blok vir Blok: the game itself
   const link = d.challenge ? `${siteUrl()}?teen=${d.challenge}` : d.mode === 'turns' ? siteUrl() : '';
   screen = 'results';
+  ui.setConnChip(null);
   ui.showResults({
     result: r,
     mode: 'duel',
     duel: d,
+    again: duel.canAgain() ? { name: d.oppName || S.duelSomeone } : null,
     reward: duelReward,
     shareText: buildDuelShareText({ outcome: d.outcome, youBest: d.youBest, oppName: d.oppName, oppBest: d.oppBest, link, mode: d.mode }),
     nextDayAt: 0,
@@ -1318,6 +1478,12 @@ bus.on('ui:duel-name', (text) => {
     nameBoardTimer = setTimeout(boardChanged, NAME_BOARD_MS);   // the latest leaderboard row takes the new name
   }
 });
+// (1.12.1) the nickname from the ranglys or Statistiek too (before, only in the Uitdagersreeks): saved through
+// 'ui:duel-name' as there, then back to the sheet it was opened from
+bus.on('ui:name', (from) => {
+  const back = from === 'board' ? () => bus.emit('ui:board') : from === 'stats' ? () => ui.showStats() : null;
+  ui.showName({ name: store.getDuel().name || '', placeholder: sessionNick, back });
+});
 bus.on('ui:duel-bot', () => versus(duel.startBot(duelMode())));
 bus.on('ui:duel-random', searchOpponent);
 bus.on('ui:duel-friend', () => {
@@ -1353,6 +1519,12 @@ bus.on('ui:duel-friend', () => {
     onWait: () => {
       if (flow === duelFlow) ui.setDuelWaitNote(null);
     },
+    // (1.12.1) a friend answered "Sorry, besig nou": said here; the room waits on for anyone else
+    onDeclined: (name) => {
+      if (flow !== duelFlow) return;
+      ui.setDuelWaitNote(S.duelDeclined(name));
+      ui.toast(S.duelDeclined(name), 3500);
+    },
   });
 });
 bus.on('ui:duel-later', () => {
@@ -1368,11 +1540,37 @@ bus.on('ui:duel-accept', () => {
   else showDuelScreen();
 });
 bus.on('ui:duel-again', () => {
+  // (1.12.1, the owner: "if I say play again after I challenged a friend then it shows finding an opponent")
+  // after a friend match: the same friend, in the same room (the match starts once both said it)
+  if (duel.canAgain()) {
+    duel.again();
+    return;
+  }
   duel.leave();
   // the same way to play as the match just played
   store.setDuelMode(lastDuelMode);
-  if (duel.live && lastDuelKind !== 'bot') searchOpponent();
+  if (duel.live && lastDuelKind === 'live' && lastDuelRoom === 'friend') bus.emit('ui:duel-friend');   // a new invite
+  else if (duel.live && lastDuelKind !== 'bot') searchOpponent();
   else versus(duel.startBot(lastDuelMode));
+});
+bus.on('duel:again', (e) => ui.setAgain(e?.state, e?.name || S.duelSomeone));
+bus.on('duel:rematch', (m) => {
+  if (screen !== 'results' && screen !== 'duelwait') return;
+  stopDuelFlow();
+  versus(m);
+});
+
+let inviteFrom = '';   // (1.12.1) who invited, while their link's question is on screen
+bus.on('ui:invite-yes', () => {
+  if (!duel.acceptInvite()) return;
+  ui.showDuelWait({ state: 'search', appLink: APP_LINK });
+  ui.setDuelCount(S.duelJoining);
+});
+bus.on('ui:invite-no', () => {
+  if (!duel.declineInvite()) return;
+  stopDuelFlow();
+  showMenu();
+  ui.toast(S.inviteBusySent(inviteFrom || S.duelSomeone), 3200);
 });
 
 /** Opened from a friend's link: their run (play it now?) or their live room (join it). */
@@ -1396,6 +1594,13 @@ function openDuelLink() {
     ui.showDuelWait({ state: 'search', appLink: APP_LINK });
     ui.setDuelCount(S.duelJoining);
     duel.joinRoom(code, {
+      // (1.12.1) who invites and which mode, then "Speel" or "Sorry, besig nou" (nothing starts before)
+      invite: true,
+      onInvite: (host) => {
+        if (flow !== duelFlow) return;
+        inviteFrom = host.name || S.duelSomeone;
+        ui.showDuelWait({ state: 'invite', oppName: inviteFrom, mode: host.mode, appLink: APP_LINK });
+      },
       onStart: (m) => {
         if (flow === duelFlow) versus(m);
       },
@@ -1447,7 +1652,7 @@ bus.on('ui:daily-retry', () => {
   const dateKey = todayKey();
   const r = store.buyDailyRetry(dateKey);
   if (!r.ok) {
-    ui.toast(r.reason === 'coins' ? S.retryNeed(DAILY_RETRY.price - r.coins) : S.retryOnce, 2600);
+    ui.toast(r.reason === 'coins' ? S.retryNeed(r.price - r.coins) : r.reason === 'max' ? S.retryMax : S.retryBusy, 2600);
     return;
   }
   ui.toast(S.retryBought, 2400);
@@ -1498,7 +1703,7 @@ function finalize(result) {
       stats = store.finishDailyRetry(result.dateKey, result);
       pushSkyline();
       isNewBest = !!(stats.applied && (stats.isNewBestHeight || stats.isNewBestScore));
-      shown = { ...result, retry: true };
+      shown = { ...result, retry: true, tryNo: 1 + (store.getDailyRetry(result.dateKey)?.n || 1) };   // ("poging 3")
       store.setBoardPending(true);   // the better of the two goes on the board, marked 🔁
     }
   } else if (result.mode === 'daily' && result.dateKey) {
@@ -1542,6 +1747,12 @@ bus.on('game:final', (result) => {
 bus.on('game:over', (result) => {
   if (lesson) endLesson();
   if (!result || run.mode === 'idle' || screen === 'results' || screen === 'menu') return;
+  // (1.12.1) an opponent was found while this Oefen tower's fall was shown: the tower counts, but its results
+  // stay away (the "Teen …! 3-2-1" is on screen and the match starts from there)
+  if (screen === 'duelwait' || screen === 'duel') {
+    if (result.mode !== 'duel') finalize(result);
+    return;
+  }
   const f = finalize(result);
   if (run.paused) resumeScenes();
   if (result.mode === 'duel') {
@@ -1654,6 +1865,54 @@ function refit() {
   }
 }
 
+// (1.12.1) The keyboard. In the app (and browsers that do the same) it makes the window shorter, and the game
+// re-fitted to that: the whole screen shrank while a nickname was typed. While a text box has the focus and only
+// the height went down, the game and the screens keep their size (the box moves up into sight, js/ui/dom.js).
+const KEYBOARD_MIN_PX = 80;   // a smaller change is the system bars, not a keyboard
+const gameBox = document.getElementById('game');
+let roomy = { w: window.innerWidth, h: window.innerHeight };   // the window without a keyboard
+let keyboardUp = false;
+function typingInBox() {
+  const a = document.activeElement;
+  if (!a) return false;
+  if (a.tagName === 'TEXTAREA' || a.isContentEditable) return true;
+  return a.tagName === 'INPUT' && !/^(button|checkbox|radio|range|submit|reset|file|color|hidden|image)$/i.test(a.type || '');
+}
+/** Called on every resize, before anything re-fits: true while the keyboard is up (nothing re-fits then). */
+function holdForKeyboard() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  if (typingInBox() && Math.abs(w - roomy.w) < 2 && h < roomy.h - KEYBOARD_MIN_PX) {
+    keyboardUp = true;
+    gameBox.style.height = `${roomy.h}px`;   // Phaser keeps fitting #game: it keeps its size
+    document.documentElement.classList.add('kb-up');   // a short phone's window is wider than tall now: no "turn upright"
+    ui.setKeyboard(true);
+    return true;
+  }
+  if (keyboardUp) {
+    keyboardUp = false;
+    gameBox.style.height = '';
+    document.documentElement.classList.remove('kb-up');
+    ui.setKeyboard(false);
+  }
+  if (!typingInBox()) roomy = { w, h };
+  return false;
+}
+// the size just before the keyboard comes up (the window may not have changed since it loaded)
+document.addEventListener('focusin', () => {
+  if (!keyboardUp && typingInBox()) roomy = { w: window.innerWidth, h: window.innerHeight };
+});
+// typing done, yet no resize said the keyboard went (a desktop window made shorter while typing, a keyboard
+// that stays): fit the window as it is
+document.addEventListener('focusout', () => {
+  setTimeout(() => {
+    if (keyboardUp && !typingInBox()) {
+      holdForKeyboard();
+      scheduleLayout();
+    }
+  }, 600);
+});
+
 let layoutRaf = 0;
 let layoutTimer = 0;
 /** Window resized or rotated: re-fit Phaser (which fires its own 'resize'), then the DOM. */
@@ -1661,9 +1920,14 @@ function scheduleLayout() {
   cancelAnimationFrame(layoutRaf);
   clearTimeout(layoutTimer);
   layoutRaf = requestAnimationFrame(() => {
+    if (keyboardUp) return;
     refit();
     relayout();
-    layoutTimer = setTimeout(() => { refit(); relayout(); }, 120);   // the browser settles bars/rotation a beat later
+    layoutTimer = setTimeout(() => {   // the browser settles bars/rotation a beat later
+      if (keyboardUp) return;
+      refit();
+      relayout();
+    }, 120);
   });
 }
 /** Phaser re-fitted the canvas: only the DOM follows (re-fitting again here would loop). */
@@ -1671,12 +1935,16 @@ function scheduleRelayout() {
   cancelAnimationFrame(layoutRaf);
   layoutRaf = requestAnimationFrame(relayout);
 }
-window.addEventListener('resize', scheduleLayout);
+// (in the resize event itself: Phaser looks at #game's size on its next frame)
+const onResize = () => {
+  if (!holdForKeyboard()) scheduleLayout();
+};
+window.addEventListener('resize', onResize);
 window.addEventListener('orientationchange', scheduleLayout);
 if (window.screen && window.screen.orientation && window.screen.orientation.addEventListener) {
   window.screen.orientation.addEventListener('change', scheduleLayout);
 }
-if (window.visualViewport) window.visualViewport.addEventListener('resize', scheduleLayout);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -1686,8 +1954,9 @@ function onReady() {
   relayout();
   watchContextLoss();
 
-  const recovered = store.recoverUnfinished(todayKey(), { staleMs: STALE_MS, owner: TAB_ID });
+  const recovered = store.recoverUnfinished(todayKey(), { staleMs: STALE_AFTER_MS, owner: TAB_ID });
   const recoveredCoins = payRecovered(recovered);
+  refundRetries();
   startIdle();
   showMenu();
   retryBoard();
@@ -1699,6 +1968,7 @@ function onReady() {
   if (recovered.length) ui.toast(recoveredCoins ? `${S.unfinished} +${recoveredCoins} 🪙` : S.unfinished, 3600);
   else if (liveElsewhere(todayKey())) ui.toast(S.otherTab, 3000);
   if (DEBUG) startFpsMeter();
+  setTimeout(capFrames, 1500);   // (once the start-up's work is done: a busy start would measure low)
   window.__stapel.booted = true;
 }
 

@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.12.0';
+export const VERSION = '1.12.1';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -255,6 +255,13 @@ export const DUEL = {
   countdownMs: 3000,
   stateEveryMs: 400,       // live: how often a tower sends its height
   nameMax: 16,
+  // (1.12.1, protocol 5; the owner: "it just switch from Wifi to data and it disconnected, cant you make it
+  // reconnecting", "pause from both sides if you play against a friend", play again against the same friend)
+  rejoinMs: 20000,         // a dropped connection keeps its seat this long (the phone comes back to it meanwhile)
+  pauseMs: 60000,          // a friend match: a pause stops both games, at most this long...
+  pauses: 3,               // ...and each player has this many a match
+  resumeMs: 3000,          // the 3-2-1 after a pause
+  againMs: 3 * 60 * 1000,  // a finished friend match waits this long for both to say "Speel weer"
 };
 
 // Blok vir Blok (1.11): two players build ONE tower, a block each in turn. A turn that loses blocks
@@ -288,13 +295,18 @@ export const TURNS = {
 // Emoji reactions in a match (1.12; the owner: "Emoji reaction while in game but you can't spam it"): a
 // small, kind set; one every cooldownMs, perMatch in a match; the server passes on at most one every
 // serverGapMs and serverMax in a match, whatever a game sends.
-export const EMOTES = Object.freeze({ lag: '😂', vuur: '🔥', skrik: '😱', klap: '👏', koel: '😎', oeps: '🙈' });
+// Every emoji a game may send (an older game's too: 🙈 stays readable), and (1.12.1) the ones the tray offers: the
+// owner asked for a little taunt, "the sticking out the tongue, also a laughing face. Not too many emojis though."
+export const EMOTES = Object.freeze({ lag: '😂', tong: '😛', vuur: '🔥', skrik: '😱', klap: '👏', koel: '😎', oeps: '🙈' });
+export const EMOTE_PICKS = Object.freeze(['lag', 'tong', 'koel', 'vuur', 'skrik', 'klap']);
 export const EMOTE = Object.freeze({ cooldownMs: 5000, perMatch: 12, serverGapMs: 3000, serverMax: 20, botAnswer: 0.5 });
 
 // "Nog 'n kans" (1.12; the owner: "What if you can use coins to buy another chance?"): one more Daaglikse
 // Toring try a day, for coins. The leaderboard keeps the better of the two, marked 🔁 (the owner's choice);
 // the second try earns no coins, streak or week box (the first try did).
-export const DAILY_RETRY = Object.freeze({ price: 50 });
+// "Nog 'n kans": extra Daaglikse Toring tries bought with coins. (1.12.1) Up to four a day, each dearer than the
+// last; then "Kom môre terug". `price` is the first one's (what a 1.12.0 page knew).
+export const DAILY_RETRY = Object.freeze({ price: 50, prices: Object.freeze([50, 100, 200, 400]) });
 
 // ---------------------------------------------------------------------------
 // Daily tower
