@@ -299,7 +299,7 @@ export const DAILY_RETRY = Object.freeze({ price: 50 });
 // (1.13) Sign in with Google (js/account.js): the web client ID from Google Cloud (Google Auth Platform >
 // Clients > "Stapel web"; public, not a secret; the Worker's GOOGLE_CLIENT_ID is the same). Empty: the
 // sign-in stays hidden. The Android app asks Google for tokens for this same ID.
-export const AUTH = Object.freeze({ googleClientId: '' });
+export const AUTH = Object.freeze({ googleClientId: '338179953021-qocupp0icc6764ik3gm3lskbbftvnqt4.apps.googleusercontent.com' });
 
 // ---------------------------------------------------------------------------
 // Daily tower
