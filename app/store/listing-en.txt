@@ -1,5 +1,5 @@
 NAME (max 30)
-Stapel: Afrikaans tower game
+Stapel
 
 SHORT DESCRIPTION (max 80)
 Stack blocks as high as you can. One tower a day, the same for everyone!
