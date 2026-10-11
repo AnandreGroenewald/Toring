@@ -27,14 +27,21 @@ import {
 const YOU = 0;
 const THEM = 1;
 const RESULT_WAIT_MS = 2500;   // live: after our tower fell, wait this long for the server's verdict
-const PROTOCOL = 5;            // 2: the first to a height mark chooses the punishment ('choose' / 'punish'); 3: Blok vir Blok;
+const PROTOCOL = 6;            // 2: the first to a height mark chooses the punishment ('choose' / 'punish'); 3: Blok vir Blok;
                               // 4 (1.12): Blok vir Blok 'go' (a turn began) and the report's step count, for a smooth replay;
                               // the rondtes (weather and visitors in the turn messages) and 'visit' (Skelm Sakkie's outcome);
                               // 5 (1.12.1): back on a new connection ('?rejoin=1'), "Sorry, besig nou" ('decline'),
-                              // "Speel weer" in the same room ('again'), a pause for both in a friend match ('pause' / 'resume')
+                              // "Speel weer" in the same room ('again'), a pause for both in a friend match ('pause' / 'resume');
+                              // 6 (1.13): coin matches (a stake in the lobby's hello and the friend room's POST; the start says it)
+const V5 = 5;                  // the protocol that brought rejoin, "Speel weer" and the pause for both (a 1.12.1 game has them too)
 const REJOIN_RETRY_MS = [600, 1200, 2000, 3000];   // a dropped match tries its room again after these (then every 3 s)
+// (1.13) a coin match is settled by the room's result only: after our tower ended (or we quit) the game waits this long
+// for it (from the moment it is back, after a dropped connection) before it counts the match as lost
+const STAKE_RESULT_WAIT_MS = 10000;
 const DEFAULT_CARD = cleanCard(null);   // a recording or a link carries no card
 const round1 = (v) => Math.round(v * 10) / 10;
+/** (1.13) A stake as the room or the player says it: one of DUEL.stakes, else 0 (no coins at stake). */
+const stakeOf = (n) => (DUEL.stakes.includes(Number(n)) ? Number(n) : 0);
 const num = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(DUEL.maxHeightM, Number(v))) : 0);
 
 function parse(data) {
@@ -98,14 +105,16 @@ export function createDuel({
   // very moment): back to the lobby after this, instead of waiting out the room (2 minutes)
   const PAIR_WAIT_MS = 20000;
   const hud = { you: 0, them: 0, name: '', badge: '', claimed: {}, lives: null, youLives: null };
-  const hello = (mode) => ({
-    t: 'hello', v: PROTOCOL, rules: DUEL.rules, ...(mode === 'turns' ? { mode } : {}), name: nickname() || '', card: cleanCard(card(mode)),
+  // (1.13) `stake`: only the lobby's hello asks for one (a room has its own, from its making)
+  const hello = (mode, stake = 0) => ({
+    t: 'hello', v: PROTOCOL, rules: DUEL.rules, ...(mode === 'turns' ? { mode } : {}), ...(stakeOf(stake) ? { stake: stakeOf(stake) } : {}),
+    name: nickname() || '', card: cleanCard(card(mode)),
   });
 
   // ------------------------------------------------------------------------------- a match
   function newMatch({
     kind, seed, oppName, oppCard = null, run = null, ws = null, you = YOU, mode = 'race', turn = null, oppV = null, rounds = false,
-    room = null, sv = 0, roomKind = null,
+    room = null, sv = 0, roomKind = null, stake = 0,
   }) {
     reqGen++;
     if (match) dropChoice(match);
@@ -143,6 +152,11 @@ export function createDuel({
       // kind; what this game said that may need saying again (this turn's messages, a joker, a punishment chosen,
       // how its tower ended), what it already heard (a message heard twice counts once), the pause, "Speel weer"
       room, sv, roomKind,
+      stake: kind === 'live' ? stakeOf(stake) : 0,   // (1.13) what each player put in (only a live match against a person)
+      // (1.13) the room's word on the stakes (true: both hold theirs; false: none, both get theirs back; null: not yet),
+      // and what this game answered (said again when it comes back while that is still open)
+      stakeOn: null, stakeAns: null,
+      backAt: 0,   // when this game last came back to its room (a verdict on its way gets a full wait from then)
       rejoin: null,
       outbox: [], jokerOut: null, chosen: {}, overMsg: null,
       seen: new Set(),
@@ -178,9 +192,24 @@ export function createDuel({
     if (m.kind === 'live' && !canAgain(m)) setTimer(() => { if (match === m) close(m.ws); }, 1500);
   }
 
+  /**
+   * (1.13) The room's word on a coin match's stakes: once on (both hold theirs), or off (none: both get theirs back;
+   * also later, when a coin match ran out of time with level towers). The game hears it as 'duel:stake'.
+   */
+  function stakeVerdict(m, on) {
+    if (!m.stake || (on !== true && on !== false)) return;
+    if (on === true && m.stakeOn !== null) return;
+    if (on === false && m.stakeOn === false) return;
+    m.stakeOn = on;
+    bus.emit('duel:stake', { on, match: m });
+  }
+
+  /** (1.13) A coin match waits for the room's own result; any other live match for RESULT_WAIT_MS. */
+  const resultWaitMs = (m) => (m.stake ? STAKE_RESULT_WAIT_MS : RESULT_WAIT_MS);
+
   /** (1.12.1) Can this live match start again in the same room ("Speel weer")? A friend room, both games 1.12.1. */
   function canAgain(m) {
-    return !!m && m.kind === 'live' && m.roomKind === 'friend' && m.sv >= PROTOCOL && (m.oppV || 0) >= PROTOCOL;
+    return !!m && m.kind === 'live' && m.roomKind === 'friend' && m.sv >= V5 && (m.oppV || 0) >= V5;
   }
 
   /** Referee events (a recording or the computer) and the live result, in one shape. */
@@ -333,27 +362,36 @@ export function createDuel({
     if (m.mode === 'turns') {
       // Blok vir Blok ends by itself only when the player quits: a loss (the server hands it on)
       if (m.kind === 'live') send(m.ws, (m.overMsg = { t: 'over', reason: 'quit' }));
-      decide('lost', 'quit');
+      // (1.13) a coin match: the room's result decides (it may have named us the winner a moment before)
+      if (m.kind === 'live' && m.stake) awaitResult(m, 'quit');
+      else decide('lost', 'quit');
       return;
     }
     if (m.kind === 'live') {
       send(m.ws, (m.overMsg = { t: 'over', reason, best: round1(m.youBest) }));
-      // quitting is always a loss; otherwise the server says (whoever fell first loses)
-      if (reason === 'quit') decide('lost', 'quit');
-      // (no verdict because the connection went meanwhile: it doesn't count, as a dropped match never does; while
-      // it comes back, the verdict waits for it)
-      else {
-        const wait = () => {
-          if (match !== m || m.outcome || m.lostConn) return;
-          if (m.rejoin) setTimer(wait, 500);
-          else decide('lost', reason);
-        };
-        setTimer(wait, RESULT_WAIT_MS);
-      }
+      // quitting is always a loss (1.13: in a coin match the room's result says so); otherwise the server says
+      // (whoever fell first loses)
+      if (reason === 'quit' && !m.stake) decide('lost', 'quit');
+      else awaitResult(m, reason);
     } else {
       handle(m.referee.report(YOU, { h: m.youBest, over: reason }));
     }
   });
+
+  /**
+   * Our tower ended in a live match: the room's verdict, or (none in time) a loss. While the game comes back to its
+   * room the wait goes on, and starts again once it is back (the room then hears where our tower is). No verdict
+   * because the connection went for good: it doesn't count (lostMatch).
+   */
+  function awaitResult(m, reason) {
+    const t0 = now();
+    const wait = () => {
+      if (match !== m || m.outcome || m.lostConn) return;
+      if (m.rejoin || now() - Math.max(t0, m.backAt) < resultWaitMs(m)) setTimer(wait, 250);
+      else decide('lost', reason);
+    };
+    setTimer(wait, 250);
+  }
 
   // ------------------------------------------------------------------------------- Blok vir Blok
   /** A referee's 'turn' event (or the server's 'turn' message) as the game takes it; null if malformed. */
@@ -666,6 +704,9 @@ export function createDuel({
    */
   function onShared(m, msg) {
     switch (msg.t) {
+      case 'stake':   // (1.13) both games hold their stake (on), or the match plays for none (both get theirs back)
+        stakeVerdict(m, msg.on);
+        return true;
       case 'away':
         if (!m.outcome) bus.emit('duel:conn', { state: 'lost', mine: false, name: m.oppName });
         return true;
@@ -723,6 +764,8 @@ export function createDuel({
       mode: turns ? 'turns' : 'race', turn, oppV: Number.isFinite(msg.opp?.v) ? Math.max(1, Math.min(99, Math.floor(msg.opp.v))) : null, rounds: msg.rounds === true,
       // (1.12.1: the room's protocol and kind, from a Worker of protocol 5)
       room, sv: Number.isFinite(msg.sv) ? Math.floor(msg.sv) : 0, roomKind: msg.room === 'friend' || msg.room === 'random' ? msg.room : null,
+      // (1.13) the room's stake, as the room says it (a Worker older than 1.13 says none: no coins at stake)
+      stake: msg.stake,
     });
     if (!quiet) room.onStart(m);
     return m;
@@ -736,7 +779,8 @@ export function createDuel({
    * starts while this player isn't looking; back() reconnects.
    * (1.12.1) `invite`: a friend's link. The room says who invites (`onInvite(host)`), and nothing starts until the
    * player answers: acceptInvite() ("Speel") or declineInvite() ("Sorry, besig nou"). The one who invited hears
-   * such an answer through `onDeclined(name)` and keeps waiting (the link may have gone to a group).
+   * such an answer through `onDeclined(name, { coins })` and keeps waiting (the link may have gone to a group).
+   * (1.13) A coin match: `onInvite(host)` also says the stake (host.stake; 0 for none).
    */
   function joinRoom(code, {
     onWait = () => {}, onStart = () => {}, onFail = () => {}, onRetry = () => {}, waitMs = 0,
@@ -809,10 +853,13 @@ export function createDuel({
             if (room.accepted) onWait(code);
             else {
               const host = msg.host && typeof msg.host === 'object' ? msg.host : null;
-              room.onInvite({ name: cleanNickname(host?.name) || '', mode: host?.mode === 'turns' ? 'turns' : host ? 'race' : null });
+              room.onInvite({
+                name: cleanNickname(host?.name) || '', mode: host?.mode === 'turns' ? 'turns' : host ? 'race' : null,
+                stake: stakeOf(host?.stake),   // (1.13) a coin match: what each player puts in
+              });
             }
-          } else if (msg.t === 'declined') {   // (1.12.1) a friend answered "Sorry, besig nou"
-            room.onDeclined(cleanNickname(msg.name) || S.duelSomeone);
+          } else if (msg.t === 'declined') {   // (1.12.1) a friend answered "Sorry, besig nou" (1.13: or too few coins)
+            room.onDeclined(cleanNickname(msg.name) || S.duelSomeone, { coins: msg.coins === true, old: msg.old === true });
           } else if (msg.t === 'gone') {
             stopPending();
             onFail(S.duelRoomGone);
@@ -863,7 +910,7 @@ export function createDuel({
       }
       return;
     }
-    if (m.sv >= PROTOCOL && m.room && live) {
+    if (m.sv >= V5 && m.room && live) {
       startRejoin(m);
       return;
     }
@@ -874,6 +921,7 @@ export function createDuel({
   function lostMatch(m) {
     if (m.outcome) return;
     m.lostConn = true;
+    bus.emit('duel:dropped', { match: m });   // (1.13: a coin match's stake goes, also after the tower ended)
     // During the 3-2-1 there is no match scene yet: it ends the moment there is ('duel:ready' / 'turns:ready').
     if (!m.over) {
       dropChoice(m);
@@ -953,6 +1001,10 @@ export function createDuel({
     m.rejoin.ws = null;   // (kept: it is the match's connection now)
     stopRejoin(m);
     m.ws = ws;
+    m.backAt = now();
+    // (1.13) the room's word on the stakes so far; not yet: our answer again (it may have been lost)
+    if (m.stake && (msg.stake === true || msg.stake === false)) stakeVerdict(m, msg.stake);
+    else if (m.stake && m.stakeAns && m.stakeOn === null) send(ws, m.stakeAns);
     bus.emit('duel:conn', { state: 'back', mine: true });
     if (m.mode === 'race') {
       if (msg.opp && typeof msg.opp === 'object') onRoomMessage(m, { ...msg.opp, t: 'opp' });
@@ -994,11 +1046,14 @@ export function createDuel({
     return true;
   }
 
-  /** "Sorry, besig nou": the one who invited hears it, and this game lets the room go. */
-  function declineInvite() {
+  /**
+   * "Sorry, besig nou": the one who invited hears it, and this game lets the room go.
+   * (1.13) `coins`: the reason is too few coins for the room's stake (they hear that instead).
+   */
+  function declineInvite({ coins = false } = {}) {
     const room = pending?.room;
     if (!room || room.accepted) return false;
-    if (pending.ws && pending.ws.readyState === 1) send(pending.ws, { t: 'decline', name: nickname() || '' });
+    if (pending.ws && pending.ws.readyState === 1) send(pending.ws, { t: 'decline', name: nickname() || '', ...(coins ? { coins: true } : {}) });
     const ws = pending.ws;
     pending.ws = null;   // (closed a moment later: the answer goes first)
     stopPending();
@@ -1017,13 +1072,14 @@ export function createDuel({
    * connection comes back (and stays closed while the game is hidden, like a room); `onRetry` meanwhile.
    * A quiet ping keeps a phone's connection open while nothing happens.
    */
-  function findOpponent({ onFound = () => {}, onFallback = () => {}, onRetry = () => {}, mode = 'race' } = {}) {
+  function findOpponent({ onFound = () => {}, onFallback = () => {}, onRetry = () => {}, mode = 'race', stake = 0 } = {}) {
     stopPending();
     if (!live) {
       fallback(onFallback, mode);
       return;
     }
-    const search = { tries: 0, retry: null, ping: null, away: hidden(), connect: null, onRetry, onFound, onFallback, mode };
+    // (1.13) `stake`: a coin match; the lobby pairs only players who asked for the same stake
+    const search = { tries: 0, retry: null, ping: null, away: hidden(), connect: null, onRetry, onFound, onFallback, mode, stake: stakeOf(stake) };
     pending = { ws: null, timer: null, search };
     const retryLater = () => {
       if (pending?.search !== search || search.retry || search.away) return;
@@ -1046,13 +1102,13 @@ export function createDuel({
       pending.ws = ws;
       ws.onopen = () => {
         search.tries = 0;
-        send(ws, hello(mode));
+        send(ws, hello(mode, search.stake));
       };
       ws.onmessage = (e) => {
         const msg = parse(e.data);
         if (!msg || msg.t !== 'match' || !isRoomCode(msg.room) || pending?.ws !== ws) return;
         stopPending();
-        joinRoom(msg.room, { onStart: onFound, onFail: () => findOpponent({ onFound, onFallback, onRetry, mode }), waitMs: PAIR_WAIT_MS });
+        joinRoom(msg.room, { onStart: onFound, onFail: () => findOpponent({ onFound, onFallback, onRetry, mode, stake: search.stake }), waitMs: PAIR_WAIT_MS });
       };
       ws.onclose = () => {
         if (pending?.ws !== ws) return;   // stopped, paired, or replaced by a reconnect
@@ -1115,6 +1171,7 @@ export function createDuel({
   /** A friend room: the server makes a code; the host waits in the room until the friend comes. */
   async function createRoom({
     onCode = () => {}, onStart = () => {}, onFail = () => {}, onWait = () => {}, onRetry = () => {}, onDeclined = () => {}, mode = 'race',
+    stake = 0,
   } = {}) {
     stopPending();
     const gen = reqGen;
@@ -1125,7 +1182,9 @@ export function createDuel({
     let code = null;
     try {
       const res = await fetchImpl(`${httpUrl}/match/room`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mode === 'turns' ? { mode } : {}), credentials: 'omit',
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'omit',
+        // (1.13) `stake`: a coin match (the room keeps it; a friend's game older than 1.13 can't come in)
+        body: JSON.stringify({ ...(mode === 'turns' ? { mode } : {}), ...(stakeOf(stake) ? { stake: stakeOf(stake) } : {}) }),
       });
       const body = res.ok ? await res.json() : null;
       code = isRoomCode(body?.code) ? body.code : null;
@@ -1255,6 +1314,14 @@ export function createDuel({
     },
     acceptInvite,
     declineInvite,
+    /** (1.13) A coin match starts: this game holds its stake (ok) or can't; the room tells both whether it counts. */
+    answerStake(ok) {
+      const m = match;
+      if (!m || m.kind !== 'live' || !m.stake || m.stakeAns) return false;
+      m.stakeAns = { t: 'stake', ok: ok === true };
+      send(m.ws, m.stakeAns);
+      return true;
+    },
     /** (1.12.1) A friend match of two 1.12.1 games: can a pause stop both games now? */
     canPauseBoth() {
       const m = match;
@@ -1328,8 +1395,8 @@ export function createDuel({
       const t0 = now();
       const poll = () => {
         // (1.12.1) while the game comes back to its room, the verdict waits for it (else the results said "doesn't
-        // count" and the verdict counted a moment later)
-        const late = now() - t0 > RESULT_WAIT_MS + 300 + (m.rejoin ? DUEL.rejoinMs : 0);
+        // count" and the verdict counted a moment later); (1.13) and once it is back, a full wait again
+        const late = !m.rejoin && now() - Math.max(t0, m.backAt) > resultWaitMs(m) + 300;
         if (match !== m || m.outcome || m.lostConn || late) cb();
         else setTimer(poll, 100);
       };

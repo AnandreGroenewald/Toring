@@ -3,7 +3,7 @@
 // and real buttons lives here, positioned exactly over the canvas by layout().
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
-import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, computeGameHeight } from '../config.js';
+import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, DUEL, computeGameHeight } from '../config.js';
 import { WEEK } from '../core/week.js';
 
 const WEEK_COINS = WEEK.coins;
@@ -1348,6 +1348,8 @@ export function createUI(bus) {
       h('div', { class: 'duel-head' }, emo('⚔️'), h('h2', { text: S.duel })),
       h('p', { class: 'duel-intro', text: S.duelIntroModes }),
       modePicker(m.mode),
+      // (1.13) coin matches: only where a live match can be played
+      m.live ? stakePicker(m.stake || 0, m.coins || 0) : null,
       m.rank ? rankBox(m.rank, m.card, d.name || st.duelPlaceholder) : null,
       // (1.12.1) the name rules where a nickname is typed (Google Play's user content policy)
       h('div', { class: 'nick' }, h('span', { class: 'label', text: S.duelNick }), input, msg, h('p', { class: 'name-rules', text: S.nameRules })),
@@ -1381,6 +1383,54 @@ export function createUI(bus) {
         opt('race', '🏁', S.modeRace),
         opt('turns', '🧱', S.modeTurns)),
       h('p', { class: 'mode-what', 'aria-live': 'polite', text: mode === 'turns' ? S.modeTurnsWhat : S.modeRaceWhat }));
+  }
+
+  /**
+   * (1.13, the owner: coin matches with earned coins only) what a live match is played for: none, or one of DUEL.stakes
+   * ('ui:duel-stake' -> setDuelStake). An amount above the player's coins can't be chosen.
+   */
+  function stakePicker(stake, coins) {
+    const opt = (n) => {
+      const short = n > coins;
+      return h('button', {
+        type: 'button', class: 'stake-btn', 'data-stake': String(n), 'aria-pressed': String(stake === n),
+        ...(short ? { disabled: true, title: S.stakeNeedMore(fmtInt(n - coins)) } : {}),
+        onclick: () => {
+          audio.play('click');
+          bus.emit('ui:duel-stake', n);
+        },
+      }, n ? [emo(COIN), h('span', { text: fmtInt(n) })] : h('span', { text: S.stakeNone }));
+    };
+    return h('div', { class: 'stake-pick' },
+      h('span', { class: 'label', text: S.stakeLabel }),
+      h('div', { class: 'stake-btns', role: 'group', 'aria-label': S.stakeLabel }, [0, ...DUEL.stakes].map(opt)),
+      h('p', { class: 'stake-what', 'aria-live': 'polite', text: stakeWhat(stake) }),
+      h('p', { class: 'stake-have', text: S.stakeHave(fmtInt(coins)) }),
+      h('p', { class: 'stake-note', text: S.stakeNote }));
+  }
+
+  const stakeWhat = (n) => (n ? S.stakeWhat(fmtInt(n), fmtInt(n * 2)) : S.stakeNoneWhat);
+
+  /** (1.13) The chosen stake (or the coins) changed: the buttons and the lines follow. */
+  function setDuelStake(stake, coins) {
+    const box = screens.duel.querySelector('.stake-pick');
+    if (!box) return;
+    for (const b of box.querySelectorAll('.stake-btn')) {
+      const n = Number(b.dataset.stake);
+      b.setAttribute('aria-pressed', String(n === stake));
+      b.disabled = n > coins;
+      if (n > coins) b.title = S.stakeNeedMore(fmtInt(n - coins));
+      else b.removeAttribute('title');
+    }
+    const what = box.querySelector('.stake-what');
+    if (what) what.textContent = stakeWhat(stake);
+    const have = box.querySelector('.stake-have');
+    if (have) have.textContent = S.stakeHave(fmtInt(coins));
+  }
+
+  /** "🪙 Speel vir 50 🪙 elk" on the waiting screens (null without a stake). */
+  function stakeLine(n, text = S.stakeLine(fmtInt(n))) {
+    return n ? h('p', { class: 'stake-line', text }) : null;
   }
 
   /** The chosen way to play changed: the buttons and the description follow. */
@@ -1497,6 +1547,7 @@ export function createUI(bus) {
       kids.push(h('div', { class: 'spinner', 'aria-hidden': 'true' }),
         h('h2', { text: S.duelSearching }),
         modeLine(o.mode),
+        stakeLine(o.stake),
         h('p', { class: 'duel-sub', text: S.duelSearchHint }),
         h('p', { class: 'duel-count', 'data-duel-count': '' }),
         button('btn-big btn-green', [emo('🏗️'), h('span', { text: S.duelSearchPractice })], () => bus.emit('ui:duel-practice')),
@@ -1514,6 +1565,7 @@ export function createUI(bus) {
       kids.push(h('div', { class: 'spinner', 'aria-hidden': 'true' }),
         h('h2', { text: S.duelWaitFriend }),
         modeLine(o.mode),
+        stakeLine(o.stake),
         h('p', { class: 'duel-sub', text: S.duelWaitHint }),
         linkBox,
         h('div', { class: 'share-row' },
@@ -1526,6 +1578,7 @@ export function createUI(bus) {
       kids.push(h('p', { class: 'vs-badge' }, emo('⚔️')),
         h('h2', { class: 'vs-title', text: S.duelVs(o.oppName || S.duelSomeone) }),
         modeLine(o.mode),
+        stakeLine(o.stake, S.stakeVs(fmtInt(o.stake), fmtInt(o.stake * 2))),
         o.first ? h('p', { class: 'vs-first', text: o.first }) : null,
         o.oppCard ? h('div', { class: 'vs-cards' },
           playerCard({ name: o.oppName || S.duelSomeone, card: o.oppCard }),
@@ -1534,12 +1587,17 @@ export function createUI(bus) {
         h('p', { class: 'vs-count', 'data-duel-count': '', 'aria-live': 'assertive' }));
     } else if (o.state === 'invite') {
       // (1.12.1) a friend's live link: who invites and which mode, then "Speel" or "Sorry, besig nou"
+      // (1.13) a coin match says what each puts in; with too few coins the answer is "Laat weet: te min munte"
+      const short = o.stake > 0 && (o.coins || 0) < o.stake;
       kids.push(h('p', { class: 'vs-badge' }, emo('⚔️')),
         h('h2', { class: 'vs-title', text: S.duelLinkTitle(o.oppName || S.duelSomeone) }),
         o.mode ? modeLine(o.mode) : null,
-        h('p', { class: 'duel-sub', text: S.inviteSub }),
-        button('btn-big btn-green', [icon('play'), h('span', { text: S.invitePlay })], () => bus.emit('ui:invite-yes')),
-        button('btn-white btn-busy', [emo('😅'), h('span', { text: S.inviteBusy })], () => bus.emit('ui:invite-no')));
+        stakeLine(o.stake, S.inviteStake(fmtInt(o.stake), fmtInt(o.stake * 2))),
+        h('p', { class: short ? 'duel-sub stake-short' : 'duel-sub', text: short ? S.inviteShort(fmtInt(o.coins || 0)) : S.inviteSub }),
+        short ? null : button('btn-big btn-green', [icon('play'), h('span', { text: S.invitePlay })], () => bus.emit('ui:invite-yes')),
+        short
+          ? button('btn-white btn-busy', [emo('🪙'), h('span', { text: S.inviteCoins })], () => bus.emit('ui:invite-no', { coins: true }))
+          : button('btn-white btn-busy', [emo('😅'), h('span', { text: S.inviteBusy })], () => bus.emit('ui:invite-no')));
     } else if (o.state === 'link') {
       kids.push(h('p', { class: 'vs-badge' }, emo('⚔️')),
         h('h2', { class: 'vs-title', text: S.duelLinkTitle(o.oppName || S.duelSomeone) }),
@@ -1711,6 +1769,8 @@ export function createUI(bus) {
       why = r === 'turns' ? S.turnsWhyTurns
         : won ? (r === 'quit' ? S.duelWhyTheyQuit(name) : r === 'timeout' ? S.turnsWhyTimeout(name) : S.turnsWhyTheyOut(name))
           : (r === 'quit' ? S.duelWhyYouQuit : r === 'timeout' ? S.turnsWhyTimeout(S.hudYou) : S.turnsWhyYouOut);
+    } else if (d.reason === 'time') {   // (1.13) a coin match at its longest: the higher tower won
+      why = won ? S.duelWhyTimeWon : S.duelWhyTimeLost(name);
     } else if (won) {
       why = d.reason === 'goal' ? S.duelWhyGoal
         : d.reason === 'left' ? S.duelWhyTheyLeft(name)
@@ -1849,8 +1909,21 @@ export function createUI(bus) {
     const c = reward?.coins;
     const rk = reward?.rank;
     const wk = reward?.week;
-    if (!c && !rk && !wk) return null;
+    const sk = reward?.stake;   // (1.13) a coin match: { n, paid, outcome, name }
+    if (!c && !rk && !wk && !sk) return null;
     const kids = [];
+    if (sk && sk.n) {
+      // won: both stakes; back: the match played for none; else lost (a loss, or the connection didn't come back)
+      const won = sk.outcome === 'won';
+      const back = sk.outcome === 'refund';
+      kids.push(h('span', { class: `rw-stake${won ? ' is-won' : back ? '' : ' is-lost'}` }, emo(COIN),
+        h('b', { text: won || back ? `+${fmtInt(sk.paid)}` : `−${fmtInt(sk.n)}` }),
+        h('span', {
+          class: 'rw-sub',
+          text: won ? S.stakeWonSub(sk.name || S.duelSomeone, fmtInt(sk.n)) : back ? S.stakeBackSub
+            : sk.outcome === 'none' ? S.stakeConnSub : S.stakeLostSub(sk.name || S.duelSomeone),
+        })));
+    }
     if (wk) {
       const notes = [];
       if (wk.saved) notes.push(S.weekSaved(wk.saved));
@@ -1872,7 +1945,7 @@ export function createUI(bus) {
       const name = rankName(rk.id);
       if (!rk.counted) {
         kids.push(h('span', { class: 'rw-rank is-quiet' }, emo(rk.emoji), h('b', { text: name }),
-          h('span', { class: 'rw-sub', text: S.rankNotCounted })));
+          h('span', { class: 'rw-sub', text: reward.quick ? S.rankTooQuick : S.rankNotCounted })));
       } else {
         const title = rk.up ? S.rankUp(name) : rk.down ? S.rankDown(name) : rk.shielded ? S.rankShield(name) : name;
         // the bar moves from where it was to the new percentage (a new rank starts it from empty)
@@ -1886,6 +1959,25 @@ export function createUI(bus) {
       }
     }
     return h('div', { class: 'res-reward', role: 'status' }, kids);
+  }
+
+  /** (1.13) The results card's coins line again (a coin match settled after the card was drawn). */
+  function setResultReward(reward) {
+    const card = screens.results.querySelector('.res-card');
+    if (!card) return;
+    const el = rewardEl(reward);
+    const old = card.querySelector('.res-reward');
+    if (old && el) old.replaceWith(el);
+    else if (old) old.remove();
+    else if (el) card.querySelector('.res-stats, .res-vs')?.after(el);
+  }
+
+  /** (1.13) The stake line on the waiting / versus screen: gone when the match plays for no coins after all. */
+  function setStakeLine(text) {
+    const el = screens.duelwait.querySelector('.stake-line');
+    if (!el) return;
+    if (text) el.textContent = text;
+    else el.remove();
   }
 
   /** The daily reminder exists here (the Android app) and its time ('HH:MM' or null). */
@@ -2276,6 +2368,9 @@ export function createUI(bus) {
     showResults,
     showDuel,
     setDuelMode,
+    setDuelStake,
+    setResultReward,
+    setStakeLine,
     setDuelName,
     showDuelWait,
     setDuelCount,

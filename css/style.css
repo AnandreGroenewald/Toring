@@ -1082,6 +1082,25 @@ svg.ic {
 .mode-what { margin: 0; font-size: max(12px, calc(23 * var(--u))); font-weight: 700; color: var(--ink-soft); line-height: 1.35; }
 .mode-line { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: calc(8 * var(--u)); margin: 0; font-size: max(13px, calc(26 * var(--u))); color: var(--ink-soft); }
 .mode-line b { color: var(--ink); font-weight: 900; }
+/* (1.13) coin matches: what a live match is played for (none or 20-500), in two rows of three */
+.stake-pick { display: grid; gap: calc(8 * var(--u)); }
+.stake-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: calc(8 * var(--u)); padding: calc(6 * var(--u)); border-radius: calc(28 * var(--u)); background: var(--panel); }
+.stake-btn {
+  display: flex; align-items: center; justify-content: center; gap: calc(6 * var(--u));
+  min-height: 44px; padding: calc(8 * var(--u)) calc(6 * var(--u));
+  border: calc(3 * var(--u)) solid transparent; border-radius: calc(22 * var(--u));
+  background: transparent; color: var(--ink-soft);
+  font: 900 max(14px, calc(27 * var(--u))) / 1.1 var(--font); cursor: pointer;
+}
+.stake-btn .emoji { font-size: 1.1em; }
+.stake-btn[aria-pressed="true"] { background: #fff4cc; color: #6b4d00; border-color: #e0a800; box-shadow: 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(10, 34, 78, 0.12); }
+.stake-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.stake-btn:focus-visible { outline: 3px solid var(--jakaranda-d, #5b3fa8); outline-offset: 2px; }
+.stake-what { margin: 0; font-size: max(12px, calc(23 * var(--u))); font-weight: 800; color: var(--ink); line-height: 1.35; }
+.stake-have { margin: 0; font-size: max(11px, calc(20 * var(--u))); font-weight: 700; color: var(--muted); }
+.stake-note { margin: 0; font-size: max(11px, calc(19 * var(--u))); font-weight: 700; line-height: 1.3; color: var(--muted); }
+.stake-line { align-self: center; margin: 0; padding: calc(6 * var(--u)) calc(18 * var(--u)); border-radius: 999px; background: #fff4cc; color: #6b4d00; font-size: max(13px, calc(25 * var(--u))); font-weight: 900; }
+.stake-short { color: var(--klei-d); font-weight: 800; }
 .vs-first { margin: 0; font-size: max(15px, calc(32 * var(--u))); font-weight: 900; color: var(--jakaranda-d, #5b3fa8); }
 /* Blok vir Blok results: one row per player */
 .res-vs { display: grid; gap: calc(10 * var(--u)); margin-top: calc(16 * var(--u)); }
@@ -1288,6 +1307,9 @@ svg.ic {
 .res-reward b { font-size: max(14px, calc(26 * var(--u))); }
 .res-reward .rw-sub { font-weight: 700; opacity: 0.8; }
 .res-reward .rw-rank { background: #ece6ff; color: #45308f; }
+/* (1.13) a coin match: won (gold) or lost (grey) */
+.res-reward .rw-stake.is-won { background: #ffe9a8; color: #6b4d00; }
+.res-reward .rw-stake.is-lost { background: #eef1f6; color: var(--ink-soft); }
 /* the weekkis box on the results (1.10): its own line, the notes under it */
 .res-reward .rw-week { flex-direction: column; gap: calc(2 * var(--u)); border-radius: calc(22 * var(--u)); padding: calc(8 * var(--u)) calc(18 * var(--u)); background: #e7f7e3; color: #22582a; text-align: center; }
 .res-reward .rw-week.is-full { background: #fff0c2; color: #6b4d00; box-shadow: 0 0 0 calc(3 * var(--u)) #f7c948; }

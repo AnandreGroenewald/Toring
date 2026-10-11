@@ -139,16 +139,18 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
       if (!rate.allow(key, ROOMS_PER_HOUR, t)) throw new HttpError(429, 'rate_limited');
       // the mode: Wedloop, or Blok vir Blok ({ "mode": "turns" }; older games send {})
       let mode = 'race';
+      let stake = 0;   // (1.13) a coin match: what each player puts in ({ "stake": 50 }; the room checks it)
       try {
         const body = await readJsonObject(request, 256);
         if (body && body.mode === 'turns') mode = 'turns';
+        if (body && Number.isFinite(body.stake)) stake = body.stake;
       } catch {
         mode = 'race';
       }
       for (let tries = 0; tries < 4; tries++) {
         const code = newRoomCode(rand32);
         const res = await env.MATCH_ROOM.get(env.MATCH_ROOM.idFromName(code))
-          .fetch('https://room/init', { method: 'POST', body: JSON.stringify({ kind: 'friend', mode }) });
+          .fetch('https://room/init', { method: 'POST', body: JSON.stringify({ kind: 'friend', mode, stake }) });
         if (res.status === 200) return json(200, { code });
       }
       throw new HttpError(503, 'busy');

@@ -239,9 +239,9 @@ export const S = {
   duelReconnecting: 'Koppel weer aan…',
   duelWaitFriend: 'Wag vir jou vriend…',
   duelWaitHint: 'Stuur die skakel. Sodra jou vriend dit oopmaak, begin julle.',
-  duelRoomText: (name, link, mode) => (mode === 'turns'
-    ? `${name} daag jou uit vir Blok vir Blok op Stapel! Kom bou saam, om die beurt, aan een toring: ${link}`
-    : `${name} daag jou uit vir ’n Stapel-wedstryd! Kom bou kop-aan-kop: ${link}`),
+  duelRoomText: (name, link, mode, stake = 0) => (mode === 'turns'
+    ? `${name} daag jou uit vir Blok vir Blok op Stapel${stake ? `, vir ${stake} 🪙 elk` : ''}! Kom bou saam, om die beurt, aan een toring: ${link}`
+    : `${name} daag jou uit vir ’n Stapel-wedstryd${stake ? ` vir ${stake} 🪙 elk` : ''}! Kom bou kop-aan-kop: ${link}`),
   duelPlayLater: 'Speel solank teen die rekenaar',
   duelFriendLater: 'Speel jou rondte teen Robot Rikus. Daarna stuur jy dit vir ’n vriend om te klop.',
   duelJoining: 'Koppel aan die uitdaging…',
@@ -375,6 +375,8 @@ export const S = {
   rankShieldOn: '🛡️ Skild aan: jou volgende verlies laat jou nie val nie.',
   rankPlacement: (n) => (n === 1 ? 'Nog 1 plasingswedstryd: ’n oorwinning tel 1,5 keer.' : `Nog ${n} plasingswedstryde: oorwinnings tel 1,5 keer.`),
   rankNotCounted: 'Teen Robot Rikus of ’n opname tel nie vir jou rang nie.',
+  // (1.13) a live match that ended by a quit within its first 25 s (no rank farming by closing a tab)
+  rankTooQuick: 'Te kort: ’n wedstryd wat so gou eindig, tel nie vir jou rang nie.',
   seasonBadges: 'Seisoenkentekens:',
   seasonReward: (rank, emoji) => `Nuwe seisoen! Jy hou ’n ${rank}-kenteken ${emoji}`,
   changeLook: 'Verander jou styl',
@@ -426,6 +428,37 @@ export const S = {
   againThey: (name) => `🔁 ${name} wil weer speel!`,
   againStarting: 'Ons begin…',
   againGone: (name) => `${name} het geloop: 📲 daag weer uit`,
+  // (1.13, the owner: coin matches with earned coins only) a live match against a real player can be played for
+  // coins: each puts the same in, the winner gets both (never against Robot Rikus or a recording)
+  stakeLabel: 'Speel vir munte',
+  stakeNone: 'Geen',
+  stakeWhat: (n, pot) => `Elkeen sit ${n} 🪙 in. Die wenner kry ${pot} 🪙.`,
+  stakeNoneWhat: 'Net vir die pret: geen munte nie.',
+  stakeHave: (coins) => `Jy het ${coins} 🪙 · net teen ’n regte speler`,
+  stakeNeedMore: (n) => `Nog ${n} munte nodig`,
+  stakeNote: 'Munte is net vir die spel: hulle kan nie gekoop of vir geld omgeruil word nie.',
+  stakeLine: (n) => `Speel vir ${n} 🪙 elk`,
+  stakeVs: (n, pot) => `${n} 🪙 elk · die wenner kry ${pot} 🪙`,
+  stakeNeed: (n, coins) => `Te min munte: jy het ${coins} 🪙, hierdie wedstryd vra ${n}.`,
+  stakeNoBot: 'Hierdie een is sonder munte.',
+  stakeNotHeld: 'Te min munte: hierdie wedstryd is sonder munte vir jou.',
+  stakeBusy: '’n Ander muntwedstryd speel nog in ’n ander venster: hierdie een is sonder munte vir jou.',
+  stakeWonSub: (name, n) => `jou ${n} terug plus ${name} se ${n}`,
+  stakeLostSub: (name) => `${name} kry jou munte`,
+  stakeConnSub: 'die verbinding het nie betyds teruggekom nie',
+  stakeLeft: (n) => `Jy het die muntwedstryd gelos: jou ${n} 🪙 het na die ander speler gegaan.`,
+  stakeEarlier: (n) => `’n Muntwedstryd is nie klaargespeel nie: jou ${n} 🪙 het na die ander speler gegaan.`,
+  stakeAgainShort: (n) => `Te min munte om weer vir ${n} 🪙 te speel.`,
+  inviteStake: (n, pot) => `Vir ${n} 🪙 elk: die wenner kry ${pot} 🪙.`,
+  inviteShort: (coins) => `Jy het ${coins} 🪙: te min vir hierdie wedstryd.`,
+  inviteCoins: 'Laat weet: te min munte',
+  inviteCoinsSent: (name) => `${name} sal sien jy het te min munte.`,
+  duelDeclinedCoins: (name) => `${name} het te min munte vir hierdie wedstryd. Probeer ’n kleiner bedrag.`,
+  duelDeclinedOld: (name) => `${name} se Stapel moet eers opdateer vir ’n muntwedstryd. Daag weer uit sonder munte, of later.`,
+  stakeOff: (n) => `Hierdie wedstryd is sonder munte: jou ${n} 🪙 is terug.`,
+  stakeBackSub: 'jou munte is terug',
+  duelWhyTimeWon: 'Die tyd was op: jou toring was die hoogste.',
+  duelWhyTimeLost: (name) => `Die tyd was op: ${name} se toring was hoër.`,
   // --- Daaglikse ranglys (1.9.2; js/board.js) ---
   // the daily reminder (1.10, the Android app)
   remindTitle: 'Daaglikse herinnering',

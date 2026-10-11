@@ -215,7 +215,7 @@ test('a friend\'s link: who invites first; nothing starts until "Speel"', async 
   ws.open();
   assert.equal(ws.of('hello').length, 0, 'no hello before the player chose');
   ws.hear({ t: 'wait', host: { name: 'Anna', mode: 'turns' } });
-  assert.deepEqual(invites, [{ name: 'Anna', mode: 'turns' }]);
+  assert.deepEqual(invites, [{ name: 'Anna', mode: 'turns', stake: 0 }]);
   assert.equal(duel.acceptInvite(), true);
   assert.equal(ws.of('hello').length, 1);
   ws.hear({ ...START, you: 1, opp: { name: 'Anna', v: 5 }, mode: 'turns', turn: TURN1 });

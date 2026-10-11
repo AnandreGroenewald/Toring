@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.12.2';
+export const VERSION = '1.13.0';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -262,6 +262,9 @@ export const DUEL = {
   pauses: 3,               // ...and each player has this many a match
   resumeMs: 3000,          // the 3-2-1 after a pause
   againMs: 3 * 60 * 1000,  // a finished friend match waits this long for both to say "Speel weer"
+  // (1.13, the owner: coin matches with earned coins only) what a live match against a person can be played for: each
+  // player puts this in, the winner the room names takes both (0 = no stake, as before)
+  stakes: [20, 50, 100, 200, 500],
 };
 
 // Blok vir Blok (1.11): two players build ONE tower, a block each in turn. A turn that loses blocks

@@ -8,6 +8,7 @@
 // punishment's outfit) and ranks, never strength.
 
 import { isDateKey } from './daily.js';
+import { DUEL } from '../config.js';
 
 export const COIN = '🪙';
 
@@ -292,6 +293,7 @@ export function defaultEconomy() {
     look: { ...DEFAULT_LOOK },
     ranks: { race: cleanModeRank(null), turns: cleanModeRank(null) },   // (1.12) one rank per mode
     freeFoundation: null,   // the daily (date key) whose free Fondamentblok was used
+    stake: null,            // (1.13) a coin match's stake while it is played: { n, room, at, tab, beat }
   };
 }
 
@@ -317,7 +319,63 @@ export function cleanEconomy(raw) {
     e.ranks = migrateOldRank(r.rank);
   }
   e.freeFoundation = isDateKey(r.freeFoundation) ? r.freeFoundation : null;
+  e.stake = cleanStake(r.stake);
   return e;
+}
+
+/**
+ * (1.13) A held stake as stored, else null: { n, room, at, tab, beat } with n one of DUEL.stakes; `tab` the browser tab
+ * that plays the match and `beat` when that tab last said it still does (a stake nobody looks after any more was a
+ * match that ended without its result: the app was closed or the page reloaded).
+ */
+export function cleanStake(s) {
+  if (!s || typeof s !== 'object') return null;
+  const n = Math.floor(Number(s.n) || 0);
+  if (!DUEL.stakes.includes(n)) return null;
+  const room = typeof s.room === 'string' && /^[A-Za-z0-9]{1,12}$/.test(s.room) ? s.room : null;
+  const at = Number.isFinite(s.at) ? Math.floor(s.at) : 0;
+  const tab = typeof s.tab === 'string' && /^[A-Za-z0-9]{1,16}$/.test(s.tab) ? s.tab : null;
+  const beat = Number.isFinite(s.beat) ? Math.floor(s.beat) : at;
+  return { n, room, at, tab, beat };
+}
+
+/**
+ * (1.13) A coin match starts: its stake leaves the wallet and is held until the result. { economy, ok, reason }
+ * (reason: 'stake' not an allowed amount, 'busy' another stake is still held, 'coins' too few).
+ */
+export function holdStake(eco, n, room, at = 0, tab = null) {
+  const e = cleanEconomy(eco);
+  const amount = Math.floor(Number(n) || 0);
+  if (!DUEL.stakes.includes(amount)) return { economy: e, ok: false, reason: 'stake' };
+  if (e.stake) return { economy: e, ok: false, reason: 'busy' };
+  if (e.coins < amount) return { economy: e, ok: false, reason: 'coins' };
+  e.coins -= amount;
+  e.stake = cleanStake({ n: amount, room, at, tab, beat: at });
+  return { economy: e, ok: true };
+}
+
+/** (1.13) The tab playing the coin match for `room` says it still does (at `at`). { economy, ok } */
+export function touchStake(eco, room, at = 0) {
+  const e = cleanEconomy(eco);
+  if (!e.stake || (room && e.stake.room && room !== e.stake.room)) return { economy: e, ok: false };
+  e.stake.beat = Math.max(e.stake.beat, Math.floor(Number(at) || 0));
+  return { economy: e, ok: true };
+}
+
+/**
+ * (1.13) The held stake ends: 'won' pays both stakes (not counted against the day's cap: the coins come from the two
+ * players), 'refund' gives it back (the match never really began), 'lost' keeps nothing. Only for the room it was
+ * held for (a stale `room` changes nothing). Returns { economy, n, paid } (n: the stake, 0 when none was held).
+ */
+export function settleStake(eco, outcome, room = null) {
+  const e = cleanEconomy(eco);
+  const s = e.stake;
+  if (!s || (room && s.room && room !== s.room)) return { economy: e, n: 0, paid: 0 };
+  const want = outcome === 'won' ? 2 * s.n : outcome === 'refund' ? s.n : 0;
+  const paid = Math.max(0, Math.min(want, MAX_COINS - e.coins));
+  e.coins += paid;
+  e.stake = null;
+  return { economy: e, n: s.n, paid };
 }
 
 /** Coins added on `dayKey` (the cap only applies to `capped` coins). Returns { economy, added }. */

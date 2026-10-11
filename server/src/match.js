@@ -44,6 +44,15 @@ const PROTOCOL_CHOOSE = 2;
 const PROTOCOL_TURNS = 3;   // a game older than this can't play Blok vir Blok: such a room is "gone" for it
 const PROTOCOL_ROUNDS = 4;  // 1.12: Blok vir Blok rondtes (weather and visitors), only when both games know them
 const PROTOCOL_V5 = 5;      // 1.12.1: back after a dropped connection, "Sorry, besig nou", "Speel weer", a pause for both
+const PROTOCOL_STAKES = 6;  // 1.13: coin matches (a room's stake); a staked room is "gone" for an older game
+/** (1.13) A stake as asked for: one of DUEL.stakes, else 0 (no stake). */
+const stakeOf = (n) => (DUEL.stakes.includes(Number(n)) ? Number(n) : 0);
+/**
+ * A friend's "no" as the one who invited hears it: kept as a name, or (1.13) { name, coins } when they have too few coins
+ * for the coin match, { name, old } when their game is too old to play one.
+ */
+const declinedMsg = (d) => (typeof d === 'string' ? { t: 'declined', name: d }
+  : { t: 'declined', name: d.name, ...(d.coins ? { coins: true } : {}), ...(d.old ? { old: true } : {}) });
 
 export const rand32 = () => crypto.getRandomValues(new Uint32Array(1))[0];
 const randFloat = () => rand32() / 4294967296;
@@ -185,13 +194,14 @@ export class MatchRoom {
   }
 
   /** A new room (from the lobby or POST /match/room): its seed, its mode and how long it waits for players. */
-  async init({ seed, kind, mode } = {}) {
+  async init({ seed, kind, mode, stake } = {}) {
     if (await this.load()) return json(409, { error: 'exists' });
     const now = this.now();
     this.m = {
       seed: isMatchSeed(seed) ? seed : newMatchSeed(randFloat),
       kind: kind === 'random' ? 'random' : 'friend',
       mode: mode === 'turns' ? 'turns' : 'race',
+      stake: stakeOf(stake),   // (1.13) what each player puts in (0: none)
       createdAt: now,
       names: [null, null],
       started: false,
@@ -204,7 +214,7 @@ export class MatchRoom {
     };
     await this.save();
     await this.state.storage.setAlarm(now + (this.m.kind === 'random' ? RANDOM_ROOM_TTL_MS : DUEL.roomWaitMs));
-    return json(200, { ok: true, seed: this.m.seed, mode: this.m.mode });
+    return json(200, { ok: true, seed: this.m.seed, mode: this.m.mode, stake: this.m.stake });
   }
 
   /**
@@ -230,7 +240,7 @@ export class MatchRoom {
     // (a network change closes it on the phone, not here); their hello's key decides (onMessage).
     ws.serializeAttachment({ seat, hello: false, name: null });
     // (1.12.1) a friend room says who invites, so the friend's game can ask "Speel" or "Sorry, besig nou"
-    sendJson(ws, m.kind === 'friend' && m.host ? { t: 'wait', host: { name: m.host.name, mode: m.mode } } : { t: 'wait' });
+    sendJson(ws, m.kind === 'friend' && m.host ? { t: 'wait', host: { name: m.host.name, mode: m.mode, ...(m.stake ? { stake: m.stake } : {}) } } : { t: 'wait' });
   }
 
   async webSocketMessage(ws, data) {
@@ -291,10 +301,13 @@ export class MatchRoom {
         return;
       }
       const v = Math.max(1, Math.min(99, Math.floor(Number(msg.v)) || 1));
-      if (m.mode === 'turns' && v < PROTOCOL_TURNS) {   // (1.10 and older would start a Wedloop here)
+      // (1.10 and older would start a Wedloop here; 1.12 and older know nothing of a stake)
+      if ((m.mode === 'turns' && v < PROTOCOL_TURNS) || (m.stake && v < PROTOCOL_STAKES)) {
         ws.serializeAttachment({ ...att(ws), seat: -1, hello: false });
         sendJson(ws, { t: 'gone' });
         closeWs(ws, 'old');
+        // (1.13) a coin match: the one who invited hears why (their friend's Stapel needs an update first)
+        if (m.stake && m.kind === 'friend' && !m.started && m.host) await this.tellHost(ws, { name: cleanNickname(msg.name) || DEFAULT_NAME, old: true });
         return;
       }
       // the player card (looks and rank, js/core/economy.js) goes to the other player as known ids only
@@ -305,7 +318,7 @@ export class MatchRoom {
       if (m.kind === 'friend' && (!m.host || (m.declines?.length && isHost && v >= PROTOCOL_V5))) {
         if (!m.host) m.host = { name: cleanNickname(msg.name) || DEFAULT_NAME, key };
         else {
-          for (const name of m.declines || []) sendJson(ws, { t: 'declined', name });
+          for (const d of m.declines || []) sendJson(ws, declinedMsg(d));
           m.declines = [];
         }
         await this.save();
@@ -328,6 +341,10 @@ export class MatchRoom {
       return;
     }
     if (!m.started || m.result) return;
+    if (msg.t === 'stake') {   // (1.13) this game holds its stake (or can't)
+      await this.stakeAnswer(seat, msg.ok === true);
+      return;
+    }
     if (msg.t === 'pause') {
       await this.pause(seat, now);
       return;
@@ -541,6 +558,7 @@ export class MatchRoom {
     const other = this.socketFor(1 - seat);
     if (wasAway && !m.result && other && version(other) >= PROTOCOL_V5) sendJson(other, { t: 'back' });
     const state = { t: 'rejoined', you: seat };
+    if (m.stake) state.stake = m.stakeOn === true || m.stakeOn === false ? m.stakeOn : null;   // (1.13: null: say yours again)
     if (m.mode !== 'turns') state.opp = m.last?.[1 - seat] || null;
     else if (!m.result && m.tref?.seat === seat) m.deadline = Math.max(m.deadline || 0, now + TURNS.serverTurnMs);
     if (m.paused) state.paused = { by: m.paused.by, ms: Math.max(0, m.paused.until - now), left: m.pauses?.[seat] ?? 0 };
@@ -558,18 +576,51 @@ export class MatchRoom {
     const m = this.m;
     if (m.started || m.kind !== 'friend' || att(ws).hello) return;
     const name = cleanNickname(msg.name) || DEFAULT_NAME;
+    // (1.13) why: too few coins for this coin match (else simply "Sorry, besig nou")
+    await this.tellHost(ws, m.stake && msg.coins === true ? { name, coins: true } : name);
+    ws.serializeAttachment({ ...att(ws), seat: -1 });
+    closeWs(ws, 'declined');
+  }
+
+  /** (1.12.1) A friend's "no" to the one who invited (known by their key), or kept until their game is back. */
+  async tellHost(from, d) {
+    const m = this.m;
     let told = false;
     for (const s of this.sockets()) {   // (the one who invited only: not another friend already in)
-      if (s === ws || !att(s).hello || !m.host?.key || att(s).key !== m.host.key) continue;
-      sendJson(s, { t: 'declined', name });
+      if (s === from || !att(s).hello || !m.host?.key || att(s).key !== m.host.key) continue;
+      sendJson(s, declinedMsg(d));
       if (version(s) >= PROTOCOL_V5) told = true;
     }
     if (!told) {
-      m.declines = [...(m.declines || []), name].slice(-5);
+      m.declines = [...(m.declines || []), d].slice(-5);
       await this.save();
     }
-    ws.serializeAttachment({ ...att(ws), seat: -1 });
-    closeWs(ws, 'declined');
+  }
+
+  /**
+   * (1.13) A coin match counts only when both games hold the stake: each says so at the start (`stake`, ok); once
+   * both have, both hear `{ t: 'stake', on: true }`. A game that can't hold it (too few coins, another coin match in
+   * another window of the same player) makes it a match without coins for both (`on: false`: both get theirs back).
+   */
+  async stakeAnswer(seat, ok) {
+    const m = this.m;
+    if (!m.stake || m.stakeOn === true || m.stakeOn === false) return;
+    (m.stakeOk ||= [null, null])[seat] = ok;
+    if (!ok) this.stakeVerdict(false);
+    else if (m.stakeOk.every((x) => x === true)) this.stakeVerdict(true);
+    else return;
+    await this.save();
+  }
+
+  /** (1.13) The coin match's verdict to both games (a game away hears it in `rejoined`); once only. */
+  stakeVerdict(on) {
+    const m = this.m;
+    if (!m.stake || m.stakeOn === true || m.stakeOn === false) return;
+    m.stakeOn = on;
+    for (const k of [0, 1]) {
+      const s = this.socketFor(k);
+      if (s) sendJson(s, { t: 'stake', on });
+    }
   }
 
   /** (1.12.1) "Speel weer" after a friend match: once both said it, a new match in the same room. */
@@ -598,6 +649,7 @@ export class MatchRoom {
       seed: newMatchSeed(randFloat), kind: old.kind, mode: old.mode, createdAt: now, names: [null, null], started: false,
       startAt: 0, ref: null, samples: [[], []], ends: [null, null], result: null, done: false, host: old.host || null,
       declines: [], round: (old.round || 1) + 1,
+      stake: old.stake || 0,   // (1.13) "Speel weer" plays for the same stake
     };
     this.emoteState = null;
     await this.start(now);
@@ -692,8 +744,13 @@ export class MatchRoom {
       const msg = { t: 'start', seed: m.seed, you: k, opp: { name: m.names[1 - k], card: cleanCard(att(this.socketFor(1 - k)).card), v: version(this.socketFor(1 - k)) } };
       if (turn) Object.assign(msg, { mode: 'turns', turn, ...(m.rounds ? { rounds: true } : {}) });
       // (1.12.1) to a game of protocol 5: this room's protocol and kind (a friend room: "Speel weer", pauses)
-      if (version(s) >= PROTOCOL_V5) Object.assign(msg, { sv: PROTOCOL_V5, room: m.kind });
+      if (version(s) >= PROTOCOL_V5) Object.assign(msg, { sv: Math.min(version(s), PROTOCOL_STAKES), room: m.kind });
+      if (m.stake) msg.stake = m.stake;   // (1.13) both games hold it now (and say so); the winner takes both
       sendJson(s, msg);
+    }
+    if (m.stake) {
+      m.stakeOk = [null, null];
+      m.stakeOn = null;
     }
     if (turn) for (const k of [0, 1]) this.tell(k, { t: 'turn', ...turn }, { quiet: true });
     // (1.12.1) anyone else still reading the invite: someone else plays now
@@ -785,6 +842,7 @@ export class MatchRoom {
   /** Blok vir Blok is decided: everyone hears it, and the room closes soon (no recordings: it needs two). */
   async decidedTurns(e, now) {
     const m = this.m;
+    this.stakeVerdict(false);   // (1.13) a coin match whose stakes weren't both held by now plays for none
     m.result = { winner: e.winner, reason: e.reason };
     m.done = true;
     m.paused = null;
@@ -810,6 +868,7 @@ export class MatchRoom {
   /** The match is decided: everyone hears it, the runs go to the lobby, and the room closes soon. */
   async decided(ref, e, now) {
     const m = this.m;
+    this.stakeVerdict(false);   // (1.13) a coin match whose stakes weren't both held by now plays for none
     m.result = { winner: e.winner, reason: e.reason };
     m.pending = [];   // the match is over: no more punishments
     m.done = true;
@@ -864,6 +923,27 @@ export class MatchRoom {
         if (changed) await this.save();
         if (!m.done) await this.armAlarm(now);
         return;
+      }
+      // (1.13) a coin match at its longest (nobody at the goal, nobody fallen): the higher tower wins it; level
+      // towers: both get their coins back (a match without a result never takes anyone's coins)
+      if (m.stake) {
+        const ref = createReferee({ init: m.ref });
+        const best = [ref.best(0), ref.best(1)];
+        if (best[0] !== best[1]) {
+          const winner = best[0] > best[1] ? 0 : 1;
+          m.ends[winner] = 'stop';
+          m.ends[1 - winner] = 'stop';
+          await this.decided(ref, { type: 'result', winner, reason: 'time' }, now);
+          await this.save();
+          return;
+        }
+        if (m.stakeOn !== false) {
+          m.stakeOn = false;
+          for (const k of [0, 1]) {
+            const s = this.socketFor(k);
+            if (s) sendJson(s, { t: 'stake', on: false });
+          }
+        }
       }
     }
     // (1.12.1) a finished friend room (two 1.12.1 games) waits for "Speel weer" until its time is up
@@ -924,16 +1004,19 @@ export class MatchLobby {
     // only (stages, blocks and visitors change between versions; older games send none)
     const rules = Number.isInteger(msg.rules) && msg.rules > 0 && msg.rules < 100000 ? msg.rules : 0;
     const mode = msg.mode === 'turns' ? 'turns' : 'race';
-    ws.serializeAttachment({ ...me, hello: true, rules, mode });
+    // (1.13) a coin match: only players looking for the same stake meet (an older game never asks for one)
+    const stake = Math.floor(Number(msg.v)) >= PROTOCOL_STAKES ? stakeOf(msg.stake) : 0;
+    ws.serializeAttachment({ ...me, hello: true, rules, mode, stake });
     const waiting = this.state.getWebSockets('wait')
-      .filter((s) => s !== ws && att(s).hello && !att(s).paired && (att(s).rules || 0) === rules && (att(s).mode || 'race') === mode)
+      .filter((s) => s !== ws && att(s).hello && !att(s).paired && (att(s).rules || 0) === rules && (att(s).mode || 'race') === mode
+        && (att(s).stake || 0) === stake)
       .sort((a, b) => (att(a).at || 0) - (att(b).at || 0));
     const other = waiting[0];
     if (!other) {
       sendJson(ws, { t: 'wait' });
       return;
     }
-    const room = await this.newRoom(mode);
+    const room = await this.newRoom(mode, stake);
     if (!room) {
       sendJson(ws, { t: 'wait' });
       return;
@@ -945,11 +1028,11 @@ export class MatchLobby {
     }
   }
 
-  async newRoom(mode = 'race') {
+  async newRoom(mode = 'race', stake = 0) {
     for (let tries = 0; tries < 4; tries++) {
       const code = this.roomCode();
       const stub = this.env.MATCH_ROOM.get(this.env.MATCH_ROOM.idFromName(code));
-      const res = await stub.fetch('https://room/init', { method: 'POST', body: JSON.stringify({ kind: 'random', seed: newMatchSeed(randFloat), mode }) });
+      const res = await stub.fetch('https://room/init', { method: 'POST', body: JSON.stringify({ kind: 'random', seed: newMatchSeed(randFloat), mode, stake }) });
       if (res.status === 200) return code;
     }
     return null;

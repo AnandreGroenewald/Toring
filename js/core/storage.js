@@ -8,11 +8,11 @@ import { dateKeyFor, dayNumber, addDays, daysBetween, isDateKey } from './daily.
 import { cleanVisits } from './visitorrules.js';
 import { cleanNickname } from './duel.js';
 import { WEEK, cleanWeek, openBox, addShield } from './week.js';
-import { DAILY_RETRY } from '../config.js';
+import { DAILY_RETRY, DUEL } from '../config.js';
 import {
   defaultEconomy, cleanEconomy, earnCoins, buyPowerup, usePowerup, buyCosmetic, wearCosmetic, grantRankLooks, spendCoins,
   rankAfterMatch, rolloverSeason, seasonOf, cardOf, ladderAt, bestTier, RANK_MODES, RANK_RULES, cleanModeRank,
-  rankIndex,
+  rankIndex, holdStake, settleStake, touchStake,
 } from './economy.js';
 
 const SCHEMA = 1;
@@ -112,7 +112,7 @@ function defaultData() {
       played: 0, streak: 0, maxStreak: 0, bestScore: 0, bestHeightM: 0, totalPerfects: 0, lastDateKey: null,
     },
     practice: { played: 0, heightM: 0, score: 0 },
-    duel: { name: null, played: 0, wins: 0, losses: 0, streak: 0, bestStreak: 0, mode: 'race' },
+    duel: { name: null, played: 0, wins: 0, losses: 0, streak: 0, bestStreak: 0, mode: 'race', stake: 0 },
   };
 }
 
@@ -171,6 +171,7 @@ function sanitize(raw) {
       streak: int(u.streak),
       bestStreak: int(u.bestStreak),
       mode: u.mode === 'turns' ? 'turns' : 'race',   // the last way chosen: Wedloop or Blok vir Blok (1.11)
+      stake: DUEL.stakes.includes(u.stake) ? u.stake : 0,   // (1.13) the coins last chosen to play for (0: none)
     };
     d.duel.played = Math.max(d.duel.played, d.duel.wins + d.duel.losses);
     d.duel.bestStreak = Math.max(d.duel.bestStreak, d.duel.streak);
@@ -874,6 +875,14 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       return data.duel.mode;
     },
 
+    /** (1.13) The coins chosen to play a live match for: one of DUEL.stakes, or 0 (none). Returns it. */
+    setDuelStake(n) {
+      sync();
+      data.duel.stake = DUEL.stakes.includes(Number(n)) ? Number(n) : 0;
+      persist();
+      return data.duel.stake;
+    },
+
     /** A finished match: 'won' or 'lost' (a winning streak counts wins in a row). */
     recordDuel(outcome) {
       sync();
@@ -1027,6 +1036,51 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     getCard(mode = 'race') {
       sync();
       return cardOf({ ...econ, ranks: { ...econ.ranks, [modeOf(mode)]: seasonNow(mode).rank } }, mode);
+    },
+
+    /**
+     * (1.13) A coin match starts: `n` coins leave the wallet and are held for `room` until its result.
+     * Returns { ok, reason, coins } (reason: 'stake', 'busy' or 'coins').
+     */
+    holdStake(n, room, tab = null) {
+      sync();
+      const r = holdStake(econ, n, room, now(), tab);
+      if (r.ok) {
+        econ = r.economy;
+        persistEcon();
+      }
+      return { ok: r.ok, reason: r.reason || null, coins: econ.coins };
+    },
+
+    /**
+     * (1.13) The held stake ends ('won' pays both stakes, 'refund' gives it back, 'lost' keeps nothing), for `room`
+     * only. Returns { n, paid, coins } (n 0: nothing was held).
+     */
+    settleStake(outcome, room = null) {
+      sync();
+      const r = settleStake(econ, outcome, room);
+      if (r.n) {
+        econ = r.economy;
+        persistEcon();
+      }
+      return { n: r.n, paid: r.paid, coins: econ.coins };
+    },
+
+    /** (1.13) The tab playing the coin match for `room` says it still does. */
+    touchStake(room) {
+      sync();
+      const r = touchStake(econ, room, now());
+      if (r.ok) {
+        econ = r.economy;
+        persistEcon();
+      }
+      return r.ok;
+    },
+
+    /** (1.13) The stake held right now (a coin match on), or null. */
+    heldStake() {
+      sync();
+      return econ.stake ? { ...econ.stake } : null;
     },
 
     /** Coins for a finished game; Oefen and duels count towards the day's cap. Returns { added, coins }. */

@@ -5,7 +5,7 @@ import { SAVED_LANG, PREVIEW_LANG } from './core/langboot.js';
 import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL } from './config.js';
 import { bus } from './core/bus.js';
 import { S, POWERUP_INFO, COSMETIC_INFO, RANK_INFO } from './core/strings.js';
-import { fmtDateKey, fmtM } from './core/format.js';
+import { fmtDateKey, fmtM, fmtInt } from './core/format.js';
 import { createStore } from './core/storage.js';
 import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate, isDateKey, addDays } from './core/daily.js';
 import { createSequence } from './core/sequence.js';
@@ -434,6 +434,7 @@ bus.on('ui:shop-buy', ({ kind, id } = {}) => {
       ui.toast(S.bought(S.weekShield));
     }
     ui.showShop(shopModel());
+    if (w.ok) coinsChanged();
     return;
   }
   const r = kind === 'powerup' ? store.buyPowerup(id) : store.buyCosmetic(kind, id);
@@ -445,6 +446,7 @@ bus.on('ui:shop-buy', ({ kind, id } = {}) => {
   }
   ui.showShop(shopModel());
   if (r.ok && kind !== 'powerup') lookChanged();
+  if (r.ok) coinsChanged();
 });
 bus.on('ui:shop-wear', ({ kind, id } = {}) => {
   store.wearCosmetic(kind, id);
@@ -542,7 +544,7 @@ function startGame(data) {
   }
   // a new game of another kind ends any match (and its live room); an Oefen tower keeps a search going
   if (data.mode !== 'duel' && !(data.mode === 'practice' && duel.searching)) {
-    duel.leave();
+    leaveDuel();
     ui.setSearchChip(false);
   }
   if (run.paused) {
@@ -1200,12 +1202,12 @@ bus.on('ui:home', () => {
   if (lesson) endLesson();
   if (linkWaiting) {
     linkWaiting = false;
-    duel.leave();
+    leaveDuel();
     startIdle();
     if (openDuelLink()) return;
   }
   stopDuelFlow();
-  duel.leave();
+  leaveDuel();
   if (run.mode !== 'idle' || run.paused) {
     startIdle();
   } else {
@@ -1282,13 +1284,187 @@ const duel = createDuel({
     const quick = (m?.reason === 'quit' || m?.reason === 'timeout') && Date.now() - (m?.startedAt || 0) < RANK_MIN_MS;
     const live = m?.kind === 'live' && !quick;
     ui.setEmotes(null);
+    // (1.13) a coin match: the room named the winner (first, so "jy het …" under the coins counts it too)
+    settleMatchStake(m, outcome);
     duelReward = {
       coins: awardCoins({ mode: 'duel', outcome, live }),
       rank: store.recordDuelRank({ outcome, live, mode: m?.mode, opp: m?.oppCard?.rl }),
+      quick: m?.kind === 'live' && quick,   // (1.13: its rank line says why it didn't count)
     };
+    refreshResultReward(m);   // (a verdict that came after the results were drawn)
   },
 });
 if (DEBUG) window.__stapel.duel = duel;   // tests look at the search and the match
+
+// ---------------------------------------------------------------------------
+// (1.13, the owner: coin matches with earned coins only) A live match against a real player can be played for coins.
+// Each game holds its stake when the match starts (versus) and tells the room; the match counts for coins only when
+// both hold theirs (the room's 'stake' verdict; else both get theirs back). The result the room names settles it: the
+// winner gets both; a loss, leaving, or a connection that doesn't come back loses it (the room gives that match to the
+// other player). The stake waits in the wallet (js/core/economy.js), so a match that ended without its result (the app
+// was closed, the page reloaded) is settled as lost the next time the game starts. Never against Robot Rikus or a
+// recording; coins can't be bought.
+// ---------------------------------------------------------------------------
+// One coin match per browser at a time: the window that plays it holds a browser lock (the Web Locks API, shared by
+// every tab and released when a tab closes or crashes), so two tabs of one wallet never both put coins in, and a stake
+// whose lock nobody holds belongs to a match that ended without its result. Where a browser has no locks, the window
+// playing a coin match says so in the wallet every STAKE_BEAT_MS instead, and a stake nobody has looked after for
+// STAKE_STALE_MS (longer than a pause for both and a dropped connection's wait together) belongs to a match that ended.
+const STAKE_LOCK = 'stapel.stake';
+const LOCKS = typeof navigator !== 'undefined' && navigator.locks && typeof navigator.locks.request === 'function' ? navigator.locks : null;
+const STAKE_BEAT_MS = 5000;
+const STAKE_STALE_MS = 90000;
+let stakeBeat = 0;
+const coinsNow = () => store.getEconomy().coins;
+/** The coins chosen to play the next live match for (0: none). */
+const duelStake = () => {
+  const n = store.getDuel().stake;
+  return DUEL.stakes.includes(n) ? n : 0;
+};
+
+/**
+ * The match starts: a coin match holds its stake now and tells the room (which makes it count only when both games
+ * hold theirs). Resolves to a note when this player can't (another window plays a coin match, too few coins): the
+ * match then plays for no coins, for both.
+ */
+async function holdMatchStake(m) {
+  m.stakeHeld = false;
+  if (m.kind !== 'live' || !m.stake) return '';
+  const lost = await clearStaleStake();   // (a coin match that ended without its result, in a window gone since)
+  if (lost) ui.toast(S.stakeEarlier(fmtInt(lost)), 4200);
+  const release = await claimStakeLock();
+  // (gone while the lock was asked for, or the room already said this match plays for no coins)
+  if (duel.match !== m || m.outcome || m.lostConn || m.stakeOn === false) {
+    release?.();
+    return '';
+  }
+  if (!release) {
+    duel.answerStake(false);
+    return S.stakeBusy;
+  }
+  const r = store.holdStake(m.stake, m.room?.code || null, TAB_ID);
+  if (!r.ok) {
+    release();
+    duel.answerStake(false);
+    return r.reason === 'busy' ? S.stakeBusy : S.stakeNotHeld;
+  }
+  m.stakeHeld = true;
+  m.stakeRelease = release;
+  duel.answerStake(true);
+  clearInterval(stakeBeat);
+  stakeBeat = setInterval(() => {
+    if (duel.match === m && !m.stakeDone) store.touchStake(m.room?.code || null);
+    else stopStakeBeat();
+  }, STAKE_BEAT_MS);
+  return '';
+}
+
+/**
+ * This window's claim on the wallet for one coin match: resolves to the function that lets it go, or null when another
+ * window of this browser has it (without the Web Locks API: always granted; the wallet's own check stays).
+ */
+function claimStakeLock() {
+  if (!LOCKS) return Promise.resolve(() => {});
+  return new Promise((resolve) => {
+    LOCKS.request(STAKE_LOCK, { ifAvailable: true }, (lock) => {
+      if (!lock) {
+        resolve(null);
+        return undefined;
+      }
+      return new Promise((release) => resolve(release));   // held until the match's stake is settled
+    }).catch(() => resolve(() => {}));
+  });
+}
+
+/** Does any window of this browser play a coin match right now (hold the claim)? null: this browser can't tell. */
+async function stakeLockHeld() {
+  if (!LOCKS || typeof LOCKS.query !== 'function') return null;
+  try {
+    const q = await LOCKS.query();
+    return (q?.held || []).some((l) => l.name === STAKE_LOCK);
+  } catch {
+    return null;
+  }
+}
+
+function stopStakeBeat() {
+  clearInterval(stakeBeat);
+  stakeBeat = 0;
+}
+
+/**
+ * The match's stake ends: 'won' gets both, anything else ('lost', 'none': the connection didn't come back) loses it.
+ * Returns { n, paid, outcome, name } for the results, or null (no coins at stake for this player).
+ */
+function settleMatchStake(m, outcome) {
+  if (!m || !m.stakeHeld || m.stakeDone) return null;
+  m.stakeDone = true;
+  stopStakeBeat();
+  m.stakeRelease?.();   // (the browser lock: another coin match may start, in any window)
+  m.stakeRelease = null;
+  // (the room said the match plays for none: the stake goes back, whatever the outcome)
+  const how = m.stakeOn === false || outcome === 'refund' ? 'refund' : outcome === 'won' ? 'won' : 'lost';
+  const r = store.settleStake(how, m.room?.code || null);
+  m.stakeResult = r.n ? { n: r.n, paid: r.paid, outcome: how === 'refund' ? 'refund' : outcome, name: m.oppName } : null;
+  return m.stakeResult;
+}
+
+/** The match was settled after its results were drawn (a late verdict, a dropped connection): their coin line follows. */
+function refreshResultReward(m) {
+  if (screen === 'results' && m && duel.match === m) ui.setResultReward(matchReward(m));
+}
+
+/** What the results card shows for the match: its coins and rank (duelReward) and its stake. */
+const matchReward = (m) => ({ ...(duelReward || {}), stake: m?.stakeResult || null });
+
+/**
+ * A held stake whose match is gone (the app was closed or the page reloaded mid-match): it is lost. Resolves to the
+ * coins (0: none, or another window of this browser still plays that match).
+ */
+async function clearStaleStake() {
+  if (!store.heldStake()) return 0;
+  const m = duel.match;
+  if (m && m.stakeHeld && !m.stakeDone) return 0;   // this window's own match, still on
+  const lockHeld = await stakeLockHeld();
+  const held = store.heldStake();
+  if (!held || (duel.match?.stakeHeld && !duel.match.stakeDone)) return 0;
+  if (lockHeld === true) return 0;   // another window holds the claim: its match is on
+  // without locks: another tab may still play it (the app has one window: there it's always an old one)
+  if (lockHeld === null && !IN_APP && held.tab !== TAB_ID && Date.now() - held.beat < STAKE_STALE_MS) return 0;
+  return store.settleStake('lost', held.room).n;
+}
+
+/** Leave the match (and its live room). A coin match left before its result loses its stake. */
+function leaveDuel() {
+  const m = duel.match;
+  duel.leave();
+  const s = settleMatchStake(m, 'lost');
+  if (s) ui.toast(S.stakeLeft(fmtInt(s.n)), 3600);
+}
+
+// (1.13) a match whose connection didn't come back (it doesn't count): a coin match's stake is lost (also when the
+// tower had already ended)
+bus.on('duel:dropped', (e) => {
+  if (settleMatchStake(e?.match, 'none')) refreshResultReward(e.match);
+});
+// (1.13) the room's word: the match plays for no coins (the other game couldn't hold its stake, or a coin match ran out
+// of time with level towers): this game's stake goes back
+bus.on('duel:stake', (e) => {
+  const m = e?.match;
+  if (e?.on !== false || !m || !m.stakeHeld || m.stakeDone) return;
+  const s = settleMatchStake(m, 'refund');
+  if (s) ui.toast(S.stakeOff(fmtInt(s.n)), 3600);
+  if (screen === 'duelwait') ui.setStakeLine(null);
+  refreshResultReward(m);
+});
+bus.on('ui:duel-stake', (n) => ui.setDuelStake(store.setDuelStake(n), coinsNow()));
+
+/** (1.13) The coins changed while the Uitdagersreeks screen is up (the Winkel): the stake picker follows. */
+function coinsChanged() {
+  if (screen !== 'duel') return;
+  const coins = coinsNow();
+  ui.setDuelStake(duelStake() <= coins ? duelStake() : store.setDuelStake(0), coins);
+}
 // A friend's run (?teen=...) or live room (?kamer=CODE) from the link this page was opened with, and a
 // language from the address (?lang=, already applied by js/core/langboot.js). They are taken off the
 // address straight away, so a reload or a shared screenshot doesn't repeat them.
@@ -1325,6 +1501,7 @@ let duelTimer = 0;
 let lastDuelKind = null;
 let lastDuelMode = 'race';
 let lastDuelRoom = null;   // (1.12.1) 'friend' or 'random' for a live match
+let lastDuelStake = null;  // (1.13) the coins a live match was played for (a new invite after it plays for the same)
 /** The way to play chosen on the Uitdagersreeks screen: 'race' (Wedloop) or 'turns' (Blok vir Blok, 1.11). */
 const duelMode = () => (store.getDuel().mode === 'turns' ? 'turns' : 'race');
 
@@ -1342,7 +1519,9 @@ function showDuelScreen() {
   // the season first: a new month drops each rank a tier and hands out last month's badge (1.12: per mode)
   const mode = duelMode();
   const rank = store.getSeasonRank(mode);
-  ui.showDuel({ live: duel.live, duel: store.getDuel(), placeholder: sessionNick, rank, card: store.getCard(mode), mode });
+  const coins = coinsNow();
+  const stake = duelStake() <= coins ? duelStake() : store.setDuelStake(0);   // (1.13) never more than the coins
+  ui.showDuel({ live: duel.live, duel: store.getDuel(), placeholder: sessionNick, rank, card: store.getCard(mode), mode, stake, coins });
   seasonToast(rank.reward);
 }
 bus.on('ui:duel-mode', (mode) => {
@@ -1365,11 +1544,22 @@ function versus(m, note = '') {
   lastDuelKind = m.kind;
   lastDuelMode = m.mode === 'turns' ? 'turns' : 'race';
   lastDuelRoom = m.roomKind || null;
+  lastDuelStake = m.kind === 'live' ? m.stake || 0 : null;
   ui.setConnChip(null);
   screen = 'duelwait';
   // Blok vir Blok: who drops the first block
   const first = m.mode === 'turns' && m.turn ? (m.turn.seat === m.you ? S.turnsYouStart : S.turnsTheyStart(m.oppName)) : '';
-  ui.showDuelWait({ state: 'versus', oppName: m.oppName, oppCard: m.oppCard, youName: duelNick(), youCard: store.getCard(lastDuelMode), note, mode: lastDuelMode, first });
+  ui.showDuelWait({
+    state: 'versus', oppName: m.oppName, oppCard: m.oppCard, youName: duelNick(), youCard: store.getCard(lastDuelMode),
+    note, mode: lastDuelMode, first, stake: m.kind === 'live' ? m.stake : 0,
+  });
+  // (1.13) a coin match: the stake leaves the wallet now; a player who can't put it in hears why (the match then
+  // plays for no coins: the room tells both)
+  holdMatchStake(m).then((why) => {
+    if (!why || duel.match !== m) return;
+    if (screen === 'duelwait') ui.setStakeLine(null);
+    ui.toast(why, 3600);
+  });
   let n = Math.max(1, Math.round(DUEL.countdownMs / 1000));
   ui.setDuelCount(String(n));
   duelTimer = setInterval(() => {
@@ -1421,7 +1611,7 @@ function showDuelResults(r) {
     mode: 'duel',
     duel: d,
     again: duel.canAgain() ? { name: d.oppName || S.duelSomeone } : null,
-    reward: duelReward,
+    reward: matchReward(duel.match),
     shareText: buildDuelShareText({ outcome: d.outcome, youBest: d.youBest, oppName: d.oppName, oppBest: d.oppBest, link, mode: d.mode }),
     nextDayAt: 0,
   });
@@ -1438,20 +1628,28 @@ function showDuelResults(r) {
  * someone comes: "Teen <naam>!", 3-2-1, the match.
  */
 function searchOpponent() {
+  const mode = duelMode();
+  const stake = duelStake();
+  if (stake && coinsNow() < stake) {   // (1.13) too few coins for the amount chosen: choose again
+    showDuelScreen();
+    ui.toast(S.stakeNeed(fmtInt(stake), fmtInt(coinsNow())), 3400);
+    return;
+  }
   stopDuelFlow();
   const flow = duelFlow;
   screen = 'duelwait';
-  const mode = duelMode();
-  ui.showDuelWait({ state: 'lobby', mode });
+  ui.showDuelWait({ state: 'lobby', mode, stake });
   duel.findOpponent({
     mode,
+    stake,
     onFound: (m) => {
       if (flow === duelFlow) opponentFound(m);
     },
+    // (a recording or Robot Rikus: never for coins)
     onFallback: (m, note) => {
       if (flow !== duelFlow) return;
       ui.setSearchChip(false);
-      versus(m, note);
+      versus(m, stake ? `${note} ${S.stakeNoBot}` : note);
     },
     onRetry: () => {
       if (flow === duelFlow && screen === 'duelwait') ui.setDuelCount(S.duelReconnecting);
@@ -1521,15 +1719,22 @@ bus.on('ui:duel-friend', () => {
     versus(duel.startBot(mode), mode === 'turns' ? S.turnsBotNow : S.duelFriendLater);
     return;
   }
+  const stake = duelStake();
+  if (stake && coinsNow() < stake) {   // (1.13) too few coins for the amount chosen: choose again
+    showDuelScreen();
+    ui.toast(S.stakeNeed(fmtInt(stake), fmtInt(coinsNow())), 3400);
+    return;
+  }
   stopDuelFlow();
   const flow = duelFlow;
   duel.createRoom({
     mode,
+    stake,
     onCode: (code) => {
       if (flow !== duelFlow) return;
       const link = `${siteUrl()}?kamer=${code}`;
       screen = 'duelwait';
-      ui.showDuelWait({ state: 'room', link, shareText: S.duelRoomText(duelNick(), link, mode), mode });
+      ui.showDuelWait({ state: 'room', link, shareText: S.duelRoomText(duelNick(), link, mode, stake), mode, stake });
     },
     onStart: (m) => {
       if (flow === duelFlow) versus(m);
@@ -1546,11 +1751,13 @@ bus.on('ui:duel-friend', () => {
     onWait: () => {
       if (flow === duelFlow) ui.setDuelWaitNote(null);
     },
-    // (1.12.1) a friend answered "Sorry, besig nou": said here; the room waits on for anyone else
-    onDeclined: (name) => {
+    // (1.12.1) a friend answered "Sorry, besig nou" (1.13: or has too few coins): said here; the room waits on for
+    // anyone else
+    onDeclined: (name, why) => {
       if (flow !== duelFlow) return;
-      ui.setDuelWaitNote(S.duelDeclined(name));
-      ui.toast(S.duelDeclined(name), 3500);
+      const text = why?.old ? S.duelDeclinedOld(name) : why?.coins ? S.duelDeclinedCoins(name) : S.duelDeclined(name);
+      ui.setDuelWaitNote(text);
+      ui.toast(text, 3500);
     },
   });
 });
@@ -1570,12 +1777,18 @@ bus.on('ui:duel-again', () => {
   // (1.12.1, the owner: "if I say play again after I challenged a friend then it shows finding an opponent")
   // after a friend match: the same friend, in the same room (the match starts once both said it)
   if (duel.canAgain()) {
+    const m = duel.match;
+    if (m?.stake && coinsNow() < m.stake) {   // (1.13) a coin match again needs the coins again
+      ui.toast(S.stakeAgainShort(fmtInt(m.stake)), 3400);
+      return;
+    }
     duel.again();
     return;
   }
-  duel.leave();
-  // the same way to play as the match just played
+  leaveDuel();
+  // the same way to play as the match just played (1.13: and for the same coins)
   store.setDuelMode(lastDuelMode);
+  if (lastDuelStake !== null) store.setDuelStake(lastDuelStake);
   if (duel.live && lastDuelKind === 'live' && lastDuelRoom === 'friend') bus.emit('ui:duel-friend');   // a new invite
   else if (duel.live && lastDuelKind !== 'bot') searchOpponent();
   else versus(duel.startBot(lastDuelMode));
@@ -1588,16 +1801,22 @@ bus.on('duel:rematch', (m) => {
 });
 
 let inviteFrom = '';   // (1.12.1) who invited, while their link's question is on screen
+let inviteStake = 0;   // (1.13) ...and the coins each puts in (0: none)
 bus.on('ui:invite-yes', () => {
+  if (inviteStake && coinsNow() < inviteStake) {
+    ui.toast(S.inviteShort(fmtInt(coinsNow())), 3200);
+    return;
+  }
   if (!duel.acceptInvite()) return;
   ui.showDuelWait({ state: 'search', appLink: APP_LINK });
   ui.setDuelCount(S.duelJoining);
 });
-bus.on('ui:invite-no', () => {
-  if (!duel.declineInvite()) return;
+bus.on('ui:invite-no', (o) => {
+  const coins = o?.coins === true;   // (1.13) "Laat weet: te min munte"
+  if (!duel.declineInvite({ coins })) return;
   stopDuelFlow();
   showMenu();
-  ui.toast(S.inviteBusySent(inviteFrom || S.duelSomeone), 3200);
+  ui.toast(coins ? S.inviteCoinsSent(inviteFrom || S.duelSomeone) : S.inviteBusySent(inviteFrom || S.duelSomeone), 3200);
 });
 
 /** Opened from a friend's link: their run (play it now?) or their live room (join it). */
@@ -1626,7 +1845,8 @@ function openDuelLink() {
       onInvite: (host) => {
         if (flow !== duelFlow) return;
         inviteFrom = host.name || S.duelSomeone;
-        ui.showDuelWait({ state: 'invite', oppName: inviteFrom, mode: host.mode, appLink: APP_LINK });
+        inviteStake = host.stake || 0;
+        ui.showDuelWait({ state: 'invite', oppName: inviteFrom, mode: host.mode, stake: inviteStake, coins: coinsNow(), appLink: APP_LINK });
       },
       onStart: (m) => {
         if (flow === duelFlow) versus(m);
@@ -1984,6 +2204,10 @@ function onReady() {
   const recovered = store.recoverUnfinished(todayKey(), { staleMs: STALE_AFTER_MS, owner: TAB_ID });
   const recoveredCoins = payRecovered(recovered);
   refundRetries();
+  // (1.13) a coin match that ended without its result (the app closed mid-match, a reload): its stake is lost
+  clearStaleStake().then((n) => {
+    if (n) setTimeout(() => ui.toast(S.stakeEarlier(fmtInt(n)), 4200), 1200);
+  });
   startIdle();
   showMenu();
   retryBoard();
