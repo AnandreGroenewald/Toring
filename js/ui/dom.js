@@ -1303,7 +1303,11 @@ export function createUI(bus) {
       // (1.13) a coin match: "Hou op" gives the other player both stakes
       stake && stake.n ? h('p', { class: 'warn' }, emo('⚠️'), h('span', { text: S.quitWarnStake(stake.name || S.duelSomeone, fmtInt(stake.n)) })) : null,
       button('btn-big btn-green', [icon('play'), h('span', { text: S.resume })], () => bus.emit('ui:resume')),
-      button('btn-white btn-quit', [icon('close'), h('span', { text: S.quit })], () => bus.emit('ui:quit')),
+      // (1.13.4, the owner) outside a match: "Terug na die hoofkieslys", straight to the menu (the tower is saved first);
+      // a match keeps "Hou op" (it goes on to the match's result)
+      mode === 'duel'
+        ? button('btn-white btn-quit', [icon('close'), h('span', { text: S.quit })], () => bus.emit('ui:quit'))
+        : button('btn-white btn-quit', [icon('home'), h('span', { text: S.quitHome })], () => bus.emit('ui:quit-home')),
       h('div', { class: 'dock' }, toggleBtns({ contrast: true })));
     screens.pause.replaceChildren(card);
     showScreen('pause');
@@ -1396,14 +1400,16 @@ export function createUI(bus) {
       modePicker(m.mode),
       // (1.13) coin matches: only where a live match can be played
       m.live ? stakePicker(m.stake || 0, m.coins || 0) : null,
-      m.rank ? rankBox(m.rank, m.card, d.name || st.duelPlaceholder) : null,
-      // (1.12.1) the name rules where a nickname is typed (Google Play's user content policy)
-      h('div', { class: 'nick' }, h('span', { class: 'label', text: S.duelNick }), input, msg, h('p', { class: 'name-rules', text: S.nameRules })),
+      // (1.13.4, the owner: the screen "just doesn't fit" on his phone) the three ways to play straight under the choices,
+      // in sight on a phone; the rank, the nickname and the notes below them
       h('div', { class: 'duel-btns' },
         m.live ? button('btn-big btn-green', [emo('🎲'), h('span', { text: S.duelRandom })], () => bus.emit('ui:duel-random')) : null,
         button(m.live ? 'btn-purple' : 'btn-big btn-purple', [emo('📲'), h('span', { text: S.duelFriend })], () => bus.emit('ui:duel-friend')),
         button('btn-teal', [emo('🤖'), h('span', { text: S.duelBot })], () => bus.emit('ui:duel-bot'))),
       m.live ? null : h('p', { class: 'note duel-note', text: S.duelOffline }),
+      m.rank ? rankBox(m.rank, m.card, d.name || st.duelPlaceholder) : null,
+      // (1.12.1) the name rules where a nickname is typed (Google Play's user content policy)
+      h('div', { class: 'nick' }, h('span', { class: 'label', text: S.duelNick }), input, msg, h('p', { class: 'name-rules', text: S.nameRules })),
       record ? h('p', { class: 'duel-record', text: record }) : null,
       m.rank ? seasonNotes(m.rank) : null);
     screens.duel.replaceChildren(h('div', { class: 'duel-wrap' }, card,
@@ -1838,7 +1844,7 @@ export function createUI(bus) {
       h('p', { class: 'res-sub', text: why }));
   }
 
-  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null, againStake = 0, freeTry = null, bestStays = null } = {}) {
+  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null, againStake = 0, freeTry = null, bestStays = null, switchTo = null } = {}) {
     if (st.modal) closeModal();
     const r = result || {};
     const m = mode || r.mode || 'practice';
@@ -1938,9 +1944,14 @@ export function createUI(bus) {
         button('btn-teal btn-practice',
           [icon('again'), h('span', { class: 'btn-txt' }, h('span', { text: daily ? S.practice : S.practiceAgain }), h('span', { class: 'btn-sub', text: S.practiceSubShort }))],
           () => bus.emit('ui:play-practice'), { attrs: { 'aria-label': `${daily ? S.practice : S.practiceAgain}: ${S.practiceSub}` } }),
-        button('btn-purple btn-practice btn-duel',
-          [emo('⚔️'), h('span', { class: 'btn-txt' }, h('span', { text: S.duel }), h('span', { class: 'btn-sub', text: S.playSomeoneNow }))],
-          () => bus.emit('ui:duel'), { attrs: { 'aria-label': `${S.duel}: ${S.duelSub}` } })));
+        // (1.13.4, the owner) an Oefen tower while a search runs: the second button looks in the other mode instead
+        switchTo
+          ? button('btn-purple btn-practice btn-duel btn-switch',
+            [emo(switchTo === 'turns' ? '🧱' : '🏁'), h('span', { class: 'btn-txt' }, h('span', { text: switchTo === 'turns' ? S.switchToTurns : S.switchToRace }), h('span', { class: 'btn-sub', text: S.switchSub }))],
+            () => bus.emit('ui:duel-switch'))
+          : button('btn-purple btn-practice btn-duel',
+            [emo('⚔️'), h('span', { class: 'btn-txt' }, h('span', { text: S.duel }), h('span', { class: 'btn-sub', text: S.playSomeoneNow }))],
+            () => bus.emit('ui:duel'), { attrs: { 'aria-label': `${S.duel}: ${S.duelSub}` } })));
 
     // peek: hide the card to look at (and screenshot) the whole tower
     const peek = h('button', {

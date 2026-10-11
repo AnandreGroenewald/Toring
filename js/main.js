@@ -615,7 +615,9 @@ function startGame(data) {
   });
 }
 
+let quitHome = false;   // (1.13.4) "Terug na die hoofkieslys": this run ends on the menu instead of its results
 function resetRun(mode, dateKey = null) {
+  quitHome = false;
   pw.effects = {};
   pw.free = false;
   if (mode !== 'duel') ui.setEmotes(null);   // (1.12) emojis belong to a match
@@ -1311,6 +1313,13 @@ bus.on('ui:quit', () => {
   renderTray();
   bus.emit('game:quit');
 });
+// (1.13.4, the owner: "Hou op" → "Terug na die hoofkieslys", straight to the menu) outside a match the tower ends and is
+// saved as before (a daily's try counts; the menu's card shows its result), then the menu instead of the results.
+// A match keeps "Hou op" ('ui:quit'): it goes on to the match's result.
+bus.on('ui:quit-home', () => {
+  if (run.mode !== 'duel' && run.mode !== 'idle' && !run.over) quitHome = true;
+  bus.emit('ui:quit');
+});
 bus.on('ui:home', () => {
   if (lesson) endLesson();
   if (linkWaiting) {
@@ -1657,6 +1666,7 @@ let lastDuelRoom = null;   // (1.12.1) 'friend' or 'random' for a live match
 let lastDuelStake = null;  // (1.13) the coins a live match was played for (a new invite after it plays for the same)
 /** The way to play chosen on the Uitdagersreeks screen: 'race' (Wedloop) or 'turns' (Blok vir Blok, 1.11). */
 const duelMode = () => (store.getDuel().mode === 'turns' ? 'turns' : 'race');
+const otherMode = (mode) => (mode === 'turns' ? 'race' : 'turns');
 
 function stopDuelFlow() {
   duelFlow++;
@@ -1831,6 +1841,12 @@ bus.on('ui:duel-practice', () => {
   ui.showInGame();
   renderTray();
   ui.setSearchChip(true);
+});
+// (1.13.4, the owner) after an Oefen tower while a search runs: look in the other mode (the same coins) instead
+bus.on('ui:duel-switch', () => {
+  ui.setDuelMode(store.setDuelMode(otherMode(duelMode())));
+  if (duel.searching) searchOpponent();
+  else showDuelScreen();   // the search ended meanwhile: the Uitdagersreeks, the new mode chosen
 });
 // "Speel dadelik": stop looking, a recording of a real match or Robot Rikus now
 bus.on('ui:duel-now', () => duel.playNow());
@@ -2171,9 +2187,13 @@ bus.on('game:over', (result) => {
     duel.whenDecided(() => showDuelResults(f.result));
     return;
   }
-  if (f.aborted) {
+  if (f.aborted || quitHome) {
+    const home = quitHome && !f.aborted;
+    const added = f.coins?.added || 0;
     startIdle();
     showMenu();
+    if (home && added > 0) ui.toast(`+${fmtInt(added)} 🪙`, 2400);
+    if (home && result.mode === 'daily') planReminders();   // today is built: no reminder today
     return;
   }
   if (f.isNewBest) audio.play('record');
@@ -2187,6 +2207,8 @@ bus.on('game:over', (result) => {
     shareText: shareTextFor(r),
     nextDayAt: r.mode === 'daily' ? nextDayFor(r.dateKey) : 0,
     mode: r.mode,
+    // (1.13.4, the owner) an Oefen tower while a search runs: "Verander na Blok vir Blok / Wedloop"
+    switchTo: r.mode === 'practice' && duel.searching ? otherMode(duelMode()) : null,
     ...resultsExtras(r),
   });
   showPercentile(r);

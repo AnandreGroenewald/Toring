@@ -61,7 +61,8 @@ export const S_EN = {
   paused: 'Paused',
   resume: 'Keep playing',
   quit: 'Stop',
-  quitWarnDaily: 'If you stop now, this try counts as your Daily Tower.',
+  quitHome: 'Back to the main menu',
+  quitWarnDaily: 'If you go back now, this try counts as your Daily Tower.',
   // (1.13) a coin match: quitting gives the other player both stakes
   quitWarnStake: (name, n) => `If you stop now, ${name} gets your ${n} 🪙.`,
   pause: 'Pause',
@@ -317,6 +318,9 @@ export const S_EN = {
   zoneTitle: (k) => ['', 'Above the clouds!', 'High in the sky!', 'Edge of space!', 'Outer space!', 'Among the stars!'][k] || '',
   zoneSub: (k) => ['', '50 m: the city is gone below the clouds.', '100 m: this is where the planes fly.', '200 m: you can see the curve of the Earth!', '300 m: welcome to space, astronaut!', '500 m: past the moon. Legend!'][k] || '',
   playSomeoneNow: 'Play someone now',
+  switchToTurns: 'Switch to Block by Block',
+  switchToRace: 'Switch to Race',
+  switchSub: 'Still looking',
   raceLeadYou: 'You’re ahead! 💪',
   raceLeadThem: (name) => `${name} is ahead of you! 😮`,
   // --- Coins, power-ups and rank (1.8; js/core/economy.js) ---

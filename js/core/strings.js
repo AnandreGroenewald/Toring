@@ -60,7 +60,9 @@ export const S = {
   paused: 'Gepouseer',
   resume: 'Speel verder',
   quit: 'Hou op',
-  quitWarnDaily: 'As jy nou ophou, tel hierdie poging as jou Daaglikse Toring.',
+  // (1.13.4, the owner) the pause card outside a match: straight back to the menu (the tower is saved)
+  quitHome: 'Terug na die hoofkieslys',
+  quitWarnDaily: 'As jy nou teruggaan, tel hierdie poging as jou Daaglikse Toring.',
   // (1.13) a coin match: quitting gives the other player both stakes
   quitWarnStake: (name, n) => `As jy nou ophou, kry ${name} jou ${n} 🪙.`,
   pause: 'Pouseer',
@@ -337,6 +339,10 @@ export const S = {
   zoneTitle: (k) => ['', 'Bo die wolke!', 'Hoog in die lug!', 'Ruimte se rand!', 'Die ruimte!', 'Tussen die sterre!'][k] || '',
   zoneSub: (k) => ['', '50 m: die stad is weg onder die wolke.', '100 m: hier vlieg die vliegtuie.', '200 m: jy sien die aarde se kurwe!', '300 m: welkom in die ruimte, ruimtevaarder!', '500 m: verby die maan. Legende!'][k] || '',
   playSomeoneNow: 'Speel nou teen iemand',
+  // (1.13.4, the owner) after an Oefen tower while a search runs: look in the other mode instead (the coins stay)
+  switchToTurns: 'Verander na Blok vir Blok',
+  switchToRace: 'Verander na Wedloop',
+  switchSub: 'Soek steeds',
   raceLeadYou: 'Jy is voor! 💪',
   raceLeadThem: (name) => `${name} is voor jou! 😮`,
   // --- Muntstukke, kragte en rang (1.8; js/core/economy.js) ---
