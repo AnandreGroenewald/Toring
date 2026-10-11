@@ -35,6 +35,21 @@ const tower = svg.slice(svg.indexOf('<!-- base platform -->'), svg.indexOf('</g>
   // the rope comes down from the crane above the icon
   .replace('<rect x="236" y="-10" width="8" height="34" rx="4" fill="#2b2b2b"/>', '<rect x="236" y="-600" width="8" height="624" rx="4" fill="#2b2b2b"/>');
 if (!clouds || !tower.includes('crane rope')) throw new Error('icon.svg changed: update tools/icons.mjs');
+// (1.13.2, the owner: the launch picture "looks a little wonky") the launch screen's tower stands straight: every block
+// level and centred over the base (the icon keeps its playful lean), the block on the hook hanging straight down
+const STRAIGHT = [
+  ['<g transform="rotate(-2 238 364)">', '<g transform="translate(18 0)">'],
+  ['<g transform="rotate(2 262 280)">', '<g transform="translate(-6 0)">'],
+  ['<g transform="rotate(-3 274 220)">', '<g transform="translate(-18 0)">'],
+  ['<rect x="236" y="-600" width="8" height="624" rx="4" fill="#2b2b2b"/>', '<rect x="252" y="-600" width="8" height="624" rx="4" fill="#2b2b2b"/>'],
+  ['<rect x="221" y="20" width="38" height="18" rx="6"', '<rect x="237" y="20" width="38" height="18" rx="6"'],
+  ['<g transform="rotate(6 240 38)">', '<g transform="translate(16 0)">'],
+];
+let towerStraight = tower;
+for (const [a, b] of STRAIGHT) {
+  if (!towerStraight.includes(a)) throw new Error(`icon.svg changed: can't straighten ${a}`);
+  towerStraight = towerStraight.replace(a, b);
+}
 
 const BIG = '<rect x="-2000" y="-2000" width="4512" height="4512" fill="url(#sky)"/>';
 const DEEP = '<rect x="-2000" y="455" width="4512" height="3000" fill="#2f86d8"/>';
@@ -57,8 +72,12 @@ for (const [d, k] of Object.entries(DENSITIES)) {
   jobs.push({ file: join(dir, 'ic_launcher.png'), size: 48 * k, svg });
   jobs.push({ file: join(dir, 'ic_launcher_round.png'), size: 48 * k, svg: svgDoc(VIEW, `<g clip-path="url(#circle)">${backdrop}${tower}</g>`, ROUND) });
 }
-// launch screen: the tower alone, on the sky colour of the theme
-jobs.push({ file: join(res, 'drawable-nodpi/splash_logo.png'), size: 432, svg: svgDoc(LAYER, tower) });
+// launch screen: the tower alone (straight), on the sky colour of the theme — Android 12+ (`splash_icon`, per density, the
+// 108 dp layer like the launcher's foreground) and older phones (`splash_logo`)
+for (const [d, k] of Object.entries(DENSITIES)) {
+  jobs.push({ file: join(res, `mipmap-${d}`, 'splash_icon.png'), size: 108 * k, svg: svgDoc(LAYER, towerStraight), splash: true });
+}
+jobs.push({ file: join(res, 'drawable-nodpi/splash_logo.png'), size: 432, svg: svgDoc(LAYER, towerStraight), splash: true });
 // Play Store: 512 × 512, square (Google rounds the corners itself)
 jobs.push({ file: join(store, 'play-icon-512.png'), size: 512, svg: svgDoc('0 0 512 512', backdrop + tower) });
 
@@ -66,11 +85,12 @@ jobs.push({ file: join(store, 'play-icon-512.png'), size: 512, svg: svgDoc('0 0 
 // capture a frame that is still the old size)
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
 const page = await browser.newPage({ deviceScaleFactor: 1, viewport: { width: 1100, height: 1100 } });
-for (const j of jobs) {
+// ONLY=splash: just the launch-screen pictures (the icons stay byte for byte as they are)
+for (const j of jobs.filter((x) => process.env.ONLY !== 'splash' || x.splash)) {
   const px = Math.round(j.size);
   await page.setContent(`<!doctype html><html><body style="margin:0;background:transparent">${j.svg.replace('<svg ', `<svg width="${px}" height="${px}" style="display:block" `)}</body></html>`);
   mkdirSync(dirname(j.file), { recursive: true });
   await page.locator('svg').first().screenshot({ path: j.file, omitBackground: true });
 }
 await browser.close();
-console.log(`${jobs.length} icons written`);
+console.log(`${process.env.ONLY === 'splash' ? jobs.filter((x) => x.splash).length : jobs.length} pictures written`);
