@@ -150,6 +150,47 @@ export function getGeometry(spec) {
   return g;
 }
 
+// (1.13.4, the owner: "the different skins on the blocks", bought with coins) the blocks' skin, the player's own view: its own
+// eight colours (one per PALETTE entry, so blocks still differ) and a pattern drawn over the block; looks only. 'kleur' is the
+// game's own colours (and keeps the textures' keys as they were).
+const BLOCK_SKINS = {
+  kleur: null,
+  lekkergoed: {
+    pattern: 'stripes',
+    pal: [[0xffb3d1, 0xffe0ec, 0xe0789f], [0xffcc99, 0xffe8cc, 0xe0995c], [0xfff2a1, 0xfffbd6, 0xd9c45c], [0xb5f2c2, 0xe2fbe8, 0x6fc584],
+      [0xa6eef0, 0xdcfafb, 0x5ec1c4], [0xd6c2ff, 0xeee5ff, 0x9a80db], [0xb3d4ff, 0xe0edff, 0x6f9ee0], [0xff9fa3, 0xffd2d4, 0xe0636a]],
+  },
+  klip: {
+    pattern: 'speckle',
+    pal: [[0x9a9a9a, 0xc4c4c4, 0x6b6b6b], [0xa8957f, 0xcdbda9, 0x766553], [0x8f8a80, 0xb8b3a8, 0x625e56], [0x7f8c84, 0xa9b5ad, 0x56615a],
+      [0x8a9399, 0xb2bac0, 0x5d656b], [0x9a8f9e, 0xc0b6c4, 0x6b616f], [0x8696a8, 0xafbccb, 0x5a6878], [0xa07f74, 0xc6a79c, 0x70544b]],
+  },
+  neon: {
+    pattern: 'glow',
+    pal: [[0x1d1b2e, 0xff3fa4, 0x0d0c16], [0x1d1b2e, 0xff9a1f, 0x0d0c16], [0x1d1b2e, 0xfff23f, 0x0d0c16], [0x1d1b2e, 0x39ff6a, 0x0d0c16],
+      [0x1d1b2e, 0x29f0ff, 0x0d0c16], [0x1d1b2e, 0xb04dff, 0x0d0c16], [0x1d1b2e, 0x3f8bff, 0x0d0c16], [0x1d1b2e, 0xff3b3b, 0x0d0c16]],
+  },
+  goud: {
+    pattern: 'shine',
+    pal: [[0xf2c230, 0xffe78a, 0xb88a0c], [0xe8b52a, 0xffdf7a, 0xa87a08], [0xf5cc45, 0xfff0a6, 0xbf9516], [0xedb92e, 0xffe385, 0xb08410],
+      [0xf2c230, 0xffe78a, 0xb88a0c], [0xe3ad22, 0xffd96b, 0xa06f05], [0xf7d050, 0xfff2b0, 0xc29a1c], [0xebb42a, 0xffe07c, 0xab7e0a]],
+  },
+};
+let blockSkin = 'kleur';
+/** (1.13.4) The blocks' skin from now on (new textures; a block already drawn keeps its own). */
+export function setBlockSkin(id) {
+  blockSkin = Object.prototype.hasOwnProperty.call(BLOCK_SKINS, id) ? id : 'kleur';
+}
+export const getBlockSkin = () => blockSkin;
+/** The skin's colours for a PALETTE entry (the entry itself for 'kleur'). */
+function skinned(pal) {
+  const sk = BLOCK_SKINS[blockSkin];
+  if (!sk) return pal;
+  const i = Math.max(0, PALETTE.indexOf(pal));
+  const [fill, light, dark] = sk.pal[i % sk.pal.length];
+  return { id: pal.id, fill, light, dark };
+}
+
 /** PALETTE entry for a spec. */
 export function shapeColor(spec) {
   const n = PALETTE.length;
@@ -972,6 +1013,57 @@ function drawFoundation(ctx, g) {
   ctx.restore();
 }
 
+/** (1.13.4) The blocks' skin pattern over the face (already clipped to the shape). */
+function drawSkinPattern(ctx, g, pal, rnd) {
+  const sk = BLOCK_SKINS[blockSkin];
+  if (!sk) return;
+  if (sk.pattern === 'stripes') {
+    // candy stripes, diagonal
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 7;
+    for (let x = -g.h; x < g.w + g.h; x += 18) {
+      ctx.beginPath();
+      ctx.moveTo(x, g.h);
+      ctx.lineTo(x + g.h, 0);
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else if (sk.pattern === 'speckle') {
+    // stone: dark and light grains
+    const n = Math.round((g.w * g.h) / 70);
+    for (let k = 0; k < n; k++) {
+      ctx.fillStyle = rnd() < 0.5 ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.22)';
+      const r = 0.8 + rnd() * 1.8;
+      ctx.beginPath();
+      ctx.arc(rnd() * g.w, rnd() * g.h, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (sk.pattern === 'glow') {
+    // neon: a bright tube just inside the edge
+    ctx.save();
+    roundedPolyPath(ctx, g.outline, CORNER_R);
+    ctx.shadowColor = hex(pal.light);
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = hex(pal.light);
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.restore();
+  } else if (sk.pattern === 'shine') {
+    // gold: a soft diagonal shine
+    ctx.save();
+    const gr = ctx.createLinearGradient(0, 0, g.w, g.h);
+    gr.addColorStop(0, 'rgba(255,255,255,0)');
+    gr.addColorStop(0.42, 'rgba(255,255,255,0)');
+    gr.addColorStop(0.5, 'rgba(255,255,255,0.55)');
+    gr.addColorStop(0.58, 'rgba(255,255,255,0)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gr;
+    ctx.fillRect(0, 0, g.w, g.h);
+    ctx.restore();
+  }
+}
+
 function drawBlock(ctx, g, pal, key, name = null) {
   const rnd = seededRand(key);
   const outlineCol = mix(pal.dark, 0x000000, 0.38);
@@ -990,6 +1082,7 @@ function drawBlock(ctx, g, pal, key, name = null) {
   }
   const detail = DETAIL[g.shape];
   if (detail) detail(ctx, g, pal, rnd);
+  drawSkinPattern(ctx, g, pal, rnd);
   if (g.cells.length > 1) drawSeams(ctx, g.cells, rgba(outlineCol, 0.8));
   if (name) drawName(ctx, g, pal, name);   // still clipped to the shape: the ghost silhouette is unchanged
   ctx.restore();
@@ -1008,7 +1101,7 @@ export function textureKeyFor(spec, name = null) {
   if (spec.gift) return `gift_${g.shape}_${Math.round(g.w)}x${Math.round(g.h)}`;
   if (spec.foundation) return `found_${g.shape}_${Math.round(g.w)}x${Math.round(g.h)}`;
   const color = PALETTE.indexOf(shapeColor(spec));
-  const key = `blk_${g.shape}_${Math.round(g.w)}x${Math.round(g.h)}_${color}`;
+  const key = `blk_${g.shape}_${Math.round(g.w)}x${Math.round(g.h)}_${color}${blockSkin === 'kleur' ? '' : `_s${blockSkin}`}`;
   return name ? `${key}_n${nameHash(name)}` : key;
 }
 
@@ -1030,7 +1123,7 @@ export function ensureTexture(scene, spec, name = null) {
     if (spec.log) drawLog(tex.getContext(), g);
     else if (spec.gift) drawGift(tex.getContext(), g);
     else if (spec.foundation) drawFoundation(tex.getContext(), g);
-    else drawBlock(tex.getContext(), g, shapeColor(spec), textureKeyFor(spec), label);
+    else drawBlock(tex.getContext(), g, skinned(shapeColor(spec)), textureKeyFor(spec), label);
     tex.refresh();
     if (!info) {
       info = { blocks: new Set(), lastUse: 0, named: !!label };

@@ -12,6 +12,7 @@ import { DAILY_RETRY, DUEL } from '../config.js';
 import { cleanTries, triesLadder, freeTriesFor, MAX_EXTRA } from './tries.js';
 import {
   defaultEconomy, cleanEconomy, earnCoins, buyPowerup, usePowerup, buyCosmetic, wearCosmetic, grantRankLooks, spendCoins,
+  buySkin, wearSkin,
   rankAfterMatch, rolloverSeason, seasonOf, cardOf, ladderAt, bestTier, RANK_MODES, RANK_RULES, cleanModeRank,
   rankIndex, holdStake, settleStake, touchStake,
 } from './economy.js';
@@ -1216,6 +1217,22 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
 
     wearCosmetic(kind, id) {
       return apply((e) => wearCosmetic(e, kind, id));
+    },
+
+    /** (1.13.4) The tower's skins: { owned: { scene, crane, blocks }, wear: { scene, crane, blocks } } (copies). */
+    getSkins() {
+      sync();
+      return { owned: Object.fromEntries(Object.entries(econ.skins.owned).map(([k, v]) => [k, [...v]])), wear: { ...econ.skins.wear } };
+    },
+
+    /** (1.13.4) Buy a skin for its coins: { ok, economy }. */
+    buySkin(kind, id) {
+      return apply((e) => buySkin(e, kind, id));
+    },
+
+    /** (1.13.4) Wear a skin the player owns: { ok, economy }. */
+    wearSkin(kind, id) {
+      return apply((e) => wearSkin(e, kind, id));
     },
 
     /** The Daily Tower's free Fondamentblok: true the first time for `dateKey`, then false. */

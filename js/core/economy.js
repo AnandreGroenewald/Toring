@@ -77,6 +77,38 @@ export const COSMETICS = Object.freeze({
   ]),
 });
 export const COSMETIC_KINDS = Object.freeze(Object.keys(COSMETICS));
+
+/**
+ * (1.13.4, the owner 11 Oct 22:26-22:34: "the different backgrounds that you can purchase as well and the different cranes",
+ * "the different skins on the blocks", "can be purchased with coins. But you do get the default for free") The tower's skins:
+ * the background, the crane and the blocks. Looks only (physics, blocks and weather the same); seen in this game only (not
+ * sent to an opponent). `price` 0 = everyone's default; the others only for coins (never handed out as rewards).
+ */
+export const SKINS = Object.freeze({
+  scene: Object.freeze([
+    { id: 'dag', price: 0 },
+    { id: 'sonsondergang', price: 800 },
+    { id: 'lekkergoed', price: 1000 },
+    { id: 'nag', price: 1200 },
+  ]),
+  crane: Object.freeze([
+    { id: 'geel', price: 0 },
+    { id: 'rooi', price: 500 },
+    { id: 'blou', price: 500 },
+    { id: 'pienk', price: 700 },
+    { id: 'goud', price: 1500 },
+  ]),
+  blocks: Object.freeze([
+    { id: 'kleur', price: 0 },
+    { id: 'lekkergoed', price: 800 },
+    { id: 'klip', price: 800 },
+    { id: 'neon', price: 1200 },
+    { id: 'goud', price: 2000 },
+  ]),
+});
+export const SKIN_KINDS = Object.freeze(Object.keys(SKINS));
+export const DEFAULT_SKIN = Object.freeze({ scene: 'dag', crane: 'geel', blocks: 'kleur' });
+export const skin = (kind, id) => (SKINS[kind] || []).find((c) => c.id === id) || null;
 export const DEFAULT_LOOK = Object.freeze({ frame: 'hout', badge: 'geen', title: 'bouer', celebration: 'konfetti', style: 'gewoon' });
 
 /** One item of a kind, or null. */
@@ -294,6 +326,8 @@ export function defaultEconomy() {
     ranks: { race: cleanModeRank(null), turns: cleanModeRank(null) },   // (1.12) one rank per mode
     freeFoundation: null,   // the daily (date key) whose free Fondamentblok was used
     stake: null,            // (1.13) a coin match's stake while it is played: { n, room, at, tab, beat }
+    // (1.13.4) the tower's skins: what the player bought (each kind's default free) and wears
+    skins: { owned: Object.fromEntries(SKIN_KINDS.map((k) => [k, [DEFAULT_SKIN[k]]])), wear: { ...DEFAULT_SKIN } },
   };
 }
 
@@ -320,6 +354,14 @@ export function cleanEconomy(raw) {
   }
   e.freeFoundation = isDateKey(r.freeFoundation) ? r.freeFoundation : null;
   e.stake = cleanStake(r.stake);
+  for (const kind of SKIN_KINDS) {
+    const list = Array.isArray(r.skins?.owned?.[kind]) ? r.skins.owned[kind] : [];
+    const owned = new Set([DEFAULT_SKIN[kind]]);
+    for (const id of list) if (skin(kind, id)) owned.add(id);
+    e.skins.owned[kind] = [...owned];
+    const pick = r.skins?.wear?.[kind];
+    e.skins.wear[kind] = owned.has(pick) ? pick : DEFAULT_SKIN[kind];
+  }
   return e;
 }
 
@@ -426,6 +468,24 @@ export function buyCosmetic(eco, kind, id) {
   if (!c || c.rank || c.week || e.owned[kind].includes(id) || e.coins < c.price) return { economy: e, ok: false };
   e.coins -= c.price;
   e.owned[kind].push(id);
+  return { economy: e, ok: true };
+}
+
+/** (1.13.4) Buy a skin for its coins (a default is never bought): { economy, ok }. */
+export function buySkin(eco, kind, id) {
+  const e = cleanEconomy(eco);
+  const c = skin(kind, id);
+  if (!c || !c.price || e.skins.owned[kind].includes(id) || e.coins < c.price) return { economy: e, ok: false };
+  e.coins -= c.price;
+  e.skins.owned[kind].push(id);
+  return { economy: e, ok: true };
+}
+
+/** (1.13.4) Wear a skin the player owns: { economy, ok }. */
+export function wearSkin(eco, kind, id) {
+  const e = cleanEconomy(eco);
+  if (!e.skins.owned[kind]?.includes(id)) return { economy: e, ok: false };
+  e.skins.wear[kind] = id;
   return { economy: e, ok: true };
 }
 

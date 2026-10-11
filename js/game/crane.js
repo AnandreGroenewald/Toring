@@ -32,9 +32,27 @@ const YELLOW_LIGHT = '#ffd84d';
 const YELLOW_DARK = '#c48a00';
 const STEEL_DARK = cssColor(COLORS.craneDark);
 
-function ensureCraneTextures(scene) {
-  // Jib: lattice truss (top chord, bottom chord/rail, zig-zag diagonals) baked once.
-  canvasTexture(scene, 'crane_jib', JIB_W, 64, (ctx, w) => {
+// (1.13.4, the owner: "the different cranes", bought with coins) the crane's skins: the colours of its painted steel (the
+// jib's lattice and chords, the trolley's stripe); the wheels, rope, hook and lamp stay. 'geel' is the crane as it was.
+const CRANE_SKINS = {
+  geel: { main: YELLOW, light: YELLOW_LIGHT, dark: YELLOW_DARK, edge: '#5a4100', bolt: '#7a5800' },
+  rooi: { main: '#e53935', light: '#ff7a73', dark: '#a3201c', edge: '#5c0f0f', bolt: '#7a1414' },
+  blou: { main: '#1e88e5', light: '#6ab7ff', dark: '#0b5aa8', edge: '#0a2d55', bolt: '#0d3d73' },
+  pienk: { main: '#ff5fa8', light: '#ffa3cf', dark: '#c4307a', edge: '#5e1236', bolt: '#7a1a48' },
+  goud: { main: '#f2c230', light: '#fff2a6', dark: '#a87a08', edge: '#4a3500', bolt: '#7a5a00', sparkle: true },
+};
+let craneSkin = 'geel';
+/** (1.13.4) The crane's skin for cranes made from now on (Crane.applySkin() repaints one already up). */
+export function setCraneSkin(id) {
+  craneSkin = Object.prototype.hasOwnProperty.call(CRANE_SKINS, id) ? id : 'geel';
+}
+const skinSuffix = (id) => (id === 'geel' ? '' : `_${id}`);
+
+function ensureCraneTextures(scene, skinId = craneSkin) {
+  const sk = CRANE_SKINS[skinId] || CRANE_SKINS.geel;
+  const sfx = skinSuffix(skinId);
+  // Jib: lattice truss (top chord, bottom chord/rail, zig-zag diagonals) baked once (per skin).
+  canvasTexture(scene, `crane_jib${sfx}`, JIB_W, 64, (ctx, w) => {
     const top = JIB_TOP - JIB_TEX_Y;            // 8
     const bot = LAYOUT.jibY - JIB_TEX_Y - 6;     // bottom chord centre
     const seg = 56;
@@ -64,23 +82,23 @@ function ensureCraneTextures(scene) {
       }
       ctx.stroke();
     };
-    lacing(7, '#5a4100');
-    lacing(4, YELLOW);
+    lacing(7, sk.edge);
+    lacing(4, sk.main);
     // chords
     const chord = (y, h) => {
-      ctx.fillStyle = '#5a4100';
+      ctx.fillStyle = sk.edge;
       ctx.fillRect(0, y - h / 2 - 1.5, w, h + 3);
       const g = ctx.createLinearGradient(0, y - h / 2, 0, y + h / 2);
-      g.addColorStop(0, YELLOW_LIGHT);
-      g.addColorStop(0.5, YELLOW);
-      g.addColorStop(1, YELLOW_DARK);
+      g.addColorStop(0, sk.light);
+      g.addColorStop(0.5, sk.main);
+      g.addColorStop(1, sk.dark);
       ctx.fillStyle = g;
       ctx.fillRect(0, y - h / 2, w, h);
     };
     chord(top, 8);
     chord(bot, 10);
     // gusset bolts at the joints
-    ctx.fillStyle = '#7a5800';
+    ctx.fillStyle = sk.bolt;
     for (let x = 0; x <= w; x += seg / 2) {
       ctx.beginPath();
       ctx.arc(x, (x / (seg / 2)) % 2 === 0 ? bot : top, 2.2, 0, Math.PI * 2);
@@ -91,8 +109,27 @@ function ensureCraneTextures(scene) {
     ctx.fillRect(0, bot + 5, w, 3);
     ctx.fillStyle = 'rgba(255,255,255,0.25)';
     ctx.fillRect(0, bot + 5, w, 1);
+    // the gold crane sparkles along its chords
+    if (sk.sparkle) {
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      for (let x = 20; x < w; x += 97) {
+        for (const [dx, dy, r] of [[0, top - 1, 2.4], [38, bot - 2, 2]]) {
+          ctx.beginPath();
+          ctx.moveTo(x + dx, dy - r * 2);
+          ctx.lineTo(x + dx + r * 0.6, dy - r * 0.6);
+          ctx.lineTo(x + dx + r * 2, dy);
+          ctx.lineTo(x + dx + r * 0.6, dy + r * 0.6);
+          ctx.lineTo(x + dx, dy + r * 2);
+          ctx.lineTo(x + dx - r * 0.6, dy + r * 0.6);
+          ctx.lineTo(x + dx - r * 2, dy);
+          ctx.lineTo(x + dx - r * 0.6, dy - r * 0.6);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
   });
-  canvasTexture(scene, 'crane_trolley', 76, LAYOUT.trolleyH + 4, (ctx, w) => {
+  canvasTexture(scene, `crane_trolley${sfx}`, 76, LAYOUT.trolleyH + 4, (ctx, w) => {
     const bodyH = LAYOUT.trolleyH;
     // body
     ctx.fillStyle = '#1b1c1f';
@@ -104,8 +141,8 @@ function ensureCraneTextures(scene) {
     ctx.fillStyle = g;
     roundRect(ctx, 6, 2, w - 12, bodyH - 4, 5);
     ctx.fill();
-    // yellow accent stripe
-    ctx.fillStyle = YELLOW;
+    // the skin's accent stripe
+    ctx.fillStyle = sk.main;
     ctx.fillRect(8, 7, w - 16, 5);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     for (let x = 12; x < w - 12; x += 10) ctx.fillRect(x, 7, 4, 5);
@@ -227,13 +264,15 @@ export class Crane {
   constructor(scene, { top = 0 } = {}) {
     this.scene = scene;
     this.top = Math.max(0, Number(top) || 0);
-    ensureCraneTextures(scene);
+    this.skin = craneSkin;
+    ensureCraneTextures(scene, this.skin);
     const d = DEPTH.crane;
     const add = (obj, dz) => obj.setScrollFactor(0).setDepth(d + dz);
+    const sfx = skinSuffix(this.skin);
 
-    this.jib = add(scene.add.image(GAME_W / 2, JIB_TEX_Y + this.top, 'crane_jib').setOrigin(0.5, 0), 0.5);
+    this.jib = add(scene.add.image(GAME_W / 2, JIB_TEX_Y + this.top, `crane_jib${sfx}`).setOrigin(0.5, 0), 0.5);
     this.rope = add(scene.add.image(0, 0, 'crane_rope').setOrigin(0.5, 0), 0.1);
-    this.trolley = add(scene.add.image(0, 0, 'crane_trolley').setOrigin(0.5, 0), 0.6);
+    this.trolley = add(scene.add.image(0, 0, `crane_trolley${sfx}`).setOrigin(0.5, 0), 0.6);
     this.wheels = [add(scene.add.image(0, 0, 'crane_wheel'), 0.7), add(scene.add.image(0, 0, 'crane_wheel'), 0.7)];
     this.light = add(scene.add.image(0, 0, 'crane_light'), 0.75);
     this.block = add(scene.add.image(0, 0, '__WHITE').setVisible(false), 0.2);
@@ -469,6 +508,16 @@ export class Crane {
   _stopTweens() {
     for (const t of this.tweens) t.stop();
     this.tweens.length = 0;
+  }
+
+  /** (1.13.4) Repaint this crane in the skin chosen now (setCraneSkin). */
+  applySkin() {
+    if (this.destroyed || this.skin === craneSkin) return;
+    this.skin = craneSkin;
+    ensureCraneTextures(this.scene, this.skin);
+    const sfx = skinSuffix(this.skin);
+    this.jib.setTexture(`crane_jib${sfx}`);
+    this.trolley.setTexture(`crane_trolley${sfx}`);
   }
 
   setVisible(v) {

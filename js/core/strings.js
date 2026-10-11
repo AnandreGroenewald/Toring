@@ -348,6 +348,15 @@ export const S = {
   shop: 'Winkel',
   shopPowerups: 'Kragte',
   shopLooks: 'Uitdager-styl',
+  // (1.13.4) the tower's skins (bought with coins; each kind's first is free)
+  shopSkins: 'Toring-styl',
+  shopSkinsNote: 'Net vir jou oë: jou agtergrond, hyskraan en blokke. Dit verander niks aan die spel nie. Koop dit met muntstukke; die eerste van elk is gratis.',
+  skinKinds: { scene: 'Agtergrond', crane: 'Hyskraan', blocks: 'Blokke' },
+  skinNames: {
+    scene: { dag: 'Kaapse dag', sonsondergang: 'Sonsondergang', lekkergoed: 'Lekkergoed-lug', nag: 'Sterrenag' },
+    crane: { geel: 'Klassieke geel', rooi: 'Brandweer-rooi', blou: 'Oseaan-blou', pienk: 'Pienk pret', goud: 'Goud' },
+    blocks: { kleur: 'Kleurvol', lekkergoed: 'Lekkergoed', klip: 'Klip', neon: 'Neon', goud: 'Goudstawe' },
+  },
   shopPowerupsNote: 'Vir Oefen. In die Daaglikse Toring kry almal ’n gratis Fondamentblok by 55 m.',
   shopLooksNote: 'Jou teenstander sien dit in die Uitdagersreeks. Dit maak jou nie sterker nie.',
   inBag: (n) => `In jou sak: ${n}`,

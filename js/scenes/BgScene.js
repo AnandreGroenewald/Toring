@@ -54,12 +54,25 @@ const smooth = (e0, e1, x) => {
   return t * t * (3 - 2 * t);
 };
 
-function skyColors(alt) {
-  let top = SKY_STOPS[SKY_STOPS.length - 1].top;
-  let bot = SKY_STOPS[SKY_STOPS.length - 1].bot;
-  for (let i = 0; i < SKY_STOPS.length - 1; i++) {
-    const a = SKY_STOPS[i];
-    const b = SKY_STOPS[i + 1];
+// (1.13.4, the owner: "the different backgrounds that you can purchase", bought with coins) the background's skins: the low sky
+// (its 0 m and 60 m colours; higher up every skin turns to the same space), the scenery's and the clouds' tint, the sun (tint,
+// size, how low), and for the night the moon and the stars from the ground up. 'dag' is the game's own Cape Town day.
+const BG_SKINS = {
+  dag: null,
+  sonsondergang: { sky: [[0xff7e5f, 0xffd194], [0x7b4397, 0xff8c7a]], scen: 0xffc2b0, cloud: 0xffd9c9, sunTint: 0xff9b4a, sunScale: 1.5, sunDrop: 90 },
+  lekkergoed: { sky: [[0xff9ad5, 0xfff0fb], [0xb28dff, 0xffc4ea]], scen: 0xffd6ee, cloud: 0xffffff, sunTint: 0xfff59d, sunScale: 1.15 },
+  nag: { sky: [[0x0b1640, 0x24396f], [0x070f30, 0x1a2a5e]], scen: 0x55639e, cloud: 0x7f8bb8, sun: 0, moon: 1, stars: 0.95 },
+};
+const BG_SKIN_IDS = Object.keys(BG_SKINS);
+/** Per-channel multiply of two 0xRRGGBB colours (a tint over a tint). */
+const mulColor = (a, b) => (((((a >> 16) & 255) * ((b >> 16) & 255)) / 255) << 16) | (((((a >> 8) & 255) * ((b >> 8) & 255)) / 255) << 8) | (((a & 255) * (b & 255)) / 255);
+
+function skyColors(alt, stops = SKY_STOPS) {
+  let top = stops[stops.length - 1].top;
+  let bot = stops[stops.length - 1].bot;
+  for (let i = 0; i < stops.length - 1; i++) {
+    const a = stops[i];
+    const b = stops[i + 1];
     if (alt <= b.m) {
       const t = clamp((alt - a.m) / (b.m - a.m), 0, 1);
       top = lerpColor(a.top, b.top, t);
@@ -1079,10 +1092,23 @@ export class BgScene extends Phaser.Scene {
     const altPx = alt * PX_PER_M;
     const dark = this.dark;
 
+    // (1.13.4) the background's skin (main.js sets 'bgSkin' in the registry)
+    const sid = String(reg.get('bgSkin') || 'dag');
+    if (sid !== this.skinId) {
+      this.skinId = sid;
+      const sk = BG_SKINS[sid] || null;
+      this.bgSkin = sk;
+      this.skinStops = sk ? [{ m: 0, top: sk.sky[0][0], bot: sk.sky[0][1] }, { m: 60, top: sk.sky[1][0], bot: sk.sky[1][1] }, ...SKY_STOPS.slice(2)] : SKY_STOPS;
+      this.skyKey = -1;
+      this.lastTint = -1;
+      this.sun.setTint(sk?.sunTint ?? 0xffffff);
+    }
+    const sk = this.bgSkin;
+
     this._updateSky(alt, dark);
 
-    // stars above ~200 m
-    const starA = smooth(180, 300, alt) * (1 - dark * 0.85);
+    // stars above ~200 m (the night skin: from the ground up)
+    const starA = Math.max(smooth(180, 300, alt), sk?.stars ?? 0) * (1 - dark * 0.85);
     const twinkle = 0.5 + 0.5 * Math.sin(this.t * 2.3);
     this.stars.setVisible(starA > 0.01).setAlpha(starA);
     this.stars2.setVisible(starA > 0.01).setAlpha(starA * twinkle);
@@ -1092,11 +1118,11 @@ export class BgScene extends Phaser.Scene {
     }
 
     // sun by day, moon up high
-    const sunA = (1 - smooth(140, 300, alt)) * (1 - dark * 0.9);
+    const sunA = (1 - smooth(140, 300, alt)) * (1 - dark * 0.9) * (sk?.sun ?? 1);
     this.sun.setAlpha(sunA).setVisible(sunA > 0.01);
-    this.sun.y = 380 + altPx * 0.02;
-    this.sun.setScale(1 + Math.sin(this.t * 1.2) * 0.02);
-    const moonA = smooth(220, 320, alt) * (1 - dark * 0.8);
+    this.sun.y = 380 + (sk?.sunDrop ?? 0) + altPx * 0.02;
+    this.sun.setScale((sk?.sunScale ?? 1) * (1 + Math.sin(this.t * 1.2) * 0.02));
+    const moonA = Math.max(smooth(220, 320, alt), sk?.moon ?? 0) * (1 - dark * 0.8);
     this.moon.setAlpha(moonA).setVisible(moonA > 0.01);
 
     // far scenery slides down as we climb (and sits as much lower as the game's drop line on notched phones)
@@ -1136,15 +1162,17 @@ export class BgScene extends Phaser.Scene {
 
     // tints: storms grey everything; at altitude the world below cools to dusk blue
     const night = smooth(120, 320, alt);
-    const tintKey = Math.round(dark * 60) * 100 + Math.round(night * 60);
+    const tintKey = Math.round(dark * 60) * 100 + Math.round(night * 60) + Math.max(0, BG_SKIN_IDS.indexOf(this.skinId)) * 100000;
     if (tintKey !== this.lastTint) {
       this.lastTint = tintKey;
-      const scen = lerpColor(lerpColor(0xffffff, 0x8f97c8, night), 0x7a8290, dark);
+      let scen = lerpColor(lerpColor(0xffffff, 0x8f97c8, night), 0x7a8290, dark);
+      if (sk) scen = mulColor(scen, sk.scen);
       this.mountains.setTint(scen);
       this.skyline.setTint(scen);
       this.tablecloth.setTint(scen);
       this.sea.setTint(scen);
-      const cloud = lerpColor(lerpColor(0xffffff, 0xa6acd8, night), 0x8c95a3, dark);
+      let cloud = lerpColor(lerpColor(0xffffff, 0xa6acd8, night), 0x8c95a3, dark);
+      if (sk) cloud = mulColor(cloud, sk.cloud);
       for (const c of this.clouds) c.img.setTint(cloud);
     }
 
@@ -1193,7 +1221,7 @@ export class BgScene extends Phaser.Scene {
   }
 
   _updateSky(alt, dark) {
-    let [top, bot] = skyColors(alt);
+    let [top, bot] = skyColors(alt, this.skinStops || SKY_STOPS);
     if (dark > 0) {
       top = lerpColor(top, STORM_TOP, dark);
       bot = lerpColor(bot, STORM_BOT, dark);

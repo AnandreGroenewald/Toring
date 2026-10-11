@@ -33,6 +33,8 @@ import { audio, haptics } from './audio.js';
 import { BgScene } from './scenes/BgScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { HudScene } from './scenes/HudScene.js';
+import { setBlockSkin } from './game/blocks.js';
+import { setCraneSkin } from './game/crane.js';
 
 // ---------------------------------------------------------------------------
 // Query params. The test helpers (?date, ?seed, ?auto) only work together with
@@ -133,6 +135,13 @@ const gameHeight = coarse
   ? computeGameHeight(Math.min(innerWidth, innerHeight), Math.max(innerWidth, innerHeight))
   : computeGameHeight();
 
+// (1.13.4) the tower's skins the player wears, before the first crane and blocks are drawn (BgScene reads 'bgSkin')
+{
+  const w = store.getSkins().wear;
+  setCraneSkin(w.crane);
+  setBlockSkin(w.blocks);
+}
+
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
@@ -156,6 +165,7 @@ const game = new Phaser.Game({
 });
 
 window.__stapel = Object.assign(window.__stapel || {}, { game, bus, store, ui, audio });
+game.registry.set('bgSkin', store.getSkins().wear.scene);
 
 /** Jou Stapelstad: the last 30 days of finished dailies (the background draws it once into a texture). */
 const skylineFor = (dateKey) => buildSkyline(dateKey, store.getDailyHeights(dateKey, SKYLINE_DAYS), SKYLINE_DAYS);
@@ -417,7 +427,7 @@ function menuModel() {
 // ---------------------------------------------------------------------------
 function shopModel() {
   const e = store.getEconomy();
-  return { coins: e.coins, stock: e.stock, owned: e.owned, look: e.look, card: store.getCard(duelMode()), name: duelNick(), week: store.getWeek(), refillTo: refillActive() ? REFILL.to : 0, refillLeft: store.refillsLeft(REFILL), refillTimes: REFILL.times, refillPerDay: REFILL.per !== 'ever', refillLast: todayKey() === refillLastDay() };
+  return { coins: e.coins, stock: e.stock, owned: e.owned, look: e.look, card: store.getCard(duelMode()), name: duelNick(), week: store.getWeek(), skins: store.getSkins(), refillTo: refillActive() ? REFILL.to : 0, refillLeft: store.refillsLeft(REFILL), refillTimes: REFILL.times, refillPerDay: REFILL.per !== 'ever', refillLast: todayKey() === refillLastDay() };
 }
 
 bus.on('ui:shop', (tab) => ui.showShop(shopModel(), typeof tab === 'string' ? tab : undefined));
@@ -435,6 +445,31 @@ bus.on('ui:shop-refill', () => {
   }
   ui.showShop(shopModel());
 });
+// (1.13.4, the owner: backgrounds, cranes and block skins "can be purchased with coins. But you do get the default for free")
+/** The skins the player wears, now: the background at once, the crane repainted, blocks drawn from here on. */
+function applySkins() {
+  const w = store.getSkins().wear;
+  game.registry.set('bgSkin', w.scene);
+  setCraneSkin(w.crane);
+  setBlockSkin(w.blocks);
+  gameScene()?.crane?.applySkin?.();
+}
+bus.on('ui:skin-buy', ({ kind, id } = {}) => {
+  const r = store.buySkin(kind, id);
+  if (r.ok) {
+    audio.play('heart');
+    store.wearSkin(kind, id);   // a new skin goes on at once
+    applySkins();
+    ui.toast(S.bought(S.skinNames[kind]?.[id] || id));
+    coinsChanged();
+  }
+  ui.showShop(shopModel(), 'skins');
+});
+bus.on('ui:skin-wear', ({ kind, id } = {}) => {
+  if (store.wearSkin(kind, id).ok) applySkins();
+  ui.showShop(shopModel(), 'skins');
+});
+
 /** A new look from the shop shows at once on the Uitdagersreeks card underneath. */
 function lookChanged() {
   if (screen !== 'duel') return;

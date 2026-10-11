@@ -10,7 +10,7 @@ const WEEK_COINS = WEEK.coins;
 const WEEK_SHIELD_MAX = WEEK.shieldMax;
 const WEEK_SHIELD_PRICE = WEEK.shieldPrice;
 import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO, COSMETIC_INFO } from '../core/strings.js';
-import { COIN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic } from '../core/economy.js';
+import { COIN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic, SKINS, SKIN_KINDS } from '../core/economy.js';
 import { EMOTES, EMOTE_PICKS } from '../config.js';
 import { fmtM, fmtInt, fmtClock, fmtDuration, dayName, monthName } from '../core/format.js';
 import { shareResult } from '../core/share.js';
@@ -1089,6 +1089,13 @@ export function createUI(bus) {
       h('span', { class: 'pc-rank' }, emo(rank.emoji), h('span', { text: rankName(rank.id) })));
   }
 
+  /** (1.13.4) A skin's little picture in the Winkel (css: .skin-prev): the sky, the crane's lattice, three blocks. */
+  function skinPreview(kind, id) {
+    if (kind === 'scene') return h('span', { class: `skin-prev skin-scene skin-scene-${id}`, 'aria-hidden': 'true' }, emo({ dag: '☀️', sonsondergang: '🌅', lekkergoed: '🍭', nag: '🌙' }[id] || '☀️'));
+    if (kind === 'crane') return h('span', { class: `skin-prev skin-crane skin-crane-${id}`, 'aria-hidden': 'true' }, h('i'), h('i'));
+    return h('span', { class: `skin-prev skin-blocks skin-blocks-${id}`, 'aria-hidden': 'true' }, h('i'), h('i'), h('i'));
+  }
+
   function lookPreview(kind, item) {
     if (kind === 'frame') return h('span', { class: `frame-swatch frame-${item.id}` });
     if (kind === 'title') return h('span', { class: 'title-prev', text: COSMETIC_INFO.title[item.id].name });
@@ -1170,7 +1177,7 @@ export function createUI(bus) {
     const keepScroll = st.modal === 'shop' && st.shopTab === tab && prevBody ? prevBody.scrollTop : 0;
     st.shopTab = tab;
     st.shopModel = m;
-    const tabs = h('div', { class: 'shop-tabs', role: 'tablist' }, [['powerups', S.shopPowerups], ['looks', S.shopLooks]].map(([id, label]) => h('button', {
+    const tabs = h('div', { class: 'shop-tabs', role: 'tablist' }, [['powerups', S.shopPowerups], ['looks', S.shopLooks], ['skins', S.shopSkins]].map(([id, label]) => h('button', {
       type: 'button', role: 'tab', class: `shop-tab${tab === id ? ' on' : ''}`, 'aria-selected': String(tab === id), text: label,
       onclick: () => {
         audio.play('click');
@@ -1193,6 +1200,24 @@ export function createUI(bus) {
           h('span', { class: 'shop-ic' }, emo('🗓️')),
           h('span', { class: 'shop-txt' }, h('b', { text: S.weekShield }), h('span', { text: S.weekShieldWhat }), h('small', { text: S.weekShieldHave(shields) })),
           shields >= WEEK_SHIELD_MAX ? h('span', { class: 'shop-on', text: '✓' }) : buyBtn(WEEK_SHIELD_PRICE, m.coins, () => bus.emit('ui:shop-buy', { kind: 'weekshield' })))));
+    } else if (tab === 'skins') {
+      // (1.13.4) the tower's skins: bought with coins, each kind's first free; worn at once
+      body.append(h('p', { class: 'shop-note', text: S.shopSkinsNote }));
+      for (const kind of SKIN_KINDS) {
+        body.append(h('h3', { class: 'label shop-kind', text: S.skinKinds[kind] }),
+          h('div', { class: 'shop-grid' }, SKINS[kind].map((c) => {
+            const owned = !!m.skins?.owned?.[kind]?.includes(c.id);
+            const on = m.skins?.wear?.[kind] === c.id;
+            let action;
+            if (on) action = h('span', { class: 'shop-on', text: S.wearing });
+            else if (owned) action = h('button', { type: 'button', class: 'shop-wear', text: S.wear, onclick: () => { audio.play('click'); bus.emit('ui:skin-wear', { kind, id: c.id }); } });
+            else action = buyBtn(c.price, m.coins, () => bus.emit('ui:skin-buy', { kind, id: c.id }));
+            return h('div', { class: `shop-item skin-item${on ? ' is-on' : ''}`, 'data-skin': `${kind}:${c.id}` },
+              h('span', { class: 'shop-prev' }, skinPreview(kind, c.id)),
+              h('b', { class: 'shop-name', text: S.skinNames[kind][c.id] }),
+              action);
+          })));
+      }
     } else {
       body.append(playerCard({ name: m.name, card: m.card }), h('p', { class: 'shop-note', text: S.shopLooksNote }));
       for (const kind of LOOK_KINDS) {
