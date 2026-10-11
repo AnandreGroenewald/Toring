@@ -508,8 +508,10 @@ svg.ic {
 .chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: calc(10 * var(--u));
   height: calc(64 * var(--u));
+  min-width: 44px;   /* (1.13.4) a thumb-sized target, also for the lone 🏆 */
   padding: 0 calc(24 * var(--u)) 0 calc(18 * var(--u));
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.94);
@@ -1634,7 +1636,7 @@ svg.ic {
 .shop-refill .btn { width: 100%; }
 .shop-refill .shop-note { margin: 0; }
 .shop-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: calc(8 * var(--u)); margin-top: calc(16 * var(--u)); padding: calc(6 * var(--u)); border-radius: 999px; background: var(--panel); }
-.shop-tab { padding: calc(12 * var(--u)) 0; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: 900 max(13px, calc(24 * var(--u))) / 1.1 var(--font); }
+.shop-tab { min-height: 40px; padding: calc(12 * var(--u)) 0; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: 900 max(13px, calc(24 * var(--u))) / 1.1 var(--font); }
 .shop-tab.on { background: #fff; color: var(--ink); box-shadow: 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(10, 34, 78, 0.12); }
 .shop-note { margin: calc(12 * var(--u)) 0; color: var(--muted); font-size: max(12px, calc(20 * var(--u))); font-weight: 700; text-align: center; }
 .shop-list { display: flex; flex-direction: column; gap: calc(12 * var(--u)); }
@@ -1650,6 +1652,7 @@ svg.ic {
   justify-content: center;
   gap: calc(6 * var(--u));
   min-height: 40px;
+  min-width: 44px;   /* (1.13.4) "Dra" was 38px wide on a small phone */
   padding: calc(8 * var(--u)) calc(18 * var(--u));
   border: 0;
   border-radius: 999px;
@@ -1675,7 +1678,7 @@ svg.ic {
 .shop-on { color: #1f7a35; font-weight: 900; font-size: max(12px, calc(20 * var(--u))); }
 .shop-lock { color: var(--muted); font-weight: 800; font-size: max(10px, calc(17 * var(--u))); }
 /* the celebration preview: a real button (at least 32px high), not a thin underlined word */
-.shop-try { min-height: 32px; min-width: 56px; padding: 4px 12px; border: 2px solid var(--hemel-d); border-radius: 999px; background: #fff; color: var(--hemel-d); font: 800 max(12px, calc(19 * var(--u))) / 1.1 var(--font); cursor: pointer; }
+.shop-try { min-height: 40px; min-width: 56px; padding: 4px 12px; border: 2px solid var(--hemel-d); border-radius: 999px; background: #fff; color: var(--hemel-d); font: 800 max(12px, calc(19 * var(--u))) / 1.1 var(--font); cursor: pointer; }
 .title-prev { padding: calc(6 * var(--u)) calc(10 * var(--u)); border-radius: calc(10 * var(--u)); background: #fff; font: 900 max(11px, calc(19 * var(--u))) / 1.1 var(--font); color: var(--ink); }
 canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 * var(--u)); }
 .style-prev-plain { display: inline-flex; align-items: flex-end; gap: calc(2 * var(--u)); }
@@ -2241,7 +2244,7 @@ canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 
   display: inline-flex;
   align-items: center;
   gap: calc(6 * var(--u));
-  min-height: 36px;
+  min-height: 44px;   /* (1.13.4) was 36px: a thumb-sized target */
   padding: calc(6 * var(--u)) calc(16 * var(--u)) calc(6 * var(--u)) calc(12 * var(--u));
   border: 0;
   border-radius: 999px;
