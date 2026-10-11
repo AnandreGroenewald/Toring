@@ -1655,7 +1655,7 @@ function versus(m, note = '') {
   const first = m.mode === 'turns' && m.turn ? (m.turn.seat === m.you ? S.turnsYouStart : S.turnsTheyStart(m.oppName)) : '';
   ui.showDuelWait({
     state: 'versus', oppName: m.oppName, oppCard: m.oppCard, youName: duelNick(), youCard: store.getCard(lastDuelMode),
-    note, mode: lastDuelMode, first, stake: m.kind === 'live' ? m.stake : 0,
+    note, mode: lastDuelMode, first, stake: m.kind === 'live' ? m.stake : 0, canLeave: m.kind !== 'live',
   });
   // (1.13) a coin match: the stake leaves the wallet now; a player who can't put it in hears why (the match then
   // plays for no coins: the room tells both)
@@ -1872,6 +1872,15 @@ bus.on('ui:duel-later', () => {
   versus(duel.startBot(mode), mode === 'turns' ? S.turnsBotNow : S.duelFriendLater);
 });
 bus.on('ui:duel-cancel', showDuelScreen);
+// (1.13.3, the owner: "I cant seem to exit once I have opened it, can you fix that as well, for the bot only") the 3-2-1
+// against Robot Rikus, a recording or a friend's recorded run can be left (✕, "Kanselleer", Back): back to the
+// Uitdagersreeks, nothing counted (no rank, no coins: those matches never have them). A live match's 3-2-1 stays.
+bus.on('ui:duel-leave', () => {
+  const m = duel.match;
+  if (!m || m.kind === 'live' || screen !== 'duelwait') return;
+  duel.leave();
+  showDuelScreen();
+});
 bus.on('ui:duel-accept', () => {
   const m = duelLink ? duel.startLink(duelLink) : null;
   duelLink = null;

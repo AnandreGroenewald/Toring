@@ -1600,7 +1600,10 @@ export function createUI(bus) {
           playerCard({ name: o.oppName || S.duelSomeone, card: o.oppCard }),
           o.youCard ? playerCard({ name: o.youName || S.duelYou, card: o.youCard, compact: true }) : null) : null,
         o.note ? h('p', { class: 'duel-sub', text: o.note }) : null,
-        h('p', { class: 'vs-count', 'data-duel-count': '', 'aria-live': 'assertive' }));
+        h('p', { class: 'vs-count', 'data-duel-count': '', 'aria-live': 'assertive' }),
+        // (1.13.3, the owner: "I cant seem to exit once I have opened it … for the bot only") against Robot Rikus, a
+        // recording or a friend's recorded run (nobody waits on the other side) the 3-2-1 can be left
+        o.canLeave ? button('btn-white', [icon('close'), h('span', { text: S.duelCancel })], () => bus.emit('ui:duel-leave')) : null);
     } else if (o.state === 'invite') {
       // (1.12.1) a friend's live link: who invites and which mode, then "Speel" or "Sorry, besig nou"
       // (1.13) a coin match says what each puts in; with too few coins the answer is "Laat weet: te min munte"
@@ -1630,8 +1633,8 @@ export function createUI(bus) {
     if (o.appLink && (o.state === 'link' || o.state === 'search' || o.state === 'invite')) {
       kids.push(h('a', { class: 'btn btn-white app-open', href: o.appLink, onclick: () => bus.emit('ui:app-open') }, emo('📲'), h('span', { text: S.openInApp })));
     }
-    // the ✕ top right (and Back) does what the screen's own way out does (not during the 3-2-1)
-    const exit = o.state === 'versus' ? null : ({ lobby: 'ui:duel-cancel', search: 'ui:duel-cancel', room: 'ui:duel-cancel', link: 'ui:home', invite: 'ui:home' }[o.state] || 'ui:duel');
+    // the ✕ top right (and Back) does what the screen's own way out does (not during a live match's 3-2-1)
+    const exit = o.state === 'versus' ? (o.canLeave ? 'ui:duel-leave' : null) : ({ lobby: 'ui:duel-cancel', search: 'ui:duel-cancel', room: 'ui:duel-cancel', link: 'ui:home', invite: 'ui:home' }[o.state] || 'ui:duel');
     st.waitExit = exit;
     screens.duelwait.replaceChildren(h('div', { class: 'card duel-wait' }, exit ? closeX(() => bus.emit(exit)) : null, kids));
     showScreen('duelwait');
