@@ -55,6 +55,16 @@ const PREWARM_AHEAD = 2;         // block textures drawn ahead while a block fal
 const FLOOD_TAG_MS = 1000;       // the flood tag's text redraws at most this often (each redraw is a canvas + upload)
 const COLLAPSE_MS = 1500;        // tower blocks lost this soon after another loss are the same collapse: one life
 const TIP_LEAN = 1.02;           // a block whose load is this far past the middle of its support (1 = the edge) tips
+// (1.13.3) wakeUnsupported: a contact is where a block's bottom is within `gap` px of what's under it (Matter lets
+// resting bodies sink up to ~slop + a px); its weight may be `margin` px past its contacts (friction, rounding) before
+// it must move; `samples` even steps across its width besides the corners
+// (1.13.3) wakeUnsupported: a point under a block counts when its bottom is within `gap` px of what's under it (Matter
+// lets resting bodies sink a little) and within `rel` px of its closest point (on a tilted block the gap grows with the
+// distance from the corner it rests on, so a looser test would stretch one corner into a wide "contact"); its weight may
+// be `margin` px past its contacts before it must move; contacts narrower than `point` px are a single corner: a block
+// lying still on one is woken and given a little turn (`nudge` rad a step) towards its weight (or, centred, towards flat);
+// `samples` even steps across its width besides the corners
+const UNSUP = Object.freeze({ gap: 2.5, rel: 0.75, margin: 1, point: 4, nudge: 0.003, samples: 8 });
 const SET_AFTER_MS = 1500;       // a deep block still stirred by wind sets this long after landing...
 const SET_MAX_SPEED = 0.3;       // ...if it moves slower than this (px/step)
 const SET_MAX_SPIN = 0.01;       // ...and turns slower than this (rad/step)
@@ -264,6 +274,25 @@ function outlineTop(vs, x0, x1) {
     if ((a.x - x1) * (c.x - x1) < 0) top = Math.min(top, a.y + ((x1 - a.x) / (c.x - a.x)) * (c.y - a.y));
   }
   return top;
+}
+
+/** (1.13.3) Where a vertical line at x crosses a convex outline: { top, bottom } (null when it misses it). */
+function outlineCross(vs, x) {
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (let i = 0; i < vs.length; i++) {
+    const a = vs[i];
+    const c = vs[(i + 1) % vs.length];
+    if ((a.x - x) * (c.x - x) <= 0 && a.x !== c.x) {
+      const y = a.y + ((x - a.x) / (c.x - a.x)) * (c.y - a.y);
+      if (y < top) top = y;
+      if (y > bottom) bottom = y;
+    } else if (a.x === x) {
+      if (a.y < top) top = a.y;
+      if (a.y > bottom) bottom = a.y;
+    }
+  }
+  return top <= bottom ? { top, bottom } : null;
 }
 
 /**
@@ -1600,8 +1629,12 @@ export class GameScene extends Phaser.Scene {
     if (this.dynDirty) this.rebuildDyn();
     for (let k = 0; k < this.dyn.length; k++) {
       const b = this.dyn[k];
-      if (b.quietSteps < SETTLE.steps && !b.body.isSleeping) return false;
+      if ((b.calmSteps || 0) < SETTLE.steps && !b.body.isSleeping) return false;
     }
+    // (1.13.3, the owner's photos: blocks held tilted on a corner between turns) nothing whose weight is past what it
+    // really touches: the tower is held still between drops, so it has to be at rest for real first (wakeUnsupported's
+    // count, every 4 steps; towerLean's boxes would also flag a plank bridging two blocks)
+    if ((this.unsupNow || 0) > 0) return false;
     const surf = this.water.surfaceY;
     for (let k = 0; k < this.active.length; k++) {
       const b = this.active[k];
@@ -1877,6 +1910,10 @@ export class GameScene extends Phaser.Scene {
       const body = b.body;
       if (body.isSleeping || (body.speed < SETTLE.speed && body.angularSpeed < SETTLE.angularSpeed)) b.quietSteps++;
       else b.quietSteps = 0;
+      // (1.13.3) calm for a Blok vir Blok turn's end: its tip moves under SETTLE.speed too (a plank turning 0.003 rad a
+      // step, just starting to topple, is "quiet" above but its end moves 0.3 px a step)
+      if (body.isSleeping || (body.speed < SETTLE.speed && body.angularSpeed * (body.sleepRadius || 1) < SETTLE.speed)) b.calmSteps = (b.calmSteps || 0) + 1;
+      else b.calmSteps = 0;
     }
     this.processCollisions();
     // (counted on steps that move the world: Blok vir Blok's two games count from the same report)
@@ -3290,9 +3327,127 @@ export class GameScene extends Phaser.Scene {
    */
   wakeTipping() {
     this.leanNow = this.towerLean();
+    this.wakeUnsupported();
     if (!this.tipping.size) return;
     const Sl = this.M.Sleeping;
     for (const b of this.tipping) if (b.body.isSleeping) Sl.set(b.body, false);
+  }
+
+  /**
+   * (1.13.3, the owner's photos 11 Oct: "this physics does not add up") towerLean measures with boxes, so a block
+   * rocking on the corner of the one below, or left hanging when a hailstone under it melted, can look held and fall
+   * asleep tilted, its low end in the air. Here each loose block's real contacts are found: where its outline's bottom
+   * meets the outline under it (within UNSUP.gap px). When its weight, with the loose blocks over it, is past those
+   * contacts by more than UNSUP.margin px, gravity must finish the job: a sleeping one is woken. On the physics clock
+   * (the same in every game). Returns how many such blocks there are now.
+   */
+  wakeUnsupported() {
+    const loose = this.unsupLoose || (this.unsupLoose = []);
+    loose.length = 0;
+    for (const b of this.tower) {
+      if (b.state === 'frozen' || b.state === 'lost' || b.state === 'falling' || b.destroyed || !b.body) continue;
+      loose.push(b);
+    }
+    if (!loose.length) return 0;
+    loose.sort((a, b) => b.bottom - a.bottom);   // lowest first
+    const Sl = this.M.Sleeping;
+    const xs = this.unsupXs || (this.unsupXs = []);
+    let n = 0;
+    for (let i = 0; i < loose.length; i++) {
+      const b = loose[i];
+      // the weight: it and the loose blocks over it (as towerLean groups them)
+      let m = b.body.mass;
+      let mx = b.body.mass * b.body.position.x;
+      let over0 = b.left;
+      let over1 = b.right;
+      for (let k = i + 1; k < loose.length; k++) {
+        const o = loose[k];
+        if (o.right <= over0 || o.left >= over1) continue;
+        m += o.body.mass;
+        mx += o.body.mass * o.body.position.x;
+        over0 = Math.min(over0, o.left);
+        over1 = Math.max(over1, o.right);
+      }
+      const cx = mx / m;
+      // where to look: its own corners, the corners under it, and a few even steps across it
+      xs.length = 0;
+      const lo = b.left + 0.5;
+      const hi = b.right - 0.5;
+      for (let k = 0; k <= UNSUP.samples; k++) xs.push(lo + ((hi - lo) * k) / UNSUP.samples);
+      const bp = b.body.parts;
+      for (let k = bp.length > 1 ? 1 : 0; k < bp.length; k++) for (const v of bp[k].vertices) if (v.x > lo && v.x < hi) xs.push(v.x);
+      // the blocks that can be under some part of it (a tall tower has many; only these are looked at)
+      const near = this.unsupNear || (this.unsupNear = []);
+      near.length = 0;
+      for (const o of this.tower) {
+        if (o === b || o.destroyed || o.state === 'lost' || !o.body || o.right <= lo || o.left >= hi || o.top > b.bottom + UNSUP.gap || o.bottom < b.top - UNSUP.gap) continue;
+        near.push(o);
+        const op = o.body.parts;
+        for (let k = op.length > 1 ? 1 : 0; k < op.length; k++) for (const v of op[k].vertices) if (v.x > lo && v.x < hi) xs.push(v.x);
+      }
+      for (const ex of [BASE_CX - BASE_HALF_W, BASE_CX + BASE_HALF_W]) if (ex > lo && ex < hi) xs.push(ex);
+      const pts = this.unsupPts || (this.unsupPts = []);
+      pts.length = 0;
+      let g0 = Infinity;
+      for (const x of xs) {
+        // its bottom on this line
+        let bot = -Infinity;
+        for (let k = bp.length > 1 ? 1 : 0; k < bp.length; k++) {
+          const c = outlineCross(bp[k].vertices, x);
+          if (c && c.bottom > bot) bot = c.bottom;
+        }
+        if (bot === -Infinity) continue;
+        // the nearest surface at or under it: another block's top, or the base
+        let under = Math.abs(x - BASE_CX) <= BASE_HALF_W ? LAYOUT.baseTopY : Infinity;
+        for (const o of near) {
+          if (o.left > x || o.right < x || o.top > bot + UNSUP.gap || o.bottom < bot - UNSUP.gap) continue;
+          const op = o.body.parts;
+          for (let k = op.length > 1 ? 1 : 0; k < op.length; k++) {
+            const c = outlineCross(op[k].vertices, x);
+            if (c && c.top >= bot - UNSUP.gap && c.top < under) under = c.top;
+          }
+        }
+        const gap = under - bot;
+        if (gap <= UNSUP.gap) {
+          pts.push(x, gap);
+          if (gap < g0) g0 = gap;
+        }
+      }
+      let c0 = Infinity;
+      let c1 = -Infinity;
+      for (let k = 0; k < pts.length; k += 2) {
+        if (pts[k + 1] > g0 + UNSUP.rel) continue;
+        if (pts[k] < c0) c0 = pts[k];
+        if (pts[k] > c1) c1 = pts[k];
+      }
+      if (c0 === Infinity) {
+        // touching nothing under it: on its way down (checkBlocks follows it) — unless it fell asleep there (both stones
+        // it lay on melted): then it goes on falling
+        if (b.body.isSleeping) {
+          n++;
+          Sl.set(b.body, false);
+        }
+        continue;
+      }
+      if (cx < c0 - UNSUP.margin || cx > c1 + UNSUP.margin) {
+        n++;
+        if (b.body.isSleeping) Sl.set(b.body, false);
+      } else if (c1 - c0 < UNSUP.point && (b.body.isSleeping || (b.calmSteps || 0) >= SETTLE.steps)) {
+        // lying still on a single corner: real blocks don't stay balanced there; a little turn towards its weight (or,
+        // with its weight right over the corner, towards lying flat) and gravity does the rest
+        n++;
+        const body = b.body;
+        if (body.isSleeping) Sl.set(body, false);
+        if (Math.abs(body.angularVelocity) < UNSUP.nudge / 4) {
+          const off = body.angle - Math.round(body.angle / (Math.PI / 2)) * (Math.PI / 2);
+          const lean = cx - (c0 + c1) / 2;
+          const dir = Math.abs(lean) >= 0.5 ? Math.sign(lean) : -Math.sign(off) || 1;
+          this.M.Body.setAngularVelocity(body, dir * UNSUP.nudge);
+        }
+      }
+    }
+    this.unsupNow = n;
+    return n;
   }
 
   updateWobble(dtS) {

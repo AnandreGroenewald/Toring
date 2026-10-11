@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.13.2';
+export const VERSION = '1.13.3';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -240,6 +240,9 @@ export function stageAt(i) {
 export const DUEL = {
   goalM: 50,               // the first to 50 m wins
   rules: 112,              // the game's rules (stages, blocks, visitors, physics, hearts: 1.12 three hearts): the lobby pairs only the same
+                           // (1.13.3 kept 112 on purpose: waking blocks left hanging tilted changes no block, stage or visitor; a
+                           // Blok vir Blok tower is set from the dropping game's report after every turn either way; a bump would
+                           // keep web players from the Play app's 1.12.0 players until the app upload)
   marks: [10, 20, 30, 40], // whoever reaches a mark first chooses a punishment for the other tower
   punishments: ['monkey', 'thief', 'fog', 'heat'], // Blouaap, Skelm Sakkie, Mis, Hittegolf
   attackFor: { 10: 'monkey', 20: 'thief', 30: 'monkey', 40: 'thief' }, // sent when nobody chooses in time
