@@ -1309,6 +1309,12 @@ export function createDuel({
       stopPending();
       dropChoice(match);
       if (match) stopRejoin(match);
+      // (1.13) a live match left before its result: the room hears it as quitting, so the other player wins at once
+      // (not after the 20 s a dropped connection gets, in which their tower might fall and leave nobody the winner)
+      const m = match;
+      if (m && m.kind === 'live' && !m.outcome && !m.over && m.ws) {
+        send(m.ws, m.mode === 'turns' ? { t: 'over', reason: 'quit' } : { t: 'over', reason: 'quit', best: round1(m.youBest) });
+      }
       if (match?.ws) close(match.ws);
       match = null;
     },

@@ -304,3 +304,20 @@ test('rejoined says the room\'s word so far; a connection that doesn\'t come bac
   assert.deepEqual(heard.at(-1), ['dropped']);
   assert.equal(duel.match.lostConn, true);
 });
+
+test('leaving a live match before its result tells the room it quits (the other player wins at once)', async () => {
+  const race = await coinMatch();
+  race.bus.emit('duel:self', { t: 3000, h: 12.4, best: 12.4, lives: 3 });
+  const ws = race.room;
+  race.duel.leave();
+  assert.deepEqual(ws.of('over'), [{ t: 'over', reason: 'quit', best: 12.4 }]);
+  assert.equal(ws.readyState, 3, 'then the connection closes');
+  const turns = await coinMatch({ turns: true });
+  turns.duel.leave();
+  assert.deepEqual(turns.room.of('over'), [{ t: 'over', reason: 'quit' }]);
+  // decided already (or the tower already said it ended): nothing more is said
+  const done = await coinMatch();
+  done.room.hear({ t: 'result', winner: 0, reason: 'goal', best: [50, 20] });
+  done.duel.leave();
+  assert.equal(done.room.of('over').length, 0);
+});

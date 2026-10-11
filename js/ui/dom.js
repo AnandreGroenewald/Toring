@@ -1244,7 +1244,7 @@ export function createUI(bus) {
   // ---------------------------------------------------------------------------
   // Pause
   // ---------------------------------------------------------------------------
-  function showPause({ mode, started = true, note = '' } = {}) {
+  function showPause({ mode, started = true, note = '', stake = null } = {}) {
     if (st.modal) closeModal();
     const card = h('div', { class: 'card pause-card' },
       h('div', { class: 'pause-ic', 'aria-hidden': 'true' }, icon('pause')),
@@ -1256,6 +1256,8 @@ export function createUI(bus) {
       h('p', { class: 'saying-line', text: localSaying(pauseSaying()) }),
       // before the first drop nothing counts yet, so no warning
       mode === 'daily' && started ? h('p', { class: 'warn' }, emo('⚠️'), h('span', { text: S.quitWarnDaily })) : null,
+      // (1.13) a coin match: "Hou op" gives the other player both stakes
+      stake && stake.n ? h('p', { class: 'warn' }, emo('⚠️'), h('span', { text: S.quitWarnStake(stake.name || S.duelSomeone, fmtInt(stake.n)) })) : null,
       button('btn-big btn-green', [icon('play'), h('span', { text: S.resume })], () => bus.emit('ui:resume')),
       button('btn-white btn-quit', [icon('close'), h('span', { text: S.quit })], () => bus.emit('ui:quit')),
       h('div', { class: 'dock' }, toggleBtns({ contrast: true })));
@@ -1399,14 +1401,14 @@ export function createUI(bus) {
           audio.play('click');
           bus.emit('ui:duel-stake', n);
         },
-      }, n ? [emo(COIN), h('span', { text: fmtInt(n) })] : h('span', { text: S.stakeNone }));
+      }, h('span', { text: n ? fmtInt(n) : S.stakeNone }));
     };
+    // (one row of six: the play buttons stay in sight on a phone; the coin sits on the label)
     return h('div', { class: 'stake-pick' },
-      h('span', { class: 'label', text: S.stakeLabel }),
+      h('span', { class: 'label' }, emo(COIN), h('span', { text: S.stakeLabel })),
       h('div', { class: 'stake-btns', role: 'group', 'aria-label': S.stakeLabel }, [0, ...DUEL.stakes].map(opt)),
       h('p', { class: 'stake-what', 'aria-live': 'polite', text: stakeWhat(stake) }),
-      h('p', { class: 'stake-have', text: S.stakeHave(fmtInt(coins)) }),
-      h('p', { class: 'stake-note', text: S.stakeNote }));
+      h('p', { class: 'stake-have', text: `${S.stakeHave(fmtInt(coins))} ${S.stakeNote}` }));
   }
 
   const stakeWhat = (n) => (n ? S.stakeWhat(fmtInt(n), fmtInt(n * 2)) : S.stakeNoneWhat);
@@ -1425,7 +1427,7 @@ export function createUI(bus) {
     const what = box.querySelector('.stake-what');
     if (what) what.textContent = stakeWhat(stake);
     const have = box.querySelector('.stake-have');
-    if (have) have.textContent = S.stakeHave(fmtInt(coins));
+    if (have) have.textContent = `${S.stakeHave(fmtInt(coins))} ${S.stakeNote}`;
   }
 
   /** "🪙 Speel vir 50 🪙 elk" on the waiting screens (null without a stake). */
@@ -1593,6 +1595,7 @@ export function createUI(bus) {
         h('h2', { class: 'vs-title', text: S.duelLinkTitle(o.oppName || S.duelSomeone) }),
         o.mode ? modeLine(o.mode) : null,
         stakeLine(o.stake, S.inviteStake(fmtInt(o.stake), fmtInt(o.stake * 2))),
+        o.stake > 0 && !short ? h('p', { class: 'stake-have', text: `${S.stakeHaveShort(fmtInt(o.coins || 0))} ${S.stakeRule}` }) : null,
         h('p', { class: short ? 'duel-sub stake-short' : 'duel-sub', text: short ? S.inviteShort(fmtInt(o.coins || 0)) : S.inviteSub }),
         short ? null : button('btn-big btn-green', [icon('play'), h('span', { text: S.invitePlay })], () => bus.emit('ui:invite-yes')),
         short
@@ -1785,7 +1788,7 @@ export function createUI(bus) {
       h('p', { class: 'res-sub', text: why }));
   }
 
-  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null } = {}) {
+  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null, againStake = 0 } = {}) {
     if (st.modal) closeModal();
     const r = result || {};
     const m = mode || r.mode || 'practice';
@@ -1870,7 +1873,7 @@ export function createUI(bus) {
     // what next: another match; or (after a tower) the two ways to keep playing, side by side as on the
     // start screen (testers: a lone "Oefen" floating over the card looked like the only thing left)
     wrap.append(duel
-      ? h('div', { class: 'btn-row' }, button('btn-purple btn-duel-again', h('span', { text: again ? S.againAsk(again.name) : S.duelAgain }), () => bus.emit('ui:duel-again')))
+      ? h('div', { class: 'btn-row' }, button('btn-purple btn-duel-again', h('span', { text: `${again ? S.againAsk(again.name) : S.duelAgain}${againStake ? ` (${fmtInt(againStake)} 🪙)` : ''}` }), () => bus.emit('ui:duel-again')))
       : h('div', { class: 'play-row res-play' },
         button('btn-teal btn-practice',
           [icon('again'), h('span', { class: 'btn-txt' }, h('span', { text: daily ? S.practice : S.practiceAgain }), h('span', { class: 'btn-sub', text: S.practiceSubShort }))],

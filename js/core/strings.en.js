@@ -61,6 +61,8 @@ export const S_EN = {
   resume: 'Keep playing',
   quit: 'Stop',
   quitWarnDaily: 'If you stop now, this try counts as your Daily Tower.',
+  // (1.13) a coin match: quitting gives the other player both stakes
+  quitWarnStake: (name, n) => `If you stop now, ${name} gets your ${n} 🪙.`,
   pause: 'Pause',
 
   // --- Results ---
@@ -230,8 +232,8 @@ export const S_EN = {
   duelWaitFriend: 'Waiting for your friend…',
   duelWaitHint: 'Send the link. As soon as your friend opens it, you start.',
   duelRoomText: (name, link, mode, stake = 0) => (mode === 'turns'
-    ? `${name} challenges you to Block by Block on Stapel${stake ? `, for ${stake} 🪙 each` : ''}! Come build one tower together, taking turns: ${link}`
-    : `${name} challenges you to a Stapel match${stake ? ` for ${stake} 🪙 each` : ''}! Come build head-to-head: ${link}`),
+    ? `${name} challenges you to Block by Block on Stapel${stake ? `, for ${stake} 🪙 game coins each` : ''}! Come build one tower together, taking turns: ${link}`
+    : `${name} challenges you to a Stapel match${stake ? ` for ${stake} 🪙 game coins each` : ''}! Come build head-to-head: ${link}`),
   duelPlayLater: 'Play the computer meanwhile',
   duelFriendLater: 'Play your round against Robot Rikus. Then send it to a friend to beat.',
   duelJoining: 'Joining the challenge…',
@@ -367,7 +369,7 @@ export const S_EN = {
   duelGhostHit: (name, m) => `${name}’s tower is ${m} m shorter!`,
   duelYou: 'You',
   duelLeft: (name) => `${name} left the match.`,
-  duelConnLost: 'The connection dropped. This match doesn’t count.',
+  duelConnLost: 'The connection dropped. This match doesn’t count for your rank.',
   // results
   duelWon: 'You won!',
   duelLost: 'You lost',
@@ -414,9 +416,11 @@ export const S_EN = {
   // (1.13) coin matches: each puts the same in, the winner gets both (only against a real player)
   stakeLabel: 'Play for coins',
   stakeNone: 'None',
-  stakeWhat: (n, pot) => `Each puts in ${n} 🪙. The winner gets ${pot} 🪙.`,
+  stakeWhat: (n, pot) => `Each puts in ${n} 🪙; the winner gets ${pot} 🪙. Leave the match, or lose your connection for more than 20 s, and the other player gets your coins.`,
   stakeNoneWhat: 'Just for fun: no coins.',
-  stakeHave: (coins) => `You have ${coins} 🪙 · only against a real player`,
+  stakeHave: (coins) => `You have ${coins} 🪙 · only against a real player.`,
+  stakeHaveShort: (coins) => `You have ${coins} 🪙.`,
+  stakeRule: 'Leave the match, or lose your connection for more than 20 s, and the other player gets your coins.',
   stakeNeedMore: (n) => `${n} more coins needed`,
   stakeNote: 'Coins are just for the game: they can’t be bought or swapped for money.',
   stakeLine: (n) => `Playing for ${n} 🪙 each`,
@@ -432,11 +436,11 @@ export const S_EN = {
   stakeEarlier: (n) => `A coin match wasn’t finished: your ${n} 🪙 went to the other player.`,
   stakeAgainShort: (n) => `Not enough coins to play for ${n} 🪙 again.`,
   inviteStake: (n, pot) => `For ${n} 🪙 each: the winner gets ${pot} 🪙.`,
-  inviteShort: (coins) => `You have ${coins} 🪙: not enough for this match.`,
+  inviteShort: (coins) => `You have ${coins} 🪙: not enough for this match. Practice and the Daily Tower earn coins.`,
   inviteCoins: 'Let them know: not enough coins',
   inviteCoinsSent: (name) => `${name} will see you don’t have enough coins.`,
-  duelDeclinedCoins: (name) => `${name} doesn’t have enough coins for this match. Try a smaller amount.`,
-  duelDeclinedOld: (name) => `${name}’s Stapel needs an update for a coin match. Challenge again without coins, or later.`,
+  duelDeclinedCoins: (name) => `${name} doesn’t have enough coins for this match. Try fewer coins, or play without coins.`,
+  duelDeclinedOld: (name) => `${name}’s Stapel doesn’t know coin matches yet. Challenge again without coins.`,
   stakeOff: (n) => `This match is without coins: your ${n} 🪙 are back.`,
   stakeBackSub: 'your coins are back',
   duelWhyTimeWon: 'Time ran out: your tower was the highest.',

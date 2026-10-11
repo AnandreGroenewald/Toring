@@ -787,7 +787,10 @@ function pauseLocal() {
   audio.suspend();
   saveProgressNow();
   screen = 'pause';
-  ui.showPause({ mode: run.mode, started: run.started });
+  // (1.13) a coin match: the card says what "Hou op" costs
+  const m = duel.match;
+  const atStake = run.mode === 'duel' && m && m.stakeHeld && !m.stakeDone && m.stakeOn !== false && !m.outcome;
+  ui.showPause({ mode: run.mode, started: run.started, stake: atStake ? { n: m.stake, name: m.oppName } : null });
   // (1.12, the owner: "If i pause while looking for an opponent make it stop looking") a pause, or the
   // game out of sight, ends the search: nobody is paired with a player who isn't there
   if (duel.searching) {
@@ -1611,6 +1614,7 @@ function showDuelResults(r) {
     mode: 'duel',
     duel: d,
     again: duel.canAgain() ? { name: d.oppName || S.duelSomeone } : null,
+    againStake: lastDuelStake > 0 ? lastDuelStake : 0,   // (1.13) "Speel weer" plays for the same coins
     reward: matchReward(duel.match),
     shareText: buildDuelShareText({ outcome: d.outcome, youBest: d.youBest, oppName: d.oppName, oppBest: d.oppBest, link, mode: d.mode }),
     nextDayAt: 0,
