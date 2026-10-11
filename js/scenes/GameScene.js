@@ -1985,7 +1985,7 @@ export class GameScene extends Phaser.Scene {
     this.landedCount++;
     this.advance(f);
     if (f.special === 'foundation' && !this.over) {
-      this.landFoundation(f, supportBody === this.baseBody ? null : supportBody.gameBlock);
+      this.landFoundation(f);
       return;
     }
 
@@ -2413,20 +2413,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * The Fondamentblok lands: flush on what it hit (where the player aimed it), at rest; then it
-   * and the tower under it set as cement, a new foundation (like Hanswors's blocks).
+   * The Fondamentblok lands (1.12.2, the owner: "it should start a new base no matter how bad the previous block was,
+   * it needs to start in a straight line"): level, where the player aimed it, on the highest point of anything under
+   * it (like Hanswors's log), never along the tilt of a crooked block; then it and the tower under it set as cement, a
+   * new foundation.
    */
-  landFoundation(f, sup) {
+  landFoundation(f) {
     const M = this.M;
-    const t = this.supportTop(sup);
-    const ang = sup && !isRect(sup.geom) && Math.abs(t.angle) > TIPPED ? 0 : t.angle;
-    const d = f.geom.h - f.geom.cy;
+    const g = f.geom;
     const x = f.centerX;
-    const along = Math.cos(ang) ? (x - t.x) / Math.cos(ang) : 0;
-    const sy = t.y + along * Math.sin(ang);
+    const top = this.highestUnder(x - g.cx, x + g.w - g.cx, f);
     M.Sleeping.set(f.body, false);
-    M.Body.setAngle(f.body, ang);
-    M.Body.setPosition(f.body, { x: x + d * Math.sin(ang), y: sy - d * Math.cos(ang) });
+    M.Body.setAngle(f.body, 0);
+    M.Body.setPosition(f.body, { x, y: top - (g.h - g.cy) });
     M.Body.setVelocity(f.body, { x: 0, y: 0 });
     M.Body.setAngularVelocity(f.body, 0);
     f.sync();
@@ -3054,8 +3053,8 @@ export class GameScene extends Phaser.Scene {
     else wf.fill(w.meanWindAccel);
     const lastW = GHOST_WIND_STEPS - 1;
 
-    // rotated extents of the bbox relative to the centroid
-    const a = pose.angle;
+    // rotated extents of the bbox relative to the centroid (the Fondamentblok lands level: its ghost is level too)
+    const a = this.curSpec?.foundation ? 0 : pose.angle;
     const sn = Math.sin(a);
     const cs = Math.cos(a);
     const x0 = -g.cx;
@@ -3107,6 +3106,16 @@ export class GameScene extends Phaser.Scene {
     out.y = landTop - (g.h - g.cy);
     out.targetX = this.supportTop(hit ? s.block : this.topBlock).x;
     return out;
+  }
+
+  /** (1.12.2) The highest point of the tower over [x0, x1] (any block standing there, the base), leaving out `skip`. */
+  highestUnder(x0, x1, skip = null) {
+    let top = BASE_CX - BASE_HALF_W < x1 && BASE_CX + BASE_HALF_W > x0 ? LAYOUT.baseTopY : Infinity;
+    for (const b of this.tower) {
+      if (b === skip || b.destroyed || b.state === 'lost' || !b.body) continue;
+      if (b.left < x1 && b.right > x0 && b.top < top) top = b.top;
+    }
+    return Number.isFinite(top) ? top : LAYOUT.baseTopY;
   }
 
   /** Highest support surface overlapping [x0, x1]: dynamic tower blocks, the top of the cement, the base. */
