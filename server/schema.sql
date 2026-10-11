@@ -81,7 +81,8 @@ CREATE INDEX IF NOT EXISTS idx_consents_ip ON consents (ip_hash, accepted_at);
 
 -- Anonymous audience counts (POST /stats). One row per day, metric and sponsor; only totals,
 -- never anything about a person or a device. sponsor_id is '' for metrics that belong to nobody.
--- metric: games_daily | games_practice | block_shows | billboard_games | menu_views
+-- metric: games_daily | games_practice | block_shows | billboard_games | menu_views |
+--         shares_daily | shares_practice | shares_duel (1.13.1: share-button taps)
 -- Rows older than 13 months are deleted by the daily housekeeping.
 CREATE TABLE IF NOT EXISTS stats_daily (
   date_key TEXT NOT NULL,

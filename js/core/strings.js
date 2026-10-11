@@ -317,6 +317,11 @@ export const S = {
   freeTryGo: (n, free) => `Poging ${n} van ${free}: gratis!`,
   retryHowAfterFree: (free, left) => `Jou ${free} gratis pogings is op. Nog ’n kans: nog ${left} keer met munte; jou beste poging tel.`,
   tryHead: (n, free) => (free > 1 && n <= free ? `poging ${n}/${free}` : `poging ${n}`),
+  // (1.13.1, the Customer: show the free tries where a player looks) the daily card's date line before the first try;
+  // the results while free tries are left; a later try that came in lower
+  freeTriesDate: (free) => `${free} gratis pogings`,
+  freeTriesLeft: (left) => (left === 1 ? 'Nog 1 gratis poging vandag; jou beste een tel.' : `Nog ${left} gratis pogings vandag; jou beste een tel.`),
+  bestStays: (m) => `Jou beste vandag bly ${m}`,
   emoteLabel: 'Stuur ’n emoji',
   emoteMute: 'Demp hul emoji’s',
   emoteUnmute: 'Wys hul emoji’s',

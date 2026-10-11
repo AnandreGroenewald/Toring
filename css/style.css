@@ -2139,6 +2139,10 @@ canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 
 /* Jou Stapelstad (the player's own skyline), friend challenge, teaser, install */
 /* ------------------------------------------------------------------------- */
 .res-city { padding: calc(18 * var(--u)) calc(22 * var(--u)) calc(16 * var(--u)); border-radius: calc(32 * var(--u)); }
+/* (1.13.1) a free daily try left: the big green button under the result */
+.res-free { padding: calc(18 * var(--u)) calc(22 * var(--u)) calc(16 * var(--u)); border-radius: calc(32 * var(--u)); }
+.res-free .retry-note { margin-top: calc(12 * var(--u)); }
+.res-best { font-weight: 800; }
 .city-head { display: flex; align-items: center; justify-content: space-between; gap: calc(10 * var(--u)); }
 .city-title { display: flex; align-items: center; gap: calc(8 * var(--u)); margin: 0; }
 .city-title .emoji { font-size: calc(26 * var(--u)); }

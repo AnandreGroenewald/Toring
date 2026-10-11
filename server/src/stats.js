@@ -17,7 +17,8 @@ export const MAX_SHOWS_PER_GAME = 120; // all sponsors together
 export const MAX_BLOCK_KEYS = 50;
 export const MAX_HEIGHT_M = 1000;
 export const BUCKET_M = 0.5;
-export const METRICS = ['games_daily', 'games_practice', 'block_shows', 'billboard_games', 'menu_views'];
+export const METRICS = ['games_daily', 'games_practice', 'block_shows', 'billboard_games', 'menu_views',
+  'shares_daily', 'shares_practice', 'shares_duel'];
 
 const HOUR_MS = 60 * 60 * 1000;
 const MAX_TRACKED = 5000;

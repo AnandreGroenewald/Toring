@@ -765,7 +765,8 @@ export function createUI(bus) {
     const head = h('div', { class: 'daily-head' },
       h('div', null,
         h('h2', { class: 'daily-title', text: S.dailyN(m.dayNumber ?? '?') }),
-        h('p', { class: 'daily-date', text: done ? m.dateLabel || '' : [m.dateLabel, S.oneTry].filter(Boolean).join(' · ') })));
+        // (1.13.1, the Customer) a day with free tries says so before the first try: "Maandag 12 Oktober 2026 · 3 gratis pogings"
+        h('p', { class: 'daily-date', text: done ? m.dateLabel || '' : [m.dateLabel, (m.tries?.free || 1) > 1 ? S.freeTriesDate(m.tries.free) : S.oneTry].filter(Boolean).join(' · ') })));
 
     // (1.12) today's leaderboard: a small 🏆 top-left (the streak's mirror), with your place once you played
     const trophy = m.boardOn ? h('button', {
@@ -966,10 +967,11 @@ export function createUI(bus) {
       h('div', { class: 'sheet-head' }, emo('🏗️'), h('h2', { id: 'stapel-howto-title', text: S.howToTitle })),
       h('div', { class: 'sheet-body' }, h('ol', { class: 'steps' }, steps)),
       h('div', { class: 'sheet-foot' },
-        // a new player's "Kom ons bou!" starts the short lesson; anyone can take it from here
+        // a new player's "Kom ons bou!" starts the short lesson; anyone can take it from here. (1.13.1, the owner: from the
+        // menu it closed the sheet and nothing started) from the menu it builds a tower (js/main.js 'ui:howto-build')
         button('btn-big btn-green', [icon('play'), h('span', { text: S.howToGo })], () => {
           closeModal();
-          if (st.howtoLesson) bus.emit('ui:lesson');
+          bus.emit(st.howtoLesson ? 'ui:lesson' : 'ui:howto-build');
         }, { nav: false }),
         st.howtoLesson ? null : h('button', { type: 'button', class: 'sheet-link lesson-link', text: `🎓 ${S.lessonTry}`, onclick: () => { audio.play('click'); closeModal(); bus.emit('ui:lesson'); } }),
         // the privacy policy, linked from inside the game too (Google Play asks for that)
@@ -1801,7 +1803,7 @@ export function createUI(bus) {
       h('p', { class: 'res-sub', text: why }));
   }
 
-  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null, againStake = 0 } = {}) {
+  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null, againStake = 0, freeTry = null, bestStays = null } = {}) {
     if (st.modal) closeModal();
     const r = result || {};
     const m = mode || r.mode || 'practice';
@@ -1826,7 +1828,9 @@ export function createUI(bus) {
       h('div', { class: 'res-height' },
         h('div', { class: 'label' }, emo('🏗️'), h('span', { text: S.height })),
         bigM,
-        r.durationMs > 0 ? h('div', { class: 'res-time', text: `${S.duration}: ${fmtDuration(r.durationMs)}` }) : null),
+        r.durationMs > 0 ? h('div', { class: 'res-time', text: `${S.duration}: ${fmtDuration(r.durationMs)}` }) : null,
+        // (1.13.1) a later try that came in lower: the day's best still counts
+        daily && bestStays ? h('div', { class: 'res-time res-best', text: S.bestStays(fmtM(bestStays)) }) : null),
       duel && duel.mode === 'turns'
         // Blok vir Blok: one tower; each player's hearts left and Perfeks, one row each
         ? turnsRows(duel)
@@ -1866,6 +1870,14 @@ export function createUI(bus) {
       }, icon('close')));
 
     const wrap = h('div', { class: 'res-wrap' }, head, card);
+    // (1.13.1, the Customer: a player who only sees the results never found the free tries) a free try left today is the
+    // next thing to do: "Speel weer · poging 2/3" right under the result, and "Nog 2 gratis pogings vandag"
+    if (daily && freeTry) {
+      wrap.append(h('div', { class: 'card res-free' },
+        button('btn-big btn-green free-try', [icon('play'), h('span', { text: S.freeTryBtn(freeTry.n, freeTry.free) })],
+          () => bus.emit(freeTry.ready ? 'ui:play-daily' : 'ui:daily-retry')),
+        h('p', { class: 'retry-note', text: S.freeTriesLeft(freeTry.left) })));
+    }
     if (daily) {
       const streak = Math.max(0, (stats?.currentStreak ?? 0) | 0);
       st.city = city || st.city;
@@ -1879,7 +1891,7 @@ export function createUI(bus) {
         st.nextDayAt ? h('div', { class: 'foot-cell' },
           h('b', { 'data-countdown': '', text: fmtClock(st.nextDayAt - Date.now()) }),
           h('span', { text: S.nextTowerCaption })) : null),
-        teaser && teaser.text ? h('p', { class: 'res-teaser', text: teaser.text }) : null);
+        teaser && teaser.text && !freeTry ? h('p', { class: 'res-teaser', text: teaser.text }) : null);
       const inst = empty ? null : installRow(install);
       if (inst) wrap.append(inst);
     }

@@ -782,7 +782,29 @@ bus.on('ui:share-tap', (e) => {
 /** What the daily results add beyond the result itself: the skyline, tomorrow's teaser and the install offer. */
 function resultsExtras(r) {
   if (!r || r.mode !== 'daily' || !r.dateKey) return {};
-  return { city: skylineFor(r.dateKey), teaser: tomorrowTeaser(r.dateKey), install: installMode() };
+  return { city: skylineFor(r.dateKey), teaser: tomorrowTeaser(r.dateKey), install: installMode(), ...dayTriesExtras(r) };
+}
+
+/**
+ * (1.13.1, the Customer: a player who only sees the results never found the free tries) today's daily results while a
+ * free try is left: { freeTry: { n, free, left, ready } } (`ready`: taken, not started); and { bestStays } (metres) when
+ * this later try came in lower than the day's best.
+ */
+function dayTriesExtras(r) {
+  const out = {};
+  const dateKey = r.dateKey;
+  if (r.retry) {
+    const best = store.getDailyBest(dateKey);
+    if (best && (best.heightM || 0) > (r.heightM || 0)) out.bestStays = best.heightM;
+  }
+  if (dateKey !== todayKey()) return out;   // a tower finished after midnight: today's tries are another day's
+  const t = store.dailyTries(dateKey);
+  if (!(t.free > 1 && t.played < t.free)) return out;
+  const rt = store.getDailyRetry(dateKey);
+  const ready = rt?.status === 'ready';
+  if (ready ? rt.paid !== 0 : store.nextRetryPrice(dateKey) !== 0) return out;
+  out.freeTry = { n: t.played + 1, free: t.free, left: t.free - t.played, ready };
+  return out;
 }
 
 function canPause() {
@@ -1066,6 +1088,14 @@ bus.on('ui:install-dismiss', () => {
 });
 onInstallChange(() => ui.setInstall(installMode()));
 bus.on('ui:play-practice', playPractice);
+// (1.13.1, the owner via Alfred: "Let's build!" on "How do I play?" closed it and nothing started) "Kom ons bou!" from
+// the menu's "Hoe speel ek?" builds a tower: today's Daaglikse Toring while it isn't played, else an Oefen tower (it
+// never takes one of the day's tries or coins)
+bus.on('ui:howto-build', () => {
+  if (screen !== 'menu') return;
+  if (store.getDaily(todayKey())?.status === 'done') playPractice();
+  else bus.emit('ui:play-daily');
+});
 
 // ---------------------------------------------------------------------------
 // The short lesson (1.10): a new player's first Oefen game, four steps that follow what they do
