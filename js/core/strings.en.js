@@ -237,9 +237,9 @@ export const S_EN = {
   duelReconnecting: 'Reconnecting…',
   duelWaitFriend: 'Waiting for your friend…',
   duelWaitHint: 'Send the link. As soon as your friend opens it, you start.',
-  duelRoomText: (name, link, mode, stake = 0) => (mode === 'turns'
-    ? `${name} challenges you to Block by Block on Stapel${stake ? `, for ${stake} 🪙 game coins each` : ''}! Come build one tower together, taking turns: ${link}`
-    : `${name} challenges you to a Stapel match${stake ? ` for ${stake} 🪙 game coins each` : ''}! Come build head-to-head: ${link}`),
+  duelRoomText: (name, link, mode, stake = 0) => (stake ? `🪙 ${stake} game coins each, the winner gets ${stake * 2}! ` : '') + (mode === 'turns'
+    ? `${name} challenges you to Block by Block on Stapel! Come build one tower together, taking turns: ${link}`
+    : `${name} challenges you to a Stapel match! Come build head-to-head: ${link}`),
   duelPlayLater: 'Play the computer meanwhile',
   duelFriendLater: 'Play your round against Robot Rikus. Then send it to a friend to beat.',
   duelJoining: 'Joining the challenge…',

@@ -249,9 +249,11 @@ export const S = {
   duelReconnecting: 'Koppel weer aan…',
   duelWaitFriend: 'Wag vir jou vriend…',
   duelWaitHint: 'Stuur die skakel. Sodra jou vriend dit oopmaak, begin julle.',
-  duelRoomText: (name, link, mode, stake = 0) => (mode === 'turns'
-    ? `${name} daag jou uit vir Blok vir Blok op Stapel${stake ? `, vir ${stake} 🪙 speelmunte elk` : ''}! Kom bou saam, om die beurt, aan een toring: ${link}`
-    : `${name} daag jou uit vir ’n Stapel-wedstryd${stake ? ` vir ${stake} 🪙 speelmunte elk` : ''}! Kom bou kop-aan-kop: ${link}`),
+  // (1.13.3, the owner: the WhatsApp challenge "doesnt show me how much coins I want to play for") a stake comes first:
+  // WhatsApp's chat list and the top of the message (above the link's card) show the start
+  duelRoomText: (name, link, mode, stake = 0) => (stake ? `🪙 ${stake} speelmunte elk, die wenner kry ${stake * 2}! ` : '') + (mode === 'turns'
+    ? `${name} daag jou uit vir Blok vir Blok op Stapel! Kom bou saam, om die beurt, aan een toring: ${link}`
+    : `${name} daag jou uit vir ’n Stapel-wedstryd! Kom bou kop-aan-kop: ${link}`),
   duelPlayLater: 'Speel solank teen die rekenaar',
   duelFriendLater: 'Speel jou rondte teen Robot Rikus. Daarna stuur jy dit vir ’n vriend om te klop.',
   duelJoining: 'Koppel aan die uitdaging…',

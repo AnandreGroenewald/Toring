@@ -1585,7 +1585,8 @@ export function createUI(bus) {
         linkBox,
         h('div', { class: 'share-row' },
           button('btn-wa', [icon('chat'), h('span', { text: S.shareWhatsApp })], () => doShare(o.shareText || o.link, 'whatsapp'), { nav: false }),
-          button('btn-blue btn-mini', [icon('copy'), h('span', { text: S.copy })], () => doShare(o.link, 'copy'), { nav: false })),
+          // (1.13.3) "Kopieer" copies the whole invite (the stake and the link), the same words as WhatsApp gets
+          button('btn-blue btn-mini', [icon('copy'), h('span', { text: S.copy })], () => doShare(o.shareText || o.link, 'copy'), { nav: false })),
         button('btn-teal', [emo('🤖'), h('span', { text: S.duelPlayLater })], () => bus.emit('ui:duel-later')),
         button('btn-white', [icon('close'), h('span', { text: S.duelCancel })], () => bus.emit('ui:duel-cancel')));
     } else if (o.state === 'versus') {
