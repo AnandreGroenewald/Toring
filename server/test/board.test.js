@@ -255,3 +255,11 @@ test('1.13.1 GET /daily/config: the free tries and their first day (the game ask
   assert.deepEqual((await h3.request('GET', '/daily/config')).json, { free: 4, from: '2026-10-12' }, 'kept within 1-4 and a real day');
   assert.equal((await h.request('POST', '/daily/config')).status, 405);
 });
+
+test('1.13.1 the board reads the top rows through its index (equal heights sorted again), never the whole day', async () => {
+  const h = createHarness();
+  const plan = h.db.q(`EXPLAIN QUERY PLAN SELECT player, name, height_dm, hidden, blocked, retried, tries FROM daily_board INDEXED BY idx_daily_board_rank
+    WHERE date_key = '2026-10-06' ORDER BY height_dm DESC, tries ASC, created_at ASC, player ASC LIMIT 40`).map((r) => r.detail).join(' | ');
+  assert.match(plan, /USING INDEX idx_daily_board_rank/);
+  assert.doesNotMatch(plan, /USE TEMP B-TREE FOR ORDER BY/, 'only the right part of the order is sorted again');
+});

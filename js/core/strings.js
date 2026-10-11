@@ -13,6 +13,7 @@ export const S = {
   dailyN: (n) => `Daaglikse Toring #${n}`,
   playToday: 'Bou vandag se toring',
   doneToday: 'Klaar vir vandag!',
+  doneSoFar: 'Jou beste vandag tot dusver',   // (1.13.1: free tries left)
   seeResult: 'Kyk na jou uitslag',
   nextTower: 'Volgende toring oor',
   practice: 'Oefen',
@@ -311,7 +312,7 @@ export const S = {
   freeTryBtn: (n, free) => `Speel weer · poging ${n}/${free}`,
   freeTryHow: (free) => `${free} gratis pogings per dag; jou beste een tel.`,
   freeTryGo: (n, free) => `Poging ${n} van ${free}: gratis!`,
-  retryHowAfterFree: (free) => `Jou ${free} gratis pogings is op. Nog ’n kans: tot 4 keer meer met munte; jou beste poging tel.`,
+  retryHowAfterFree: (free, left) => `Jou ${free} gratis pogings is op. Nog ’n kans: nog ${left} keer met munte; jou beste poging tel.`,
   tryHead: (n, free) => (free > 1 && n <= free ? `poging ${n}/${free}` : `poging ${n}`),
   emoteLabel: 'Stuur ’n emoji',
   emoteMute: 'Demp hul emoji’s',

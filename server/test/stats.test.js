@@ -368,10 +368,10 @@ test('GET /admin/stats: totals per day and per sponsor, with names', async () =>
   assert.equal(res.headers.get('Cache-Control'), 'no-store');
   assert.equal(res.json.from, TODAY);
   assert.equal(res.json.to, '2026-10-07');
-  assert.deepEqual(res.json.totals, { gamesDaily: 2, gamesPractice: 1, games: 3, blockShows: 25, billboardGames: 3, menuViews: 2 });
+  assert.deepEqual(res.json.totals, { gamesDaily: 2, gamesPractice: 1, games: 3, blockShows: 25, billboardGames: 3, menuViews: 2, sharesDaily: 0, sharesPractice: 0, sharesDuel: 0 });
   assert.deepEqual(res.json.days, [
-    { dateKey: TODAY, gamesDaily: 1, gamesPractice: 1, games: 2, blockShows: 20, billboardGames: 2, menuViews: 1 },
-    { dateKey: '2026-10-07', gamesDaily: 1, gamesPractice: 0, games: 1, blockShows: 5, billboardGames: 1, menuViews: 1 },
+    { dateKey: TODAY, gamesDaily: 1, gamesPractice: 1, games: 2, blockShows: 20, billboardGames: 2, menuViews: 1, sharesDaily: 0, sharesPractice: 0, sharesDuel: 0 },
+    { dateKey: '2026-10-07', gamesDaily: 1, gamesPractice: 0, games: 1, blockShows: 5, billboardGames: 1, menuViews: 1, sharesDaily: 0, sharesPractice: 0, sharesDuel: 0 },
   ]);
   assert.deepEqual(res.json.sponsors, [
     { id: a, name: 'Bakkery Bos', tier: 'block', blockShows: 21, billboardGames: 0, blockDays: 2, billboardDays: 0 },
@@ -444,4 +444,7 @@ test('POST /stats/share: a results share tap is an anonymous count per day and k
   assert.equal(c[`${TODAY}|shares_daily|`], 2);
   assert.equal(c[`${TODAY}|shares_duel|`], 1);
   assert.equal(Object.keys(c).length, 2, 'two counters, no player, address or time stored');
+  // the owner reads them in /admin/stats (admin.html)
+  const adm = await h.admin('GET', `/admin/stats?from=${TODAY}&to=${TODAY}`);
+  assert.deepEqual([adm.json.totals.sharesDaily, adm.json.totals.sharesPractice, adm.json.totals.sharesDuel], [2, 0, 1]);
 });

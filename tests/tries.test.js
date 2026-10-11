@@ -79,3 +79,15 @@ test('a free try taken and never played gives no coins back; the Worker\'s setti
   assert.deepEqual(again.getDailyTries(), { free: 2, from: MON });
   assert.equal(again.dailyTries('2026-10-14').free, 2);
 });
+
+test('an extra try a 1.12.0 page bought (it kept no price) and never played: its 50 coins come back, also on a free-tries day', () => {
+  const backend = memoryBackend();
+  const store = createStore(backend, { now: () => Date.UTC(2026, 9, 12, 8) });
+  store.startDaily(MON, result(MON, 0, 0));
+  store.finishDaily(MON, result(MON, 20, 300));
+  // what a 1.12.0 page wrote: one bought try, no `n`, no `paid` (the coins already left its wallet)
+  backend.setItem('stapel.v1.retry', JSON.stringify({ [MON]: { status: 'ready', result: null } }));
+  const again = createStore(backend, { now: () => Date.UTC(2026, 9, 13, 8) });
+  assert.equal(again.getDailyRetry(MON).paid, DAILY_RETRY.prices[0]);
+  assert.equal(again.refundOldRetries('2026-10-13'), 50);
+});

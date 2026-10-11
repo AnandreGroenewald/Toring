@@ -774,8 +774,9 @@ if (DEBUG && /^\d+(,\d{4}-\d{2}-\d{2})?$/.test(params.get('tries') || '')) {
 // (1.13.1, the owner: "count shares") a share from the results counts as an anonymous number per day and kind of game
 bus.on('ui:share-tap', (e) => {
   if (!AUDIENCE_ON || e?.screen !== 'results') return;
-  const mode = run.mode === 'daily' || run.mode === 'practice' || run.mode === 'duel' ? run.mode : null;
-  if (mode) sendShareCount(matchApiUrl(), { dateKey: run.dateKey || todayKey(), mode });
+  // (a daily result opened again from the menu: the game is idle then, the results screen says which day it was)
+  const mode = e.daily ? 'daily' : run.mode === 'daily' || run.mode === 'practice' || run.mode === 'duel' ? run.mode : null;
+  if (mode) sendShareCount(matchApiUrl(), { dateKey: e.dateKey || run.dateKey || todayKey(), mode });
 });
 
 /** What the daily results add beyond the result itself: the skyline, tomorrow's teaser and the install offer. */

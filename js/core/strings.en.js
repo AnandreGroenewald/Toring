@@ -14,6 +14,7 @@ export const S_EN = {
   dailyN: (n) => `Daily Tower #${n}`,
   playToday: 'Build today’s tower',
   doneToday: 'Done for today!',
+  doneSoFar: 'Your best today so far',   // (1.13.1: free tries left)
   seeResult: 'See your result',
   nextTower: 'Next tower in',
   practice: 'Practice',
@@ -298,7 +299,7 @@ export const S_EN = {
   freeTryBtn: (n, free) => `Play again · try ${n}/${free}`,
   freeTryHow: (free) => `${free} free tries a day; your best one counts.`,
   freeTryGo: (n, free) => `Try ${n} of ${free}: free!`,
-  retryHowAfterFree: (free) => `Your ${free} free tries are used. One more try: up to 4 more with coins; your best try counts.`,
+  retryHowAfterFree: (free, left) => `Your ${free} free tries are used. One more try: ${left} more with coins; your best try counts.`,
   tryHead: (n, free) => (free > 1 && n <= free ? `try ${n}/${free}` : `try ${n}`),
   emoteLabel: 'Send an emoji',
   emoteMute: 'Mute their emojis',

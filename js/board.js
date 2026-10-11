@@ -44,8 +44,9 @@ export async function postBoard({ apiUrl, result, player, name = '', hidden = fa
     blocks: result.blocksDropped | 0,
     durationMs: Math.max(0, Math.round(Number(result.durationMs) || 0)),
     hidden: !!hidden,
-    // (1.12) "Nog 'n kans": the best of the tries, marked 🔁 (1.12.1: and how many tries, 2-5)
-    ...(result.retry === true ? { retry: true, tries: Number.isInteger(result.tries) && result.tries >= 2 && result.tries <= 5 ? result.tries : 2 } : {}),
+    // (1.12) "Nog 'n kans": the best of the tries, marked 🔁 (1.12.1: and how many tries, 2-5; 1.13.1: a 6th or 7th try
+    // goes as 5, the board's most, so a better one still counts — sent as 2 it would be refused as an older try)
+    ...(result.retry === true ? { retry: true, tries: Number.isInteger(result.tries) && result.tries >= 2 ? Math.min(result.tries, 5) : 2 } : {}),
   };
   return cleanBoard(await request(`${root}/board`, {
     method: 'POST',

@@ -103,3 +103,12 @@ test('without a nickname of their own a player is "Bouer 123", the same every vi
   assert.ok(names.size >= 3, 'other phones mostly get other numbers');
   assert.match(defaultNicknameFor(null), /^Bouer \d{3}$/, 'no number yet: still a name');
 });
+
+test('(1.13.1) a 6th or 7th try goes to the board as 5 (its most), so a better one still counts; junk counts as 2', async () => {
+  const sent = async (tries) => {
+    const seen = [];
+    await postBoard({ apiUrl: API, result: { ...daily, retry: true, tries }, player: 'abcdefghijklmnop', name: 'Bennie', fetchImpl: fakeFetch(answer, seen) });
+    return JSON.parse(seen[0].init.body).tries;
+  };
+  assert.deepEqual([await sent(2), await sent(5), await sent(6), await sent(7), await sent('x'), await sent(1)], [2, 5, 5, 5, 2, 2]);
+});

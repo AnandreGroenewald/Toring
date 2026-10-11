@@ -780,20 +780,23 @@ export function createUI(bus) {
       const r = m.best || entry.result || {};
       const rt = m.retry;
       const price = m.retryPrice;   // (1.12.1) the next extra try's: 50, 100, 200, 400; null once all are used
+      const t = m.tries || { free: 1, played: 1, extra: 0, maxExtra: 4 };   // (1.13.1) the day's free tries and tries played
+      const freeLeft = t.free > 1 && t.played < t.free;
       card.append(
         h('div', { class: 'done-box' },
-          h('div', { class: 'done-title' }, emo('✅'), h('span', { text: S.doneToday })),
+          // (1.13.1) free tries left: "Jou beste vandag tot dusver", not "Klaar vir vandag!"
+          h('div', { class: 'done-title' }, emo('✅'), h('span', { text: freeLeft ? S.doneSoFar : S.doneToday })),
           h('div', { class: 'done-stats' },
             emo('🏗️'), ' ', fmtM(r.heightM || 0),
             h('span', { class: 'sep', 'aria-hidden': 'true', text: '·' }),
             emo('⭐'), ' ', fmtInt(r.score || 0),
             r.retried ? h('span', { class: 'done-retry', title: S.retryMark((r.tries || 2) - 1), 'aria-label': S.retryMark((r.tries || 2) - 1), text: ` 🔁${(r.tries || 2) > 2 ? r.tries - 1 : ''}` }) : null),
           countdownEl()));
-      const t = m.tries || { free: 1, played: 1 };   // (1.13.1) the day's free tries and the tries played
       if (rt && rt.status === 'ready') {
         // bought, not played yet: it's the big button now
         card.append(
-          button('btn-big btn-green', [icon('play'), h('span', { text: S.retryPlay })], () => bus.emit('ui:play-daily')),
+          // (1.13.1: a free try taken, not started: "Speel weer · poging 2/3")
+          button('btn-big btn-green', [icon('play'), h('span', { text: rt.paid === 0 ? S.freeTryBtn(t.played + 1, t.free) : S.retryPlay })], () => bus.emit('ui:play-daily')),
           button('btn-white btn-mini retry-see', [icon('chart'), h('span', { text: S.seeResult })], () => bus.emit('ui:daily-results'), { nav: false }));
       } else if (price === 0) {
         // (1.13.1) a free try left: "Speel weer · poging 2/3" is the big button
@@ -811,7 +814,7 @@ export function createUI(bus) {
             button(`btn-white btn-mini retry-buy${short ? ' is-short' : ''}`,
               [h('span', { text: S.retryBtn }), h('span', { class: 'retry-price' }, emo(COIN), h('b', { text: String(price) }))],
               () => bus.emit('ui:daily-retry'), { nav: false, attrs: { 'aria-label': `${S.retryBtn}: ${price}` } }),
-            h('p', { class: 'retry-note', text: short ? S.retryNeed(short) : t.free > 1 ? S.retryHowAfterFree(t.free) : S.retryHow })));
+            h('p', { class: 'retry-note', text: short ? S.retryNeed(short) : t.free > 1 ? S.retryHowAfterFree(t.free, Math.max(1, t.maxExtra - t.extra)) : S.retryHow })));
         }
       }
     } else {
@@ -1741,7 +1744,8 @@ export function createUI(bus) {
   }
 
   async function doShare(text, channel) {
-    bus.emit('ui:share-tap', { channel, screen: st.screen });   // (1.13.1) counted anonymously (results only)
+    // (1.13.1) counted anonymously (results only; a daily result opened again later says its day itself)
+    bus.emit('ui:share-tap', { channel, screen: st.screen, daily: !!st.resultsDaily, dateKey: st.resultsDaily ? st.resultsDateKey : null });
     const res = await shareResult(text, channel);
     if (res === 'copied') toast(S.copied);
     else if (res === 'shared') toast(S.shared);

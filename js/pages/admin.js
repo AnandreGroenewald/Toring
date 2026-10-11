@@ -621,6 +621,9 @@ function normStats(data) {
     blockShows: num(d.blockShows),
     billboardGames: num(d.billboardGames),
     menuViews: num(d.menuViews),
+    // (1.13.1) share taps on the results (a Worker older than 1.13.1 sends none)
+    shares: num(d.sharesDaily) + num(d.sharesPractice) + num(d.sharesDuel),
+    sharesDaily: num(d.sharesDaily),
   });
   return {
     from: str(data.from),
@@ -755,6 +758,7 @@ function renderStats() {
     kpi(fmtInt(t.blockShows), 'Name op blokke gewys'),
     kpi(fmtInt(t.billboardGames), 'Speletjies met ’n advertensiebord'),
     kpi(fmtInt(t.menuViews), 'Spyskaart-advertensie gesien'),
+    kpi(fmtInt(t.shares), `Uitslae gedeel (${fmtInt(t.sharesDaily)} van die Daaglikse Toring)`),
   );
   const td = (label, content, cls) => h('td', { 'data-label': label, class: cls || null }, content);
   const numCell = (label, n, cls = '') => td(label, fmtInt(n), `num ${cls}`.trim());
@@ -764,7 +768,7 @@ function renderStats() {
   const perDay = data.days.length
     ? h('table', { class: 'dtable' },
       h('caption', { class: 'stats-caption', text: 'Per dag' }),
-      h('thead', null, h('tr', null, ['Datum', 'Speletjies', 'Daagliks', 'Oefen', 'Name gewys', 'Advertensiebord', 'Spyskaart'].map((c) => h('th', { scope: 'col', text: c })))),
+      h('thead', null, h('tr', null, ['Datum', 'Speletjies', 'Daagliks', 'Oefen', 'Name gewys', 'Advertensiebord', 'Spyskaart', 'Gedeel'].map((c) => h('th', { scope: 'col', text: c })))),
       h('tbody', null,
         data.days.map((d) => h('tr', null,
           td('Datum', d.dateKey, 'strong'),
@@ -774,6 +778,7 @@ function renderStats() {
           numCell('Name gewys', d.blockShows),
           numCell('Advertensiebord', d.billboardGames),
           numCell('Spyskaart', d.menuViews),
+          numCell('Gedeel', d.shares),
         ))),
       h('tfoot', null, h('tr', null,
         td('Datum', 'Totaal', 'strong'),
@@ -783,6 +788,7 @@ function renderStats() {
         numCell('Name gewys', t.blockShows),
         numCell('Advertensiebord', t.billboardGames),
         numCell('Spyskaart', t.menuViews),
+        numCell('Gedeel', t.shares),
       )))
     : h('p', { class: 'empty', text: 'Geen speletjies getel in hierdie tydperk nie.' });
 

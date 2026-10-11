@@ -95,10 +95,11 @@ const metre = (heightDm) => Math.floor(heightDm / 10);
 /** The day's top, the number of players, and `player`'s own place (null when they have no result). */
 export async function boardOf(db, dateKey, player = null) {
   // places are true places: a hidden or blocked player keeps theirs (the list skips it), so numbers never clash
-  // (1.13.1) equal heights: the fewer tries first, then the earlier result
+  // (1.13.1) equal heights: the fewer tries first, then the earlier first post. INDEXED BY keeps the read to the top
+  // rows (the index orders by height; only equal heights are sorted again), never the whole day
   const scan = await db.prepare(
-    `SELECT player, name, height_dm, hidden, blocked, retried, tries FROM daily_board WHERE date_key = ?1
-     ORDER BY height_dm DESC, COALESCE(tries, 1) ASC, created_at ASC, player ASC LIMIT ?2`,
+    `SELECT player, name, height_dm, hidden, blocked, retried, tries FROM daily_board INDEXED BY idx_daily_board_rank WHERE date_key = ?1
+     ORDER BY height_dm DESC, tries ASC, created_at ASC, player ASC LIMIT ?2`,
   ).bind(dateKey, TOP_SCAN).all();
   const rows = scan.results || [];
   const top = [];
@@ -122,7 +123,7 @@ export async function boardOf(db, dateKey, player = null) {
           .bind(dateKey, m).first();
         const same = await db.prepare(
           `SELECT COUNT(*) AS n FROM daily_board WHERE date_key = ?1 AND height_dm BETWEEN ?2 AND ?3
-           AND (height_dm > ?4 OR (height_dm = ?4 AND (COALESCE(tries, 1) < ?7 OR (COALESCE(tries, 1) = ?7
+           AND (height_dm > ?4 OR (height_dm = ?4 AND (tries < ?7 OR (tries = ?7
              AND (created_at < ?5 OR (created_at = ?5 AND player < ?6))))))`,
         ).bind(dateKey, m * 10, m * 10 + 9, me.height_dm, me.created_at, player, me.tries || 1).first();
         rank = (higher?.n || 0) + (same?.n || 0) + 1;
@@ -221,8 +222,8 @@ export async function adminListBoard(url, ctx) {
   const dateKey = url.searchParams.get('dateKey') || new Date(ctx.now).toISOString().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) throw new HttpError(400, 'invalid_field', { field: 'dateKey' });
   const r = await ctx.db.prepare(
-    `SELECT player, name, height_dm, blocks, duration_s, hidden, blocked, created_at, retried, tries FROM daily_board WHERE date_key = ?1
-     ORDER BY height_dm DESC, COALESCE(tries, 1) ASC, created_at ASC, player ASC LIMIT ?2`,
+    `SELECT player, name, height_dm, blocks, duration_s, hidden, blocked, created_at, retried, tries FROM daily_board INDEXED BY idx_daily_board_rank
+     WHERE date_key = ?1 ORDER BY height_dm DESC, tries ASC, created_at ASC, player ASC LIMIT ?2`,
   ).bind(dateKey, ADMIN_LIST).all();
   const day = await ctx.db.prepare('SELECT players FROM daily_board_days WHERE date_key = ?1').bind(dateKey).first();
   return json(200, {

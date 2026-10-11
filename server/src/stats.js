@@ -281,7 +281,10 @@ export async function adminStats(url, ctx) {
   const { from, to } = reportRange(url, ctx.now);
   const data = await db.statsBetween(ctx.db, from, to);
 
-  const emptyDay = (dateKey) => ({ dateKey, gamesDaily: 0, gamesPractice: 0, games: 0, blockShows: 0, billboardGames: 0, menuViews: 0 });
+  const emptyDay = (dateKey) => ({
+    dateKey, gamesDaily: 0, gamesPractice: 0, games: 0, blockShows: 0, billboardGames: 0, menuViews: 0,
+    sharesDaily: 0, sharesPractice: 0, sharesDuel: 0,   // (1.13.1) share taps on the results
+  });
   const days = new Map();
   const sponsors = new Map();
   const totals = emptyDay(null);
@@ -298,6 +301,9 @@ export async function adminStats(url, ctx) {
     if (r.metric === 'games_daily') add('gamesDaily');
     else if (r.metric === 'games_practice') add('gamesPractice');
     else if (r.metric === 'menu_views') add('menuViews');
+    else if (r.metric === 'shares_daily') add('sharesDaily');
+    else if (r.metric === 'shares_practice') add('sharesPractice');
+    else if (r.metric === 'shares_duel') add('sharesDuel');
     else if (r.metric === 'block_shows') {
       add('blockShows');
       const s = sponsorRow(r.sponsor_id);

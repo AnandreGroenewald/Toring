@@ -353,7 +353,8 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
         beatAt: num(r.beatAt, null),
         owner: typeof r.owner === 'string' ? r.owner : null,
         n,
-        paid: Number.isInteger(r.paid) && r.paid >= 0 && r.paid <= 100000 ? r.paid : (ladder(k)[n - 1] ?? 0),
+        // (a 1.12.0 entry keeps no price: that version only sold "Nog 'n kans", never a free try)
+        paid: Number.isInteger(r.paid) && r.paid >= 0 && r.paid <= 100000 ? r.paid : DAILY_RETRY.prices[n - 1] ?? 0,
         best: r.best && typeof r.best === 'object' ? normalizeResult(r.best, k) : r.status === 'done' ? result : null,
       };
     }
