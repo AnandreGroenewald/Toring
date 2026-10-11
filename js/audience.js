@@ -44,6 +44,30 @@ export function sendStats(apiUrl, batch, { fetchImpl, navigatorImpl } = {}) {
   }
 }
 
+/**
+ * (1.13.1, the owner: count shares) One tap on a results screen's share button: an anonymous number per day and kind
+ * of game ({ dateKey, mode: 'daily' | 'practice' | 'duel' }; nothing else is sent). Fire and forget, like sendStats.
+ */
+export function sendShareCount(apiUrl, { dateKey, mode } = {}, { fetchImpl, navigatorImpl } = {}) {
+  try {
+    const root = base(apiUrl);
+    if (!root || !isDateKey(dateKey) || !['daily', 'practice', 'duel'].includes(mode)) return false;
+    const url = `${root}/stats/share`;
+    const body = JSON.stringify({ dateKey, mode });
+    const nav = navigatorImpl === undefined ? globalThis.navigator : navigatorImpl;
+    if (nav && typeof nav.sendBeacon === 'function' && typeof Blob === 'function') {
+      if (nav.sendBeacon(url, new Blob([body], { type: TEXT }))) return true;
+    }
+    const f = fetcher(fetchImpl);
+    if (!f) return false;
+    Promise.resolve(f(url, { method: 'POST', body, headers: { 'Content-Type': TEXT }, keepalive: true, credentials: 'omit' }))
+      .catch(() => {});
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** A JSON answer, or null on any failure (network, status, timeout, shape). */
 export async function request(url, init, fetchImpl) {
   const f = fetcher(fetchImpl);

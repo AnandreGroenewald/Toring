@@ -202,9 +202,11 @@ test('1.12 "Nog \'n kans": a retry post keeps the better height and marks the en
   assert.equal(r.json.players, 3);
 });
 
-test('1.12.1 up to 4 extra tries: a later try may raise the height, the same one again or an older one never, 5 at most', async () => {
+test('1.12.1 extra tries: a later try may raise the height, the same one again or an older one never; (1.13.1) 8 at most', async () => {
   const h = createHarness();
-  const post = (over) => h.request('POST', '/board', { body: entry({ player: P(1), name: 'Anna', blocks: 30, durationMs: 200000, ...over }), ip: '198.51.100.1' });
+  // (each post from its own address: 10 posts is past one address's hourly limit)
+  let ip = 0;
+  const post = (over) => h.request('POST', '/board', { body: entry({ player: P(1), name: 'Anna', blocks: 30, durationMs: 200000, ...over }), ip: `198.51.100.${++ip}` });
   await post({ heightM: 20 });
   let r = await post({ heightM: 24, retry: true, tries: 2 });
   assert.deepEqual([r.json.you.heightM, r.json.you.tries], [24, 2]);
@@ -218,7 +220,38 @@ test('1.12.1 up to 4 extra tries: a later try may raise the height, the same one
   assert.deepEqual([r.json.you.heightM, r.json.you.tries], [31, 4], 'the same try sent again');
   r = await post({ heightM: 35, retry: true, tries: 5 });
   assert.deepEqual([r.json.you.heightM, r.json.you.tries], [35, 5]);
+  // (1.13.1) up to 4 free tries a day (GET /daily/config) and then "Nog 'n kans": 8 tries at most; the board keeps
+  // 5 at most (the column's rule), so a 6th-8th try still raises the height and shows as 5
   r = await post({ heightM: 60, retry: true, tries: 6 });
-  assert.equal(r.json.you.heightM, 35, 'never past 5 tries (a 6th counts as the second)');
+  assert.deepEqual([r.json.you.heightM, r.json.you.tries], [60, 5]);
+  r = await post({ heightM: 61, retry: true, tries: 8 });
+  assert.deepEqual([r.json.you.heightM, r.json.you.tries], [61, 5]);
+  r = await post({ heightM: 90, retry: true, tries: 9 });
+  assert.equal(r.json.you.heightM, 61, 'never past 8 tries (a 9th counts as the second)');
   assert.deepEqual(r.json.top.map((t) => [t.name, t.tries]), [['Anna', 5]]);
+});
+
+test('1.13.1 equal heights: the fewer tries rank first, then the earlier result', async () => {
+  const h = createHarness();
+  const post = (n, over) => h.request('POST', '/board', { body: entry({ player: P(n), name: `Speler ${n}`, blocks: 30, durationMs: 200000, ...over }), ip: `198.51.100.${n}` });
+  await post(1, { heightM: 30 });
+  await post(1, { heightM: 40, retry: true, tries: 3 });   // 40 m in 3 tries, first
+  await post(2, { heightM: 40 });                         // 40 m in 1 try, later
+  await post(3, { heightM: 40, retry: true, tries: 2 });  // (a first try at 40 m: it says 2)
+  const r = await h.request('GET', `/board?dateKey=${TODAY}&player=${P(1)}`);
+  assert.deepEqual(r.json.top.map((t) => [t.name, t.tries]), [['Speler 2', 1], ['Speler 3', 2], ['Speler 1', 3]]);
+  assert.equal(r.json.you.rank, 3);
+});
+
+test('1.13.1 GET /daily/config: the free tries and their first day (the game asks at its start)', async () => {
+  const h = createHarness();
+  const r = await h.request('GET', '/daily/config');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json, { free: 3, from: '2026-10-12' });
+  assert.match(r.headers.get('Cache-Control') || '', /max-age=300/);
+  const h2 = createHarness({ DAILY_FREE_TRIES: '2', DAILY_FREE_FROM: '2026-11-01' });
+  assert.deepEqual((await h2.request('GET', '/daily/config')).json, { free: 2, from: '2026-11-01' });
+  const h3 = createHarness({ DAILY_FREE_TRIES: '9', DAILY_FREE_FROM: 'soon' });
+  assert.deepEqual((await h3.request('GET', '/daily/config')).json, { free: 4, from: '2026-10-12' }, 'kept within 1-4 and a real day');
+  assert.equal((await h.request('POST', '/daily/config')).status, 405);
 });

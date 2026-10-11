@@ -12,7 +12,6 @@ import { createSequence } from './core/sequence.js';
 import { buildShareText, buildDuelShareText } from './core/share.js';
 import { parseChallengeQuery, parseRoomQuery, defaultNicknameFor } from './core/duel.js';
 import { coinsForGame, cosmetic, POWERUP_IDS, rankShortOf } from './core/economy.js';
-import { DAILY_RETRY } from './config.js';
 import { weekView, WEEK } from './core/week.js';
 
 const WEEK_COINS = WEEK.coins;
@@ -25,7 +24,7 @@ import { normalizeFeed, pickPremium } from './core/sponsors.js';
 import { buildStatsBatch, percentileLine } from './core/audience.js';
 import { tutorialDone } from './core/coach.js';
 import { loadSponsors } from './sponsorsFeed.js';
-import { sendStats, dailyPercentile } from './audience.js';
+import { sendStats, dailyPercentile, sendShareCount, request as apiRequest, base as apiBase } from './audience.js';
 import { postBoard, getBoard } from './board.js';
 import { SPONSOR_API_URL, salesEnabled, matchApiUrl } from './sponsorConfig.js';
 import { createUI } from './ui/dom.js';
@@ -397,8 +396,9 @@ function menuModel() {
     boardOn: BOARD_ON,                       // (1.12) the 🏆 on the daily card, with today's place once known
     boardPlace: boardLast?.dateKey === dateKey && boardLast.board?.you ? boardLast.board.you.rank : null,
     retry: store.getDailyRetry(dateKey),    // (1.12) "Nog 'n kans": the day's extra try, if bought
-    retryPrice: store.nextRetryPrice(dateKey),   // (1.12.1) 50, 100, 200, 400; null: none to buy now
-    retryMax: (store.getDailyRetry(dateKey)?.n || 0) >= DAILY_RETRY.prices.length,
+    retryPrice: store.nextRetryPrice(dateKey),   // (1.13.1) 0 for a free try, then 50, 100, 200, 400; null: none now
+    retryMax: store.dailyTries(dateKey).extra >= store.dailyTries(dateKey).maxExtra,
+    tries: store.dailyTries(dateKey),           // (1.13.1) { free, played, extra, maxExtra }
     stats: store.getStats(dateKey),
     settings,
     nextDayAt: nextDayTimestamp(),
@@ -749,8 +749,34 @@ function showDoneResults(dateKey, result) {
 }
 
 function shareTextFor(result) {
-  return buildShareText(result, { url: shareUrlFor(siteUrl(), result), highContrast: !!settings.highContrast });
+  // (1.13.1) a day with free tries: the share line says how many were played ("2/3")
+  const r = result && result.mode === 'daily' && result.dateKey && !result.freeTries
+    ? { ...result, freeTries: store.dailyTries(result.dateKey).free } : result;
+  return buildShareText(r, { url: shareUrlFor(siteUrl(), r), highContrast: !!settings.highContrast });
 }
+
+// (1.13.1) The Daaglikse Toring's free tries from the Worker (GET /daily/config): asked at the start; the phone keeps the
+// last answer for an offline start, and without one the game's own setting counts (js/config.js DAILY_TRIES).
+async function loadDailyTries() {
+  const root = apiBase(matchApiUrl() || '');
+  if (!root || DEBUG) return;   // (a test page keeps the game's own setting, or ?tries=…)
+  const cfg = await apiRequest(`${root}/daily/config`, { method: 'GET' });
+  if (!cfg) return;
+  const before = JSON.stringify(store.getDailyTries());
+  store.setDailyTries(cfg);
+  if (JSON.stringify(store.getDailyTries()) !== before && screen === 'menu') showMenu();
+}
+if (DEBUG && /^\d+(,\d{4}-\d{2}-\d{2})?$/.test(params.get('tries') || '')) {
+  const [free, from] = params.get('tries').split(',');
+  store.setDailyTries({ free: Number(free), from: from || undefined });
+}
+
+// (1.13.1, the owner: "count shares") a share from the results counts as an anonymous number per day and kind of game
+bus.on('ui:share-tap', (e) => {
+  if (!AUDIENCE_ON || e?.screen !== 'results') return;
+  const mode = run.mode === 'daily' || run.mode === 'practice' || run.mode === 'duel' ? run.mode : null;
+  if (mode) sendShareCount(matchApiUrl(), { dateKey: run.dateKey || todayKey(), mode });
+});
 
 /** What the daily results add beyond the result itself: the skyline, tomorrow's teaser and the install offer. */
 function resultsExtras(r) {
@@ -1906,7 +1932,8 @@ bus.on('ui:daily-retry', () => {
     ui.toast(r.reason === 'coins' ? S.retryNeed(r.price - r.coins) : r.reason === 'max' ? S.retryMax : S.retryBusy, 2600);
     return;
   }
-  ui.toast(S.retryBought, 2400);
+  // (1.13.1) a free try ("Poging 2 van 3: gratis!") or a bought one
+  ui.toast(r.price === 0 ? S.freeTryGo(r.n + 1, store.dailyTries(dateKey).free) : S.retryBought, 2400);
   playDaily();
 });
 
@@ -1954,7 +1981,8 @@ function finalize(result) {
       stats = store.finishDailyRetry(result.dateKey, result);
       pushSkyline();
       isNewBest = !!(stats.applied && (stats.isNewBestHeight || stats.isNewBestScore));
-      shown = { ...result, retry: true, tryNo: 1 + (store.getDailyRetry(result.dateKey)?.n || 1) };   // ("poging 3")
+      // ("poging 3"; 1.13.1: "poging 2/3" on a day with free tries, in the chip and the share line)
+      shown = { ...result, retry: true, tryNo: 1 + (store.getDailyRetry(result.dateKey)?.n || 1), freeTries: store.dailyTries(result.dateKey).free };
       store.setBoardPending(true);   // the better of the two goes on the board, marked 🔁
     }
   } else if (result.mode === 'daily' && result.dateKey) {
@@ -2214,6 +2242,7 @@ function onReady() {
   });
   startIdle();
   showMenu();
+  loadDailyTries();   // (1.13.1) the free tries a day: the Worker's word (the menu follows when it changes)
   retryBoard();
   planReminders();
   // a new player chooses a language first; a challenge link waits for that choice

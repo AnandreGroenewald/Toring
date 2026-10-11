@@ -9,6 +9,7 @@ import { cleanVisits } from './visitorrules.js';
 import { cleanNickname } from './duel.js';
 import { WEEK, cleanWeek, openBox, addShield } from './week.js';
 import { DAILY_RETRY, DUEL } from '../config.js';
+import { cleanTries, triesLadder, freeTriesFor, MAX_EXTRA } from './tries.js';
 import {
   defaultEconomy, cleanEconomy, earnCoins, buyPowerup, usePowerup, buyCosmetic, wearCosmetic, grantRankLooks, spendCoins,
   rankAfterMatch, rolloverSeason, seasonOf, cardOf, ladderAt, bestTier, RANK_MODES, RANK_RULES, cleanModeRank,
@@ -264,6 +265,17 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
   let lastRanksRaw = null;
   let retries = {};
   let lastRetryRaw = null;
+  // (1.13.1) the free tries setting: the Worker's last word (kept for an offline start), else the game's own
+  const triesKey = `${key}.tries`;
+  let triesCfg = (() => {
+    try {
+      return cleanTries(JSON.parse(be.getItem(triesKey) || 'null'));
+    } catch {
+      return cleanTries(null);
+    }
+  })();
+  /** A day's extra tries' prices: the free ones (0), then "Nog 'n kans". */
+  const ladder = (dateKey) => triesLadder(dateKey, triesCfg);
 
   function readRaw(k = storeKey) {
     try {
@@ -330,7 +342,7 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       if (!isDateKey(k) || !r || !['ready', 'playing', 'done'].includes(r.status)) continue;
       // (1.12.1) up to 4 a day: `n` the tries bought (1-4), `paid` the last one's price (a refund gives that
       // back), `best` the best finished extra try (an entry from 1.12.0 is one try, its result the best)
-      const maxN = DAILY_RETRY.prices.length;
+      const maxN = MAX_EXTRA;   // (1.13.1: the free extra tries, then "Nog 'n kans")
       const n = Number.isInteger(r.n) && r.n >= 1 && r.n <= maxN ? r.n : 1;
       const result = r.status === 'ready' ? null : normalizeResult(r.result, k);
       out[k] = {
@@ -341,7 +353,7 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
         beatAt: num(r.beatAt, null),
         owner: typeof r.owner === 'string' ? r.owner : null,
         n,
-        paid: Number.isInteger(r.paid) && r.paid >= 0 && r.paid <= 100000 ? r.paid : DAILY_RETRY.prices[n - 1],
+        paid: Number.isInteger(r.paid) && r.paid >= 0 && r.paid <= 100000 ? r.paid : (ladder(k)[n - 1] ?? 0),
         best: r.best && typeof r.best === 'object' ? normalizeResult(r.best, k) : r.status === 'done' ? result : null,
       };
     }
@@ -639,7 +651,33 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       const r = retries[dateKey];
       if (r && r.status !== 'done') return null;
       const k = r ? r.n : 0;
-      return k < DAILY_RETRY.prices.length ? DAILY_RETRY.prices[k] : null;
+      const lad = ladder(dateKey);   // (1.13.1: 0 for a free try)
+      return k < lad.length ? lad[k] : null;
+    },
+
+    /** (1.13.1) The day's tries: { free, played, extra, maxExtra } (`extra` the extra tries taken so far, played or not). */
+    dailyTries(dateKey) {
+      sync();
+      const r = retries[dateKey];
+      const e = data.daily[dateKey];
+      const extra = r ? r.n : 0;
+      return { free: freeTriesFor(dateKey, triesCfg), played: (e && e.status !== 'ready' ? 1 : 0) + (r ? extraDone(r) : 0), extra, maxExtra: ladder(dateKey).length };
+    },
+
+    /** (1.13.1) The free tries setting (the game's own, or the Worker's last word): { free, from }. */
+    getDailyTries() {
+      return { ...triesCfg };
+    },
+
+    /** (1.13.1) The Worker's tries setting: kept (also for the next start, offline). Returns the setting in use. */
+    setDailyTries(cfg) {
+      triesCfg = cleanTries(cfg);
+      try {
+        be.setItem(triesKey, JSON.stringify(triesCfg));
+      } catch {
+        // private mode: this visit only
+      }
+      return { ...triesCfg };
     },
 
     /**
@@ -653,8 +691,9 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       const prev = retries[dateKey];
       if (prev && prev.status !== 'done') return { ok: false, reason: 'busy', coins: econ.coins };
       const k = prev ? prev.n : 0;
-      if (k >= DAILY_RETRY.prices.length) return { ok: false, reason: 'max', coins: econ.coins };
-      const price = DAILY_RETRY.prices[k];
+      const lad = ladder(dateKey);   // (1.13.1: the free tries first, at 0)
+      if (k >= lad.length) return { ok: false, reason: 'max', coins: econ.coins };
+      const price = lad[k];
       const r = spendCoins(econ, price);
       if (!r.ok) return { ok: false, reason: 'coins', coins: econ.coins, price };
       econ = r.economy;
@@ -679,7 +718,7 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
         if (r.status !== 'ready' || daysBetween(k, todayKey) <= 0) continue;
         back += r.paid;
         // the tries played that day stay (the best of them still counts); a day with none left goes
-        if (r.n > 1) retries[k] = { ...r, status: 'done', n: r.n - 1, result: r.best, paid: DAILY_RETRY.prices[r.n - 2] };
+        if (r.n > 1) retries[k] = { ...r, status: 'done', n: r.n - 1, result: r.best, paid: ladder(k)[r.n - 2] ?? 0 };
         else delete retries[k];
       }
       if (!back) return 0;

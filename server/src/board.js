@@ -21,7 +21,13 @@ export const BOARD_TOP = 10;
 export const DEFAULT_NAME = 'Bouer';
 const TOP_SCAN = BOARD_TOP + 30;   // rows read for the top: hidden ones keep their place, so read a few more
 const PLAYER_RE = /^[a-z0-9]{12,32}$/;
-export const MAX_TRIES = 5;    // (1.12.1) the day's first try and up to 4 extra ones ("Nog 'n kans": 50, 100, 200, 400 coins)
+// (1.12.1) the day's first try and up to 4 extra ones ("Nog 'n kans": 50, 100, 200, 400 coins); (1.13.1) up to 4 free
+// tries a day (GET /daily/config) before "Nog 'n kans": 8 at most
+export const MAX_TRIES = 8;
+// (1.13.1) what the board keeps: the tries column allows 1-5 (migrations/0005_board_tries.sql's CHECK; widening it
+// rebuilds the table, a later migration), so a 6th, 7th or 8th try is kept as 5 — the count only orders equal heights
+// and marks 🔁, and the game's own share line says the exact number
+export const STORED_MAX_TRIES = 5;
 const MAX_HEIGHT_DM = 10000;   // 1 000 m
 // What a real tower can be. Generous on purpose (a result past these is refused, not trimmed), yet far
 // below a forged one: real games build about 1,7 m a block and climb under 1 m a second.
@@ -79,7 +85,7 @@ export function validateEntry(body, now) {
     hidden: body.hidden === true,
     retry: body.retry === true,   // (1.12) "Nog 'n kans": the better of the tries, marked
     // (1.12.1) how many tries the player has played that day (2-5 with `retry`; a 1.12.0 game sends none: 2)
-    tries: body.retry === true ? (Number.isInteger(body.tries) && body.tries >= 2 && body.tries <= MAX_TRIES ? body.tries : 2) : 1,
+    tries: body.retry === true ? (Number.isInteger(body.tries) && body.tries >= 2 && body.tries <= MAX_TRIES ? Math.min(body.tries, STORED_MAX_TRIES) : 2) : 1,
   };
 }
 
@@ -89,9 +95,10 @@ const metre = (heightDm) => Math.floor(heightDm / 10);
 /** The day's top, the number of players, and `player`'s own place (null when they have no result). */
 export async function boardOf(db, dateKey, player = null) {
   // places are true places: a hidden or blocked player keeps theirs (the list skips it), so numbers never clash
+  // (1.13.1) equal heights: the fewer tries first, then the earlier result
   const scan = await db.prepare(
     `SELECT player, name, height_dm, hidden, blocked, retried, tries FROM daily_board WHERE date_key = ?1
-     ORDER BY height_dm DESC, created_at ASC, player ASC LIMIT ?2`,
+     ORDER BY height_dm DESC, COALESCE(tries, 1) ASC, created_at ASC, player ASC LIMIT ?2`,
   ).bind(dateKey, TOP_SCAN).all();
   const rows = scan.results || [];
   const top = [];
@@ -115,8 +122,9 @@ export async function boardOf(db, dateKey, player = null) {
           .bind(dateKey, m).first();
         const same = await db.prepare(
           `SELECT COUNT(*) AS n FROM daily_board WHERE date_key = ?1 AND height_dm BETWEEN ?2 AND ?3
-           AND (height_dm > ?4 OR (height_dm = ?4 AND (created_at < ?5 OR (created_at = ?5 AND player < ?6))))`,
-        ).bind(dateKey, m * 10, m * 10 + 9, me.height_dm, me.created_at, player).first();
+           AND (height_dm > ?4 OR (height_dm = ?4 AND (COALESCE(tries, 1) < ?7 OR (COALESCE(tries, 1) = ?7
+             AND (created_at < ?5 OR (created_at = ?5 AND player < ?6))))))`,
+        ).bind(dateKey, m * 10, m * 10 + 9, me.height_dm, me.created_at, player, me.tries || 1).first();
         rank = (higher?.n || 0) + (same?.n || 0) + 1;
       }
       you = { rank, heightM: me.height_dm / 10, hidden: me.hidden === 1 || me.blocked === 1, retried: me.retried === 1, tries: me.tries || 1 };
@@ -214,7 +222,7 @@ export async function adminListBoard(url, ctx) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) throw new HttpError(400, 'invalid_field', { field: 'dateKey' });
   const r = await ctx.db.prepare(
     `SELECT player, name, height_dm, blocks, duration_s, hidden, blocked, created_at, retried, tries FROM daily_board WHERE date_key = ?1
-     ORDER BY height_dm DESC, created_at ASC, player ASC LIMIT ?2`,
+     ORDER BY height_dm DESC, COALESCE(tries, 1) ASC, created_at ASC, player ASC LIMIT ?2`,
   ).bind(dateKey, ADMIN_LIST).all();
   const day = await ctx.db.prepare('SELECT players FROM daily_board_days WHERE date_key = ?1').bind(dateKey).first();
   return json(200, {

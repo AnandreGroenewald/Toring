@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.13.0';
+export const VERSION = '1.13.1';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -310,6 +310,10 @@ export const EMOTE = Object.freeze({ cooldownMs: 5000, perMatch: 12, serverGapMs
 // "Nog 'n kans": extra Daaglikse Toring tries bought with coins. (1.12.1) Up to four a day, each dearer than the
 // last; then "Kom môre terug". `price` is the first one's (what a 1.12.0 page knew).
 export const DAILY_RETRY = Object.freeze({ price: 50, prices: Object.freeze([50, 100, 200, 400]) });
+// (1.13.1, the owner 11 Oct: "let's do the 3 and see how it goes") free Daaglikse Toring tries a day from `from` (the days
+// before keep one); the best try counts. "Nog 'n kans" (the prices above) comes after the free ones. The Worker's
+// GET /daily/config can change `free` and `from` without a new app (js/core/tries.js cleans what it says).
+export const DAILY_TRIES = Object.freeze({ free: 3, from: '2026-10-12', maxFree: 4 });
 
 // ---------------------------------------------------------------------------
 // Daily tower

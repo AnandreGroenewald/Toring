@@ -98,6 +98,8 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
       const feed = await cachedFeed('/sponsors', ctx, getSponsorsFeed);
       return stats.postStats(request, ctx, new Set([...feed.block, ...feed.premium].map((s) => s.id)));
     }
+    // (1.13.1) a share-button tap on a results screen: an anonymous count
+    if (path === '/stats/share') return method === 'POST' ? stats.postShare(request, ctx) : methodNotAllowed('POST');
     if (path === '/score') {
       if (method === 'POST') return stats.postScore(request, ctx);
       return method === 'GET' ? stats.getScore(request, url, ctx) : methodNotAllowed('GET, POST');
@@ -105,6 +107,11 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
     if (path === '/board') {
       if (method === 'POST') return board.postBoard(request, ctx);
       return method === 'GET' ? board.getBoard(request, url, ctx) : methodNotAllowed('GET, POST');
+    }
+    // (1.13.1) the Daaglikse Toring's free tries (the game asks at its start; a phone keeps the last answer)
+    if (path === '/daily/config') {
+      if (method !== 'GET') return methodNotAllowed('GET');
+      return json(200, { free: ctx.cfg.dailyFreeTries, from: ctx.cfg.dailyFreeFrom }, { 'Cache-Control': 'public, max-age=300' });
     }
     if (path === '/subscribe') return method === 'POST' ? subscribe(request, ctx) : methodNotAllowed('POST');
     if (path === '/status') return method === 'GET' ? status(url, ctx) : methodNotAllowed('GET');

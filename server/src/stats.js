@@ -221,6 +221,25 @@ export async function postStats(request, ctx, liveIds) {
   return json(200, { ok: true }, { 'Access-Control-Allow-Credentials': 'true' });
 }
 
+/**
+ * POST /stats/share (1.13.1, the owner: count shares) — one share-button tap on a results screen: an anonymous number per
+ * day and kind of game (`shares_daily`, `shares_practice`, `shares_duel`), added up in memory like the game counts.
+ */
+export async function postShare(request, ctx) {
+  checkOrigin(request, ctx.cfg);
+  await limit(ctx, request, 'share', ctx.cfg.rate.statsPerHour);
+  const body = await readBatch(request);
+  const dateKey = checkDateKey(body.dateKey, ctx.now);
+  if (!['daily', 'practice', 'duel'].includes(body.mode)) throw new HttpError(400, 'invalid_field', { field: 'mode' });
+  ctx.statsBuffer.add([{ dateKey, metric: `shares_${body.mode}`, sponsorId: '', n: 1 }]);
+  try {
+    await ctx.statsBuffer.flushIfDue(ctx.db, ctx.now, ctx.cfg.statsFlushMs);
+  } catch (err) {
+    ctx.log('warn', 'stats_flush_failed', { message: String(err?.message || err).slice(0, 200) });
+  }
+  return json(200, { ok: true }, { 'Access-Control-Allow-Credentials': 'true' });
+}
+
 function scoreAnswer(summary) {
   return { percentile: percentileOf(summary), players: summary.players };
 }

@@ -428,3 +428,20 @@ test('the daily housekeeping deletes counts older than about 13 months and keeps
   assert.deepEqual(h.db.q('SELECT date_key FROM daily_scores ORDER BY 1').map((r) => r.date_key), ['2026-11-05', '2027-11-30']);
   assert.ok(h.logs.some((l) => l.event === 'retention' && l.statsDeleted === 4));
 });
+
+// ------------------------------------------------------------------ (1.13.1) share taps
+test('POST /stats/share: a results share tap is an anonymous count per day and kind of game; nothing else is kept', async () => {
+  const h = createHarness();
+  const share = (body, opts = {}) => h.request('POST', '/stats/share', { body, ...opts });
+  assert.equal((await share({ dateKey: TODAY, mode: 'daily' })).status, 200);
+  await share({ dateKey: TODAY, mode: 'daily' }, { ip: '198.51.100.9' });
+  await share({ dateKey: TODAY, mode: 'duel' });
+  assert.equal((await share({ dateKey: TODAY, mode: 'sponsor' })).status, 400);
+  assert.equal((await share({ dateKey: '2020-01-01', mode: 'daily' })).status, 400, 'only today +/- 1 day');
+  assert.equal((await share({ dateKey: TODAY, mode: 'daily' }, { origin: 'https://evil.example' })).status, 403);
+  assert.equal((await h.request('GET', '/stats/share')).status, 405);
+  const c = counts(h);
+  assert.equal(c[`${TODAY}|shares_daily|`], 2);
+  assert.equal(c[`${TODAY}|shares_duel|`], 1);
+  assert.equal(Object.keys(c).length, 2, 'two counters, no player, address or time stored');
+});

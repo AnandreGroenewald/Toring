@@ -243,3 +243,16 @@ test('the game only talks to the API when a Worker is set (MATCH_API_URL or SPON
   assert.equal(cfg.match(/SPONSOR_API_URL = '(.*)'/)[1], '', 'sales shipped switched off');
   assert.match(cfg, /export const matchApiUrl = \(\) => MATCH_API_URL \|\| SPONSOR_API_URL;/);
 });
+
+test('(1.13.1) sendShareCount: a results share tap goes to /stats/share as { dateKey, mode } only; anything else: nothing', async () => {
+  const { sendShareCount } = await import('../js/audience.js');
+  const calls = [];
+  const fetchImpl = (url, init) => { calls.push({ url, init }); return Promise.resolve({ ok: true }); };
+  assert.equal(sendShareCount('https://api.example/', { dateKey: '2026-10-12', mode: 'daily' }, { fetchImpl, navigatorImpl: null }), true);
+  assert.equal(calls[0].url, 'https://api.example/stats/share');
+  assert.deepEqual(JSON.parse(calls[0].init.body), { dateKey: '2026-10-12', mode: 'daily' });
+  assert.equal(calls[0].init.credentials, 'omit');
+  assert.equal(sendShareCount('https://api.example/', { dateKey: '2026-10-12', mode: 'sponsor' }, { fetchImpl, navigatorImpl: null }), false);
+  assert.equal(sendShareCount('', { dateKey: '2026-10-12', mode: 'daily' }, { fetchImpl, navigatorImpl: null }), false);
+  assert.equal(calls.length, 1);
+});

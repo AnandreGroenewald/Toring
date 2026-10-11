@@ -789,22 +789,29 @@ export function createUI(bus) {
             emo('⭐'), ' ', fmtInt(r.score || 0),
             r.retried ? h('span', { class: 'done-retry', title: S.retryMark((r.tries || 2) - 1), 'aria-label': S.retryMark((r.tries || 2) - 1), text: ` 🔁${(r.tries || 2) > 2 ? r.tries - 1 : ''}` }) : null),
           countdownEl()));
+      const t = m.tries || { free: 1, played: 1 };   // (1.13.1) the day's free tries and the tries played
       if (rt && rt.status === 'ready') {
         // bought, not played yet: it's the big button now
         card.append(
           button('btn-big btn-green', [icon('play'), h('span', { text: S.retryPlay })], () => bus.emit('ui:play-daily')),
           button('btn-white btn-mini retry-see', [icon('chart'), h('span', { text: S.seeResult })], () => bus.emit('ui:daily-results'), { nav: false }));
+      } else if (price === 0) {
+        // (1.13.1) a free try left: "Speel weer · poging 2/3" is the big button
+        card.append(
+          button('btn-big btn-green free-try', [icon('play'), h('span', { text: S.freeTryBtn(t.played + 1, t.free) })], () => bus.emit('ui:daily-retry')),
+          button('btn-white btn-mini retry-see', [icon('chart'), h('span', { text: S.seeResult })], () => bus.emit('ui:daily-results'), { nav: false }),
+          h('p', { class: 'retry-note', text: S.freeTryHow(t.free) }));
       } else {
         card.append(button('btn-big btn-green', [icon('chart'), h('span', { text: S.seeResult })], () => bus.emit('ui:daily-results')));
-        if (!price && m.retryMax) {
-          card.append(h('p', { class: 'retry-note', text: S.retryMax }));   // all four used: "Kom môre terug"
+        if (price == null && m.retryMax) {
+          card.append(h('p', { class: 'retry-note', text: S.retryMax }));   // all used: "Kom môre terug"
         } else if (price) {
           const short = Math.max(0, price - (m.coins | 0));
           card.append(h('div', { class: 'retry-row' },
             button(`btn-white btn-mini retry-buy${short ? ' is-short' : ''}`,
               [h('span', { text: S.retryBtn }), h('span', { class: 'retry-price' }, emo(COIN), h('b', { text: String(price) }))],
               () => bus.emit('ui:daily-retry'), { nav: false, attrs: { 'aria-label': `${S.retryBtn}: ${price}` } }),
-            h('p', { class: 'retry-note', text: short ? S.retryNeed(short) : S.retryHow })));
+            h('p', { class: 'retry-note', text: short ? S.retryNeed(short) : t.free > 1 ? S.retryHowAfterFree(t.free) : S.retryHow })));
         }
       }
     } else {
@@ -1734,6 +1741,7 @@ export function createUI(bus) {
   }
 
   async function doShare(text, channel) {
+    bus.emit('ui:share-tap', { channel, screen: st.screen });   // (1.13.1) counted anonymously (results only)
     const res = await shareResult(text, channel);
     if (res === 'copied') toast(S.copied);
     else if (res === 'shared') toast(S.shared);
@@ -1800,7 +1808,7 @@ export function createUI(bus) {
 
     // a new record is the headline, whatever ended the run
     const head = duel ? duelHead(duel) : h('div', { class: 'res-head' },
-      h('div', { class: 'chip' }, emo(daily ? '🏗️' : '🧱'), h('span', { text: daily ? `${S.dailyN(r.dayNumber ?? '?')}${r.tryNo ? ` · 🔁 ${S.retryHead(r.tryNo)}` : r.retry || r.retried ? ` · 🔁 ${S.retryTries(r.tries || 2)}` : ''}` : S.practiceLabel })),
+      h('div', { class: 'chip' }, emo(daily ? '🏗️' : '🧱'), h('span', { text: daily ? `${S.dailyN(r.dayNumber ?? '?')}${r.tryNo ? ` · 🔁 ${S.tryHead(r.tryNo, r.freeTries || 1)}` : r.retry || r.retried ? ` · 🔁 ${S.retryTries(r.tries || 2)}` : ''}` : S.practiceLabel })),
       h('h2', { class: 'res-title' }, emo(isNewBest ? '🏆' : why.emoji), h('span', { text: isNewBest ? S.newRecord : why.title })),
       h('p', { class: 'res-sub', text: isNewBest ? `${why.emoji} ${why.title}` : why.sub }),
       // a saying for the outcome (same for everyone with the same daily seed and outcome); not part of the share text

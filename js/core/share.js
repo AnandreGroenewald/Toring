@@ -6,6 +6,7 @@ import { RATING_EMOJI, RATING_EMOJI_HC } from '../config.js';
 import { S, WEATHER_INFO } from './strings.js';
 import { fmtM, fmtInt } from './format.js';
 import { visitorEmoji } from './visitorrules.js';
+import { triesLabel } from './tries.js';
 
 const GRID_COLS = 10;
 const GRID_ROWS = 5;
@@ -41,7 +42,9 @@ export function buildShareText(result, { url, highContrast = false } = {}) {
   const lines = [];
   const height = fmtM(r.heightM || 0);
   const head = r.mode === 'practice' ? S.sharePracticeHead : S.shareDailyHead(r.dayNumber ?? '?');
-  lines.push(`${head}${r.retry || r.retried ? ' 🔁' : ''} 🏗️ ${height}`);   // (1.12: 🔁 a second try, "Nog 'n kans")
+  // (1.12: 🔁 a second try, "Nog 'n kans"); (1.13.1) on a day with free tries: "· 2/3", the tries played of them
+  const tries = triesLabel(r.tryNo || r.tries || 1, r.mode === 'daily' ? Number(r.freeTries) || 1 : 1);
+  lines.push(tries ? `${head} 🏗️ ${height} · ${tries}` : `${head}${r.retry || r.retried ? ' 🔁' : ''} 🏗️ ${height}`);
 
   const stats = [`⭐ ${fmtInt(r.score || 0)}`, `🎯 ${fmtInt(r.perfects || 0)}× ${S.perfects}`];
   if ((r.maxCombo || 0) >= 2) stats.push(`🔥 ${fmtInt(r.maxCombo)}`);
