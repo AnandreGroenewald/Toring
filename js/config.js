@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.13.3';
+export const VERSION = '1.13.4';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -321,6 +321,13 @@ export const DAILY_TRIES = Object.freeze({ free: 3, from: '2026-10-12', maxFree:
 // they can test everything"; off the leaderboard and the ranks; removable before production) The link
 // …/geskenk?toetser=CODE gives this device `coins` once. Only the code's SHA-256 is here (the code: Keychain "Stapel tester
 // gift code"). `on: false` turns the link off (before production); devices that took it stay off the board.
+// (1.13.4, the owner via Alfred 11 Oct 22:07: "Please make it that it refills the account if you press it, with 2000 coins. Build
+// it tonight") a Winkel button that tops the wallet up to `to` coins, any time it holds less (for testers, for now). Every player
+// sees it; players stay on the leaderboard and in the ranks. `on: false` takes it away (before production: the store texts say
+// coins are earned by playing); coins already given stay on the phones.
+// (22:08-22:09) "Make it work 3 times." … "Make it 3 times a day for 5 days.": `times` presses a day, on the `days` days from
+// `from` (South African dates: Mon 12 - Fri 16 Oct 2026); from the day after, the button is gone by itself
+export const REFILL = Object.freeze({ on: true, to: 2000, times: 3, per: 'day', from: '2026-10-12', days: 5 });
 export const TESTER_GIFT = Object.freeze({ on: true, coins: 100000, hash: '7b325f2da84141879a5a4b6ab2f0a72a0386a3d7a3519ece2f6a5a075553792d' });
 
 // ---------------------------------------------------------------------------

@@ -379,6 +379,10 @@ export const S_EN = {
   rankTester: 'Testers’ ranks don’t move (the tester gift).',
   testerGift: (n) => `🎁 Tester gift: ${n} coins! Thanks for testing. Testers don’t show on the leaderboard, and your ranks don’t move.`,
   testerGiftAgain: 'You already got the tester gift 🎁',
+  refillBtn: (n, left) => `Refill my coins (up to ${n}) · ${left} left`,
+  refillUsed: (times, perDay) => (perDay ? `Your ${times} refills for today are used. Again tomorrow.` : `Your ${times} refills are used.`),
+  refillFull: (n) => `You have ${n} coins or more`,
+  refillDone: (added, total) => `+${added} 🪙 · you now have ${total}`,
   testerGiftBad: 'This gift link doesn’t work (any more).',
   // (1.13) a live match that ended by a quit within its first 25 s
   rankTooQuick: 'Too short: a match that ends this quickly doesn’t count for your rank.',

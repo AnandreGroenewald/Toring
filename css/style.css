@@ -1629,6 +1629,10 @@ svg.ic {
   font-size: max(14px, calc(28 * var(--u)));
 }
 .shop-coins .emoji { font-size: calc(32 * var(--u)); }
+/* (1.13.4) the refill button under the Winkel's head */
+.shop-refill { margin-top: calc(12 * var(--u)); display: flex; justify-content: center; }
+.shop-refill .btn { width: 100%; }
+.shop-refill .shop-note { margin: 0; }
 .shop-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: calc(8 * var(--u)); margin-top: calc(16 * var(--u)); padding: calc(6 * var(--u)); border-radius: 999px; background: var(--panel); }
 .shop-tab { padding: calc(12 * var(--u)) 0; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: 900 max(13px, calc(24 * var(--u))) / 1.1 var(--font); }
 .shop-tab.on { background: #fff; color: var(--ink); box-shadow: 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(10, 34, 78, 0.12); }

@@ -230,6 +230,24 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       // private mode: the board still works for this visit
     }
   }
+  // (1.13.4) the Winkel's refill: how many presses filled the wallet (`n` on `day`, `total` in all). Its own key.
+  const refillKey = `${key}.refill`;
+  function readRefill() {
+    try {
+      const v = JSON.parse(readRaw(refillKey) || 'null');
+      const count = (x) => (Number.isInteger(x) && x >= 0 ? x : 0);
+      return { day: isDateKey(v?.day) ? v.day : null, n: count(v?.n), total: count(v?.total) };
+    } catch {
+      return { day: null, n: 0, total: 0 };
+    }
+  }
+  function writeRefill(r) {
+    try {
+      be.setItem(refillKey, JSON.stringify(r));
+    } catch {
+      // private mode: counted for this visit only
+    }
+  }
   // The daily reminder (the Android app): the time the player chose ('HH:MM', or null: off) and
   // whether they were asked. Its own key.
   const remindKey = `${key}.remind`;
@@ -988,6 +1006,33 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       const b = readBoard();
       b.hidden = !!hidden || !!b.tester;
       writeBoard(b);
+    },
+
+    /** (1.13.4) How many refills are left: `times` per day (`per: 'day'`) or in all (`per: 'ever'`). */
+    refillsLeft({ times = 3, per = 'day' } = {}) {
+      const r = readRefill();
+      const used = per === 'ever' ? r.total : r.day === today() ? r.n : 0;
+      return Math.max(0, times - used);
+    },
+
+    /**
+     * (1.13.4) The Winkel's "Vul my munte aan": the wallet up to `to` coins (outside the day's cap). A press that adds coins
+     * counts; one with the wallet already full doesn't, nor one with none left. Returns { added, coins, left, reason }
+     * (reason: 'full', 'used' or null).
+     */
+    refillCoins(to, { times = 3, per = 'day' } = {}) {
+      sync();
+      const left = this.refillsLeft({ times, per });
+      if (left <= 0) return { added: 0, coins: econ.coins, left: 0, reason: 'used' };
+      const want = Math.max(0, Math.floor(Number(to) || 0) - econ.coins);
+      if (!want) return { added: 0, coins: econ.coins, left, reason: 'full' };
+      const r = earnCoins(econ, want, { capped: false });
+      econ = r.economy;
+      persistEcon();
+      const c = readRefill();
+      const day = today();
+      writeRefill({ day, n: (c.day === day ? c.n : 0) + 1, total: c.total + 1 });
+      return { added: r.added, coins: econ.coins, left: left - 1, reason: null };
     },
 
     /** (1.13.2) The day this device took the testers' gift, or null. */

@@ -402,6 +402,11 @@ export const S = {
   // (1.13.2) the testers' gift from its link (…/geskenk?toetser=CODE)
   testerGift: (n) => `🎁 Toetser-geskenk: ${n} muntstukke! Dankie dat jy toets. Toetsers wys nie op die ranglys nie, en jou range skuif nie.`,
   testerGiftAgain: 'Jy het die toetser-geskenk reeds gekry 🎁',
+  // (1.13.4) the Winkel's refill button (for testers, for now)
+  refillBtn: (n, left) => `Vul my munte aan (tot ${n}) · nog ${left}`,
+  refillUsed: (times, perDay) => (perDay ? `Jou ${times} aanvullings vir vandag is op. Môre weer.` : `Jou ${times} aanvullings is op.`),
+  refillFull: (n) => `Jy het ${n} of meer munte`,
+  refillDone: (added, total) => `+${added} 🪙 · jy het nou ${total}`,
   testerGiftBad: 'Hierdie geskenk-skakel werk nie (meer) nie.',
   // (1.13) a live match that ended by a quit within its first 25 s (no rank farming by closing a tab)
   rankTooQuick: 'Te kort: ’n wedstryd wat so gou eindig, tel nie vir jou rang nie.',

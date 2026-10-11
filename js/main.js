@@ -2,7 +2,7 @@
 // pause/visibility, settings, service worker and debug hooks.
 // First of all: the language, before any other module reads a string (js/core/langboot.js).
 import { SAVED_LANG, PREVIEW_LANG } from './core/langboot.js';
-import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL, TESTER_GIFT } from './config.js';
+import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL, TESTER_GIFT, REFILL } from './config.js';
 import { bus } from './core/bus.js';
 import { S, POWERUP_INFO, COSMETIC_INFO, RANK_INFO } from './core/strings.js';
 import { fmtDateKey, fmtM, fmtInt } from './core/format.js';
@@ -417,10 +417,24 @@ function menuModel() {
 // ---------------------------------------------------------------------------
 function shopModel() {
   const e = store.getEconomy();
-  return { coins: e.coins, stock: e.stock, owned: e.owned, look: e.look, card: store.getCard(duelMode()), name: duelNick(), week: store.getWeek() };
+  return { coins: e.coins, stock: e.stock, owned: e.owned, look: e.look, card: store.getCard(duelMode()), name: duelNick(), week: store.getWeek(), refillTo: refillActive() ? REFILL.to : 0, refillLeft: store.refillsLeft(REFILL), refillTimes: REFILL.times, refillPerDay: REFILL.per !== 'ever', refillLast: todayKey() === refillLastDay() };
 }
 
 bus.on('ui:shop', (tab) => ui.showShop(shopModel(), typeof tab === 'string' ? tab : undefined));
+// (1.13.4, the owner: "refills the account if you press it, with 2000 coins", "3 times a day for 5 days") the Winkel's
+// "Vul my munte aan": on REFILL's days only (it switches itself off after the last)
+const refillLastDay = () => addDays(REFILL.from, REFILL.days - 1);
+const refillActive = () => REFILL.on && todayKey() >= REFILL.from && todayKey() <= refillLastDay();
+bus.on('ui:shop-refill', () => {
+  if (!refillActive()) return;
+  const r = store.refillCoins(REFILL.to, REFILL);
+  if (r.added) {
+    audio.play('heart');
+    ui.toast(S.refillDone(fmtInt(r.added), fmtInt(r.coins)), 3000);
+    coinsChanged();
+  }
+  ui.showShop(shopModel());
+});
 /** A new look from the shop shows at once on the Uitdagersreeks card underneath. */
 function lookChanged() {
   if (screen !== 'duel') return;

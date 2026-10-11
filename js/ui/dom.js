@@ -1218,6 +1218,12 @@ export function createUI(bus) {
       h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); } }, icon('close')),
       h('div', { class: 'sheet-head' }, emo('🛒'), h('h2', { id: 'stapel-shop-title', text: S.shop }),
         h('span', { class: 'shop-coins', role: 'status' }, emo(COIN), h('b', { text: fmtInt(m.coins || 0) }))),
+      // (1.13.4) "Vul my munte aan": up to m.refillTo coins (for testers, for now; REFILL in js/config.js)
+      m.refillTo ? h('div', { class: 'shop-refill' }, !m.refillLeft
+        ? h('p', { class: 'shop-note', text: S.refillUsed(m.refillTimes, m.refillPerDay && !m.refillLast) })
+        : (m.coins | 0) < m.refillTo
+          ? button('btn-green btn-mini', [emo(COIN), h('span', { text: S.refillBtn(fmtInt(m.refillTo), m.refillLeft) })], () => bus.emit('ui:shop-refill'), { nav: false })
+          : h('p', { class: 'shop-note', text: S.refillFull(fmtInt(m.refillTo)) })) : null,
       tabs,
       body,
       h('div', { class: 'sheet-foot' }, button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false })));
