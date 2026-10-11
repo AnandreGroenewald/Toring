@@ -112,7 +112,10 @@ export const S = {
     { icon: '🌊', text: 'Die water styg. Hou jou toring bo die vloedlyn.' },
     { icon: '❤️', text: 'Drie lewens. ’n Blok in die see kos een, elke vierde Perfek bring een terug.' },
     { icon: '🐒', text: 'Besoekers: ’n Perfek jaag Blouaap weg, tik Skelm Sakkie vas, en Hanswors bring geskenke. Hulle kos nooit ’n lewe nie.' },
-    { icon: '🗓️', text: 'Een Daaglikse Toring per dag, dieselfde vir almal. Nog ’n kans kos muntstukke. Oefen soveel jy wil.' },
+    // (1.13.1) with the day's free tries (from 12 Oct 2026: 3)
+    { icon: '🗓️', text: (free = 1) => (free > 1
+      ? `Een Daaglikse Toring per dag, dieselfde vir almal: ${free} gratis pogings en jou beste een tel. Daarna kos Nog ’n kans muntstukke. Oefen soveel jy wil.`
+      : 'Een Daaglikse Toring per dag, dieselfde vir almal. Nog ’n kans kos muntstukke. Oefen soveel jy wil.') },
   ],
   // the short lesson (1.10): a new player's first Oefen game, step by step
   lessonTry: 'Probeer die kort les',

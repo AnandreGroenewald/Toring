@@ -954,11 +954,12 @@ export function createUI(bus) {
   // How to play
   // ---------------------------------------------------------------------------
   function renderHowTo() {
+    const free = st.model?.tries?.free || 1;   // (1.13.1) the day's free tries, as on the daily card
     const steps = S.howToSteps.map((s, i) => {
       const c = STEP_COLORS[i % STEP_COLORS.length];
       return h('li', { class: 'step' },
         h('span', { class: 'step-ic', vars: { '--c': `var(--${c})`, '--cd': `var(--${c}-d)`, '--r': `${i % 2 ? 3 : -3}deg` } }, emo(s.icon)),
-        h('p', { text: s.text }));
+        h('p', { text: typeof s.text === 'function' ? s.text(free) : s.text }));
     });
     const sheet = h('div', { class: 'card sheet' },
       h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); } }, icon('close')),

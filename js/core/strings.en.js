@@ -110,7 +110,9 @@ export const S_EN = {
     { icon: '🌊', text: 'The water rises. Keep your tower above the flood line.' },
     { icon: '❤️', text: 'Three hearts. A block in the sea costs one, every fourth Perfect brings one back.' },
     { icon: '🐒', text: 'Visitors: a Perfect chases Blouaap off, tap Skelm Sakkie to catch him, and Hanswors brings gifts. They never cost a heart.' },
-    { icon: '🗓️', text: 'One Daily Tower a day, the same for everyone. One more try costs coins. Practise as much as you like.' },
+    { icon: '🗓️', text: (free = 1) => (free > 1
+      ? `One Daily Tower a day, the same for everyone: ${free} free tries and your best one counts. After that, One more try costs coins. Practise as much as you like.`
+      : 'One Daily Tower a day, the same for everyone. One more try costs coins. Practise as much as you like.') },
   ],
   lessonTry: 'Try the short lesson',
   lesson1: 'Tap anywhere to drop the block.',
