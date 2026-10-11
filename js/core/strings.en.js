@@ -110,6 +110,9 @@ export const S_EN = {
     { icon: '🌊', text: 'The water rises. Keep your tower above the flood line.' },
     { icon: '❤️', text: 'Three hearts. A block in the sea costs one, every fourth Perfect brings one back.' },
     { icon: '🐒', text: 'Visitors: a Perfect chases Blouaap off, tap Skelm Sakkie to catch him, and Hanswors brings gifts. They never cost a heart.' },
+    { icon: '⚔️', text: 'Challenger Series: play a friend, someone else or Robot Rikus. Against a real player you can play for coins: the winner gets both stakes.' },
+    { icon: '🏁', text: 'Race: each of you builds your own tower with the same blocks. Whoever reaches a 10 m mark first picks a punishment for the other. First to 50 m wins.' },
+    { icon: '🤝', text: 'Block by Block: one tower together, a block each in turn, 10 seconds to aim. Drop your block or knock blocks off and it costs a heart. 5 Perfects in a row send a sabotage.' },
     { icon: '🗓️', text: (free = 1) => (free > 1
       ? `One Daily Tower a day, the same for everyone: ${free} free tries and your best one counts. After that, One more try costs coins. Practise as much as you like.`
       : 'One Daily Tower a day, the same for everyone. One more try costs coins. Practise as much as you like.') },
@@ -120,7 +123,7 @@ export const S_EN = {
   lesson3: 'Perfect! Five in a row bring Hanswors with gifts.',
   lesson3b: 'Close. The nearer the middle, the more points.',
   lesson4: 'The water rises. A block in the sea costs a heart.',
-  lessonDone: 'You’re ready. Every day there’s one Daily Tower: the same blocks for everyone.',
+  lessonDone: 'You’re ready. Every day there’s one Daily Tower: the same blocks for everyone. In the Challenger Series you play others: Race or Block by Block.',
   lessonDaily: 'Play today’s tower',
   lessonMore: 'Keep practising',
   lessonSkip: 'Skip',
@@ -373,6 +376,10 @@ export const S_EN = {
   rankShieldOn: '🛡️ Shield on: your next loss won’t drop you.',
   rankPlacement: (n) => (n === 1 ? '1 placement match left: a win counts 1.5x.' : `${n} placement matches left: wins count 1.5x.`),
   rankNotCounted: 'Matches against Robot Rikus or a recording don’t count for your rank.',
+  rankTester: 'Testers’ ranks don’t move (the tester gift).',
+  testerGift: (n) => `🎁 Tester gift: ${n} coins! Thanks for testing. Testers don’t show on the leaderboard, and your ranks don’t move.`,
+  testerGiftAgain: 'You already got the tester gift 🎁',
+  testerGiftBad: 'This gift link doesn’t work (any more).',
   // (1.13) a live match that ended by a quit within its first 25 s
   rankTooQuick: 'Too short: a match that ends this quickly doesn’t count for your rank.',
   seasonBadges: 'Season badges:',
@@ -494,6 +501,7 @@ export const S_EN = {
   nameDefault: (dflt) => `You play as “${dflt}” again.`,
   boardYou: 'You',
   boardHiddenNote: 'You’re hidden: others don’t see you, but you see your place.',
+  boardTesterNote: 'Testers don’t show on the leaderboard, but you see your place.',
   boardSaving: 'Saving…',
   boardRetry: 'Not saved yet: we’ll try again once you’re online.',
   boardTitleYesterday: 'Yesterday’s leaderboard',

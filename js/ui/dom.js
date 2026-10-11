@@ -1973,7 +1973,7 @@ export function createUI(bus) {
       const name = rankName(rk.id);
       if (!rk.counted) {
         kids.push(h('span', { class: 'rw-rank is-quiet' }, emo(rk.emoji), h('b', { text: name }),
-          h('span', { class: 'rw-sub', text: reward.quick ? S.rankTooQuick : S.rankNotCounted })));
+          h('span', { class: 'rw-sub', text: rk.tester ? S.rankTester : reward.quick ? S.rankTooQuick : S.rankNotCounted })));
       } else {
         const title = rk.up ? S.rankUp(name) : rk.down ? S.rankDown(name) : rk.shielded ? S.rankShield(name) : name;
         // the bar moves from where it was to the new percentage (a new rank starts it from empty)
@@ -2100,7 +2100,7 @@ export function createUI(bus) {
    * without it when the server can't be reached. `state`: 'saving' while a change is on its way,
    * 'retry' when it didn't arrive (it goes again later). `title` names the day (today's by default).
    */
-  function showBoard({ board = null, loading = false, name = '', hidden = false, state = null, title = '', refresh = false } = {}) {
+  function showBoard({ board = null, loading = false, name = '', hidden = false, tester = false, state = null, title = '', refresh = false } = {}) {
     if (refresh && st.modal !== 'board') return;   // an answer that came after the sheet was closed
     const MEDAL = ['🥇', '🥈', '🥉'];
     const row = (t) => h('li', { class: `board-row${t.you ? ' is-you' : ''}` },
@@ -2125,11 +2125,12 @@ export function createUI(bus) {
     }
     // the note says what the server has: a change on its way, one that didn't arrive, or the board's own word
     const hiddenNow = board?.you ? board.you.hidden : hidden;
-    const note = state === 'saving' ? S.boardSaving : state === 'retry' ? S.boardRetry : hiddenNow ? S.boardHiddenNote : S.boardAs(name);
+    const note = state === 'saving' ? S.boardSaving : state === 'retry' ? S.boardRetry : tester ? S.boardTesterNote : hiddenNow ? S.boardHiddenNote : S.boardAs(name);
     // a rebuilt sheet keeps the keyboard where it was
     const focused = modals.board.contains(document.activeElement) ? ['board-check', 'close'].find((c) => document.activeElement.classList.contains(c)) : null;
     const toggle = h('input', { type: 'checkbox', class: 'board-check' });
-    toggle.checked = !hidden;
+    toggle.checked = !hidden && !tester;
+    toggle.disabled = tester;   // (1.13.2) testers stay off the leaderboard
     toggle.addEventListener('change', () => {
       audio.play('click');
       bus.emit('ui:board-hide', !toggle.checked);

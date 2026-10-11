@@ -112,6 +112,10 @@ export const S = {
     { icon: '🌊', text: 'Die water styg. Hou jou toring bo die vloedlyn.' },
     { icon: '❤️', text: 'Drie lewens. ’n Blok in die see kos een, elke vierde Perfek bring een terug.' },
     { icon: '🐒', text: 'Besoekers: ’n Perfek jaag Blouaap weg, tik Skelm Sakkie vas, en Hanswors bring geskenke. Hulle kos nooit ’n lewe nie.' },
+    // (1.13.2, the owner: "add the challenger and brick by brick series to the tutorial")
+    { icon: '⚔️', text: 'Uitdagersreeks: speel teen ’n vriend, iemand anders of Robot Rikus. Teen ’n regte speler kan julle vir muntstukke speel: die wenner kry albei s’n.' },
+    { icon: '🏁', text: 'Wedloop: elkeen bou sy eie toring met dieselfde blokke. Wie eerste by ’n 10 m-merk kom, kies ’n straf vir die ander. Eerste tot 50 m wen.' },
+    { icon: '🤝', text: 'Blok vir Blok: een toring saam, om die beurt ’n blok, 10 sekondes om te mik. Val jou blok of gooi jy blokke af, kos dit ’n hartjie. 5 Perfeks op ’n ry stuur ’n sabotasie.' },
     // (1.13.1) with the day's free tries (from 12 Oct 2026: 3)
     { icon: '🗓️', text: (free = 1) => (free > 1
       ? `Een Daaglikse Toring per dag, dieselfde vir almal: ${free} gratis pogings en jou beste een tel. Daarna kos Nog ’n kans muntstukke. Oefen soveel jy wil.`
@@ -124,7 +128,7 @@ export const S = {
   lesson3: 'Perfek! Vyf op ’n ry bring Hanswors met geskenke.',
   lesson3b: 'Amper. Hoe nader aan die middel, hoe meer punte.',
   lesson4: 'Die water styg. ’n Blok in die see kos ’n lewe.',
-  lessonDone: 'Jy is reg. Elke dag is daar een Daaglikse Toring: dieselfde blokke vir almal.',
+  lessonDone: 'Jy is reg. Elke dag is daar een Daaglikse Toring: dieselfde blokke vir almal. In die Uitdagersreeks speel jy teen ander: Wedloop of Blok vir Blok.',
   lessonDaily: 'Speel vandag se toring',
   lessonMore: 'Oefen verder',
   lessonSkip: 'Slaan oor',
@@ -392,6 +396,11 @@ export const S = {
   rankShieldOn: '🛡️ Skild aan: jou volgende verlies laat jou nie val nie.',
   rankPlacement: (n) => (n === 1 ? 'Nog 1 plasingswedstryd: ’n oorwinning tel 1,5 keer.' : `Nog ${n} plasingswedstryde: oorwinnings tel 1,5 keer.`),
   rankNotCounted: 'Teen Robot Rikus of ’n opname tel nie vir jou rang nie.',
+  rankTester: 'Toetsers se range skuif nie (die toetser-geskenk).',
+  // (1.13.2) the testers' gift from its link (…/geskenk?toetser=CODE)
+  testerGift: (n) => `🎁 Toetser-geskenk: ${n} muntstukke! Dankie dat jy toets. Toetsers wys nie op die ranglys nie, en jou range skuif nie.`,
+  testerGiftAgain: 'Jy het die toetser-geskenk reeds gekry 🎁',
+  testerGiftBad: 'Hierdie geskenk-skakel werk nie (meer) nie.',
   // (1.13) a live match that ended by a quit within its first 25 s (no rank farming by closing a tab)
   rankTooQuick: 'Te kort: ’n wedstryd wat so gou eindig, tel nie vir jou rang nie.',
   seasonBadges: 'Seisoenkentekens:',
@@ -517,6 +526,7 @@ export const S = {
   nameDefault: (dflt) => `Jy speel weer as “${dflt}”.`,
   boardYou: 'Jy',
   boardHiddenNote: 'Jy is versteek: ander sien jou nie, maar jy sien jou plek.',
+  boardTesterNote: 'Toetsers wys nie op die ranglys nie, maar jy sien jou plek.',   // (1.13.2) the testers' gift
   boardSaving: 'Stoor…',
   boardRetry: 'Nog nie gestoor nie: ons probeer weer sodra jy aanlyn is.',
   boardTitleYesterday: 'Gister se ranglys',

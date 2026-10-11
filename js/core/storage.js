@@ -217,9 +217,10 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
         hidden: v?.hidden === true,
         posted: isDateKey(v?.posted) ? v.posted : null,
         pending: v?.pending === true,
+        tester: isDateKey(v?.tester) ? v.tester : null,   // (1.13.2) the day this device took the testers' gift
       };
     } catch {
-      return { player: null, hidden: false, posted: null, pending: false };
+      return { player: null, hidden: false, posted: null, pending: false, tester: null };
     }
   }
   function writeBoard(b) {
@@ -977,15 +978,39 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       return b.player;
     },
 
-    /** Whether the player chose to stay off the leaderboard (they still see their own place). */
+    /** Whether the player stays off the leaderboard (they still see their own place): their choice, or a tester. */
     getBoardHidden() {
-      return readBoard().hidden;
+      const b = readBoard();
+      return b.hidden || !!b.tester;
     },
 
     setBoardHidden(hidden) {
       const b = readBoard();
-      b.hidden = !!hidden;
+      b.hidden = !!hidden || !!b.tester;
       writeBoard(b);
+    },
+
+    /** (1.13.2) The day this device took the testers' gift, or null. */
+    getTester() {
+      return readBoard().tester;
+    },
+
+    /**
+     * (1.13.2, the owner: 100 000 coins for everyone in testing, off the leaderboard and the ranks) The testers' gift,
+     * once per device: `n` coins outside the day's cap (up to MAX_COINS), then off the leaderboard for good.
+     * Returns { ok, added, coins } (ok false: this device already took it).
+     */
+    claimTesterGift(n) {
+      sync();
+      const b = readBoard();
+      if (b.tester) return { ok: false, added: 0, coins: econ.coins };
+      const r = earnCoins(econ, n, { capped: false });
+      econ = r.economy;
+      persistEcon();
+      b.tester = today();
+      b.hidden = true;
+      writeBoard(b);
+      return { ok: true, added: r.added, coins: econ.coins };
     },
 
     /** The last day whose result reached the leaderboard (later visits only read it). */
@@ -1167,6 +1192,8 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       const reward = rollSeasons();
       const m = modeOf(mode);
       if (!live || (outcome !== 'won' && outcome !== 'lost')) return rankView(m, { counted: false, delta: 0, reward });
+      // (1.13.2) a tester's rank stays where it is (the testers' gift: off the leaderboard and the ranks)
+      if (readBoard().tester) return rankView(m, { counted: false, delta: 0, reward, tester: true });
       const r = rankAfterMatch(econ.ranks[m], { outcome, opp, season: seasonOf(today()) });
       econ.ranks[m] = r.rank;
       econ = grantRankLooks(econ, bestTier(econ));

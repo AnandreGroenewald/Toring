@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.13.1';
+export const VERSION = '1.13.2';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -314,6 +314,11 @@ export const DAILY_RETRY = Object.freeze({ price: 50, prices: Object.freeze([50,
 // before keep one); the best try counts. "Nog 'n kans" (the prices above) comes after the free ones. The Worker's
 // GET /daily/config can change `free` and `from` without a new app (js/core/tries.js cleans what it says).
 export const DAILY_TRIES = Object.freeze({ free: 3, from: '2026-10-12', maxFree: 4 });
+// (1.13.2, the owner via Alfred 11 Oct 13:18: "a testers-only gift of 100,000 coins for everyone currently in testing, so
+// they can test everything"; off the leaderboard and the ranks; removable before production) The link
+// …/geskenk?toetser=CODE gives this device `coins` once. Only the code's SHA-256 is here (the code: Keychain "Stapel tester
+// gift code"). `on: false` turns the link off (before production); devices that took it stay off the board.
+export const TESTER_GIFT = Object.freeze({ on: true, coins: 100000, hash: '7b325f2da84141879a5a4b6ab2f0a72a0386a3d7a3519ece2f6a5a075553792d' });
 
 // ---------------------------------------------------------------------------
 // Daily tower

@@ -3,7 +3,7 @@
 **Stapel hoog. Staan sterk.**
 
 ’n Gratis Afrikaanse blok-stapel-speletjie vir jou foon, reg in die blaaier.
-Elke dag is daar een **Daaglikse Toring**: dieselfde blokke en dieselfde weer vir almal, en jy kry een poging.
+Elke dag is daar een **Daaglikse Toring**: dieselfde blokke en dieselfde weer vir almal, met drie gratis pogings (jou beste een tel).
 Bou so hoog as wat jy kan, land blokke reg in die middel vir ’n **Perfek!**, oorleef die weer, en bly bo die stygende water.
 Deel dan jou toring op WhatsApp.
 

@@ -2,7 +2,7 @@
 // pause/visibility, settings, service worker and debug hooks.
 // First of all: the language, before any other module reads a string (js/core/langboot.js).
 import { SAVED_LANG, PREVIEW_LANG } from './core/langboot.js';
-import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL } from './config.js';
+import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL, TESTER_GIFT } from './config.js';
 import { bus } from './core/bus.js';
 import { S, POWERUP_INFO, COSMETIC_INFO, RANK_INFO } from './core/strings.js';
 import { fmtDateKey, fmtM, fmtInt } from './core/format.js';
@@ -304,6 +304,7 @@ function renderBoard({ loading = false, refresh = true } = {}) {
     loading: loading && !last,
     name: duelNick(),
     hidden: store.getBoardHidden(),
+    tester: !!store.getTester(),
     state: boardSaving > 0 ? 'saving' : mine && store.getBoardPending() ? 'retry' : null,
     title: boardDate === todayKey() ? S.boardTitle : boardDate === addDays(todayKey(), -1) ? S.boardTitleYesterday : S.dailyN(dayNumber(boardDate)),
     refresh,
@@ -1556,6 +1557,46 @@ if (params.has('teen') || params.has('kamer') || params.has('lang')) {
     // sandboxed frames: the parameters simply stay
   }
 }
+// (1.13.2) The testers' gift from its link (…/geskenk?toetser=CODE; the app doesn't claim that path, so it opens in the
+// browser): the code's SHA-256 must match TESTER_GIFT.hash; once per device; then off the leaderboard and the ranks for
+// good. Taken off the address at once (and /geskenk back to the game's own address); given once the menu is up (a slow
+// phone's start would hide the thank-you), from onReady.
+const testerCode = params.get('toetser');
+if (testerCode !== null) {
+  try {
+    const q = new URLSearchParams(location.search);
+    q.delete('toetser');
+    const rest = q.toString();
+    history.replaceState(history.state, '', location.pathname.replace(/\/geskenk\/?$/, '/') + (rest ? `?${rest}` : '') + location.hash);
+  } catch {
+    // sandboxed frames: the parameter simply stays
+  }
+}
+async function claimTesterGift(code) {
+  if (!TESTER_GIFT.on) return;
+  let ok = false;
+  try {
+    const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(code).trim().toLowerCase()));
+    ok = Array.from(new Uint8Array(d), (x) => x.toString(16).padStart(2, '0')).join('') === TESTER_GIFT.hash;
+  } catch {
+    ok = false;   // (no crypto.subtle outside https)
+  }
+  if (!ok) {
+    ui.toast(S.testerGiftBad, 4000);
+    return;
+  }
+  const shown = !store.getBoardHidden();
+  const r = store.claimTesterGift(TESTER_GIFT.coins);
+  if (!r.ok) {
+    ui.toast(S.testerGiftAgain, 4000);
+    return;
+  }
+  audio.play('heart');
+  ui.toast(S.testerGift(fmtInt(r.added)), 7000);
+  ui.setMenuCoins(r.coins);
+  coinsChanged();
+  if (shown) boardChanged();   // a result already on today's (or yesterday's) board goes off it too
+}
 let duelFlow = 0;        // bumps on every new search or cancel, so a late answer can't start a stale match
 let duelTimer = 0;
 let lastDuelKind = null;
@@ -2282,6 +2323,7 @@ function onReady() {
   ui.setLoading(false);
   if (recovered.length) ui.toast(recoveredCoins ? `${S.unfinished} +${recoveredCoins} 🪙` : S.unfinished, 3600);
   else if (liveElsewhere(todayKey())) ui.toast(S.otherTab, 3000);
+  if (testerCode !== null) setTimeout(() => claimTesterGift(testerCode), 900);   // (1.13.2) the testers' gift
   if (DEBUG) startFpsMeter();
   setTimeout(capFrames, 1500);   // (once the start-up's work is done: a busy start would measure low)
   window.__stapel.booted = true;
