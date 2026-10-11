@@ -62,7 +62,8 @@
   };
 
   // Challenge links (AndroidManifest: App Links): a friend's room (?kamer=), run (?teen=) or daily height
-  // (?klop=). One that started the app reloads the game with its query (read at start), once: Android
+  // (?klop=), and (1.13.3) the testers' gift (?toetser=). One that started the app reloads the game with its
+  // query (read at start), once: Android
   // hands the same link again when the app comes back from Recents, so a link opened in the last
   // LAUNCH_ONCE_MS is let go. One that comes while the game runs is handed over as 'stapel:link' (no
   // reload: a tower in progress stays); the starting link, which Capacitor also hands over, isn't.
@@ -70,7 +71,7 @@
   function linkQuery(url) {
     try {
       var q = new URL(url).search;
-      return /[?&](kamer|teen|klop)=/.test(q) ? q : '';
+      return /[?&](kamer|teen|klop|toetser)=/.test(q) ? q : '';
     } catch (err) {
       return '';
     }
@@ -80,7 +81,7 @@
     launchUrl = (r && r.url) || null;
     return launchUrl;
   }, function () { return null; });
-  if (!/[?&](kamer|teen|klop)=/.test(location.search)) {
+  if (!/[?&](kamer|teen|klop|toetser)=/.test(location.search)) {
     launched.then(function (url) {
       var q = url ? linkQuery(url) : '';
       if (!q) return;

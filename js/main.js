@@ -1158,6 +1158,9 @@ window.addEventListener('stapel:link', (e) => {
   } catch {
     return;
   }
+  // (1.13.3) the testers' gift opened in the app while it runs (App Links: …/?toetser=CODE): given at once
+  const gift = new URLSearchParams(q).get('toetser');
+  if (gift !== null) claimTesterGift(gift);
   const klop = /[?&]klop=/.test(q) ? loadChallenge(q, todayKey()) : null;
   if (klop) {
     challengeRaw = klop;   // "Kan jy my klop?": on the daily card (now, or when the menu comes back)
