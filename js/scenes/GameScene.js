@@ -253,6 +253,18 @@ function restsOn(geom, face) {
 
 /** A single rectangle (plank, slab, brick, crate, cube, pillar): any side can be the top. */
 const isRect = (geom) => !geom.poly && (!geom.parts || geom.parts.length === 1);
+/** (1.12.2) The highest point (smallest y) of a convex outline between x0 and x1 (Infinity when it isn't there). */
+function outlineTop(vs, x0, x1) {
+  let top = Infinity;
+  for (let i = 0; i < vs.length; i++) {
+    const a = vs[i];
+    const c = vs[(i + 1) % vs.length];
+    if (a.x >= x0 && a.x <= x1 && a.y < top) top = a.y;
+    if ((a.x - x0) * (c.x - x0) < 0) top = Math.min(top, a.y + ((x0 - a.x) / (c.x - a.x)) * (c.y - a.y));
+    if ((a.x - x1) * (c.x - x1) < 0) top = Math.min(top, a.y + ((x1 - a.x) / (c.x - a.x)) * (c.y - a.y));
+  }
+  return top;
+}
 
 /**
  * Width that carries a load placed on the shape (sets how forgiving Perfek/Goed are):
@@ -1985,7 +1997,7 @@ export class GameScene extends Phaser.Scene {
     this.landedCount++;
     this.advance(f);
     if (f.special === 'foundation' && !this.over) {
-      this.landFoundation(f);
+      this.landFoundation(f, supportBody === this.baseBody ? null : supportBody.gameBlock);
       return;
     }
 
@@ -2418,11 +2430,13 @@ export class GameScene extends Phaser.Scene {
    * it (like Hanswors's log), never along the tilt of a crooked block; then it and the tower under it set as cement, a
    * new foundation.
    */
-  landFoundation(f) {
+  landFoundation(f, sup) {
     const M = this.M;
     const g = f.geom;
     const x = f.centerX;
-    const top = this.highestUnder(x - g.cx, x + g.w - g.cx, f);
+    let top = this.highestUnder(x - g.cx, x + g.w - g.cx, f);
+    // (only its tilted corner touched something past its level span: it sets on what it touched, never lower)
+    if (!Number.isFinite(top)) top = sup && !sup.destroyed ? sup.top : LAYOUT.baseTopY;
     M.Sleeping.set(f.body, false);
     M.Body.setAngle(f.body, 0);
     M.Body.setPosition(f.body, { x, y: top - (g.h - g.cy) });
@@ -3101,21 +3115,35 @@ export class GameScene extends Phaser.Scene {
     const over = s.block ? x < s.block.left || x > s.block.right : Math.abs(x - BASE_CX) > BASE_HALF_W;
     const hit = s.found && !deep;
     out.miss = !hit || over;
-    const landTop = hit ? s.top : this.towerTopY + GHOST_MISS_DROP;
+    let landTop = hit ? s.top : this.towerTopY + GHOST_MISS_DROP;
+    if (this.curSpec?.foundation) {
+      // (1.12.2) the Fondamentblok: where it will set (the outline under its level span), and it never falls once it
+      // touches the tower, so only "nothing under it" is a miss
+      const ft = this.highestUnder(x - g.cx, x + g.w - g.cx);
+      const fhit = Number.isFinite(ft) && ft <= this.towerTopY + 2 * GHOST_MISS_DROP;
+      out.miss = !fhit;
+      landTop = fhit ? ft : this.towerTopY + GHOST_MISS_DROP;
+    }
     out.x = x;
     out.y = landTop - (g.h - g.cy);
     out.targetX = this.supportTop(hit ? s.block : this.topBlock).x;
     return out;
   }
 
-  /** (1.12.2) The highest point of the tower over [x0, x1] (any block standing there, the base), leaving out `skip`. */
+  /**
+   * (1.12.2) The highest point of the tower over [x0, x1]: the real outline of each block standing there (a crooked
+   * block counts only where it is under the span, not its whole box) and the base, leaving out `skip`. Infinity when
+   * nothing is under the span.
+   */
   highestUnder(x0, x1, skip = null) {
     let top = BASE_CX - BASE_HALF_W < x1 && BASE_CX + BASE_HALF_W > x0 ? LAYOUT.baseTopY : Infinity;
     for (const b of this.tower) {
       if (b === skip || b.destroyed || b.state === 'lost' || !b.body) continue;
-      if (b.left < x1 && b.right > x0 && b.top < top) top = b.top;
+      if (b.left >= x1 || b.right <= x0 || b.top >= top) continue;
+      const parts = b.body.parts;
+      for (let k = parts.length > 1 ? 1 : 0; k < parts.length; k++) top = Math.min(top, outlineTop(parts[k].vertices, x0, x1));
     }
-    return Number.isFinite(top) ? top : LAYOUT.baseTopY;
+    return top;
   }
 
   /** Highest support surface overlapping [x0, x1]: dynamic tower blocks, the top of the cement, the base. */
