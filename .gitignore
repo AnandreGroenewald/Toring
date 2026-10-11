@@ -14,3 +14,5 @@ pages-dist/
 !.dev.vars.example
 .env*
 !.env.example
+# Claude Code's own folder (agent worktrees): never committed
+.claude/
