@@ -334,15 +334,16 @@ bus.on('ui:account-native', () => {
 });
 bus.on('ui:account-signout', () => {
   ui.setAccountNote(null, { working: true });
+  // (1.14) signing out keeps everything on this device; Instellings stays open, its account part shows the sign-in again
   account.signOut().then(() => {
-    ui.closeModal();
+    ui.showAccount(accountStatus());
     ui.toast(S.accountBye, 3000);
   }, (err) => ui.setAccountNote(err.message === 'out' ? S.accountOut : S.accountErr(err.message)));
 });
 bus.on('ui:account-delete', () => {
   ui.setAccountNote(null, { working: true });
   account.deleteAccount().then(() => {
-    ui.closeModal();
+    ui.showAccount(accountStatus());
     ui.toast(S.accountDeleted, 3000);
   }, (err) => ui.setAccountNote(err.message === 'out' ? S.accountOut : S.accountErr(err.message)));
 });

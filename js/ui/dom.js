@@ -64,6 +64,8 @@ const ICONS = {
   // (1.12) the Uitdagersreeks: two crossed swords, drawn like the other icons (it was the ⚔️ emoji)
   vs: '<path d="M3 3h3l10 10-3 3L3 6V3zm11.2 14.6 3.4-3.4 1.4 1.4-3.4 3.4-1.4-1.4zm3.3 1.3 1.4-1.4 2.1 2.1-1.4 1.4-2.1-2.1zM21 3h-3L8 13l3 3L21 6V3zM9.8 17.6l-3.4-3.4-1.4 1.4 3.4 3.4 1.4-1.4zm-3.3 1.3-1.4-1.4L3 19.6 4.4 21l2.1-2.1z"/>',
   eye: `<path ${STROKE} stroke-width="2.3" d="M2.5 12s3.6-6.4 9.5-6.4S21.5 12 21.5 12s-3.6 6.4-9.5 6.4S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3.2"/>`,
+  // (1.14) ⚙️ Instellings
+  gear: `<path ${STROKE} stroke-width="2.2" d="M10.3 3h3.4l.5 2.4 1.7.8 2.1-1.3 2.4 2.4-1.3 2.1.8 1.7 2.4.5v3.4l-2.4.5-.8 1.7 1.3 2.1-2.4 2.4-2.1-1.3-1.7.8-.5 2.4h-3.4l-.5-2.4-1.7-.8-2.1 1.3-2.4-2.4 1.3-2.1-.8-1.7L3 13.7v-3.4l2.4-.5.8-1.7-1.3-2.1 2.4-2.4 2.1 1.3 1.7-.8z"/><circle ${STROKE} stroke-width="2.2" cx="12" cy="12" r="3.1"/>`,
 };
 
 // ---------------------------------------------------------------------------
@@ -174,7 +176,7 @@ export function createUI(bus) {
     board: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-board-title', tabindex: '-1' }),
     remind: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-remind-title', tabindex: '-1' }),
     name: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-name-title', tabindex: '-1' }),
-    account: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-account-title', tabindex: '-1' }),
+    settings: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-settings-title', tabindex: '-1' }),   // (1.14) ⚙️ Instellings (with the account)
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -215,7 +217,7 @@ export function createUI(bus) {
   // buttons take taps: a tap anywhere else still drops a block)
   const emoteBar = h('div', { class: 'emote-bar', role: 'group', 'aria-label': S.emoteLabel, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.account, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // Measures env(safe-area-inset-*) so layout() can work out how much of each
@@ -610,22 +612,24 @@ export function createUI(bus) {
     return list;
   }
 
+  /** A setting switched (the pause card's toggles, or an Instellings row): saved, and every switch follows. */
+  function setToggle(key, val) {
+    st.settings[key] = val;
+    syncToggles();
+    bus.emit('ui:settings', { [key]: val });
+    if (key === 'sound' && val) {
+      audio.unlock();
+      audio.play('click');
+    } else if (key === 'vibration' && val) {
+      haptics.tap();
+    } else if (key === 'highContrast') {
+      root.classList.toggle('hc', val);
+    }
+  }
+
   function toggleBtn(key) {
     const btn = dockBtn('soundOn', LABELS[key], null, { 'data-setting': key });
-    btn.addEventListener('click', () => {
-      const val = !st.settings[key];
-      st.settings[key] = val;
-      syncToggles();
-      bus.emit('ui:settings', { [key]: val });
-      if (key === 'sound' && val) {
-        audio.unlock();
-        audio.play('click');
-      } else if (key === 'vibration' && val) {
-        haptics.tap();
-      } else if (key === 'highContrast') {
-        root.classList.toggle('hc', val);
-      }
-    });
+    btn.addEventListener('click', () => setToggle(key, !st.settings[key]));
     paintToggle(btn);
     return btn;
   }
@@ -643,6 +647,7 @@ export function createUI(bus) {
 
   function syncToggles() {
     for (const btn of root.querySelectorAll('[data-setting]')) paintToggle(btn);
+    for (const b of root.querySelectorAll('[data-setting-row]')) paintSettingRow(b);   // (1.14) Instellings
   }
 
   /**
@@ -853,7 +858,8 @@ export function createUI(bus) {
       dockBtn('help', S.howToShort, () => { audio.play('click'); showHowTo(); }, { 'aria-label': S.howTo, title: S.howTo }),
       dockBtn('chart', S.stats, () => { audio.play('click'); showStats(st.model?.stats); }),
       shopBtn(m.coins),
-      toggleBtns());
+      // (1.14, the owner: like 8 Ball Pool) ⚙️ Instellings: Klank and Vibrasie moved in there (the pause card keeps its toggles)
+      dockBtn('gear', S.settings, () => { audio.play('click'); showSettings(); }, { class: 'dock-btn dock-settings' }));
 
 
     const adSlot = h('div', { class: 'menu-ad' });
@@ -1055,11 +1061,9 @@ export function createUI(bus) {
         button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false }),
         h('p', { class: 'version-note', text: S.versionNote(VERSION) })));
     // the daily reminder (only in the Android app)
-    if (st.remindOn) sheet.querySelector('.stats-foot').prepend(button('btn-white', [emo('🔔'), h('span', { text: S.remindButton(st.remindTime) })], () => bus.emit('ui:remind'), { nav: false }));
+    // (1.14) the daily reminder moved to ⚙️ Instellings (🔔 Herinneringe)
     // (1.12.1) your nickname (the ranglys and your opponents see it)
     sheet.querySelector('.stats-foot').prepend(button('btn-white btn-mini', [emo('✏️'), h('span', { text: S.nameChange })], () => bus.emit('ui:name', 'stats'), { nav: false }));
-    // (1.14) Sign in with Google: save the progress (only where sign-in is on; never needed to play)
-    if (st.account) sheet.querySelector('.stats-foot').prepend(button('btn-white', [emo('☁️'), h('span', { text: S.accountButton(st.account.signedIn) })], () => bus.emit('ui:account'), { nav: false }));
     // today's leaderboard (only when the game can reach the server)
     if (st.boardOn) sheet.querySelector('.stats-foot').prepend(button('btn-blue', [emo('🏆'), h('span', { text: S.board })], () => bus.emit('ui:board'), { nav: false }));
     modals.stats.replaceChildren(sheet);
@@ -2151,7 +2155,7 @@ export function createUI(bus) {
   }
 
   /** (1.14) Is the account sheet open (a sign-in from it shows its notes there)? */
-  const accountSheetOpen = () => st.modal === 'account';
+  const accountSheetOpen = () => st.modal === 'settings';
 
   function googleBtn() {
     const g = document.createElement('span');
@@ -2169,38 +2173,42 @@ export function createUI(bus) {
   /** What the account sheet shows (js/account.js status()); null or `on` false: sign-in is off here. */
   function setAccount(status) {
     st.account = status && status.on ? status : null;
-    if (st.modal === 'account') renderAccount();
+    if (st.modal === 'settings') renderAccount();
   }
 
-  /** The account sheet. */
+  /** (1.14) The account lives in ⚙️ Instellings: "Bêre jou vordering" (or the privacy page's ?rekening) opens it there. */
   function showAccount(status) {
     if (status !== undefined) st.account = status && status.on ? status : null;
-    if (!st.account) return;
-    st.accountAsk = null;
-    st.accountMsg = null;
-    st.accountWorking = false;
-    st.accountView = null;
-    renderAccount();
-    openModal('account');
+    showSettings();
   }
 
   /** A line under the buttons (a sign-in that didn't work, or no internet for signing out); `working`: wait. */
   function setAccountNote(text = null, { working = false } = {}) {
     st.accountMsg = text;
     st.accountWorking = !!working;
-    if (st.modal === 'account') renderAccount();
+    if (st.modal === 'settings') renderAccount();
   }
 
+  /** (1.14) The account section of Instellings, drawn again in place (nothing at all while sign-in isn't open). */
   function renderAccount() {
+    const box = modals.settings.querySelector('.settings-account');
+    if (!box) return;
     const a = st.account;
-    if (!a) return;
+    if (!a) {
+      box.replaceChildren();
+      box.hidden = true;
+      st.accountView = null;
+      return;
+    }
+    box.hidden = false;
     const ask = st.accountAsk;
     const min = a.at ? Math.max(0, Math.floor((Date.now() - a.at) / 60000)) : null;
     // the same view again (a sync started or ended with nothing new to show): leave Google's button alone
     const view = JSON.stringify([ask, a.signedIn, a.out, a.native, a.busy, a.error, min, st.accountMsg, st.accountWorking]);
-    if (view === st.accountView && modals.account.firstChild) return;
+    if (view === st.accountView && box.firstChild) return;
     st.accountView = view;
     const wait = st.accountWorking;
+    const msg = st.accountMsg ? h('p', { class: 'account-msg', role: 'alert', text: st.accountMsg }) : null;
     if (ask) {
       const del = ask === 'delete';
       const back = () => {
@@ -2208,58 +2216,110 @@ export function createUI(bus) {
         st.accountMsg = null;
         renderAccount();
       };
-      modals.account.replaceChildren(h('div', { class: 'card sheet account-sheet' },
-        closeX(back),
-        h('div', { class: 'sheet-head' }, emo(del ? '⚠️' : '☁️'), h('h2', { id: 'stapel-account-title', text: del ? S.accountDelete : S.accountSignOut })),
-        h('div', { class: 'sheet-body' },
-          h('p', { class: 'account-ask', text: del ? S.accountDeleteAsk : S.accountSignOutAsk }),
-          st.accountMsg ? h('p', { class: 'account-msg', role: 'alert', text: st.accountMsg }) : null),
-        h('div', { class: 'sheet-foot account-foot' },
+      box.replaceChildren(...[
+        h('p', { class: 'account-ask' }, emo(del ? '⚠️' : '☁️'), h('span', { text: del ? S.accountDeleteAsk : S.accountSignOutAsk })),
+        msg,
+        h('div', { class: 'account-foot' },
           button(del ? 'btn-klei' : 'btn-blue', h('span', { text: wait ? '…' : del ? S.accountDeleteYes : S.accountSignOut }), () => {
             if (st.accountWorking) return;
             bus.emit(del ? 'ui:account-delete' : 'ui:account-signout');
           }, { nav: false, attrs: wait ? { disabled: true } : {} }),
-          button('btn-white', h('span', { text: S.accountCancel }), back, { nav: false }))));
+          button('btn-white', h('span', { text: S.accountCancel }), back, { nav: false }))].filter(Boolean));
       return;
     }
-    const body = h('div', { class: 'sheet-body account-body' });
-    let foot = null;
     if (a.signedIn) {
-      body.append(
-        h('p', { class: 'account-in' }, h('span', { class: 'account-tick', 'aria-hidden': 'true', text: '✓' }), h('span', { text: S.accountSignedIn })),
-        h('p', { class: 'account-line', role: 'status', text: a.busy ? S.accountSaving : a.error === 'offline' ? S.accountOffline : min !== null ? S.accountSaved(S.accountAgo(min)) : S.accountNotYet }));
-      if (st.accountMsg) body.append(h('p', { class: 'account-msg', role: 'alert', text: st.accountMsg }));
-      foot = h('div', { class: 'sheet-foot account-foot' },
-        button('btn-white', h('span', { text: S.accountSignOut }), () => {
-          st.accountAsk = 'signout';
-          st.accountMsg = null;
-          renderAccount();
-        }, { nav: false }),
-        h('button', {
-          type: 'button', class: 'account-delete', text: S.accountDelete,
-          onclick: () => {
-            audio.play('click');
-            st.accountAsk = 'delete';
+      // (never Google's name, email or photo: Stapel keeps only a number made from the account)
+      box.replaceChildren(...[
+        h('p', { class: 'account-in' }, emo('☁️'), h('span', { text: S.accountSignedIn })),
+        h('p', { class: 'account-line', role: 'status', text: a.busy ? S.accountSaving : a.error === 'offline' ? S.accountOffline : min !== null ? S.accountSaved(S.accountAgo(min)) : S.accountNotYet }),
+        msg,
+        h('div', { class: 'account-foot' },
+          button('btn-white', h('span', { text: S.accountSignOut }), () => {
+            st.accountAsk = 'signout';
             st.accountMsg = null;
             renderAccount();
-          },
-        }));
-    } else {
-      if (a.out) body.append(h('p', { class: 'account-msg', text: S.accountOut }));
-      const slot = h('div', { class: 'account-google' });
-      if (a.native) slot.append(googleBtn());
-      body.append(h('p', { class: 'account-why', text: S.accountWhy }), slot);
-      if (wait) body.append(h('p', { class: 'account-line', role: 'status', text: S.accountSaving }));
-      if (st.accountMsg) body.append(h('p', { class: 'account-msg', role: 'alert', text: st.accountMsg }));
-      body.append(h('p', { class: 'account-keeps', text: S.accountKeeps }));
-      // Google's own button on the website (js/account.js renderButton), once the slot is in the page
-      if (!a.native) queueMicrotask(() => { if (slot.isConnected) bus.emit('ui:account-slot', slot); });
+          }, { nav: false }),
+          h('button', {
+            type: 'button', class: 'account-delete', text: S.accountDelete,
+            onclick: () => {
+              audio.play('click');
+              st.accountAsk = 'delete';
+              st.accountMsg = null;
+              renderAccount();
+            },
+          }))].filter(Boolean));
+      return;
     }
-    modals.account.replaceChildren(h('div', { class: 'card sheet account-sheet' },
+    const slot = h('div', { class: 'account-google' });
+    if (a.native) slot.append(googleBtn());
+    box.replaceChildren(...[
+      h('p', { class: 'account-title' }, emo('☁️'), h('span', { text: S.accountTitle })),
+      a.out ? h('p', { class: 'account-msg', text: S.accountOut }) : null,
+      h('p', { class: 'account-why', text: S.accountWhy }),
+      slot,
+      wait ? h('p', { class: 'account-line', role: 'status', text: S.accountSaving }) : null,
+      msg,
+      h('p', { class: 'account-keeps', text: S.accountKeeps })].filter(Boolean));
+    // Google's own button on the website (js/account.js renderButton), once the slot is in the page
+    if (!a.native) queueMicrotask(() => { if (slot.isConnected) bus.emit('ui:account-slot', slot); });
+  }
+
+  /**
+   * (1.14, the owner: "like 8 Ball Pool") ⚙️ Instellings: the account at the top (only once sign-in is open), then
+   * Klank, Vibrasie, Kontras, Taal, Herinneringe (where reminders exist) and Privaatheid. Android Back closes it.
+   */
+  function showSettings() {
+    st.accountAsk = null;
+    st.accountMsg = null;
+    st.accountWorking = false;
+    st.accountView = null;
+    renderSettings();
+    openModal('settings');
+  }
+
+  function renderSettings() {
+    const lang = getLanguage();
+    const row = (emoji, label, value, onPress, attrs = {}) => h('button', {
+      type: 'button', class: 'settings-row', ...attrs,
+      onclick: () => {
+        audio.play('click');
+        onPress();
+      },
+    }, emo(emoji, 'settings-ic'), h('span', { class: 'settings-label', text: label }), h('span', { class: 'settings-value', text: value }));
+    const toggleRow = (key, emoji) => {
+      const b = row(emoji, LABELS[key], '', () => setToggle(key, !st.settings[key]), { 'data-setting-row': key, role: 'switch' });
+      paintSettingRow(b);
+      return b;
+    };
+    const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    const buzz = touch && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+    const privacy = h('a', {
+      class: 'settings-row', href: lang === 'en' ? 'privacy.html' : 'privaatheid.html', target: '_blank', rel: 'noopener',
+      onclick: () => audio.play('click'),
+    }, emo('🔒', 'settings-ic'), h('span', { class: 'settings-label', text: S.privacy }), h('span', { class: 'settings-value', text: '›' }));
+    modals.settings.replaceChildren(h('div', { class: 'card sheet settings-sheet' },
       closeX(() => closeModal()),
-      h('div', { class: 'sheet-head' }, emo('☁️'), h('h2', { id: 'stapel-account-title', text: a.signedIn ? S.accountTitleIn : S.accountTitle })),
-      body,
-      foot));
+      h('div', { class: 'sheet-head' }, emo('⚙️'), h('h2', { id: 'stapel-settings-title', text: S.settings })),
+      h('div', { class: 'sheet-body' },
+        h('div', { class: 'settings-account', hidden: true }),
+        h('div', { class: 'settings-list' },
+          toggleRow('sound', '🔊'),
+          buzz ? toggleRow('vibration', '📳') : null,
+          toggleRow('highContrast', '◐'),
+          row('🌐', S.language, S.langNames[lang], () => showLanguage({ current: lang })),
+          st.remindOn ? row('🔔', S.reminders, st.remindTime || S.off, () => bus.emit('ui:remind')) : null,
+          privacy)),
+      h('div', { class: 'sheet-foot' }, button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false }))));
+    renderAccount();
+  }
+
+  /** A setting's switch on its Instellings row: "Aan" / "Af". */
+  function paintSettingRow(b) {
+    const key = b.dataset.settingRow;
+    const on = !!st.settings[key];
+    b.setAttribute('aria-checked', String(on));
+    b.classList.toggle('is-on', on);
+    b.querySelector('.settings-value').textContent = on ? S.on : S.off;
   }
 
   function showReminder({ time = null } = {}) {
@@ -2618,6 +2678,7 @@ export function createUI(bus) {
     setReminderInfo,
     showReminder,
     showName,
+    showSettings,
     setKeyboard,
     setConnChip,
     setPauseNote,

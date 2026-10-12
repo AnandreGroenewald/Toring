@@ -7,7 +7,9 @@
 // when the player opens the account sheet); in the Android app Google's sign-in comes from the phone itself
 // (app/shim.js, window.stapelApp.google). Either way the game gets an ID token, which the server checks once
 // and swaps for a session of its own.
-// Signing out (or deleting the account) starts this device over: the progress stays in the account.
+// (1.14, the owner: "it need to keep everything hense the Google sign in") Signing out only ends this device's
+// session: the phone keeps all its progress (and the account keeps its copy). Deleting the account deletes the
+// account; the phone's own progress stays too. Nothing is ever wiped.
 // Nothing here ever gets in the way of the game: offline, a sync simply waits for the next chance.
 
 import { base } from './audience.js';
@@ -266,9 +268,8 @@ export function createAccount({
       // the same account as before (this device was signed out by the server, not by the player): carry on from
       // where it was. One deleted and made anew takes this device's progress as new.
       const same = sameAccount && !!prev.base && Number.isInteger(prev.rev) && r.json.rev >= prev.rev;
-      // A different Google account: this device's progress belongs to the account it was in, so it starts over
-      // here (else one player's progress would be copied into a second account).
-      if (prev?.account && !sameGoogle && prev.base) store.resetProgress();
+      // (1.14) a different Google account: nothing is wiped; this device's progress joins that account as new
+      // (base null), as a guest's would
       // the account keeps the leaderboard number of its first device (made now if that device has none yet); a
       // device that joins later takes the account's (the merge lists its own, if it had one, under board.past)
       if (!r.json.save?.board?.player) store.getBoardPlayer();
@@ -293,22 +294,19 @@ export function createAccount({
   }
 
   /**
-   * Sign out: the last progress goes to the account first, then this device starts over. Refused when that last
-   * sync didn't happen (no internet, or the server had already signed this device out): the progress stays.
+   * (1.14) Sign out: the last progress goes to the account first (when it can), then this device's session ends.
+   * The phone keeps everything; the link keeps the account's last copy (`base`) and any store still on its way
+   * (`pending`), so signing in to the same account again carries on without counting anything twice. Offline it
+   * still signs out: what wasn't saved yet stays here and goes with the next sign-in.
    */
   async function signOut() {
-    if (readLink()?.token) {
-      const out = await sync();
-      if (out === 'out') throw new Error('out');
-      if (out !== 'same' && out !== 'saved') throw new Error(out === 'refused' ? 'refused' : 'offline');
-    }
-    // (another tab's sync waits: it must not bring the account's progress back after this)
+    if (readLink()?.token) await sync().catch(() => null);
+    // (another tab's sync waits: it must not run on after this)
     await locked(async () => {
       const link = readLink();
       if (link?.token) await call('/account/signout', { token: link.token });
       googleSignOut();
-      writeLink(null);
-      store.resetProgress();
+      if (link) writeLink({ ...link, token: null, left: true });
     });
     state.error = null;
     state.synced = false;
@@ -324,7 +322,7 @@ export function createAccount({
     }
   }
 
-  /** Delete the account (its save, every device's session, its leaderboard rows); this device starts over. */
+  /** Delete the account (its save, every device's session, its leaderboard rows); (1.14) the phone keeps its own progress. */
   async function deleteAccount() {
     const link = readLink();
     if (!link?.token) throw new Error('out');
@@ -336,8 +334,7 @@ export function createAccount({
     if (r.status !== 200 || !r.json?.ok) throw new Error(r.status === 0 ? 'offline' : 'error');
     await locked(async () => {
       googleSignOut();
-      writeLink(null);
-      store.resetProgress();
+      writeLink(null);   // (the account is gone: a sign-in later makes a new one, this device's progress joining it)
     });
     state.error = null;
     state.synced = false;
@@ -415,7 +412,7 @@ export function createAccount({
       return {
         on,
         signedIn: !!link?.token,
-        out: !!(link && !link.token),
+        out: !!(link && !link.token && !link.left),   // the server ended the session (not the player's own sign-out)
         at: link?.at || null,
         busy: state.busy,
         error: state.error,

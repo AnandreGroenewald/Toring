@@ -125,23 +125,34 @@ test('a sync waits while a tower is being built, and runs when it ends', async (
   assert.equal(web.store.getEconomy().coins, 25);
 });
 
-test('signing out: the last progress goes up first, then this device starts over; signing in brings it back', async () => {
+test('1.14 signing out keeps everything on this device (the owner: "it need to keep everything"); signing in again counts nothing twice', async () => {
   const { device, token, net } = await world();
   const phone = device();
   phone.play(D1, 22);
+  phone.store.buySkin?.('crane', 'rooi');
   await phone.account.signInWithToken(await token());
   phone.store.earnCoins(60, { capped: false });
-  net.down = true;
-  await assert.rejects(phone.account.signOut(), /offline/, 'not without the internet: nothing would be saved');
-  assert.equal(phone.store.getEconomy().coins, 60, 'and nothing was reset');
-  net.down = false;
   await phone.account.signOut();
-  assert.equal(phone.account.status().signedIn, false);
-  assert.equal(phone.store.getEconomy().coins, 0);
-  assert.equal(phone.store.getStats(D1).played, 0);
+  const s = phone.account.status();
+  assert.deepEqual([s.signedIn, s.out], [false, false], 'signed out by the player: no "you were signed out" warning');
+  assert.equal(phone.store.getEconomy().coins, 60, 'the coins stay');
+  assert.equal(phone.store.getDailyBest(D1).heightM, 22, 'the towers stay');
+  assert.equal(phone.store.getStats(D1).played, 1);
+  // a guest again: plays on, signs out offline too
+  phone.store.earnCoins(15, { capped: false });
   await phone.account.signInWithToken(await token());
-  assert.equal(phone.store.getEconomy().coins, 60);
-  assert.equal(phone.store.getDailyBest(D1).heightM, 22);
+  assert.equal(phone.store.getEconomy().coins, 75, 'signing in again: the account\'s 60 are not added a second time');
+  net.down = true;
+  phone.store.earnCoins(5, { capped: false });
+  await phone.account.signOut();   // offline: it still signs out, and keeps everything
+  assert.equal(phone.account.status().signedIn, false);
+  assert.equal(phone.store.getEconomy().coins, 80);
+  net.down = false;
+  await phone.account.signInWithToken(await token());
+  assert.equal(phone.store.getEconomy().coins, 80, 'the 5 earned offline went with this sign-in, once');
+  const check = device();
+  await check.account.signInWithToken(await token());
+  assert.equal(check.store.getEconomy().coins, 80, 'the account has it all');
 });
 
 test('signed out elsewhere (the account deleted on the website): this device keeps its progress and says so', async () => {
@@ -153,7 +164,7 @@ test('signed out elsewhere (the account deleted on the website): this device kee
   await web.account.signInWithToken(await token());
   await web.account.deleteAccount();
   assert.equal(web.account.status().signedIn, false);
-  assert.equal(web.store.getEconomy().coins, 0, 'the website starts over');
+  assert.equal(web.store.getEconomy().coins, 45, '(1.14) the website keeps what it has: deleting deletes the account, not this device');
   assert.equal(await phone.account.sync(), 'out');
   const s = phone.account.status();
   assert.deepEqual([s.signedIn, s.out], [false, true]);
@@ -215,17 +226,18 @@ test('a lost answer, then the server signs the phone out: signing in again sends
   assert.equal(fresh.store.getEconomy().coins, 100);
 });
 
-test('signing out after the server already signed this device out: refused, and the progress stays', async () => {
+test('1.14 signing out after the server already signed this device out: it signs out, and the progress stays', async () => {
   const { device, token } = await world();
   const phone = device();
   await phone.account.signInWithToken(await token());
   phone.store.earnCoins(80, { capped: false });
   for (let k = 0; k < 10; k++) await device().account.signInWithToken(await token());
-  await assert.rejects(phone.account.signOut(), /out/);
+  await phone.account.signOut();
+  assert.equal(phone.account.status().signedIn, false);
   assert.equal(phone.store.getEconomy().coins, 80);
 });
 
-test('signed out by the server, then signed in with another Google account: no progress is copied across', async () => {
+test('1.14 signed out, then signed in with another Google account: nothing is wiped; the phone\'s progress joins that account', async () => {
   const { device, token } = await world();
   const phone = device();
   phone.store.earnCoins(300, { capped: false });
@@ -233,10 +245,13 @@ test('signed out by the server, then signed in with another Google account: no p
   for (let k = 0; k < 10; k++) await device().account.signInWithToken(await token('anna'));
   assert.equal(await phone.account.sync(), 'out');
   await phone.account.signInWithToken(await token('bennie'));
-  assert.equal(phone.store.getEconomy().coins, 0, "Bennie's account starts empty: Anna's coins stay Anna's");
-  const check = device();
-  await check.account.signInWithToken(await token('anna'));
-  assert.equal(check.store.getEconomy().coins, 300);
+  assert.equal(phone.store.getEconomy().coins, 300, 'the phone keeps what it has');
+  const b = device();
+  await b.account.signInWithToken(await token('bennie'));
+  assert.equal(b.store.getEconomy().coins, 300, 'and it joined the account it signed in to, as a guest\'s would');
+  const a = device();
+  await a.account.signInWithToken(await token('anna'));
+  assert.equal(a.store.getEconomy().coins, 300, 'Anna\'s account keeps its own copy');
 });
 
 test('an account deleted and made anew (the same Google account): the old copy is not used as a base', async () => {
@@ -255,8 +270,10 @@ test('an account deleted and made anew (the same Google account): the old copy i
   }
   assert.equal(await phone.account.sync(), 'out');
   await phone.account.signInWithToken(await token());
-  // the phone's 50 join the new account as new progress (it never held them), no more and no less
-  assert.equal(phone.store.getEconomy().coins, 65);
+  // the phone's 50 join the new account as new progress (it never held them). (1.14) The website kept its 50 when it
+  // deleted (no wipe), and they joined the new account too: deleting and making the account anew on two devices
+  // brings both devices' copies in (the known cost of never wiping; coins can't be bought)
+  assert.equal(phone.store.getEconomy().coins, 115);
 });
 
 test('the first sync after start: stale() until it is done; settle() waits for it', async () => {
