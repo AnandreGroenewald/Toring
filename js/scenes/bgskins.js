@@ -501,7 +501,7 @@ export class SkinLayers {
       this.rays.x = W / 2 + Math.sin(t * 0.25) * 18;
       // the school glides across, slowly, and comes round again
       if (!reduced) this.schoolX += 34 * dt;
-      if (this.schoolX > W + 340) this.schoolX = -220;   // (wide enough that the turtle behind them is off too)
+      if (this.schoolX > W + 440) this.schoolX = -220;   // (wide enough that the turtle behind them is off too)
       const sy = H * 0.34 + alt * 0.3;
       for (const f of this.school) {
         f.img.setPosition(this.schoolX + f.dx, sy + f.dy + Math.sin(t * 1.4 + f.ph) * 4).setAlpha(low).setFlipX(true);
@@ -512,7 +512,7 @@ export class SkinLayers {
         j.img.setScale(j.s * (1 + 0.06 * p), j.s * (1 - 0.08 * p)).setAlpha(0.85 * low);
       }
       // (1.15, the owner: "make the squerrel come a few seconds after the fish") the turtle follows the school, ~4 s behind
-      this.turtleX = this.schoolX - 150;
+      this.turtleX = this.schoolX - 255;   // ("Its still to quick, make it wait 3 more seconds": ~7.5 s behind)
       if (!reduced) {
         this.whaleX -= 12 * dt;
         if (this.whaleX < -500) this.whaleX = W + 900;
