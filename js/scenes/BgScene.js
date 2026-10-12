@@ -70,6 +70,8 @@ const BG_SKINS = {
   kersieblom: { sky: [[0xff9ec4, 0xffe3ed], [0xff86b6, 0xffcfe1]], scen: 0xffd2e3, cloud: 0xfff1f6, sun: 0, cloudA: 0.8, scenery: 'bgs_land_fuji' },
   noorderlig: { sky: [[0x041428, 0x0b3a48], [0x030c1f, 0x062a3a]], scen: 0x3b5266, cloud: 0x5d7286, sun: 0, moon: 0.45, stars: 0.95, cloudA: 0.45, gulls: 0, scenery: 'bgs_land_nordic' },
   ruimte: { sky: [[0x07051a, 0x1c0c3e], [0x05031a, 0x140934]], scen: 0x46395f, cloud: 0x6a5c8c, sun: 0, stars: 1, cloudA: 0.18, gulls: 0, scenery: 'bgs_land_moon' },
+  // (1.15, the owner: "also make a accerium background") under the sea: no sun, no clouds, no gulls; a reef for land
+  akwarium: { sky: [[0x0b6a8a, 0x5ad6c8], [0x075474, 0x2aa7bd]], scen: 0x8fe0e8, cloud: 0xffffff, sun: 0, cloudA: 0, gulls: 0, scenery: 'bgs_land_reef' },
   sintgolf: { sky: [[0x1a0533, 0xff4f8b], [0x14042c, 0x8a2299]], scen: 0x5e2f8c, cloud: 0xd08ad8, sun: 0, stars: 0.55, cloudA: 0.55, gulls: 0, scenery: 'bgs_land_wire' },
 };
 const BG_SKIN_IDS = Object.keys(BG_SKINS);

@@ -10,7 +10,7 @@ const WEEK_COINS = WEEK.coins;
 const WEEK_SHIELD_MAX = WEEK.shieldMax;
 const WEEK_SHIELD_PRICE = WEEK.shieldPrice;
 import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO, COSMETIC_INFO } from '../core/strings.js';
-import { COIN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic, SKINS, SKIN_KINDS, tierOf } from '../core/economy.js';
+import { COIN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic, SKINS, SKIN_KINDS, tierOf, shownPoints, shownDelta } from '../core/economy.js';
 import * as BLOCKS from '../game/blocks.js';
 import { playCelebration, drawCelebrationIcon } from './celebrate.js';
 import { EMOTES, EMOTE_PICKS } from '../config.js';
@@ -1213,7 +1213,7 @@ export function createUI(bus) {
     if (swatch) return h('span', { class: `skin-prev skin-blocks skin-blocks-${id} has-swatch`, 'aria-hidden': 'true' }, swatch);
     return h('span', { class: `skin-prev skin-blocks skin-blocks-${id}`, 'aria-hidden': 'true' }, h('i'), h('i'), h('i'));
   }
-  const SCENE_EMOJI = { dag: '☀️', sonsondergang: '🌅', lekkergoed: '🍭', nag: '🌙', kersieblom: '🌸', noorderlig: '✨', ruimte: '🪐', sintgolf: '🌆' };
+  const SCENE_EMOJI = { dag: '☀️', sonsondergang: '🌅', lekkergoed: '🍭', nag: '🌙', kersieblom: '🌸', noorderlig: '✨', ruimte: '🪐', akwarium: '🐠', sintgolf: '🌆' };
 
   /** (1.15) Three sample blocks in a block skin, drawn once per skin and then copied (null if the painter can't). */
   const swatchCache = new Map();
@@ -1340,7 +1340,7 @@ export function createUI(bus) {
   }
 
   // (1.15) what's new in this version: a "Nuut" tag in the Winkel
-  const NEW_ITEMS = new Set(['scene:kersieblom', 'scene:noorderlig', 'scene:ruimte', 'scene:sintgolf', 'blocks:piksel', 'blocks:koolstof',
+  const NEW_ITEMS = new Set(['scene:akwarium', 'scene:kersieblom', 'scene:noorderlig', 'scene:ruimte', 'scene:sintgolf', 'blocks:piksel', 'blocks:koolstof',
     'blocks:ys', 'blocks:marmer', 'blocks:lawa', 'blocks:chroom', 'blocks:holo', 'blocks:heelal', 'frame:neon', 'frame:holo', 'badge:weerlig',
     'badge:haai', 'badge:vuurpyl', 'badge:goat', 'badge:draak', 'title:ikoon', 'celebration:weerlig', 'celebration:goudreen',
     'celebration:laser', 'celebration:sterrestof']);
@@ -1379,13 +1379,15 @@ export function createUI(bus) {
     const keepScroll = st.modal === 'shop' && st.shopTab === tab && prevBody ? prevBody.scrollTop : 0;
     st.shopTab = tab;
     st.shopModel = m;
+    // (1.15, the owner: "add a small touch to it, not too fancy") a small icon on each tab, a gold line under the open one
+    const TAB_IC = { powerups: '⚡', looks: '⚔️', skins: '🏗️' };
     const tabs = h('div', { class: 'shop-tabs', role: 'tablist' }, [['powerups', S.shopPowerups], ['looks', S.shopLooks], ['skins', S.shopSkins]].map(([id, label]) => h('button', {
-      type: 'button', role: 'tab', class: `shop-tab${tab === id ? ' on' : ''}`, 'aria-selected': String(tab === id), text: label,
+      type: 'button', role: 'tab', class: `shop-tab${tab === id ? ' on' : ''}`, 'aria-selected': String(tab === id),
       onclick: () => {
         audio.play('click');
         showShop(st.shopModel, id);
       },
-    })));
+    }, emo(TAB_IC[id]), h('span', { text: label }))));
     const body = h('div', { class: 'sheet-body shop-body' });
     if (tab === 'powerups') {
       const shields = m.week?.shields | 0;
@@ -1730,17 +1732,19 @@ export function createUI(bus) {
   function rankBox(r, card, name) {
     const [year, month] = String(r.season || '').split('-').map(Number);
     const next = r.next ? LADDER[ladderIndex(r.next)] : null;
+    const pts = shownPoints(LADDER[ladderIndex(r.id)], r.pct);
     const note = r.placementLeft > 0 ? S.rankPlacement(r.placementLeft)
       : r.shield && r.pct < 20 && ladderIndex(r.id) > 0 ? S.rankShieldOn : '';
     return h('div', { class: 'rank-box', 'data-rank-box': '' },
       h('div', { 'data-my-card': '' }, playerCard({ name, card })),
       h('p', { class: 'rank-season', text: month ? `${S.rankModeLabel(r.mode)} · ${S.season(monthName(month - 1), year)}` : S.rankModeLabel(r.mode) }),
-      h('div', { class: 'rank-now' }, emo(r.emoji), h('b', { text: rankName(r.id) }), next ? h('span', { text: `${r.pct}%` }) : null),
+      // (1.15) in points: "40 / 100", "Nog 60 punte tot Brons II" (a rank is worth more points higher up: economy.js RANK_SCALE)
+      h('div', { class: 'rank-now' }, emo(r.emoji), h('b', { text: rankName(r.id) }), next ? h('span', { text: S.rankPts(fmtInt(pts.have), fmtInt(pts.need)) }) : null),
       h('div', {
-        class: 'rank-bar', role: 'progressbar', 'aria-label': `${rankName(r.id)}: ${r.pct}%`,
-        'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(r.pct),
+        class: 'rank-bar', role: 'progressbar', 'aria-label': `${rankName(r.id)}: ${S.rankPts(fmtInt(pts.have), fmtInt(pts.need))}`,
+        'aria-valuemin': '0', 'aria-valuemax': String(pts.need), 'aria-valuenow': String(pts.have),
       }, h('i', { vars: { '--p': `${r.pct}%` } })),
-      h('p', { class: 'rank-next', text: next ? S.rankPct(r.toNext, `${rankName(next.id)} ${next.emoji}`) : S.rankTop }),
+      h('p', { class: 'rank-next', text: next ? S.rankToNext(fmtInt(pts.left), `${rankName(next.id)} ${next.emoji}`) : S.rankTop }),
       note ? h('p', { class: 'rank-note', text: note }) : null);
   }
 
@@ -2258,7 +2262,8 @@ export function createUI(bus) {
         requestAnimationFrame(() => requestAnimationFrame(() => fill.style.setProperty('--p', `${rk.pct}%`)));
         kids.push(h('span', { class: `rw-rank${rk.up ? ' is-up' : ''}${rk.down ? ' is-down' : ''}` }, emo(rk.emoji),
           h('b', { text: title }),
-          h('span', { class: 'rw-sub', text: `${S.rankPctDelta(rk.delta)} · ${rk.pct}%` }),
+          // (1.15) in points, at the rank the match was played from (its scale)
+          h('span', { class: 'rw-sub', text: `${S.rankPointsDelta(shownDelta(rk.delta, LADDER[ladderIndex(rk.before?.id || rk.id)]))} · ${S.rankPts(fmtInt(shownPoints(LADDER[ladderIndex(rk.id)], rk.pct).have), fmtInt(shownPoints(LADDER[ladderIndex(rk.id)], rk.pct).need))}` }),
           h('span', { class: 'rank-bar rw-bar', 'aria-hidden': 'true' }, fill)));
       }
     }

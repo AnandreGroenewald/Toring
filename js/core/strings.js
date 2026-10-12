@@ -368,7 +368,7 @@ export const S = {
   skinKinds: { scene: 'Agtergrond', crane: 'Hyskraan', blocks: 'Blokke' },
   skinNames: {
     scene: { dag: 'Kaapse dag', sonsondergang: 'Sonsondergang', lekkergoed: 'Lekkergoedlug', nag: 'Sterrenag', kersieblom: 'Kersiebloeisels',
-      noorderlig: 'Noorderlig', ruimte: 'Diep ruimte', sintgolf: 'Retro-neon' },
+      noorderlig: 'Noorderlig', ruimte: 'Diep ruimte', akwarium: 'Akwarium', sintgolf: 'Retro-neon' },
     crane: { geel: 'Klassieke geel', rooi: 'Brandweer-rooi', blou: 'Oseaanblou', pienk: 'Pienk pret', goud: 'Goud' },
     blocks: { kleur: 'Kleurvol', lekkergoed: 'Lekkergoed', klip: 'Klip', neon: 'Neon', goud: 'Goudstawe', piksel: 'Retro-piksel',
       koolstof: 'Koolstofvesel', ys: 'Yskristal', marmer: 'Marmer', lawa: 'Lawa', chroom: 'Chroom', holo: 'Holografies', heelal: 'Sterrestelsel' },
@@ -422,12 +422,13 @@ export const S = {
   shieldBlocked: (name) => `${name} bons van jou skild af! 🛡️`,
   resMonkeyBlocked: 'Jou skild het Blouaap gekeer! 🛡️',
   resThiefBlocked: 'Jou skild het Skelm Sakkie gekeer! 🛡️',
-  rankPointsDelta: (d) => (d >= 0 ? `+${d} punte` : `${d} punte`),
+  rankPts: (have, need) => `${have} / ${need} punte`,   // (1.15) a rank's points
+  rankPointsDelta: (d) => (d >= 0 ? `+${d} punte` : `−${-d} punte`),
   season: (month, year) => `Seisoen: ${month} ${year}`,
   rankPoints: (n) => (n === 1 ? '1 punt' : `${n} punte`),
-  rankToNext: (n, rank) => `Nog ${n === 1 ? '1 punt' : `${n} punte`} tot ${rank}`,
+  rankToNext: (n, rank) => `Nog ${String(n) === '1' ? '1 punt' : `${n} punte`} tot ${rank}`,
   rankTop: 'Die hoogste rang! Hou dit so.',
-  rankHow: (r) => `Wen teen ’n mens: +${r.win}% (meer teen ’n hoër rang). Verloor: −${r.loss}% (minder teen ’n hoër rang). Robot Rikus tel nie. Elke maand begin ’n nuwe seisoen: jou rang sak een vlak, en jy hou ’n kenteken vir jou beste.`,
+  rankHow: (r) => `Wen teen ’n mens: +${r.win} punte by Brons (meer teen ’n hoër rang). Verloor: −${r.loss} punte. Hoe hoër jou rang, hoe meer punte is ’n rang werd, en ’n wen ook. Robot Rikus tel nie. Elke maand begin ’n nuwe seisoen: jou rang sak een vlak, en jy hou ’n kenteken vir jou beste.`,
   // (1.12) the ladder of 23 per mode (js/core/economy.js LADDER)
   rankDiv: ['I', 'II', 'III', 'Meester'],
   rankElite: { meesterbouer: 'Meesterbouer', grootmeester: 'Grootmeester', legende: 'Stapel-legende' },

@@ -354,6 +354,9 @@ export function ensureSkinTextures(scene) {
   canvasTexture(scene, 'bgs_pagoda', 110, 210, drawPagoda);
   canvasTexture(scene, 'bgs_branch', 280, 190, drawBlossomBranch);
   canvasTexture(scene, 'bgs_jpsun', 260, 260, drawRisingSun);
+  canvasTexture(scene, 'bgs_rays', 720, 700, drawLightRays);
+  canvasTexture(scene, 'bgs_school', 36, 16, drawSchoolFish);
+  canvasTexture(scene, 'bgs_bubble', 18, 18, drawBubble);
 }
 
 // ------------------------------------------------------------------------------------------------ the layers
@@ -389,6 +392,12 @@ export class SkinLayers {
     this.toriiMirror = scene.add.image(W * 0.13, 0, 'bgs_torii').setOrigin(0.5, 1).setScale(0.62 * Math.max(1, k), -0.62 * Math.max(1, k)).setDepth(2.07).setAlpha(0.28).setVisible(false);
     this.branchL = scene.add.image(0, 0, 'bgs_branch').setOrigin(0, 0).setScale(0.95 * Math.max(1, k)).setDepth(3.25).setVisible(false);
     this.branchR = scene.add.image(W, 0, 'bgs_branch').setOrigin(0, 0).setScale(-0.8 * Math.max(1, k), 0.8 * Math.max(1, k)).setDepth(3.25).setVisible(false);
+    // the aquarium: sunbeams from above, a school of fish, rising bubbles
+    this.rays = scene.add.image(W / 2, 0, 'bgs_rays').setOrigin(0.5, 0).setScale(Math.max(1.1, k * 1.1)).setDepth(0.05).setBlendMode('ADD').setVisible(false);
+    const rs = seeded(9);
+    this.school = Array.from({ length: 9 }, (_, i) => ({ img: scene.add.image(0, 0, 'bgs_school').setDepth(0.3).setVisible(false), dx: (i % 3) * 30 + rs() * 12, dy: Math.floor(i / 3) * 18 + rs() * 8, ph: rs() * 6 }));
+    this.schoolX = -200;
+    this.bubbles = Array.from({ length: 18 }, () => ({ img: scene.add.image(rs() * W, rs() * H, 'bgs_bubble').setDepth(3.15).setVisible(false), v: 30 + rs() * 50, ph: rs() * 6, s: 0.5 + rs() * 0.9 }));
     const r = seeded(5);
     this.petals = Array.from({ length: PETALS }, () => ({
       img: scene.add.image(r() * W, r() * H, 'bgs_petal').setDepth(3.2).setVisible(false),
@@ -409,6 +418,7 @@ export class SkinLayers {
     on([this.synthSun, this.grid, ...this.gridRows], id === 'sintgolf');
     for (const p of this.petals) p.img.setVisible(id === 'kersieblom');
     on([this.jpSun, this.pagoda, this.torii, this.toriiMirror, this.branchL, this.branchR], id === 'kersieblom');
+    on([this.rays, ...this.school.map((f) => f.img), ...this.bubbles.map((b) => b.img)], id === 'akwarium');
   }
 
   /** alt (m), horizon (screen y of the bay's horizon), wind (px/s²), dark (storm 0..1), reduced (no motion). */
@@ -457,6 +467,27 @@ export class SkinLayers {
         row.setPosition(W / 2, yy);
         row.setDisplaySize(W * 1.35, 2 + 5 * f);
         row.setAlpha((0.25 + 0.75 * f) * low);
+      }
+    } else if (id === 'akwarium') {
+      this.rays.setAlpha((0.75 + 0.25 * Math.sin(t * 0.6)) * low);
+      this.rays.x = W / 2 + Math.sin(t * 0.25) * 18;
+      // the school glides across, slowly, and comes round again
+      if (!reduced) this.schoolX += 34 * dt;
+      if (this.schoolX > W + 160) this.schoolX = -220;
+      const sy = H * 0.34 + alt * 0.3;
+      for (const f of this.school) {
+        f.img.setPosition(this.schoolX + f.dx, sy + f.dy + Math.sin(t * 1.4 + f.ph) * 4).setAlpha(low).setFlipX(true);
+      }
+      for (const b of this.bubbles) {
+        if (!reduced) {
+          b.img.y -= b.v * dt;
+          b.img.x += Math.sin(t * 2 + b.ph) * 12 * dt;
+          if (b.img.y < -20) {
+            b.img.y = H + 20;
+            b.img.x = Math.random() * W;
+          }
+        }
+        b.img.setScale(b.s).setAlpha(0.8 * (1 - smooth(140, 260, alt)));
       }
     } else if (id === 'kersieblom') {
       const fade = 1 - smooth(140, 260, alt);
@@ -554,37 +585,64 @@ function drawFuji(ctx, w, h) {
   ridge(ctx, w, h, [[0, 0.86], [0.12, 0.8], [0.26, 0.86], [0.42, 0.83], [0.6, 0.9], [0.8, 0.84], [1, 0.88]], '#a77fb8');
 }
 
-/** Lekkergoed: gumdrop hills with sprinkles, lollipops and candy canes. */
+/**
+ * Lekkergoed: low hazy hills far off, small gumdrop hills nearer, and a frosting shore along the water where the lollipops
+ * and candy canes stand (the owner: "the candy looks like its in the sky": everything now stands on the ground).
+ */
 function drawCandyLand(ctx, w, h) {
   const r = seeded(31);
-  const hill = (cx, cy, rx, ry, c1, c2) => {
+  const G = 0.93;   // the frosting shore's top (of h); the candy stands on it
+  // far hills: low, soft, hazy
+  ridge(ctx, w, h, [[0, 0.74], [0.12, 0.62], [0.26, 0.7], [0.4, 0.6], [0.55, 0.68], [0.7, 0.58], [0.86, 0.66], [1, 0.6]], 'rgba(205,190,255,0.75)');
+  ridge(ctx, w, h, [[0, 0.8], [0.18, 0.72], [0.34, 0.79], [0.5, 0.71], [0.66, 0.78], [0.82, 0.7], [1, 0.77]], 'rgba(255,200,228,0.85)');
+  // gumdrop hills nearer, with sprinkles
+  const drop = (cx, rx, top, c1, c2) => {
     ctx.save();
     ctx.beginPath();
-    ctx.ellipse(cx * w, cy * h, rx * w, ry * h, 0, Math.PI, TAU);
-    ctx.lineTo((cx + rx) * w, h + 2);
-    ctx.lineTo((cx - rx) * w, h + 2);
+    ctx.moveTo((cx - rx) * w, G * h + 2);
+    ctx.bezierCurveTo((cx - rx) * w, top * h, (cx + rx) * w, top * h, (cx + rx) * w, G * h + 2);
     ctx.closePath();
-    ctx.fillStyle = vgrad(ctx, h, c1, c2, (cy - ry) * h);
+    ctx.fillStyle = vgrad(ctx, G * h, c1, c2, top * h);
     ctx.fill();
     ctx.clip();
-    for (let k = 0; k < 26; k++) {
+    for (let k = 0; k < 14; k++) {
       ctx.fillStyle = ['#ffffff', '#fff27a', '#ff6fae', '#6fd8ff'][k % 4];
-      ctx.globalAlpha = 0.85;
       ctx.beginPath();
-      ctx.ellipse((cx + (r() - 0.5) * rx * 2) * w, (cy - ry + r() * ry * 1.6) * h, 4, 1.8, r() * Math.PI, 0, TAU);
+      ctx.ellipse((cx + (r() - 0.5) * rx * 1.6) * w, (top + 0.04 + r() * (G - top - 0.06)) * h, 3.6, 1.6, r() * Math.PI, 0, TAU);
       ctx.fill();
     }
+    // a soft highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath();
+    ctx.ellipse((cx - rx * 0.35) * w, (top + 0.08) * h, rx * w * 0.22, 6, -0.3, 0, TAU);
+    ctx.fill();
     ctx.restore();
   };
-  hill(0.12, 0.66, 0.2, 0.3, '#b9a6ff', '#9a84f0');
-  hill(0.72, 0.6, 0.26, 0.36, '#ffb3d9', '#f28cc0');
-  hill(0.42, 0.74, 0.22, 0.22, '#8ee6c9', '#5ccfac');
-  hill(0.95, 0.76, 0.16, 0.2, '#ffd89a', '#f5b75e');
-  const lolly = (x, base, top, rad, colors) => {
+  drop(0.1, 0.14, 0.7, '#8ee6c9', '#4fc7a3');
+  drop(0.36, 0.11, 0.76, '#ffb3d9', '#ee82b8');
+  drop(0.62, 0.15, 0.68, '#c8b3ff', '#9a80ee');
+  drop(0.9, 0.12, 0.74, '#ffd89a', '#f2b05a');
+  // the frosting shore: a pastel band with a wavy white icing edge
+  ctx.fillStyle = vgrad(ctx, h, '#ffc6e2', '#ff9ccb', G * h);
+  ctx.fillRect(0, G * h, w, h - G * h + 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(0, G * h);
+  for (let x = 0; x <= w + 20; x += 20) {
+    ctx.quadraticCurveTo(x + 10, G * h + 9 + (x % 40 ? 3 : 0), x + 20, G * h);
+  }
+  ctx.lineTo(w + 20, G * h - 4);
+  ctx.lineTo(0, G * h - 4);
+  ctx.closePath();
+  ctx.fill();
+  // lollipops and candy canes planted in the frosting
+  const lolly = (x, hgt, rad, colors) => {
+    const base = G * h + 4;
+    const top = base - hgt;
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x * w - 2.5, top * h, 5, (base - top) * h);
+    ctx.fillRect(x * w - 2.5, top, 5, hgt);
     ctx.save();
-    ctx.translate(x * w, top * h);
+    ctx.translate(x * w, top);
     for (let i = 0; i < 12; i++) {
       ctx.fillStyle = colors[i % colors.length];
       ctx.beginPath();
@@ -593,33 +651,35 @@ function drawCandyLand(ctx, w, h) {
       ctx.closePath();
       ctx.fill();
     }
-    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    for (let a = 0; a < TAU * 2.2; a += 0.15) ctx.lineTo(Math.cos(a) * a * rad * 0.07, Math.sin(a) * a * rad * 0.07);
+    ctx.arc(0, 0, rad, 0, TAU);
     ctx.stroke();
     ctx.restore();
   };
-  lolly(0.3, 0.88, 0.56, 22, ['#ff5fa2', '#ffffff']);
-  lolly(0.55, 0.9, 0.5, 28, ['#46c8ff', '#fff27a']);
-  lolly(0.86, 0.92, 0.62, 18, ['#8a5cff', '#ffffff']);
-  const cane = (x, base, top) => {
+  const cane = (x, hgt) => {
+    const base = G * h + 4;
+    const top = base - hgt;
     ctx.save();
     ctx.lineCap = 'round';
-    ctx.lineWidth = 9;
+    ctx.lineWidth = 8;
     ctx.strokeStyle = '#ffffff';
     ctx.beginPath();
-    ctx.moveTo(x * w, base * h);
-    ctx.lineTo(x * w, top * h);
-    ctx.arc(x * w + 12, top * h, 12, Math.PI, 0);
+    ctx.moveTo(x * w, base);
+    ctx.lineTo(x * w, top);
+    ctx.arc(x * w + 11, top, 11, Math.PI, 0);
     ctx.stroke();
     ctx.setLineDash([6, 7]);
     ctx.strokeStyle = '#ff3b5c';
     ctx.stroke();
     ctx.restore();
   };
-  cane(0.06, 0.92, 0.66);
-  cane(0.66, 0.94, 0.7);
+  lolly(0.22, 74, 18, ['#ff5fa2', '#ffffff']);
+  cane(0.05, 56);
+  lolly(0.5, 92, 22, ['#46c8ff', '#fff27a']);
+  cane(0.72, 62);
+  lolly(0.83, 64, 15, ['#8a5cff', '#ffffff']);
 }
 
 /** Sonsondergang: the bushveld at dusk, flat-topped acacias and a giraffe against the sky. */
@@ -850,6 +910,116 @@ function drawWireMountains(ctx, w, h) {
   edge('#ff7ccf', 2, 0);
 }
 
+/** (1.15, the owner: "also make a accerium background") the aquarium's floor: rocks, corals and swaying weed (drawn still). */
+function drawReef(ctx, w, h) {
+  const r = seeded(53);
+  ridge(ctx, w, h, [[0, 0.82], [0.15, 0.76], [0.3, 0.8], [0.5, 0.74], [0.7, 0.79], [0.85, 0.73], [1, 0.78]], 'rgba(10,80,100,0.6)');
+  // sea grass
+  ctx.lineCap = 'round';
+  for (let k = 0; k < 26; k++) {
+    const x = r() * w;
+    const hh = 30 + r() * 70;
+    ctx.strokeStyle = r() < 0.5 ? '#2fae7a' : '#1f8f63';
+    ctx.lineWidth = 3 + r() * 3;
+    ctx.beginPath();
+    ctx.moveTo(x, h);
+    ctx.bezierCurveTo(x + 10, h - hh * 0.3, x - 10, h - hh * 0.6, x + 4, h - hh);
+    ctx.stroke();
+  }
+  // corals: branching pink and orange, round purple brain corals, tube corals
+  const branch = (x, y, len, a, wd, col, depth) => {
+    if (depth <= 0 || len < 4) return;
+    const x2 = x + Math.cos(a) * len;
+    const y2 = y + Math.sin(a) * len;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = wd;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    branch(x2, y2, len * 0.72, a - 0.45 - r() * 0.2, wd * 0.75, col, depth - 1);
+    branch(x2, y2, len * 0.72, a + 0.45 + r() * 0.2, wd * 0.75, col, depth - 1);
+  };
+  branch(w * 0.12, h, 34, -Math.PI / 2, 9, '#ff6f91', 5);
+  branch(w * 0.63, h, 38, -Math.PI / 2, 10, '#ff9a3c', 5);
+  branch(w * 0.9, h, 28, -Math.PI / 2, 8, '#ff6f91', 4);
+  const brain = (x, rad, c1, c2) => {
+    const g = ctx.createRadialGradient(x - rad * 0.3, h - rad * 0.9, 2, x, h - rad * 0.5, rad);
+    g.addColorStop(0, c1);
+    g.addColorStop(1, c2);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(x, h, rad, rad * 0.9, 0, Math.PI, TAU);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 2;
+    for (let k = 1; k < 4; k++) {
+      ctx.beginPath();
+      ctx.ellipse(x, h, rad * (k / 4), rad * 0.9 * (k / 4), 0, Math.PI, TAU);
+      ctx.stroke();
+    }
+  };
+  brain(w * 0.32, 30, '#c18bff', '#6a3fb8');
+  brain(w * 0.8, 24, '#7fe0ff', '#2a8fb8');
+  for (const [x, n, col] of [[0.44, 4, '#ffd23f'], [0.5, 3, '#ff8fb8']]) {
+    for (let k = 0; k < n; k++) {
+      const tx = x * w + k * 9;
+      const th = 26 + r() * 30;
+      ctx.fillStyle = col;
+      ctx.fillRect(tx - 3, h - th, 7, th);
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath();
+      ctx.ellipse(tx + 0.5, h - th, 3.5, 1.6, 0, 0, TAU);
+      ctx.fill();
+    }
+  }
+}
+
+function drawLightRays(ctx, w, h) {
+  ctx.globalCompositeOperation = 'lighter';
+  const r = seeded(61);
+  for (let k = 0; k < 7; k++) {
+    const x = (0.05 + k * 0.15 + (r() - 0.5) * 0.05) * w;
+    const wd = 26 + r() * 40;
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, 'rgba(220,255,250,0.32)');
+    g.addColorStop(1, 'rgba(220,255,250,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x + wd, 0);
+    ctx.lineTo(x + wd * 2.4 - 60, h);
+    ctx.lineTo(x - 60, h);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+function drawSchoolFish(ctx, w, h) {
+  ctx.fillStyle = 'rgba(8,60,80,0.55)';
+  ctx.beginPath();
+  ctx.ellipse(w * 0.42, h / 2, w * 0.36, h * 0.32, 0, 0, TAU);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(w * 0.74, h / 2);
+  ctx.lineTo(w * 0.98, h * 0.12);
+  ctx.lineTo(w * 0.98, h * 0.88);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawBubble(ctx, w, h) {
+  ctx.strokeStyle = 'rgba(230,255,255,0.85)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(w / 2, h / 2, w / 2 - 1.5, 0, TAU);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.beginPath();
+  ctx.arc(w * 0.38, h * 0.36, w * 0.12, 0, TAU);
+  ctx.fill();
+}
+
 /** Each world's own land (texture key -> drawer); BG_SKINS names it as `scenery`. */
 export const SCENERY = Object.freeze({
   bgs_land_fuji: drawFuji,
@@ -859,6 +1029,7 @@ export const SCENERY = Object.freeze({
   bgs_land_nordic: drawNordic,
   bgs_land_moon: drawMoonscape,
   bgs_land_wire: drawWireMountains,
+  bgs_land_reef: drawReef,
 });
 
 export function ensureScenery(scene, key, w, h) {

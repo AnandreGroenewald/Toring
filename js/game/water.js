@@ -29,6 +29,11 @@ const UNDER_DEEP = 0x4f78b8;
 const UNDER_DEEP_PX = 320;
 const BUBBLE_SPEED = 120;      // px/s up
 const FISH = ['🐟', '🐠', '🐡'];
+// (1.15, the owner: "make each background have different kind of fish") what swims past in each world (bgSkin)
+const FISH_BY_SKIN = {
+  sonsondergang: ['🐠', '🦈'], lekkergoed: ['🐡', '🐙'], nag: ['🦑', '🐟'], kersieblom: ['🐠', '🦐'], noorderlig: ['🐋', '🦭'],
+  ruimte: ['🦑', '🐙'], sintgolf: ['🐬', '🐠'], akwarium: ['🐠', '🐡', '🐢', '🦀', '🐟'],
+};
 const FISH_EVERY_S = [9, 18];  // a fish swims past this often (looks only)
 const rgba = ([r, g, b, a], aMul = 1) => `rgba(${r},${g},${b},${a * aMul})`;
 const DEEP_HEX = (DEEP[0] << 16) | (DEEP[1] << 8) | DEEP[2];
@@ -288,7 +293,9 @@ export class Water {
       if (f.x < -120 || f.x > GAME_W + 120) {
         f.destroy();
         this.fish = null;
-        this.fishAt = this.t + FISH_EVERY_S[0] + Math.random() * (FISH_EVERY_S[1] - FISH_EVERY_S[0]);
+        // (the aquarium is busier)
+        const busy = this.scene.registry?.get('bgSkin') === 'akwarium' ? 0.4 : 1;
+        this.fishAt = this.t + (FISH_EVERY_S[0] + Math.random() * (FISH_EVERY_S[1] - FISH_EVERY_S[0])) * busy;
       }
       return;
     }
@@ -302,7 +309,8 @@ export class Water {
     const fromLeft = Math.random() < 0.5;
     const depth = Math.min(viewBottom - this.displayY - 50, 50 + Math.random() * 140);
     // (1.12.1) an image drawn once a session (js/game/emojitex.js), not a new text for every fish
-    const txt = emojiImage(this.scene, fromLeft ? -90 : GAME_W + 90, this.displayY + depth, FISH[Math.floor(Math.random() * FISH.length)], 46, {
+    const kinds = FISH_BY_SKIN[this.scene.registry?.get('bgSkin')] || FISH;
+    const txt = emojiImage(this.scene, fromLeft ? -90 : GAME_W + 90, this.displayY + depth, kinds[Math.floor(Math.random() * kinds.length)], 46, {
       font: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
     }).setDepth(DEPTH.water + 0.12).setAlpha(0.8);
     if (fromLeft) txt.setFlipX(true);   // (the emoji faces left)

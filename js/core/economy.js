@@ -106,6 +106,7 @@ export const SKINS = Object.freeze({
     { id: 'kersieblom', price: 1500, tier: 'rare' },     // (1.15) cherry blossom, falling petals
     { id: 'noorderlig', price: 2400, tier: 'epic' },     // (1.15) the northern lights
     { id: 'ruimte', price: 2600, tier: 'epic' },         // (1.15) deep space from the ground up
+    { id: 'akwarium', price: 2800, tier: 'epic' },       // (1.15) the aquarium: a reef, sunbeams, a school of fish
     { id: 'sintgolf', price: 3200, tier: 'legendary' },  // (1.15) retro neon (synthwave): the striped sun, the neon grid
   ]),
   crane: Object.freeze([
@@ -189,6 +190,25 @@ export const RANK_RULES = Object.freeze({
   seasonDrop: 4 * RANK_STEP,                           // a new month: one tier down (Goud II -> Silwer II)
   maxPoints: (LADDER.length - 1) * RANK_STEP + RANK_STEP - 1,   // the top of Stapel-legende: points never pile up out of sight
 });
+
+/**
+ * (1.15, the owner: "lets make this point based not percentage based, for example 100 point till bronze 2 200 for bronze 3
+ * 400 for bronze 4, something like that") a rank is shown in points, and a rank is worth more points the higher it is
+ * (Brons 100, Silwer 150, Goud 200, Platinum 300, Diamant 400, the elite 500); a match's points grow with it. The climb
+ * underneath is unchanged (RANK_STEP steps per rank), so no one's rank moves and the same wins take you up.
+ */
+export const RANK_SCALE = Object.freeze({ brons: 1, silwer: 1.5, goud: 2, platinum: 3, diamant: 4, elite: 5 });
+/** A ladder rank's (or ladderAt's) point scale. */
+export const rankScale = (r) => (r?.elite ? RANK_SCALE.elite : RANK_SCALE[r?.tier] || 1);
+/** The points to show for a rank: { have, need, left } (need: the rank's size; left: to the next rank). */
+export function shownPoints(at, pct = at?.pct) {
+  const k = rankScale(at);
+  const need = Math.round(RANK_STEP * k);
+  const have = Math.min(need, Math.round(Math.max(0, Number(pct) || 0) * k));
+  return { have, need, left: Math.max(0, need - have) };
+}
+/** A match's rank points as shown (at the rank it was played from). */
+export const shownDelta = (delta, at) => Math.round((Number(delta) || 0) * rankScale(at));
 
 /** The rank at some points: { ...ladder rank, pct (0-99, 100 at the top), next (ladder rank or null), toNext }. */
 export function ladderAt(points) {

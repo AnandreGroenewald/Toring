@@ -2682,3 +2682,18 @@ button.chip { font: inherit; border: 0; cursor: pointer; -webkit-tap-highlight-c
 }
 @keyframes plate-foil { 50% { background-position: 100% 0; } }
 @media (prefers-reduced-motion: reduce) { .title-plate.tier-legendary { animation: none; } }
+/* (1.15) the Winkel's tabs: a small icon each, a thin gold line under the open one */
+.shop-tab { display: inline-flex; align-items: center; justify-content: center; gap: calc(6 * var(--u)); }
+.shop-tab .emoji { font-size: 1.05em; filter: saturate(0.6); opacity: 0.75; }
+.shop-tab.on .emoji { filter: none; opacity: 1; }
+.shop-tab.on { box-shadow: inset 0 calc(-4 * var(--u)) 0 #ffc928, 0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(10, 34, 78, 0.12); }
+@media (max-width: 430px) { .shop-tab .emoji { display: none; } }
+/* (1.15, the owner: "The background does not fit") the chests stay inside the strip: room at the top, one height for all
+   (the amounts line up), the opened lid tilted a little less */
+.week-strip { padding-top: calc(18 * var(--u)); padding-bottom: calc(10 * var(--u)); overflow: visible; }
+.wk-chest { height: calc(66 * var(--u)); justify-content: flex-end; }
+.wk-chest.is-done .chest .chest-lid { transform: rotate(-26deg) translate(calc(-1 * var(--u)), calc(-2 * var(--u))); }
+.wk-chest.is-big::after { margin-top: calc(-2 * var(--u)); }
+.skin-scene-akwarium { background: linear-gradient(180deg, #0b6a8a, #2aa7bd 60%, #5ad6c8); }
+.skin-scene-akwarium .scene-fx { background: linear-gradient(100deg, transparent 20%, rgba(220, 255, 250, 0.35) 30%, transparent 40%, transparent 55%, rgba(220, 255, 250, 0.3) 63%, transparent 72%); }
+.skin-scene-akwarium::after { background: linear-gradient(180deg, #ff6f91, #2fae7a); }
