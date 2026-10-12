@@ -68,11 +68,11 @@ export const S_EN = {
   pausePerfects: 'Perfects',
   paused: 'Paused',
   resume: 'Keep playing',
-  quit: 'Stop',
+  quit: 'Give up the match',
   quitHome: 'Back to the main menu',
   quitWarnDaily: 'If you go back now, this try counts as your Daily Tower.',
   // (1.13) a coin match: quitting gives the other player both stakes
-  quitWarnStake: (name, n) => `If you stop now, ${name} gets your ${n} 🪙.`,
+  quitWarnStake: (name, n) => `If you give up now, ${name} gets your ${n} 🪙.`,
   pause: 'Pause',
 
   // --- Results ---

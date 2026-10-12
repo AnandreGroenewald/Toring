@@ -67,12 +67,12 @@ export const S = {
   pausePerfects: 'Perfeks',
   paused: 'Gepouseer',
   resume: 'Speel verder',
-  quit: 'Hou op',
+  quit: 'Gee die wedstryd op',
   // (1.13.4, the owner) the pause card outside a match: straight back to the menu (the tower is saved)
   quitHome: 'Terug na die hoofkieslys',
   quitWarnDaily: 'As jy nou teruggaan, tel hierdie poging as jou Daaglikse Toring.',
   // (1.13) a coin match: quitting gives the other player both stakes
-  quitWarnStake: (name, n) => `As jy nou ophou, kry ${name} jou ${n} 🪙.`,
+  quitWarnStake: (name, n) => `As jy nou opgee, kry ${name} jou ${n} 🪙.`,
   pause: 'Pouseer',
 
   // --- Uitslag (results) ---

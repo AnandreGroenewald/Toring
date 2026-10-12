@@ -3066,3 +3066,20 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 }
 .card .shop-item .shop-buy:active, .card .shop-item .shop-wear:active { transform: scale(0.96); }
 .card .shop-item .shop-try { min-height: 32px; padding: 2px 10px; border: 0; background: none; color: #9fd0ff; font-size: max(12px, calc(20 * var(--u))); text-decoration: underline; text-underline-offset: 3px; }
+/* (1.15, the owner: "This needs to be more to the right and a little more tilted") the flame on the strip's corner, orange */
+.card .week-strip > .streak {
+  right: calc(-14 * var(--u)); top: calc(-24 * var(--u)); transform: rotate(9deg);
+  background: linear-gradient(180deg, #ffb35c, #f06a1a); color: #fff;
+  box-shadow: 0 0 calc(12 * var(--u)) rgba(255, 140, 40, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(0, 0, 0, 0.3);
+}
+.card .week-strip > .streak.is-zero { background: rgba(255, 255, 255, 0.14); color: #c9d4ea; box-shadow: none; }
+/* the trophy chip on the done card's top-left corner, tilted the other way from the flame */
+.done-box { position: relative; }
+.card .done-box > .board-chip {
+  position: absolute; top: calc(-24 * var(--u)); left: calc(-14 * var(--u)); z-index: 2; height: calc(50 * var(--u)); min-height: 36px;
+  padding: 0 calc(16 * var(--u)) 0 calc(12 * var(--u)); border: 0; cursor: pointer; font-size: calc(26 * var(--u)); transform: rotate(-9deg);
+  background: linear-gradient(180deg, #fffbe8, #ffe08a); color: #6b4a00;
+  box-shadow: 0 0 calc(12 * var(--u)) rgba(255, 200, 60, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(0, 0, 0, 0.3);
+}
+.card .done-box > .board-chip:has(span:only-child) { padding-right: calc(12 * var(--u)); }
+.card .done-box > .board-chip .emoji { font-size: calc(30 * var(--u)); }

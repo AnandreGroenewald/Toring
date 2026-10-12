@@ -323,8 +323,10 @@ export class HudScene extends Phaser.Scene {
     }
     this.pipN = -1;
 
-    // --- Row 1: weather chip (centre) ------------------------------------------------
-    this.wxY = y1;
+    // --- The weather chip: (1.15, the owner: "Now that the balance beam is at the top, can we make the "special
+    // abilities", the monkey the fog etc appear at the left side?") on the left, under the balance level; the visitor's
+    // chip under it. (A match moves the weather to row 3, centred: buildDuelHud.)
+    this.wxY = LAYOUT.jibY + st + 92;
     this.wxBg = add(this.add.image(CHIP_CX, this.wxY, '__WHITE'));
     // Emoji are drawn once into textures (emojiTexture): drawing a big emoji glyph is slow, and done in the
     // frame a weather banner appeared it stalled that frame, just as the new block arrives and the player
@@ -333,6 +335,12 @@ export class HudScene extends Phaser.Scene {
       .concat(STAGES.slice(1).map((st) => [st.emoji, 72]))   // the stage banners' too
       .concat(Object.values(EMOTES).map((e) => [e, 92]));    // (1.12.1) and the emoji reactions'
     this.wxEmoji = add(this.add.image(0, this.wxY, '__WHITE').setOrigin(0.5));
+    // the visitor's chip (setVisitor), made here so a restarted scene never keeps a destroyed one
+    this.vsType = null;
+    this.vsW = 0;
+    this.vsBg = add(this.add.image(0, 0, '__WHITE').setVisible(false));
+    this.vsEmoji = add(this.add.image(0, 0, '__WHITE').setOrigin(0.5).setVisible(false));
+    this.vsName = add(text(this, 0, 0, '', 22, { strokeMul: 0.2 }).setOrigin(0, 0.5).setVisible(false));
     this.wxName = add(text(this, 0, this.wxY - 11, '', 22, { strokeMul: 0.2 }).setOrigin(0, 0.5));
     this.wxLeft = add(text(this, 0, this.wxY + 14, '', 20, { color: '#d9ecff', strokeMul: 0.22, shadow: false }).setOrigin(0, 0.5));
     this.wxType = null;
@@ -527,6 +535,7 @@ export class HudScene extends Phaser.Scene {
     if (combo !== this.combo) this.setCombo(combo);
     this.setNext(s.next);
     this.setWeather(this.duelHud?.turns ? null : s.weather);   // (Blok vir Blok: whose turn has row 3)
+    this.setVisitor(s.visitor || null);
     this.setWater(s.waterDistM, time);
     if (this.duelHud) this.updateDuelHud(s, time);
     // the balance meter: how near the loose top is to tipping (its lean), or moving (its wobble)
@@ -920,6 +929,39 @@ export class HudScene extends Phaser.Scene {
 
   setWeatherVisible(on) {
     for (const o of [this.wxBg, this.wxEmoji, this.wxName, this.wxLeft]) o.setVisible(on);
+    this.placeVisitor();
+  }
+
+  /** The weather chip's centre: centred on row 3 in a match, else on the left side. */
+  wxCx(w2) {
+    return this.duelHud ? this.W / 2 : 12 + w2 / 2;
+  }
+
+  /** (1.15) The visitor on screen (type) as a chip on the left, under the weather's; null hides it. */
+  setVisitor(type) {
+    const info = type && !this.duelHud ? VISITOR_INFO[type] : null;
+    if ((info ? type : null) === this.vsType) return;
+    this.vsType = info ? type : null;
+    for (const o of [this.vsBg, this.vsEmoji, this.vsName]) o.setVisible(!!info);
+    if (!info) return;
+    this.vsEmoji.setTexture(this.emojiTexture(info.emoji, 32));
+    this.vsName.setText(info.name);
+    this.vsW = Math.min(CHIP_MAX_W, Math.ceil((16 + 40 + 8 + this.vsName.width + 18) / 8) * 8);
+    this.vsBg.setTexture(panelTexture(this, this.vsW, 50, NAVY, 0.6, { radius: 20 }));
+    this.placeVisitor();
+    for (const o of [this.vsBg, this.vsEmoji, this.vsName]) {
+      o.setAlpha(0);
+      this.tweens.add({ targets: o, alpha: 1, duration: 260 });
+    }
+  }
+
+  placeVisitor() {
+    if (!this.vsBg || !this.vsType) return;
+    const y = this.wxBg.visible ? this.wxY + 62 : this.wxY;
+    const cx = 12 + this.vsW / 2;
+    this.vsBg.setPosition(cx, y);
+    this.vsEmoji.setPosition(12 + 16 + 20, y);
+    this.vsName.setPosition(12 + 16 + 40 + 8, y);
   }
 
   setWeather(w) {
@@ -942,7 +984,7 @@ export class HudScene extends Phaser.Scene {
     const textW = Math.max(this.wxName.width, this.wxLeft.width);
     const w2 = Math.min(CHIP_MAX_W, Math.ceil((16 + 40 + 8 + textW + 18) / 8) * 8);
     this.wxBg.setTexture(panelTexture(this, w2, 56, NAVY, 0.6, { radius: 22 }));
-    const cx = this.duelHud ? this.W / 2 : CHIP_CX;   // (in a match the chip has row 3 to itself)
+    const cx = this.wxCx(w2);   // (in a match the chip has row 3 to itself)
     this.wxBg.setPosition(cx, this.wxY);
     const x0 = cx - w2 / 2;
     this.wxEmoji.setPosition(x0 + 16 + 20, this.wxY);
@@ -1103,7 +1145,7 @@ export class HudScene extends Phaser.Scene {
       // banner just fades where it is: the visitor itself is on screen
       const out = visitor
         ? { y: y0 + 24, scale: 0.92, alpha: 0, duration: 280, ease: 'Quad.easeIn' }
-        : { x: this.duelHud ? this.W / 2 : CHIP_CX, y: this.wxY, scale: 0.3, alpha: 0, duration: 320, ease: 'Cubic.easeIn' };
+        : { x: this.wxBg.x, y: this.wxY, scale: 0.3, alpha: 0, duration: 320, ease: 'Cubic.easeIn' };
       this.bannerTween = this.tweens.add({
         targets: c, ...out,
         onComplete: () => {

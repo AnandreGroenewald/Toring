@@ -3626,6 +3626,9 @@ export class GameScene extends Phaser.Scene {
     s.wobble = this.wobble;
     s.lean = this.lean;
     s.turns = this.turns ? this.turnsHud() : null;
+    // (1.15) the visitor on screen (its chip on the left side of the HUD), none in Blok vir Blok (its rounds have the pill)
+    const v = !this.turns && this.visitors?.active;
+    s.visitor = v && !v.gone ? v.type : null;
     bus.emit('hud:state', s);
   }
 

@@ -911,12 +911,9 @@ export function createUI(bus) {
           h('div', { class: 'done-stats' },
             doneTile('🏗️', fmtM(r.heightM || 0), S.height),
             doneTile('⭐', fmtInt(r.score || 0), S.points),
-            r.retried ? doneTile('🔁', String((r.tries || 2) - 1), S.extraTries, 'done-retry') : null,
-            m.boardOn ? h('button', {
-              type: 'button', class: 'done-tile done-board', 'aria-label': m.boardPlace ? `${S.boardTitle}: #${m.boardPlace}` : S.boardTitle,
-              onclick: () => { audio.play('click'); bus.emit('ui:board'); },
-            }, h('span', { class: 'done-tile-top' }, emo('🏆'), m.boardPlace ? h('b', { text: `#${m.boardPlace}` }) : null),
-            h('small', { text: m.boardPlace ? S.boardPlace : S.boardShort })) : null),
+            r.retried ? doneTile('🔁', String((r.tries || 2) - 1), S.extraTries, 'done-retry') : null),
+          // (1.15, the owner: "this was a little better with the simple trophy") the 🏆 chip on the done card's corner
+          trophy,
           countdownEl('done-count')));
       if (rt && rt.status === 'ready') {
         // bought, not played yet: it's the big button now
@@ -1667,9 +1664,10 @@ export function createUI(bus) {
       stake && stake.n ? h('p', { class: 'warn' }, emo('⚠️'), h('span', { text: S.quitWarnStake(stake.name || S.duelSomeone, fmtInt(stake.n)) })) : null,
       button('btn-big btn-green', [icon('play'), h('span', { text: S.resume })], () => bus.emit('ui:resume')),
       // (1.13.4, the owner) outside a match: "Terug na die hoofkieslys", straight to the menu (the tower is saved first);
-      // a match keeps "Hou op" (it goes on to the match's result)
+      // a match keeps its own way out (it goes on to the match's result): (1.15, the owner: "it should not show Stop
+      // please") "🏳️ Gee die wedstryd op", which says what it does
       mode === 'duel'
-        ? button('btn-white btn-quit', [icon('close'), h('span', { text: S.quit })], () => bus.emit('ui:quit'))
+        ? button('btn-white btn-quit', [emo('🏳️'), h('span', { text: S.quit })], () => bus.emit('ui:quit'))
         : button('btn-white btn-quit', [icon('home'), h('span', { text: S.quitHome })], () => bus.emit('ui:quit-home')),
       h('div', { class: 'dock' }, toggleBtns({ contrast: true })));
     screens.pause.replaceChildren(card);
