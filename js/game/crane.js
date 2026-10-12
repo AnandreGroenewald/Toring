@@ -39,10 +39,10 @@ const CRANE_SKINS = {
   rooi: { main: '#e53935', light: '#ff7a73', dark: '#a3201c', edge: '#5c0f0f', bolt: '#7a1414' },
   blou: { main: '#1e88e5', light: '#6ab7ff', dark: '#0b5aa8', edge: '#0a2d55', bolt: '#0d3d73' },
   pienk: { main: '#ff5fa8', light: '#ffa3cf', dark: '#c4307a', edge: '#5e1236', bolt: '#7a1a48' },
-  // (1.15, the owner: "Make the gold more promenent") polished gold: deeper shading, more sparkles, a glint running along
-  goud: { main: '#f7c531', light: '#fff7c2', dark: '#9c6a00', edge: '#3f2a00', bolt: '#6b4a00', sparkle: true, metal: true, glint: 0xfff0b0 },
-  // (1.15, the owner: "Add one more ... crane") neon tubes on dark steel, pink chords and cyan lacing, a glow running along
-  neon: { main: '#29f0ff', light: '#c9fbff', dark: '#120724', edge: '#07030f', bolt: '#ffe066', neon: '#ff3fa4', glint: 0xff8ae0 },
+  // (1.15, the owner: "Make the gold more promenent") polished gold: deeper shading, more sparkles
+  goud: { main: '#f7c531', light: '#fff7c2', dark: '#9c6a00', edge: '#3f2a00', bolt: '#6b4a00', sparkle: true, metal: true },
+  // (1.15, the owner: "Add one more ... crane") neon tubes on dark steel, pink chords and cyan lacing
+  neon: { main: '#29f0ff', light: '#c9fbff', dark: '#120724', edge: '#07030f', bolt: '#ffe066', neon: '#ff3fa4' },
 };
 let craneSkin = 'geel';
 /** (1.13.4) The crane's skin for cranes made from now on (Crane.applySkin() repaints one already up). */
@@ -170,15 +170,6 @@ function ensureCraneTextures(scene, skinId = craneSkin) {
       }
     }
   });
-  if (sk.glint) {
-    const src = scene.textures.get(`crane_jib${sfx}`).getSourceImage();
-    canvasTexture(scene, `crane_glint${sfx}`, JIB_W, 64, (ctx) => {
-      ctx.drawImage(src, 0, 0);
-      ctx.globalCompositeOperation = 'source-in';
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, JIB_W, 64);
-    });
-  }
   canvasTexture(scene, `crane_trolley${sfx}`, 76, LAYOUT.trolleyH + 4, (ctx, w) => {
     const bodyH = LAYOUT.trolleyH;
     // body
@@ -327,10 +318,7 @@ export class Crane {
     this.light = add(scene.add.image(0, 0, 'crane_light'), 0.75);
     this.block = add(scene.add.image(0, 0, '__WHITE').setVisible(false), 0.2);
     this.hook = add(scene.add.image(0, 0, 'crane_hook').setOrigin(0.5, 0), 0.3);
-    // (1.15) the gold and neon cranes: a glint runs along the jib (its own shape in white, a window of it lit at a time)
-    this.glint = add(scene.add.image(GAME_W / 2, JIB_TEX_Y + this.top, '__WHITE').setOrigin(0.5, 0).setBlendMode('ADD').setVisible(false), 0.52);
-    this.parts = [this.jib, this.rope, this.trolley, ...this.wheels, this.light, this.block, this.hook, this.glint];
-    this._setGlint();
+    this.parts = [this.jib, this.rope, this.trolley, ...this.wheels, this.light, this.block, this.hook];
 
     this.phase = 0;
     this.windAccel = 0;
@@ -517,22 +505,8 @@ export class Crane {
     if (this.acc < 0) this.acc = 0;
     this._layout();
     this._glow(heat);
-    if (this._glintOn && this.visible) {
-      const span = JIB_W + 240;
-      const x = ((this.time * 230) % (span + 900)) - 120;   // a pass every ~5 s, then a rest
-      const on = x < span;
-      this.glint.setVisible(on);
-      if (on) this.glint.setCrop(Math.max(0, x - 60), 0, x < 60 ? x : 60, 64);
-    }
   }
 
-  /** The gold and neon cranes' glint: on for a skin that has one (its colour), off otherwise. */
-  _setGlint() {
-    const sk = CRANE_SKINS[this.skin] || CRANE_SKINS.geel;
-    this._glintOn = !!sk.glint && !this.scene.reducedMotion && !this.scene.scene?.get?.('Game')?.reducedMotion;
-    if (sk.glint) this.glint.setTexture(`crane_glint${skinSuffix(this.skin)}`).setTint(sk.glint).setAlpha(0.75);
-    this.glint.setVisible(false);
-  }
 
   /** Heat wave (heat 0..1, eased in and out with the weather): the steel glows hot, pulsing. */
   _glow(heat) {
@@ -586,14 +560,12 @@ export class Crane {
     const sfx = skinSuffix(this.skin);
     this.jib.setTexture(`crane_jib${sfx}`);
     this.trolley.setTexture(`crane_trolley${sfx}`);
-    this._setGlint();
   }
 
   setVisible(v) {
     this.visible = !!v;
     for (const p of this.parts) {
       if (p === this.block) p.setVisible(this.visible && this._hasBlock);
-      else if (p === this.glint) p.setVisible(false);   // (update() shows it while it runs)
       else p.setVisible(this.visible);
     }
   }

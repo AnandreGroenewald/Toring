@@ -2995,3 +2995,28 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .card .daily-date { color: #9fb0d0; }
 .card .lang-btn { background: rgba(255, 255, 255, 0.08); color: #f2f5ff; border-color: rgba(255, 255, 255, 0.18); }
 .card .lang-btn.on { background: #fff; color: #1d2b45; border-color: #ffc928; box-shadow: inset 0 calc(-4 * var(--u)) 0 #ffc928; }
+/* white pills keep dark words on the dark sheets (the chosen mode, a title's preview) */
+.card .mode-btn[aria-pressed="true"], .card .title-prev, .card .shop-tab.on { color: #1d2b45; }
+/* (1.15, the owner: "Make the coss just a little to the top right corner") */
+.sheet .close, .duel-card > .close, .duel-wait > .close { top: calc(14 * var(--u)); right: calc(14 * var(--u)); width: max(44px, calc(68 * var(--u))); height: max(44px, calc(68 * var(--u))); font-size: calc(32 * var(--u)); }
+/* (1.15, the owner: "Also look at this gear?") the round menu buttons in dark glass, white icons, a thin light ring */
+.dock-ic {
+  background: radial-gradient(circle at 35% 25%, #33447a 0%, #1a2446 60%, #10172f 100%); color: #fff;
+  box-shadow: 0 var(--depth) 0 #0a0f22, 0 calc(12 * var(--u)) calc(20 * var(--u)) rgba(5, 10, 30, 0.35), inset 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.22);
+}
+.dock-btn:active .dock-ic { box-shadow: 0 calc(1 * var(--u)) 0 #0a0f22, inset 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.22); }
+.dock-shop .dock-ic { color: #ffd75a; box-shadow: 0 var(--depth) 0 #0a0f22, 0 calc(12 * var(--u)) calc(20 * var(--u)) rgba(5, 10, 30, 0.35), inset 0 0 0 calc(2 * var(--u)) rgba(255, 215, 90, 0.55); }
+.dock-btn[aria-pressed="false"] .dock-ic { color: #7d8aa6; background: rgba(255, 255, 255, 0.06); }
+.card .dock-ic { background: rgba(255, 255, 255, 0.08); color: #fff; box-shadow: 0 var(--depth) 0 rgba(0, 0, 0, 0.35), inset 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.14); }
+.card .dock-btn:active .dock-ic { box-shadow: 0 calc(1 * var(--u)) 0 rgba(0, 0, 0, 0.35); }
+.card .dock-btn { color: #c9d4ea; }
+/* the versus cards and their medals always play, also while the game loop rests (.zzz) */
+.zzz .vs-cards .pcard, .zzz .vs-cards .pcard *, .zzz .vs-cards .pcard *::before, .zzz .vs-cards .pcard *::after, .zzz .vs-cards .pc-badge::before { animation-play-state: running !important; }
+/* (1.15, the owner: "the corss is next to it instead of top right hand corner of that bubble") the ✕ as a small badge on
+   the offer's top-right corner */
+.install-row { position: relative; }
+.install-x {
+  position: absolute; top: calc(-12 * var(--u)); right: calc(-8 * var(--u)); z-index: 2;
+  width: max(30px, calc(46 * var(--u))); height: max(30px, calc(46 * var(--u)));
+  background: #1d2b45; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(0, 0, 0, 0.3);
+}

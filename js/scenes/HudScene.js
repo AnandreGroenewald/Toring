@@ -363,16 +363,13 @@ export class HudScene extends Phaser.Scene {
     this.wmTick = add(this.add.image(this.wm.cx, this.wm.cy, 'hud_level_bub'));
     this.wmGlass = add(this.add.image(this.wm.cx, this.wm.cy, 'hud_level_glass'));
     this.wmLbl = add(text(this, lx + 14 + (LV.vx - 18) / 2, ly + 34, S.wobbleTitle, 19, { strokeMul: 0.2, shadow: false }).setOrigin(0.5));
-    // the heavy side's end of the vial lights up near tipping (place the next block on the other side)
-    this.wmSide = add(this.add.image(this.wm.cx, this.wm.cy, 'fx_px').setDisplaySize(16, LV.vh - 6).setVisible(false));
-    this.wmSideNow = 0;
     this.wmVal = -1;
     this.wmLean = 0;
     this.wmHotNow = false;
     this.wmShakeUntil = 0;
     this.buildDuelHud(add);
     this.wmAlpha = 0.7;
-    this.wmParts = [this.wmBg, this.wmFill, this.wmTick, this.wmGlass, this.wmLbl, this.wmSide];
+    this.wmParts = [this.wmBg, this.wmFill, this.wmTick, this.wmGlass, this.wmLbl];
     for (const o of this.wmParts) o.setAlpha(this.wmAlpha);
     this.drawWobble(0);
 
@@ -537,7 +534,6 @@ export class HudScene extends Phaser.Scene {
     const wob = Math.max(s.wobble || 0, Math.min(1, Math.abs(lean)));
     this.wmLean = lean;
     this.drawWobble(wob, time);
-    this.drawSide(lean);
     // the meter steps forward when the tower is in some trouble (with hysteresis)
     const wa = wob > 0.15 ? 1 : wob < 0.08 ? 0.7 : this.wmAlpha;
     if (wa !== this.wmAlpha) {
@@ -1021,18 +1017,6 @@ export class HudScene extends Phaser.Scene {
   }
 
   /** Crops a pre-drawn gradient bar (no Graphics re-tessellation per frame). */
-  /** The vial's heavy end lights up (amber, red near tipping) while the loose top leans that way (none while about centred). */
-  drawSide(lean) {
-    const side = lean > 0.3 ? 1 : lean < -0.3 ? -1 : Math.abs(lean) > 0.2 ? this.wmSideNow : 0;
-    // red near the tipping point, amber before (and back to amber only below 0.6: no flicker at the line)
-    const hot = Math.abs(lean) > 0.7 || (this.wmSideHot && Math.abs(lean) > 0.6);
-    if (side === this.wmSideNow && hot === this.wmSideHot) return;
-    this.wmSideNow = side;
-    this.wmSideHot = hot;
-    this.wmSide.setVisible(side !== 0);
-    if (side) this.wmSide.setTint(hot ? 0xff6b5e : 0xffc56e).setX(this.wm.cx + side * (LV.vw / 2 - 14));
-  }
-
   /** The level: the liquid's colour for how near tipping, the bubble on the heavy side; entering the red, one buzz. */
   drawWobble(v, time = 0) {
     const q = Math.round(Math.min(1, Math.max(0, v)) * 60) / 60;
