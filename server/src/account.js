@@ -21,6 +21,7 @@ import { checkOrigin, limit } from './stats.js';
 import { hmacHex, sha256Hex, randomHex } from './crypto.js';
 import { verifyGoogleIdToken } from './google.js';
 import { metre } from './board.js';
+import { COSMETIC_KINDS, SKIN_KINDS, cosmetic, skin } from '../../js/core/economy.js';
 
 export const SAVE_MAX_BYTES = 256 * 1024;
 export const SESSIONS_MAX = 10;              // devices signed in at once; the longest unused goes first
@@ -78,6 +79,38 @@ function cleanSave(save) {
   if (!save || typeof save !== 'object' || Array.isArray(save)) throw new HttpError(400, 'invalid_field', { field: 'save' });
   if (save.v !== 1) throw new HttpError(400, 'invalid_field', { field: 'save.v' });
   return JSON.stringify(save);
+}
+
+/**
+ * (1.15) A store never loses a bought look or skin. An older game cleans its copy against its own (shorter) shop
+ * list, so what it doesn't know yet is gone from the copy it sends; every shop id the kept save owned stays owned
+ * in the new one. Known ids only, added to the owned lists; nothing removed, what is worn is the game's choice.
+ */
+export function keepOwned(save, kept) {
+  const e = save?.econ;
+  const k = kept?.econ;
+  if (!e || typeof e !== 'object' || Array.isArray(e) || !k || typeof k !== 'object') return save;
+  const keep = (into, from, kinds, known) => {
+    if (!from || typeof from !== 'object') return;
+    for (const kind of kinds) {
+      const old = Array.isArray(from[kind]) ? from[kind] : [];
+      const ids = old.filter((id) => typeof id === 'string' && known(kind, id));
+      if (!ids.length) continue;
+      const now = Array.isArray(into[kind]) ? into[kind] : (into[kind] = []);
+      for (const id of ids) if (!now.includes(id)) now.push(id);
+    }
+  };
+  if (k.owned && (e.owned === undefined || (e.owned && typeof e.owned === 'object' && !Array.isArray(e.owned)))) {
+    keep((e.owned ??= {}), k.owned, COSMETIC_KINDS, cosmetic);
+  }
+  const ks = k.skins?.owned;
+  if (ks && (e.skins === undefined || (e.skins && typeof e.skins === 'object' && !Array.isArray(e.skins)))) {
+    e.skins ??= {};
+    if (e.skins.owned === undefined || (e.skins.owned && typeof e.skins.owned === 'object' && !Array.isArray(e.skins.owned))) {
+      keep((e.skins.owned ??= {}), ks, SKIN_KINDS, skin);
+    }
+  }
+  return save;
 }
 
 async function signInGoogle(request, ctx) {
@@ -141,11 +174,23 @@ async function store(request, ctx) {
   if (!ctx.rate.allow(`store:${account}`, ctx.cfg.rate.accountStoresPerHour, ctx.now)) throw new HttpError(429, 'rate_limited');
   if (!Number.isInteger(body.rev) || body.rev < 0) throw new HttpError(400, 'invalid_field', { field: 'rev' });
   if (typeof body.push !== 'string' || !PUSH_RE.test(body.push)) throw new HttpError(400, 'invalid_field', { field: 'push' });
-  const text = cleanSave(body.save);
+  let text = cleanSave(body.save);
   if (text.length > SAVE_MAX_BYTES) throw new HttpError(413, 'payload_too_large');
   // sent again (the game never heard the answer): it was kept the first time
   const before = await pushed(ctx, account, body.push);
   if (before !== null) return json(200, { ok: true, rev: before, again: true });
+  // (1.15) built on the kept save: what it owned stays owned (keepOwned; an older game drops looks it doesn't know)
+  const kept = await ctx.db.prepare('SELECT rev, save FROM accounts WHERE id = ?1').bind(account).first();
+  if (kept && kept.rev === body.rev && typeof kept.save === 'string') {
+    let old = null;
+    try {
+      old = JSON.parse(kept.save);
+    } catch {
+      old = null;
+    }
+    const merged = old ? JSON.stringify(keepOwned(body.save, old)) : text;
+    if (merged.length <= SAVE_MAX_BYTES) text = merged;
+  }
   // only on top of the version the game read: otherwise it gets the newer one back to merge with. The store and
   // its id are kept together, in one batch: the id only when this very store went in (the row carries it).
   await ctx.db.batch([

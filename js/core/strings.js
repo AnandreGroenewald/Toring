@@ -120,7 +120,7 @@ export const S = {
     { icon: '🌦️', text: 'Hoe hoër jy bou, hoe meer weer: wind, reën, weerlig, hael en mis.' },
     { icon: '🌊', text: 'Die water styg. Hou jou toring bo die vloedlyn.' },
     { icon: '❤️', text: 'Drie hartjies. ’n Blok in die see kos een; elke vierde Perfek bring een terug.' },
-    { icon: '🐒', text: 'Besoekers: ’n Perfek jaag Blouaap weg, tik Skelm Sakkie vas, en Hanswors bring geskenke. Hulle kos nooit ’n lewe nie.' },
+    { icon: '🐒', text: 'Besoekers: ’n Perfek jaag Blouaap weg, tik Skelm Sakkie vas, en Hanswors bring geskenke. Hulle kos nooit ’n hartjie nie.' },
     // (1.13.2, the owner: "add the challenger and brick by brick series to the tutorial")
     { icon: '⚔️', text: 'Uitdagersreeks: speel teen ’n vriend, iemand anders of Robot Rikus. Teen ’n regte speler kan julle vir munte speel: die wenner kry albei se munte.' },
     { icon: '🏁', text: 'Wedloop: elkeen bou sy eie toring met dieselfde blokke. Wie eerste by ’n 10 m-merk kom, kies ’n straf vir die ander. Eerste tot 50 m wen.' },
@@ -286,10 +286,10 @@ export const S = {
   modeChoose: 'Hoe wil julle speel?',
   modeRace: 'Wedloop',
   modeRaceTag: 'eerste tot 50 m wen',
-  modeRaceWhat: 'Elkeen bou sy eie toring; eerste tot 50 m wen. Elke 10 m kies jy ’n straf vir die ander.',
+  modeRaceWhat: 'Elkeen bou sy eie toring; eerste tot 50 m wen. Wees eerste by elke 10 m en kies ’n straf vir die ander.',
   modeTurns: 'Blok vir Blok',
   modeTurnsTag: 'om die beurt op een toring',
-  modeTurnsWhat: 'Een toring saam, om die beurt ’n blok. Laat val jy ’n blok, verloor jy ’n hartjie.',
+  modeTurnsWhat: 'Een toring saam, om die beurt ’n blok. Val daar blokke af in jou beurt, kos dit jou ’n hartjie.',
   hudYou: 'Jy',
   turnsYourTurn: 'Jou beurt!',
   turnsTheirTurn: (name) => `${name} se beurt…`,
@@ -320,7 +320,7 @@ export const S = {
   roundBeatMine: (type, gain) => `${type === 'thief' ? 'Gevang!' : 'Blouaap vlug!'}${gain ? ' +❤️' : ''}`,
   roundBeatTheirs: (name, type, gain) => `${name} ${type === 'thief' ? 'vang Skelm Sakkie' : 'jaag Blouaap weg'}!${gain ? ' +❤️' : ''}`,
   roundThiefFirst: 'Vang eers Skelm Sakkie!',
-  searchStoppedPause: 'Opgehou soek na ’n teenstander.',
+  searchStoppedPause: 'Ons het opgehou om ’n teenstander te soek.',
   // "Nog 'n kans" (1.12): one more daily try for coins; the leaderboard keeps the better one, marked 🔁
   retryBtn: '🔁 Nog ’n kans',
   retryHow: 'Tot 4 keer per dag. Jou beste poging tel, met ’n 🔁 op die ranglys.',
@@ -370,7 +370,7 @@ export const S = {
   shopLooks: 'Uitdager-styl',
   // (1.13.4) the tower's skins (bought with coins; each kind's first is free)
   shopSkins: 'Toring-styl',
-  shopSkinsNote: 'Net vir jou oë: jou agtergrond, hyskraan en blokke. Dit verander niks aan die spel nie. Koop dit met munte; die gewone een van elke soort is gratis.',
+  shopSkinsNote: 'Jou agtergrond en hyskraan sien net jy; jou blokke sien jou teenstander ook in Blok vir Blok. Dit verander niks aan die spel nie. Koop dit met munte; die gewone een van elke soort is gratis.',
   skinKinds: { scene: 'Agtergrond', crane: 'Hyskraan', blocks: 'Blokke' },
   skinNames: {
     scene: { dag: 'Kaapse dag', sonsondergang: 'Safari', lekkergoed: 'Lekkergoedlug', nag: 'Sterrenag', kersieblom: 'Kersiebloeisels',
@@ -399,7 +399,7 @@ export const S = {
   updateBtn: 'Dateer op',
   updateLater: 'Later',
   lockedRank: (rank) => `🔒 ${rank}-rang`,
-  lockedWeek: '🔒 Speel 7 dae na mekaar',
+  lockedWeek: '🔒 Speel 7 dae op ’n ry',
   // die weekkis (1.10, js/core/week.js)
   weekTitle: 'Weekkis',
   // (1.15) a tap on a chest
@@ -523,7 +523,7 @@ export const S = {
   stakeHaveShort: (coins) => `Jy het ${coins} 🪙.`,
   stakeRule: 'Los jy die wedstryd of val jy langer as 20 s uit, kry die ander jou munte.',
   stakeNeedMore: (n) => `Nog ${n} munte nodig`,
-  stakeNote: 'speelmunte: nie te koop nie, nie vir geld nie.',
+  stakeNote: 'Munte kan nie gekoop of vir geld omgeruil word nie.',
   stakeLine: (n) => `Speel vir ${n} 🪙 elk`,
   stakeVs: (n, pot) => `${n} 🪙 elk · die wenner kry ${pot} 🪙`,
   stakeNeed: (n, coins) => `Te min munte: jy het ${coins} 🪙, hierdie wedstryd vra ${n}.`,

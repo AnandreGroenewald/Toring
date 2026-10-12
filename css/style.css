@@ -2449,13 +2449,16 @@ canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 
 @keyframes tier-sweep { from { transform: translateX(-60%); } 55%, to { transform: translateX(60%); } }
 .shop-item.is-on { border-color: #4fd66a; box-shadow: 0 0 0 calc(3 * var(--u)) #4fd66a inset, 0 0 calc(12 * var(--u)) rgba(79, 214, 106, 0.35); }
 .shop-item > * { position: relative; }
-.shop-tags { position: absolute !important; top: calc(6 * var(--u)); left: calc(6 * var(--u)); right: calc(6 * var(--u)); display: flex; justify-content: space-between; gap: calc(4 * var(--u)); pointer-events: none; }
+/* (1.15) on a narrow phone "LEGENDARIES" + "NUUT" don't fit one row: Nuut then drops to its own row, right, over the
+   picture's corner (the tags sit above the picture) */
+.shop-tags { z-index: 3; position: absolute !important; top: calc(6 * var(--u)); left: calc(6 * var(--u)); right: calc(6 * var(--u)); display: flex; flex-wrap: wrap; justify-content: space-between; gap: calc(4 * var(--u)); pointer-events: none; }
 .shop-tier, .shop-new { padding: calc(2 * var(--u)) calc(9 * var(--u)); border-radius: 999px; font: 900 max(9px, calc(15 * var(--u))) / 1.2 var(--font); letter-spacing: 0.02em; text-transform: uppercase; color: #fff; white-space: nowrap; }
-.shop-tier.tier-common { background: var(--t-common); }
-.shop-tier.tier-rare { background: var(--t-rare); }
+/* the tags' small white words at 4.5:1 or more (the tier colours stay for the tiles and the try bar) */
+.shop-tier.tier-common { background: #64768c; }
+.shop-tier.tier-rare { background: #1c6fd9; }
 .shop-tier.tier-epic { background: var(--t-epic); }
 .shop-tier.tier-legendary { background: linear-gradient(90deg, #f2a516, #ffd76a, #f2a516); color: #4a2d00; }
-.shop-new { margin-left: auto; background: #ff3b5c; box-shadow: 0 0 calc(8 * var(--u)) rgba(255, 59, 92, 0.6); }
+.shop-new { margin-left: auto; background: #e0234a; box-shadow: 0 0 calc(8 * var(--u)) rgba(255, 59, 92, 0.6); }
 .shop-prev { height: calc(92 * var(--u)); }
 /* the real blocks in a block skin (drawn by js/game/blocks.js) */
 .skin-prev.has-swatch { width: calc(132 * var(--u)); height: calc(92 * var(--u)); background: transparent; box-shadow: none; }
@@ -2555,6 +2558,7 @@ canvas.cel-icon { display: block; width: calc(84 * var(--u)); height: calc(84 * 
   cursor: pointer; font-variant-numeric: tabular-nums;
 }
 .menu-wallet .coin-ic { font-size: 1.2em; }
+.menu-wallet.no-plus { padding-right: calc(14 * var(--u)); }
 .menu-wallet .wallet-plus {
   display: grid; place-items: center; width: calc(30 * var(--u)); height: calc(30 * var(--u)); min-width: 22px; min-height: 22px; border-radius: 50%;
   background: #4fd66a; color: #fff; font-size: 0.95em; line-height: 1; box-shadow: inset 0 calc(-3 * var(--u)) 0 #2f9e48;
@@ -2609,7 +2613,8 @@ button.chip { font: inherit; border: 0; cursor: pointer; -webkit-tap-highlight-c
 .wk-chest.is-big .chest::before, .chest.is-big::before { background: linear-gradient(90deg, transparent 18%, #fff3b0 18% 27%, transparent 27% 73%, #fff3b0 73% 82%, transparent 82%), linear-gradient(180deg, #ffd23f, #d38a00); }
 .wk-chest.is-big .chest .chest-lid, .chest.is-big .chest-lid { background: linear-gradient(90deg, transparent 18%, #fffbe0 18% 27%, transparent 27% 73%, #fffbe0 73% 82%, transparent 82%), linear-gradient(180deg, #ffe680, #e8a915); box-shadow: inset 0 calc(-3 * var(--u)) 0 #fff3b0; }
 .wk-chest.is-big .chest .chest-lock, .chest.is-big .chest-lock { background: linear-gradient(180deg, #ff8fb8, #c2185b); }
-.wk-chest.is-big::after { content: '✦'; position: absolute; margin: calc(-6 * var(--u)) 0 0 calc(30 * var(--u)); color: #fff6b0; font-size: calc(18 * var(--u)); text-shadow: 0 0 calc(6 * var(--u)) #ffc928; animation: medal-shine 2.4s ease-in-out infinite; }
+.wk-chest.is-big::after { content: '✦'; position: absolute; top: calc(12 * var(--u)); right: calc(-8 * var(--u)); margin: 0;   /* (1.15 round 2) above the chest's corner, clear of the "+75" */
+  color: #fff6b0; font-size: calc(18 * var(--u)); text-shadow: 0 0 calc(6 * var(--u)) #ffc928; animation: medal-shine 2.4s ease-in-out infinite; }
 .wk-chest.is-big { position: relative; }
 /* the results: today's chest pops open, coins burst out */
 .rw-week .chest.is-opening { --cw: calc(40 * var(--u)); margin-right: calc(4 * var(--u)); animation: chest-pop 0.9s ease-out both; }
@@ -3161,7 +3166,9 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 /* the common title plates: silver with dark words (the dark sheets made their words white on white) */
 .card .title-plate.tier-common { background: linear-gradient(180deg, #f4f7fb, #c9d4e2); color: #1d2b45; text-shadow: none; box-shadow: 0 calc(3 * var(--u)) 0 #8796a8, inset 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.6); }
 /* the sticky card: a ring of the sheet's own colour around it, so the tiles scrolling under it stay hidden */
-.look-zone > .pcard { box-shadow: 0 0 calc(20 * var(--u)) var(--pc-glow), 0 calc(10 * var(--u)) calc(22 * var(--u)) rgba(5, 10, 30, 0.6), 0 0 0 calc(12 * var(--u)) rgba(18, 26, 52, 0.88); }
+/* (1.15 round 2) a full-width band: the ring reaches the sheet's sides (no heading or tile edge peeks past it) and the card
+   pins at the very top (nothing shows above it); the clip keeps the band 12u above and below the card */
+.look-zone > .pcard { top: 0; box-shadow: 0 0 calc(20 * var(--u)) var(--pc-glow), 0 calc(10 * var(--u)) calc(22 * var(--u)) rgba(5, 10, 30, 0.6), 0 0 0 100vw rgba(18, 26, 52, 0.94); clip-path: inset(calc(-12 * var(--u)) -100vw); }
 .punish-title { display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u)); flex-wrap: wrap; }
 .punish-m { padding: calc(3 * var(--u)) calc(12 * var(--u)); border-radius: 999px; background: linear-gradient(180deg, #ffe08a, #f0a500); color: #2a1d00; font-weight: 900; box-shadow: 0 0 calc(10 * var(--u)) rgba(255, 200, 60, 0.45); }
 /* (1.15, the owner: "the punishement needs to be more compact on the left") two by two: small tiles, the icon on top,
@@ -3178,6 +3185,9 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .punish-btn b { font-size: max(11px, calc(19 * var(--u))); }
 .punish-btn small { font-size: max(9px, calc(14 * var(--u))); }
 .punish-btn .pk-go { display: none; }
+/* (1.15 round 2) a small phone (360 px): a little wider, and a long name or line wraps instead of "Skelm Sak…" */
+.punish { min-width: 168px; }
+.punish-btn b, .punish-btn small { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.15; text-wrap: balance; }
 .punish-track { margin-top: calc(8 * var(--u)); }
 /* the round buttons' light falls straight from above (the off-centre highlight made them look lopsided) */
 .dock-ic { background: radial-gradient(circle at 50% 18%, #34467c 0%, #1b2548 58%, #10172f 100%); }

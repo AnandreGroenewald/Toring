@@ -660,6 +660,39 @@ Later the owner added (decisions are final unless they say otherwise):
     punish, vs, cards, flows, celframes: a celebration on a controlled clock).
   - **Kept for 1.16 (the owner: "Keep it for 1.16"):** sea creatures to buy with coins (shark, whale, dolphin, octopus,
     turtle) with Try it.
+  - **The heat wave is gentler:** the crane at 1.3x, was 1.5x (`WEATHER_TUNING.heatCraneMul`; the owner: "The heat wave
+    needs to be difficult but not that difficult. Please take it down a notch"). `DUEL.rules` stays 112 on purpose, so
+    website (1.15) and app (1.14) players still meet in matches: until a player's app is on 1.15 its crane races at 1.5x in a
+    heat wave (the daily board is shared; heat waves fall on 13, 15-19 Oct) and a race's Hittegolf punishment hits a 1.14
+    tower the old way. Accepted for the few days until Play has 1.15 for everyone.
+  - **Download:** the offline cache is 74 files, ~3.08 MB raw, ~1.0 MB over the wire (1.14: 63 files, 2.57 MB; the 9 world
+    photos 180 KB). 1.16's sea creatures should start with a trim (the photos as WebP, the biggest scripts).
+  - **Panel round 1 (6a33cc9, 13 Oct ~00:55-01:10): 30/40, all HOLD** (Guardian 6, Customer 8, Bottom Line 8, Advocate 8).
+    Fixed in round 2:
+    - *A 1.14 app's sync dropped 1.15 purchases* (the Guardian ran it with the real code): a 1.14 app cleans a synced save
+      against its own shop list, so the website then wore the standard look again and a new phone signed in without the
+      1.15 items (coins stayed right). `js/core/cloudsave.js` `worn`: when this device wears an item it owns that the
+      account's copy no longer owns and the account went back to the standard one, keep wearing it (not on the first
+      merge); `tests/cloudsave115.test.js`. The server keeps every shop id the kept save owned (`server/src/account.js`
+      `keepOwned`, one extra D1 read per store; `server/test/keepowned115.test.js`): this also guards 1.16's items
+      against 1.15 apps.
+    - *Words:* the Winkel's tower-style note is true again ("Jou agtergrond en hyskraan sien net jy; jou blokke sien jou
+      teenstander ook in Blok vir Blok ..."); the stake note a whole sentence again ("Munte kan nie gekoop of vir geld
+      omgeruil word nie." / "Coins can’t be bought or swapped for money."); "Hulle kos nooit ’n hartjie nie"; Blok vir
+      Blok: "Val daar blokke af in jou beurt, kos dit jou ’n hartjie." / "If blocks fall off on your turn, you lose a
+      heart."; Wedloop: "Wees eerste by elke 10 m en kies ’n straf vir die ander."; "Speel 7 dae op ’n ry"; "Ons het
+      opgehou om ’n teenstander te soek."; 🔍 (not 🎲) on "Soek ’n teenstander".
+    - *Privacy (both pages, still 2026-10-13: not live yet):* section 11 lists `stapel.v1.shopSeen`, `chestSeen` and
+      `updateSeen` (none sent) and says Kleurblindmodus; the English section 6 "By signing up as a sponsor".
+    - *Look (360 px):* the rarity tags wrap (Nuut drops onto the picture's corner) and the common/rare/Nuut tags reach
+      4.5:1; the menu wallet's + shows only while the refill runs (to Fri 16 Oct; after it a + on coins would read as
+      "buy coins"); the sticky player card pins flush with a full-width band; the day-7 sparkle clear of "+75"; the 2x2
+      punishment names wrap instead of "Skelm Sak…". Screenshots: scratchpad `r2b/`.
+    - *Docs:* SPEC's heat 1.3, README's skins line (the blocks show in Blok vir Blok).
+  - **Watch after release:** the board's daily players on Wed 14 and Sat 17 Oct against the 1.14 days (about 5-12); Thu 15
+    Oct ask the Family which new look they tried and bought; the morning after each step, no match complaints and no new
+    Worker errors (`wrangler tail` or /admin/events). The refill ends Fri 16 Oct, so the week after is the real test of
+    "want to buy".
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

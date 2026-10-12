@@ -46,9 +46,11 @@ feedback live, about 120 rounds of it.
 
 **a. Merge** `stapel-1.15` into `claude/trusting-hopper-26qcax` (local only; fast-forward if possible).
 
-**b. The Worker** (`cd ~/Desktop/Toring/server && ./wr.sh deploy`), at a quiet moment (ask "anyone in a match?" first:
-a deploy restarts the match rooms). Why: the server cleans each player card with the game's own `cleanCard`, so until
-it is deployed an opponent sees the old default for any new medal, frame or title, and no block skin in Blok vir Blok.
+**b. The Worker** (`cd ~/Desktop/Toring/server && ./wr.sh deploy`), at a quiet moment (his night answer: no "anyone in a
+match?"; Claude checks the board's activity first and waits if anyone plays: a deploy restarts the match rooms). Why: the
+server cleans each player card with the game's own `cleanCard`, so until it is deployed an opponent sees the old default
+for any new medal, frame or title, and no block skin in Blok vir Blok. (Round 2) A save store also keeps every shop id the
+account's kept save owned (`keepOwned`), so a 1.14 app's sync can't drop a 1.15 purchase.
 `APP_LATEST` stays "1.14.0" (no update card yet). Before: note the live Worker id (`./wr.sh deployments list`).
 - Live check: `curl -s -H "Origin: https://stapelspel.pages.dev" https://stapel-borge.bonkers-bunch-online.workers.dev/daily/config`
   answers `{"free":3,...,"signin":true,"app":"1.14.0"}`.
@@ -71,3 +73,14 @@ release-notes.txt, README; full panel; the owner's typed word; only "Save and pu
 
 **e. Later, each with its own yes:** promote to the closed test (Google review); raise `APP_LATEST` to "1.15.0" only once
 Play has 1.15.0 for everyone (then `./wr.sh deploy`).
+
+## The Critic Panel (his bar: all four 10 + the Final Boss 10)
+- **Round 1 on 6a33cc9 (13 Oct ~00:55-01:10): 30/40, all HOLD:** Guardian 6 (a 1.14 app's sync dropped 1.15 purchases),
+  Customer 8 (an Afrikaans tag cut off at 360 px, two rule lines, the wallet's + after the refill), Bottom Line 8 (the
+  Winkel's "only you see these" note untrue in 1.15, the records), Advocate 8 (three phone-only keys missing from privacy
+  section 11). Every must-do and lift done in round 2 (HANDOVER §2 1.15.0 "Panel round 1").
+
+## Watch after release
+- The board's daily players on Wed 14 and Sat 17 Oct against the 1.14 days (about 5-12); Thu 15 Oct ask the Family which
+  new look they tried and bought; the morning after each step, no match complaints and no new Worker errors. The refill
+  ends Fri 16 Oct, so the week after is the real test of "want to buy".

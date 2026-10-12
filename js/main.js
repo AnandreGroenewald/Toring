@@ -523,6 +523,7 @@ function menuModel() {
     challenge: activeChallenge() ? { text: S.challengeMenu(fmtM(activeChallenge().heightM)) } : null,
     city: skylineFor(dateKey),
     coins: store.getEconomy().coins,
+    refill: refillActive(),   // (1.15) the wallet's + only while "Vul my munte aan" runs (coins are never sold)
     week: weekView(store.getWeek(), dateKey),   // the weekkis strip (js/core/week.js)
   };
 }

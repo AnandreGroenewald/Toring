@@ -1004,15 +1004,16 @@ export function createUI(bus) {
         showLanguage({ current: lang });
       },
     }, emo('🌐'), h('span', { text: lang.toUpperCase() }));
-    // (1.15) the wallet, top right: your coins, and a tap opens the Winkel
+    // (1.15) the wallet, top right: your coins, and a tap opens the Winkel. Its + only while the refill runs (REFILL):
+    // after that a + on coins would read as "buy coins" in a game where coins can't be bought
     const wallet = h('button', {
-      type: 'button', class: 'menu-wallet', 'aria-label': `${S.shop}: ${fmtInt(m.coins || 0)}`, title: S.shop,
+      type: 'button', class: m.refill ? 'menu-wallet' : 'menu-wallet no-plus', 'aria-label': `${S.shop}: ${fmtInt(m.coins || 0)}`, title: S.shop,
       onclick: () => {
         if (!guard()) return;
         audio.play('click');
         bus.emit('ui:shop');
       },
-    }, coinIc(), h('b', { class: 'wallet-n', text: fmtInt(m.coins || 0) }), h('span', { class: 'wallet-plus', 'aria-hidden': 'true', text: '+' }));
+    }, coinIc(), h('b', { class: 'wallet-n', text: fmtInt(m.coins || 0) }), m.refill ? h('span', { class: 'wallet-plus', 'aria-hidden': 'true', text: '+' }) : null);
     screens.menu.replaceChildren(brand, gap,
       h('div', { class: 'menu-stack' }, card, playRow, dock, adSlot), langChip, wallet);
     // the gap shrinks when the sponsor feed adds the ad card later, so re-check whenever it resizes
@@ -1775,7 +1776,7 @@ export function createUI(bus) {
       // (1.15, the owner: "the 3 buttons feels to childish, and the whole menu doesnt feel premium") three play cards: an
       // icon tile, the name and a line on what it is, a chevron; finding an opponent is the gold one
       h('div', { class: 'duel-btns' },
-        m.live ? playCard('random', '🎲', S.duelRandom, S.duelRandomSub, 'ui:duel-random', true) : null,
+        m.live ? playCard('random', '🔍', S.duelRandom, S.duelRandomSub, 'ui:duel-random', true) : null,
         playCard('friend', '📲', S.duelFriend, S.duelFriendSub, 'ui:duel-friend', !m.live),
         playCard('bot', '🤖', S.duelBot, S.duelBotSub, 'ui:duel-bot', false)),
       m.live ? null : h('p', { class: 'note duel-note', text: S.duelOffline }),

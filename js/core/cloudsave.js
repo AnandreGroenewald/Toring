@@ -161,11 +161,17 @@ export function mergeSaves(localRaw, cloudRaw, baseRaw = null, { today = null } 
   const nOn = (e) => (e.earned.day === earnDay ? e.earned.n : 0);
   const stock = {};
   for (const id of POWERUP_IDS) stock[id] = add(le.stock[id], ce.stock[id], be.stock[id], MAX_STOCK);
+  // (1.15) An older game cleans a save against its own shop list, so a look or skin it doesn't know yet is gone from
+  // its copy and it wears the standard one instead. When this device wears one it owns, and the account's copy went
+  // back to the standard one and no longer lists it as owned, an older game dropped it: keep wearing it here (the
+  // merged copy owns it again for everyone). Not on the first merge, where the account's choice comes first.
+  const worn = (picked, mine, mineOwned, theirsOwned, unset) =>
+    !first && picked === unset && mine !== unset && mineOwned.includes(mine) && !theirsOwned.includes(mine) ? mine : picked;
   const owned = {};
   const look = {};
   for (const kind of COSMETIC_KINDS) {
     owned[kind] = [...new Set([...ce.owned[kind], ...le.owned[kind]])];
-    look[kind] = pick(le.look[kind], ce.look[kind], be.look[kind], DEFAULT_LOOK[kind]);
+    look[kind] = worn(pick(le.look[kind], ce.look[kind], be.look[kind], DEFAULT_LOOK[kind]), le.look[kind], le.owned[kind], ce.owned[kind], DEFAULT_LOOK[kind]);
   }
   const ranks = {};
   for (const m of RANK_MODES) ranks[m] = mergeRank(le.ranks[m], ce.ranks[m], be.ranks[m], first);
@@ -173,7 +179,7 @@ export function mergeSaves(localRaw, cloudRaw, baseRaw = null, { today = null } 
   const skins = { owned: {}, wear: {} };
   for (const kind of SKIN_KINDS) {
     skins.owned[kind] = [...new Set([...ce.skins.owned[kind], ...le.skins.owned[kind]])];
-    skins.wear[kind] = pick(le.skins.wear[kind], ce.skins.wear[kind], be.skins.wear[kind], DEFAULT_SKIN[kind]);
+    skins.wear[kind] = worn(pick(le.skins.wear[kind], ce.skins.wear[kind], be.skins.wear[kind], DEFAULT_SKIN[kind]), le.skins.wear[kind], le.skins.owned[kind], ce.skins.owned[kind], DEFAULT_SKIN[kind]);
   }
   const econ = {
     coins: add(le.coins, ce.coins, be.coins, MAX_COINS),
