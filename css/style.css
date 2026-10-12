@@ -3130,3 +3130,28 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .punish-btn small { color: #b4c2e0; font-size: max(10px, calc(17 * var(--u))); }
 .punish-btn:active { transform: scale(0.97); box-shadow: inset 0 0 0 2px #ffd75a; }
 .grid-box { margin-top: calc(10 * var(--u)); }
+/* (1.15) the choices as play cards: an icon tile in each one's colour, the name, what it does, a chevron; the timer on a track */
+.punish { width: calc(360 * var(--u)); }
+.punish-title { text-align: center; color: #fff; font-size: max(12px, calc(21 * var(--u))); margin-bottom: calc(10 * var(--u)); }
+.punish-btn { grid-template-columns: auto 1fr auto; column-gap: calc(12 * var(--u)); padding: calc(7 * var(--u)) calc(10 * var(--u)) calc(7 * var(--u)) calc(7 * var(--u)); background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.05)); }
+.pk-ic {
+  grid-row: 1 / 3; display: grid; place-items: center; width: max(38px, calc(62 * var(--u))); height: max(38px, calc(62 * var(--u))); border-radius: calc(16 * var(--u));
+  background: linear-gradient(145deg, #8fa2c8, #46557a); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(0, 0, 0, 0.3); overflow: hidden;
+}
+.pk-ic .emoji { font-size: max(22px, calc(38 * var(--u))); line-height: 1; }
+.pk-monkey .pk-ic, .pk-ape .pk-ic { background: linear-gradient(145deg, #ffb35c, #c8661a); }
+.pk-thief .pk-ic { background: linear-gradient(145deg, #b18cff, #5b34c9); }
+.pk-fog .pk-ic { background: linear-gradient(145deg, #c9d6e8, #7d8fae); }
+.pk-heat .pk-ic { background: linear-gradient(145deg, #ff9a6b, #d9381e); }
+.pk-wind .pk-ic { background: linear-gradient(145deg, #9fe2ff, #2f8fd0); }
+.pk-rain .pk-ic, .pk-storm .pk-ic { background: linear-gradient(145deg, #7cc0ff, #2a62c9); }
+.pk-hail .pk-ic { background: linear-gradient(145deg, #e0f4ff, #8fb6d8); }
+.pk-go { grid-row: 1 / 3; grid-column: 3; font-size: max(20px, calc(36 * var(--u))); font-weight: 900; color: rgba(255, 255, 255, 0.5); line-height: 1; }
+.punish-btn b, .punish-btn small { grid-column: 2; }
+.punish-track { margin-top: calc(10 * var(--u)); height: calc(8 * var(--u)); min-height: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.punish-track .punish-time { margin: 0; height: 100%; background: linear-gradient(90deg, #ffe08a, #f0a500); }
+/* (1.15, the owner: "make these a little brighter") on the dark cards: your height gold, theirs sky blue, the labels lighter */
+.card .tile-you b { color: #ffc94a; }
+.card .tile-them b { color: #7cc4ff; }
+.card .label { color: #c9d4ea; }
+.card .tile span { color: #c9d4ea; }

@@ -2879,14 +2879,17 @@ export function createUI(bus) {
     };
     const btns = kinds.map((k) => {
       const info = infoOf(k);
-      return h('button', { type: 'button', class: 'punish-btn', 'aria-label': `${info.name}: ${info.what}`, onclick: () => pick(k) },
-        emo(info.emoji), h('b', { text: info.name }), h('small', { text: info.what }));
+      // (1.15, the owner: "Almost there, not quite") each choice like the Uitdagersreeks' play cards: its icon in a coloured
+      // tile, the name and what it does, a chevron
+      return h('button', { type: 'button', class: `punish-btn pk-${k}`, 'aria-label': `${info.name}: ${info.what}`, onclick: () => pick(k) },
+        h('span', { class: 'pk-ic', 'aria-hidden': 'true' }, emo(info.emoji)), h('b', { text: info.name }), h('small', { text: info.what }),
+        h('span', { class: 'pk-go', 'aria-hidden': 'true', text: '›' }));
     });
     punishBar.setAttribute('aria-label', joker ? S.turnsChooseLabel : S.duelChooseLabel);
     punishBar.replaceChildren(
       h('p', { class: 'punish-title', text: joker ? S.turnsChoose(opp || S.duelSomeone) : S.duelChoose(m, opp || S.duelSomeone) }),
       h('div', { class: 'punish-btns' }, btns),
-      h('div', { class: 'punish-time', vars: { '--ms': `${ms}ms` } }));
+      h('div', { class: 'punish-track' }, h('div', { class: 'punish-time', vars: { '--ms': `${ms}ms` } })));
     punishAt = performance.now();
     punishPick = (n) => {
       if (kinds[n]) pick(kinds[n]);
