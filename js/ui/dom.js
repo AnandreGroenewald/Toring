@@ -319,6 +319,7 @@ export function createUI(bus) {
   }
 
   function showScreen(name) {
+    stopTry(true);
     st.screen = name;
     if (name) st.revealing = false;
     bus.emit('ui:view');
@@ -362,6 +363,7 @@ export function createUI(bus) {
   }
 
   function openModal(name) {
+    stopTry(true);
     if (st.modal && st.modal !== name) setOn(modals[st.modal], false);
     st.modal = name;
     syncTutor();
@@ -430,7 +432,9 @@ export function createUI(bus) {
    * screen with nothing open (the app then closes).
    */
   function goBack() {
-    if (st.modal === 'lang' && st.langFirst) {
+    if (st.trying) {
+      st.trying.querySelector('.try-back')?.click();   // a Try it: back to the Winkel
+    } else if (st.modal === 'lang' && st.langFirst) {
       bus.emit('ui:lang', getLanguage());   // the first-start choice can't be skipped: back keeps the language shown
     } else if (st.modal) {
       closeModal();
@@ -1374,14 +1378,15 @@ export function createUI(bus) {
    * The shop sheet. m: { coins, stock, owned, look, card, name }. Re-rendered after every buy or
    * wear (the tab and the scroll position stay).
    */
-  function showShop(m = {}, tab = st.shopTab || 'powerups') {
+  function showShop(m = {}, tab = st.shopTab || 'skins') {
     const prevBody = modals.shop.querySelector('.sheet-body');
     const keepScroll = st.modal === 'shop' && st.shopTab === tab && prevBody ? prevBody.scrollTop : 0;
     st.shopTab = tab;
     st.shopModel = m;
-    // (1.15, the owner: "add a small touch to it, not too fancy") a small icon on each tab, a gold line under the open one
+    // (1.15, the owner: "add a small touch to it, not too fancy") a small icon on each tab, a gold line under the open one;
+    // ("Make the power ups the 3rd windows and the tower style first") Toring-styl first, and the Winkel opens on it
     const TAB_IC = { powerups: '⚡', looks: '⚔️', skins: '🏗️' };
-    const tabs = h('div', { class: 'shop-tabs', role: 'tablist' }, [['powerups', S.shopPowerups], ['looks', S.shopLooks], ['skins', S.shopSkins]].map(([id, label]) => h('button', {
+    const tabs = h('div', { class: 'shop-tabs', role: 'tablist' }, [['skins', S.shopSkins], ['looks', S.shopLooks], ['powerups', S.shopPowerups]].map(([id, label]) => h('button', {
       type: 'button', role: 'tab', class: `shop-tab${tab === id ? ' on' : ''}`, 'aria-selected': String(tab === id),
       onclick: () => {
         audio.play('click');
@@ -1420,7 +1425,8 @@ export function createUI(bus) {
               tierTags(c, `${kind}:${c.id}`),
               h('span', { class: 'shop-prev' }, skinPreview(kind, c.id)),
               h('b', { class: 'shop-name', text: S.skinNames[kind][c.id] }),
-              action);
+              action,
+              h('button', { type: 'button', class: 'shop-try', text: S.preview, onclick: () => trySkin(kind, c) }));
           })));
       }
     } else {
@@ -1467,7 +1473,45 @@ export function createUI(bus) {
     }
     if (st.modal !== 'shop') openModal('shop');
     else if (keepScroll) body.scrollTop = keepScroll;
+    if (st.tryScroll && tab === 'skins') body.scrollTop = st.tryScroll;   // back from a Try it: where you were
+    st.tryScroll = 0;
     setMenuCoins(m.coins);
+  }
+
+  /**
+   * (1.15, the owner: "the "try it" makes it feel more "THATS WHAT I WANT"") a tower style tried on the real world: the
+   * Winkel and the screen step aside, the world behind wears it (main.js 'ui:skin-try': nothing bought or saved), and a
+   * bar at the bottom buys or wears it right there, or goes back to the Winkel where you were.
+   */
+  function trySkin(kind, item) {
+    audio.play('click');
+    const m = st.shopModel || {};
+    const name = S.skinNames[kind]?.[item.id] || item.id;
+    st.tryScroll = modals.shop.querySelector('.sheet-body')?.scrollTop || 0;
+    stopTry(false);
+    closeModal();
+    const owned = !!m.skins?.owned?.[kind]?.includes(item.id);
+    let action;
+    if (m.skins?.wear?.[kind] === item.id) action = h('span', { class: 'shop-on', text: S.wearing });
+    else if (owned) action = h('button', { type: 'button', class: 'shop-wear', text: S.wear, onclick: () => { audio.play('click'); stopTry(false); bus.emit('ui:skin-wear', { kind, id: item.id }); } });
+    else action = buyBtn(item.price, m.coins, () => { stopTry(false); bus.emit('ui:skin-buy', { kind, id: item.id }); });
+    const bar = h('div', { class: `try-bar tier-${tierOf(item)}`, role: 'dialog', 'aria-label': `${S.preview}: ${name}` },
+      h('span', { class: 'try-txt' }, h('small', { text: S.tryNow }), h('b', { text: name })),
+      action,
+      h('button', { type: 'button', class: 'try-back', text: S.tryBack, onclick: () => { audio.play('click'); stopTry(true); bus.emit('ui:shop', 'skins'); } }));
+    st.trying = bar;
+    root.append(bar);
+    doc.body.classList.add('is-trying');
+    bus.emit('ui:skin-try', { kind, id: item.id });
+    if (st.keyboard) focusQuietly(bar);
+  }
+  /** The try ends: its bar goes and the screen comes back; `restore`: the world puts the worn styles back on. */
+  function stopTry(restore) {
+    if (!st.trying) return;
+    st.trying.remove();
+    st.trying = null;
+    doc.body.classList.remove('is-trying');
+    if (restore) bus.emit('ui:skin-try', null);
   }
 
   /**

@@ -2470,10 +2470,12 @@ canvas.skin-swatch { display: block; width: 100%; height: 100%; }
 }
 .medal .emoji { font-size: calc(42 * var(--u)); filter: drop-shadow(0 calc(3 * var(--u)) calc(2 * var(--u)) rgba(0, 0, 0, 0.4)); }
 .medal .medal-rays { display: none; }
-.medal.tier-common { --m-face1: #f4f7fb; --m-face2: #b9c6d6; --m-rim: #8796a8; --m-rim2: #e6edf5; }
-.medal.tier-rare { --m-face1: #7fc0ff; --m-face2: #1d5fc4; --m-rim: #c7d3e0; --m-rim2: #5e7894; }
-.medal.tier-epic { --m-face1: #d39bff; --m-face2: #5b1fa8; --m-rim: #f0d68a; --m-rim2: #9d6f18; }
-.medal.tier-legendary { --m-face1: #ffe9a3; --m-face2: #d17a00; --m-rim: #fff3c4; --m-rim2: #b07400; }
+/* (1.15, the owner: "the background colours overpower the icons inside") a light face in the tier's tint, the tier's
+   colour in the metal rim: the picture stands out */
+.medal.tier-common { --m-face1: #ffffff; --m-face2: #dde5ee; --m-rim: #a9b6c6; --m-rim2: #eef2f7; }
+.medal.tier-rare { --m-face1: #ffffff; --m-face2: #cfe3ff; --m-rim: #4f9bff; --m-rim2: #1d5fc4; }
+.medal.tier-epic { --m-face1: #ffffff; --m-face2: #ead8ff; --m-rim: #b77cff; --m-rim2: #5b1fa8; }
+.medal.tier-legendary { --m-face1: #fffdf3; --m-face2: #ffe6a0; --m-rim: #ffd257; --m-rim2: #b07400; }
 .medal.medal-none { --m-face1: #f4f7fb; --m-face2: #dfe6ee; --m-rim: #c9d3de; --m-rim2: #f4f7fb; opacity: 0.6; }
 /* epic and legendary: a slow shine; legendary: light rays turning behind it */
 .medal.tier-epic::after, .medal.tier-legendary::after {
@@ -2643,7 +2645,7 @@ button.chip { font: inherit; border: 0; cursor: pointer; -webkit-tap-highlight-c
 .wk-chest.is-opened-now .chest, .rw-chest.is-opened-now .chest { animation: chest-pop 0.9s ease-out both; }
 .wk-chest.is-opened-now .chest .chest-lid, .rw-chest.is-opened-now .chest .chest-lid { animation: lid-fly 0.9s cubic-bezier(.3, 1.6, .5, 1) both; }
 @media (prefers-reduced-motion: reduce) { .wk-chest.is-ready .chest, .rw-chest.is-ready .chest, .wk-chest.is-opened-now .chest, .rw-chest.is-opened-now .chest { animation: none; } }
-.medal.medal-leeu .medal-art { width: 84%; height: 84%; }
+.medal.medal-leeu .medal-art { width: 72%; height: 72%; }   /* (1.15, the owner: "The lion still doesnt fit") inside the rim */
 
 /* (1.15, the owner: "This window still doesnt look like a pause menu, it looks plain ... something is off") a game's pause:
    the game blurred and dimmed behind, a dark glass card with a gold edge, the title in gold, the tower so far in tiles */
@@ -2683,8 +2685,9 @@ button.chip { font: inherit; border: 0; cursor: pointer; -webkit-tap-highlight-c
 @keyframes plate-foil { 50% { background-position: 100% 0; } }
 @media (prefers-reduced-motion: reduce) { .title-plate.tier-legendary { animation: none; } }
 /* (1.15) the Winkel's tabs: a small icon each, a thin gold line under the open one */
-.shop-tab { display: inline-flex; align-items: center; justify-content: center; gap: calc(6 * var(--u)); }
-.shop-tab .emoji { font-size: 1.05em; filter: saturate(0.6); opacity: 0.75; }
+/* (1.15, the owner: "This looks off") the icon above the name, so a two-word name never pushes it out of the pill */
+.shop-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(3 * var(--u)); padding: calc(8 * var(--u)) calc(6 * var(--u)); text-wrap: balance; }
+.shop-tab .emoji { font-size: 1.1em; line-height: 1; filter: saturate(0.6); opacity: 0.75; }
 .shop-tab.on .emoji { filter: none; opacity: 1; }
 .shop-tab.on { box-shadow: inset 0 calc(-4 * var(--u)) 0 #ffc928, 0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(10, 34, 78, 0.12); }
 @media (max-width: 430px) { .shop-tab .emoji { display: none; } }
@@ -2697,3 +2700,25 @@ button.chip { font: inherit; border: 0; cursor: pointer; -webkit-tap-highlight-c
 .skin-scene-akwarium { background: linear-gradient(180deg, #0b6a8a, #2aa7bd 60%, #5ad6c8); }
 .skin-scene-akwarium .scene-fx { background: linear-gradient(100deg, transparent 20%, rgba(220, 255, 250, 0.35) 30%, transparent 40%, transparent 55%, rgba(220, 255, 250, 0.3) 63%, transparent 72%); }
 .skin-scene-akwarium::after { background: linear-gradient(180deg, #ff6f91, #2fae7a); }
+
+/* (1.15, the owner: "the "try it" makes it feel more "THATS WHAT I WANT"") a tower style tried on the real world: the
+   screen steps aside, and a bar at the bottom names it with buy / wear and the way back to the Winkel */
+body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+.try-bar {
+  position: absolute; left: 50%; bottom: calc(var(--sab, 0px) + 18px); z-index: 6; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; width: min(calc(100% - 24px), 560px); padding: 10px 10px 10px 16px;
+  border-radius: 22px; background: rgba(255, 255, 255, 0.95); box-shadow: 0 10px 30px rgba(10, 34, 78, 0.38), inset 0 0 0 2px var(--tier, #c9d3de);
+  animation: try-in 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) both; pointer-events: auto;
+}
+.try-bar.tier-rare { --tier: var(--t-rare); }
+.try-bar.tier-epic { --tier: var(--t-epic); }
+.try-bar.tier-legendary { --tier: var(--t-legendary); }
+.try-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.try-txt small { color: var(--muted); font: 800 12px / 1.1 var(--font); letter-spacing: 0.06em; text-transform: uppercase; }
+.try-txt b { color: var(--ink); font: 900 18px / 1.15 var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.try-bar .shop-buy, .try-bar .shop-wear { flex: none; }
+.try-bar .shop-on { flex: none; padding: 0 6px; }
+.try-back { flex: none; min-height: 44px; padding: 6px 14px; border: 2px solid var(--hemel-d); border-radius: 999px; background: #fff; color: var(--hemel-d); font: 800 14px / 1.1 var(--font); cursor: pointer; }
+@keyframes try-in { from { opacity: 0; transform: translate(-50%, 30px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (max-width: 380px) { .try-back { padding: 6px 10px; font-size: 13px; } .try-txt b { font-size: 16px; } }
+@media (prefers-reduced-motion: reduce) { .try-bar { animation: none; } }

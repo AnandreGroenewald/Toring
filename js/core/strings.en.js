@@ -357,6 +357,8 @@ export const S_EN = {
   wear: 'Wear',
   wearing: 'Wearing',
   preview: 'Try it',
+  tryNow: 'Trying on',
+  tryBack: 'Back to the Shop',
   tierNames: { common: 'Common', rare: 'Rare', epic: 'Epic', legendary: 'Legendary' },
   newTag: 'New',
   updateTitle: 'New version!',

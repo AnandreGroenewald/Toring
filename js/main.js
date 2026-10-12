@@ -11,7 +11,7 @@ import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate, isDat
 import { createSequence } from './core/sequence.js';
 import { buildShareText, buildDuelShareText } from './core/share.js';
 import { parseChallengeQuery, parseRoomQuery, defaultNicknameFor } from './core/duel.js';
-import { coinsForGame, cosmetic, POWERUP_IDS, rankShortOf } from './core/economy.js';
+import { coinsForGame, cosmetic, POWERUP_IDS, rankShortOf, SKINS } from './core/economy.js';
 import { weekView, WEEK } from './core/week.js';
 
 const WEEK_COINS = WEEK.coins;
@@ -551,30 +551,45 @@ bus.on('ui:shop-refill', () => {
   ui.showShop(shopModel());
 });
 // (1.13.4, the owner: backgrounds, cranes and block skins "can be purchased with coins. But you do get the default for free")
-/** The skins the player wears, now: the background at once, the crane repainted, blocks drawn from here on. */
-function applySkins() {
-  const w = store.getSkins().wear;
+/** The skins the player wears (or `w`), now: the background at once, the crane repainted, blocks drawn from here on. */
+function applySkins(w = store.getSkins().wear) {
   game.registry.set('bgSkin', w.scene);
   setCraneSkin(w.crane);
   setBlockSkin(w.blocks);
   gameScene()?.crane?.applySkin?.();
 }
+// (1.15, the owner: "the "try it" makes it feel more "THATS WHAT I WANT"") the Winkel's Try it: the world wears a tower
+// style for a look (nothing bought or saved); null puts the worn ones back. Tried blocks restart the menu's tower in them.
+let tried = null;
+function settleTry() {
+  const t = tried;
+  tried = null;
+  applySkins();
+  if (t?.kind === 'blocks' && t.id !== store.getSkins().wear.blocks) gameScene()?.idleRestyle?.();
+}
+bus.on('ui:skin-try', (t) => {
+  if (!t || !SKINS[t.kind]?.some((c) => c.id === t.id)) {
+    settleTry();
+    return;
+  }
+  tried = { kind: t.kind, id: t.id };
+  applySkins({ ...store.getSkins().wear, [t.kind]: t.id });
+  if (t.kind === 'blocks') gameScene()?.idleRestyle?.();
+});
 bus.on('ui:skin-buy', ({ kind, id } = {}) => {
   const r = store.buySkin(kind, id);
   if (r.ok) {
     audio.play('heart');
     store.wearSkin(kind, id);   // a new skin goes on at once
-    applySkins();
     ui.toast(S.bought(S.skinNames[kind]?.[id] || id));
     coinsChanged();
   }
+  settleTry();
   ui.showShop({ ...shopModel(), signinOffer: r.ok && takeSigninOffer() }, 'skins');
 });
 bus.on('ui:skin-wear', ({ kind, id } = {}) => {
-  if (store.wearSkin(kind, id).ok) {
-    applySkins();
-    account.soon();
-  }
+  if (store.wearSkin(kind, id).ok) account.soon();
+  settleTry();
   ui.showShop(shopModel(), 'skins');
 });
 

@@ -379,7 +379,9 @@ export const S = {
   buy: 'Koop',
   wear: 'Dra',
   wearing: 'Aan',
-  preview: 'Wys',
+  preview: 'Probeer',
+  tryNow: 'Jy probeer',
+  tryBack: 'Terug na die Winkel',
   // (1.15) how rare a shop item is (its colour in the Winkel), and the label on what's new
   tierNames: { common: 'Gewoon', rare: 'Skaars', epic: 'Epies', legendary: 'Legendaries' },
   newTag: 'Nuut',

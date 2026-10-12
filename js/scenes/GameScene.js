@@ -3859,6 +3859,16 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * (1.15, the Winkel's Try it on blocks) the menu's tower starts over in the blocks being tried: the crane lets its
+   * block go too (a reset while it holds one would leave the new tower's first block unplanned).
+   */
+  idleRestyle() {
+    if (!this.idle || this.idleResetting || !this.crane) return;
+    if (this.crane.hasBlock()) this.crane.release();
+    this.idleReset();
+  }
+
   // -------------------------------------------------------------------------
   // Debug
   // -------------------------------------------------------------------------
