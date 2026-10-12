@@ -137,18 +137,26 @@ step c. Both restart the match rooms, so a live match drops. So:
   - Everything already declared for 1.13.x stays (the nickname, the random leaderboard number, game results).
 - **Send for review:** only this change, if Play asks. STOP on any other listed change, a new declaration or terms page.
 - **Way back:** edit the form again.
+- **DONE 12 Oct, just before f:** filled exactly as above, the preview checked, saved; Publishing overview listed exactly
+  1 change ("App content › Data safety") → sent for review (Google: hours to a few days).
 
 ### f. The app 1.14.0 (versionCode 11400) to internal testing (full panel; the owner ~14:05: "Please push it to the playstore for testing")
 - **Folder:** `~/Desktop/Stapel app (Google Play)/Upload 1.14.0 internal` (Stapel-1.14.0.aab SHA-256 0226df5e…eda7e6,
-  release-notes.txt af 446 / en 446, README.txt with the steps, data-safety.txt). Order: e first, then f, same session.
-- **The phone test (about 10 minutes), on the internal-testing build:**
-  - ⚙️ Instellings › ☁️ › pick his Google account › "Ingeteken met Google ✓".
-  - His coins and skins are still there.
-  - The website, signed in with the same account, shows the same progress.
-  - Cancelling the picker shows nothing.
-  - Signing out keeps everything on the phone.
-  - Signing in again brings nothing twice.
+  release-notes.txt af 445 / en 444, README.txt with the steps, data-safety.txt). Order: e first, then f, same session.
+- **The phone test (about 10 minutes), on the internal-testing build, in this order** (signing out comes before the
+  cancel test: "Teken in met Google" only shows when signed out):
+  1. ⚙️ Instellings › under "Bêre jou vordering" tap "Teken in met Google" › pick his Google account › "Ingeteken met
+     Google ✓".
+  2. His coins and skins are still there.
+  3. The website, signed in with the same account, shows the same progress.
+  4. Teken uit keeps everything on the phone.
+  5. Tap "Teken in met Google" again and cancel the picker: nothing scary, the game carries on.
+  6. Sign in for real: nothing is counted twice.
 - **Way back:** Internal testing › Pause track.
+- **DONE 12 Oct 17:35:** 11400 (1.14.0) "Available to internal testers" (release 14), uploaded from the byte-identical
+  scratchpad copy (SHA-256 0226df5e…); same devices as 11304; the notes checked by SHA-256 (6 of 6 languages); only the
+  deobfuscation warning; "Save and publish". Panel on the folder (content e90451e): round 1 31/40, round 2 36/40 (all four
+  9) + the Final Boss 9.
 
 ## Before production (not now)
 REFILL and TESTER_GIFT off; the IARC gambling answers and Play's "could it appeal to children?" answered again;
