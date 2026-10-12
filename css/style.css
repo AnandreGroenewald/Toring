@@ -3089,3 +3089,44 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 /* (1.15, the owner: "These pops way to close to eachother") room for the medals that stand out of the versus cards */
 .vs-cards { gap: calc(40 * var(--u)); margin: calc(22 * var(--u)) 0 calc(20 * var(--u)); }
 .vs-cards .pc-badge { margin-right: calc(14 * var(--u)); }
+
+/* (1.15) the results' blocks: a title and a key with each kind's count */
+.grid-box { display: flex; flex-direction: column; align-items: center; gap: calc(6 * var(--u)); }
+.grid-title { margin: 0; }
+.grid-key { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(6 * var(--u)) calc(14 * var(--u)); font-size: max(12px, calc(21 * var(--u))); font-weight: 800; color: var(--ink-soft); }
+.grid-key-item { display: inline-flex; align-items: center; gap: calc(6 * var(--u)); }
+.grid-key .cell { display: inline-grid; place-items: center; width: calc(28 * var(--u)); height: calc(28 * var(--u)); border-radius: calc(7 * var(--u)); font: 900 calc(17 * var(--u)) / 1 var(--font); font-style: normal; }
+.grid-key b { color: var(--ink); }
+/* (1.15, the owner: "The coins section doesnt fit in, The "matches against robot Ricus..." is too light") the results'
+   reward pills in dark glass: coins gold-edged, the rank readable */
+.card .res-reward > span { background: rgba(255, 255, 255, 0.08); color: #e6ecfa; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+.card .res-reward .rw-sub { opacity: 1; color: #b4c2e0; }
+.card .res-reward .rw-coins { background: linear-gradient(180deg, rgba(255, 215, 90, 0.2), rgba(255, 215, 90, 0.08)); box-shadow: inset 0 0 0 1px rgba(255, 215, 90, 0.6); }
+.card .res-reward .rw-coins b { color: #ffd75a; }
+.card .res-reward .rw-rank { background: rgba(155, 120, 255, 0.16); color: #fff; box-shadow: inset 0 0 0 1px rgba(185, 150, 255, 0.45); }
+.card .res-reward .rw-rank.is-quiet, .card .res-reward .rw-rank.is-down { background: rgba(255, 255, 255, 0.07); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); }
+.card .res-reward .rw-rank.is-up { background: linear-gradient(180deg, rgba(255, 215, 90, 0.3), rgba(255, 215, 90, 0.12)); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 215, 90, 0.7); }
+.card .res-reward .rw-stake.is-won { background: linear-gradient(180deg, rgba(255, 215, 90, 0.3), rgba(255, 215, 90, 0.12)); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 215, 90, 0.7); }
+.card .res-reward .rw-stake.is-lost { background: rgba(255, 255, 255, 0.07); color: #e6ecfa; }
+.card .res-reward .rw-week { background: rgba(110, 224, 143, 0.14); color: #e6ffe9; box-shadow: inset 0 0 0 1px rgba(110, 224, 143, 0.45); }
+.card .res-reward .rw-week.is-full, .card .res-reward .rw-chest.is-ready { background: linear-gradient(180deg, rgba(255, 215, 90, 0.3), rgba(255, 215, 90, 0.12)); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 215, 90, 0.8), 0 0 calc(14 * var(--u)) rgba(255, 201, 40, 0.4); }
+
+/* (1.15, the owner: "THis needs to show up on the left side") the punishment (and Blok vir Blok's sabotage) choice as a
+   column on the left, under the balance level: the top of the screen, the crane and the race track stay in sight */
+.punish {
+  top: calc(var(--sat) + 270 * var(--u)); right: auto; width: calc(330 * var(--u)); min-width: 168px;
+  padding: calc(10 * var(--u)); border-radius: calc(22 * var(--u));
+  background: rgba(13, 19, 40, 0.92); box-shadow: 0 calc(8 * var(--u)) calc(20 * var(--u)) rgba(5, 10, 30, 0.4), inset 0 0 0 1px rgba(255, 215, 90, 0.35);
+}
+.punish-title { white-space: normal; text-align: left; line-height: 1.2; color: #ffd75a; font-size: max(12px, calc(22 * var(--u))); }
+.punish-btns { grid-template-columns: 1fr; gap: calc(6 * var(--u)); }
+.punish-btn {
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; align-items: center; column-gap: calc(10 * var(--u)); row-gap: 0;
+  padding: calc(6 * var(--u)) calc(10 * var(--u)); text-align: left; border-radius: calc(14 * var(--u));
+  background: rgba(255, 255, 255, 0.1); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+.punish-btn .emoji { grid-row: 1 / 3; font-size: calc(40 * var(--u)); }
+.punish-btn b { font-size: max(12px, calc(22 * var(--u))); }
+.punish-btn small { color: #b4c2e0; font-size: max(10px, calc(17 * var(--u))); }
+.punish-btn:active { transform: scale(0.97); box-shadow: inset 0 0 0 2px #ffd75a; }
+.grid-box { margin-top: calc(10 * var(--u)); }

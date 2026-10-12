@@ -2108,7 +2108,15 @@ export function createUI(bus) {
     const label = `${S.perfects} ${counts.P}, ${S.good} ${counts.G}, ${S.skew} ${counts.S}, ${S.lostCount} ${counts.X}`
       + (counts.B ? `, ${S.gifts} ${counts.B}` : '')
       + (counts.F ? `, ${POWERUP_INFO.foundation.name} ${counts.F}` : '');
-    return h('div', { class: 'grid', role: 'img', 'aria-label': label }, rows);
+    // (1.15, the owner: "what is the little orange block?") a title, and a key under the blocks: each kind there was, with
+    // its count (the picture itself stays as the share grid draws it)
+    const NAMES = { P: S.perfects, G: S.good, S: S.skew, X: S.lostCount, B: S.gifts, F: POWERUP_INFO.foundation.name };
+    const key = h('div', { class: 'grid-key', 'aria-hidden': 'true' }, Object.keys(NAMES).filter((k) => counts[k]).map((k) =>
+      h('span', { class: 'grid-key-item' }, h('i', { class: `cell cell-${k}`, text: CELL_GLYPH[k] }), h('b', { text: String(counts[k]) }), h('span', { text: NAMES[k] }))));
+    return h('div', { class: 'grid-box' },
+      h('p', { class: 'label grid-title', text: S.gridTitle }),
+      h('div', { class: 'grid', role: 'img', 'aria-label': label }, rows),
+      key);
   }
 
   /** One chip per kind of weather (×n when it came back), so a long day still fits on one line. */

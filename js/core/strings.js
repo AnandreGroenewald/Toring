@@ -214,6 +214,7 @@ export const S = {
   thiefCaught: 'Gevang! Jy kry jou blokke terug.',
   thiefStole: (n) => (n === 1 ? 'Skelm Sakkie het 1 blok gesteel!' : `Skelm Sakkie het ${n} blokke gesteel!`),
   thiefEmpty: 'Skelm Sakkie het niks gekry nie!',
+  gridTitle: 'Jou blokke',
   gifts: 'Geskenke',                          // results grid label (🎁 cells)
   // one line on the results card about the day's visitors (never in the share text)
   resThiefCaught: 'Jy het Skelm Sakkie gevang! 👮',

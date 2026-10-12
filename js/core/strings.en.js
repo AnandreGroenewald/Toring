@@ -203,6 +203,7 @@ export const S_EN = {
   thiefCaught: 'Caught! You get your blocks back.',
   thiefStole: (n) => (n === 1 ? 'Skelm Sakkie stole 1 block!' : `Skelm Sakkie stole ${n} blocks!`),
   thiefEmpty: 'Skelm Sakkie got nothing!',
+  gridTitle: 'Your blocks',
   gifts: 'Gifts',
   resThiefCaught: 'You caught Skelm Sakkie! 👮',
   resThiefStole: (n) => (n === 1 ? 'Skelm Sakkie stole 1 block 🦹' : `Skelm Sakkie stole ${n} blocks 🦹`),

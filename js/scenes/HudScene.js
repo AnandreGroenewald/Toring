@@ -610,7 +610,8 @@ export class HudScene extends Phaser.Scene {
     const H = this.H;
     const top = Math.round(H * 0.25);
     const bottom = Math.round(H * 0.52);   // (clear of the island's sign at the start)
-    const x = this.W - 10 - TRACK_W / 2;
+    // (1.15, the owner: "Make the challengers arrow show on the right side of the bar") room right of the track for theirs
+    const x = this.W - 14 - TRACK_DOT - TRACK_W / 2;
     // a marker: a small pointer in the player's colour, beside the track, pointing at how high their tower is
     const dot = (key, fill) => {
       if (this.textures.exists(key)) return key;
@@ -641,7 +642,7 @@ export class HudScene extends Phaser.Scene {
     const ticks = DUEL.marks.map((m) => add(this.add.image(x, this.trackY(m, top, bottom), 'fx_px').setDisplaySize(TRACK_W + 10, 5).setAlpha(0.8)));
     const flag = add(text(this, x - 2, top - 24, '🏁', 34, { emoji: true, stroke: false }).setOrigin(0.5));
     const px = x - TRACK_W / 2 - TRACK_DOT / 2 - 2;
-    const them = add(this.add.image(px, bottom, dot('hud_ptr_them', THEM_TINT)));
+    const them = add(this.add.image(x + TRACK_W / 2 + TRACK_DOT / 2 + 2, bottom, dot('hud_ptr_them', THEM_TINT)).setFlipX(true));
     const you = add(this.add.image(px, bottom, dot('hud_ptr_you', YOU_TINT)));
     // each marker's name and how far to the finish ride along beside it
     const themLabel = add(text(this, px - TRACK_DOT / 2 - 4, bottom, '', 22, { strokeMul: 0.22, emoji: true }).setOrigin(1, 0.5));
