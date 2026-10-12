@@ -557,6 +557,11 @@ export class HudScene extends Phaser.Scene {
       return key;
     };
     const bg = add(this.add.image(x, (top + bottom) / 2, panelTexture(this, TRACK_W, bottom - top + 18, NAVY, 0.55, { radius: 12, rim: 0.4 })));
+    // (1.15, the owner: "cant we make it that it fills up as you go without percentages") the track fills from the bottom
+    // in each player's colour, side by side (yours left, theirs right), up to where each tower stands
+    const fillW = Math.max(4, Math.floor((TRACK_W - 10) / 2));
+    const youFill = add(this.add.image(x - fillW / 2 - 1, bottom, 'fx_px').setOrigin(0.5, 1).setDisplaySize(fillW, 1).setTint(YOU_TINT));
+    const themFill = add(this.add.image(x + fillW / 2 + 1, bottom, 'fx_px').setOrigin(0.5, 1).setDisplaySize(fillW, 1).setTint(THEM_TINT));
     const ticks = DUEL.marks.map((m) => add(this.add.image(x, this.trackY(m, top, bottom), 'fx_px').setDisplaySize(TRACK_W + 10, 5).setAlpha(0.8)));
     const flag = add(text(this, x - 2, top - 24, '🏁', 34, { emoji: true, stroke: false }).setOrigin(0.5));
     const them = add(this.add.image(x, bottom, dot('hud_dot_them2', THEM_TINT, '')));
@@ -564,8 +569,9 @@ export class HudScene extends Phaser.Scene {
     // each marker's name and how far to the finish ride along beside it
     const themLabel = add(text(this, x - TRACK_DOT / 2 - 6, bottom, '', 24, { strokeMul: 0.22, emoji: true }).setOrigin(1, 0.5));
     const youLabel = add(text(this, x - TRACK_DOT / 2 - 6, bottom, '', 24, { strokeMul: 0.22 }).setOrigin(1, 0.5));
-    const t = { x, top, bottom, bg, ticks, flag, them, you, themLabel, youLabel, youY: bottom, themY: bottom, youStr: '', themStr: '', claimed: '' };
+    const t = { x, top, bottom, bg, ticks, flag, them, you, themLabel, youLabel, youFill, themFill, fillW, youY: bottom, themY: bottom, youStr: '', themStr: '', claimed: '' };
     for (const o of [bg, ...ticks, flag, them, you, themLabel, youLabel]) o.setAlpha(0.95);
+    for (const o of [youFill, themFill]) o.setAlpha(0.9);
     return t;
   }
 
@@ -691,6 +697,10 @@ export class HudScene extends Phaser.Scene {
     t.themY += (this.trackY(d.them, t.top, t.bottom) - t.themY) * ease;
     t.you.y = t.youY;
     t.them.y = t.themY;
+    if (t.youFill) {
+      t.youFill.setDisplaySize(t.fillW, Math.max(1, t.bottom + 6 - t.youY));
+      t.themFill.setDisplaySize(t.fillW, Math.max(1, t.bottom + 6 - t.themY));
+    }
     // the labels keep apart when the markers are close (yours above, theirs below)
     const gap = 30;
     let ly = t.youY;
@@ -703,10 +713,10 @@ export class HudScene extends Phaser.Scene {
     }
     t.youLabel.y = ly;
     t.themLabel.y = lt;
-    const pct = (h) => `${Math.max(0, Math.min(100, Math.floor((100 * h) / DUEL.goalM)))}%`;
-    const youStr = `${S.hudYou} ${pct(d.you)}`;
+    // (1.15: names only; the filling track shows how far)
+    const youStr = S.hudYou;
     const themName = d.name.length > PILL_NAME_MAX ? `${d.name.slice(0, PILL_NAME_MAX - 1)}…` : d.name;
-    const themStr = `${d.badge ? `${d.badge} ` : ''}${themName} ${pct(d.them)}`;
+    const themStr = `${d.badge ? `${d.badge} ` : ''}${themName}`;
     if (youStr !== t.youStr) {
       t.youStr = youStr;
       t.youLabel.setText(youStr);

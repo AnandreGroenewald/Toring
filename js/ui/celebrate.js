@@ -152,6 +152,54 @@ function emojiSprite(doc, ch, px) {
     x.fillText(ch, px / 2, px / 2 + px * 0.04);
   });
 }
+/**
+ * (1.15, the owner: "This ball does not look like a rugby ball, maybe a very old one") a modern rugby ball drawn here (the
+ * 🏉 emoji is a brown laced leather ball on some phones): cream, Springbok green-and-gold bands near the ends, a seam, laces.
+ */
+function rugbySprite(doc, px) {
+  return sprite(doc, `rugby${px}`, px, px, (x) => {
+    const c = px / 2;
+    const rx = px * 0.42;
+    const ry = px * 0.26;
+    x.translate(c, c);
+    x.rotate(-0.56);
+    x.beginPath();
+    x.ellipse(0, 0, rx, ry, 0, 0, TAU);
+    const g = x.createRadialGradient(-rx * 0.3, -ry * 0.45, ry * 0.1, 0, 0, rx);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.6, '#f4efe2');
+    g.addColorStop(1, '#cfc6b0');
+    x.fillStyle = g;
+    x.fill();
+    x.save();
+    x.clip();
+    for (const [x0, w, col] of [[-rx * 0.66, rx * 0.16, '#157a3f'], [-rx * 0.5, rx * 0.09, '#f7c948'], [rx * 0.41, rx * 0.09, '#f7c948'], [rx * 0.5, rx * 0.16, '#157a3f']]) {
+      x.fillStyle = col;
+      x.fillRect(x0, -ry, w, ry * 2);
+    }
+    x.restore();
+    x.strokeStyle = 'rgba(120,105,80,0.55)';
+    x.lineWidth = px * 0.012;
+    x.beginPath();
+    x.moveTo(-rx * 0.95, 0);
+    x.quadraticCurveTo(0, -ry * 0.18, rx * 0.95, 0);
+    x.stroke();
+    x.strokeStyle = '#8a7a58';
+    x.lineWidth = px * 0.016;
+    x.lineCap = 'round';
+    for (let k = -2; k <= 2; k++) {
+      x.beginPath();
+      x.moveTo(k * rx * 0.09, -ry * 0.16);
+      x.lineTo(k * rx * 0.09, ry * 0.05);
+      x.stroke();
+    }
+    x.beginPath();
+    x.ellipse(0, 0, rx, ry, 0, 0, TAU);
+    x.lineWidth = px * 0.02;
+    x.strokeStyle = '#3b3424';
+    x.stroke();
+  });
+}
 /** A gold coin's face (`D` device pixels): a rim, a bevel, an embossed star and a shine. */
 function coinFace(doc, D) {
   return sprite(doc, `cf${D}`, D, D, (x) => {
@@ -1018,7 +1066,7 @@ function skrumFx(env) {
   const { doc, W, H, s, dpr, ctx: c0 } = env;
   const cx = W * 0.5;
   const cy = H * 0.42;
-  const ball = emojiSprite(doc, '🏉', Math.round(190 * s * dpr));
+  const ball = rugbySprite(doc, Math.round(190 * s * dpr));
   const glow = glowSprite(doc, '#ffd23f');
   const paper = confetti(env, 220, BOK_PAPER);
   const glints = twinkles(env, 20, ['#fff3b0', '#ffffff', '#ffd23f'], 0.12, 0.2, 0.88, 0.66, 15);

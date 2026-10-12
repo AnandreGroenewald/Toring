@@ -2667,3 +2667,18 @@ button.chip { font: inherit; border: 0; cursor: pointer; -webkit-tap-highlight-c
 .pause-card .dock .dock-btn[aria-pressed="false"] .dock-ic { background: rgba(255, 255, 255, 0.06); color: rgba(255, 255, 255, 0.45); }
 .pause-card .pause-note { color: #ffd0f0; }
 .pause-card .pause-count, .pause-card .pause-timer { color: #fff; }
+/* (1.15) a title in the Winkel: one nameplate, a ribbon in its tier's style */
+.title-plate {
+  position: relative; display: inline-block; max-width: 100%; padding: calc(8 * var(--u)) calc(16 * var(--u)); border-radius: calc(10 * var(--u));
+  font: 900 max(12px, calc(21 * var(--u))) / 1.15 var(--font); text-align: center; overflow-wrap: anywhere;
+  background: linear-gradient(180deg, #ffffff, #e9eef5); color: var(--ink); box-shadow: 0 calc(3 * var(--u)) 0 #c3cfdc, inset 0 0 0 calc(2 * var(--u)) #d5dee8;
+}
+.title-plate.tier-rare { background: linear-gradient(180deg, #5aa2ff, #2f6fd6); color: #fff; box-shadow: 0 calc(3 * var(--u)) 0 #1f4f9e, inset 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.3); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25); }
+.title-plate.tier-epic { background: linear-gradient(180deg, #b47bff, #7a3fd6); color: #fff; box-shadow: 0 calc(3 * var(--u)) 0 #522a96, inset 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.3); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25); }
+.title-plate.tier-legendary {
+  background: linear-gradient(110deg, #f2a516, #ffe27a 35%, #fff6cf 50%, #ffd23f 65%, #e08f00); background-size: 220% 100%; color: #4a2d00;
+  box-shadow: 0 calc(3 * var(--u)) 0 #a86a00, 0 0 calc(12 * var(--u)) rgba(255, 196, 40, 0.6), inset 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.5);
+  animation: plate-foil 3s ease-in-out infinite;
+}
+@keyframes plate-foil { 50% { background-position: 100% 0; } }
+@media (prefers-reduced-motion: reduce) { .title-plate.tier-legendary { animation: none; } }

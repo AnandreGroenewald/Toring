@@ -1283,7 +1283,8 @@ export function createUI(bus) {
 
   function lookPreview(kind, item) {
     if (kind === 'frame') return h('span', { class: `frame-swatch frame-${item.id}` });
-    if (kind === 'title') return h('span', { class: 'title-prev', text: COSMETIC_INFO.title[item.id].name });
+    // (1.15: the title once, as a nameplate in its tier's style; the tile shows no second name line)
+    if (kind === 'title') return h('span', { class: `title-plate tier-${tierOf(item)}`, text: COSMETIC_INFO.title[item.id].name });
     if (kind === 'style') return stylePreview(item);
     if (kind === 'celebration') return celebrationIcon(item);
     if (kind === 'badge') return item.emoji ? medal(item) : h('span', { class: 'medal medal-none', 'aria-hidden': 'true' }, h('i', { class: 'medal-face' }));
@@ -1436,7 +1437,7 @@ export function createUI(bus) {
             return h('div', { class: `shop-item tier-${tierOf(c)}${on ? ' is-on' : ''}`, 'data-look': `${kind}:${c.id}` },
               tierTags(c, `${kind}:${c.id}`),
               h('span', { class: 'shop-prev' }, lookPreview(kind, c)),
-              h('b', { class: 'shop-name', text: COSMETIC_INFO[kind][c.id].name }),
+              kind === 'title' ? null : h('b', { class: 'shop-name', text: COSMETIC_INFO[kind][c.id].name }),
               action,
               kind === 'celebration' ? h('button', { type: 'button', class: 'shop-try', text: S.preview, onclick: () => celebrate(c.id) }) : null);
           })));
