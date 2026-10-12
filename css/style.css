@@ -2958,3 +2958,40 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .frame-swatch:not(.frame-holo) { background: linear-gradient(135deg, var(--pc-a, #fff), var(--pc-b, #fff)); box-shadow: 0 0 calc(10 * var(--u)) var(--pc-glow, transparent); }
 @media (prefers-reduced-motion: reduce) { .pcard::after, .pcard.frame-holo { animation: none; } }
 #ui.rm .pcard::after, #ui.rm .pcard.frame-holo { animation: none; }
+
+/* ========================================================================================================================
+   (1.15, the owner: "Also change all menus now to that permium feeling") every card and sheet in the dark glass of the
+   Uitdagersreeks: the colours are re-set inside a card (light ink on deep navy, smoked-glass panels), and the pieces with
+   light colours of their own get their dark-glass twins below. The colourful buttons stay colourful.
+   ======================================================================================================================== */
+.card {
+  --ink: #f2f5ff; --ink-soft: #c9d4ea; --muted: #9fb0d0; --line: rgba(255, 255, 255, 0.12); --panel: rgba(255, 255, 255, 0.07); --card: #17213f;
+  color: var(--ink);
+  background: radial-gradient(120% 55% at 50% 0%, #2a3a68 0%, #17213f 48%, #0d1328 100%);
+  box-shadow: 0 calc(26 * var(--u)) calc(50 * var(--u)) rgba(5, 10, 30, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.card .icon-btn, .card > .close { background: rgba(255, 255, 255, 0.12); color: #fff; box-shadow: none; }
+.card .btn-white { --bg: rgba(255, 255, 255, 0.08); --bg-l: rgba(255, 255, 255, 0.12); --bg-d: rgba(0, 0, 0, 0.35); --fg: #f2f5ff; box-shadow: 0 var(--depth) 0 rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+.card .btn-white > .emoji:first-child { background: rgba(255, 255, 255, 0.1); }
+.card .chip { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.card input, .card select, .card textarea { background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.6); }
+.card a { color: #9fd0ff; }
+/* the Winkel: dark tiles with their tier's colour in the edge and a glow, the tabs on smoked glass */
+.card .shop-tabs { background: rgba(255, 255, 255, 0.07); }
+.card .shop-tab { color: #9fb0d0; }
+.card .shop-tab.on { background: #fff; color: #1d2b45; }
+.card .shop-item { background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04)); border-color: rgba(255, 255, 255, 0.1); }
+.card .shop-item.tier-rare { background: linear-gradient(180deg, rgba(47, 128, 237, 0.28), rgba(255, 255, 255, 0.04) 60%); border-color: rgba(90, 160, 255, 0.6); }
+.card .shop-item.tier-epic { background: linear-gradient(180deg, rgba(155, 81, 224, 0.32), rgba(255, 255, 255, 0.04) 60%); border-color: rgba(185, 125, 255, 0.65); box-shadow: 0 0 calc(10 * var(--u)) rgba(155, 81, 224, 0.3); }
+.card .shop-item.tier-legendary { background: linear-gradient(180deg, rgba(242, 165, 22, 0.32), rgba(255, 255, 255, 0.04) 62%); border-color: rgba(255, 200, 60, 0.85); box-shadow: 0 0 calc(16 * var(--u)) rgba(242, 165, 22, 0.45); }
+.card .shop-item.is-on { border-color: #4fd66a; }
+.card .shop-on { color: #6ee08f; }
+.card .shop-try { background: transparent; color: #cfe3ff; border-color: rgba(207, 227, 255, 0.7); }
+.card .shop-row { background: rgba(255, 255, 255, 0.06); }
+.card .shop-coins { background: rgba(0, 0, 0, 0.35); }
+.card .title-plate { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1); }
+/* the menu's daily card: its strip, forecast and notes */
+.card .forecast { background: rgba(255, 255, 255, 0.06); }
+.card .daily-date { color: #9fb0d0; }
+.card .lang-btn { background: rgba(255, 255, 255, 0.08); color: #f2f5ff; border-color: rgba(255, 255, 255, 0.18); }
+.card .lang-btn.on { background: #fff; color: #1d2b45; border-color: #ffc928; box-shadow: inset 0 calc(-4 * var(--u)) 0 #ffc928; }
