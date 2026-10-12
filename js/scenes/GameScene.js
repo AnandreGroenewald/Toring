@@ -16,7 +16,7 @@ import { createSequence } from '../core/sequence.js';
 import { audio, haptics } from '../audio.js';
 import { Block, ensureTexture, getGeometry, releaseNamedTextures, FROZEN_TINT, withBlockSkin } from '../game/blocks.js';
 import { ZONES, zoneAt } from '../core/zones.js';
-import { createBillboard, BILLBOARD_LEFT } from '../game/billboard.js';
+import { createBillboard } from '../game/billboard.js';
 import { createBlockNamer } from '../core/sponsors.js';
 import { createTally, tallyShow } from '../core/audience.js';
 import { createCoach } from '../core/coach.js';
@@ -599,13 +599,14 @@ export class GameScene extends Phaser.Scene {
     this.ghostPath = new Float32Array(2 * 920);
     this.ghostPathN = 0;
     this.ghostLabel = null;
-    this.ghostLabelRight = false;
+    this.ghostArrow = null;
     if (!this.idle) {
-      this.ghostLabel = this.add.text(0, 0, `↓ ${S.ghostHint}`, {
-        fontFamily: FONT, fontSize: '26px', fontStyle: 'bold', color: '#ffffff',
-        stroke: '#1d2b45', strokeThickness: 6, resolution: 1,
-      }).setOrigin(0.5, 1).setDepth(DEPTH.ghost + 0.5).setVisible(false);
-      this.ghostLabelW = this.ghostLabel.width;   // the same either way round
+      // (1.15, the owner: "Its still broken, the "your block lands here"") two parts: the arrow always right over the middle
+      // of the ghost, the words above it, kept on the screen (over the billboard if need be)
+      const style = { fontFamily: FONT, fontSize: '26px', fontStyle: 'bold', color: '#ffffff', stroke: '#1d2b45', strokeThickness: 6, resolution: 1 };
+      this.ghostLabel = this.add.text(0, 0, S.ghostHint, style).setOrigin(0.5, 1).setDepth(DEPTH.ghost + 0.5).setVisible(false);
+      this.ghostArrow = this.add.text(0, 0, '↓', { ...style, fontSize: '30px' }).setOrigin(0.5, 1).setDepth(DEPTH.ghost + 0.5).setVisible(false);
+      this.ghostLabelW = this.ghostLabel.width;
     }
 
     // Distance tag on the flood line itself, so the line and the HUD pill read as one thing.
@@ -1141,6 +1142,7 @@ export class GameScene extends Phaser.Scene {
         this.started = true;
         this.hintPending = false;
         if (this.ghostLabel) this.ghostLabel.setVisible(false);
+        if (this.ghostArrow) this.ghostArrow.setVisible(false);
         bus.emit('hud:hint', { text: null });
         bus.emit('game:started', this.buildResult('quit'));
       }
@@ -3117,25 +3119,22 @@ export class GameScene extends Phaser.Scene {
       // dotted guide from the hanging block to its landing spot, along the path it will fall (wind included)
       this.placeAimDots(p);
       if (this.ghostLabel && this.hintPending) {
-        // (kept left of the island billboard, which stands right of the base). (1.15, the owner: "to the left it works
-        // perfectly fine but to the right it doesnt go to the end") where the centred label would have to stop short, it
-        // turns round: "Jou blok land hier ↓", its arrow at its right end over the ghost and the words to the left
-        const y = p.y - (this.curGeom.h - this.curGeom.cy) - 14;
-        const lbl = this.ghostLabel;
-        const right = p.x > Math.max(140, Math.min(GAME_W - 140, BILLBOARD_LEFT - 6 - this.ghostLabelW / 2));
-        if (right !== this.ghostLabelRight) {
-          this.ghostLabelRight = right;
-          lbl.setText(right ? `${S.ghostHint} ↓` : `↓ ${S.ghostHint}`).setOrigin(right ? 1 : 0.5, 1);
+        // the arrow over the ghost's middle, the words centred over it but never off the screen's edge
+        const y = p.y - (this.curGeom.h - this.curGeom.cy) - 8;
+        const half = this.ghostLabelW / 2 + 10;
+        this.ghostArrow.setPosition(p.x, y);
+        this.ghostLabel.setPosition(Math.max(half, Math.min(GAME_W - half, p.x)), y - 30);
+        if (!this.ghostLabel.visible) {
+          this.ghostLabel.setVisible(true);
+          this.ghostArrow.setVisible(true);
         }
-        if (right) lbl.setPosition(Math.min(p.x + 12, BILLBOARD_LEFT - 6), y);
-        else lbl.setPosition(Math.max(140, p.x), y);
-        if (!this.ghostLabel.visible) this.ghostLabel.setVisible(true);
       }
     }
     this.setGhostVisible(showGhost);
     if (this.midArrow) {
       const t = this.supportTop(this.topBlock);
-      const on = showGhost && t.flat;
+      // (the first blocks' "Jou blok land hier ↓" has the ghost's own arrow: one arrow at a time)
+      const on = showGhost && t.flat && !this.ghostLabel?.visible;
       if (on) {
         // (1.15, the owner: "the arrow shifted and showed the wrong place") when the ghost lies over the middle, the arrow
         // floats above the ghost (still over the middle of the block below), so it never looks like part of the ghost
@@ -3150,7 +3149,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   setGhostVisible(on) {
-    if (!on && this.ghostLabel && this.ghostLabel.visible) this.ghostLabel.setVisible(false);
+    if (!on && this.ghostLabel && this.ghostLabel.visible) {
+      this.ghostLabel.setVisible(false);
+      this.ghostArrow.setVisible(false);
+    }
     if (this.ghost.visible === on) return;
     this.ghost.setVisible(on);
     this.ghostEdge.setVisible(on);

@@ -599,6 +599,9 @@ export function createUI(bus) {
     }
   }
 
+  /** (1.15) One of the done card's tiles: an emoji, the number, what it is. */
+  const doneTile = (e, value, label, cls = '') => h('div', { class: `done-tile ${cls}`.trim() },
+    h('span', { class: 'done-tile-top' }, emo(e), h('b', { text: value })), h('small', { text: label }));
   const countdownEl = (cls = '') => h('div', { class: `countdown ${cls}`.trim() },
     h('span', { text: S.nextTower }),
     h('b', { 'data-countdown': '', text: fmtClock(st.nextDayAt - Date.now()) }));
@@ -893,15 +896,16 @@ export function createUI(bus) {
       const t = m.tries || { free: 1, played: 1, extra: 0, maxExtra: 4 };   // (1.13.1) the day's free tries and tries played
       const freeLeft = t.free > 1 && t.played < t.free;
       card.append(
+        // (1.15, the owner: "Please fix this, it looks bland") a dark glass card: a gold tick, the day's tower in tiles
+        // (height, points, the extra tries), the next tower's countdown in a pill
         h('div', { class: 'done-box' },
           // (1.13.1) free tries left: "Jou beste vandag tot dusver", not "Klaar vir vandag!"
-          h('div', { class: 'done-title' }, emo('✅'), h('span', { text: freeLeft ? S.doneSoFar : S.doneToday })),
+          h('div', { class: 'done-title' }, h('span', { class: 'done-check', 'aria-hidden': 'true', text: '✓' }), h('span', { text: freeLeft ? S.doneSoFar : S.doneToday })),
           h('div', { class: 'done-stats' },
-            emo('🏗️'), ' ', fmtM(r.heightM || 0),
-            h('span', { class: 'sep', 'aria-hidden': 'true', text: '·' }),
-            emo('⭐'), ' ', fmtInt(r.score || 0),
-            r.retried ? h('span', { class: 'done-retry', title: S.retryMark((r.tries || 2) - 1), 'aria-label': S.retryMark((r.tries || 2) - 1), text: ` 🔁${(r.tries || 2) > 2 ? r.tries - 1 : ''}` }) : null),
-          countdownEl()));
+            doneTile('🏗️', fmtM(r.heightM || 0), S.height),
+            doneTile('⭐', fmtInt(r.score || 0), S.points),
+            r.retried ? doneTile('🔁', String((r.tries || 2) - 1), S.extraTries, 'done-retry') : null),
+          countdownEl('done-count')));
       if (rt && rt.status === 'ready') {
         // bought, not played yet: it's the big button now
         card.append(
@@ -1737,10 +1741,12 @@ export function createUI(bus) {
       m.live ? stakePicker(m.stake || 0, m.coins || 0) : null,
       // (1.13.4, the owner: the screen "just doesn't fit" on his phone) the three ways to play straight under the choices,
       // in sight on a phone; the rank, the nickname and the notes below them
+      // (1.15, the owner: "the 3 buttons feels to childish, and the whole menu doesnt feel premium") three play cards: an
+      // icon tile, the name and a line on what it is, a chevron; finding an opponent is the gold one
       h('div', { class: 'duel-btns' },
-        m.live ? button('btn-big btn-green', [emo('🎲'), h('span', { text: S.duelRandom })], () => bus.emit('ui:duel-random')) : null,
-        button(m.live ? 'btn-purple' : 'btn-big btn-purple', [emo('📲'), h('span', { text: S.duelFriend })], () => bus.emit('ui:duel-friend')),
-        button('btn-teal', [emo('🤖'), h('span', { text: S.duelBot })], () => bus.emit('ui:duel-bot'))),
+        m.live ? playCard('random', '🎲', S.duelRandom, S.duelRandomSub, 'ui:duel-random', true) : null,
+        playCard('friend', '📲', S.duelFriend, S.duelFriendSub, 'ui:duel-friend', !m.live),
+        playCard('bot', '🤖', S.duelBot, S.duelBotSub, 'ui:duel-bot', false)),
       m.live ? null : h('p', { class: 'note duel-note', text: S.duelOffline }),
       m.rank ? rankBox(m.rank, m.card, d.name || st.duelPlaceholder) : null,
       // (1.12.1) the name rules where a nickname is typed (Google Play's user content policy)
@@ -1751,6 +1757,21 @@ export function createUI(bus) {
       button('btn-white', [icon('home'), h('span', { text: S.back })], () => bus.emit('ui:home'))));
     st.duelMsg = msg;
     showScreen('duel');
+  }
+
+  /** (1.15) One of the Uitdagersreeks' ways to play, as a card (see the duel card above). */
+  function playCard(kind, emoji, title, sub, event, primary) {
+    return h('button', {
+      type: 'button',
+      class: `play-card play-${kind}${primary ? ' is-primary' : ''}`,
+      onclick: () => {
+        if (!guard()) return;
+        audio.play('click');
+        bus.emit(event);
+      },
+    }, h('span', { class: 'pl-ic', 'aria-hidden': 'true' }, emo(emoji)),
+    h('span', { class: 'pl-tx' }, h('b', { text: title }), h('small', { text: sub })),
+    h('span', { class: 'pl-go', 'aria-hidden': 'true', text: '›' }));
   }
 
   /**

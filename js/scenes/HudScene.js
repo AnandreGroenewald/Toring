@@ -6,6 +6,7 @@ import { bus } from '../core/bus.js';
 import { S, WEATHER_INFO, VISITOR_INFO } from '../core/strings.js';
 import { fmtM, fmtInt } from '../core/format.js';
 import { ensureTexture } from '../game/blocks.js';
+import { haptics } from '../audio.js';
 
 // Text font first: emoji fonts also contain (blank-looking) digit glyphs.
 const EMOJI_FONT = `${FONT}, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"`;
@@ -37,7 +38,6 @@ const SAYING_RETRY_MS = 500;   // how often a waiting saying checks whether bann
 const SAYING_MAX_WAIT_MS = 9000; // then it is skipped: the tower has moved on
 /** How long a message stays: long enough to read (about 20 characters a second), at least `min`. */
 const readMs = (text, min) => Math.min(READ_MAX_MS, Math.max(min, 900 + String(text || '').length * 55));
-const WOBBLE_W = 18;
 const COACH_W = 620;        // widest first-game hint pill
 // Uitdagersreeks (1.11): each player's name and hearts at the top (you left, them right), Wedloop's race
 // track on the right edge (a little bigger than 1.9's, with both names and how far to 50 m), and Blok vir
@@ -151,22 +151,89 @@ function heartTextures(scene) {
   draw('hud_heart_empty', false);
 }
 
-/** Wobble meter fill: green at the bottom to red at the top, cropped to the level each frame. */
-function wobbleTexture(scene, h) {
-  const key = `hud_wobble_${h}`;
-  if (scene.textures.exists(key)) return key;
-  const tex = scene.textures.createCanvas(key, WOBBLE_W - 6, h);
-  const ctx = tex.getContext();
-  const g = ctx.createLinearGradient(0, h, 0, 0);
-  g.addColorStop(0, '#5bbf5a');
-  g.addColorStop(0.5, '#f7c948');
-  g.addColorStop(1, '#e5483b');
-  ctx.fillStyle = g;
-  roundRectPath(ctx, 0, 0, WOBBLE_W - 6, h, (WOBBLE_W - 6) / 2);
+/**
+ * (1.15, the owner: "this balance bar feels out of place ... Maybe on the crane itself?") the balance meter as a builder's
+ * level hung under the crane's jib: its plate and brackets, the glass vial, the liquid (tinted by how near the top is to
+ * tipping), the bubble (slides to the heavy side), the vial's marks and shine. Drawn once.
+ */
+const LV = { w: 236, h: 56, vx: 96, vy: 22, vw: 126, vh: 24 };
+function levelTextures(scene) {
+  if (scene.textures.exists('hud_level')) return;
+  let tex = scene.textures.createCanvas('hud_level', LV.w, LV.h);
+  let ctx = tex.getContext();
+  ctx.fillStyle = '#2a2d33';                                  // the brackets up to the jib
+  for (const x of [34, LV.w - 34]) {
+    ctx.fillRect(x - 3, 0, 6, 14);
+    ctx.fillRect(x - 7, 0, 14, 4);
+  }
+  roundRectPath(ctx, 2, 12, LV.w - 4, LV.h - 14, 14);
+  ctx.fillStyle = 'rgba(16,26,44,0.9)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';                   // two screws
+  for (const x of [14, LV.w - 14]) {
+    ctx.beginPath();
+    ctx.arc(x, 33, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  roundRectPath(ctx, LV.vx, LV.vy, LV.vw, LV.vh, LV.vh / 2); // the vial's dark glass
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.fill();
   tex.refresh();
-  return key;
+  tex = scene.textures.createCanvas('hud_level_liq', LV.vw - 6, LV.vh - 6);
+  ctx = tex.getContext();
+  roundRectPath(ctx, 0, 0, LV.vw - 6, LV.vh - 6, (LV.vh - 6) / 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  tex.refresh();
+  tex = scene.textures.createCanvas('hud_level_bub', 34, 16);
+  ctx = tex.getContext();
+  ctx.beginPath();
+  ctx.ellipse(17, 8, 15, 6.5, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(20,40,60,0.35)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(13, 6, 6, 2, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  tex.refresh();
+  tex = scene.textures.createCanvas('hud_level_glass', LV.vw, LV.vh);
+  ctx = tex.getContext();
+  ctx.strokeStyle = 'rgba(10,20,35,0.7)';                     // the two marks: the bubble between them is level
+  ctx.lineWidth = 2.5;
+  for (const x of [LV.vw / 2 - 19, LV.vw / 2 + 19]) {
+    ctx.beginPath();
+    ctx.moveTo(x, 2);
+    ctx.lineTo(x, LV.vh - 2);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(LV.vh / 2, 4);
+  ctx.lineTo(LV.vw - LV.vh / 2, 4);
+  ctx.stroke();
+  roundRectPath(ctx, 1, 1, LV.vw - 2, LV.vh - 2, LV.vh / 2 - 1);
+  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  tex.refresh();
 }
+const LV_GREEN = [0x5b, 0xbf, 0x5a];
+const LV_AMBER = [0xf7, 0xc9, 0x48];
+const LV_RED = [0xe5, 0x48, 0x3b];
+/** The liquid's colour for how near the top is to tipping (0 green, 0.5 amber, 1 red). */
+function levelColor(v) {
+  const [a, b, f] = v < 0.5 ? [LV_GREEN, LV_AMBER, v / 0.5] : [LV_AMBER, LV_RED, (v - 0.5) / 0.5];
+  const c = (i) => Math.round(a[i] + (b[i] - a[i]) * f);
+  return (c(0) << 16) | (c(1) << 8) | c(2);
+}
+
 
 function text(scene, x, y, str, px, opts = {}) {
   const t = scene.add.text(x, y, str, {
@@ -286,24 +353,26 @@ export class HudScene extends Phaser.Scene {
     this.waterBg.setVisible(false);
     this.waterTxt.setVisible(false);
 
-    // --- Wobble meter (left edge) ----------------------------------------------
-    const wmTop = Math.round(H * 0.36);
-    const wmH = Math.round(H * 0.2);
-    this.wm = { x: 10, top: wmTop, h: wmH, w: WOBBLE_W };
-    this.wmBg = add(this.add.image(10 + WOBBLE_W / 2, wmTop + wmH / 2,
-      panelTexture(this, WOBBLE_W, wmH + 6, NAVY, 0.5, { radius: 9, rim: 0.35 })));
-    this.wmFill = add(this.add.image(10 + 3, wmTop + wmH, wobbleTexture(this, wmH)).setOrigin(0, 1));
-    // the creak threshold: above this line the tower is in real trouble
-    this.wmTick = add(this.add.image(10 + WOBBLE_W / 2, wmTop + wmH * (1 - 0.6), 'fx_px').setDisplaySize(WOBBLE_W + 6, 3));
-    this.wmLbl = add(text(this, 10 + WOBBLE_W / 2, wmTop - 12, S.wobbleTitle, 20, { strokeMul: 0.22, shadow: false })
-      .setOrigin(0, 0.5).setAngle(-90));
-    // the heavy side, under the meter: place the next block on the other side to balance it
-    this.wmSide = add(text(this, 10 + WOBBLE_W / 2, wmTop + wmH + 22, '', 26, { strokeMul: 0.2 }).setOrigin(0.5).setVisible(false));
+    // --- The balance level, hung under the crane's jib (left of where the trolley runs) -------------------
+    levelTextures(this);
+    const lx = 12;
+    const ly = LAYOUT.jibY + st - 4;
+    this.wm = { x: lx, y: ly, cx: lx + LV.vx + LV.vw / 2, cy: ly + LV.vy + LV.vh / 2, travel: LV.vw / 2 - 21 };
+    this.wmBg = add(this.add.image(lx, ly, 'hud_level').setOrigin(0, 0));
+    this.wmFill = add(this.add.image(this.wm.cx, this.wm.cy, 'hud_level_liq').setTint(levelColor(0)));
+    this.wmTick = add(this.add.image(this.wm.cx, this.wm.cy, 'hud_level_bub'));
+    this.wmGlass = add(this.add.image(this.wm.cx, this.wm.cy, 'hud_level_glass'));
+    this.wmLbl = add(text(this, lx + 14 + (LV.vx - 18) / 2, ly + 34, S.wobbleTitle, 19, { strokeMul: 0.2, shadow: false }).setOrigin(0.5));
+    // the heavy side's end of the vial lights up near tipping (place the next block on the other side)
+    this.wmSide = add(this.add.image(this.wm.cx, this.wm.cy, 'fx_px').setDisplaySize(16, LV.vh - 6).setVisible(false));
     this.wmSideNow = 0;
     this.wmVal = -1;
+    this.wmLean = 0;
+    this.wmHotNow = false;
+    this.wmShakeUntil = 0;
     this.buildDuelHud(add);
     this.wmAlpha = 0.7;
-    this.wmParts = [this.wmBg, this.wmFill, this.wmTick, this.wmLbl, this.wmSide];
+    this.wmParts = [this.wmBg, this.wmFill, this.wmTick, this.wmGlass, this.wmLbl, this.wmSide];
     for (const o of this.wmParts) o.setAlpha(this.wmAlpha);
     this.drawWobble(0);
 
@@ -466,7 +535,8 @@ export class HudScene extends Phaser.Scene {
     // the balance meter: how near the loose top is to tipping (its lean), or moving (its wobble)
     const lean = s.lean || 0;
     const wob = Math.max(s.wobble || 0, Math.min(1, Math.abs(lean)));
-    this.drawWobble(wob);
+    this.wmLean = lean;
+    this.drawWobble(wob, time);
     this.drawSide(lean);
     // the meter steps forward when the tower is in some trouble (with hysteresis)
     const wa = wob > 0.15 ? 1 : wob < 0.08 ? 0.7 : this.wmAlpha;
@@ -949,7 +1019,7 @@ export class HudScene extends Phaser.Scene {
   }
 
   /** Crops a pre-drawn gradient bar (no Graphics re-tessellation per frame). */
-  /** The arrow under the balance meter: the side the loose top leans to (none while it's about centred). */
+  /** The vial's heavy end lights up (amber, red near tipping) while the loose top leans that way (none while about centred). */
   drawSide(lean) {
     const side = lean > 0.3 ? 1 : lean < -0.3 ? -1 : Math.abs(lean) > 0.2 ? this.wmSideNow : 0;
     // red near the tipping point, amber before (and back to amber only below 0.6: no flicker at the line)
@@ -958,26 +1028,27 @@ export class HudScene extends Phaser.Scene {
     this.wmSideNow = side;
     this.wmSideHot = hot;
     this.wmSide.setVisible(side !== 0);
-    if (side) {
-      // one redraw: the colour into the style, then the arrow (the same arrow: only the colour)
-      const arrow = side < 0 ? '◀' : '▶';
-      const color = hot ? '#ff6b5e' : '#ffc56e';
-      if (this.wmSide.text === arrow) this.wmSide.setColor(color);
-      else {
-        this.wmSide.style.color = color;
-        this.wmSide.setText(arrow);
-      }
-    }
+    if (side) this.wmSide.setTint(hot ? 0xff6b5e : 0xffc56e).setX(this.wm.cx + side * (LV.vw / 2 - 14));
   }
 
-  drawWobble(v) {
+  /** The level: the liquid's colour for how near tipping, the bubble on the heavy side; entering the red, one buzz. */
+  drawWobble(v, time = 0) {
     const q = Math.round(Math.min(1, Math.max(0, v)) * 60) / 60;
+    const { cx, cy, travel } = this.wm;
+    const lean = Math.max(-1, Math.min(1, this.wmLean || 0));
+    // trembling while the top moves (and for a moment after the warning), none with "Minder beweging"
+    let jx = 0;
+    if (!this.reduced && (q > 0.35 || time < this.wmShakeUntil)) jx = Math.sin(time * 0.06) * (time < this.wmShakeUntil ? 3 : 1.2 * q);
+    this.wmTick.setPosition(cx + lean * travel + jx * 0.5, cy);
+    const hot = q > 0.7 || (this.wmHotNow && q > 0.55);
+    if (hot && !this.wmHotNow) {
+      haptics.warn();
+      this.wmShakeUntil = time + 420;
+    }
+    this.wmHotNow = hot;
     if (q === this.wmVal) return;
     this.wmVal = q;
-    const { h } = this.wm;
-    const fh = Math.round(h * q);
-    this.wmFill.setVisible(fh > 0);
-    if (fh > 0) this.wmFill.setCrop(0, h - fh, WOBBLE_W - 6, fh);
+    this.wmFill.setTint(levelColor(q));
   }
 
   // -------------------------------------------------------------------------

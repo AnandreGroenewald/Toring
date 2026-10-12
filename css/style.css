@@ -2799,3 +2799,75 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 /* the Uitdagersreeks heading on one line */
 .duel-head { padding: 0 calc(70 * var(--u)); }
 .duel-head h2 { font-size: calc(44 * var(--u)); text-wrap: balance; }
+
+/* (1.15, the owner: "the 3 buttons feels to childish, and the whole menu doesnt feel premium") the Uitdagersreeks as a
+   dark glass panel with gold: light text, the pickers on smoked glass, three play cards (the gold one first) */
+.duel-card {
+  background: radial-gradient(120% 70% at 50% 0%, #2a3a68 0%, #17213f 48%, #0d1328 100%);
+  color: #eef3ff; box-shadow: 0 calc(18 * var(--u)) calc(40 * var(--u)) rgba(5, 10, 30, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.duel-card .duel-head h2 { color: #fff; letter-spacing: 0.01em; }
+.duel-card .duel-intro, .duel-card .mode-what, .duel-card .mode-line { color: #b4c2e0; }
+.duel-card > .close { background: rgba(255, 255, 255, 0.12); color: #fff; box-shadow: none; }
+.duel-card .mode-btns, .duel-card .stake-btns { background: rgba(255, 255, 255, 0.07); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
+.duel-card .mode-btn { color: #b4c2e0; }
+.duel-card .mode-btn[aria-pressed="true"] { background: #fff; color: var(--ink); }
+.duel-card .stake-pick > .label { color: #ffd75a; }
+.duel-card .stake-btn { color: #c9d4ea; }
+.duel-card .stake-what { color: #fff; }
+.duel-card .stake-have, .duel-card .duel-record { color: #8fa0c4; }
+.duel-card .label { color: #9fb0d0; }
+.duel-card .rank-box { background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07); }
+.duel-card .rank-season, .duel-card .rank-next, .duel-card .rank-now span { color: #b4c2e0; }
+.duel-card .rank-now { color: #fff; }
+.duel-card .rank-note, .duel-card .nick-msg, .duel-card .name-rules, .duel-card .note, .duel-card .rank-badges { color: #8fa0c4; }
+.duel-card .rank-bar { background: rgba(255, 255, 255, 0.12); }
+.duel-card .nick-input { background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.16); }
+.duel-card .nick-input::placeholder { color: rgba(255, 255, 255, 0.45); }
+.play-card {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: calc(16 * var(--u)); width: 100%;
+  min-height: max(60px, calc(104 * var(--u))); padding: calc(12 * var(--u)) calc(18 * var(--u)) calc(12 * var(--u)) calc(14 * var(--u));
+  border: 0; border-radius: calc(26 * var(--u)); text-align: left; cursor: pointer; font: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05)); color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 calc(6 * var(--u)) calc(16 * var(--u)) rgba(0, 0, 0, 0.25);
+  transition: transform 0.08s ease-out, box-shadow 0.15s;
+}
+.play-card:active { transform: scale(0.98); }
+.pl-ic {
+  display: grid; place-items: center; width: max(44px, calc(76 * var(--u))); height: max(44px, calc(76 * var(--u))); border-radius: calc(20 * var(--u));
+  font-size: max(22px, calc(40 * var(--u))); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(0, 0, 0, 0.25);
+}
+.play-random .pl-ic { background: linear-gradient(145deg, #4fe08e, #148a50); }
+.play-friend .pl-ic { background: linear-gradient(145deg, #b18cff, #5b34c9); }
+.play-bot .pl-ic { background: linear-gradient(145deg, #4fd6d0, #137a76); }
+.pl-tx { display: flex; flex-direction: column; gap: calc(4 * var(--u)); min-width: 0; }
+.pl-tx b { font-size: max(16px, calc(32 * var(--u))); font-weight: 900; line-height: 1.1; }
+.pl-tx small { font-size: max(12px, calc(21 * var(--u))); font-weight: 700; color: #b4c2e0; line-height: 1.25; }
+.pl-go { font-size: max(24px, calc(46 * var(--u))); font-weight: 900; color: rgba(255, 255, 255, 0.55); line-height: 1; }
+.play-card.is-primary { background: linear-gradient(135deg, #ffe08a 0%, #ffc928 45%, #f0a500 100%); color: #2a1d00; box-shadow: 0 0 0 1px rgba(255, 236, 170, 0.7) inset, 0 calc(8 * var(--u)) calc(22 * var(--u)) rgba(255, 190, 40, 0.35); }
+.play-card.is-primary small { color: rgba(42, 29, 0, 0.75); }
+.play-card.is-primary .pl-go { color: rgba(42, 29, 0, 0.6); }
+.play-card.is-primary .pl-ic { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 0 0 2px rgba(255, 255, 255, 0.5); }
+.play-card:focus-visible { outline: 3px solid #ffd75a; outline-offset: 3px; }
+
+/* (1.15, the owner: "Please fix this, it looks bland") the day done: a dark glass card like the Uitdagersreeks, a gold tick,
+   the tower in tiles, the countdown in a pill */
+.done-box {
+  gap: calc(14 * var(--u)); padding: calc(22 * var(--u)) calc(18 * var(--u));
+  background: radial-gradient(120% 90% at 50% 0%, #2a3a68 0%, #17213f 55%, #0d1328 100%); color: #eef3ff;
+  box-shadow: 0 calc(10 * var(--u)) calc(24 * var(--u)) rgba(5, 10, 30, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.done-title { color: #fff; font-size: max(17px, calc(36 * var(--u))); }
+.done-check {
+  display: inline-grid; place-items: center; width: 1.25em; height: 1.25em; border-radius: 50%; font-size: 0.85em;
+  background: linear-gradient(145deg, #ffe08a, #f0a500); color: #2a1d00; box-shadow: 0 0 calc(12 * var(--u)) rgba(255, 200, 60, 0.6);
+}
+.done-stats { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: calc(10 * var(--u)); width: 100%; color: #fff; }
+.done-tile { display: flex; flex-direction: column; align-items: center; gap: calc(4 * var(--u)); padding: calc(12 * var(--u)) calc(6 * var(--u)); border-radius: calc(20 * var(--u)); background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+.done-tile-top { display: inline-flex; align-items: center; gap: calc(6 * var(--u)); }
+.done-tile-top .emoji { font-size: max(16px, calc(30 * var(--u))); }
+.done-tile b { font-size: max(18px, calc(36 * var(--u))); font-weight: 900; font-variant-numeric: tabular-nums; }
+.done-tile small { font-size: max(10px, calc(18 * var(--u))); font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #9fb0d0; }
+.countdown.done-count { padding: calc(8 * var(--u)) calc(18 * var(--u)); border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: #b4c2e0; align-items: center; }
+.countdown.done-count b { color: #ffd75a; }
+.duel-card .stake-btn[aria-pressed="true"] { color: #3a2800; }

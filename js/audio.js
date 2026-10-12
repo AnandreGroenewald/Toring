@@ -1317,4 +1317,6 @@ export const haptics = {
   perfect() { vibrate([12, 40, 18]); },
   lost() { vibrate([60]); },
   heavy() { vibrate([30, 30, 80]); },
+  // (1.15) the tower's top near tipping: one soft double buzz
+  warn() { vibrate([16, 60, 16], true); },
 };
