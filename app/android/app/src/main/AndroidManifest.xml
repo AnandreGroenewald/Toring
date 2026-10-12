@@ -58,4 +58,8 @@
     <!-- the daily reminder (LocalNotifications) asks for POST_NOTIFICATIONS itself; it never needs
          exact alarms (Google Play allows those only for alarm and calendar apps), so that goes -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
+    <!-- (1.14) androidx.credentials brings these for its own passkey/fingerprint prompts; Stapel only uses Google's
+         account picker (Sign in with Google), so the game never asks for a fingerprint -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" tools:node="remove" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" tools:node="remove" />
 </manifest>
