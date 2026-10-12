@@ -2871,3 +2871,30 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .countdown.done-count { padding: calc(8 * var(--u)) calc(18 * var(--u)); border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: #b4c2e0; align-items: center; }
 .countdown.done-count b { color: #ffd75a; }
 .duel-card .stake-btn[aria-pressed="true"] { color: #3a2800; }
+/* (1.15, the owner: "The icons is a little blant now ... And now this does not fit") on the dark panel: the heading's swords
+   in a glowing gold tile, each mode's icon in its own coloured tile, and your player card in dark glass inside its frame */
+.duel-card .duel-head .emoji {
+  display: inline-grid; place-items: center; flex: none; width: 1.55em; height: 1.55em; border-radius: 0.4em; font-size: calc(40 * var(--u)); line-height: 1;
+  background: linear-gradient(145deg, #ffe08a, #f0a500); box-shadow: 0 0 calc(16 * var(--u)) rgba(255, 200, 60, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.duel-card .mode-btn .emoji {
+  display: inline-grid; place-items: center; flex: none; width: 1.6em; height: 1.6em; border-radius: 0.45em; font-size: 0.85em; line-height: 1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(0, 0, 0, 0.25);
+}
+.duel-card .mode-btn[data-mode="race"] .emoji { background: linear-gradient(145deg, #ff9a6b, #d9381e); }
+.duel-card .mode-btn[data-mode="turns"] .emoji { background: linear-gradient(145deg, #7cc0ff, #2a62c9); }
+.duel-card .mode-btn[aria-pressed="false"] .emoji { opacity: 0.8; }
+.duel-card .pcard:not(.frame-holo) { background: linear-gradient(180deg, #2a3a68, #172244); color: #fff; }
+.duel-card .pcard .pc-title { color: #9fb0d0; }
+.duel-card .pcard .pc-rank { color: #fff; }
+/* (1.15, the owner: "And the chest also") the weekly chests on the same dark glass, the title and the amounts in gold */
+.week-strip {
+  background: radial-gradient(120% 120% at 50% 0%, #2a3a68 0%, #17213f 60%, #0f162d 100%); color: #ffd75a;
+  box-shadow: 0 calc(6 * var(--u)) calc(16 * var(--u)) rgba(5, 10, 30, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.week-strip .wk-title { color: #ffd75a; }
+.week-strip .wk-amt { color: #e6ecfa; opacity: 0.9; }
+.week-strip .wk-chest.is-done .wk-amt { color: #6ee08f; }
+.week-strip .wk-line { color: #fff; }
+.week-strip .wk-line .coin-ic, .week-strip .wk-line .emoji { filter: drop-shadow(0 0 calc(4 * var(--u)) rgba(255, 200, 60, 0.6)); }
+.week-strip .wk-chest:not(.is-done):not(.is-today) .chest { opacity: 0.92; filter: saturate(0.85); }
