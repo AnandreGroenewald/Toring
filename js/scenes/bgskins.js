@@ -914,64 +914,67 @@ function drawFlare(ctx, w, h) {
 
 /** Noorderlig: snowy peaks and a dark pine forest with snow on its tips. */
 function drawNordic(ctx, w, h) {
-  // (1.15, the owner: "The mountains looks off") a hazy far range, then the main peaks lit from the left (the aurora's side)
-  // and shaded on the right, snow that follows the slopes with a ragged edge; the forest in front
-  const clipTo = (pts) => {
+  // (1.15, the owner: "The mountains looks off", then "Still doesnt feel right, the mountains...") real peaks: each mountain
+  // a triangle with a lit left face and a shaded right face, its snow following both slopes down to a ragged edge; a hazy
+  // far range behind, the main range in front
+  const mountain = (cx, peak, half, lit, dark, snow, depth) => {
+    const X = cx * w;
+    const Y = peak * h;
+    const L = (cx - half) * w;
+    const R = (cx + half) * w;
+    const B = h + 2;
+    const ridgeX = X + half * w * 0.12;   // where the two faces meet at the foot
+    ctx.fillStyle = lit;
     ctx.beginPath();
-    ctx.moveTo(-2, h + 2);
-    for (const [x, y] of pts) ctx.lineTo(x * w, y * h);
-    ctx.lineTo(w + 2, h + 2);
+    ctx.moveTo(L, B);
+    ctx.lineTo(X, Y);
+    ctx.lineTo(ridgeX, B);
     ctx.closePath();
-    ctx.clip();
-  };
-  const snowcaps = (pts, depth, fill) => {
-    ctx.save();
-    clipTo(pts);
-    ctx.fillStyle = fill;
-    for (let i = 1; i < pts.length - 1; i++) {
-      const [px, py] = pts[i];
-      if (py > 0.52) continue;
-      ctx.beginPath();
-      ctx.moveTo((px - 0.13) * w, (py - 0.05) * h);
-      ctx.lineTo((px + 0.13) * w, (py - 0.05) * h);
-      for (let k = 0; k <= 13; k++) {
-        const x = px + 0.13 - k * 0.02;
-        const y = py + depth * (k % 2 ? 1 : 0.62) + (k % 3 === 1 ? depth * 0.25 : 0);
-        ctx.lineTo(x * w, y * h);
+    ctx.fill();
+    ctx.fillStyle = dark;
+    ctx.beginPath();
+    ctx.moveTo(X, Y);
+    ctx.lineTo(R, B);
+    ctx.lineTo(ridgeX, B);
+    ctx.closePath();
+    ctx.fill();
+    // the snow: down each slope to `depth` of the height, a ragged lower edge (lit and shaded like the rock)
+    const at = (f, side) => [X + (side < 0 ? L - X : R - X) * f, Y + (B - Y) * f];
+    const [lx, ly] = at(depth, -1);
+    const [rx, ry] = at(depth * 0.92, 1);
+    const mx = X + (ridgeX - X) * depth;
+    const my = Y + (B - Y) * depth;
+    const jag = (x0, y0, x1, y1, n, amp) => {
+      for (let k = 1; k <= n; k++) {
+        const f = k / n;
+        ctx.lineTo(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f + (k % 2 ? amp : -amp * 0.4));
       }
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
+    };
+    ctx.fillStyle = snow[0];
+    ctx.beginPath();
+    ctx.moveTo(X, Y);
+    ctx.lineTo(lx, ly);
+    jag(lx, ly, mx, my, 4, (B - Y) * depth * 0.18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = snow[1];
+    ctx.beginPath();
+    ctx.moveTo(X, Y);
+    ctx.lineTo(mx, my);
+    jag(mx, my, rx, ry, 4, (B - Y) * depth * 0.16);
+    ctx.closePath();
+    ctx.fill();
   };
-  const shade = (pts, a) => {
-    ctx.save();
-    clipTo(pts);
-    ctx.fillStyle = `rgba(6,14,28,${a})`;
-    for (let i = 1; i < pts.length - 1; i++) {
-      const [px, py] = pts[i];
-      const [vx, vy] = pts[i + 1];
-      if (vy < py) continue;   // (not a peak)
-      ctx.beginPath();
-      ctx.moveTo(px * w, py * h);
-      ctx.lineTo(vx * w, vy * h);
-      ctx.lineTo(vx * w, h + 2);
-      ctx.lineTo((px + 0.035) * w, h + 2);
-      ctx.lineTo((px + 0.012) * w, (py + 0.12) * h);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
-  };
-  const far = [[0, 0.55], [0.08, 0.43], [0.16, 0.5], [0.25, 0.37], [0.36, 0.48], [0.48, 0.35], [0.6, 0.47], [0.7, 0.39], [0.82, 0.5], [0.92, 0.37], [1, 0.45]];
-  ridge(ctx, w, h, far, vgrad(ctx, h, '#5d7a96', '#344c63', 0.35 * h));
-  snowcaps(far, 0.06, 'rgba(228,240,252,0.6)');
-  shade(far, 0.18);
-  const peaks = [[0, 0.64], [0.1, 0.43], [0.2, 0.59], [0.31, 0.32], [0.43, 0.57], [0.53, 0.45], [0.65, 0.61], [0.77, 0.34], [0.89, 0.53], [1, 0.47]];
-  ridge(ctx, w, h, peaks, vgrad(ctx, h, '#4a6884', '#1c2e41', 0.3 * h));
-  snowcaps(peaks, 0.1, '#eef6ff');
-  shade(peaks, 0.34);
-  // (1.15, the owner: "those black pointy stuff at the bottom, please remove it for now": the pine forest is gone)
+  // the far range: hazy blue
+  for (const [cx, pk, hf] of [[0.04, 0.5, 0.16], [0.24, 0.42, 0.18], [0.46, 0.48, 0.17], [0.66, 0.4, 0.19], [0.9, 0.46, 0.18]]) {
+    mountain(cx, pk, hf, '#5d7894', '#425a75', ['rgba(226,238,250,0.85)', 'rgba(186,204,224,0.85)'], 0.26);
+  }
+  // the main range
+  for (const [cx, pk, hf] of [[0.13, 0.36, 0.2], [0.36, 0.5, 0.17], [0.55, 0.3, 0.22], [0.8, 0.42, 0.2], [1.02, 0.52, 0.16]]) {
+    mountain(cx, pk, hf, '#53708e', '#2c405a', ['#f4f9ff', '#c4d4e6'], 0.3);
+  }
+  // a dark shoreline at the foot
+  ridge(ctx, w, h, [[0, 0.95], [0.2, 0.93], [0.45, 0.955], [0.7, 0.935], [1, 0.95]], '#1b2a3d');
 }
 
 /** Diep ruimte: no land at all (1.15). */
