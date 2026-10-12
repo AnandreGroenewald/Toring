@@ -58,7 +58,10 @@ account's kept save owned (`keepOwned`), so a 1.14 app's sync can't drop a 1.15 
   (`MATCH_API=https://stapel-borge.bonkers-bunch-online.workers.dev node ~/.claude/skills/stapel/scripts/qa/serve2.mjs ~/Desktop/Toring 8323`,
   then `LIVE=1 GAME=http://127.0.0.1:8323/ node ~/.claude/skills/stapel/scripts/qa/friends1121.mjs turns`).
 - The way back: `./wr.sh rollback b6601722-d420-4969-b60d-e71a96ff3c91 --yes --message "…"` (the live 1.14 Worker,
-  deployed 12 Oct 13:41; checked with `./wr.sh deployments list` on 13 Oct 01:00).
+  deployed 12 Oct 13:41; checked with `./wr.sh deployments list` on 13 Oct 01:00). If both steps go back, roll the website
+  back FIRST (Pages 9623ad11), then the Worker: a 1.15 website on the 1.14 Worker loses keepOwned (step b also keeps the
+  worn item an older app dropped), so a new phone could miss a 1.15 purchase until the website syncs again; or put the
+  1.15 Worker back soon after.
 
 **c. The website:** `git push origin claude/trusting-hopper-26qcax`, then `cd ~/Desktop/Toring && node tools/build-pages.mjs
 && cd pages-dist && ../server/node_modules/.bin/wrangler pages deploy . --project-name stapelspel --branch main` (the build

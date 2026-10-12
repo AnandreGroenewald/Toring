@@ -682,8 +682,8 @@ Later the owner added (decisions are final unless they say otherwise):
       kept save's worn id when the new copy wears the standard one and didn't own it (a game that owns it and wears the
       standard one chose that); keepowned115 replays the whole path (the website, a 1.14 store, the website's merge, a
       new phone: owned and worn, coins 950; the 1.14 app sees no change, so no upload loop).
-    - *Words:* the Winkel's tower-style note is true again ("Jou agtergrond en hyskraan sien net jy; jou blokke sien jou
-      teenstander ook in Blok vir Blok ..."); the stake note a whole sentence again ("Munte kan nie gekoop of vir geld
+    - *Words:* the Winkel's tower-style note is true again ("Jou agtergrond en hyskraan sien net jy; in Blok vir Blok sien
+      jou teenstander ook jou blokke ..." — round 3's word order, "Blok vir Blok" kept on one line); the stake note a whole sentence again ("Munte kan nie gekoop of vir geld
       omgeruil word nie." / "Coins can’t be bought or swapped for money."); "Hulle kos nooit ’n hartjie nie"; Blok vir
       Blok: "Val daar blokke af in jou beurt, kos dit jou ’n hartjie." / "If blocks fall off on your turn, you lose a
       heart."; Wedloop: "Wees eerste by elke 10 m en kies ’n straf vir die ander."; "Speel 7 dae op ’n ry"; "Ons het
@@ -695,6 +695,18 @@ Later the owner added (decisions are final unless they say otherwise):
       "buy coins"); the sticky player card pins flush with a full-width band; the day-7 sparkle clear of "+75"; the 2x2
       punishment names wrap instead of "Skelm Sak…". Screenshots: scratchpad `r2b/`.
     - *Docs:* SPEC's heat 1.3, README's skins line (the blocks show in Blok vir Blok).
+  - **Round 3 (74eaca2 + a60c5b6; round 2 was 34/40):** keepOwned keeps the dropped worn id (above); match pills show
+    names up to 12 letters ("Robot Rikus" whole; the width check still shortens); no-break spaces keep "tot 4 000" /
+    "up to 4 000", "Robot Rikus" and "Blok vir Blok" together; the sticky band solid; privacy: kleurblindmodus, the cement
+    tip and how long updateSeen stays (section 11), "Wat jy koop, bly joune" / "What you buy stays yours" (2d, kept by
+    keepOwned). Round 3 scored 36/40 (all four 9 APPROVE); round 4 (the commit after a60c5b6): the race track ends above
+    the island's sign on tall phones (HudScene `buildRaceTrack` measures the sign at the start), "up to" kept together,
+    section 11's stapel.v1 line names the Challenger nickname and record, the last match kind and coins, and the first-game
+    hints.
+  - **A rule from 1.15 on: never remove or rename a look or skin id once players can own it.** `keepOwned` (server) and
+    `cleanEconomy` (game) keep only ids they know, so a removed id would drop players' purchases and break the privacy
+    promise "Wat jy koop, bly joune". Retire an item by hiding it from the Winkel, never by deleting its id; and a new
+    version's Worker goes out before its website/app, so the server knows the new ids first.
   - **Watch after release:** the board's daily players on Wed 14 and Sat 17 Oct against the 1.14 days (about 5-12); Thu 15
     Oct ask the Family which new look they tried and bought; the morning after each step, no match complaints and no new
     Worker errors (`wrangler tail` or /admin/events). The refill ends Fri 16 Oct, so the week after is the real test of

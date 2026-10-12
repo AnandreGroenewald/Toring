@@ -425,7 +425,7 @@ export const S_EN = {
   rankTester: 'Testers’ ranks don’t move (the tester gift).',
   testerGift: (n) => `🎁 Tester gift: ${n} coins! Thanks for testing. Testers don’t show on the leaderboard, and your ranks don’t move.`,
   testerGiftAgain: 'You already got the tester gift 🎁',
-  refillBtn: (n, left) => `Refill my coins (up to ${n}) · ${left} left`,
+  refillBtn: (n, left) => `Refill my coins (up to ${n}) · ${left} left`,
   refillUsed: (times, perDay) => (perDay ? `Your ${times} refills for today are used up. More tomorrow.` : `Your ${times} refills are used up.`),
   refillFull: (n) => `You have ${n} coins or more`,
   refillDone: (added, total) => `+${added} 🪙 · you now have ${total}`,

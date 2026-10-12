@@ -608,8 +608,22 @@ export class HudScene extends Phaser.Scene {
   /** Wedloop: 0-50 m on the right edge, the height marks (gold once you got there first, blue them), both markers. */
   buildRaceTrack(add) {
     const H = this.H;
-    const top = Math.round(H * 0.25);
-    const bottom = Math.round(H * 0.52);   // (clear of the island's sign at the start)
+    let top = Math.round(H * 0.25);
+    let bottom = Math.round(H * 0.52);   // (clear of the island's sign at the start)
+    // (1.15 round 3) on a tall phone the sign stands higher on the screen: end the track just above it at the start,
+    // and lift the track's top (still under the pause button) so it keeps its length
+    try {
+      const g = this.scene.get('Game');
+      const b = g?.billboard?.bounds?.();
+      const cam = g?.cameras?.main;
+      if (b && cam && Number.isFinite(b.top)) {
+        const signTop = (b.top - cam.scrollY) * (cam.zoom || 1);
+        if (signTop - 16 < bottom) bottom = Math.max(Math.round(H * 0.3), Math.round(signTop - 16));
+        if (bottom - top < H * 0.2) top = Math.max(Math.round(H * 0.15), Math.round(bottom - H * 0.2));
+      }
+    } catch {
+      // (no sign yet: the old place)
+    }
     // (1.15, the owner: "Make the challengers arrow show on the right side of the bar") room right of the track for theirs
     const x = this.W - 14 - TRACK_DOT - TRACK_W / 2;
     // a marker: a small pointer in the player's colour, beside the track, pointing at how high their tower is
