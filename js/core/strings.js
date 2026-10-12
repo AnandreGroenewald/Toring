@@ -48,7 +48,7 @@ export const S = {
   height: 'Hoogte',
   points: 'Punte',
   extraTries: 'Pogings',
-  triesWhat: (n) => `Jy het vandag ${n} pogings gespeel. Jou beste een tel op die ranglys.`,
+  triesWhat: (n) => `Jy het vandag ${n} pogings aan die Daaglikse Toring gebou. Jou beste een tel op die ranglys.`,
   boardPlace: 'Plek',
   boardShort: 'Ranglys',
   lives: 'Hartjies',

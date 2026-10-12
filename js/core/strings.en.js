@@ -49,7 +49,7 @@ export const S_EN = {
   height: 'Height',
   points: 'Points',
   extraTries: 'Tries',
-  triesWhat: (n) => `You played ${n} tries today. Your best one counts on the leaderboard.`,
+  triesWhat: (n) => `You built today’s Daily Tower ${n} times. Your best try counts on the leaderboard.`,
   boardPlace: 'Place',
   boardShort: 'Leaders',
   lives: 'Hearts',
