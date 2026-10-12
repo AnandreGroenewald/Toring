@@ -389,6 +389,11 @@ export const S = {
   lockedWeek: '🔒 ’n Volle weekkis',
   // die weekkis (1.10, js/core/week.js)
   weekTitle: 'Weekkis',
+  // (1.15) a tap on a chest
+  weekChestDone: (d, c) => `Dag ${d}: oopgemaak · +${c} 🪙`,
+  weekChestToday: (d, c) => `Dag ${d} is vandag se kis: +${c} 🪙. Speel die Daaglikse Toring om hom oop te maak!`,
+  weekChestLater: (d, c) => `Dag ${d}: +${c} 🪙. Speel elke dag om by hom uit te kom.`,
+  weekChestBig: (c) => `Dag 7, die groot goue kis: +${c} 🪙! Speel 7 dae op ’n ry om hom oop te maak.`,
   weekToday: (coins) => `Speel vandag: +${coins} 🪙`,
   weekTomorrow: (coins) => `Môre: +${coins} 🪙`,
   weekDay: (day) => `Dag ${day} van 7`,

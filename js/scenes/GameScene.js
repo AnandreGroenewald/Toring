@@ -327,7 +327,7 @@ function ensureAimTexture(scene) {
       c.lineWidth = 5;
       c.strokeStyle = '#1d2b45';
       c.stroke();
-      c.fillStyle = '#ffffff';
+      c.fillStyle = '#ffd23f';   // gold: never mistaken for the white ghost or the guide's dots
       c.fill();
       t.refresh();
     }
@@ -3135,7 +3135,14 @@ export class GameScene extends Phaser.Scene {
     if (this.midArrow) {
       const t = this.supportTop(this.topBlock);
       const on = showGhost && t.flat;
-      if (on) this.midArrow.setPosition(t.x, t.y - 6 - (this.reducedMotion ? 0 : 4 * (0.5 + 0.5 * Math.sin(this.now / 260))));
+      if (on) {
+        // (1.15, the owner: "the arrow shifted and showed the wrong place") when the ghost lies over the middle, the arrow
+        // floats above the ghost (still over the middle of the block below), so it never looks like part of the ghost
+        const g = this.curGeom;
+        const over = p.x - g.cx < t.x + 6 && p.x - g.cx + g.w > t.x - 6;
+        const top = over ? Math.min(t.y, p.y - g.cy - 4) : t.y;
+        this.midArrow.setPosition(t.x, top - 6 - (this.reducedMotion ? 0 : 4 * (0.5 + 0.5 * Math.sin(this.now / 260))));
+      }
       if (this.midArrow.visible !== on) this.midArrow.setVisible(on);
     }
     if (this.autoOn) this.autoCheck(p.x, p.targetX);

@@ -2567,3 +2567,57 @@ canvas.cel-icon { display: block; width: calc(84 * var(--u)); height: calc(84 * 
 .res-reward > span:has(.rw-sub) { flex-wrap: wrap; justify-content: center; text-align: center; row-gap: calc(2 * var(--u)); border-radius: calc(22 * var(--u)); padding: calc(8 * var(--u)) calc(16 * var(--u)); }
 .res-reward > span:has(.rw-sub) .rw-sub { flex-basis: 100%; }
 button.chip { font: inherit; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+
+/* (1.15, the owner: "The chest needs an upgrade, it needs to be more interactive") the weekly chests, drawn */
+.wk-cells { gap: calc(6 * var(--u)); align-items: flex-end; }
+.wk-chest {
+  display: inline-flex; flex-direction: column; align-items: center; gap: calc(2 * var(--u)); min-width: 30px; min-height: 44px;
+  padding: calc(4 * var(--u)) 0 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.wk-amt { font-size: max(9px, calc(15 * var(--u))); font-weight: 900; line-height: 1; opacity: 0.85; }
+.chest { --cw: calc(34 * var(--u)); position: relative; display: block; width: var(--cw); height: calc(var(--cw) * 0.82); font-style: normal; }
+/* the body: dark wood, a gold band, two gold straps */
+.chest::before {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 58%; border-radius: 0 0 calc(5 * var(--u)) calc(5 * var(--u));
+  background:
+    linear-gradient(90deg, transparent 18%, #e8b62c 18% 27%, transparent 27% 73%, #e8b62c 73% 82%, transparent 82%),
+    linear-gradient(180deg, #b0682a, #7a4118);
+  box-shadow: inset 0 calc(-3 * var(--u)) 0 rgba(0, 0, 0, 0.25), 0 calc(2 * var(--u)) calc(3 * var(--u)) rgba(80, 40, 0, 0.35);
+}
+/* the lid: domed, lighter wood, gold trim; hinged at the back */
+.chest .chest-lid {
+  position: absolute; left: -4%; right: -4%; top: 0; height: 46%; border-radius: calc(12 * var(--u)) calc(12 * var(--u)) calc(3 * var(--u)) calc(3 * var(--u));
+  background:
+    linear-gradient(90deg, transparent 18%, #ffd23f 18% 27%, transparent 27% 73%, #ffd23f 73% 82%, transparent 82%),
+    linear-gradient(180deg, #d1873d, #9a5520);
+  box-shadow: inset 0 calc(-3 * var(--u)) 0 #e8b62c; transform-origin: 8% 100%; transition: transform 0.4s cubic-bezier(.3, 1.6, .5, 1);
+}
+.chest .chest-lock { position: absolute; left: 50%; top: 40%; width: 22%; height: 26%; transform: translateX(-50%); border-radius: calc(3 * var(--u)); background: linear-gradient(180deg, #ffe680, #d99a00); box-shadow: 0 0 0 calc(1.5 * var(--u)) #7a4118; z-index: 1; }
+/* opened: the lid up, gold light inside, the lock gone */
+.wk-chest.is-done .chest .chest-lid, .chest.is-opening .chest-lid { transform: rotate(-38deg) translate(calc(-2 * var(--u)), calc(-3 * var(--u))); }
+.wk-chest.is-done .chest .chest-lock, .chest.is-opening .chest-lock { display: none; }
+.wk-chest.is-done .chest::after, .chest.is-opening::after { content: ''; position: absolute; left: 10%; right: 10%; top: 30%; height: 22%; border-radius: 50%; background: radial-gradient(ellipse, #fff6b0, #ffc928 60%, rgba(255, 201, 40, 0)); }
+.wk-chest.is-done .wk-amt { color: #1f7a35; }
+/* future days a little faded; today glows and wiggles */
+.wk-chest:not(.is-done):not(.is-today) .chest { filter: saturate(0.75) brightness(0.95); opacity: 0.8; }
+.wk-chest.is-today .chest { filter: drop-shadow(0 0 calc(6 * var(--u)) rgba(255, 196, 40, 0.95)); animation: chest-wiggle 2.6s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes chest-wiggle { 0%, 70%, 100% { transform: rotate(0); } 76% { transform: rotate(-7deg); } 82% { transform: rotate(6deg); } 88% { transform: rotate(-4deg); } 94% { transform: rotate(2deg); } }
+/* day 7: the big golden chest, with a sparkle */
+.wk-chest.is-big .chest, .chest.is-big { --cw: calc(44 * var(--u)); }
+.wk-chest.is-big .chest::before, .chest.is-big::before { background: linear-gradient(90deg, transparent 18%, #fff3b0 18% 27%, transparent 27% 73%, #fff3b0 73% 82%, transparent 82%), linear-gradient(180deg, #ffd23f, #d38a00); }
+.wk-chest.is-big .chest .chest-lid, .chest.is-big .chest-lid { background: linear-gradient(90deg, transparent 18%, #fffbe0 18% 27%, transparent 27% 73%, #fffbe0 73% 82%, transparent 82%), linear-gradient(180deg, #ffe680, #e8a915); box-shadow: inset 0 calc(-3 * var(--u)) 0 #fff3b0; }
+.wk-chest.is-big .chest .chest-lock, .chest.is-big .chest-lock { background: linear-gradient(180deg, #ff8fb8, #c2185b); }
+.wk-chest.is-big::after { content: '✦'; position: absolute; margin: calc(-6 * var(--u)) 0 0 calc(30 * var(--u)); color: #fff6b0; font-size: calc(18 * var(--u)); text-shadow: 0 0 calc(6 * var(--u)) #ffc928; animation: medal-shine 2.4s ease-in-out infinite; }
+.wk-chest.is-big { position: relative; }
+/* the results: today's chest pops open, coins burst out */
+.rw-week .chest.is-opening { --cw: calc(40 * var(--u)); margin-right: calc(4 * var(--u)); animation: chest-pop 0.9s ease-out both; }
+.rw-week .chest.is-opening .chest-lid { animation: lid-fly 0.9s cubic-bezier(.3, 1.6, .5, 1) both; }
+@keyframes chest-pop { 0% { transform: scale(0.6); } 25% { transform: scale(1.1) rotate(-6deg); } 40% { transform: scale(1.1) rotate(6deg); } 55% { transform: scale(1.05) rotate(-3deg); } 100% { transform: scale(1); } }
+@keyframes lid-fly { 0%, 50% { transform: none; } 100% { transform: rotate(-38deg) translate(calc(-2 * var(--u)), calc(-3 * var(--u))); } }
+.chest .chest-coin { position: absolute; left: 40%; top: 30%; font-size: calc(18 * var(--u)); opacity: 0; animation: coin-burst 1.1s ease-out calc(0.5s + var(--k) * 0.07s) both; }
+@keyframes coin-burst {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc((var(--k) - 2) * 14 * var(--u)), calc(-46 * var(--u))) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .wk-chest.is-today .chest, .rw-week .chest.is-opening, .rw-week .chest.is-opening .chest-lid, .wk-chest.is-big::after { animation: none; } }

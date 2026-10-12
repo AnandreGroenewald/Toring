@@ -703,15 +703,28 @@ export function createUI(bus) {
    */
   function weekStrip(w) {
     if (!w) return null;
+    // (1.15, the owner: "The chest needs an upgrade, it needs to be more interactive") seven drawn chests: the opened ones
+    // with their lids up, today's glowing, the big golden one on day 7; a tap says what's in it and how to open it
     const cells = [];
     for (let d = 1; d <= 7; d++) {
       const opened = d <= w.done;
       const today = !w.opened && d === w.day;
-      cells.push(h('span', { class: `wk-cell${opened ? ' is-done' : ''}${today ? ' is-today' : ''}${d === 7 ? ' is-big' : ''}`, 'aria-hidden': 'true' },
-        opened ? '✓' : d === 7 ? emo('🎁') : emo('📦')));
+      const coins = WEEK_COINS[d - 1];
+      const tip = opened ? S.weekChestDone(d, coins) : today ? S.weekChestToday(d, coins) : d === 7 ? S.weekChestBig(coins) : S.weekChestLater(d, coins);
+      cells.push(h('button', {
+        type: 'button',
+        class: `wk-chest${opened ? ' is-done' : ''}${today ? ' is-today' : ''}${d === 7 ? ' is-big' : ''}`,
+        'aria-label': tip,
+        onclick: (e) => {
+          e.stopPropagation();
+          audio.play('click');
+          toast(tip, 3600);
+        },
+      }, h('i', { class: 'chest', 'aria-hidden': 'true' }, h('i', { class: 'chest-lid' }), h('i', { class: 'chest-lock' })),
+      h('span', { class: 'wk-amt', text: opened ? '✓' : `+${coins}` })));
     }
     const line = w.opened ? (w.next ? S.weekTomorrow(w.next.coins) : '') : S.weekToday(w.coins);
-    return h('div', { class: 'week-strip', role: 'img', 'aria-label': `${S.weekTitle}: ${S.weekDay(w.opened ? w.day : w.day)}. ${line}` },
+    return h('div', { class: 'week-strip', role: 'group', 'aria-label': `${S.weekTitle}: ${S.weekDay(w.opened ? w.day : w.day)}. ${line}` },
       h('span', { class: 'wk-title', text: S.weekTitle }),
       h('span', { class: 'wk-cells' }, cells),
       h('span', { class: 'wk-line', text: line }),
@@ -2140,7 +2153,10 @@ export function createUI(bus) {
       if (wk.shield) notes.push(S.weekShieldWon);
       if (wk.look) notes.push(S.weekLook(COSMETIC_INFO[wk.look.kind]?.[wk.look.id]?.name || ''));
       notes.push(wk.day < 7 ? S.weekTomorrow(WEEK_COINS[wk.day]) : S.weekTomorrow(WEEK_COINS[0]));
+      // (1.15) today's chest pops open on the results: a shake, the lid flies up, coins burst out
+      const burst = reducedMotion() ? [] : [0, 1, 2, 3, 4].map((k) => h('i', { class: 'coin-ic chest-coin', 'aria-hidden': 'true', vars: { '--k': k } }));
       kids.push(h('span', { class: `rw-week${wk.day === 7 ? ' is-full' : ''}` },
+        h('i', { class: `chest is-opening${wk.day === 7 ? ' is-big' : ''}`, 'aria-hidden': 'true' }, h('i', { class: 'chest-lid' }), h('i', { class: 'chest-lock' }), burst),
         h('b', { text: S.weekBox(wk.day, wk.coins) }),
         h('span', { class: 'rw-sub', text: notes.join(' · ') })));
     }
