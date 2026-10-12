@@ -3155,3 +3155,12 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .card .tile-them b { color: #7cc4ff; }
 .card .label { color: #c9d4ea; }
 .card .tile span { color: #c9d4ea; }
+/* (1.15, the owner: "Make this banner go down with you so that for each change you make it is visible") your player card
+   stays at the top of the Uitdager-styl tab while you scroll, so every frame, medal or title you wear shows on it */
+.shop-body > .pcard { position: sticky; top: calc(20 * var(--u)); z-index: 4; margin-top: calc(22 * var(--u)); margin-bottom: calc(20 * var(--u)); }
+/* the common title plates: silver with dark words (the dark sheets made their words white on white) */
+.card .title-plate.tier-common { background: linear-gradient(180deg, #f4f7fb, #c9d4e2); color: #1d2b45; text-shadow: none; box-shadow: 0 calc(3 * var(--u)) 0 #8796a8, inset 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.6); }
+/* the sticky card: a ring of the sheet's own colour around it, so the tiles scrolling under it stay hidden */
+.shop-body > .pcard { box-shadow: 0 0 calc(20 * var(--u)) var(--pc-glow), 0 0 0 calc(18 * var(--u)) #121a34; }
+.punish-title { display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u)); flex-wrap: wrap; }
+.punish-m { padding: calc(3 * var(--u)) calc(12 * var(--u)); border-radius: 999px; background: linear-gradient(180deg, #ffe08a, #f0a500); color: #2a1d00; font-weight: 900; box-shadow: 0 0 calc(10 * var(--u)) rgba(255, 200, 60, 0.45); }

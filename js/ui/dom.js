@@ -2887,7 +2887,11 @@ export function createUI(bus) {
     });
     punishBar.setAttribute('aria-label', joker ? S.turnsChooseLabel : S.duelChooseLabel);
     punishBar.replaceChildren(
-      h('p', { class: 'punish-title', text: joker ? S.turnsChoose(opp || S.duelSomeone) : S.duelChoose(m, opp || S.duelSomeone) }),
+      // (1.15, the owner: "the name ... "Robot Ricus" it feels out of place. Maybe do not any name there?") a gold badge (the
+      // height reached, or Blok vir Blok's five Perfects) and what to do; the whole sentence stays for screen readers
+      h('p', { class: 'punish-title', 'aria-label': joker ? S.turnsChoose(opp || S.duelSomeone) : S.duelChoose(m, opp || S.duelSomeone) },
+        h('span', { class: 'punish-m', 'aria-hidden': 'true', text: joker ? '★ ×5' : `🏁 ${m} m` }),
+        h('span', { 'aria-hidden': 'true', text: joker ? S.turnsChooseLabel : S.duelChooseLabel })),
       h('div', { class: 'punish-btns' }, btns),
       h('div', { class: 'punish-track' }, h('div', { class: 'punish-time', vars: { '--ms': `${ms}ms` } })));
     punishAt = performance.now();
