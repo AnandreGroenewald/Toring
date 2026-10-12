@@ -158,6 +158,36 @@ step c. Both restart the match rooms, so a live match drops. So:
   deobfuscation warning; "Save and publish". Panel on the folder (content e90451e): round 1 31/40, round 2 36/40 (all four
   9) + the Final Boss 9.
 
+### g. 1.14.0 to the CLOSED TEST + a new content rating (full panel; the owner 18:06 "YES PLEASE")
+- **Why:** both test tracks use the Family list (17), but the closed test "Alpha" still has 11200 (1.12.0, 9 Oct). A
+  tester who joined only the closed test gets 1.12.0; tonight a Family phone (on the list, just joined the internal test)
+  installed 1.12.0 from Play: no coin matches. With 11400 on both tracks every tester gets 1.14.0 by itself.
+- **The owner's own words (typed in the Stapel terminal, 12 Oct):** 18:01 "she still doesnt even have the challenge
+  oponents for coins?"; 18:06 "YES PLEASE" (to "Shall I go ahead and put 1.14.0 on the closed test?", which named the
+  panel and Google's review); 18:09 AskUserQuestion "Yes, simulated gambling (Recommended)"; 18:12 "done" (he ticked
+  IARC's terms box himself); 18:18 AskUserQuestion, after seeing "18+ in Australia (3+ everywhere else it's offered)":
+  "Go ahead, 18+ in Australia".
+- **The phone-check gate** (stapel skill §4.1 step 6: internal first, then the owner opens the build on his phone, and
+  only then the closed test; internal builds get no pre-launch report): done on a Family phone: the owner typed 18:55 "I have asked my wife to open it and it worked! Thank you." (her
+  phone had installed 1.12.0 from Play at ~17:55; it now runs the Play-installed 1.14.0 from the internal test). The live
+  server (read only, 18:55) shows a NEW account created 18:41:44 SAST with its game save stored twice (rev 2, 2 050
+  bytes, last 18:42:06) and 1 session: Google's account picker → Stapel's server → the save, end to end. (Before it
+  only the 14:05 website sign-in existed.) The owner's own phone: "I have the newer version" (18:01). No Family
+  tester lives in Australia (the owner, 18:39).
+- **What goes out** (folder `~/Desktop/Stapel app (Google Play)/Upload 1.14.0 closed`, README.txt + content-rating.txt):
+  1. the content rating: the draft questionnaire (every answer and its reason in content-rating.txt; simulated gambling =
+     "other games that use and reward in-game currency through gameplay") → Australia 18+, Taiwan 15, Saudi 16 (not
+     Stapel countries), the other ten Stapel countries 3+ / Everyone / PEGI 3 → Save;
+  2. Closed testing - Alpha: Promote 11400 from internal (the same bundle, SHA-256 0226df5e…; the same notes, c7983181…);
+  3. Publishing overview: send exactly these two (Data safety is already in review). STOP on any other listed change, a
+     Managed publishing change, a new declaration or a terms page.
+- **Way back:** before Google decides, move the two changes back to "not sent" in Publishing overview; after approval,
+  Closed testing › Halt release (new testers get 1.12.0 again; phones that updated keep 1.14.0); the rating: a new
+  questionnaire; sign-in off for everyone: `./wr.sh rollback f632dfe5-0148-4458-a94f-5d08f2d0b60d --yes`.
+- **Records to fix right after the send:** Google Play steps.txt section 2 "Content rating ... no gambling ... Expect
+  'Everyone' / 3+" (lines 27-30) → the new answers and ratings; this file's "Before production" IARC line → done
+  (12 Oct), keep "could it appeal to children?"; HANDOVER's 1.13.5-list IARC item.
+
 ## Before production (not now)
 REFILL and TESTER_GIFT off; the IARC gambling answers and Play's "could it appeal to children?" answered again;
 the SA gambling-law opinion **before coins are ever sold for money** (Anandre: "we will sort out gambling laws if
