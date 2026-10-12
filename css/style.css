@@ -3083,3 +3083,6 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 }
 .card .done-box > .board-chip:has(span:only-child) { padding-right: calc(12 * var(--u)); }
 .card .done-box > .board-chip .emoji { font-size: calc(30 * var(--u)); }
+button.done-tile { border: 0; font: inherit; color: inherit; cursor: pointer; }
+button.done-tile:active { transform: scale(0.97); }
+button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }

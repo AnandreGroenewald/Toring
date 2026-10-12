@@ -602,8 +602,9 @@ export function createUI(bus) {
   }
 
   /** (1.15) One of the done card's tiles: an emoji, the number, what it is. */
-  const doneTile = (e, value, label, cls = '') => h('div', { class: `done-tile ${cls}`.trim() },
-    h('span', { class: 'done-tile-top' }, emo(e), h('b', { text: value })), h('small', { text: label }));
+  const doneTile = (e, value, label, cls = '', onTap = null) => h(onTap ? 'button' : 'div', {
+    class: `done-tile ${cls}`.trim(), ...(onTap ? { type: 'button', onclick: () => { audio.play('click'); onTap(); } } : {}),
+  }, h('span', { class: 'done-tile-top' }, emo(e), h('b', { text: value })), h('small', { text: label }));
   const countdownEl = (cls = '') => h('div', { class: `countdown ${cls}`.trim() },
     h('span', { text: S.nextTower }),
     h('b', { 'data-countdown': '', text: fmtClock(st.nextDayAt - Date.now()) }));
@@ -911,7 +912,9 @@ export function createUI(bus) {
           h('div', { class: 'done-stats' },
             doneTile('🏗️', fmtM(r.heightM || 0), S.height),
             doneTile('⭐', fmtInt(r.score || 0), S.points),
-            r.retried ? doneTile('🔁', String((r.tries || 2) - 1), S.extraTries, 'done-retry') : null),
+            // (1.15, the owner: "Can you make it more clear what this means? maybe if they click on it?") all of today's
+            // tries, and a tap says what they mean
+            r.retried ? doneTile('🔁', String(r.tries || 2), S.extraTries, 'done-retry', () => toast(S.triesWhat(fmtInt(r.tries || 2)), 3600)) : null),
           // (1.15, the owner: "this was a little better with the simple trophy") the 🏆 chip on the done card's corner
           trophy,
           countdownEl('done-count')));
