@@ -21,7 +21,7 @@ import { checkOrigin, limit } from './stats.js';
 import { hmacHex, sha256Hex, randomHex } from './crypto.js';
 import { verifyGoogleIdToken } from './google.js';
 import { metre } from './board.js';
-import { COSMETIC_KINDS, SKIN_KINDS, cosmetic, skin } from '../../js/core/economy.js';
+import { COSMETIC_KINDS, SKIN_KINDS, DEFAULT_LOOK, DEFAULT_SKIN, cosmetic, skin } from '../../js/core/economy.js';
 
 export const SAVE_MAX_BYTES = 256 * 1024;
 export const SESSIONS_MAX = 10;              // devices signed in at once; the longest unused goes first
@@ -83,31 +83,46 @@ function cleanSave(save) {
 
 /**
  * (1.15) A store never loses a bought look or skin. An older game cleans its copy against its own (shorter) shop
- * list, so what it doesn't know yet is gone from the copy it sends; every shop id the kept save owned stays owned
- * in the new one. Known ids only, added to the owned lists; nothing removed, what is worn is the game's choice.
+ * list, so what it doesn't know yet is gone from the copy it sends and it wears the standard one instead. So:
+ *   - every shop id the kept save owned stays owned in the new one (known ids only; nothing is removed);
+ *   - when the new copy wears the standard one and doesn't own what the kept save wore (an older game dropped it),
+ *     the kept save's choice stays on. A game that owns the item and wears the standard one chose it: that stays.
  */
 export function keepOwned(save, kept) {
   const e = save?.econ;
   const k = kept?.econ;
-  if (!e || typeof e !== 'object' || Array.isArray(e) || !k || typeof k !== 'object') return save;
+  const obj = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
+  if (!obj(e) || !obj(k)) return save;
+  const has = (lists, kind, id) => Array.isArray(lists?.[kind]) && lists[kind].includes(id);
+  // what the new copy owned and wore as it came (before anything is added back)
+  const sentOwned = { looks: structuredClone(obj(e.owned) ? e.owned : {}), skins: structuredClone(obj(e.skins?.owned) ? e.skins.owned : {}) };
   const keep = (into, from, kinds, known) => {
-    if (!from || typeof from !== 'object') return;
+    if (!obj(from)) return;
     for (const kind of kinds) {
-      const old = Array.isArray(from[kind]) ? from[kind] : [];
-      const ids = old.filter((id) => typeof id === 'string' && known(kind, id));
+      const ids = (Array.isArray(from[kind]) ? from[kind] : []).filter((id) => typeof id === 'string' && known(kind, id));
       if (!ids.length) continue;
       const now = Array.isArray(into[kind]) ? into[kind] : (into[kind] = []);
       for (const id of ids) if (!now.includes(id)) now.push(id);
     }
   };
-  if (k.owned && (e.owned === undefined || (e.owned && typeof e.owned === 'object' && !Array.isArray(e.owned)))) {
+  const keepWorn = (wear, keptWear, keptOwned, owned, kinds, unset, known) => {
+    if (!obj(keptWear)) return;
+    for (const kind of kinds) {
+      const id = keptWear[kind];
+      if (typeof id !== 'string' || id === unset[kind] || !known(kind, id) || !has(keptOwned, kind, id)) continue;
+      if ((wear[kind] === undefined || wear[kind] === unset[kind]) && !has(owned, kind, id)) wear[kind] = id;
+    }
+  };
+  if (k.owned && (e.owned === undefined || obj(e.owned))) {
     keep((e.owned ??= {}), k.owned, COSMETIC_KINDS, cosmetic);
+    if (e.look === undefined || obj(e.look)) keepWorn((e.look ??= {}), k.look, k.owned, sentOwned.looks, COSMETIC_KINDS, DEFAULT_LOOK, cosmetic);
   }
-  const ks = k.skins?.owned;
-  if (ks && (e.skins === undefined || (e.skins && typeof e.skins === 'object' && !Array.isArray(e.skins)))) {
+  const ks = k.skins;
+  if (obj(ks) && ks.owned && (e.skins === undefined || obj(e.skins))) {
     e.skins ??= {};
-    if (e.skins.owned === undefined || (e.skins.owned && typeof e.skins.owned === 'object' && !Array.isArray(e.skins.owned))) {
-      keep((e.skins.owned ??= {}), ks, SKIN_KINDS, skin);
+    if (e.skins.owned === undefined || obj(e.skins.owned)) {
+      keep((e.skins.owned ??= {}), ks.owned, SKIN_KINDS, skin);
+      if (e.skins.wear === undefined || obj(e.skins.wear)) keepWorn((e.skins.wear ??= {}), ks.wear, ks.owned, sentOwned.skins, SKIN_KINDS, DEFAULT_SKIN, skin);
     }
   }
   return save;
@@ -179,7 +194,7 @@ async function store(request, ctx) {
   // sent again (the game never heard the answer): it was kept the first time
   const before = await pushed(ctx, account, body.push);
   if (before !== null) return json(200, { ok: true, rev: before, again: true });
-  // (1.15) built on the kept save: what it owned stays owned (keepOwned; an older game drops looks it doesn't know)
+  // (1.15) built on the kept save: what it owned stays owned and on (keepOwned; an older game drops looks it doesn't know)
   const kept = await ctx.db.prepare('SELECT rev, save FROM accounts WHERE id = ?1').bind(account).first();
   if (kept && kept.rev === body.rev && typeof kept.save === 'string') {
     let old = null;

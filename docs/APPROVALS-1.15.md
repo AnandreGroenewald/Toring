@@ -57,7 +57,8 @@ account's kept save owned (`keepOwned`), so a 1.14 app's sync can't drop a 1.15 
 - The live gate (the card gained `bs`): the 1.15 game on this Mac against the live Worker
   (`MATCH_API=https://stapel-borge.bonkers-bunch-online.workers.dev node ~/.claude/skills/stapel/scripts/qa/serve2.mjs ~/Desktop/Toring 8323`,
   then `LIVE=1 GAME=http://127.0.0.1:8323/ node ~/.claude/skills/stapel/scripts/qa/friends1121.mjs turns`).
-- The way back: `./wr.sh rollback <the noted id> --yes --message "…"` (on 12 Oct the 1.14 Worker is the one from 13:40).
+- The way back: `./wr.sh rollback b6601722-d420-4969-b60d-e71a96ff3c91 --yes --message "…"` (the live 1.14 Worker,
+  deployed 12 Oct 13:41; checked with `./wr.sh deployments list` on 13 Oct 01:00).
 
 **c. The website:** `git push origin claude/trusting-hopper-26qcax`, then `cd ~/Desktop/Toring && node tools/build-pages.mjs
 && cd pages-dist && ../server/node_modules/.bin/wrangler pages deploy . --project-name stapelspel --branch main` (the build
@@ -78,7 +79,12 @@ Play has 1.15.0 for everyone (then `./wr.sh deploy`).
 - **Round 1 on 6a33cc9 (13 Oct ~00:55-01:10): 30/40, all HOLD:** Guardian 6 (a 1.14 app's sync dropped 1.15 purchases),
   Customer 8 (an Afrikaans tag cut off at 360 px, two rule lines, the wallet's + after the refill), Bottom Line 8 (the
   Winkel's "only you see these" note untrue in 1.15, the records), Advocate 8 (three phone-only keys missing from privacy
-  section 11). Every must-do and lift done in round 2 (HANDOVER §2 1.15.0 "Panel round 1").
+  section 11). Their must-dos and lifts were done in 5780ece (HANDOVER §2 1.15.0 "Panel round 1").
+- **Round 2 on 5780ece (13 Oct ~01:25): 34/40** — Customer 9, Bottom Line 9, Advocate 9 (all APPROVE), Guardian 7 HOLD
+  (keepOwned and the game's `worn` cancelled out on the real path: the item stayed owned but went back to the standard
+  look). Round 3: keepOwned keeps the dropped worn id too; the Customer's polish (Robot Rikus whole in the match pills,
+  no split "tot 4 000" / "Robot Rikus", the Afrikaans note's word order, a solid band); the Advocate's lines (the cement
+  tip and how long updateSeen stays in §11, "Wat jy koop, bly joune" in §2d); these records.
 
 ## Watch after release
 - The board's daily players on Wed 14 and Sat 17 Oct against the 1.14 days (about 5-12); Thu 15 Oct ask the Family which

@@ -3168,7 +3168,7 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 /* the sticky card: a ring of the sheet's own colour around it, so the tiles scrolling under it stay hidden */
 /* (1.15 round 2) a full-width band: the ring reaches the sheet's sides (no heading or tile edge peeks past it) and the card
    pins at the very top (nothing shows above it); the clip keeps the band 12u above and below the card */
-.look-zone > .pcard { top: 0; box-shadow: 0 0 calc(20 * var(--u)) var(--pc-glow), 0 calc(10 * var(--u)) calc(22 * var(--u)) rgba(5, 10, 30, 0.6), 0 0 0 100vw rgba(18, 26, 52, 0.94); clip-path: inset(calc(-12 * var(--u)) -100vw); }
+.look-zone > .pcard { top: 0; box-shadow: 0 0 calc(20 * var(--u)) var(--pc-glow), 0 calc(10 * var(--u)) calc(22 * var(--u)) rgba(5, 10, 30, 0.6), 0 0 0 100vw rgb(18, 26, 52); clip-path: inset(calc(-12 * var(--u)) -100vw); }
 .punish-title { display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u)); flex-wrap: wrap; }
 .punish-m { padding: calc(3 * var(--u)) calc(12 * var(--u)); border-radius: 999px; background: linear-gradient(180deg, #ffe08a, #f0a500); color: #2a1d00; font-weight: 900; box-shadow: 0 0 calc(10 * var(--u)) rgba(255, 200, 60, 0.45); }
 /* (1.15, the owner: "the punishement needs to be more compact on the left") two by two: small tiles, the icon on top,

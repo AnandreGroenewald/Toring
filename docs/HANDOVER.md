@@ -664,7 +664,8 @@ Later the owner added (decisions are final unless they say otherwise):
     needs to be difficult but not that difficult. Please take it down a notch"). `DUEL.rules` stays 112 on purpose, so
     website (1.15) and app (1.14) players still meet in matches: until a player's app is on 1.15 its crane races at 1.5x in a
     heat wave (the daily board is shared; heat waves fall on 13, 15-19 Oct) and a race's Hittegolf punishment hits a 1.14
-    tower the old way. Accepted for the few days until Play has 1.15 for everyone.
+    tower the old way. Claude's call overnight (13 Oct; the owner asked for the gentler heat wave, not for this side
+    effect): accepted for the few days until Play has 1.15 for everyone, and named in his morning note.
   - **Download:** the offline cache is 74 files, ~3.08 MB raw, ~1.0 MB over the wire (1.14: 63 files, 2.57 MB; the 9 world
     photos 180 KB). 1.16's sea creatures should start with a trim (the photos as WebP, the biggest scripts).
   - **Panel round 1 (6a33cc9, 13 Oct ~00:55-01:10): 30/40, all HOLD** (Guardian 6, Customer 8, Bottom Line 8, Advocate 8).
@@ -675,7 +676,12 @@ Later the owner added (decisions are final unless they say otherwise):
       account's copy no longer owns and the account went back to the standard one, keep wearing it (not on the first
       merge); `tests/cloudsave115.test.js`. The server keeps every shop id the kept save owned (`server/src/account.js`
       `keepOwned`, one extra D1 read per store; `server/test/keepowned115.test.js`): this also guards 1.16's items
-      against 1.15 apps.
+      against 1.15 apps (as long as the Worker goes out first with 1.16's economy.js: keepOwned only keeps ids it
+      knows). Round 2 (the Guardian, 7 HOLD): on the real path the two cancelled out (keepOwned listed the item as owned
+      again, so `worn` stepped aside and the website went back to the standard look); round 3: keepOwned also keeps the
+      kept save's worn id when the new copy wears the standard one and didn't own it (a game that owns it and wears the
+      standard one chose that); keepowned115 replays the whole path (the website, a 1.14 store, the website's merge, a
+      new phone: owned and worn, coins 950; the 1.14 app sees no change, so no upload loop).
     - *Words:* the Winkel's tower-style note is true again ("Jou agtergrond en hyskraan sien net jy; jou blokke sien jou
       teenstander ook in Blok vir Blok ..."); the stake note a whole sentence again ("Munte kan nie gekoop of vir geld
       omgeruil word nie." / "Coins can’t be bought or swapped for money."); "Hulle kos nooit ’n hartjie nie"; Blok vir

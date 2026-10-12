@@ -282,7 +282,7 @@ export const S = {
   duelChoose: (m, name) => `Eerste by ${m} m! Kies ’n straf vir ${name}:`,
   duelChooseLabel: 'Kies ’n straf',
   // --- Wedloop en Blok vir Blok (1.11): two ways to play the Uitdagersreeks ---
-  duelIntroModes: 'Speel teen ’n ander speler, ’n vriend of Robot Rikus.',
+  duelIntroModes: 'Speel teen ’n ander speler, ’n vriend of Robot Rikus.',
   modeChoose: 'Hoe wil julle speel?',
   modeRace: 'Wedloop',
   modeRaceTag: 'eerste tot 50 m wen',
@@ -370,7 +370,7 @@ export const S = {
   shopLooks: 'Uitdager-styl',
   // (1.13.4) the tower's skins (bought with coins; each kind's first is free)
   shopSkins: 'Toring-styl',
-  shopSkinsNote: 'Jou agtergrond en hyskraan sien net jy; jou blokke sien jou teenstander ook in Blok vir Blok. Dit verander niks aan die spel nie. Koop dit met munte; die gewone een van elke soort is gratis.',
+  shopSkinsNote: 'Jou agtergrond en hyskraan sien net jy; in Blok vir Blok sien jou teenstander ook jou blokke. Dit verander niks aan die spel nie. Koop dit met munte; die gewone een van elke soort is gratis.',
   skinKinds: { scene: 'Agtergrond', crane: 'Hyskraan', blocks: 'Blokke' },
   skinNames: {
     scene: { dag: 'Kaapse dag', sonsondergang: 'Safari', lekkergoed: 'Lekkergoedlug', nag: 'Sterrenag', kersieblom: 'Kersiebloeisels',
@@ -455,7 +455,7 @@ export const S = {
   testerGift: (n) => `🎁 Toetser-geskenk: ${n} munte! Dankie dat jy toets. Toetsers wys nie op die ranglys nie, en jou range skuif nie.`,
   testerGiftAgain: 'Jy het die toetser-geskenk reeds gekry 🎁',
   // (1.13.4) the Winkel's refill button (for testers, for now)
-  refillBtn: (n, left) => `Vul my munte aan (tot ${n}) · nog ${left}`,
+  refillBtn: (n, left) => `Vul my munte aan (tot ${n}) · nog ${left}`,
   refillUsed: (times, perDay) => (perDay ? `Jou ${times} aanvullings vir vandag is op. Môre weer.` : `Jou ${times} aanvullings is op.`),
   refillFull: (n) => `Jy het ${n} of meer munte`,
   refillDone: (added, total) => `+${added} 🪙 · jy het nou ${total}`,

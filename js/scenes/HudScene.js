@@ -44,7 +44,7 @@ const COACH_W = 620;        // widest first-game hint pill
 // Blok's "whose turn" pill.
 const PILL_H = 46;
 const PILL_NAME_PX = 22;
-const PILL_NAME_MAX = 10;   // characters of a name in a pill (then "…")
+const PILL_NAME_MAX = 12;   // characters of a name in a pill (then "…"; 1.15: 12, so "Robot Rikus" shows whole; the width check still shortens)
 const PILL_HEART = 0.56;    // heart scale in a pill
 const PILL_GAP = 25;        // between hearts
 const TRACK_W = 26;         // Wedloop: the race track on the right edge (1.9 had 18)
