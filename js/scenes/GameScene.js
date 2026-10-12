@@ -598,11 +598,13 @@ export class GameScene extends Phaser.Scene {
     this.ghostPath = new Float32Array(2 * 920);
     this.ghostPathN = 0;
     this.ghostLabel = null;
+    this.ghostLabelRight = false;
     if (!this.idle) {
       this.ghostLabel = this.add.text(0, 0, `↓ ${S.ghostHint}`, {
         fontFamily: FONT, fontSize: '26px', fontStyle: 'bold', color: '#ffffff',
         stroke: '#1d2b45', strokeThickness: 6, resolution: 1,
       }).setOrigin(0.5, 1).setDepth(DEPTH.ghost + 0.5).setVisible(false);
+      this.ghostLabelW = this.ghostLabel.width;   // the same either way round
     }
 
     // Distance tag on the flood line itself, so the line and the HUD pill read as one thing.
@@ -3103,9 +3105,18 @@ export class GameScene extends Phaser.Scene {
       // dotted guide from the hanging block to its landing spot, along the path it will fall (wind included)
       this.placeAimDots(p);
       if (this.ghostLabel && this.hintPending) {
-        // (kept left of the island billboard, which stands right of the base)
-        const maxX = Math.max(140, Math.min(GAME_W - 140, BILLBOARD_LEFT - 6 - this.ghostLabel.width / 2));
-        this.ghostLabel.setPosition(clamp(p.x, 140, maxX), p.y - (this.curGeom.h - this.curGeom.cy) - 14);
+        // (kept left of the island billboard, which stands right of the base). (1.15, the owner: "to the left it works
+        // perfectly fine but to the right it doesnt go to the end") where the centred label would have to stop short, it
+        // turns round: "Jou blok land hier ↓", its arrow at its right end over the ghost and the words to the left
+        const y = p.y - (this.curGeom.h - this.curGeom.cy) - 14;
+        const lbl = this.ghostLabel;
+        const right = p.x > Math.max(140, Math.min(GAME_W - 140, BILLBOARD_LEFT - 6 - this.ghostLabelW / 2));
+        if (right !== this.ghostLabelRight) {
+          this.ghostLabelRight = right;
+          lbl.setText(right ? `${S.ghostHint} ↓` : `↓ ${S.ghostHint}`).setOrigin(right ? 1 : 0.5, 1);
+        }
+        if (right) lbl.setPosition(Math.min(p.x + 12, BILLBOARD_LEFT - 6), y);
+        else lbl.setPosition(Math.max(140, p.x), y);
         if (!this.ghostLabel.visible) this.ghostLabel.setVisible(true);
       }
     }
