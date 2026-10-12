@@ -3086,3 +3086,6 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 button.done-tile { border: 0; font: inherit; color: inherit; cursor: pointer; }
 button.done-tile:active { transform: scale(0.97); }
 button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
+/* (1.15, the owner: "These pops way to close to eachother") room for the medals that stand out of the versus cards */
+.vs-cards { gap: calc(40 * var(--u)); margin: calc(22 * var(--u)) 0 calc(20 * var(--u)); }
+.vs-cards .pc-badge { margin-right: calc(14 * var(--u)); }
