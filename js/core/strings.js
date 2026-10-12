@@ -2,6 +2,8 @@
 // js/core/strings.en.js (same keys and shapes; tests/i18n.test.js checks). js/core/i18n.js swaps the
 // tables in place, so code keeps reading S.x as always. Use the typographic ’n (U+2019).
 
+import { fmtInt } from './format.js';
+
 export const S = {
   title: 'Stapel',
   tagline: 'Stapel hoog. Staan sterk.',
@@ -42,10 +44,10 @@ export const S = {
   good: 'Goed',
   skew: 'Skeef',
   lost: 'Oeps!',
-  extraLife: '’n Lewe terug!',
+  extraLife: '’n Hartjie terug!',
   height: 'Hoogte',
   points: 'Punte',
-  lives: 'Lewens',
+  lives: 'Hartjies',
   next: 'Volgende',
   combo: 'Kombo',
   wobble: 'Wankel',
@@ -69,7 +71,7 @@ export const S = {
 
   // --- Uitslag (results) ---
   results: 'Uitslag',
-  overLives: 'Jou lewens is op!',
+  overLives: 'Jou hartjies is op!',
   overLivesSub: 'Te veel blokke het in die see geplons.',
   overFlood: 'Oorstroom!',
   overFloodSub: 'Die water het jou toring ingehaal.',
@@ -109,19 +111,19 @@ export const S = {
     // if the blocks are scew or not")
     { icon: '🎯', text: 'Land in die middel vir ’n Perfek: alles onder hom word dadelik sement, al staan dit skeef. Perfeks op ’n ry gee ekstra punte.' },
     { icon: '🧱', text: 'Sement word grys en kan nie meer val nie. Ook sonder Perfeks word die onderste blokke sement. In Blok vir Blok word alles behalwe die boonste 5 blokke ná elke beurt sement.' },
-    { icon: '⚖️', text: 'Bo bly die toring los: die Balans-meter wys hoe naby die bokant aan omval is.' },
+    { icon: '⚖️', text: 'Bo bly die toring los: die Balansmeter wys hoe naby die bokant aan omval is.' },
     { icon: '🌦️', text: 'Hoe hoër jy bou, hoe meer weer: wind, reën, weerlig, hael en mis.' },
     { icon: '🌊', text: 'Die water styg. Hou jou toring bo die vloedlyn.' },
-    { icon: '❤️', text: 'Drie lewens. ’n Blok in die see kos een, elke vierde Perfek bring een terug.' },
+    { icon: '❤️', text: 'Drie hartjies. ’n Blok in die see kos een; elke vierde Perfek bring een terug.' },
     { icon: '🐒', text: 'Besoekers: ’n Perfek jaag Blouaap weg, tik Skelm Sakkie vas, en Hanswors bring geskenke. Hulle kos nooit ’n lewe nie.' },
     // (1.13.2, the owner: "add the challenger and brick by brick series to the tutorial")
-    { icon: '⚔️', text: 'Uitdagersreeks: speel teen ’n vriend, iemand anders of Robot Rikus. Teen ’n regte speler kan julle vir muntstukke speel: die wenner kry albei s’n.' },
-    { icon: '🏁', text: 'Wedloop: elkeen bou sy eie toring met dieselfde blokke. Wie eerste by ’n 10 m-merk kom, kies ’n straf vir die ander. Eerste tot 50 m wen.' },
+    { icon: '⚔️', text: 'Uitdagersreeks: speel teen ’n vriend, iemand anders of Robot Rikus. Teen ’n regte speler kan julle vir munte speel: die wenner kry albei se munte.' },
+    { icon: '🏁', text: 'Wedloop: elkeen bou sy eie toring met dieselfde blokke. Wie eerste by ’n 10 m-merk kom, kies ’n straf vir die ander. Eerste tot 50 m wen.' },
     { icon: '🤝', text: 'Blok vir Blok: een toring saam, om die beurt ’n blok, 10 sekondes om te mik. Val jou blok of gooi jy blokke af, kos dit ’n hartjie. 5 Perfeks op ’n ry stuur ’n sabotasie.' },
     // (1.13.1) with the day's free tries (from 12 Oct 2026: 3)
     { icon: '🗓️', text: (free = 1) => (free > 1
-      ? `Een Daaglikse Toring per dag, dieselfde vir almal: ${free} gratis pogings en jou beste een tel. Daarna kos Nog ’n kans muntstukke. Oefen soveel jy wil.`
-      : 'Een Daaglikse Toring per dag, dieselfde vir almal. Nog ’n kans kos muntstukke. Oefen soveel jy wil.') },
+      ? `Een Daaglikse Toring per dag, dieselfde vir almal: ${free} gratis pogings en jou beste poging tel. Daarna kos “Nog ’n kans” munte. Oefen soveel jy wil.`
+      : 'Een Daaglikse Toring per dag, dieselfde vir almal. “Nog ’n kans” kos munte. Oefen soveel jy wil.') },
   ],
   // the short lesson (1.10): a new player's first Oefen game, step by step
   lessonTry: 'Probeer die kort les',
@@ -129,8 +131,8 @@ export const S = {
   lesson2: 'Mik vir die middel. Die wit vorm wys waar die blok gaan land.',
   lesson3: 'Perfek! Vyf op ’n ry bring Hanswors met geskenke.',
   lesson3b: 'Amper. Hoe nader aan die middel, hoe meer punte.',
-  lesson4: 'Die water styg. ’n Blok in die see kos ’n lewe.',
-  lessonDone: 'Jy is reg. Elke dag is daar een Daaglikse Toring: dieselfde blokke vir almal. In die Uitdagersreeks speel jy teen ander: Wedloop of Blok vir Blok.',
+  lesson4: 'Die water styg. ’n Blok in die see kos ’n hartjie.',
+  lessonDone: 'Jy is gereed. Elke dag is daar een Daaglikse Toring: dieselfde blokke vir almal. In die Uitdagersreeks speel jy teen ander: Wedloop of Blok vir Blok.',
   lessonDaily: 'Speel vandag se toring',
   lessonMore: 'Oefen verder',
   lessonSkip: 'Slaan oor',
@@ -149,12 +151,12 @@ export const S = {
   coachCement: 'Perfek! Alles onder hom is nou sement 🧱',
   cementTip: '🧱 Grys blokke is sement: hulle kan nie meer val nie',
   coachPerfect: 'Perfek! Doen dit weer 🎯',
-  coachWater: 'Die water styg — bou vinniger as die vloedlyn 🌊',
+  coachWater: 'Die water styg — bly bo die vloedlyn 🌊',
   coachLost: '’n Blok in die see kos ’n hartjie ❤️',
 
   // --- Bygevoeg in 1.0.1 ---
   ghostHint: 'Hier land jou blok',
-  clickToDrop: 'Klik of druk spasie om te laat val',
+  clickToDrop: 'Klik of druk die spasiebalk om te laat val',
   nextTowerCaption: 'tot die volgende toring',
   newTowerGo: 'Bou die nuwe toring',
   lostCount: 'Verlore',
@@ -174,11 +176,11 @@ export const S = {
   boardFree: 'Jou advertensie hier!',
   boardFreeSub: 'Adverteer op Stapel',
   // results card: how today's tower compares with the other players (never in the WhatsApp text)
-  percentileBetter: (n) => `Jy het beter gedoen as ${n}% van spelers vandag`,
+  percentileBetter: (n) => `Jy het vandag beter gevaar as ${n}% van die spelers`,
   // "Jou Stapelstad": every finished Daaglikse Toring becomes a building in the player's own skyline
   cityTitle: 'Jou Stapelstad',
   cityLine: (n) => (n === 1 ? 'Jou stad se eerste toring staan!' : `Jou stad het nou ${n} torings!`),
-  cityStreak: (n) => (n >= 2 ? `${n} dae in ’n ry` : ''),
+  cityStreak: (n) => (n >= 2 ? `${n} dae op ’n ry` : ''),
   cityBest: 'Beste toring',
   cityEmpty: 'Voltooi ’n Daaglikse Toring om jou stad te begin bou.',
   cityAria: (n, days) => `Jou Stapelstad: ${n} torings in die laaste ${days} dae`,
@@ -191,13 +193,13 @@ export const S = {
   tomorrowLine: (emoji) => `Môre: ${emoji} — kom terug!`,
   // add to home screen
   installBtn: '📲 Sit Stapel op jou tuisskerm',
-  installTipIos: 'Tik Deel ⬆️ en dan “Voeg by tuisskerm”',
+  installTipIos: 'Tik ⬆️ (Share) en dan “Add to Home Screen”',
   installDismiss: 'Nie nou nie',
 
   // --- Besoekers (visitors; js/game/visitors.js) ---
   visitors: 'Besoekers',                      // share line: "Weer: 💨 · Besoekers: 🐒🦹✋"
   visitorsToday: 'Besoekers vandag',          // menu, under the weather forecast
-  monkeyBack: 'Ek sal terug wees!',          // Blouaap's speech bubble when a Perfek scares him off
+  monkeyBack: 'Ek kom terug!',          // Blouaap's speech bubble when a Perfek scares him off
   visitorFree: (name) => `${name} se skuld — jy hou jou hartjies ❤️`,   // a visitor knocked blocks into the sea
   thiefCaught: 'Gevang! Jy kry jou blokke terug.',
   thiefStole: (n) => (n === 1 ? 'Skelm Sakkie het 1 blok gesteel!' : `Skelm Sakkie het ${n} blokke gesteel!`),
@@ -216,25 +218,25 @@ export const S = {
   clownRewardSub: 'Hanswors bring geskenke: ’n boomstam, en dalk ’n paar blokke. Bou daarop verder!',
   // first game only: the first visitor of each kind explains itself in its arrival banner (js/core/coach.js)
   coachMonkey: 'Land jou volgende blok Perfek, anders gooi Blouaap jou boonste blok in die see!',
-  coachClown: 'Hanswors sit ’n groot boomstam (en dalk ’n paar geskenkblokke) bo-op jou toring en sement dit vas. Bou daarop verder!',
+  coachClown: 'Hanswors sit ’n groot boomstam (en dalk ’n paar geskenkblokke) bo-op jou toring en sementeer dit vas. Bou daarop verder!',
   coachThief: 'Tik vinnig op Skelm Sakkie, anders steel hy jou boonste blokke!',
 
   // --- Uitdagersreeks (head-to-head; docs/CHALLENGE-SPEC.md) ---
   duel: 'Uitdagersreeks',
-  duelSub: 'Kop-aan-kop teen ’n ander speler',
-  duelSubShort: 'Kop-aan-kop',            // under the menu button (beside Oefen)
+  duelSub: 'Kop aan kop teen ’n ander speler',
+  duelSubShort: 'Kop aan kop',            // under the menu button (beside Oefen)
   practiceSubShort: 'Dit tel nie',
-  duelIntro: 'Julle bou kop-aan-kop met dieselfde blokke en weer. Wie eerste by ’n 10 m-merk kom, kies ’n straf vir die ander se toring. Eerste tot 50 m wen!',
+  duelIntro: 'Julle bou kop aan kop met dieselfde blokke en weer. Wie eerste by ’n 10 m-merk kom, kies ’n straf vir die ander se toring. Eerste tot 50 m wen!',
   duelNick: 'Jou bynaam',
-  duelNickHint: 'Wys vir jou teenstander (hoogstens 16 letters)',
+  duelNickHint: 'Jou teenstander sien dit (hoogstens 16 letters)',
   duelNickBad: 'Daardie naam gaan nie werk nie. Probeer ’n ander een.',
   duelNickSaved: 'Bynaam gestoor',
   duelRandom: 'Soek ’n teenstander',
   duelFriend: 'Daag ’n vriend uit',
-  duelBot: 'Speel teen die rekenaar',
+  duelBot: 'Speel teen Robot Rikus',
   duelRecord: (w, l) => `${w === 1 ? '1 oorwinning' : `${w} oorwinnings`} · ${l === 1 ? '1 nederlaag' : `${l} nederlae`}`,
   duelStreak: (n) => `${n} op ’n ry`,
-  duelOffline: 'Lewendige wedstryde werk nog nie. Speel solank teen die rekenaar of daag ’n vriend uit met jou rondte.',
+  duelOffline: 'Aanlyn wedstryde werk nou nie. Speel solank teen Robot Rikus, of daag ’n vriend uit met jou rondte.',
   duelSearchPractice: 'Oefen terwyl jy wag',
   duelPlayNow: 'Speel dadelik',
   duelPlayNowSub: 'teen ’n opname of Robot Rikus',
@@ -253,10 +255,10 @@ export const S = {
   duelWaitHint: 'Stuur die skakel. Sodra jou vriend dit oopmaak, begin julle.',
   // (1.13.3, the owner: the WhatsApp challenge "doesnt show me how much coins I want to play for") a stake comes first:
   // WhatsApp's chat list and the top of the message (above the link's card) show the start
-  duelRoomText: (name, link, mode, stake = 0) => (stake ? `🪙 ${stake} speelmunte elk, die wenner kry ${stake * 2}! ` : '') + (mode === 'turns'
+  duelRoomText: (name, link, mode, stake = 0) => (stake ? `🪙 ${fmtInt(stake)} speelmunte elk, die wenner kry ${fmtInt(stake * 2)}! ` : '') + (mode === 'turns'
     ? `${name} daag jou uit vir Blok vir Blok op Stapel! Kom bou saam, om die beurt, aan een toring: ${link}`
-    : `${name} daag jou uit vir ’n Stapel-wedstryd! Kom bou kop-aan-kop: ${link}`),
-  duelPlayLater: 'Speel solank teen die rekenaar',
+    : `${name} daag jou uit vir ’n Stapel-wedstryd! Kom bou kop aan kop: ${link}`),
+  duelPlayLater: 'Speel solank teen Robot Rikus',
   duelFriendLater: 'Speel jou rondte teen Robot Rikus. Daarna stuur jy dit vir ’n vriend om te klop.',
   duelJoining: 'Koppel aan die uitdaging…',
   duelRoomGone: 'Hierdie uitdaging is verby of bestaan nie meer nie.',
@@ -265,14 +267,14 @@ export const S = {
   duelSomeone: '’n Vriend',
   duelAttackIn: (name, visitor) => `${name} stuur ${visitor}!`,
   duelAttackOut: (visitor, name, emoji) => `Jy stuur ${visitor} na ${name}! ${emoji}`,
-  duelChoose: (m, name) => `Eerste by ${m} m! Kies ’n straf vir ${name}:`,
+  duelChoose: (m, name) => `Eerste by ${m} m! Kies ’n straf vir ${name}:`,
   duelChooseLabel: 'Kies ’n straf',
   // --- Wedloop en Blok vir Blok (1.11): two ways to play the Uitdagersreeks ---
   duelIntroModes: 'Speel teen ’n ander speler, ’n vriend of Robot Rikus. Kies hoe:',
   modeChoose: 'Hoe wil julle speel?',
   modeRace: 'Wedloop',
-  modeRaceTag: 'eerste tot 50 m wen',
-  modeRaceWhat: 'Julle bou gelyktydig, elkeen sy eie toring met dieselfde blokke. Wie eerste by ’n 10 m-merk kom, kies ’n straf vir die ander. Eerste tot 50 m wen!',
+  modeRaceTag: 'eerste tot 50 m wen',
+  modeRaceWhat: 'Julle bou gelyktydig, elkeen sy eie toring met dieselfde blokke. Wie eerste by ’n 10 m-merk kom, kies ’n straf vir die ander. Eerste tot 50 m wen!',
   modeTurns: 'Blok vir Blok',
   modeTurnsTag: 'om die beurt op een toring',
   modeTurnsWhat: 'Een toring, om die beurt ’n blok. Val jou blok, of gooi jy blokke af, verloor jy ’n hartjie. Later kom rondtes: dieselfde weer of besoeker vir albei, een ná die ander. 5 Perfeks op ’n ry: kies ’n sabotasie vir die ander se volgende blok! Ná elke beurt word alles behalwe die boonste 5 blokke sement (grys).',
@@ -306,12 +308,12 @@ export const S = {
   roundBeatMine: (type, gain) => `${type === 'thief' ? 'Gevang!' : 'Blouaap vlug!'}${gain ? ' +❤️' : ''}`,
   roundBeatTheirs: (name, type, gain) => `${name} ${type === 'thief' ? 'vang Skelm Sakkie' : 'jaag Blouaap weg'}!${gain ? ' +❤️' : ''}`,
   roundThiefFirst: 'Vang eers Skelm Sakkie!',
-  searchStoppedPause: 'Gestop met soek na ’n teenstander.',
+  searchStoppedPause: 'Opgehou soek na ’n teenstander.',
   // "Nog 'n kans" (1.12): one more daily try for coins; the leaderboard keeps the better one, marked 🔁
   retryBtn: '🔁 Nog ’n kans',
   retryHow: 'Tot 4 keer per dag. Jou beste poging tel, met ’n 🔁 op die ranglys.',
   retryNeed: (n) => `Nog ${n} munte nodig (Oefen verdien munte).`,
-  retryRefund: (n) => `Jou ongebruikte Nog ’n kans: +${n} 🪙 terug.`,
+  retryRefund: (n) => `Jou ongebruikte “Nog ’n kans”: +${n} 🪙 terug.`,
   retryBusy: 'Speel eers jou ekstra kans.',
   retryMax: 'Jy het vandag al jou pogings gebruik. Kom môre terug!',
   retryBought: 'Nog ’n kans! Jou beste poging tel.',
@@ -321,14 +323,14 @@ export const S = {
   retryMark: (n) => (n > 1 ? `${n} ekstra pogings` : 'Ekstra poging'),
   // (1.13.1, the owner: three free tries a day) the day's free tries first, then "Nog ’n kans" with coins
   freeTryBtn: (n, free) => `Speel weer · poging ${n}/${free}`,
-  freeTryHow: (free) => `${free} gratis pogings per dag; jou beste een tel.`,
+  freeTryHow: (free) => `${free} gratis pogings per dag; jou beste poging tel.`,
   freeTryGo: (n, free) => `Poging ${n} van ${free}: gratis!`,
   retryHowAfterFree: (free, left) => `Jou ${free} gratis pogings is op. Nog ’n kans: nog ${left} keer met munte; jou beste poging tel.`,
   tryHead: (n, free) => (free > 1 && n <= free ? `poging ${n}/${free}` : `poging ${n}`),
   // (1.13.1, the Customer: show the free tries where a player looks) the daily card's date line before the first try;
   // the results while free tries are left; a later try that came in lower
   freeTriesDate: (free) => `${free} gratis pogings`,
-  freeTriesLeft: (left) => (left === 1 ? 'Nog 1 gratis poging vandag; jou beste een tel.' : `Nog ${left} gratis pogings vandag; jou beste een tel.`),
+  freeTriesLeft: (left) => (left === 1 ? 'Nog 1 gratis poging vandag; jou beste poging tel.' : `Nog ${left} gratis pogings vandag; jou beste poging tel.`),
   bestStays: (m) => `Jou beste vandag bly ${m}`,
   emoteLabel: 'Stuur ’n emoji',
   emoteMute: 'Demp hul emoji’s',
@@ -336,12 +338,12 @@ export const S = {
   emoteLimit: 'Genoeg emoji’s vir hierdie wedstryd',
   turnsNoRounds: (name) => `${name} se Stapel is ouer: hierdie wedstryd het geen rondtes nie.`,
   // height zones (1.12, js/core/zones.js): the first time a tower gets there
-  zoneTitle: (k) => ['', 'Bo die wolke!', 'Hoog in die lug!', 'Ruimte se rand!', 'Die ruimte!', 'Tussen die sterre!'][k] || '',
-  zoneSub: (k) => ['', '50 m: die stad is weg onder die wolke.', '100 m: hier vlieg die vliegtuie.', '200 m: jy sien die aarde se kurwe!', '300 m: welkom in die ruimte, ruimtevaarder!', '500 m: verby die maan. Legende!'][k] || '',
+  zoneTitle: (k) => ['', 'Bo die wolke!', 'Hoog in die lug!', 'Die rand van die ruimte!', 'Die ruimte!', 'Tussen die sterre!'][k] || '',
+  zoneSub: (k) => ['', '50 m: die stad is weg onder die wolke.', '100 m: hier vlieg die vliegtuie.', '200 m: jy sien die aarde se ronding!', '300 m: welkom in die ruimte, ruimtevaarder!', '500 m: verby die maan. Legende!'][k] || '',
   playSomeoneNow: 'Speel nou teen iemand',
   // (1.13.4, the owner) after an Oefen tower while a search runs: look in the other mode instead (the coins stay)
-  switchToTurns: 'Verander na Blok vir Blok',
-  switchToRace: 'Verander na Wedloop',
+  switchToTurns: 'Wissel na Blok vir Blok',
+  switchToRace: 'Wissel na Wedloop',
   switchSub: 'Soek steeds',
   raceLeadYou: 'Jy is voor! 💪',
   raceLeadThem: (name) => `${name} is voor jou! 😮`,
@@ -356,20 +358,30 @@ export const S = {
   shopLooks: 'Uitdager-styl',
   // (1.13.4) the tower's skins (bought with coins; each kind's first is free)
   shopSkins: 'Toring-styl',
-  shopSkinsNote: 'Net vir jou oë: jou agtergrond, hyskraan en blokke. Dit verander niks aan die spel nie. Koop dit met muntstukke; die gewone een van elk is gratis.',
+  shopSkinsNote: 'Net vir jou oë: jou agtergrond, hyskraan en blokke. Dit verander niks aan die spel nie. Koop dit met munte; die gewone een van elke soort is gratis.',
   skinKinds: { scene: 'Agtergrond', crane: 'Hyskraan', blocks: 'Blokke' },
   skinNames: {
-    scene: { dag: 'Kaapse dag', sonsondergang: 'Sonsondergang', lekkergoed: 'Lekkergoed-lug', nag: 'Sterrenag' },
-    crane: { geel: 'Klassieke geel', rooi: 'Brandweer-rooi', blou: 'Oseaan-blou', pienk: 'Pienk pret', goud: 'Goud' },
-    blocks: { kleur: 'Kleurvol', lekkergoed: 'Lekkergoed', klip: 'Klip', neon: 'Neon', goud: 'Goudstawe' },
+    scene: { dag: 'Kaapse dag', sonsondergang: 'Sonsondergang', lekkergoed: 'Lekkergoedlug', nag: 'Sterrenag', kersieblom: 'Kersiebloeisels',
+      noorderlig: 'Noorderlig', ruimte: 'Diep ruimte', sintgolf: 'Retro-neon' },
+    crane: { geel: 'Klassieke geel', rooi: 'Brandweer-rooi', blou: 'Oseaanblou', pienk: 'Pienk pret', goud: 'Goud' },
+    blocks: { kleur: 'Kleurvol', lekkergoed: 'Lekkergoed', klip: 'Klip', neon: 'Neon', goud: 'Goudstawe', piksel: 'Retro-piksel',
+      koolstof: 'Koolstofvesel', ys: 'Yskristal', marmer: 'Marmer', lawa: 'Lawa', chroom: 'Chroom', holo: 'Holografies', heelal: 'Sterrestelsel' },
   },
-  shopPowerupsNote: 'Vir Oefen. In die Daaglikse Toring kry almal ’n gratis Fondamentblok by 55 m.',
+  shopPowerupsNote: 'Vir Oefen. In die Daaglikse Toring kry almal ’n gratis Fondamentblok by 55 m.',
   shopLooksNote: 'Jou teenstander sien dit in die Uitdagersreeks. Dit maak jou nie sterker nie.',
   inBag: (n) => `In jou sak: ${n}`,
   buy: 'Koop',
   wear: 'Dra',
   wearing: 'Aan',
   preview: 'Wys',
+  // (1.15) how rare a shop item is (its colour in the Winkel), and the label on what's new
+  tierNames: { common: 'Gewoon', rare: 'Skaars', epic: 'Epies', legendary: 'Legendaries' },
+  newTag: 'Nuut',
+  // (1.15) the app: a newer version is on Google Play
+  updateTitle: 'Nuwe weergawe!',
+  updateBody: (v) => `Stapel ${v} is op Google Play. Dateer op om die nuutste weergawe te kry.`,
+  updateBtn: 'Dateer op',
+  updateLater: 'Later',
   lockedRank: (rank) => `🔒 ${rank}-rang`,
   lockedWeek: '🔒 ’n Volle weekkis',
   // die weekkis (1.10, js/core/week.js)
@@ -386,8 +398,8 @@ export const S = {
   weekShield: 'Reeksskild',
   weekShieldWhat: 'Mis jy ’n dag, hou dit jou weekkis se plek (jy kan 2 hê)',
   weekShieldHave: (n) => `Jy het ${n}`,
-  lookKinds: { frame: 'Raam', badge: 'Wapen', title: 'Titel', celebration: 'Wen-viering', style: 'Straf-styl' },
-  notEnoughCoins: 'Nie genoeg muntstukke nie. Speel nog ’n bietjie!',
+  lookKinds: { frame: 'Raam', badge: 'Kenteken', title: 'Titel', celebration: 'Wenviering', style: 'Strafstyl' },
+  notEnoughCoins: 'Nie genoeg munte nie. Speel nog ’n bietjie!',
   bought: (name) => `${name} gekoop!`,
   powerupSlow: 'Stadige hyskraan: 5 blokke lank 🐢',
   powerupShield: 'Skild aan! Die volgende aap of skelm bons af 🛡️',
@@ -407,15 +419,15 @@ export const S = {
   rankElite: { meesterbouer: 'Meesterbouer', grootmeester: 'Grootmeester', legende: 'Stapel-legende' },
   rankModeLabel: (mode) => (mode === 'turns' ? 'Blok vir Blok-rang' : 'Wedloop-rang'),
   rankPct: (toNext, next) => `Nog ${toNext}% tot ${next}`,
-  rankPctDelta: (d) => (d >= 0 ? `+${d}%` : `${d}%`),
+  rankPctDelta: (d) => (d >= 0 ? `+${d}%` : `−${-d}%`),
   rankDown: (name) => `Af na ${name}`,
   rankShield: (name) => `🛡️ Skild! Jy bly ${name}`,
   rankShieldOn: '🛡️ Skild aan: jou volgende verlies laat jou nie val nie.',
   rankPlacement: (n) => (n === 1 ? 'Nog 1 plasingswedstryd: ’n oorwinning tel 1,5 keer.' : `Nog ${n} plasingswedstryde: oorwinnings tel 1,5 keer.`),
-  rankNotCounted: 'Teen Robot Rikus of ’n opname tel nie vir jou rang nie.',
+  rankNotCounted: 'Wedstryde teen Robot Rikus of ’n opname tel nie vir jou rang nie.',
   rankTester: 'Toetsers se range skuif nie (die toetser-geskenk).',
   // (1.13.2) the testers' gift from its link (…/geskenk?toetser=CODE)
-  testerGift: (n) => `🎁 Toetser-geskenk: ${n} muntstukke! Dankie dat jy toets. Toetsers wys nie op die ranglys nie, en jou range skuif nie.`,
+  testerGift: (n) => `🎁 Toetser-geskenk: ${n} munte! Dankie dat jy toets. Toetsers wys nie op die ranglys nie, en jou range skuif nie.`,
   testerGiftAgain: 'Jy het die toetser-geskenk reeds gekry 🎁',
   // (1.13.4) the Winkel's refill button (for testers, for now)
   refillBtn: (n, left) => `Vul my munte aan (tot ${n}) · nog ${left}`,
@@ -423,20 +435,20 @@ export const S = {
   refillFull: (n) => `Jy het ${n} of meer munte`,
   refillDone: (added, total) => `+${added} 🪙 · jy het nou ${total}`,
   testerGiftBad: 'Hierdie geskenk-skakel werk nie (meer) nie.',
-  // (1.13) a live match that ended by a quit within its first 25 s (no rank farming by closing a tab)
+  // (1.13) a live match that ended by a quit within its first 25 s (no rank farming by closing a tab)
   rankTooQuick: 'Te kort: ’n wedstryd wat so gou eindig, tel nie vir jou rang nie.',
   seasonBadges: 'Seisoenkentekens:',
   seasonReward: (rank, emoji) => `Nuwe seisoen! Jy hou ’n ${rank}-kenteken ${emoji}`,
   changeLook: 'Verander jou styl',
-  duelGhostHit: (name, m) => `${name} se toring is ${m} m korter!`,
+  duelGhostHit: (name, m) => `${name} se toring is ${m} m korter!`,
   duelYou: 'Jy',
   duelLeft: (name) => `${name} het die wedstryd verlaat.`,
   duelConnLost: 'Die verbinding het weggeval. Hierdie wedstryd tel nie vir jou rang nie.',
   // results
   duelWon: 'Jy het gewen!',
   duelLost: 'Jy het verloor',
-  duelWhyGoal: 'Eerste tot 50 m!',
-  duelWhyTheyGoal: (name) => `${name} was eerste by 50 m.`,
+  duelWhyGoal: 'Eerste tot 50 m!',
+  duelWhyTheyGoal: (name) => `${name} was eerste by 50 m.`,
   duelWhyTheyFell: (name) => `${name} se toring het geval.`,
   duelWhyTheyLeft: (name) => `${name} het die wedstryd verlaat.`,
   duelWhyTheyQuit: (name) => `${name} het opgehou.`,
@@ -448,7 +460,7 @@ export const S = {
   duelShareInvite: 'Kan jy my klop? Speel teen my rondte:',
   // somebody's run in a link (?teen=)
   duelLinkTitle: (name) => `${name} daag jou uit!`,
-  duelLinkSub: (height) => `Bou dieselfde toring kop-aan-kop teen hul rondte (${height}).`,
+  duelLinkSub: (height) => `Bou dieselfde toring kop aan kop teen hul rondte (${height}).`,
   duelLinkPlay: 'Aanvaar die uitdaging',
   // (1.12.1) a friend's live link: who invites, "Speel" or "Sorry, besig nou" (the owner: "simple like Sorry,
   // busy right now"); the one who invited hears it and keeps waiting (the link may have gone to a group)
@@ -459,7 +471,7 @@ export const S = {
   duelDeclined: (name) => `${name}: “Sorry, besig nou.” 🙏`,
   // (1.12.1) back after the connection went (Wi-Fi to mobile data)
   connLost: '📶 Verbinding weg… koppel weer aan',
-  connBack: '✓ Weer aan',
+  connBack: '✓ Weer aanlyn',
   connOppLost: (name) => `📶 ${name} se verbinding is weg… wag ’n bietjie`,
   connOppBack: (name) => `✓ ${name} is terug`,
   // (1.12.1) a friend match: a pause stops both games
@@ -471,7 +483,7 @@ export const S = {
   pauseResuming: 'Ons begin weer…',
   pauseGoesOn: (t) => `Gaan aan oor ${t}`,
   // (1.12.1) "Speel weer" after a friend match: the same friend, in the same room
-  againAsk: (name) => `🔁 Speel weer teen ${name}`,
+  againAsk: (name) => `🔁 Weer teen ${name}`,
   againWait: (name) => `Wag vir ${name}…`,
   againThey: (name) => `🔁 ${name} wil weer speel!`,
   againStarting: 'Ons begin…',
@@ -480,11 +492,11 @@ export const S = {
   // coins: each puts the same in, the winner gets both (never against Robot Rikus or a recording)
   stakeLabel: 'Speel vir munte',
   stakeNone: 'Geen',
-  stakeWhat: (n, pot) => `Elkeen sit ${n} 🪙 in; die wenner kry ${pot} 🪙. Los jy die wedstryd, of bly jou verbinding langer as 20 s weg, kry die ander speler jou munte.`,
-  stakeNoneWhat: 'Net vir die pret: geen munte nie.',
+  stakeWhat: (n, pot) => `Elkeen sit ${n} 🪙 in; die wenner kry ${pot} 🪙. Los jy die wedstryd, of bly jou verbinding langer as 20 s weg, kry die ander speler jou munte.`,
+  stakeNoneWhat: 'Net vir die lekker: geen munte nie.',
   stakeHave: (coins) => `Jy het ${coins} 🪙 · net teen ’n regte speler.`,
   stakeHaveShort: (coins) => `Jy het ${coins} 🪙.`,
-  stakeRule: 'Los jy die wedstryd, of bly jou verbinding langer as 20 s weg, kry die ander speler jou munte.',
+  stakeRule: 'Los jy die wedstryd, of bly jou verbinding langer as 20 s weg, kry die ander speler jou munte.',
   stakeNeedMore: (n) => `Nog ${n} munte nodig`,
   stakeNote: 'Munte is net vir die spel: hulle kan nie gekoop of vir geld omgeruil word nie.',
   stakeLine: (n) => `Speel vir ${n} 🪙 elk`,
@@ -505,9 +517,9 @@ export const S = {
   inviteCoinsSent: (name) => `${name} sal sien jy het te min munte.`,
   duelDeclinedCoins: (name) => `${name} het te min munte vir hierdie wedstryd. Probeer minder munte, of speel sonder munte.`,
   duelDeclinedOld: (name) => `${name} se Stapel ken nog nie muntwedstryde nie. Daag weer uit sonder munte.`,
-  stakeOff: (n) => `Hierdie wedstryd is sonder munte: jou ${n} 🪙 is terug.`,
+  stakeOff: (n) => `Hierdie wedstryd word sonder munte gespeel: jou ${n} 🪙 is terug.`,
   stakeBackSub: 'jou munte is terug',
-  duelWhyTimeWon: 'Die tyd was op: jou toring was die hoogste.',
+  duelWhyTimeWon: 'Die tyd was op: jou toring was hoër.',
   duelWhyTimeLost: (name) => `Die tyd was op: ${name} se toring was hoër.`,
   // --- Daaglikse ranglys (1.9.2; js/board.js) ---
   // the daily reminder (1.10, the Android app)
@@ -525,7 +537,7 @@ export const S = {
   remind2: (day, coins) => `📦 Jou weekkis vir dag ${day} wag: +${coins} 🪙`,
   remind3: 'Blouaap wag vir jou… 🐒 Kom bou!',
   remind4: 'Hoe hoog kan jy vandag bou? 🔥',
-  remind5: '⚔️ Daag ’n vriend uit en wen munte!',
+  remind5: '⚔️ Daag ’n vriend uit vir ’n wedstryd!',
   linkLater: 'Die uitdaging wag: bou eers jou toring klaar.',
   openInApp: 'Maak oop in die Stapel-app',
   versionNote: (v) => `Weergawe ${v}`,
@@ -534,14 +546,14 @@ export const S = {
   // (1.14) the one gentle offer (a new best, or just after a purchase): never needed to play
   signinOffer: 'Bêre jou vordering met Google · een tik',
   signinOfferNo: 'Nie nou nie',
-  signinOfferFail: 'Inteken het nie nou gewerk nie. Jy speel gewoon verder.',
+  signinOfferFail: 'Inteken het nou nie gewerk nie. Speel gewoon verder.',
   accountTitle: 'Bêre jou vordering',
   accountTitleIn: 'Jou rekening',
   accountWhy: 'Teken in met Google, dan is jou torings, munte, voorkoms en range veilig, en dieselfde op jou foon en die webwerf.',
   accountKeeps: 'Stapel hou jou vordering en ’n nommer wat van jou Google-rekening gemaak is: nie jou naam, e-pos of foto nie.',
   // (1.14, POPIA s35: a child is under 18) beside every sign-in, no extra tap
   accountUnder18: 'Jonger as 18? Vra eers jou ouer of voog.',
-  accountAppSoon: 'Binnekort ook in die Stapel-toep.',
+  accountAppSoon: 'Werk ook in die Stapel-app.',
   accountBusy: 'Stapel is nou besig. Ons bêre later weer.',
   accountSignIn: 'Teken in met Google',
   accountSignedIn: 'Ingeteken met Google ✓',
@@ -549,7 +561,7 @@ export const S = {
   accountAgo: (min) => (min < 1 ? 'nou net' : min < 60 ? `${min} min gelede` : min < 48 * 60 ? `${Math.round(min / 60)} uur gelede` : `${Math.round(min / 1440)} dae gelede`),
   accountSaving: 'Besig om te bêre…',
   accountNotYet: 'Nog nie gebêre nie.',
-  accountOffline: 'Geen internet nie: dit bêre sodra jy weer aanlyn is.',
+  accountOffline: 'Geen internet nie: ons bêre sodra jy weer aanlyn is.',
   accountOut: 'Jy is uitgeteken. Teken weer in om aan te hou bêre.',
   accountSignOut: 'Teken uit',
   accountSignOutAsk: 'Teken uit? Alles bly op hierdie toestel, en jou rekening hou sy afskrif. Teken weer in om aan te hou bêre.',
@@ -577,7 +589,8 @@ export const S = {
   stageSub: (k) => ['', 'Die weer begin draai, en daar kom besoekers.', 'Storms, hael en rukwinde. Pas op vir Skelm Sakkie!', 'Alles, en meer dikwels. Hou vas!'][k] || '',
   board: 'Ranglys',
   boardTitle: 'Vandag se ranglys',
-  boardPlace: (rank, n) => `Jy is #${rank} van ${n} vandag`,
+  boardMailSubject: 'Stapel ranglys',   // (1.15) the leaderboard's report e-mail
+  boardPlace: (rank, n) => `Jy is #${fmtInt(rank)} van ${fmtInt(n)} vandag`,
   boardEmpty: 'Nog niemand op die ranglys nie. Wees die eerste!',
   boardLoading: 'Laai die ranglys…',
   boardOffline: 'Die ranglys kan nie nou laai nie. Probeer later weer.',
@@ -608,7 +621,7 @@ export const WEATHER_INFO = {
   wind:    { emoji: '💨', name: 'Wind',        desc: (dir) => (dir < 0 ? 'Die wind waai na links ←' : 'Die wind waai na regs →') },
   gust:    { emoji: '🌪️', name: 'Warrelwind',  desc: () => 'Rukwinde van alle kante!' },
   rain:    { emoji: '🌧️', name: 'Reën',        desc: (dir) => (dir < 0 ? 'Glibberig! Blokke gly na links ←' : 'Glibberig! Blokke gly na regs →') },
-  storm:   { emoji: '⛈️', name: 'Donderstorm', desc: () => 'Pasop vir die weerlig!' },
+  storm:   { emoji: '⛈️', name: 'Donderstorm', desc: () => 'Pas op vir die weerlig!' },
   hail:    { emoji: '🌨️', name: 'Hael',        desc: () => 'Haelkorrels tref jou toring!' },
   fog:     { emoji: '🌫️', name: 'Mis',         desc: () => 'Jy sien skaars waar die blok gaan land…' },
   heat:    { emoji: '☀️', name: 'Hittegolf',   desc: () => 'Die hyskraan jaag!' },
@@ -641,19 +654,21 @@ export const POWERUP_INFO = {
 export const COSMETIC_INFO = {
   frame: {
     hout: { name: 'Hout' }, see: { name: 'See' }, goud: { name: 'Goud' }, springbok: { name: 'Groen en goud' },
-    vuur: { name: 'Vuur' }, diamant: { name: 'Diamant' },
+    vuur: { name: 'Vuur' }, neon: { name: 'Neon' }, holo: { name: 'Holografies' }, diamant: { name: 'Diamant' },
   },
   badge: {
     geen: { name: 'Geen' }, leeu: { name: 'Leeu' }, vuur: { name: 'Vuur' }, rugby: { name: 'Rugby' }, olifant: { name: 'Olifant' },
-    arend: { name: 'Visarend' }, kroon: { name: 'Kroon' }, 's-brons': { name: 'Seisoen: Brons' }, 's-silwer': { name: 'Seisoen: Silwer' },
+    arend: { name: 'Visarend' }, weerlig: { name: 'Weerlig' }, haai: { name: 'Haai' }, kroon: { name: 'Kroon' }, vuurpyl: { name: 'Vuurpyl' },
+    goat: { name: 'Die GOAT' }, draak: { name: 'Draak' }, 's-brons': { name: 'Seisoen: Brons' }, 's-silwer': { name: 'Seisoen: Silwer' },
     's-goud': { name: 'Seisoen: Goud' }, 's-platinum': { name: 'Seisoen: Platinum' }, 's-diamant': { name: 'Seisoen: Diamant' },
   },
   title: {
-    bouer: { name: 'Bouer' }, hyskraanheld: { name: 'Hyskraanheld' }, perfekmeester: { name: 'Perfek-meester' },
-    wolkekrabber: { name: 'Wolkekrabber' }, toringkoning: { name: 'Toringkoning' }, getrou: { name: 'Getroue Bouer' },
+    bouer: { name: 'Bouer' }, hyskraanheld: { name: 'Hyskraanheld' }, perfekmeester: { name: 'Perfekmeester' },
+    wolkekrabber: { name: 'Wolkekrabber' }, toringkoning: { name: 'Toringkoning' }, ikoon: { name: 'Ikoon' }, getrou: { name: 'Getroue Bouer' },
   },
   celebration: {
     konfetti: { name: 'Konfetti' }, vuurwerk: { name: 'Vuurwerk' }, vuvuzela: { name: 'Vuvuzela' }, braai: { name: 'Braai' }, skrum: { name: 'Skrum' },
+    weerlig: { name: 'Weerligstorm' }, goudreen: { name: 'Goue reën' }, laser: { name: 'Laserskou' }, sterrestof: { name: 'Sterrestof' },
   },
   style: {
     gewoon: { name: 'Gewoon' }, pet: { name: 'Pet' }, sonbril: { name: 'Sonbril' }, hoed: { name: 'Hoed' }, kroon: { name: 'Kroon' },

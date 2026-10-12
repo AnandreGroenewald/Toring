@@ -66,18 +66,18 @@ test('buildStatsBatch clamps and drops what the Worker would drop anyway', () =>
 // ---------------------------------------------------------------------------
 
 test('percentile line: exact Afrikaans text, only with enough players and something to say', () => {
-  assert.equal(percentileLine({ percentile: 72, players: 40 }), 'Jy het beter gedoen as 72% van spelers vandag');
-  assert.equal(S.percentileBetter('72'), 'Jy het beter gedoen as 72% van spelers vandag');
+  assert.equal(percentileLine({ percentile: 72, players: 40 }), 'Jy het vandag beter gevaar as 72% van die spelers');
+  assert.equal(S.percentileBetter('72'), 'Jy het vandag beter gevaar as 72% van die spelers');
   assert.equal(MIN_PLAYERS, 10);
-  assert.equal(percentileLine({ percentile: 72, players: 10 }), 'Jy het beter gedoen as 72% van spelers vandag');
+  assert.equal(percentileLine({ percentile: 72, players: 10 }), 'Jy het vandag beter gevaar as 72% van die spelers');
   assert.equal(percentileLine({ percentile: 72, players: 9 }), '', 'fewer than 10 players: nothing');
-  assert.equal(percentileLine({ percentile: 100, players: 10 }), 'Jy het beter gedoen as 100% van spelers vandag');
-  assert.equal(percentileLine({ percentile: 71.6, players: 12 }), 'Jy het beter gedoen as 72% van spelers vandag');
+  assert.equal(percentileLine({ percentile: 100, players: 10 }), 'Jy het vandag beter gevaar as 100% van die spelers');
+  assert.equal(percentileLine({ percentile: 71.6, players: 12 }), 'Jy het vandag beter gevaar as 72% van die spelers');
   assert.equal(percentileLine({ percentile: 0, players: 50 }), '', 'a 0% line would only discourage');
   for (const bad of [null, undefined, {}, 'x', { percentile: null, players: 50 }, { percentile: 'hoog', players: 50 }, { percentile: NaN, players: 50 }, { percentile: 50 }, { percentile: 50, players: NaN }]) {
     assert.equal(percentileLine(bad), '');
   }
-  assert.equal(percentileLine({ percentile: 250, players: 20 }), 'Jy het beter gedoen as 100% van spelers vandag', 'never above 100');
+  assert.equal(percentileLine({ percentile: 250, players: 20 }), 'Jy het vandag beter gevaar as 100% van die spelers', 'never above 100');
 });
 
 test('the percentile never reaches the WhatsApp text', () => {

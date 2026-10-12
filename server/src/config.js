@@ -100,6 +100,10 @@ export function loadConfig(env) {
     // the game asks at its start, so this changes without a new app (1..4; the game's own default is 3 from 2026-10-12).
     dailyFreeTries: int(e.DAILY_FREE_TRIES, 3, 1, 4),
     dailyFreeFrom: /^\d{4}-\d{2}-\d{2}$/.test(str(e.DAILY_FREE_FROM)) ? str(e.DAILY_FREE_FROM) : '2026-10-12',
+    // (1.15, the owner: "Isnt there a way to do it through a app notification?") the newest Android app on Google Play, for
+    // GET /daily/config `app`: a 1.15+ app that's older shows "Nuwe weergawe!" with a Play Store button. Set it only once Play
+    // has the version for everyone (an internal test isn't enough); empty = no card.
+    appLatest: /^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(str(e.APP_LATEST)) ? str(e.APP_LATEST) : '',
     // (1.13) Sign in with Google: the web client ID (public; the app asks Google for tokens for it too)
     // and the secret that turns a Google account's number into Stapel's account number. Without both,
     // /account/* answers 503 not_configured and the game hides the sign-in.

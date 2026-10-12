@@ -10,7 +10,8 @@ const WEEK_COINS = WEEK.coins;
 const WEEK_SHIELD_MAX = WEEK.shieldMax;
 const WEEK_SHIELD_PRICE = WEEK.shieldPrice;
 import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO, COSMETIC_INFO } from '../core/strings.js';
-import { COIN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic, SKINS, SKIN_KINDS } from '../core/economy.js';
+import { COIN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic, SKINS, SKIN_KINDS, tierOf } from '../core/economy.js';
+import * as BLOCKS from '../game/blocks.js';
 import { EMOTES, EMOTE_PICKS } from '../config.js';
 import { fmtM, fmtInt, fmtClock, fmtDuration, dayName, monthName } from '../core/format.js';
 import { shareResult } from '../core/share.js';
@@ -177,6 +178,7 @@ export function createUI(bus) {
     remind: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-remind-title', tabindex: '-1' }),
     name: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-name-title', tabindex: '-1' }),
     settings: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-settings-title', tabindex: '-1' }),   // (1.14) ⚙️ Instellings (with the account)
+    update: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-update-title', tabindex: '-1' }),   // (1.15) a newer app on Google Play
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -592,7 +594,14 @@ export function createUI(bus) {
   function shopBtn(coins) {
     const b = dockBtn('shop', S.shop, () => { audio.play('click'); bus.emit('ui:shop'); }, { class: 'dock-btn dock-shop' });
     b.querySelector('.dock-ic').append(h('span', { class: 'dock-coins' }, emo(COIN), h('b', { text: fmtInt(coins || 0) })));
+    // (1.15) a "Nuut" dot until the Winkel has been opened once in this version (new skins, medals and celebrations)
+    if (!shopSeen()) b.querySelector('.dock-ic').append(h('span', { class: 'dock-new', text: S.newTag }));
     return b;
+  }
+
+  const SHOP_SEEN = 'stapel.v1.shopSeen';
+  function shopSeen() {
+    try { return localStorage.getItem(SHOP_SEEN) === VERSION; } catch { return true; }
   }
 
   /** New coin balance on the menu's Winkel button (after buying, or a game). */
@@ -1085,11 +1094,11 @@ export function createUI(bus) {
   function playerCard({ name = '', card = null, compact = false } = {}) {
     const c = card || {};
     const frame = cosmetic('frame', c.frame) ? c.frame : 'hout';
-    const badge = cosmetic('badge', c.badge)?.emoji || '';
+    const badgeItem = cosmetic('badge', c.badge);
     const rl = LADDER_IDS.includes(c.rl) ? c.rl : `${c.rank || 'brons'}-1`;
     const rank = LADDER[ladderIndex(rl)];
     return h('div', { class: `pcard frame-${frame}${compact ? ' is-compact' : ''}` },
-      badge ? h('span', { class: 'pc-badge' }, emo(badge)) : null,
+      badgeItem?.emoji ? h('span', { class: 'pc-badge' }, medal(badgeItem)) : null,
       h('span', { class: 'pc-main' },
         h('b', { class: 'pc-name', text: name }),
         h('span', { class: 'pc-title', text: (COSMETIC_INFO.title[c.title] || COSMETIC_INFO.title.bouer).name })),
@@ -1098,15 +1107,54 @@ export function createUI(bus) {
 
   /** (1.13.4) A skin's little picture in the Winkel (css: .skin-prev): the sky, the crane's lattice, three blocks. */
   function skinPreview(kind, id) {
-    if (kind === 'scene') return h('span', { class: `skin-prev skin-scene skin-scene-${id}`, 'aria-hidden': 'true' }, emo({ dag: '☀️', sonsondergang: '🌅', lekkergoed: '🍭', nag: '🌙' }[id] || '☀️'));
+    if (kind === 'scene') return h('span', { class: `skin-prev skin-scene skin-scene-${id}`, 'aria-hidden': 'true' }, h('i', { class: 'scene-fx' }), emo(SCENE_EMOJI[id] || '☀️'));
     if (kind === 'crane') return h('span', { class: `skin-prev skin-crane skin-crane-${id}`, 'aria-hidden': 'true' }, h('i'), h('i'));
+    // (1.15) the blocks drawn by the game's own block painter in that skin (exactly what you'll build with)
+    const swatch = blockSwatch(id);
+    if (swatch) return h('span', { class: `skin-prev skin-blocks skin-blocks-${id} has-swatch`, 'aria-hidden': 'true' }, swatch);
     return h('span', { class: `skin-prev skin-blocks skin-blocks-${id}`, 'aria-hidden': 'true' }, h('i'), h('i'), h('i'));
+  }
+  const SCENE_EMOJI = { dag: '☀️', sonsondergang: '🌅', lekkergoed: '🍭', nag: '🌙', kersieblom: '🌸', noorderlig: '✨', ruimte: '🪐', sintgolf: '🌆' };
+
+  /** (1.15) Three sample blocks in a block skin, drawn once per skin and then copied (null if the painter can't). */
+  const swatchCache = new Map();
+  function blockSwatch(id) {
+    if (typeof BLOCKS.drawSkinSwatch !== 'function') return null;
+    try {
+      const W = 132;
+      const H = 92;
+      const dpr = Math.min(3, Math.max(1, globalThis.devicePixelRatio || 1));
+      let src = swatchCache.get(id);
+      if (!src) {
+        src = doc.createElement('canvas');
+        src.width = Math.round(W * dpr);
+        src.height = Math.round(H * dpr);
+        BLOCKS.drawSkinSwatch(src, id);
+        swatchCache.set(id, src);
+      }
+      const c = doc.createElement('canvas');
+      c.width = src.width;
+      c.height = src.height;
+      c.getContext('2d').drawImage(src, 0, 0);
+      c.className = 'skin-swatch';
+      return c;
+    } catch {
+      return null;
+    }
+  }
+
+  /** (1.15, the owner: "the icons like the lion is also not very impressive") a badge as a minted medal: its tier's metal
+   * rim, a jewel-toned face, light rays behind a legendary one; the emoji sits in the middle with a soft shadow. */
+  function medal(item, { big = false } = {}) {
+    return h('span', { class: `medal tier-${tierOf(item)} medal-${item.id}${big ? ' is-big' : ''}`, 'aria-hidden': 'true' },
+      h('i', { class: 'medal-rays' }), h('i', { class: 'medal-face' }), emo(item.emoji));
   }
 
   function lookPreview(kind, item) {
     if (kind === 'frame') return h('span', { class: `frame-swatch frame-${item.id}` });
     if (kind === 'title') return h('span', { class: 'title-prev', text: COSMETIC_INFO.title[item.id].name });
     if (kind === 'style') return stylePreview(item);
+    if (kind === 'badge') return item.emoji ? medal(item) : h('span', { class: 'medal medal-none', 'aria-hidden': 'true' }, h('i', { class: 'medal-face' }));
     return emo(item.emoji || '–');
   }
 
@@ -1156,6 +1204,20 @@ export function createUI(bus) {
     } catch {
       return h('span', { class: 'style-prev-plain' }, emo('🐒'), item.emoji ? emo(item.emoji) : null);
     }
+  }
+
+  // (1.15) what's new in this version: a "Nuut" tag in the Winkel
+  const NEW_ITEMS = new Set(['scene:kersieblom', 'scene:noorderlig', 'scene:ruimte', 'scene:sintgolf', 'blocks:piksel', 'blocks:koolstof',
+    'blocks:ys', 'blocks:marmer', 'blocks:lawa', 'blocks:chroom', 'blocks:holo', 'blocks:heelal', 'frame:neon', 'frame:holo', 'badge:weerlig',
+    'badge:haai', 'badge:vuurpyl', 'badge:goat', 'badge:draak', 'title:ikoon', 'celebration:weerlig', 'celebration:goudreen',
+    'celebration:laser', 'celebration:sterrestof']);
+  /** (1.15) A shop tile's corner tags: how rare it is (not on the free defaults) and "Nuut". */
+  function tierTags(item, key) {
+    const free = !item.price && !item.rank && !item.week;
+    const tier = tierOf(item);
+    return h('span', { class: 'shop-tags' },
+      free ? null : h('span', { class: `shop-tier tier-${tier}`, text: S.tierNames[tier] }),
+      NEW_ITEMS.has(key) ? h('span', { class: 'shop-new', text: S.newTag }) : null);
   }
 
   function buyBtn(price, coins, onBuy) {
@@ -1219,7 +1281,8 @@ export function createUI(bus) {
             if (on) action = h('span', { class: 'shop-on', text: S.wearing });
             else if (owned) action = h('button', { type: 'button', class: 'shop-wear', text: S.wear, onclick: () => { audio.play('click'); bus.emit('ui:skin-wear', { kind, id: c.id }); } });
             else action = buyBtn(c.price, m.coins, () => bus.emit('ui:skin-buy', { kind, id: c.id }));
-            return h('div', { class: `shop-item skin-item${on ? ' is-on' : ''}`, 'data-skin': `${kind}:${c.id}` },
+            return h('div', { class: `shop-item skin-item tier-${tierOf(c)}${on ? ' is-on' : ''}`, 'data-skin': `${kind}:${c.id}` },
+              tierTags(c, `${kind}:${c.id}`),
               h('span', { class: 'shop-prev' }, skinPreview(kind, c.id)),
               h('b', { class: 'shop-name', text: S.skinNames[kind][c.id] }),
               action);
@@ -1238,7 +1301,8 @@ export function createUI(bus) {
             else if (c.rank) action = h('span', { class: 'shop-lock', text: S.lockedRank(RANK_INFO[c.rank].name) });
             else if (c.week) action = h('span', { class: 'shop-lock', text: S.lockedWeek });
             else action = buyBtn(c.price, m.coins, () => bus.emit('ui:shop-buy', { kind, id: c.id }));
-            return h('div', { class: `shop-item${on ? ' is-on' : ''}` },
+            return h('div', { class: `shop-item tier-${tierOf(c)}${on ? ' is-on' : ''}`, 'data-look': `${kind}:${c.id}` },
+              tierTags(c, `${kind}:${c.id}`),
               h('span', { class: 'shop-prev' }, lookPreview(kind, c)),
               h('b', { class: 'shop-name', text: COSMETIC_INFO[kind][c.id].name }),
               action,
@@ -1262,6 +1326,10 @@ export function createUI(bus) {
       body,
       h('div', { class: 'sheet-foot' }, button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false })));
     modals.shop.replaceChildren(sheet);
+    if (!shopSeen()) {
+      try { localStorage.setItem(SHOP_SEEN, VERSION); } catch { /* fine */ }
+      screens.menu.querySelector('.dock-new')?.remove();
+    }
     if (st.modal !== 'shop') openModal('shop');
     else if (keepScroll) body.scrollTop = keepScroll;
     setMenuCoins(m.coins);
@@ -2343,6 +2411,24 @@ export function createUI(bus) {
     openModal('remind');
   }
 
+  /**
+   * (1.15, the owner: "Isnt there a way to do it through a app notification?") A newer app is on Google Play: one card per
+   * version (main.js keeps which one was seen), with a button to Stapel's page in the Play Store and "Later".
+   */
+  function showUpdate(version, url) {
+    if (st.modal) return false;   // never over another sheet: it comes again at the next start
+    modals.update.replaceChildren(h('div', { class: 'card sheet update-sheet' },
+      closeX(() => closeModal()),
+      h('div', { class: 'sheet-head' }, emo('🚀'), h('h2', { id: 'stapel-update-title', text: S.updateTitle })),
+      h('div', { class: 'sheet-body' }, h('p', { class: 'update-body', text: S.updateBody(version) })),
+      h('div', { class: 'sheet-foot update-foot' },
+        h('a', { class: 'btn btn-big btn-green', href: url, target: '_blank', rel: 'noopener', onclick: () => { audio.play('click'); closeModal(); } },
+          emo('⬆️'), h('span', { text: S.updateBtn })),
+        button('btn-white', h('span', { text: S.updateLater }), () => closeModal(), { nav: false }))));
+    openModal('update');
+    return true;
+  }
+
   /** The game can reach the leaderboard (main.js says so once at start). */
   function setBoardOn(on) {
     st.boardOn = !!on;
@@ -2413,7 +2499,7 @@ export function createUI(bus) {
         button('btn-white btn-mini board-name-btn', [emo('✏️'), h('span', { text: S.nameChange })], () => bus.emit('ui:name', 'board'), { nav: false }),
         // (1.12.1) names are public here: a way to report an unsuitable one (Google Play asks for one)
         SPONSOR.contactEmail ? h('p', { class: 'board-report' }, h('span', { text: `${S.boardReport} ` }),
-          h('a', { href: `mailto:${SPONSOR.contactEmail}?subject=${encodeURIComponent('Stapel ranglys')}`, text: SPONSOR.contactEmail })) : null,
+          h('a', { href: `mailto:${SPONSOR.contactEmail}?subject=${encodeURIComponent(S.boardMailSubject)}`, text: SPONSOR.contactEmail })) : null,
         button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false }))));
     if (st.modal !== 'board') openModal('board');
     else if (focused) modals.board.querySelector(`.${focused}`)?.focus();
@@ -2704,6 +2790,7 @@ export function createUI(bus) {
     showShop,
     setMenuCoins,
     celebrate,
+    showUpdate,
     setDuelCard,
     setDuelRank,
     setBoardPlace,

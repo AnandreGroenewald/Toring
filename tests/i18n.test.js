@@ -79,7 +79,7 @@ test('switching: English laid over in place, Afrikaans back exactly; numbers and
   assert.equal(AF.S.duelVs('Bennie'), 'vs Bennie!');
   assert.equal(AF.WEATHER_INFO.wind.emoji, '💨', 'emoji stay');
   assert.equal(AF.WEATHER_INFO.heat.name, 'Heat wave');
-  assert.equal(AF.COSMETIC_INFO.title.toringkoning.name, 'Tower king');
+  assert.equal(AF.COSMETIC_INFO.title.toringkoning.name, 'Tower King');
   assert.equal(AF.VISITOR_INFO.monkey.name, 'Blouaap', 'the characters keep their names');
   assert.equal(AF.S.howToSteps[0].icon, '👆');
   assert.equal(fmtM(37.46), '37.5 m');

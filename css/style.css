@@ -2430,3 +2430,107 @@ canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 
 .settings-row.is-on .settings-value { color: var(--bosveld-d); }
 .account-under18 { margin: calc(8 * var(--u)) 0 0; font-size: max(12px, calc(22 * var(--u))); font-weight: 700; line-height: 1.35; color: var(--ink-soft); }
 .signin-offer .account-under18 { margin: 0; }
+
+/* ------------------------------------------------------------------------- */
+/* 1.15 the Winkel, polished (the owner: "it must be somthing a 22 year old  */
+/* looks at and thinks I need this"): rarity tiers, tags, medals, frames     */
+/* ------------------------------------------------------------------------- */
+:root { --t-common: #8a9bb0; --t-rare: #2f80ed; --t-epic: #9b51e0; --t-legendary: #f2a516; }
+.shop-item { position: relative; overflow: hidden; padding-top: calc(30 * var(--u)); transition: transform 0.12s ease; }
+.shop-item.tier-rare { background: linear-gradient(180deg, #e3efff, var(--panel) 55%); border-color: rgba(47, 128, 237, 0.35); }
+.shop-item.tier-epic { background: linear-gradient(180deg, #f1e4ff, var(--panel) 55%); border-color: rgba(155, 81, 224, 0.45); }
+.shop-item.tier-legendary { background: linear-gradient(180deg, #fff1cf, var(--panel) 60%); border-color: rgba(242, 165, 22, 0.75); box-shadow: 0 0 calc(14 * var(--u)) rgba(242, 165, 22, 0.35); }
+/* a slow golden sweep across a legendary tile */
+.shop-item.tier-legendary::before {
+  content: ''; position: absolute; inset: -40% -60%; pointer-events: none;
+  background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, 0.65) 50%, transparent 58%);
+  animation: tier-sweep 3.6s ease-in-out infinite;
+}
+@keyframes tier-sweep { from { transform: translateX(-60%); } 55%, to { transform: translateX(60%); } }
+.shop-item.is-on { border-color: #4fd66a; box-shadow: 0 0 0 calc(3 * var(--u)) #4fd66a inset, 0 0 calc(12 * var(--u)) rgba(79, 214, 106, 0.35); }
+.shop-item > * { position: relative; }
+.shop-tags { position: absolute !important; top: calc(6 * var(--u)); left: calc(6 * var(--u)); right: calc(6 * var(--u)); display: flex; justify-content: space-between; gap: calc(4 * var(--u)); pointer-events: none; }
+.shop-tier, .shop-new { padding: calc(2 * var(--u)) calc(9 * var(--u)); border-radius: 999px; font: 900 max(9px, calc(15 * var(--u))) / 1.2 var(--font); letter-spacing: 0.02em; text-transform: uppercase; color: #fff; white-space: nowrap; }
+.shop-tier.tier-common { background: var(--t-common); }
+.shop-tier.tier-rare { background: var(--t-rare); }
+.shop-tier.tier-epic { background: var(--t-epic); }
+.shop-tier.tier-legendary { background: linear-gradient(90deg, #f2a516, #ffd76a, #f2a516); color: #4a2d00; }
+.shop-new { margin-left: auto; background: #ff3b5c; box-shadow: 0 0 calc(8 * var(--u)) rgba(255, 59, 92, 0.6); }
+.shop-prev { height: calc(92 * var(--u)); }
+/* the real blocks in a block skin (drawn by js/game/blocks.js) */
+.skin-prev.has-swatch { width: calc(132 * var(--u)); height: calc(92 * var(--u)); background: transparent; box-shadow: none; }
+canvas.skin-swatch { display: block; width: 100%; height: 100%; }
+
+/* the medal: a badge as a minted coin (the face's colour and the rim's metal by tier) */
+.medal { position: relative; display: inline-grid; place-items: center; width: calc(76 * var(--u)); height: calc(76 * var(--u)); border-radius: 50%; isolation: isolate; }
+.medal .medal-face {
+  position: absolute; inset: 0; border-radius: 50%; z-index: -1;
+  background: radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.95) 0 8%, transparent 30%), radial-gradient(circle at 50% 55%, var(--m-face1), var(--m-face2) 72%);
+  box-shadow: inset 0 0 0 calc(5 * var(--u)) var(--m-rim), inset 0 0 0 calc(8 * var(--u)) var(--m-rim2), inset 0 calc(-8 * var(--u)) calc(14 * var(--u)) rgba(0, 0, 0, 0.28), 0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(0, 0, 0, 0.28);
+}
+.medal .emoji { font-size: calc(42 * var(--u)); filter: drop-shadow(0 calc(3 * var(--u)) calc(2 * var(--u)) rgba(0, 0, 0, 0.4)); }
+.medal .medal-rays { display: none; }
+.medal.tier-common { --m-face1: #f4f7fb; --m-face2: #b9c6d6; --m-rim: #8796a8; --m-rim2: #e6edf5; }
+.medal.tier-rare { --m-face1: #7fc0ff; --m-face2: #1d5fc4; --m-rim: #c7d3e0; --m-rim2: #5e7894; }
+.medal.tier-epic { --m-face1: #d39bff; --m-face2: #5b1fa8; --m-rim: #f0d68a; --m-rim2: #9d6f18; }
+.medal.tier-legendary { --m-face1: #ffe9a3; --m-face2: #d17a00; --m-rim: #fff3c4; --m-rim2: #b07400; }
+.medal.medal-none { --m-face1: #f4f7fb; --m-face2: #dfe6ee; --m-rim: #c9d3de; --m-rim2: #f4f7fb; opacity: 0.6; }
+/* epic and legendary: a slow shine; legendary: light rays turning behind it */
+.medal.tier-epic::after, .medal.tier-legendary::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.7) 48%, transparent 58%) no-repeat;
+  background-size: 260% 100%; animation: medal-shine 3.2s ease-in-out infinite;
+}
+@keyframes medal-shine { from { background-position: 120% 0; } 60%, to { background-position: -40% 0; } }
+.medal.tier-legendary .medal-rays {
+  display: block; position: absolute; inset: calc(-14 * var(--u)); z-index: -2; border-radius: 50%;
+  background: repeating-conic-gradient(rgba(255, 210, 90, 0.85) 0 10deg, transparent 10deg 30deg);
+  -webkit-mask: radial-gradient(circle, #000 42%, transparent 70%); mask: radial-gradient(circle, #000 42%, transparent 70%);
+  animation: medal-rays 9s linear infinite;
+}
+@keyframes medal-rays { to { transform: rotate(360deg); } }
+.pc-badge .medal { width: calc(68 * var(--u)); height: calc(68 * var(--u)); }
+.pc-badge .medal .emoji { font-size: calc(38 * var(--u)); }
+.pcard.is-compact .pc-badge .medal { width: calc(52 * var(--u)); height: calc(52 * var(--u)); }
+.pcard.is-compact .pc-badge .medal .emoji { font-size: calc(28 * var(--u)); }
+.pcard.is-compact .pc-badge .medal-rays { inset: calc(-8 * var(--u)); }
+
+/* (1.15) two new frames: a neon tube and a holographic foil */
+.frame-neon { border: calc(5 * var(--u)) solid #ff3fa4; box-shadow: 0 0 calc(8 * var(--u)) #ff3fa4, inset 0 0 calc(8 * var(--u)) rgba(255, 63, 164, 0.55), 0 0 calc(22 * var(--u)) rgba(41, 240, 255, 0.55); }
+.pcard.frame-holo, .frame-swatch.frame-holo {
+  border: calc(5 * var(--u)) solid transparent;
+  background: linear-gradient(#fff, #fff) padding-box, linear-gradient(115deg, #ff9ad5, #8be9ff, #b28dff, #fff59d, #7dffc4, #ff9ad5) border-box;
+  background-size: 100% 100%, 300% 300%; animation: holo-shift 5s linear infinite;
+  box-shadow: 0 0 calc(14 * var(--u)) rgba(178, 141, 255, 0.55);
+}
+@keyframes holo-shift { from { background-position: 0 0, 0% 50%; } to { background-position: 0 0, 300% 50%; } }
+
+/* (1.15) the new backgrounds' little pictures */
+.skin-scene .scene-fx { position: absolute; inset: 0; pointer-events: none; }
+.skin-scene-kersieblom { background: linear-gradient(180deg, #ffb6d0, #ffd9e6 55%, #fff1f4); }
+.skin-scene-kersieblom .scene-fx { background: radial-gradient(ellipse 3px 2px at 18% 30%, #ff7aa8 98%, transparent), radial-gradient(ellipse 3px 2px at 62% 18%, #ff8fb8 98%, transparent), radial-gradient(ellipse 3px 2px at 80% 52%, #ff6f9f 98%, transparent), radial-gradient(ellipse 3px 2px at 38% 60%, #ffa3c4 98%, transparent); }
+.skin-scene-kersieblom::after { background: linear-gradient(180deg, #e7a3c0, #c97ba0); }
+.skin-scene-noorderlig { background: linear-gradient(180deg, #020b1f, #062e3c 70%, #0c4a52); }
+.skin-scene-noorderlig .scene-fx { background: linear-gradient(100deg, transparent 18%, rgba(57, 255, 160, 0.7) 32%, rgba(0, 210, 255, 0.45) 46%, rgba(170, 90, 255, 0.55) 58%, transparent 72%); filter: blur(2px); -webkit-mask: linear-gradient(180deg, #000 10%, transparent 70%); mask: linear-gradient(180deg, #000 10%, transparent 70%); }
+.skin-scene-noorderlig::after { background: linear-gradient(180deg, #0f2430, #08161e); }
+.skin-scene-ruimte { background: radial-gradient(circle at 25% 30%, rgba(190, 80, 255, 0.55), transparent 45%), radial-gradient(circle at 75% 60%, rgba(40, 120, 255, 0.5), transparent 50%), radial-gradient(circle at 40% 20%, #fff 0 1px, transparent 2px), radial-gradient(circle at 85% 25%, #fff 0 1px, transparent 2px), #07051a; }
+.skin-scene-ruimte .scene-fx { background: radial-gradient(circle at 72% 32%, #ffd59e 0 5px, #c27a3a 6px 7px, transparent 8px); }
+.skin-scene-ruimte::after { background: linear-gradient(180deg, #2a2440, #151026); }
+.skin-scene-sintgolf { background: linear-gradient(180deg, #1b0638, #7a1f8f 45%, #ff3f8e 70%, #ff9a3c); }
+.skin-scene-sintgolf .scene-fx { background: radial-gradient(circle at 50% 74%, #ffe066 0 30%, #ff5fa2 46%, transparent 47%); -webkit-mask: repeating-linear-gradient(180deg, #000 0 3px, transparent 3px 5px); mask: repeating-linear-gradient(180deg, #000 0 3px, transparent 3px 5px); }
+.skin-scene-sintgolf::after { background: repeating-linear-gradient(90deg, rgba(41, 240, 255, 0.85) 0 1px, transparent 1px 8px), linear-gradient(180deg, #2a0b4a, #12042a); }
+.skin-scene .emoji { z-index: 1; }
+
+/* (1.15) "Nuwe weergawe!" */
+.update-body { font-size: max(14px, calc(26 * var(--u))); text-align: center; }
+.update-foot { display: grid; gap: calc(10 * var(--u)); }
+.update-foot .btn { text-decoration: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .shop-item.tier-legendary::before, .medal::after, .medal .medal-rays, .pcard.frame-holo, .frame-swatch.frame-holo { animation: none; }
+}
+/* (1.15) the "Nuut" dot on the menu's Winkel button */
+.dock-ic { position: relative; }
+.dock-new { position: absolute; top: calc(-8 * var(--u)); right: calc(-10 * var(--u)); padding: calc(2 * var(--u)) calc(7 * var(--u)); border-radius: 999px; background: #ff3b5c; color: #fff; font: 900 max(9px, calc(14 * var(--u))) / 1.2 var(--font); text-transform: uppercase; box-shadow: 0 0 0 calc(2 * var(--u)) #fff, 0 0 calc(10 * var(--u)) rgba(255, 59, 92, 0.6); animation: dock-new-pulse 1.8s ease-in-out infinite; }
+@keyframes dock-new-pulse { 50% { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .dock-new { animation: none; } }

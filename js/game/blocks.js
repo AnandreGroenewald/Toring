@@ -175,6 +175,72 @@ const BLOCK_SKINS = {
     pal: [[0xf2c230, 0xffe78a, 0xb88a0c], [0xe8b52a, 0xffdf7a, 0xa87a08], [0xf5cc45, 0xfff0a6, 0xbf9516], [0xedb92e, 0xffe385, 0xb08410],
       [0xf2c230, 0xffe78a, 0xb88a0c], [0xe3ad22, 0xffd96b, 0xa06f05], [0xf7d050, 0xfff2b0, 0xc29a1c], [0xebb42a, 0xffe07c, 0xab7e0a]],
   },
+  // (1.15, the owner: "it must be somthing a 22 year old looks at and thinks I need this, the bricks ...") eight premium skins
+  // that paint the whole face themselves (SKIN_FACE below; the game's own grain, nails and bands stay on 'kleur'). Each entry
+  // is [fill, light, dark, ...extra colours]; `seam` is how dark the lines between an L's cells are, `stroke: false` skips
+  // the smooth outline (the pixel skin draws its own).
+  // carbon fibre: a dark 2x2 twill, a clear coat, a sporty accent trim in the entry's colour
+  koolstof: {
+    pattern: 'carbon',
+    seam: 0.9,
+    pal: [0xff2d87, 0xff7a1a, 0xffd21f, 0x3dff6e, 0x16e0d0, 0xa04dff, 0x2f86ff, 0xff3030].map((a) => [mix(0x1a1d23, a, 0.08), a, 0x07080a]),
+  },
+  // ice: [mid, the lit top, the deep bottom]; a clear crystal, cut in planes, frost creeping in from the edges
+  ys: {
+    pattern: 'ice',
+    seam: 0.35,
+    pal: [[0xf4c4dd, 0xfff4fa, 0xc06a98], [0xdfeaf5, 0xffffff, 0x7f9bb8], [0xc4f2fb, 0xf4fdff, 0x4fb0c6], [0xb2f0d4, 0xf0fff8, 0x3fa47c],
+      [0x8fe3ea, 0xeefffe, 0x23919f], [0xcbbcff, 0xf7f2ff, 0x6f56c9], [0x9ccbff, 0xeef7ff, 0x3a7ad0], [0x7aa2f2, 0xe2ebff, 0x2a46a6]],
+  },
+  // 8-bit: [base, highlight, shade, the pixel outline]
+  piksel: {
+    pattern: 'pixel',
+    seam: 0,
+    stroke: false,
+    pal: [[0xff4fa0, 0xffa3d0, 0xc2246f, 0x3a0a24], [0xff8a1f, 0xffc477, 0xc4560a, 0x3d1804], [0xffd93b, 0xfff3a3, 0xcf960a, 0x3d2c02],
+      [0x46d65a, 0xa3f78f, 0x1f8f3a, 0x0b2e12], [0x2ad6e0, 0x9af7f8, 0x138aa6, 0x062a33], [0x9a5cff, 0xcdaaff, 0x5f2fc7, 0x1e0a45],
+      [0x3d7dff, 0x93b9ff, 0x2245c2, 0x0b1647], [0xff4848, 0xffa092, 0xbd1f2b, 0x40080c]],
+  },
+  // marble: [stone, cloud, outline, vein, gold vein (0: none)]; white, cream, black and green stones, gold on some
+  marmer: {
+    pattern: 'marble',
+    seam: 0.45,
+    pal: [[0xf3d3d8, 0xe6b3bd, 0xa66473, 0x9d4e63, 0], [0xefe1c6, 0xdcc49c, 0x9c8058, 0x8d6c45, 0xc99a3a],
+      [0xf8f6f1, 0xe9e4da, 0xa89c88, 0xb2aaa0, 0xd8a633], [0x1d5a44, 0x2c7a5d, 0x0d2e22, 0xd9f1e3, 0],
+      [0xf1f3f5, 0xdde2e7, 0x8a949e, 0x67727e, 0], [0x1b1a1f, 0x2e2c35, 0x050506, 0xdcd6ca, 0xe2b648],
+      [0x2c4c84, 0x42659e, 0x16264a, 0xe7eefb, 0], [0x8c2929, 0xa63c38, 0x4a1111, 0xf4dccf, 0xe0b048]],
+  },
+  // lava: [basalt, glow, outline, the white-hot core]; cracks glowing in the entry's colour
+  lawa: {
+    pattern: 'lava',
+    seam: 0.85,
+    pal: [0xff3d82, 0xff7a1a, 0xffc21f, 0x7dff3a, 0x1fe5c8, 0xb45cff, 0x3d8bff, 0xff2a1a]
+      .map((c) => [mix(0x2a2321, c, 0.07), c, 0x0d0a09, mix(c, 0xfff6d0, 0.72)]),
+  },
+  // chrome: [mid, sky, the dark band]; mirror metal in eight colours (silver on the sea-green entry)
+  chroom: {
+    pattern: 'chrome',
+    seam: 0.7,
+    pal: [[0xd98ca6, 0xffe6ee, 0x5a2236], [0xd98a52, 0xffe7d1, 0x5a2a10], [0xe0b23c, 0xfff6cf, 0x5e4108], [0x4fbf86, 0xe3ffef, 0x0e4a2c],
+      [0xa9b6c4, 0xffffff, 0x2a323c], [0x9f7ae0, 0xf1e6ff, 0x2e1a5a], [0x5b95e6, 0xe6f2ff, 0x0f2c5c], [0xe0453f, 0xffe0e0, 0x5a0f0f]],
+  },
+  // holographic foil: [main tint, sheen, outline, ...the foil's colours, the entry's own first]
+  holo: {
+    pattern: 'holo',
+    seam: 0.4,
+    pal: [[0xff9fd6, 0xfff0fa, 0x9c4f86, 0xff9fd6, 0xb9a0ff, 0x8ff3ff, 0xfff0a0], [0xffbe8f, 0xfff4ea, 0xa0603a, 0xffbe8f, 0xff9fd6, 0xfff0a0, 0x8ff3ff],
+      [0xfff09a, 0xfffdf0, 0x9a8a30, 0xfff09a, 0x9fffcf, 0xffbe8f, 0xff9fd6], [0x9fffcf, 0xf0fff8, 0x3f9a74, 0x9fffcf, 0x8ff3ff, 0xfff09a, 0xb9a0ff],
+      [0x8ff3ff, 0xf0feff, 0x3a8c9c, 0x8ff3ff, 0x9fffcf, 0xb9a0ff, 0xff9fd6], [0xb9a0ff, 0xf6f0ff, 0x6650b0, 0xb9a0ff, 0xff9fd6, 0x8ff3ff, 0x9fffcf],
+      [0x9fb8ff, 0xf0f4ff, 0x4a5fb0, 0x9fb8ff, 0x8ff3ff, 0xb9a0ff, 0xff9fd6], [0xff9f9f, 0xfff0f0, 0xa04848, 0xff9f9f, 0xffbe8f, 0xb9a0ff, 0x8ff3ff]],
+  },
+  // galaxy: [deep space, nebula, outline, second nebula]
+  heelal: {
+    pattern: 'galaxy',
+    seam: 0.5,
+    pal: [[0x1a0b2e, 0xff4fb8, 0x07030f, 0x7a3cff], [0x1f0d14, 0xff8a3d, 0x0a0406, 0xff3d6e], [0x1c1408, 0xffcf4d, 0x0a0703, 0xff6a3d],
+      [0x061c18, 0x3dffb0, 0x020a08, 0x2a8cff], [0x041a24, 0x2de2e6, 0x01080c, 0x3d5bff], [0x140a2a, 0xa64dff, 0x06030f, 0xff5cc8],
+      [0x070f2e, 0x3d8bff, 0x02050f, 0x9a5cff], [0x22080c, 0xff3d3d, 0x0c0204, 0xff9a3d]],
+  },
 };
 let blockSkin = 'kleur';
 /** (1.13.4) The blocks' skin from now on (new textures; a block already drawn keeps its own). */
@@ -182,13 +248,13 @@ export function setBlockSkin(id) {
   blockSkin = Object.prototype.hasOwnProperty.call(BLOCK_SKINS, id) ? id : 'kleur';
 }
 export const getBlockSkin = () => blockSkin;
-/** The skin's colours for a PALETTE entry (the entry itself for 'kleur'). */
+/** The skin's colours for a PALETTE entry (the entry itself for 'kleur'); `x` holds a premium skin's extra colours. */
 function skinned(pal) {
   const sk = BLOCK_SKINS[blockSkin];
   if (!sk) return pal;
   const i = Math.max(0, PALETTE.indexOf(pal));
-  const [fill, light, dark] = sk.pal[i % sk.pal.length];
-  return { id: pal.id, fill, light, dark };
+  const [fill, light, dark, ...x] = sk.pal[i % sk.pal.length];
+  return { id: pal.id, fill, light, dark, x };
 }
 
 /** PALETTE entry for a spec. */
@@ -1064,6 +1130,876 @@ function drawSkinPattern(ctx, g, pal, rnd) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// (1.15) Premium skins: each paints the whole face (already clipped to the shape), once per texture
+// ---------------------------------------------------------------------------
+
+const between = (rnd, a, b) => a + rnd() * (b - a);
+/** The block's visual cells (the whole box for the wedge, which the clip cuts). */
+const faceCells = (g) => (g.cells.length ? g.cells : [{ x: 0, y: 0, w: g.w, h: g.h }]);
+
+/** A canvas for a skin's tile or the shop's sample (only ever drawn in the browser). */
+function scratchCanvas(w, h) {
+  if (typeof document !== 'undefined') {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    return c;
+  }
+  return typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(w, h) : null;
+}
+
+/** How many device px one texture px is on this context (the shop's sample draws scaled up). */
+const drawScale = (ctx) => {
+  const m = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null;
+  return m ? Math.max(1, Math.min(4, Math.hypot(m.a, m.b))) : 1;
+};
+
+/** A soft bevel per cell, so a painted face still reads as a solid block: a lit top edge, a shaded bottom. */
+function drawBevel(ctx, g, hi, lo, inset = 3) {
+  for (const c of faceCells(g)) {
+    const gr = ctx.createLinearGradient(0, c.y, 0, c.y + c.h);
+    gr.addColorStop(0, rgba(0xffffff, hi));
+    gr.addColorStop(Math.min(0.45, inset / c.h), rgba(0xffffff, 0));
+    gr.addColorStop(Math.max(0.55, 1 - (inset * 2) / c.h), rgba(0x000000, 0));
+    gr.addColorStop(1, rgba(0x000000, lo));
+    ctx.fillStyle = gr;
+    ctx.fillRect(c.x, c.y, c.w, c.h);
+  }
+}
+
+/** A four-point glint (a sparkle): a soft halo and two thin rays that fade out. */
+function drawGlint(ctx, x, y, r, col = 0xffffff, a = 1) {
+  const halo = ctx.createRadialGradient(x, y, 0, x, y, r * 0.55);
+  halo.addColorStop(0, rgba(col, 0.75 * a));
+  halo.addColorStop(1, rgba(col, 0));
+  ctx.fillStyle = halo;
+  ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+  for (const [dx, dy] of [[1, 0], [0, 1]]) {
+    const gr = ctx.createLinearGradient(x - dx * r, y - dy * r, x + dx * r, y + dy * r);
+    gr.addColorStop(0, rgba(col, 0));
+    gr.addColorStop(0.5, rgba(col, a));
+    gr.addColorStop(1, rgba(col, 0));
+    ctx.fillStyle = gr;
+    const t = Math.max(0.8, r * 0.09);
+    if (dx) ctx.fillRect(x - r, y - t / 2, 2 * r, t);
+    else ctx.fillRect(x - t / 2, y - r, t, 2 * r);
+  }
+  ctx.fillStyle = rgba(0xffffff, a);
+  ctx.beginPath();
+  ctx.arc(x, y, Math.max(0.7, r * 0.1), 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Point-in-polygon (even-odd), for the pixel skin's grid. */
+function insidePoly(pts, x, y) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[i];
+    const b = pts[j];
+    if ((a.y > y) !== (b.y > y) && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * A wandering line (a marble vein, a lava crack): `turn` how much it bends each step, `jag` how sharply; it may branch.
+ * Returns polylines [{ pts, w }] (w: its width factor), all inside a generous box around the face.
+ */
+function wander(rnd, x, y, ang, len, { step = 4, turn = 0.12, jag = 0, branch = 0.03, depth = 0, w = 1 } = {}, out = []) {
+  const pts = [P(x, y)];
+  let a = ang;
+  let da = 0;
+  for (let s = 0; s < len; s += step) {
+    da = da * 0.88 + (rnd() - 0.5) * turn;
+    a += da + (jag ? (rnd() - 0.5) * jag : 0);
+    x += Math.cos(a) * step;
+    y += Math.sin(a) * step;
+    pts.push(P(x, y));
+    if (depth < 2 && rnd() < branch) {
+      const side = rnd() < 0.5 ? -1 : 1;
+      wander(rnd, x, y, a + side * between(rnd, 0.45, 1.1), (len - s) * between(rnd, 0.3, 0.6),
+        { step, turn, jag, branch: branch * 0.7, depth: depth + 1, w: w * 0.55 }, out);
+    }
+  }
+  out.push({ pts, w });
+  return out;
+}
+
+function strokePolyline(ctx, pts) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.stroke();
+}
+
+/** A start on the left or top edge (a little outside) and a heading across the face, for veins and cracks. */
+function edgeStart(rnd, w, h) {
+  if (rnd() < w / (w + h)) return { x: rnd() * w, y: -4, ang: between(rnd, 0.6, 2.5) };
+  return { x: -4, y: rnd() * h, ang: between(rnd, -0.7, 0.7) };
+}
+
+// Smooth value noise (one fixed 64x64 lattice; each block reads it at its own offset), for the natural materials.
+const NOISE_N = 64;
+let noiseLattice = null;
+function vnoise(x, y) {
+  if (!noiseLattice) {
+    const r = seededRand('stapel-noise');
+    noiseLattice = new Float32Array(NOISE_N * NOISE_N);
+    for (let i = 0; i < noiseLattice.length; i++) noiseLattice[i] = r();
+  }
+  const L = noiseLattice;
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  const xf = x - xi;
+  const yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf);
+  const v = yf * yf * (3 - 2 * yf);
+  const x0 = xi & 63;
+  const y0 = yi & 63;
+  const x1 = (x0 + 1) & 63;
+  const y1 = (y0 + 1) & 63;
+  const a = L[y0 * NOISE_N + x0];
+  const b = L[y0 * NOISE_N + x1];
+  const c = L[y1 * NOISE_N + x0];
+  const d = L[y1 * NOISE_N + x1];
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+/** Fractal noise, about 0..1. */
+function fbm(x, y, oct) {
+  let s = 0;
+  let amp = 0.5;
+  let f = 1;
+  let norm = 0;
+  for (let o = 0; o < oct; o++) {
+    s += amp * vnoise(x * f + o * 17.3, y * f + o * 9.1);
+    norm += amp;
+    f *= 2.03;
+    amp *= 0.5;
+  }
+  return s / norm;
+}
+const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const rgbOf = (c) => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+
+let fieldCanvas = null;
+/**
+ * Paints a soft field over the face: `fn(x, y, out)` sets out[0..2] (0..255) for texture point (x, y); sampled every
+ * `step` px and smoothed up. Drawn once per texture (a few thousand samples), never per frame.
+ */
+function paintField(ctx, w, h, step, fn) {
+  const nx = Math.ceil(w / step) + 1;
+  const ny = Math.ceil(h / step) + 1;
+  if (!fieldCanvas || fieldCanvas.width < nx || fieldCanvas.height < ny) {
+    fieldCanvas = scratchCanvas(Math.max(nx, fieldCanvas ? fieldCanvas.width : 0), Math.max(ny, fieldCanvas ? fieldCanvas.height : 0));
+    if (!fieldCanvas) return;
+  }
+  const c = fieldCanvas.getContext('2d');
+  const img = c.createImageData(nx, ny);
+  const d = img.data;
+  const out = [0, 0, 0];
+  let n = 0;
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      fn((i + 0.5) * step, (j + 0.5) * step, out);
+      d[n] = out[0];
+      d[n + 1] = out[1];
+      d[n + 2] = out[2];
+      d[n + 3] = 255;
+      n += 4;
+    }
+  }
+  c.putImageData(img, 0, 0);
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(fieldCanvas, 0, 0, nx, ny, 0, 0, nx * step, ny * step);
+  ctx.restore();
+}
+
+// --- koolstof: carbon fibre ------------------------------------------------
+
+const CARBON_T = 4;              // one tow crossing, in texture px (a 2x2 twill repeats every 4 of them)
+const carbonTiles = new Map();
+
+/** The twill's 4x4 tile for one base colour, drawn `k` times finer for a scaled-up sample. */
+function carbonTile(base, k) {
+  const key = `${base}|${k}`;
+  if (carbonTiles.has(key)) return carbonTiles.get(key);
+  const T = CARBON_T * k;
+  const tile = scratchCanvas(4 * T, 4 * T);
+  if (tile) {
+    const c = tile.getContext('2d');
+    const low = hex(mix(base, 0x000000, 0.6));
+    for (let j = 0; j < 4; j++) {
+      for (let i = 0; i < 4; i++) {
+        // 2x2 twill: a tow runs over two crossings, then under two, one crossing later on the next row; the tows across
+        // catch the light (silver), the ones running down stay dark: that contrast is what reads as carbon
+        const ph = (i - j + 8) & 3;
+        const down = ph < 2;
+        const x = i * T;
+        const y = j * T;
+        const gr = down ? c.createLinearGradient(x, 0, x + T, 0) : c.createLinearGradient(0, y, 0, y + T);
+        gr.addColorStop(0, low);
+        gr.addColorStop(0.35, hex(mix(base, 0xffffff, down ? 0.1 : 0.42)));
+        gr.addColorStop(0.6, hex(mix(base, 0xffffff, down ? 0.04 : 0.2)));
+        gr.addColorStop(1, low);
+        c.fillStyle = gr;
+        c.fillRect(x, y, T, T);
+        // where the tow dives under, its end is in shade
+        const end = down ? (ph === 1 ? 'top' : 'bottom') : (ph === 2 ? 'left' : 'right');
+        const sh = end === 'top' ? c.createLinearGradient(0, y, 0, y + T) : end === 'bottom' ? c.createLinearGradient(0, y + T, 0, y)
+          : end === 'left' ? c.createLinearGradient(x, 0, x + T, 0) : c.createLinearGradient(x + T, 0, x, 0);
+        sh.addColorStop(0, 'rgba(0,0,0,0.55)');
+        sh.addColorStop(0.45, 'rgba(0,0,0,0)');
+        c.fillStyle = sh;
+        c.fillRect(x, y, T, T);
+      }
+    }
+  }
+  carbonTiles.set(key, tile);
+  return tile;
+}
+
+function paintCarbon(ctx, g, pal) {
+  const { w, h } = g;
+  const accent = pal.light;
+  ctx.fillStyle = hex(pal.fill);
+  ctx.fillRect(0, 0, w, h);
+  const k = Math.round(drawScale(ctx));
+  const tile = carbonTile(pal.fill, k);
+  if (tile) {
+    const pat = ctx.createPattern(tile, 'repeat');
+    if (pat) {
+      if (k > 1 && typeof pat.setTransform === 'function' && typeof DOMMatrix === 'function') pat.setTransform(new DOMMatrix().scale(1 / k));
+      ctx.fillStyle = pat;
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+  // the clear coat: the top catches the sky, the bottom falls into shade
+  const coat = ctx.createLinearGradient(0, 0, 0, h);
+  coat.addColorStop(0, 'rgba(255,255,255,0.26)');
+  coat.addColorStop(0.42, 'rgba(255,255,255,0.07)');
+  coat.addColorStop(0.5, 'rgba(255,255,255,0)');
+  coat.addColorStop(1, 'rgba(0,0,0,0.38)');
+  ctx.fillStyle = coat;
+  ctx.fillRect(0, 0, w, h);
+  // a glossy diagonal highlight across the face
+  const x0 = w * 0.18;
+  const span = Math.max(18, w * 0.16);
+  const gl = ctx.createLinearGradient(x0, 0, x0 + span + h * 0.6, 0);
+  gl.addColorStop(0, 'rgba(255,255,255,0)');
+  gl.addColorStop(0.35, 'rgba(255,255,255,0.22)');
+  gl.addColorStop(0.5, 'rgba(255,255,255,0.08)');
+  gl.addColorStop(0.62, 'rgba(255,255,255,0.18)');
+  gl.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gl;
+  ctx.beginPath();
+  ctx.moveTo(x0 + h * 0.6, 0);
+  ctx.lineTo(x0 + h * 0.6 + span, 0);
+  ctx.lineTo(x0 + span, h);
+  ctx.lineTo(x0, h);
+  ctx.closePath();
+  ctx.fill();
+  // sporty: twin racing stripes in the accent near the right end of the main face
+  const f = nameFace(g);
+  if (f.w >= 70 && !f.vertical) {
+    const sx = f.x + f.w * 0.78;
+    const slant = f.h * 0.45;
+    ctx.fillStyle = hex(accent);
+    for (const [dx, sw] of [[0, Math.max(4, f.w * 0.045)], [Math.max(7, f.w * 0.07), Math.max(2, f.w * 0.02)]]) {
+      ctx.beginPath();
+      ctx.moveTo(sx + dx + slant, f.y);
+      ctx.lineTo(sx + dx + slant + sw, f.y);
+      ctx.lineTo(sx + dx + sw, f.y + f.h);
+      ctx.lineTo(sx + dx, f.y + f.h);
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else if (f.vertical) {
+    // a pillar: the stripes run up its length
+    ctx.fillStyle = hex(accent);
+    ctx.fillRect(f.w * 0.62, 0, Math.max(3, f.w * 0.09), h);
+    ctx.fillRect(f.w * 0.78, 0, Math.max(1.5, f.w * 0.04), h);
+  }
+  // the accent trim just inside the edge, with a little glow
+  ctx.save();
+  roundedPolyPath(ctx, g.outline, CORNER_R);
+  ctx.strokeStyle = rgba(accent, 0.28);
+  ctx.lineWidth = 9;
+  ctx.stroke();
+  ctx.strokeStyle = hex(accent);
+  ctx.lineWidth = 4.4;
+  ctx.stroke();
+  ctx.strokeStyle = rgba(0xffffff, 0.45);
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// --- ys: ice ----------------------------------------------------------------
+
+const ICE_LIGHT = (() => {
+  const l = [-0.45, -0.65, 0.62];
+  const n = Math.hypot(...l);
+  return l.map((v) => v / n);
+})();
+
+function paintIce(ctx, g, pal, rnd) {
+  const { w, h } = g;
+  const deep = mix(pal.fill, pal.dark, 0.7);
+  // clear ice: a little of the sky shows through (the facets keep this alpha: they are drawn 'source-atop')
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = hex(pal.fill);
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-atop';
+  // a cut crystal: a jittered grid of points at random heights, two facets per square, each lit from the top left
+  const cols = Math.max(2, Math.round(w / 24));
+  const rows = Math.max(2, Math.round(h / 24));
+  const pts = [];
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      const jx = c === 0 || c === cols ? 0 : (rnd() - 0.5) * (w / cols) * 0.75;
+      const jy = r === 0 || r === rows ? 0 : (rnd() - 0.5) * (h / rows) * 0.75;
+      pts.push({ x: (c / cols) * w + jx, y: (r / rows) * h + jy, z: rnd() * 15 });
+    }
+  }
+  const at = (r, c) => pts[r * (cols + 1) + c];
+  const tris = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const a = at(r, c);
+      const b = at(r, c + 1);
+      const d = at(r + 1, c);
+      const e = at(r + 1, c + 1);
+      if ((r + c) % 2) tris.push([a, b, e], [a, e, d]);
+      else tris.push([a, b, d], [b, e, d]);
+    }
+  }
+  const tone = (t) => (t < 0.45 ? mix(pal.light, pal.fill, t / 0.45) : mix(pal.fill, deep, (t - 0.45) / 0.55));
+  for (const [a, b, c] of tris) {
+    const ux = b.x - a.x; const uy = b.y - a.y; const uz = b.z - a.z;
+    const vx = c.x - a.x; const vy = c.y - a.y; const vz = c.z - a.z;
+    let nx = uy * vz - uz * vy;
+    let ny = uz * vx - ux * vz;
+    let nz = ux * vy - uy * vx;
+    if (nz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+    const len = Math.hypot(nx, ny, nz) || 1;
+    const lam = (nx * ICE_LIGHT[0] + ny * ICE_LIGHT[1] + nz * ICE_LIGHT[2]) / len;
+    const shade = (lam - ICE_LIGHT[2]) * 2.4;
+    const cx = (a.x + b.x + c.x) / 3;
+    const cy = (a.y + b.y + c.y) / 3;
+    let col = tone(clamp01((cy / h) * 0.75 + (cx / w) * 0.25));
+    col = shade > 0 ? mix(col, 0xffffff, Math.min(0.85, shade)) : mix(col, pal.dark, Math.min(0.5, -shade * 0.7));
+    ctx.fillStyle = hex(col);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.lineTo(c.x, c.y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // the facets' edges catch the light
+  ctx.lineWidth = 0.9;
+  ctx.lineJoin = 'round';
+  for (const [a, b, c] of tris) {
+    ctx.strokeStyle = rgba(0xffffff, between(rnd, 0.15, 0.6));
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.lineTo(c.x, c.y);
+    ctx.stroke();
+  }
+  // light inside the crystal, from the top left
+  const glow = ctx.createRadialGradient(w * 0.15, 0, 0, w * 0.15, 0, Math.max(w, h) * 0.8);
+  glow.addColorStop(0, 'rgba(255,255,255,0.45)');
+  glow.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, w, h);
+  // frost creeping in from the edges: a misty band and fine white speckles
+  ctx.save();
+  roundedPolyPath(ctx, g.outline, CORNER_R);
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.lineWidth = 12;
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  ctx.restore();
+  const specks = Math.round((w + h) * 1.4);
+  for (let k = 0; k < specks; k++) {
+    const side = rnd();
+    const d = rnd() * rnd() * 12;
+    let x;
+    let y;
+    if (side < 0.3) { x = rnd() * w; y = h - d; }
+    else if (side < 0.5) { x = rnd() * w; y = d; }
+    else if (side < 0.75) { x = d; y = rnd() * h; }
+    else { x = w - d; y = rnd() * h; }
+    ctx.fillStyle = rgba(0xffffff, between(rnd, 0.5, 1));
+    const s = between(rnd, 0.6, 1.5);
+    ctx.fillRect(x, y, s, s);
+  }
+  // a few trapped air bubbles
+  const bubbles = Math.round((w * h) / 4000);
+  ctx.lineWidth = 0.8;
+  for (let k = 0; k < bubbles; k++) {
+    const r = between(rnd, 1, 2.2);
+    const bx = between(rnd, 8, w - 8);
+    const by = between(rnd, 8, h - 8);
+    ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+    ctx.beginPath();
+    ctx.arc(bx, by, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // a sparkle where the light hits
+  drawGlint(ctx, w * between(rnd, 0.12, 0.3), h * between(rnd, 0.15, 0.3), Math.min(10, Math.max(5, h * 0.17)), 0xffffff, 1);
+  // the bright rim light: brightest at the top left
+  ctx.save();
+  roundedPolyPath(ctx, g.outline, CORNER_R);
+  const rim = ctx.createLinearGradient(0, 0, w * 0.6, h);
+  rim.addColorStop(0, 'rgba(255,255,255,1)');
+  rim.addColorStop(0.6, 'rgba(255,255,255,0.75)');
+  rim.addColorStop(1, 'rgba(255,255,255,0.45)');
+  ctx.strokeStyle = rim;
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// --- piksel: 8-bit pixels ----------------------------------------------------
+
+const PIX = 6;   // one big pixel, in texture px
+// a 4x4 ordered (Bayer) dither: the old consoles' way to shade with few colours
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+function paintPixel(ctx, g, pal) {
+  const { w, h } = g;
+  const nx = Math.max(5, Math.round(w / PIX));
+  const ny = Math.max(4, Math.round(h / PIX));
+  const X = (i) => Math.round((i * w) / nx);
+  const Y = (j) => Math.round((j * h) / ny);
+  const cells = faceCells(g);
+  // which cell every pixel's centre lies in (-1: outside the shape)
+  const grid = new Int8Array(nx * ny).fill(-1);
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const cx = (X(i) + X(i + 1)) / 2;
+      const cy = (Y(j) + Y(j + 1)) / 2;
+      if (g.poly ? !insidePoly(g.poly, cx, cy) : !insidePoly(g.outline, cx, cy)) continue;
+      let k = 0;
+      if (!g.poly) {
+        k = cells.findIndex((c) => cx >= c.x && cx < c.x + c.w && cy >= c.y && cy < c.y + c.h);
+        if (k < 0) k = 0;
+      }
+      grid[j * nx + i] = k;
+    }
+  }
+  const at = (i, j) => (i < 0 || j < 0 || i >= nx || j >= ny ? -1 : grid[j * nx + i]);
+  // round the corners the 8-bit way: a corner pixel (outside both across and up/down) goes
+  const notch = [];
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      if (at(i, j) < 0) continue;
+      const l = at(i - 1, j) < 0;
+      const r = at(i + 1, j) < 0;
+      const u = at(i, j - 1) < 0;
+      const d = at(i, j + 1) < 0;
+      if ((l || r) && (u || d)) notch.push(j * nx + i);
+    }
+  }
+  for (const n of notch) grid[n] = -1;
+  // 0 inside, 1 outline (next to the outside), 2 seam (the cell to the right or below is another one)
+  const kind = new Int8Array(nx * ny);
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const k = at(i, j);
+      if (k < 0) continue;
+      if (at(i - 1, j) < 0 || at(i + 1, j) < 0 || at(i, j - 1) < 0 || at(i, j + 1) < 0) kind[j * nx + i] = 1;
+      else if ((at(i + 1, j) !== k) || (at(i, j + 1) !== k)) kind[j * nx + i] = 2;
+    }
+  }
+  const inner = (i, j, k) => at(i, j) === k && kind[j * nx + i] === 0;
+  const C = { base: hex(pal.fill), light: hex(pal.light), shade: hex(pal.dark), line: hex(pal.x[0]), white: '#ffffff' };
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const k = at(i, j);
+      if (k < 0) continue;
+      const kd = kind[j * nx + i];
+      let col;
+      if (kd) col = C.line;
+      else {
+        const top = !inner(i, j - 1, k);
+        const left = !inner(i - 1, j, k);
+        const right = !inner(i + 1, j, k);
+        const bottom = !inner(i, j + 1, k);
+        if (top) col = right ? C.base : C.light;
+        else if (bottom || right) col = C.shade;
+        else if (left) col = C.light;
+        else {
+          // a dithered shade: lit towards the top, darker towards the bottom of the cell
+          const c = cells[g.poly ? 0 : k];
+          const t = ((Y(j) + Y(j + 1)) / 2 - c.y) / c.h;
+          const b = (BAYER[(j & 3) * 4 + (i & 3)] + 0.5) / 16;
+          if (t < 0.38) col = (t - 0.1) / 0.28 > b ? C.base : C.light;
+          else if (t > 0.58) col = (t - 0.58) / 0.36 > b ? C.shade : C.base;
+          else col = C.base;
+        }
+      }
+      ctx.fillStyle = col;
+      ctx.fillRect(X(i), Y(j), X(i + 1) - X(i), Y(j + 1) - Y(j));
+    }
+  }
+  // the pixel shine in each cell's top-left corner
+  ctx.fillStyle = C.white;
+  for (let k = 0; k < cells.length; k++) {
+    let first = -1;
+    for (let n = 0; n < grid.length && first < 0; n++) if (grid[n] === k && kind[n] === 0) first = n;
+    if (first < 0) continue;
+    const fi = first % nx;
+    const fj = Math.floor(first / nx);
+    for (const [di, dj] of [[0, 0], [1, 0], [0, 1]]) {
+      if (inner(fi + di, fj + dj, k) || (di + dj === 0)) ctx.fillRect(X(fi + di), Y(fj + dj), X(fi + di + 1) - X(fi + di), Y(fj + dj + 1) - Y(fj + dj));
+    }
+  }
+}
+
+// --- marmer: marble -----------------------------------------------------------
+
+function paintMarble(ctx, g, pal, rnd) {
+  const { w, h } = g;
+  const [vein, gold] = pal.x;
+  const dark = (pal.fill & 0xff) + ((pal.fill >> 8) & 0xff) + ((pal.fill >> 16) & 0xff) < 300;
+  ctx.fillStyle = hex(pal.fill);
+  ctx.fillRect(0, 0, w, h);
+  // depth: soft clouds of a second tone in the stone
+  const clouds = 3 + Math.round((w * h) / 2200);
+  for (let k = 0; k < clouds; k++) {
+    const x = rnd() * w;
+    const y = rnd() * h;
+    const r = between(rnd, 0.25, 0.6) * Math.max(w, h);
+    const cl = ctx.createRadialGradient(x, y, 0, x, y, r);
+    cl.addColorStop(0, rgba(rnd() < 0.7 ? pal.light : mix(pal.fill, 0xffffff, 0.5), between(rnd, 0.35, 0.7)));
+    cl.addColorStop(1, rgba(pal.light, 0));
+    ctx.fillStyle = cl;
+    ctx.fillRect(0, 0, w, h);
+  }
+  // veins: curvy, branching, swelling and thinning, a soft bleed around each
+  const veins = [];
+  const count = 1 + Math.round((w + h) / 85);
+  for (let k = 0; k < count; k++) {
+    const s = edgeStart(rnd, w, h);
+    wander(rnd, s.x, s.y, s.ang, (w + h) * between(rnd, 0.7, 1.3), { step: 3, turn: 0.16, branch: 0.035, w: between(rnd, 0.7, 1.4) }, veins);
+  }
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const thick = Math.max(1.6, Math.min(w, h) * 0.05);
+  for (const v of veins) {
+    ctx.strokeStyle = rgba(vein, dark ? 0.16 : 0.12);
+    ctx.lineWidth = thick * v.w * 3.2;
+    strokePolyline(ctx, v.pts);
+  }
+  for (const v of veins) {
+    const ph = rnd() * 6;
+    const f = between(rnd, 0.05, 0.12);
+    for (let i = 1; i < v.pts.length; i++) {
+      const swell = 0.5 + 0.5 * Math.sin(i * f + ph);
+      ctx.strokeStyle = rgba(vein, (dark ? 0.55 : 0.45) + swell * 0.4);
+      ctx.lineWidth = Math.max(0.6, thick * v.w * (0.18 + 0.82 * swell * swell));
+      ctx.beginPath();
+      ctx.moveTo(v.pts[i - 1].x, v.pts[i - 1].y);
+      ctx.lineTo(v.pts[i].x, v.pts[i].y);
+      ctx.stroke();
+    }
+  }
+  // thin gold veins on the stones that have them
+  if (gold) {
+    const golds = [];
+    for (let k = 0; k < 1 + Math.round(w / 140); k++) {
+      const s = edgeStart(rnd, w, h);
+      wander(rnd, s.x, s.y, s.ang, (w + h) * between(rnd, 0.6, 1), { step: 3, turn: 0.2, branch: 0.03 }, golds);
+    }
+    for (const v of golds) {
+      ctx.strokeStyle = hex(mix(gold, 0x000000, 0.25));
+      ctx.lineWidth = Math.max(1.2, 1.9 * v.w);
+      strokePolyline(ctx, v.pts);
+      ctx.strokeStyle = hex(mix(gold, 0xffffff, 0.45));
+      ctx.lineWidth = Math.max(0.6, 0.8 * v.w);
+      strokePolyline(ctx, v.pts);
+    }
+  }
+  // the polish: a broad diagonal sheen, a crisp reflection and a lit top edge
+  const sh = ctx.createLinearGradient(0, 0, w, h * 1.5);
+  sh.addColorStop(0, 'rgba(255,255,255,0.32)');
+  sh.addColorStop(0.28, 'rgba(255,255,255,0.08)');
+  sh.addColorStop(0.36, 'rgba(255,255,255,0.22)');
+  sh.addColorStop(0.42, 'rgba(255,255,255,0)');
+  sh.addColorStop(1, 'rgba(0,0,0,0.12)');
+  ctx.fillStyle = sh;
+  ctx.fillRect(0, 0, w, h);
+  drawBevel(ctx, g, 0.75, dark ? 0.35 : 0.22, 2.5);
+}
+
+// --- lawa: lava -------------------------------------------------------------
+
+function paintLava(ctx, g, pal, rnd) {
+  const { w, h } = g;
+  const glow = pal.light;
+  const hot = pal.x[0];
+  // basalt, a little lighter on top
+  const body = ctx.createLinearGradient(0, 0, 0, h);
+  body.addColorStop(0, hex(mix(pal.fill, 0xffffff, 0.1)));
+  body.addColorStop(1, hex(mix(pal.fill, 0x000000, 0.35)));
+  ctx.fillStyle = body;
+  ctx.fillRect(0, 0, w, h);
+  // the heat inside: a glow rising from the bottom
+  const heat = ctx.createRadialGradient(w / 2, h * 1.15, 0, w / 2, h * 1.15, Math.max(w * 0.6, h * 1.1));
+  heat.addColorStop(0, rgba(glow, 0.5));
+  heat.addColorStop(0.6, rgba(glow, 0.12));
+  heat.addColorStop(1, rgba(glow, 0));
+  ctx.fillStyle = heat;
+  ctx.fillRect(0, 0, w, h);
+  // rough rock grains
+  const grains = Math.round((w * h) / 26);
+  for (let k = 0; k < grains; k++) {
+    ctx.fillStyle = rnd() < 0.55 ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.09)';
+    const s = between(rnd, 0.8, 2.2);
+    ctx.fillRect(rnd() * w, rnd() * h, s, s);
+  }
+  // the cracks: jagged and branching, glowing from wide and soft to a white-hot core
+  const cracks = [];
+  const count = 1 + Math.round((w + h) / 75);
+  for (let k = 0; k < count; k++) {
+    const s = edgeStart(rnd, w, h);
+    wander(rnd, s.x, s.y, s.ang, (w + h) * between(rnd, 0.5, 1), { step: 5, turn: 0.1, jag: 0.9, branch: 0.09 }, cracks);
+  }
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const passes = [[11, rgba(glow, 0.12)], [6, rgba(glow, 0.3)], [3, hex(glow)], [1.2, hex(hot)]];
+  for (const [lw, col] of passes) {
+    ctx.strokeStyle = col;
+    for (const c of cracks) {
+      ctx.lineWidth = Math.max(lw * 0.5, lw * (0.45 + 0.55 * c.w));
+      strokePolyline(ctx, c.pts);
+    }
+  }
+  // embers: a few bright sparks close to the cracks
+  const embers = 2 + Math.round((w * h) / 3000);
+  for (let k = 0; k < embers; k++) {
+    const c = cracks[Math.floor(rnd() * cracks.length)];
+    const p = c.pts[Math.floor(rnd() * c.pts.length)];
+    const x = p.x + between(rnd, -8, 8);
+    const y = p.y + between(rnd, -8, 8);
+    const r = between(rnd, 2.5, 4.5);
+    const em = ctx.createRadialGradient(x, y, 0, x, y, r);
+    em.addColorStop(0, rgba(hot, 1));
+    em.addColorStop(0.3, rgba(glow, 0.8));
+    em.addColorStop(1, rgba(glow, 0));
+    ctx.fillStyle = em;
+    ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+  }
+  drawBevel(ctx, g, 0.22, 0.3, 3);
+  // a warm rim, so the block shows on a night sky
+  ctx.save();
+  roundedPolyPath(ctx, g.outline, CORNER_R);
+  ctx.strokeStyle = rgba(glow, 0.55);
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// --- chroom: chrome -----------------------------------------------------------
+
+function paintChrome(ctx, g, pal, rnd) {
+  const { w, h } = g;
+  const sky = pal.light;
+  const mid = pal.fill;
+  const deep = pal.dark;
+  // the mirror, per cell: sky above, a bright line, a dark band (the horizon), the ground below, a lit bottom rim
+  for (const c of faceCells(g)) {
+    const gr = ctx.createLinearGradient(0, c.y, 0, c.y + c.h);
+    gr.addColorStop(0, hex(mix(sky, 0xffffff, 0.6)));
+    gr.addColorStop(0.28, hex(sky));
+    gr.addColorStop(0.44, hex(mix(mid, sky, 0.35)));
+    gr.addColorStop(0.5, '#ffffff');
+    gr.addColorStop(0.53, hex(deep));
+    gr.addColorStop(0.66, hex(mix(deep, mid, 0.45)));
+    gr.addColorStop(0.86, hex(mid));
+    gr.addColorStop(1, hex(mix(mid, sky, 0.7)));
+    ctx.fillStyle = gr;
+    ctx.fillRect(c.x, c.y, c.w, c.h);
+  }
+  // reflections of a window: slanted bright streaks across the mirror
+  const streaks = 1 + Math.round(w / 90);
+  for (let k = 0; k < streaks; k++) {
+    const x = w * between(rnd, 0.1, 0.9);
+    const sw = between(rnd, 3, 9);
+    const sl = h * 0.5;
+    ctx.fillStyle = rgba(0xffffff, between(rnd, 0.18, 0.4));
+    ctx.beginPath();
+    ctx.moveTo(x + sl, 0);
+    ctx.lineTo(x + sl + sw, 0);
+    ctx.lineTo(x + sw, h);
+    ctx.lineTo(x, h);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = rgba(0xffffff, 0.5);
+    ctx.beginPath();
+    ctx.moveTo(x + sl + sw + 3, 0);
+    ctx.lineTo(x + sl + sw + 4.2, 0);
+    ctx.lineTo(x + sw + 4.2, h);
+    ctx.lineTo(x + sw + 3, h);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // polished bevels per cell: a white top edge, a dark bottom one
+  for (const c of faceCells(g)) {
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.fillRect(c.x, c.y, c.w, 1.6);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillRect(c.x, c.y + 1.6, c.w, 1.4);
+    ctx.fillRect(c.x, c.y, 1.4, c.h);
+    ctx.fillStyle = rgba(deep, 0.5);
+    ctx.fillRect(c.x, c.y + c.h - 2, c.w, 2);
+    ctx.fillStyle = rgba(deep, 0.3);
+    ctx.fillRect(c.x + c.w - 1.4, c.y, 1.4, c.h);
+  }
+  // a star glint where the sun catches it
+  const f = nameFace(g);
+  drawGlint(ctx, f.x + f.w * between(rnd, 0.1, 0.25), f.y + f.h * 0.3, Math.min(11, Math.max(6, Math.min(f.w, f.h) * 0.22)));
+}
+
+// --- holo: holographic foil -----------------------------------------------------
+
+function paintHolo(ctx, g, pal, rnd) {
+  const { w, h } = g;
+  const foil = pal.x;
+  // the foil: rainbow bands on a diagonal, the entry's own colour coming back most often
+  const len = Math.hypot(w, h);
+  const ang = between(rnd, 0.35, 0.7);
+  const dx = Math.cos(ang) * len;
+  const dy = Math.sin(ang) * len;
+  const gr = ctx.createLinearGradient(0, 0, dx, dy);
+  const n = Math.max(4, Math.round(len / 34));
+  for (let k = 0; k <= n; k++) gr.addColorStop(k / n, hex(k % 2 === 0 ? foil[0] : foil[1 + ((k >> 1) % (foil.length - 1))]));
+  ctx.fillStyle = gr;
+  ctx.fillRect(0, 0, w, h);
+  // a second rainbow across the first, as the foil shifts with the light
+  ctx.save();
+  ctx.globalCompositeOperation = 'soft-light';
+  const g2 = ctx.createLinearGradient(w, 0, 0, h);
+  const m = Math.max(3, Math.round(len / 26));
+  for (let k = 0; k <= m; k++) g2.addColorStop(k / m, k % 2 ? 'rgba(255,255,255,0.9)' : hex(foil[(k >> 1) % foil.length]));
+  ctx.fillStyle = g2;
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+  // the foil's fine grating
+  ctx.strokeStyle = 'rgba(255,255,255,0.13)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  for (let x = -h; x < w + h; x += 3) {
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x + h * 0.55, h);
+  }
+  ctx.stroke();
+  // the pearly sheen
+  const pearl = ctx.createRadialGradient(w * 0.28, h * 0.1, 0, w * 0.28, h * 0.1, Math.max(w, h) * 0.7);
+  pearl.addColorStop(0, 'rgba(255,255,255,0.6)');
+  pearl.addColorStop(0.45, 'rgba(255,255,255,0.15)');
+  pearl.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = pearl;
+  ctx.fillRect(0, 0, w, h);
+  // sparkles: fine glints and a few four-point stars
+  const dots = Math.round((w * h) / 140);
+  for (let k = 0; k < dots; k++) {
+    ctx.fillStyle = rgba(0xffffff, between(rnd, 0.5, 1));
+    const s = between(rnd, 0.6, 1.5);
+    ctx.fillRect(rnd() * w, rnd() * h, s, s);
+  }
+  const stars = 1 + Math.round((w * h) / 2600);
+  for (let k = 0; k < stars; k++) drawGlint(ctx, between(rnd, 5, w - 5), between(rnd, 4, h - 4), between(rnd, 4, 8));
+  drawBevel(ctx, g, 0.8, 0.22, 2.5);
+}
+
+// --- heelal: galaxy -------------------------------------------------------------
+
+function paintGalaxy(ctx, g, pal, rnd) {
+  const { w, h } = g;
+  const neb = [pal.light, pal.x[0]];
+  const deep = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
+  deep.addColorStop(0, hex(mix(pal.fill, neb[1], 0.25)));
+  deep.addColorStop(1, hex(mix(pal.fill, 0x000000, 0.4)));
+  ctx.fillStyle = deep;
+  ctx.fillRect(0, 0, w, h);
+  // the nebula: soft clouds of two colours, added like light, with a long bright band through the middle
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const clouds = 4 + Math.round((w * h) / 1600);
+  const band = between(rnd, -0.5, 0.5);
+  for (let k = 0; k < clouds; k++) {
+    const t = rnd();
+    const x = t * w;
+    const y = h / 2 + (t - 0.5) * band * h + between(rnd, -0.35, 0.35) * h;
+    const r = between(rnd, 0.3, 0.75) * Math.min(Math.max(w, h) * 0.5, Math.min(w, h) * 1.2);
+    const c = neb[k % 2];
+    const cl = ctx.createRadialGradient(x, y, 0, x, y, r);
+    cl.addColorStop(0, rgba(c, between(rnd, 0.25, 0.5)));
+    cl.addColorStop(0.5, rgba(c, 0.1));
+    cl.addColorStop(1, rgba(c, 0));
+    ctx.fillStyle = cl;
+    ctx.fillRect(0, 0, w, h);
+  }
+  ctx.restore();
+  // dark dust lanes give the clouds their shape
+  for (let k = 0; k < 2 + Math.round(w / 120); k++) {
+    const x = rnd() * w;
+    const y = rnd() * h;
+    const r = between(rnd, 0.15, 0.35) * Math.max(w, h);
+    const d = ctx.createRadialGradient(x, y, 0, x, y, r);
+    d.addColorStop(0, rgba(pal.fill, 0.55));
+    d.addColorStop(1, rgba(pal.fill, 0));
+    ctx.fillStyle = d;
+    ctx.fillRect(0, 0, w, h);
+  }
+  // many tiny stars
+  const stars = Math.round((w * h) / 40);
+  for (let k = 0; k < stars; k++) {
+    const v = rnd();
+    ctx.fillStyle = v < 0.15 ? rgba(0xbfe0ff, 0.9) : v < 0.25 ? rgba(0xfff0c0, 0.9) : rgba(0xffffff, between(rnd, 0.35, 1));
+    const s = v < 0.08 ? 1.6 : between(rnd, 0.5, 1.1);
+    ctx.fillRect(rnd() * w, rnd() * h, s, s);
+  }
+  // a couple of bright stars with a cross glint
+  const big = 1 + Math.round((w * h) / 5000);
+  for (let k = 0; k < big; k++) {
+    drawGlint(ctx, between(rnd, 6, w - 6), between(rnd, 5, h - 5), between(rnd, 6, 11), k % 2 ? mix(neb[0], 0xffffff, 0.6) : 0xffffff);
+  }
+  drawBevel(ctx, g, 0.3, 0.35, 3);
+  // a soft rim in the nebula's colour, so the block shows on a night sky
+  ctx.save();
+  roundedPolyPath(ctx, g.outline, CORNER_R);
+  ctx.strokeStyle = rgba(neb[0], 0.6);
+  ctx.lineWidth = 3.2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** (1.15) The premium skins that paint the whole face (instead of the game's colours plus a pattern). */
+const SKIN_FACE = {
+  carbon: paintCarbon,
+  ice: paintIce,
+  pixel: paintPixel,
+  marble: paintMarble,
+  lava: paintLava,
+  chrome: paintChrome,
+  holo: paintHolo,
+  galaxy: paintGalaxy,
+};
+
 function drawBlock(ctx, g, pal, key, name = null) {
   const rnd = seededRand(key);
   const outlineCol = mix(pal.dark, 0x000000, 0.38);
@@ -1073,25 +2009,97 @@ function drawBlock(ctx, g, pal, key, name = null) {
   roundedPolyPath(ctx, g.outline, CORNER_R);
   ctx.save();
   ctx.clip();
-  ctx.fillStyle = hex(pal.fill);
-  ctx.fillRect(0, 0, g.w, g.h);
-  if (g.cells.length) {
-    for (const c of g.cells) drawCellBands(ctx, c, pal);
+  const sk = BLOCK_SKINS[blockSkin];
+  const face = sk && SKIN_FACE[sk.pattern];
+  if (face) {
+    // (1.15) a premium skin paints the whole face itself
+    ctx.save();
+    face(ctx, g, pal, rnd);
+    ctx.restore();
+    if (g.cells.length > 1 && sk.seam) drawSeams(ctx, g.cells, rgba(outlineCol, sk.seam));
   } else {
-    drawCellBands(ctx, { x: 0, y: 0, w: g.w, h: g.h }, pal);
+    ctx.fillStyle = hex(pal.fill);
+    ctx.fillRect(0, 0, g.w, g.h);
+    if (g.cells.length) {
+      for (const c of g.cells) drawCellBands(ctx, c, pal);
+    } else {
+      drawCellBands(ctx, { x: 0, y: 0, w: g.w, h: g.h }, pal);
+    }
+    const detail = DETAIL[g.shape];
+    if (detail) detail(ctx, g, pal, rnd);
+    drawSkinPattern(ctx, g, pal, rnd);
+    if (g.cells.length > 1) drawSeams(ctx, g.cells, rgba(outlineCol, 0.8));
   }
-  const detail = DETAIL[g.shape];
-  if (detail) detail(ctx, g, pal, rnd);
-  drawSkinPattern(ctx, g, pal, rnd);
-  if (g.cells.length > 1) drawSeams(ctx, g.cells, rgba(outlineCol, 0.8));
   if (name) drawName(ctx, g, pal, name);   // still clipped to the shape: the ghost silhouette is unchanged
   ctx.restore();
 
-  roundedPolyPath(ctx, g.outline, CORNER_R);
-  ctx.lineJoin = 'round';
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = hex(outlineCol);
-  ctx.stroke();
+  if (!face || sk.stroke !== false) {
+    roundedPolyPath(ctx, g.outline, CORNER_R);
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = hex(outlineCol);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// (1.15, the owner: "make it so that people want to buy it with the coins") the shop's sample of a block skin: three
+// blocks of different shapes and colours, drawn by the game's own block art, centred on the canvas (transparent around).
+const SWATCH = [
+  { shape: 'plank', color: 6, x: 0, y: 92 },
+  { shape: 'cube', color: 2, x: 0, y: 32 },
+  { shape: 'J', color: 0, x: 68, y: 4 },
+];
+const SWATCH_W = 200;
+const SWATCH_H = 132;
+const swatchCache = new Map();
+
+/**
+ * Draws the shop's sample of block skin `skinId` on `canvas` (any size, in its own pixels: size it at devicePixelRatio).
+ * The game's worn skin is left as it was. Cached per skin and size, so reopening the shop is cheap.
+ */
+export function drawSkinSwatch(canvas, skinId) {
+  const ctx = canvas && typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
+  if (!ctx) return;
+  const W = canvas.width;
+  const H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  if (W < 4 || H < 4) return;
+  const id = Object.prototype.hasOwnProperty.call(BLOCK_SKINS, skinId) ? skinId : 'kleur';
+  const cacheKey = `${id}|${W}x${H}`;
+  let art = swatchCache.get(cacheKey);
+  if (!art) {
+    art = scratchCanvas(W, H);
+    if (!art) return;
+    const off = art.getContext('2d');
+    const m = Math.min(W, H) * 0.07;
+    const s = Math.min((W - 2 * m) / SWATCH_W, (H - 2 * m - Math.min(W, H) * 0.04) / SWATCH_H);
+    const ox = (W - SWATCH_W * s) / 2;
+    const oy = (H - SWATCH_H * s) / 2 - Math.min(W, H) * 0.02;
+    const worn = blockSkin;
+    blockSkin = id;
+    try {
+      for (const b of SWATCH) {
+        const spec = { shape: b.shape, scale: 1, color: b.color };
+        const g = getGeometry(spec);
+        off.save();
+        off.translate(ox + (b.x - PAD) * s, oy + (b.y - PAD) * s);
+        off.scale(s, s);
+        drawBlock(off, g, skinned(shapeColor(spec)), textureKeyFor(spec));
+        off.restore();
+      }
+    } finally {
+      blockSkin = worn;
+    }
+    if (swatchCache.size > 40) swatchCache.clear();
+    swatchCache.set(cacheKey, art);
+  }
+  // a soft shadow under the blocks, so they sit on whatever card the shop puts them on
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.35)';
+  ctx.shadowBlur = Math.max(2, Math.min(W, H) * 0.05);
+  ctx.shadowOffsetY = Math.max(1, Math.min(W, H) * 0.025);
+  ctx.drawImage(art, 0, 0);
   ctx.restore();
 }
 

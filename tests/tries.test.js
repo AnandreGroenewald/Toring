@@ -96,8 +96,8 @@ test('"Hoe speel ek?" says the day\'s free tries (3 from 12 Oct), the old line o
   const AF = await import('../js/core/strings.js');
   const EN = await import('../js/core/strings.en.js');
   const daily = (S) => S.howToSteps.find((x) => x.icon === '🗓️').text;
-  assert.match(daily(AF.S)(3), /3 gratis pogings en jou beste een tel\. Daarna kos Nog ’n kans muntstukke\./);
-  assert.match(daily(EN.S_EN)(3), /3 free tries and your best one counts\. After that, One more try costs coins\./);
-  assert.equal(daily(AF.S)(1), 'Een Daaglikse Toring per dag, dieselfde vir almal. Nog ’n kans kos muntstukke. Oefen soveel jy wil.');
-  assert.equal(daily(EN.S_EN)(), 'One Daily Tower a day, the same for everyone. One more try costs coins. Practise as much as you like.');
+  assert.match(daily(AF.S)(3), /3 gratis pogings en jou beste poging tel\. Daarna kos “Nog ’n kans” munte\./);
+  assert.match(daily(EN.S_EN)(3), /3 free tries and your best try counts\. After that, “One more try” costs coins\./);
+  assert.equal(daily(AF.S)(1), 'Een Daaglikse Toring per dag, dieselfde vir almal. “Nog ’n kans” kos munte. Oefen soveel jy wil.');
+  assert.equal(daily(EN.S_EN)(), 'One Daily Tower a day, the same for everyone. “One more try” costs coins. Practise as much as you like.');
 });

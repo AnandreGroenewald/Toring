@@ -50,7 +50,10 @@ const BASE_CY = LAYOUT.baseTopY + LAYOUT.baseHeight / 2;
 const BASE_HALF_W = LAYOUT.baseWidth / 2;
 const GHOST_FROZEN_SCAN = 12;    // frozen blocks near the top that can still be a landing surface
 const GHOST_WIND_STEPS = 240;    // wind forecast horizon for the landing ghost (4 s of fall)
-const GHOST_MISS_DROP = 120;     // a ghost for a drop that misses the tower is shown this far below the top, in red
+const GHOST_MISS_DROP = 120;
+const AIM_STEP = 18;             // (1.15) the guide's dots: this far apart along the predicted path (px)
+const AIM_GAP = 24;              // ...stopping this short of the ghost
+const AIM_ALPHA = 0.32;     // a ghost for a drop that misses the tower is shown this far below the top, in red
 const PREWARM_AHEAD = 2;         // block textures drawn ahead while a block falls (see prewarmTextures)
 const FLOOD_TAG_MS = 1000;       // the flood tag's text redraws at most this often (each redraw is a canvas + upload)
 const COLLAPSE_MS = 1500;        // tower blocks lost this soon after another loss are the same collapse: one life
@@ -310,6 +313,22 @@ function loadWidth(geom) {
 
 /** Dotted guide line texture (drawn once; cropped to length per frame). */
 function ensureAimTexture(scene) {
+  // (1.15) one dot of the guide (the guide is a row of these along the block's real, wind-bent path)
+  if (!scene.textures.exists('aim_dot')) {
+    const dot = scene.textures.createCanvas('aim_dot', 8, 8);
+    if (dot) {
+      const c = dot.getContext();
+      c.fillStyle = 'rgba(29,43,69,0.55)';
+      c.beginPath();
+      c.arc(4, 4, 3, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = '#ffffff';
+      c.beginPath();
+      c.arc(4, 4, 2, 0, Math.PI * 2);
+      c.fill();
+      dot.refresh();
+    }
+  }
   if (scene.textures.exists('aim_dots')) return;
   const h = 1600;
   const tex = scene.textures.createCanvas('aim_dots', 6, h);
@@ -549,8 +568,13 @@ export class GameScene extends Phaser.Scene {
     this.ghost = this.add.image(0, 0, '__WHITE').setDepth(DEPTH.ghost).setAlpha(GHOST_A).setVisible(false);
     this.ghostMiss = false;
     ensureAimTexture(this);
-    this.aimLine = this.add.image(0, 0, 'aim_dots').setOrigin(0.5, 0).setDepth(DEPTH.ghost - 0.2)
-      .setAlpha(0.32).setVisible(false);
+    // (1.15, the owner: "the shodow projectory for the wind is not correct") the guide follows the fall the ghost predicts:
+    // in wind a block drops almost straight at first and drifts more and more, so a straight line from the hook to the
+    // ghost wasn't the path it takes. A row of dots, AIM_STEP apart along the predicted path (placed each frame, drawn once).
+    this.aimDots = [];
+    this.aimOn = false;
+    this.ghostPath = new Float32Array(2 * 920);
+    this.ghostPathN = 0;
     this.ghostLabel = null;
     if (!this.idle) {
       this.ghostLabel = this.add.text(0, 0, `↓ ${S.ghostHint}`, {
@@ -3054,15 +3078,8 @@ export class GameScene extends Phaser.Scene {
       }
       this.ghost.setPosition(p.x, p.y);
       this.ghostEdge.setPosition(p.x, p.y);
-      // dotted guide from the hanging block to its landing spot
-      const pose = this.crane.getBlockPose();
-      const cam = this.cameras.main;
-      const x0 = pose.x;
-      const y0 = pose.y + cam.scrollY;
-      const len = Math.max(0, Math.hypot(p.x - x0, p.y - y0) - 24);
-      const line = this.aimLine;
-      line.setPosition(x0, y0).setRotation(Math.atan2(x0 - p.x, p.y - y0));
-      line.setCrop(0, 0, 6, Math.min(len, line.height));
+      // dotted guide from the hanging block to its landing spot, along the path it will fall (wind included)
+      this.placeAimDots(p);
       if (this.ghostLabel && this.hintPending) {
         // (kept left of the island billboard, which stands right of the base)
         const maxX = Math.max(140, Math.min(GAME_W - 140, BILLBOARD_LEFT - 6 - this.ghostLabel.width / 2));
@@ -3079,7 +3096,46 @@ export class GameScene extends Phaser.Scene {
     if (this.ghost.visible === on) return;
     this.ghost.setVisible(on);
     this.ghostEdge.setVisible(on);
-    this.aimLine.setVisible(on);
+    this.aimOn = on;
+    if (!on) for (const d of this.aimDots) d.setVisible(false);
+  }
+
+  /**
+   * (1.15) The guide's dots, AIM_STEP apart along the path predictLanding() just traced (block centre, world px), from the
+   * hanging block to AIM_GAP short of the ghost. The pool grows once to the longest guide and is then only moved.
+   */
+  placeAimDots(p) {
+    const path = this.ghostPath;
+    const n = this.ghostPathN;
+    let used = 0;
+    if (n >= 2) {
+      // the path's length, so the dots stop AIM_GAP before the landing spot
+      let total = 0;
+      for (let i = 1; i < n; i++) total += Math.hypot(path[2 * i] - path[2 * i - 2], path[2 * i + 1] - path[2 * i - 1]);
+      const stop = Math.max(0, total - AIM_GAP);
+      let walked = 0;
+      let next = AIM_STEP * 0.5;
+      for (let i = 1; i < n && next <= stop; i++) {
+        const ax = path[2 * i - 2];
+        const ay = path[2 * i - 1];
+        const seg = Math.hypot(path[2 * i] - ax, path[2 * i + 1] - ay);
+        while (seg > 0 && next <= walked + seg && next <= stop) {
+          const t = (next - walked) / seg;
+          let d = this.aimDots[used];
+          if (!d) {
+            d = this.add.image(0, 0, 'aim_dot').setDepth(DEPTH.ghost - 0.2).setAlpha(AIM_ALPHA);
+            this.aimDots.push(d);
+          }
+          d.setPosition(ax + (path[2 * i] - ax) * t, ay + (path[2 * i + 1] - ay) * t);
+          if (!d.visible) d.setVisible(true);
+          used++;
+          next += AIM_STEP;
+        }
+        walked += seg;
+      }
+    }
+    for (let k = used; k < this.aimDots.length; k++) if (this.aimDots[k].visible) this.aimDots[k].setVisible(false);
+    return p;
   }
 
   /**
@@ -3127,12 +3183,17 @@ export class GameScene extends Phaser.Scene {
 
     let surface = this.towerTopY;
     let n = 0;
+    const path = this.ghostPath;
+    path[0] = x;
+    path[1] = y;
     while (y + bot < surface && n < 600) {
       vx = vx * keep + wf[n < lastW ? n : lastW] / 3600;
       vy = vy * keep + grav;
       x += vx;
       y += vy;
       n++;
+      path[2 * n] = x;
+      path[2 * n + 1] = y;
     }
     let s = this.surfaceAt(x + minX, x + maxX);
     if (s.found && s.top > surface + 0.5) {
@@ -3143,6 +3204,8 @@ export class GameScene extends Phaser.Scene {
         x += vx;
         y += vy;
         n++;
+        path[2 * n] = x;
+        path[2 * n + 1] = y;
       }
       s = this.surfaceAt(x + minX, x + maxX);
     }
@@ -3161,6 +3224,7 @@ export class GameScene extends Phaser.Scene {
       out.miss = !fhit;
       landTop = fhit ? ft : this.towerTopY + GHOST_MISS_DROP;
     }
+    this.ghostPathN = n + 1;
     out.x = x;
     out.y = landTop - (g.h - g.cy);
     out.targetX = this.supportTop(hit ? s.block : this.topBlock).x;

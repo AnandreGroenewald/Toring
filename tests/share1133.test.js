@@ -16,11 +16,13 @@ test('a coin invite starts with the stake and the pot, in both languages and bot
     for (const t of [af, en]) assert.ok(t.endsWith(link), t);
   }
   assert.match(AF.duelRoomText('Anna', link, 'turns', 20), /Blok vir Blok/);
-  assert.match(EN.duelRoomText('Anna', link, 'race', 500), /the winner gets 1000!/);
+  // (1.15) numbers in the house style: a non-breaking space between thousands (js/core/format.js)
+  assert.match(EN.duelRoomText('Anna', link, 'race', 500), /the winner gets 1\u00a0000!/);
+  assert.match(AF.duelRoomText('Anna', link, 'race', 500), /die wenner kry 1\u00a0000!/);
 });
 
 test('an invite without coins reads as before', () => {
-  assert.equal(AF.duelRoomText('Anna', link, 'race', 0), `Anna daag jou uit vir ’n Stapel-wedstryd! Kom bou kop-aan-kop: ${link}`);
+  assert.equal(AF.duelRoomText('Anna', link, 'race', 0), `Anna daag jou uit vir ’n Stapel-wedstryd! Kom bou kop aan kop: ${link}`);
   assert.equal(AF.duelRoomText('Anna', link, 'turns'), `Anna daag jou uit vir Blok vir Blok op Stapel! Kom bou saam, om die beurt, aan een toring: ${link}`);
   assert.equal(EN.duelRoomText('Anna', link, 'race', 0), `Anna challenges you to a Stapel match! Come build head-to-head: ${link}`);
 });

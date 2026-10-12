@@ -32,48 +32,61 @@ export const MAX_COINS = 999999;
  */
 export const COSMETICS = Object.freeze({
   frame: Object.freeze([
-    { id: 'hout', price: 0 },
-    { id: 'see', price: 120 },
-    { id: 'goud', price: 250 },
-    { id: 'springbok', price: 300 },
-    { id: 'vuur', price: 350 },
-    { id: 'diamant', price: 0, rank: 'diamant' },
+    { id: 'hout', price: 0, tier: 'common' },
+    { id: 'see', price: 120, tier: 'common' },
+    { id: 'goud', price: 250, tier: 'rare' },
+    { id: 'springbok', price: 300, tier: 'rare' },
+    { id: 'vuur', price: 350, tier: 'epic' },
+    { id: 'neon', price: 450, tier: 'epic' },          // (1.15) a glowing neon tube
+    { id: 'holo', price: 750, tier: 'legendary' },     // (1.15) a shifting holographic foil
+    { id: 'diamant', price: 0, rank: 'diamant', tier: 'legendary' },
   ]),
   badge: Object.freeze([
     { id: 'geen', price: 0, emoji: '' },
-    { id: 'leeu', price: 80, emoji: '🦁' },
-    { id: 'vuur', price: 80, emoji: '🔥' },
-    { id: 'rugby', price: 100, emoji: '🏉' },
-    { id: 'olifant', price: 100, emoji: '🐘' },
-    { id: 'arend', price: 120, emoji: '🦅' },
-    { id: 'kroon', price: 200, emoji: '👑' },
-    { id: 's-brons', price: 0, emoji: '🥉', rank: 'brons' },
-    { id: 's-silwer', price: 0, emoji: '🥈', rank: 'silwer' },
-    { id: 's-goud', price: 0, emoji: '🥇', rank: 'goud' },
-    { id: 's-platinum', price: 0, emoji: '💠', rank: 'platinum' },
-    { id: 's-diamant', price: 0, emoji: '💎', rank: 'diamant' },
+    { id: 'leeu', price: 80, emoji: '🦁', tier: 'rare' },
+    { id: 'vuur', price: 80, emoji: '🔥', tier: 'common' },
+    { id: 'rugby', price: 100, emoji: '🏉', tier: 'common' },
+    { id: 'olifant', price: 100, emoji: '🐘', tier: 'rare' },
+    { id: 'arend', price: 120, emoji: '🦅', tier: 'rare' },
+    { id: 'weerlig', price: 150, emoji: '⚡', tier: 'rare' },     // (1.15)
+    { id: 'haai', price: 180, emoji: '🦈', tier: 'rare' },        // (1.15)
+    { id: 'kroon', price: 200, emoji: '👑', tier: 'epic' },
+    { id: 'vuurpyl', price: 300, emoji: '🚀', tier: 'epic' },     // (1.15)
+    { id: 'goat', price: 350, emoji: '🐐', tier: 'epic' },        // (1.15) "the GOAT": the greatest of all time
+    { id: 'draak', price: 600, emoji: '🐉', tier: 'legendary' },  // (1.15)
+    { id: 's-brons', price: 0, emoji: '🥉', rank: 'brons', tier: 'rare' },
+    { id: 's-silwer', price: 0, emoji: '🥈', rank: 'silwer', tier: 'rare' },
+    { id: 's-goud', price: 0, emoji: '🥇', rank: 'goud', tier: 'epic' },
+    { id: 's-platinum', price: 0, emoji: '💠', rank: 'platinum', tier: 'epic' },
+    { id: 's-diamant', price: 0, emoji: '💎', rank: 'diamant', tier: 'legendary' },
   ]),
   title: Object.freeze([
-    { id: 'bouer', price: 0 },
-    { id: 'hyskraanheld', price: 100 },
-    { id: 'perfekmeester', price: 150 },
-    { id: 'wolkekrabber', price: 200 },
-    { id: 'toringkoning', price: 300 },
-    { id: 'getrou', price: 0, week: true },   // the first full week of the weekkis (js/core/week.js), never sold
+    { id: 'bouer', price: 0, tier: 'common' },
+    { id: 'hyskraanheld', price: 100, tier: 'common' },
+    { id: 'perfekmeester', price: 150, tier: 'rare' },
+    { id: 'wolkekrabber', price: 200, tier: 'rare' },
+    { id: 'toringkoning', price: 300, tier: 'epic' },
+    { id: 'ikoon', price: 600, tier: 'legendary' },     // (1.15) "Ikoon" (not a rank's name: ranks can't be bought)
+    { id: 'getrou', price: 0, week: true, tier: 'epic' },   // the first full week of the weekkis (js/core/week.js), never sold
   ]),
+  // (1.15, the owner: "the celebration icons is very meh"): each one its own animated show (js/ui/celebrate.js)
   celebration: Object.freeze([
-    { id: 'konfetti', price: 0, emoji: '🎊' },
-    { id: 'vuurwerk', price: 150, emoji: '🧨' },
-    { id: 'vuvuzela', price: 180, emoji: '📯' },
-    { id: 'braai', price: 200, emoji: '🍖' },
-    { id: 'skrum', price: 200, emoji: '🏉' },
+    { id: 'konfetti', price: 0, emoji: '🎊', tier: 'common' },
+    { id: 'vuurwerk', price: 150, emoji: '🎆', tier: 'rare' },
+    { id: 'vuvuzela', price: 180, emoji: '📯', tier: 'rare' },
+    { id: 'braai', price: 200, emoji: '🍖', tier: 'rare' },
+    { id: 'skrum', price: 200, emoji: '🏉', tier: 'rare' },
+    { id: 'weerlig', price: 300, emoji: '⚡', tier: 'epic' },
+    { id: 'goudreen', price: 400, emoji: '🪙', tier: 'epic' },
+    { id: 'laser', price: 450, emoji: '🌈', tier: 'epic' },
+    { id: 'sterrestof', price: 700, emoji: '🌌', tier: 'legendary' },
   ]),
   style: Object.freeze([
     { id: 'gewoon', price: 0, emoji: '' },
-    { id: 'pet', price: 100, emoji: '🧢' },
-    { id: 'sonbril', price: 120, emoji: '🕶️' },
-    { id: 'hoed', price: 150, emoji: '🎩' },
-    { id: 'kroon', price: 250, emoji: '👑' },
+    { id: 'pet', price: 100, emoji: '🧢', tier: 'common' },
+    { id: 'sonbril', price: 120, emoji: '🕶️', tier: 'rare' },
+    { id: 'hoed', price: 150, emoji: '🎩', tier: 'rare' },
+    { id: 'kroon', price: 250, emoji: '👑', tier: 'epic' },
   ]),
 });
 export const COSMETIC_KINDS = Object.freeze(Object.keys(COSMETICS));
@@ -86,27 +99,43 @@ export const COSMETIC_KINDS = Object.freeze(Object.keys(COSMETICS));
  */
 export const SKINS = Object.freeze({
   scene: Object.freeze([
-    { id: 'dag', price: 0 },
-    { id: 'sonsondergang', price: 800 },
-    { id: 'lekkergoed', price: 1000 },
-    { id: 'nag', price: 1200 },
+    { id: 'dag', price: 0, tier: 'common' },
+    { id: 'sonsondergang', price: 800, tier: 'common' },
+    { id: 'lekkergoed', price: 1000, tier: 'rare' },
+    { id: 'nag', price: 1200, tier: 'rare' },
+    { id: 'kersieblom', price: 1500, tier: 'rare' },     // (1.15) cherry blossom, falling petals
+    { id: 'noorderlig', price: 2400, tier: 'epic' },     // (1.15) the northern lights
+    { id: 'ruimte', price: 2600, tier: 'epic' },         // (1.15) deep space from the ground up
+    { id: 'sintgolf', price: 3200, tier: 'legendary' },  // (1.15) retro neon (synthwave): the striped sun, the neon grid
   ]),
   crane: Object.freeze([
-    { id: 'geel', price: 0 },
-    { id: 'rooi', price: 500 },
-    { id: 'blou', price: 500 },
-    { id: 'pienk', price: 700 },
-    { id: 'goud', price: 1500 },
+    { id: 'geel', price: 0, tier: 'common' },
+    { id: 'rooi', price: 500, tier: 'common' },
+    { id: 'blou', price: 500, tier: 'common' },
+    { id: 'pienk', price: 700, tier: 'rare' },
+    { id: 'goud', price: 1500, tier: 'epic' },
   ]),
   blocks: Object.freeze([
-    { id: 'kleur', price: 0 },
-    { id: 'lekkergoed', price: 800 },
-    { id: 'klip', price: 800 },
-    { id: 'neon', price: 1200 },
-    { id: 'goud', price: 2000 },
+    { id: 'kleur', price: 0, tier: 'common' },
+    { id: 'lekkergoed', price: 800, tier: 'common' },
+    { id: 'klip', price: 800, tier: 'common' },
+    { id: 'piksel', price: 1000, tier: 'rare' },     // (1.15) retro 8-bit
+    { id: 'neon', price: 1200, tier: 'rare' },
+    { id: 'koolstof', price: 1200, tier: 'rare' },   // (1.15) carbon fibre
+    { id: 'ys', price: 1400, tier: 'rare' },         // (1.15) ice crystal
+    { id: 'marmer', price: 1800, tier: 'epic' },     // (1.15) marble with gold veins
+    { id: 'goud', price: 2000, tier: 'epic' },
+    { id: 'lawa', price: 2200, tier: 'epic' },       // (1.15) glowing lava cracks
+    { id: 'chroom', price: 2400, tier: 'epic' },     // (1.15) mirror chrome
+    { id: 'holo', price: 3200, tier: 'legendary' },  // (1.15) holographic foil
+    { id: 'heelal', price: 3500, tier: 'legendary' }, // (1.15) a galaxy in every block
   ]),
 });
 export const SKIN_KINDS = Object.freeze(Object.keys(SKINS));
+/** (1.15) The rarity ladder of shop items (the shop's colour and label): common, rare, epic, legendary. */
+export const TIERS = Object.freeze(['common', 'rare', 'epic', 'legendary']);
+/** (1.15) An item's tier ('common' when not set). */
+export const tierOf = (item) => (item && TIERS.includes(item.tier) ? item.tier : 'common');
 export const DEFAULT_SKIN = Object.freeze({ scene: 'dag', crane: 'geel', blocks: 'kleur' });
 export const skin = (kind, id) => (SKINS[kind] || []).find((c) => c.id === id) || null;
 export const DEFAULT_LOOK = Object.freeze({ frame: 'hout', badge: 'geen', title: 'bouer', celebration: 'konfetti', style: 'gewoon' });

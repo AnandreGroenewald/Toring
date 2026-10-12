@@ -1,0 +1,2419 @@
+// Stapel — the win celebrations (1.15, the owner 12 Oct ~19:10: "the celebration icons is very meh, can you please make
+// it so that people want to buy it with the coins ... it must be somthing a 22 year old looks at and thinks I need this").
+// A celebration is a ~3.6 s canvas show over the screen (the Winkel's preview, and a live match's end: the winner sees
+// their own, the loser the winner's one with "<name> vier!"), and each has its own shop tile art drawn from the same
+// motifs (drawCelebrationIcon). Plain canvas 2D, nothing to download: glow dots, twinkles, coins and emoji are drawn once
+// into small sprite canvases and stamped with drawImage; the particle pools are made when a show starts (the hot loops
+// allocate nothing), at most ~250 particles, and a 3x phone screen draws at 2x (a 390 x 844 show is 780 x 1688 pixels).
+
+export const CELEBRATION_IDS = Object.freeze(['konfetti', 'vuurwerk', 'vuvuzela', 'braai', 'skrum', 'weerlig', 'goudreen', 'laser', 'sterrestof']);
+
+const DUR = 3.6;          // seconds a show lasts
+const OUT = 0.55;         // its last part fades out
+const MAX_DPR = 2;        // the show's canvas: 3x screens draw at 2x (a third fewer pixels to fill, the same look)
+const ICON_DPR = 3;       // the shop tiles are small: full sharpness
+const TAU = Math.PI * 2;
+const EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+
+// Each show's colours: `accent` rings the caption pill; `tint` darkens the screen behind the light (night shows make
+// additive colours glow; null keeps the screen as it is); `flash` is the layer a bang lights up.
+const LOOK = {
+  konfetti: { accent: '#ff4f9a', tint: null, flash: 'radial-gradient(ellipse at 50% 100%, rgba(255,250,230,0.85), rgba(255,250,230,0) 70%)' },
+  vuurwerk: { accent: '#ffcf4a', tint: 'radial-gradient(ellipse at 50% 30%, rgba(34,24,86,0.62), rgba(4,5,22,0.9))', flash: 'rgba(255,236,200,0.55)' },
+  vuvuzela: { accent: '#ffb612', tint: 'linear-gradient(to top, rgba(0,90,52,0.5), rgba(0,60,35,0.12) 60%, rgba(0,0,0,0))', flash: 'radial-gradient(ellipse at 50% 85%, rgba(255,214,90,0.8), rgba(255,214,90,0) 70%)' },
+  braai: { accent: '#ff8a2a', tint: 'linear-gradient(to top, rgba(120,32,0,0.62), rgba(70,18,0,0.22) 55%, rgba(30,8,0,0.05))', flash: 'radial-gradient(ellipse at 50% 85%, rgba(255,190,90,0.8), rgba(255,190,90,0) 70%)' },
+  skrum: { accent: '#ffc928', tint: 'radial-gradient(circle at 50% 42%, rgba(18,120,62,0.34), rgba(0,46,24,0.72))', flash: 'radial-gradient(circle at 50% 42%, rgba(255,246,200,0.9), rgba(255,246,200,0) 65%)' },
+  weerlig: { accent: '#6fd0ff', tint: 'radial-gradient(ellipse at 50% 18%, rgba(40,62,150,0.6), rgba(3,6,24,0.92))', flash: 'linear-gradient(to bottom, rgba(225,240,255,0.95), rgba(170,205,255,0.55))' },
+  goudreen: { accent: '#ffd23f', tint: 'radial-gradient(ellipse at 50% 32%, rgba(255,196,60,0.26), rgba(58,30,0,0.66))', flash: 'radial-gradient(ellipse at 50% 30%, rgba(255,232,150,0.9), rgba(255,232,150,0) 70%)' },
+  laser: { accent: '#ff3bd8', tint: 'radial-gradient(ellipse at 50% 100%, rgba(70,0,110,0.6), rgba(6,0,22,0.92))', flash: 'radial-gradient(ellipse at 50% 80%, rgba(255,140,240,0.55), rgba(90,230,255,0.18) 60%, rgba(0,0,0,0))' },
+  sterrestof: { accent: '#c18bff', tint: 'radial-gradient(ellipse at 50% 42%, rgba(70,26,130,0.58), rgba(7,3,26,0.94))', flash: 'radial-gradient(circle at 50% 42%, rgba(255,246,220,0.95), rgba(200,160,255,0.35) 45%, rgba(0,0,0,0) 80%)' },
+};
+
+// ---------------------------------------------------------------------------
+// Small helpers
+// ---------------------------------------------------------------------------
+const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const easeOutCubic = (t) => 1 - (1 - t) * (1 - t) * (1 - t);
+const easeOutBack = (t) => { const u = t - 1; return 1 + 2.70158 * u * u * u + 1.70158 * u * u; };
+const smooth = (t) => t * t * (3 - 2 * t);
+const rand = (a, b) => a + Math.random() * (b - a);
+
+/** '#rrggbb' → 'rgba(r,g,b,a)'. */
+function rgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+/** A tiny seeded random (mulberry32): the shop tiles look the same every time. */
+function seeded(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function starPath(x, cx, cy, R, r, n = 5, rot = -Math.PI / 2) {
+  x.beginPath();
+  for (let i = 0; i < n * 2; i++) {
+    const a = rot + (i * Math.PI) / n;
+    const d = i % 2 ? r : R;
+    if (i) x.lineTo(cx + Math.cos(a) * d, cy + Math.sin(a) * d);
+    else x.moveTo(cx + Math.cos(a) * d, cy + Math.sin(a) * d);
+  }
+  x.closePath();
+}
+
+function roundRect(x, X, Y, w, h, r) {
+  x.beginPath();
+  x.moveTo(X + r, Y);
+  x.arcTo(X + w, Y, X + w, Y + h, r);
+  x.arcTo(X + w, Y + h, X, Y + h, r);
+  x.arcTo(X, Y + h, X, Y, r);
+  x.arcTo(X, Y, X + w, Y, r);
+  x.closePath();
+}
+
+// ---------------------------------------------------------------------------
+// Sprites: drawn once (per document), stamped many times
+// ---------------------------------------------------------------------------
+const SPRITES = new Map();
+function sprite(doc, key, w, h, draw) {
+  let c = SPRITES.get(key);
+  if (!c || c.ownerDocument !== doc) {
+    c = doc.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    draw(c.getContext('2d'), w, h);
+    SPRITES.set(key, c);
+  }
+  return c;
+}
+
+const GS = 64;   // a glow's sprite size: soft, so it scales up without showing pixels
+/** A glowing dot: a white-hot centre in `hex`, fading out. */
+function glowSprite(doc, hex) {
+  return sprite(doc, `g${hex}`, GS, GS, (x) => {
+    const g = x.createRadialGradient(GS / 2, GS / 2, 0, GS / 2, GS / 2, GS / 2);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.13, rgba(hex, 1));
+    g.addColorStop(0.38, rgba(hex, 0.36));
+    g.addColorStop(1, rgba(hex, 0));
+    x.fillStyle = g;
+    x.fillRect(0, 0, GS, GS);
+  });
+}
+/** A soft round blob (haze, smoke, a wide glow). */
+function softSprite(doc, hex, a = 0.6) {
+  return sprite(doc, `s${hex}${a}`, GS, GS, (x) => {
+    const g = x.createRadialGradient(GS / 2, GS / 2, 0, GS / 2, GS / 2, GS / 2);
+    g.addColorStop(0, rgba(hex, a));
+    g.addColorStop(0.5, rgba(hex, a * 0.42));
+    g.addColorStop(1, rgba(hex, 0));
+    x.fillStyle = g;
+    x.fillRect(0, 0, GS, GS);
+  });
+}
+/** A four-pointed twinkle with a little halo. */
+function sparkSprite(doc, hex) {
+  const N = 96;
+  const c = N / 2;
+  return sprite(doc, `k${hex}`, N, N, (x) => {
+    const g = x.createRadialGradient(c, c, 0, c, c, c * 0.4);
+    g.addColorStop(0, rgba(hex, 0.7));
+    g.addColorStop(1, rgba(hex, 0));
+    x.fillStyle = g;
+    x.fillRect(0, 0, N, N);
+    const k = N * 0.05;
+    x.beginPath();
+    x.moveTo(c, 1);
+    x.quadraticCurveTo(c + k, c - k, N - 1, c);
+    x.quadraticCurveTo(c + k, c + k, c, N - 1);
+    x.quadraticCurveTo(c - k, c + k, 1, c);
+    x.quadraticCurveTo(c - k, c - k, c, 1);
+    x.closePath();
+    const w = x.createRadialGradient(c, c, 0, c, c, c);
+    w.addColorStop(0, '#ffffff');
+    w.addColorStop(0.3, rgba(hex, 1));
+    w.addColorStop(1, rgba(hex, 0.05));
+    x.fillStyle = w;
+    x.fill();
+  });
+}
+/** An emoji at `px` device pixels (this phone's own emoji font). */
+function emojiSprite(doc, ch, px) {
+  return sprite(doc, `e${ch}${px}`, px, px, (x) => {
+    x.font = `${Math.round(px * 0.8)}px ${EMOJI_FONT}`;
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    x.fillText(ch, px / 2, px / 2 + px * 0.04);
+  });
+}
+/** A gold coin's face (`D` device pixels): a rim, a bevel, an embossed star and a shine. */
+function coinFace(doc, D) {
+  return sprite(doc, `cf${D}`, D, D, (x) => {
+    const r = D / 2;
+    const g = x.createRadialGradient(r * 0.62, r * 0.55, r * 0.05, r, r, r);
+    g.addColorStop(0, '#fff7c9');
+    g.addColorStop(0.32, '#ffd84a');
+    g.addColorStop(0.78, '#eaa514');
+    g.addColorStop(1, '#b67606');
+    x.fillStyle = g;
+    x.beginPath();
+    x.arc(r, r, r * 0.97, 0, TAU);
+    x.fill();
+    x.lineWidth = r * 0.1;
+    x.strokeStyle = '#c4850a';
+    x.beginPath();
+    x.arc(r, r, r * 0.84, 0, TAU);
+    x.stroke();
+    x.lineWidth = r * 0.045;
+    x.strokeStyle = 'rgba(255,246,196,0.95)';
+    x.beginPath();
+    x.arc(r, r, r * 0.76, 0, TAU);
+    x.stroke();
+    starPath(x, r + r * 0.04, r + r * 0.06, r * 0.44, r * 0.19);
+    x.fillStyle = 'rgba(128,74,0,0.6)';
+    x.fill();
+    starPath(x, r, r, r * 0.44, r * 0.19);
+    const s = x.createLinearGradient(0, r * 0.55, 0, r * 1.45);
+    s.addColorStop(0, '#fff6c2');
+    s.addColorStop(1, '#f0b021');
+    x.fillStyle = s;
+    x.fill();
+    x.fillStyle = 'rgba(255,255,255,0.42)';
+    x.beginPath();
+    x.ellipse(r * 0.68, r * 0.5, r * 0.42, r * 0.15, -0.65, 0, TAU);
+    x.fill();
+  });
+}
+/** A coin's edge (drawn just behind its face, a little to the side, so a turning coin has a thickness). */
+function coinEdge(doc, D) {
+  return sprite(doc, `ce${D}`, D, D, (x) => {
+    const r = D / 2;
+    const g = x.createLinearGradient(0, 0, D, 0);
+    g.addColorStop(0, '#8c5a04');
+    g.addColorStop(0.5, '#d89a18');
+    g.addColorStop(1, '#7c4e02');
+    x.fillStyle = g;
+    x.beginPath();
+    x.arc(r, r, r * 0.97, 0, TAU);
+    x.fill();
+  });
+}
+/** The legendary's big star: gold, a white-hot heart, soft round points. */
+function bigStar(doc, D) {
+  return sprite(doc, `bs${D}`, D, D, (x) => {
+    const c = D / 2;
+    const h = x.createRadialGradient(c, c, 0, c, c, c);
+    h.addColorStop(0, 'rgba(255,240,200,0.9)');
+    h.addColorStop(0.35, 'rgba(255,200,90,0.35)');
+    h.addColorStop(1, 'rgba(255,170,60,0)');
+    x.fillStyle = h;
+    x.fillRect(0, 0, D, D);
+    starPath(x, c, c, c * 0.6, c * 0.26);
+    const g = x.createRadialGradient(c, c * 0.92, 0, c, c, c * 0.62);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.3, '#fff2b0');
+    g.addColorStop(0.7, '#ffcc3a');
+    g.addColorStop(1, '#f39a12');
+    x.fillStyle = g;
+    x.lineJoin = 'round';
+    x.lineWidth = c * 0.06;
+    x.strokeStyle = '#ffd860';
+    x.fill();
+    x.stroke();
+    starPath(x, c, c, c * 0.6, c * 0.26);
+    x.lineWidth = c * 0.025;
+    x.strokeStyle = 'rgba(255,255,255,0.85)';
+    x.stroke();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Particle kits shared by the shows
+// ---------------------------------------------------------------------------
+
+/**
+ * Paper confetti: squares, strips and dots that tumble (a 2D spin plus a flip, the back a darker shade), burst out
+ * fast, are braked by the air and then flutter down at their own slow speed.
+ */
+function confetti(env, n, palette) {
+  const { W, H, s, dpr } = env;
+  const P = [];
+  for (let i = 0; i < n; i++) {
+    P.push({ on: false, wait: 0, x: 0, y: 0, vx: 0, vy: 0, fall: 0, term: 0, k: 0, a: 0, va: 0, f: 0, vf: 0, ph: 0, swf: 0, sw: 0, w: 0, h: 0, front: '', back: '', round: false });
+  }
+  let next = 0;
+  return {
+    fire(count, x, y, ang, spread, vMin, vMax, stagger = 0) {
+      for (let i = 0; i < count; i++) {
+        const p = P[next];
+        next = (next + 1) % n;
+        const a = ang + (Math.random() * 2 - 1) * spread;
+        const v = rand(vMin, vMax);
+        p.on = true;
+        p.wait = Math.random() * stagger;
+        p.x = x;
+        p.y = y;
+        p.vx = Math.cos(a) * v;
+        p.vy = Math.sin(a) * v;
+        p.fall = 0;
+        p.term = rand(70, 150) * s;
+        p.k = rand(2.3, 3.3);
+        p.a = Math.random() * TAU;
+        p.va = rand(-9, 9);
+        p.f = Math.random() * TAU;
+        p.vf = rand(5, 13);
+        p.ph = Math.random() * TAU;
+        p.swf = rand(2, 4.5);
+        p.sw = rand(20, 60) * s;
+        const c = palette[(Math.random() * palette.length) | 0];
+        p.front = c[0];
+        p.back = c[1];
+        const kind = Math.random();
+        p.round = kind > 0.88;
+        if (kind < 0.6) { p.w = rand(9, 14) * s; p.h = rand(5.5, 8) * s; }        // paper squares
+        else if (kind < 0.88) { p.w = rand(3.4, 4.8) * s; p.h = rand(14, 21) * s; }   // strips
+        else { p.w = rand(6.5, 9) * s; p.h = p.w; }                             // dots
+      }
+    },
+    step(ctx, dt) {
+      const ease = Math.min(1, 2.2 * dt);
+      for (let i = 0; i < n; i++) {
+        const p = P[i];
+        if (!p.on) continue;
+        if (p.wait > 0) { p.wait -= dt; continue; }
+        const d = Math.exp(-p.k * dt);
+        p.vx *= d;
+        p.vy *= d;
+        p.fall += (p.term - p.fall) * ease;
+        p.ph += p.swf * dt;
+        p.x += (p.vx + Math.sin(p.ph) * p.sw) * dt;
+        p.y += (p.vy + p.fall) * dt;
+        p.a += p.va * dt;
+        p.f += p.vf * dt;
+        if (p.y > H + 40 && p.vy + p.fall > 0) { p.on = false; continue; }
+        if (p.x < -40 || p.x > W + 40) continue;
+        const sy = Math.cos(p.f);
+        const ca = Math.cos(p.a) * dpr;
+        const sa = Math.sin(p.a) * dpr;
+        ctx.setTransform(ca, sa, -sa * sy, ca * sy, p.x * dpr, p.y * dpr);
+        ctx.fillStyle = sy > 0 ? p.front : p.back;
+        if (p.round) {
+          ctx.beginPath();
+          ctx.arc(0, 0, p.w / 2, 0, TAU);
+          ctx.fill();
+        } else ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    },
+  };
+}
+
+/**
+ * Party streamers: a head flies out, curls (a sideways push that swings back and forth) and drifts down, trailing a
+ * fixed length of ribbon (a point is kept every SEG px) that twists (its width swells and pinches along the length).
+ */
+function ribbons(env, n, colors, width = 9) {
+  const { W, H, s } = env;
+  const HN = 13;
+  const SEG = 8 * s;
+  const R = [];
+  for (let i = 0; i < n; i++) R.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, k: 0, fall: 0, term: 0, ph: 0, cf: 0, ca: 0, tw: 0, tws: 0, col: '', w: 0, hist: new Float32Array(HN * 2), hn: 0, hi: 0 });
+  const pts = new Float32Array((HN + 1) * 2);   // one ribbon's points, head first (reused)
+  let next = 0;
+  return {
+    fire(count, x, y, ang, spread, vMin, vMax) {
+      for (let i = 0; i < count; i++) {
+        const q = R[next];
+        next = (next + 1) % n;
+        const a = ang + (Math.random() * 2 - 1) * spread;
+        const v = rand(vMin, vMax);
+        q.on = true;
+        q.x = x;
+        q.y = y;
+        q.vx = Math.cos(a) * v;
+        q.vy = Math.sin(a) * v;
+        q.k = rand(2.1, 2.9);
+        q.fall = 0;
+        q.term = rand(55, 95) * s;
+        q.ph = Math.random() * TAU;
+        q.cf = rand(4.5, 8);
+        q.ca = rand(500, 900) * s;
+        q.tw = Math.random() * TAU;
+        q.tws = rand(5, 9);
+        q.col = colors[(Math.random() * colors.length) | 0];
+        q.w = rand(0.8, 1.2) * width * s;
+        q.hn = 1;
+        q.hi = 0;
+        q.hist[0] = x;
+        q.hist[1] = y;
+      }
+    },
+    step(ctx, dt) {
+      const ease = Math.min(1, 2 * dt);
+      for (let i = 0; i < n; i++) {
+        const q = R[i];
+        if (!q.on) continue;
+        const d = Math.exp(-q.k * dt);
+        q.vx *= d;
+        q.vy *= d;
+        q.fall += (q.term - q.fall) * ease;
+        q.ph += q.cf * dt;
+        q.tw += q.tws * dt;
+        const sp = Math.hypot(q.vx, q.vy) + 1;
+        const c = Math.sin(q.ph) * q.ca * dt;
+        const vx = q.vx;
+        q.vx += (-q.vy / sp) * c;
+        q.vy += (vx / sp) * c;
+        q.x += (q.vx + Math.sin(q.ph * 0.5) * 28 * s) * dt;
+        q.y += (q.vy + q.fall) * dt;
+        if (Math.hypot(q.x - q.hist[q.hi * 2], q.y - q.hist[q.hi * 2 + 1]) >= SEG) {
+          q.hi = (q.hi + 1) % HN;
+          q.hist[q.hi * 2] = q.x;
+          q.hist[q.hi * 2 + 1] = q.y;
+          if (q.hn < HN) q.hn++;
+        }
+        // the points, head first
+        pts[0] = q.x;
+        pts[1] = q.y;
+        let low = q.y;
+        for (let j = 0; j < q.hn; j++) {
+          const idx = ((q.hi - j + HN) % HN) * 2;
+          pts[j * 2 + 2] = q.hist[idx];
+          pts[j * 2 + 3] = q.hist[idx + 1];
+          if (q.hist[idx + 1] < low) low = q.hist[idx + 1];
+        }
+        if (low > H + 20 || q.x < -W || q.x > W * 2) { q.on = false; continue; }
+        const m = q.hn + 1;
+        if (m < 2) continue;
+        // the outline: down the left edge, back up the right one
+        ctx.beginPath();
+        for (let pass = 0; pass < 2; pass++) {
+          for (let k = 0; k < m; k++) {
+            const j = pass ? m - 1 - k : k;
+            const a = j > 0 ? j - 1 : 0;
+            const b = j < m - 1 ? j + 1 : m - 1;
+            let nx = -(pts[b * 2 + 1] - pts[a * 2 + 1]);
+            let ny = pts[b * 2] - pts[a * 2];
+            const l = Math.hypot(nx, ny) || 1;
+            const taper = j > m - 4 ? (m - j) / 4 : 1;
+            const hw = (q.w / 2) * (0.22 + 0.78 * Math.abs(Math.cos(q.tw + j * 0.55))) * taper * (pass ? -1 : 1);
+            nx = (nx / l) * hw;
+            ny = (ny / l) * hw;
+            if (k === 0 && pass === 0) ctx.moveTo(pts[j * 2] + nx, pts[j * 2 + 1] + ny);
+            else ctx.lineTo(pts[j * 2] + nx, pts[j * 2 + 1] + ny);
+          }
+        }
+        ctx.closePath();
+        ctx.fillStyle = q.col;
+        ctx.fill();
+      }
+    },
+  };
+}
+
+/** Twinkles that blink in place (or drift down slowly with `fall`), from `from` seconds on. */
+function twinkles(env, n, colors, x0, y0, x1, y1, size = 14, fall = 0) {
+  const { doc, W, H, s } = env;
+  const imgs = colors.map((c) => sparkSprite(doc, c));
+  const T = [];
+  for (let i = 0; i < n; i++) {
+    T.push({ x: rand(x0, x1) * W, y: rand(y0, y1) * H, r: rand(0.5, 1.25) * size * s, ph: Math.random() * TAU, sp: rand(3, 7), img: imgs[i % imgs.length], t0: Math.random() * 0.9, v: rand(0.4, 1) * fall * s });
+  }
+  return {
+    step(ctx, t, from = 0) {
+      for (let i = 0; i < n; i++) {
+        const k = T[i];
+        const tt = t - from - k.t0;
+        if (tt < 0) continue;
+        const b = Math.sin(tt * k.sp + k.ph);
+        if (b <= 0.05) continue;
+        const r = k.r * b;
+        const y = k.y + tt * k.v;
+        ctx.globalAlpha = b;
+        ctx.drawImage(k.img, k.x - r, y - r, r * 2, r * 2);
+      }
+      ctx.globalAlpha = 1;
+    },
+  };
+}
+
+/** Tiny steady night-sky stars. */
+function nightSky(env, n, y1 = 0.75) {
+  const { W, H, s } = env;
+  const X = new Float32Array(n);
+  const Y = new Float32Array(n);
+  const R = new Float32Array(n);
+  const F = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    X[i] = Math.random() * W;
+    Y[i] = Math.random() * H * y1;
+    R[i] = rand(1, 2.2) * s;
+    F[i] = rand(1.5, 4);
+  }
+  return {
+    step(ctx, t) {
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < n; i++) {
+        ctx.globalAlpha = 0.35 + 0.3 * Math.sin(t * F[i] + i);
+        ctx.fillRect(X[i], Y[i], R[i], R[i]);
+      }
+      ctx.globalAlpha = 1;
+    },
+  };
+}
+
+/**
+ * Glowing sparks (fireworks, embers, dust): flat typed arrays, a ring buffer (a new spark takes the oldest slot), air
+ * drag `k` and gravity `g`. `tw` = 1: the spark crackles (blinks) in the last half of its life.
+ */
+function sparks(n) {
+  const P = {
+    n,
+    next: 0,
+    x: new Float32Array(n), y: new Float32Array(n), vx: new Float32Array(n), vy: new Float32Array(n),
+    age: new Float32Array(n), life: new Float32Array(n), size: new Float32Array(n), k: new Float32Array(n),
+    g: new Float32Array(n), c: new Uint8Array(n), tw: new Uint8Array(n),
+  };
+  P.emit = (x, y, vx, vy, life, size, k, g, c, tw = 0) => {
+    const i = P.next;
+    P.next = (i + 1) % n;
+    P.x[i] = x; P.y[i] = y; P.vx[i] = vx; P.vy[i] = vy;
+    P.age[i] = 0; P.life[i] = life; P.size[i] = size; P.k[i] = k; P.g[i] = g; P.c[i] = c; P.tw[i] = tw;
+  };
+  P.step = (dt) => {
+    for (let i = 0; i < n; i++) {
+      if (P.life[i] <= 0) continue;
+      P.age[i] += dt;
+      if (P.age[i] >= P.life[i]) { P.life[i] = 0; continue; }
+      const d = Math.exp(-P.k[i] * dt);
+      P.vx[i] *= d;
+      P.vy[i] = P.vy[i] * d + P.g[i] * dt;
+      P.x[i] += P.vx[i] * dt;
+      P.y[i] += P.vy[i] * dt;
+    }
+  };
+  /** Glow dots that shrink and fade over their life. */
+  P.draw = (ctx, imgs) => {
+    for (let i = 0; i < n; i++) {
+      if (P.life[i] <= 0) continue;
+      const f = 1 - P.age[i] / P.life[i];
+      let a = f < 0.3 ? f / 0.3 : 1;
+      if (P.tw[i] && f < 0.55 && Math.random() < 0.45) a *= 0.15;
+      const r = P.size[i] * (0.4 + 0.6 * f);
+      ctx.globalAlpha = a;
+      ctx.drawImage(imgs[P.c[i]], P.x[i] - r, P.y[i] - r, r * 2, r * 2);
+    }
+    ctx.globalAlpha = 1;
+  };
+  return P;
+}
+
+function ring(ctx, x, y, r, w, style, a) {
+  if (a <= 0.01 || r <= 0) return;
+  ctx.globalAlpha = a > 1 ? 1 : a;
+  ctx.lineWidth = w;
+  ctx.strokeStyle = style;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, TAU);
+  ctx.stroke();
+}
+
+/** An image centred on (x, y), turned by `a` and scaled to w x h (css px). */
+function stamp(ctx, dpr, img, x, y, w, h, a = 0) {
+  const c = Math.cos(a) * dpr;
+  const sn = Math.sin(a) * dpr;
+  ctx.setTransform(c, sn, -sn, c, x * dpr, y * dpr);
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// ---------------------------------------------------------------------------
+// The shows. Each maker gets env { doc, W, H, s, dpr, ctx } and returns { step(ctx, t, dt, top), trail?, tintAt?, flash }:
+// `step` draws one frame at `t` seconds; `trail` (per second) fades the canvas instead of clearing it, so moving lights
+// leave streaks (`top` is then a second, cleared canvas for what must not smear); `flash` is raised on a bang and the
+// runner lets it die away.
+// ---------------------------------------------------------------------------
+const PARTY = [['#ff3b6b', '#b8193f'], ['#ffd23f', '#d49a00'], ['#2fd27a', '#14904c'], ['#3fa9ff', '#1b62c4'], ['#a46bff', '#6a35cf'],
+  ['#ff8a3d', '#cf5410'], ['#ffffff', '#c9cfdd'], ['#19d3c5', '#0c8f85'], ['#ff7ad9', '#c53b9f'], ['#fff2b0', '#e0a800']];
+
+/** Konfetti (free): two party cannons in the bottom corners, two volleys of rich tumbling paper and glitter. */
+function konfettiFx(env) {
+  const { doc, W, H, s } = env;
+  const paper = confetti(env, 220, PARTY);
+  const curls = ribbons(env, 12, ['#ff3b6b', '#ffd23f', '#3fa9ff', '#2fd27a', '#a46bff', '#ff8a3d', '#19d3c5'], 8);
+  const glitter = twinkles(env, 22, ['#fff6c8', '#ffffff', '#ffe066', '#ffd0f0'], 0.06, 0.05, 0.94, 0.62, 13, 40);
+  const puff = glowSprite(doc, '#fff1b0');
+  const volleys = [0, 0.82];
+  let v = 0;
+  let shot = -9;
+  const fx = {
+    flash: 0,
+    step(ctx, t, dt) {
+      while (v < volleys.length && t >= volleys[v]) {
+        const n = v ? 42 : 68;
+        paper.fire(n, -8 * s, H + 8, -1.12, 0.3, H * 1.25, H * 2.65, 0.16);        // the left cannon, up and in
+        paper.fire(n, W + 8 * s, H + 8, -Math.PI + 1.12, 0.3, H * 1.25, H * 2.65, 0.16);
+        if (!v) {
+          curls.fire(6, -8 * s, H + 8, -1.1, 0.22, H * 1.3, H * 2.2);
+          curls.fire(6, W + 8 * s, H + 8, -Math.PI + 1.1, 0.22, H * 1.3, H * 2.2);
+        }
+        shot = t;
+        v++;
+        fx.flash = v === 1 ? 0.55 : 0.35;
+      }
+      const age = t - shot;
+      if (age < 0.4) {
+        const r = (110 + 240 * age) * s;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 1 - age / 0.4;
+        ctx.drawImage(puff, -r, H - r, r * 2, r * 2);
+        ctx.drawImage(puff, W - r, H - r, r * 2, r * 2);
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      curls.step(ctx, dt);
+      paper.step(ctx, dt);
+      ctx.globalCompositeOperation = 'lighter';
+      glitter.step(ctx, t, 0.25);
+      ctx.globalCompositeOperation = 'source-over';
+    },
+  };
+  return fx;
+}
+
+const FW = ['#ff4fa3', '#ffcf4a', '#4fd8ff', '#7dff7a', '#b07cff', '#ff6a3d', '#ffffff', '#ffe9a8'];
+
+/** Vuurwerk: six rockets with sparkling trails burst into peonies, a willow, a ring and a double finale. */
+function vuurwerkFx(env) {
+  const { doc, W, H, s } = env;
+  const imgs = FW.map((c) => glowSprite(doc, c));
+  const head = glowSprite(doc, '#fff3c4');
+  const P = sparks(260);
+  const sky = nightSky(env, 36, 0.7);
+  const RISE = 0.6;
+  const plan = [
+    { t: 0.0, x: 0.28, y: 0.3, kind: 'peony', c: 0, c2: 6 },
+    { t: 0.3, x: 0.74, y: 0.21, kind: 'peony', c: 2, c2: 4 },
+    { t: 0.66, x: 0.52, y: 0.4, kind: 'willow', c: 7 },
+    { t: 1.02, x: 0.22, y: 0.16, kind: 'ring', c: 3, c2: 6 },
+    { t: 1.36, x: 0.79, y: 0.37, kind: 'peony', c: 4, c2: 1 },
+    { t: 1.82, x: 0.5, y: 0.22, kind: 'finale', c: 0, c2: 1 },
+  ];
+  for (const r of plan) {
+    r.x0 = (r.x + rand(-0.07, 0.07)) * W;
+    r.tx = r.x * W;
+    r.ty = r.y * H;
+    r.bt = -9;
+  }
+  function burst(r) {
+    const big = r.kind === 'finale';
+    const R = (big ? 0.37 : 0.26) * W;
+    if (r.kind === 'willow') {
+      for (let i = 0; i < 44; i++) {
+        const a = (i / 44) * TAU + rand(-0.06, 0.06);
+        const v = R * 2.7 * rand(0.72, 1);
+        P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(1.6, 2.1), 7 * s, 2.7, 95 * s, r.c, 1);
+      }
+      return;
+    }
+    if (r.kind === 'ring') {
+      for (let i = 0; i < 36; i++) {
+        const a = (i / 36) * TAU;
+        const v = R * 2.4;
+        P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(1.05, 1.25), 6.5 * s, 2.4, 110 * s, r.c, 0);
+      }
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * TAU;
+        const v = R * 1.1;
+        P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(0.8, 1), 5 * s, 2.4, 110 * s, r.c2, 1);
+      }
+      return;
+    }
+    const n = big ? 62 : 46;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + rand(-0.05, 0.05);
+      const v = R * 2.4 * rand(0.84, 1);
+      P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(1.0, 1.4), 6.5 * s, 2.4, 135 * s, r.c, 1);
+    }
+    const n2 = big ? 22 : 16;
+    for (let i = 0; i < n2; i++) {
+      const a = (i / n2) * TAU + rand(-0.1, 0.1);
+      const v = R * 2.4 * rand(0.38, 0.5);
+      P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(0.75, 1.0), 5.5 * s, 2.4, 120 * s, r.c2, 0);
+    }
+    if (big) {
+      for (let i = 0; i < 34; i++) {
+        const a = (i / 34) * TAU + rand(-0.08, 0.08);
+        const v = R * 2.7 * rand(0.55, 0.75);
+        P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(1.5, 1.9), 6.5 * s, 2.7, 90 * s, 7, 1);
+      }
+    }
+  }
+  const fx = {
+    trail: 11,
+    flash: 0,
+    step(ctx, t, dt, top) {
+      sky.step(top, t);
+      ctx.globalCompositeOperation = 'lighter';
+      top.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < plan.length; i++) {
+        const r = plan[i];
+        const age = t - r.t;
+        if (age < 0) continue;
+        if (age < RISE) {
+          const p = age / RISE;
+          const e = 1 - (1 - p) * (1 - p);
+          const x = r.x0 + (r.tx - r.x0) * e;
+          const y = H + 20 + (r.ty - H - 20) * e;
+          const rr = 7.5 * s;
+          ctx.drawImage(head, x - rr, y - rr, rr * 2, rr * 2);
+          if (Math.random() < 0.85) P.emit(x, y, rand(-18, 18) * s, rand(30, 90) * s, rand(0.3, 0.6), 3.4 * s, 2, 220 * s, 7, 1);
+        } else if (r.bt < 0) {
+          r.bt = t;
+          burst(r);
+          fx.flash = Math.max(fx.flash, r.kind === 'finale' ? 0.55 : 0.3);
+        }
+        const ba = t - r.bt;
+        if (r.bt >= 0 && ba < 0.4) {
+          const R = (r.kind === 'finale' ? 0.8 : 0.55) * W * (0.55 + ba);
+          top.globalAlpha = (1 - ba / 0.4) * 0.6;
+          top.drawImage(imgs[r.c], r.tx - R, r.ty - R, R * 2, R * 2);
+          top.globalAlpha = 1;
+        }
+      }
+      P.step(dt);
+      P.draw(ctx, imgs);
+      ctx.globalCompositeOperation = 'source-over';
+      top.globalCompositeOperation = 'source-over';
+    },
+  };
+  return fx;
+}
+
+const SA_PAPER = [['#00a862', '#00703f'], ['#ffb612', '#d18e00'], ['#e8423a', '#a82520'], ['#2453e0', '#0b2a8a'], ['#1c1c1c', '#454545'], ['#ffffff', '#d5d9e2']];
+const SA_STREAM = ['#00a05a', '#ffb612', '#de3831', '#1f48d6', '#151515', '#ffffff'];
+const SA_RING = ['#00a05a', '#ffb612', '#de3831', '#1f48d6', '#ffffff'];
+
+/** Vuvuzela: the horn blasts five times; sound-wave rings, curling flag-colour streamers and flag confetti. */
+function vuvuzelaFx(env) {
+  const { doc, W, H, s, dpr } = env;
+  const hx = W * 0.5;
+  const hy = H * 0.84;
+  const ry = hy - 26 * s;                       // the rings and streamers leave just above the horn
+  const horn = emojiSprite(doc, '📯', Math.round(150 * s * dpr));
+  const hornGlow = glowSprite(doc, '#ffd23f');
+  const paper = confetti(env, 130, SA_PAPER);
+  const NS = 30;
+  const HN = 18;
+  const SEG = 9 * s;
+  const str = [];
+  for (let i = 0; i < NS; i++) str.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, k: 0, fall: 0, term: 0, ph: 0, cf: 0, ca: 0, col: '', w: 0, hist: new Float32Array(HN * 2), hn: 0, hi: 0 });
+  let si = 0;
+  const blasts = [0.05, 0.72, 1.38, 2.04, 2.66];
+  let b = 0;
+  let last = -9;
+  function streamer(ang, v) {
+    const q = str[si];
+    si = (si + 1) % NS;
+    q.on = true;
+    q.x = hx + Math.cos(ang) * 30 * s;
+    q.y = ry + Math.sin(ang) * 30 * s;
+    q.vx = Math.cos(ang) * v;
+    q.vy = Math.sin(ang) * v;
+    q.k = rand(2, 2.8);
+    q.fall = 0;
+    q.term = rand(55, 95) * s;
+    q.ph = Math.random() * TAU;
+    q.cf = rand(5, 9);
+    q.ca = rand(500, 900) * s;
+    q.col = SA_STREAM[(Math.random() * SA_STREAM.length) | 0];
+    q.w = rand(5, 7.5) * s;
+    q.hn = 1;
+    q.hi = 0;
+    q.hist[0] = q.x;
+    q.hist[1] = q.y;
+  }
+  const fx = {
+    flash: 0,
+    step(ctx, t, dt) {
+      while (b < blasts.length && t >= blasts[b]) {
+        const count = b === 0 ? 12 : b < 3 ? 9 : 0;
+        for (let i = 0; i < count; i++) streamer(-Math.PI / 2 + rand(-1, 1), H * rand(1.1, 1.9));
+        if (b === 0 || b === 2) {
+          const n = b ? 50 : 72;
+          paper.fire(n / 2, -8 * s, H + 8, -1.1, 0.3, H * 1.2, H * 2.4, 0.14);
+          paper.fire(n / 2, W + 8 * s, H + 8, -Math.PI + 1.1, 0.3, H * 1.2, H * 2.4, 0.14);
+        }
+        last = blasts[b];
+        b++;
+        fx.flash = 0.45;
+      }
+      // the sound waves: three rings a blast, flag colours
+      ctx.lineCap = 'round';
+      for (let k = 0; k < b; k++) {
+        const age = t - blasts[k];
+        if (age > 1.3) continue;
+        for (let j = 0; j < 3; j++) {
+          const p = (age - j * 0.09) / 1.15;
+          if (p < 0 || p > 1) continue;
+          ring(ctx, hx, ry, 30 * s + easeOutCubic(p) * H * 0.95, (15 * (1 - p) + 2) * s, SA_RING[(k + j) % SA_RING.length], (1 - p) ** 1.2 * 0.85);
+        }
+      }
+      ctx.globalAlpha = 1;
+      // the streamers: a fixed-length ribbon trails each head (a point is kept every SEG px)
+      ctx.lineJoin = 'round';
+      const ease = Math.min(1, 2 * dt);
+      for (let i = 0; i < NS; i++) {
+        const q = str[i];
+        if (!q.on) continue;
+        const d = Math.exp(-q.k * dt);
+        q.vx *= d;
+        q.vy *= d;
+        q.fall += (q.term - q.fall) * ease;
+        q.ph += q.cf * dt;
+        const sp = Math.hypot(q.vx, q.vy) + 1;
+        const c = Math.sin(q.ph) * q.ca * dt;
+        q.vx += (-q.vy / sp) * c;
+        q.vy += (q.vx / sp) * c;
+        q.x += (q.vx + Math.sin(q.ph * 0.5) * 30 * s) * dt;
+        q.y += (q.vy + q.fall) * dt;
+        const lx = q.hist[q.hi * 2];
+        const ly = q.hist[q.hi * 2 + 1];
+        if (Math.hypot(q.x - lx, q.y - ly) >= SEG) {
+          q.hi = (q.hi + 1) % HN;
+          q.hist[q.hi * 2] = q.x;
+          q.hist[q.hi * 2 + 1] = q.y;
+          if (q.hn < HN) q.hn++;
+        }
+        let low = q.y;
+        ctx.beginPath();
+        ctx.moveTo(q.x, q.y);
+        for (let j = 0; j < q.hn; j++) {
+          const idx = ((q.hi - j + HN) % HN) * 2;
+          ctx.lineTo(q.hist[idx], q.hist[idx + 1]);
+          if (q.hist[idx + 1] < low) low = q.hist[idx + 1];
+        }
+        if (low > H + 20) { q.on = false; continue; }
+        ctx.lineWidth = q.w;
+        ctx.strokeStyle = q.col;
+        ctx.stroke();
+        ctx.lineWidth = q.w * 0.32;
+        ctx.strokeStyle = q.col === '#ffffff' ? 'rgba(170,180,200,0.7)' : 'rgba(255,255,255,0.4)';
+        ctx.stroke();
+      }
+      paper.step(ctx, dt);
+      // the horn: rises in, then pumps on every blast
+      const pump = Math.exp(-(t - last) * 7);
+      const rise = t < 0.32 ? 1 - easeOutBack(t / 0.32) : 0;
+      ctx.globalCompositeOperation = 'lighter';
+      const gr = (120 + 70 * pump) * s;
+      ctx.globalAlpha = 0.45 + 0.4 * pump;
+      ctx.drawImage(hornGlow, hx - gr, hy + rise * 160 * s - gr, gr * 2, gr * 2);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      const hs = 150 * s * (1 + 0.2 * pump);
+      stamp(ctx, dpr, horn, hx, hy + rise * 160 * s, hs, hs, -0.3 + 0.07 * Math.sin(t * 24) * pump);
+    },
+  };
+  return fx;
+}
+
+const EMBER = ['#fff3b0', '#ffb43a', '#ff6a1f', '#e2421c'];
+
+/** Braai: a glowing bed of coals, rising embers, soft smoke wisps, sizzle pops and a happy 🍖 with cartoon steam. */
+function braaiFx(env) {
+  const { doc, W, H, s, dpr } = env;
+  const mx = W * 0.5;
+  const my = H * 0.79;
+  const meat = emojiSprite(doc, '🍖', Math.round(140 * s * dpr));
+  const E = EMBER.map((c) => glowSprite(doc, c));
+  const heat = softSprite(doc, '#ff7a1a', 0.8);
+  const coal = glowSprite(doc, '#ff5314');
+  const smoke = softSprite(doc, '#f1e6dc', 0.5);
+  const P = sparks(200);
+  const NC = 9;
+  const coals = [];
+  for (let i = 0; i < NC; i++) coals.push({ x: ((i + 0.5) / NC) * W + rand(-12, 12) * s, r: rand(55, 85) * s, ph: Math.random() * TAU, sp: rand(3, 6) });
+  const NP = 16;
+  const puffs = [];
+  for (let i = 0; i < NP; i++) puffs.push({ x: 0, y: 0, r: 0, age: 0, life: 0, vx: 0, vy: 0 });
+  let pi = 0;
+  let puffAt = 0.1;
+  let acc = 0;
+  const pops = [0.1, 0.86, 1.62, 2.38];
+  let pop = 0;
+  let lastPop = -9;
+  const fx = {
+    flash: 0,
+    step(ctx, t, dt) {
+      const on = Math.min(1, t / 0.35);
+      // the coals' glow along the bottom
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = on * (0.62 + 0.12 * Math.sin(t * 7.3) + 0.08 * Math.sin(t * 13.1));
+      ctx.drawImage(heat, -W * 0.35, H - H * 0.26, W * 1.7, H * 0.52);
+      for (let i = 0; i < NC; i++) {
+        const c = coals[i];
+        ctx.globalAlpha = on * (0.5 + 0.4 * Math.sin(t * c.sp + c.ph));
+        ctx.drawImage(coal, c.x - c.r, H - c.r * 0.55, c.r * 2, c.r * 2);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      // smoke wisps (soft, light: steam more than smoke)
+      while (t >= puffAt && puffAt < 2.7) {
+        const q = puffs[pi];
+        pi = (pi + 1) % NP;
+        const nearMeat = Math.random() < 0.55;
+        q.x = nearMeat ? mx + rand(-60, 60) * s : rand(0.05, 0.95) * W;
+        q.y = nearMeat ? my - 30 * s : H - rand(0, 30) * s;
+        q.r = rand(28, 50) * s;
+        q.age = 0;
+        q.life = rand(1.6, 2.4);
+        q.vx = rand(-25, 25) * s;
+        q.vy = -rand(55, 95) * s;
+        puffAt += 0.17;
+      }
+      for (let i = 0; i < NP; i++) {
+        const q = puffs[i];
+        if (q.life <= 0) continue;
+        q.age += dt;
+        if (q.age >= q.life) { q.life = 0; continue; }
+        q.x += (q.vx + Math.sin(q.age * 2 + i) * 20 * s) * dt;
+        q.y += q.vy * dt;
+        const r = q.r + q.age * 60 * s;
+        ctx.globalAlpha = 0.3 * Math.sin(Math.PI * (q.age / q.life));
+        ctx.drawImage(smoke, q.x - r, q.y - r, r * 2, r * 2);
+      }
+      ctx.globalAlpha = 1;
+      // embers rise from the coals; a sizzle pop sprays bright sparks off the meat
+      if (t < 2.85) {
+        acc += dt * 72;
+        while (acc >= 1) {
+          acc -= 1;
+          P.emit(rand(0.03, 0.97) * W, H + rand(0, 16) * s, rand(-25, 25) * s, -rand(130, 320) * s, rand(1.2, 2.3), rand(4, 8) * s, 0.25, -25 * s, 0, 0);
+        }
+      }
+      while (pop < pops.length && t >= pops[pop]) {
+        for (let i = 0; i < 16; i++) {
+          const a = -Math.PI / 2 + rand(-1.3, 1.3);
+          const v = rand(220, 520) * s;
+          P.emit(mx + rand(-30, 30) * s, my - 20 * s, Math.cos(a) * v, Math.sin(a) * v, rand(0.45, 0.8), rand(5, 8) * s, 2.6, 380 * s, 0, 1);
+        }
+        lastPop = pops[pop];
+        pop++;
+        fx.flash = Math.max(fx.flash, pop === 1 ? 0.5 : 0.25);
+      }
+      P.step(dt);
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < P.n; i++) {
+        if (P.life[i] <= 0) continue;
+        const f = P.age[i] / P.life[i];
+        P.x[i] += Math.sin(P.age[i] * 4 + i) * 38 * s * dt;   // embers waver as they rise
+        const c = f < 0.22 ? 0 : f < 0.5 ? 1 : f < 0.78 ? 2 : 3;
+        const a = Math.min(1, f * 10) * (1 - f) ** 0.6 * (0.72 + 0.28 * Math.sin(P.age[i] * 26 + i));
+        const r = P.size[i] * (1 - 0.45 * f);
+        ctx.globalAlpha = a;
+        ctx.drawImage(E[c], P.x[i] - r, P.y[i] - r, r * 2, r * 2);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      // the meat bounces in, sizzles (wobbles) and squashes on every pop
+      const pin = t < 0.5 ? easeOutBack(t / 0.5) : 1;
+      const sq = 1 + 0.14 * Math.exp(-(t - lastPop) * 10);
+      const ms = 140 * s * pin;
+      if (ms > 1) {
+        const y = my + Math.sin(t * 6) * 3 * s - (1 - pin) * 40 * s;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const a = -0.18 + 0.07 * Math.sin(t * 9);
+        const ca = Math.cos(a) * dpr;
+        const sa = Math.sin(a) * dpr;
+        ctx.setTransform(ca * sq, sa * sq, -sa / sq, ca / sq, mx * dpr, y * dpr);
+        ctx.drawImage(meat, -ms / 2, -ms / 2, ms, ms);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      // cartoon steam above the meat
+      if (t > 0.35) {
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 5 * s;
+        ctx.strokeStyle = '#ffffff';
+        for (let k = 0; k < 3; k++) {
+          const ph = ((t - 0.35 + k * 0.33) % 1) / 1;
+          const x = mx + (k - 1) * 34 * s;
+          const y0 = my - 78 * s - ph * 70 * s;
+          ctx.globalAlpha = Math.sin(Math.PI * ph) * 0.85;
+          ctx.beginPath();
+          ctx.moveTo(x, y0 + 20 * s);
+          ctx.quadraticCurveTo(x + 10 * s, y0 + 10 * s, x, y0);
+          ctx.quadraticCurveTo(x - 10 * s, y0 - 10 * s, x, y0 - 20 * s);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+    },
+  };
+  return fx;
+}
+
+const BOK_PAPER = [['#00a862', '#006b3c'], ['#0b7d4b', '#044a2b'], ['#ffb612', '#cc8a00'], ['#ffd75e', '#e0a400'], ['#ffffff', '#d8dde6'], ['#ffe9a0', '#d9a400']];
+
+/** Skrum: Springbok green and gold. A big 🏉 spins in on a turning gold sunburst, ripple rings and a confetti burst. */
+function skrumFx(env) {
+  const { doc, W, H, s, dpr, ctx: c0 } = env;
+  const cx = W * 0.5;
+  const cy = H * 0.42;
+  const ball = emojiSprite(doc, '🏉', Math.round(190 * s * dpr));
+  const glow = glowSprite(doc, '#ffd23f');
+  const paper = confetti(env, 220, BOK_PAPER);
+  const glints = twinkles(env, 20, ['#fff3b0', '#ffffff', '#ffd23f'], 0.12, 0.2, 0.88, 0.66, 15);
+  const R = Math.hypot(W, H) * 0.7;
+  const rays = c0.createRadialGradient(0, 0, 0, 0, 0, R);   // made once, centred on the origin: it turns with the rays
+  rays.addColorStop(0, 'rgba(255,220,100,0.6)');
+  rays.addColorStop(0.45, 'rgba(255,196,40,0.22)');
+  rays.addColorStop(1, 'rgba(255,196,40,0)');
+  const NR = 14;
+  const rings = [0.1, 0.42, 0.76, 1.45, 2.15];
+  const RC = ['#ffc928', '#1fbf6a', '#ffffff'];
+  let fired = 0;
+  const fx = {
+    flash: 0,
+    step(ctx, t, dt) {
+      if (fired === 0 && t >= 0.1) { paper.fire(150, cx, cy, -Math.PI / 2, Math.PI, H * 0.95, H * 2.1, 0.06); fired = 1; fx.flash = 0.6; }
+      if (fired === 1 && t >= 0.8) { paper.fire(70, cx, cy, -Math.PI / 2, Math.PI, H * 0.65, H * 1.5, 0.06); fired = 2; fx.flash = 0.3; }
+      // the sunburst
+      const sc = easeOutCubic(Math.min(1, t / 0.5));
+      const rot = t * 0.4;
+      const cr = Math.cos(rot) * dpr * sc;
+      const sr = Math.sin(rot) * dpr * sc;
+      ctx.setTransform(cr, sr, -sr, cr, cx * dpr, cy * dpr);
+      ctx.fillStyle = rays;
+      ctx.beginPath();
+      for (let i = 0; i < NR; i++) {
+        const a0 = (i / NR) * TAU;
+        const a1 = a0 + TAU / NR / 2;
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(a0) * R, Math.sin(a0) * R);
+        ctx.lineTo(Math.cos(a1) * R, Math.sin(a1) * R);
+        ctx.closePath();
+      }
+      ctx.fill();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // ripple rings
+      for (let k = 0; k < rings.length; k++) {
+        const p = (t - rings[k]) / 1.15;
+        if (p < 0 || p > 1) continue;
+        const r = 60 * s + easeOutCubic(p) * R * 0.85;
+        ring(ctx, cx, cy, r, (16 * (1 - p) + 2) * s, RC[k % 3], (1 - p) ** 1.3 * 0.9);
+      }
+      ctx.globalAlpha = 1;
+      paper.step(ctx, dt);
+      // the ball: pops in with a glow, spins fast, settles into a happy bob
+      ctx.globalCompositeOperation = 'lighter';
+      const gr = 175 * s * (0.8 + 0.08 * Math.sin(t * 5));
+      ctx.globalAlpha = 0.7 * sc;
+      ctx.drawImage(glow, cx - gr, cy - gr, gr * 2, gr * 2);
+      ctx.globalAlpha = 1;
+      glints.step(ctx, t, 0.3);
+      ctx.globalCompositeOperation = 'source-over';
+      const pin = t < 0.45 ? easeOutBack(t / 0.45) : 1;
+      const bs = 190 * s * pin * (1 + 0.04 * Math.sin(t * 4));
+      if (bs > 1) stamp(ctx, dpr, ball, cx, cy + Math.sin(t * 3) * 6 * s, bs, bs, 7 * Math.PI * (1 - Math.exp(-2.4 * t)) - 0.4);
+    },
+  };
+  return fx;
+}
+
+/** A jagged lightning path (midpoint displacement) from (x0, y0) to (x1, y1), its points into `pts`. */
+function jag(x0, y0, x1, y1, rough, levels) {
+  let pts = [x0, y0, x1, y1];
+  for (let l = 0; l < levels; l++) {
+    const out = [pts[0], pts[1]];
+    for (let i = 0; i + 3 < pts.length; i += 2) {
+      const ax = pts[i];
+      const ay = pts[i + 1];
+      const bx = pts[i + 2];
+      const by = pts[i + 3];
+      const len = Math.hypot(bx - ax, by - ay);
+      const off = (Math.random() * 2 - 1) * len * rough;
+      out.push((ax + bx) / 2 + ((ay - by) / (len || 1)) * off, (ay + by) / 2 + ((bx - ax) / (len || 1)) * off, bx, by);
+    }
+    pts = out;
+  }
+  return pts;
+}
+function addPath(p, pts) {
+  p.moveTo(pts[0], pts[1]);
+  for (let i = 2; i < pts.length; i += 2) p.lineTo(pts[i], pts[i + 1]);
+}
+function boltAlpha(age) {
+  if (age < 0) return 0;
+  if (age < 0.05) return 1;
+  if (age < 0.09) return 0.25;
+  if (age < 0.2) return 1;
+  return Math.max(0, 1 - (age - 0.2) / 0.32);
+}
+const SPARK_A = [1, 0.62, 0.3];
+const SPARK_C = ['#ffffff', '#bfe9ff', '#7fc8ff'];
+
+/** Weerlig: the screen goes dark, branching bolts strike down with a flash, sparks fly at every impact; a big finale. */
+function weerligFx(env) {
+  const { doc, W, H, s } = env;
+  const plan = [
+    { t: 0.12, x: 0.3 }, { t: 0.55, x: 0.74 }, { t: 0.98, x: 0.45 }, { t: 1.38, x: 0.18 }, { t: 1.72, x: 0.84 }, { t: 2.15, x: 0.5, big: true },
+  ];
+  const imp = glowSprite(doc, '#7fc8ff');
+  const cloud = softSprite(doc, '#a8c8ff', 0.75);
+  const P = sparks(220);
+  const zap = twinkles(env, 14, ['#bfe9ff', '#ffffff'], 0.08, 0.55, 0.92, 0.95, 12);
+  function strike(b) {
+    const x0 = (b.x + rand(-0.08, 0.08)) * W;
+    const x1 = b.big ? W * 0.5 : (b.x + rand(-0.12, 0.12)) * W;
+    const y1 = H * (b.big ? 0.9 : rand(0.84, 0.93));
+    const main = jag(x0, -20, x1, y1, 0.2, 6);
+    b.main = new Path2D();
+    addPath(b.main, main);
+    b.br = new Path2D();
+    const nb = b.big ? 6 : 3 + ((Math.random() * 2) | 0);
+    for (let i = 0; i < nb; i++) {
+      const j = 2 * (8 + ((Math.random() * (main.length / 2 - 24)) | 0));
+      const sx = main[j];
+      const sy = main[j + 1];
+      const dir = Math.atan2(y1 + 20, x1 - x0) + (Math.random() < 0.5 ? -1 : 1) * rand(0.35, 0.8);
+      const len = H * rand(0.12, 0.3);
+      addPath(b.br, jag(sx, sy, sx + Math.cos(dir) * len, sy + Math.sin(dir) * len, 0.25, 4));
+    }
+    b.x0 = x0;
+    b.x1 = x1;
+    b.y1 = y1;
+    const n = b.big ? 70 : 36;
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + rand(-1.3, 1.3);
+      const v = rand(220, b.big ? 900 : 680) * s;
+      P.emit(x1, y1, Math.cos(a) * v, Math.sin(a) * v, rand(0.35, 0.85), 1, 1.3, 1500 * s, 0);
+    }
+  }
+  const fx = {
+    flash: 0,
+    tintAt: (t) => Math.min(1, t / 0.12),
+    step(ctx, t, dt) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      for (let i = 0; i < plan.length; i++) {
+        const b = plan[i];
+        if (t < b.t) continue;
+        if (!b.main) strike(b);
+        const age = t - b.t;
+        if (age > 0.55) continue;
+        const a = boltAlpha(age);
+        fx.flash = Math.max(fx.flash, a * (b.big ? 0.75 : 0.5) * (age < 0.2 ? 1 : 0.3));
+        if (a <= 0) continue;
+        const m = b.big ? 1.6 : 1;
+        ctx.globalAlpha = a * 0.7;
+        ctx.drawImage(cloud, b.x0 - W * 0.55, -H * 0.2, W * 1.1, H * 0.4);
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = 'rgba(70,130,255,0.22)';
+        ctx.lineWidth = 24 * s * m;
+        ctx.stroke(b.main);
+        ctx.lineWidth = 12 * s * m;
+        ctx.stroke(b.br);
+        ctx.strokeStyle = 'rgba(130,195,255,0.55)';
+        ctx.lineWidth = 8 * s * m;
+        ctx.stroke(b.main);
+        ctx.lineWidth = 4 * s * m;
+        ctx.stroke(b.br);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.8 * s * m;
+        ctx.stroke(b.main);
+        ctx.lineWidth = 1.6 * s * m;
+        ctx.stroke(b.br);
+        // the impact: a glow and a ring along the ground
+        const R = W * 0.42 * m;
+        ctx.drawImage(imp, b.x1 - R, b.y1 - R * 0.7, R * 2, R * 1.4);
+        const p = age / 0.55;
+        ctx.globalAlpha = (1 - p) * 0.9;
+        ctx.strokeStyle = '#9fdcff';
+        ctx.lineWidth = 3 * s;
+        ctx.beginPath();
+        ctx.ellipse(b.x1, b.y1, (20 + easeOutCubic(p) * 160 * m) * s, (5 + easeOutCubic(p) * 34 * m) * s, 0, 0, TAU);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      // the sparks: short bright streaks, three brightness buckets (three strokes a frame)
+      P.step(dt);
+      for (let k = 0; k < 3; k++) {
+        ctx.beginPath();
+        for (let i = 0; i < P.n; i++) {
+          if (P.life[i] <= 0) continue;
+          const f = 1 - P.age[i] / P.life[i];
+          if ((f > 0.66 ? 0 : f > 0.33 ? 1 : 2) !== k) continue;
+          ctx.moveTo(P.x[i], P.y[i]);
+          ctx.lineTo(P.x[i] - P.vx[i] * 0.024, P.y[i] - P.vy[i] * 0.024);
+        }
+        ctx.globalAlpha = SPARK_A[k];
+        ctx.strokeStyle = SPARK_C[k];
+        ctx.lineWidth = (2.8 - k * 0.6) * s;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      zap.step(ctx, t, 0.3);
+      ctx.globalCompositeOperation = 'source-over';
+    },
+  };
+  return fx;
+}
+
+/** Goudreen: a jackpot fountain of gold coins, then a shower of them: flipping, glinting, bouncing once; gold dust. */
+function goudreenFx(env) {
+  const { doc, W, H, s, dpr } = env;
+  const D = Math.round(64 * s * dpr);
+  const face = coinFace(doc, D);
+  const edge = coinEdge(doc, D);
+  const glint = sparkSprite(doc, '#ffffff');
+  const sun = softSprite(doc, '#ffd25a', 0.7);
+  const dust = twinkles(env, 34, ['#ffe680', '#ffffff', '#ffd23f'], 0.02, 0.02, 0.98, 0.9, 11, 60);
+  const N = 92;
+  const FOUNT = 30;
+  const coins = [];
+  for (let i = 0; i < N; i++) {
+    const f = i < FOUNT;
+    coins.push({
+      t0: f ? rand(0, 0.3) : 0.3 + ((i - FOUNT) / (N - FOUNT)) * 1.9 + rand(0, 0.15),
+      r: rand(14, 32) * s, f, live: false, dead: false, x: 0, y: 0, vx: 0, vy: 0, g: 0, a: 0, va: 0, ph: 0, vf: 0, bounced: false,
+    });
+  }
+  coins.sort((a, b) => a.r - b.r);   // small (far) coins first, big ones on top
+  const fx = {
+    flash: 0,
+    step(ctx, t, dt) {
+      if (t < 0.05) fx.flash = 0.6;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = Math.min(1, t / 0.4) * (0.55 + 0.1 * Math.sin(t * 4));
+      ctx.drawImage(sun, -W * 0.3, -H * 0.3, W * 1.6, H * 0.75);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      const floor = H * 0.97;
+      for (let i = 0; i < N; i++) {
+        const c = coins[i];
+        if (c.dead || t < c.t0) continue;
+        if (!c.live) {
+          c.live = true;
+          if (c.f) {
+            c.x = W * 0.5 + rand(-20, 20) * s;
+            c.y = H + c.r;
+            c.vx = rand(-0.55, 0.55) * W;
+            c.vy = -rand(1.35, 1.95) * H;
+            c.g = 1700 * s;
+          } else {
+            c.x = rand(0.04, 0.96) * W;
+            c.y = -c.r * 1.5;
+            c.vx = rand(-40, 40) * s;
+            c.vy = rand(220, 420) * s;
+            c.g = 760 * s;
+          }
+          c.a = rand(-0.5, 0.5);
+          c.va = rand(-2.5, 2.5);
+          c.ph = Math.random() * TAU;
+          c.vf = rand(6, 13) * (Math.random() < 0.5 ? -1 : 1);
+        }
+        c.vy += c.g * dt;
+        c.x += c.vx * dt;
+        c.y += c.vy * dt;
+        c.a += c.va * dt;
+        c.ph += c.vf * dt;
+        if (!c.bounced && c.vy > 0 && c.y > floor - c.r * 0.6) {   // one bounce off the bottom, a clink
+          c.y = floor - c.r * 0.6;
+          c.vy *= -0.34;
+          c.vx *= 0.6;
+          c.vf *= 1.5;
+          c.bounced = true;
+        }
+        if (c.y > H + c.r * 2) { c.dead = true; continue; }
+        const cs = Math.cos(c.ph);
+        let sx = Math.abs(cs);
+        if (sx < 0.07) sx = 0.07;
+        const ca = Math.cos(c.a);
+        const sa = Math.sin(c.a);
+        const th = c.r * 0.17 * Math.sin(c.ph);
+        ctx.setTransform(dpr * ca * sx, dpr * sa * sx, -dpr * sa, dpr * ca, dpr * (c.x + ca * th), dpr * (c.y + sa * th));
+        ctx.drawImage(edge, -c.r, -c.r, c.r * 2, c.r * 2);
+        ctx.setTransform(dpr * ca * sx, dpr * sa * sx, -dpr * sa, dpr * ca, dpr * c.x, dpr * c.y);
+        ctx.drawImage(face, -c.r, -c.r, c.r * 2, c.r * 2);
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // a glint on every coin that turns its face to us
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < N; i++) {
+        const c = coins[i];
+        if (!c.live || c.dead) continue;
+        const cs = Math.abs(Math.cos(c.ph));
+        if (cs < 0.9) continue;
+        const r = c.r * 1.3 * (cs - 0.9) * 10;
+        ctx.globalAlpha = (cs - 0.9) * 10;
+        ctx.drawImage(glint, c.x - c.r * 0.35 - r, c.y - c.r * 0.35 - r, r * 2, r * 2);
+      }
+      ctx.globalAlpha = 1;
+      dust.step(ctx, t, 0.1);
+      ctx.globalCompositeOperation = 'source-over';
+    },
+  };
+  return fx;
+}
+
+const NEON = ['#ff2bd6', '#19f0ff', '#3dff7a'];
+const NEON_WIDE = NEON.map((c) => rgba(c, 0.11));
+const NEON_MID = NEON.map((c) => rgba(c, 0.38));
+const NEON_CORE = ['#ffd6f7', '#d9fdff', '#dcffe6'];
+
+/** Laser: a neon laser show from the bottom corners on a beat, flashes and haze; the beams meet in a starburst. */
+function laserFx(env) {
+  const { doc, W, H, s } = env;
+  const BEAT = 0.45;
+  const BURST = 2.7;
+  const bx = W * 0.5;
+  const by = H * 0.36;
+  const L = Math.hypot(W, H) * 1.25;
+  const em = [{ x: -4 * s, y: H + 4 * s, side: 1 }, { x: W + 4 * s, y: H + 4 * s, side: -1 }, { x: W * 0.5, y: H + 12 * s, side: 0 }];
+  const hot = NEON.map((c) => glowSprite(doc, c));
+  const white = glowSprite(doc, '#ffffff');
+  const star = sparkSprite(doc, '#ffffff');
+  const hz = [softSprite(doc, '#ff2bd6', 0.42), softSprite(doc, '#19f0ff', 0.42), softSprite(doc, '#8a3dff', 0.5)];
+  const haze = [];
+  for (let i = 0; i < 6; i++) haze.push({ x: rand(0, 1) * W, y: rand(0.45, 1) * H, r: rand(140, 230) * s, vx: rand(-25, 25) * s, img: hz[i % 3] });
+  const dust = twinkles(env, 30, ['#ffffff', '#bff8ff', '#ffc6f2'], 0.02, 0.05, 0.98, 0.95, 8);
+  const P = sparks(110);
+  const imgs = [hot[0], hot[1], hot[2], white];
+  let beat = -1;
+  let boom = false;
+  const fx = {
+    flash: 0,
+    step(ctx, t, dt) {
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < haze.length; i++) {
+        const h = haze[i];
+        h.x += h.vx * dt;
+        ctx.globalAlpha = Math.min(1, t / 0.4) * (0.55 + 0.25 * Math.sin(t * 2 + i));
+        ctx.drawImage(h.img, h.x - h.r, h.y - h.r, h.r * 2, h.r * 2);
+      }
+      ctx.globalAlpha = 1;
+      if (t < BURST) {
+        const b = Math.floor(t / BEAT);
+        if (b !== beat) { beat = b; fx.flash = Math.max(fx.flash, b ? 0.22 : 0.35); }
+        const inten = Math.min(1, t / 0.15) * (0.72 + 0.28 * Math.exp(-(t - b * BEAT) * 7));
+        const pat = b % 3;
+        const w = smooth(clamp01((t - (BURST - 0.4)) / 0.4));   // the last moments: every beam swings to the burst
+        ctx.lineCap = 'round';
+        for (let e = 0; e < 3; e++) {
+          const o = em[e];
+          if (o.side === 0 && b < 2) continue;
+          const ci = (b + e) % 3;
+          let base;
+          let spread;
+          let nb;
+          if (o.side === 0) {
+            base = -Math.PI / 2 + 0.55 * Math.sin(t * 2.8);
+            spread = pat === 1 ? 0.5 : 0.17;
+            nb = pat === 1 ? 2 : 5;
+          } else if (pat === 0) {
+            base = -Math.PI / 2 + o.side * (0.55 + 0.32 * Math.sin(t * 2.4));
+            spread = 0.13;
+            nb = 4;
+          } else if (pat === 1) {
+            base = -Math.PI / 2 + o.side * (0.3 + 0.5 * (0.5 + 0.5 * Math.sin(t * 4.4)));
+            spread = 0.06;
+            nb = 3;
+          } else {
+            base = -Math.PI / 2 + o.side * (0.62 + 0.16 * Math.sin(t * 3.1));
+            spread = 0.21;
+            nb = 5;
+          }
+          if (w > 0) {
+            const aim = Math.atan2(by - o.y, bx - o.x);
+            base += (aim - base) * w;
+            spread *= 1 - w;
+          }
+          ctx.beginPath();
+          for (let k = 0; k < nb; k++) {
+            const a = base + (k - (nb - 1) / 2) * spread;
+            ctx.moveTo(o.x, o.y);
+            ctx.lineTo(o.x + Math.cos(a) * L, o.y + Math.sin(a) * L);
+          }
+          ctx.globalAlpha = inten;
+          ctx.strokeStyle = NEON_WIDE[ci];
+          ctx.lineWidth = 20 * s;
+          ctx.stroke();
+          ctx.strokeStyle = NEON_MID[ci];
+          ctx.lineWidth = 6.5 * s;
+          ctx.stroke();
+          ctx.strokeStyle = NEON_CORE[ci];
+          ctx.lineWidth = 2 * s;
+          ctx.stroke();
+          const hr = 95 * s * inten;
+          ctx.drawImage(hot[ci], o.x - hr, o.y - hr, hr * 2, hr * 2);
+        }
+        ctx.globalAlpha = 1;
+      } else {
+        const age = t - BURST;
+        if (!boom) {
+          boom = true;
+          fx.flash = 0.65;
+          for (let i = 0; i < 96; i++) {
+            const a = rand(0, TAU);
+            const v = rand(280, 980) * s;
+            P.emit(bx, by, Math.cos(a) * v, Math.sin(a) * v, rand(0.7, 1.15), rand(7, 11) * s, 2.3, 90 * s, i % 4, 1);
+          }
+        }
+        // the starburst: rays out of the meeting point, three colours, turning
+        const len = easeOutCubic(Math.min(1, age / 0.5)) * L * 0.55;
+        const fade = Math.max(0, 1 - age / 0.85);
+        if (fade > 0) {
+          ctx.lineCap = 'round';
+          for (let ci = 0; ci < 3; ci++) {
+            ctx.beginPath();
+            for (let k = ci; k < 24; k += 3) {
+              const a = (k / 24) * TAU + age * 0.7;
+              ctx.moveTo(bx + Math.cos(a) * 20 * s, by + Math.sin(a) * 20 * s);
+              ctx.lineTo(bx + Math.cos(a) * len, by + Math.sin(a) * len);
+            }
+            ctx.globalAlpha = fade;
+            ctx.strokeStyle = NEON_MID[ci];
+            ctx.lineWidth = 9 * s;
+            ctx.stroke();
+            ctx.strokeStyle = NEON_CORE[ci];
+            ctx.lineWidth = 2.4 * s;
+            ctx.stroke();
+          }
+          const gr = W * (0.35 + age * 0.6);
+          ctx.globalAlpha = fade;
+          ctx.drawImage(white, bx - gr, by - gr, gr * 2, gr * 2);
+          const sr = W * 0.42 * (0.6 + 0.4 * fade);
+          ctx.drawImage(star, bx - sr, by - sr, sr * 2, sr * 2);
+          ctx.globalAlpha = 1;
+        }
+        P.step(dt);
+        P.draw(ctx, imgs);
+      }
+      dust.step(ctx, t, 0.2);
+      ctx.globalCompositeOperation = 'source-over';
+    },
+  };
+  return fx;
+}
+
+const COSMOS = ['#ffffff', '#ffd56b', '#ff8ad8', '#b07cff', '#6f8bff', '#4fd2ff'];
+
+/**
+ * Sterrestof (the legendary): a galaxy of glowing stardust spirals in faster and faster, then bursts: a flash, shock
+ * rings, a big gold star with lens flares, and the dust twinkling out across the screen.
+ */
+function sterrestofFx(env) {
+  const { doc, W, H, s, dpr } = env;
+  const cx = W * 0.5;
+  const cy = H * 0.42;
+  const T1 = 1.5;
+  const imgs = COSMOS.map((c) => glowSprite(doc, c));
+  const core = glowSprite(doc, '#e9d4ff');
+  const flare = glowSprite(doc, '#ffe7b0');
+  const star = bigStar(doc, 256);
+  const sky = nightSky(env, 46, 1);
+  const shine = twinkles(env, 16, ['#ffffff', '#ffe6a0', '#e2c8ff'], 0.18, 0.26, 0.82, 0.58, 16);
+  const N = 230;
+  const Rmax = Math.max(W, H) * 0.62;
+  const r0 = new Float32Array(N);
+  const ang = new Float32Array(N);
+  const X = new Float32Array(N);
+  const Y = new Float32Array(N);
+  const VX = new Float32Array(N);
+  const VY = new Float32Array(N);
+  const C = new Uint8Array(N);
+  const SZ = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const arm = i % 3;
+    const q = 0.1 + 0.9 * Math.random() ** 0.8;
+    r0[i] = Rmax * q;
+    ang[i] = (arm * TAU) / 3 + q * 3.4 + rand(-0.28, 0.28);
+    C[i] = q < 0.28 ? (Math.random() < 0.5 ? 0 : 1) : q < 0.6 ? 2 + ((Math.random() * 2) | 0) : 4 + ((Math.random() * 2) | 0);
+    SZ[i] = rand(4, 8.5) * s;
+  }
+  let boom = false;
+  const fx = {
+    trail: 9,
+    flash: 0,
+    step(ctx, t, dt, top) {
+      sky.step(top, t);
+      ctx.globalCompositeOperation = 'lighter';
+      top.globalCompositeOperation = 'lighter';
+      if (t < T1) {
+        const p = t / T1;
+        const pin = p ** 1.7;
+        const on = Math.min(1, t / 0.3);
+        for (let i = 0; i < N; i++) {
+          const rr = r0[i] * (1 - 0.94 * pin);
+          ang[i] += 0.75 * (Rmax / (rr + 30 * s)) ** 0.7 * dt * (1 + 1.6 * p);
+          X[i] = cx + Math.cos(ang[i]) * rr;
+          Y[i] = cy + Math.sin(ang[i]) * rr * 0.58;
+          const r = SZ[i] * (0.8 + 0.4 * p);
+          ctx.globalAlpha = on * (0.65 + 0.35 * Math.sin(t * 6 + i));
+          ctx.drawImage(imgs[C[i]], X[i] - r, Y[i] - r, r * 2, r * 2);
+        }
+        const g = (40 + 190 * p * p) * s;
+        top.globalAlpha = on * (0.35 + 0.6 * p);
+        top.drawImage(core, cx - g, cy - g * 0.75, g * 2, g * 1.5);
+        top.globalAlpha = 1;
+      } else {
+        const age = t - T1;
+        if (!boom) {
+          boom = true;
+          fx.flash = 0.95;
+          for (let i = 0; i < N; i++) {
+            const a = Math.atan2((Y[i] - cy) / 0.58, X[i] - cx) + 0.35;
+            const v = rand(240, 1150) * s;
+            VX[i] = Math.cos(a) * v;
+            VY[i] = Math.sin(a) * v * 0.85;
+          }
+        }
+        const d = Math.exp(-1.7 * dt);
+        for (let i = 0; i < N; i++) {
+          VX[i] *= d;
+          VY[i] = VY[i] * d + 12 * s * dt;
+          X[i] += VX[i] * dt;
+          Y[i] += VY[i] * dt;
+          const tw = 0.5 + 0.5 * Math.sin(t * (5 + (i % 7)) + i);
+          const r = SZ[i] * (age < 0.3 ? 1.5 - age * 1.6 : 1.02) * (0.6 + 0.4 * tw);
+          ctx.globalAlpha = 0.35 + 0.65 * tw;
+          ctx.drawImage(imgs[C[i]], X[i] - r, Y[i] - r, r * 2, r * 2);
+        }
+        // shock rings
+        for (let k = 0; k < 2; k++) {
+          const q = (age - k * 0.13) / 1.1;
+          if (q < 0 || q > 1) continue;
+          ring(top, cx, cy, easeOutCubic(q) * Rmax * 1.25, (20 * (1 - q) + 1.5) * s, k ? '#b884ff' : '#ffd56b', (1 - q) ** 1.4 * 0.9);
+        }
+        // the big star, its glow and its lens flares
+        const sc = easeOutBack(Math.min(1, age / 0.55));
+        const pulse = 1 + 0.05 * Math.sin(t * 5);
+        const gr = W * 0.62 * sc * pulse;
+        top.globalAlpha = 0.75;
+        top.drawImage(core, cx - gr, cy - gr, gr * 2, gr * 2);
+        top.globalAlpha = 0.85 * Math.min(1, age / 0.3);
+        const fw = W * 1.15 * sc * pulse;
+        top.drawImage(flare, cx - fw / 2, cy - 9 * s, fw, 18 * s);
+        top.drawImage(flare, cx - 7 * s, cy - fw * 0.36, 14 * s, fw * 0.72);
+        top.globalAlpha = 1;
+        top.globalCompositeOperation = 'source-over';
+        const ss = W * 0.5 * sc * pulse;
+        if (ss > 1) stamp(top, dpr, star, cx, cy, ss, ss, age * 0.35);
+        top.globalCompositeOperation = 'lighter';
+        shine.step(top, t, T1 + 0.15);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      top.globalCompositeOperation = 'source-over';
+    },
+  };
+  return fx;
+}
+
+const FX = { konfetti: konfettiFx, vuurwerk: vuurwerkFx, vuvuzela: vuvuzelaFx, braai: braaiFx, skrum: skrumFx, weerlig: weerligFx, goudreen: goudreenFx, laser: laserFx, sterrestof: sterrestofFx };
+
+// ---------------------------------------------------------------------------
+// The shop tiles: rounded-square art in a 100 x 100 space
+// ---------------------------------------------------------------------------
+
+/** The tile: a rich gradient, a glow behind the motif; `finish` adds the gloss and the rim. */
+function tile(x, top, bottom, glow) {
+  roundRect(x, 0, 0, 100, 100, 22);
+  x.save();
+  x.clip();
+  const g = x.createLinearGradient(25, 0, 75, 100);
+  g.addColorStop(0, top);
+  g.addColorStop(1, bottom);
+  x.fillStyle = g;
+  x.fillRect(0, 0, 100, 100);
+  if (glow) {
+    const [gx, gy, gr, gc, ga = 0.75] = glow;
+    const r = x.createRadialGradient(gx, gy, 0, gx, gy, gr);
+    r.addColorStop(0, rgba(gc, ga));
+    r.addColorStop(1, rgba(gc, 0));
+    x.fillStyle = r;
+    x.fillRect(0, 0, 100, 100);
+  }
+}
+function finish(x, rim) {
+  const g = x.createLinearGradient(0, 0, 0, 52);
+  g.addColorStop(0, 'rgba(255,255,255,0.2)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g;
+  x.fillRect(0, 0, 100, 52);
+  const v = x.createLinearGradient(0, 70, 0, 100);
+  v.addColorStop(0, 'rgba(0,0,0,0)');
+  v.addColorStop(1, 'rgba(0,0,0,0.18)');
+  x.fillStyle = v;
+  x.fillRect(0, 70, 100, 30);
+  x.restore();
+  roundRect(x, 1.5, 1.5, 97, 97, 20.5);
+  x.lineWidth = rim ? 3.2 : 2;
+  x.strokeStyle = rim || 'rgba(255,255,255,0.3)';
+  x.stroke();
+}
+function sparkle(x, cx, cy, r, color = '#ffffff') {
+  x.save();
+  x.globalCompositeOperation = 'lighter';
+  const g = x.createRadialGradient(cx, cy, 0, cx, cy, r * 0.6);
+  g.addColorStop(0, rgba(color === '#ffffff' ? '#ffffff' : color, 0.8));
+  g.addColorStop(1, rgba(color === '#ffffff' ? '#ffffff' : color, 0));
+  x.fillStyle = g;
+  x.fillRect(cx - r, cy - r, r * 2, r * 2);
+  const k = r * 0.1;
+  x.beginPath();
+  x.moveTo(cx, cy - r);
+  x.quadraticCurveTo(cx + k, cy - k, cx + r, cy);
+  x.quadraticCurveTo(cx + k, cy + k, cx, cy + r);
+  x.quadraticCurveTo(cx - k, cy + k, cx - r, cy);
+  x.quadraticCurveTo(cx - k, cy - k, cx, cy - r);
+  x.fillStyle = '#ffffff';
+  x.fill();
+  x.restore();
+}
+function iconCoin(x, cx, cy, r, sx, rot) {
+  x.save();
+  x.translate(cx, cy);
+  x.rotate(rot);
+  x.scale(sx, 1);
+  x.fillStyle = '#9a6406';
+  x.beginPath();
+  x.arc(r * 0.22, 0, r, 0, TAU);
+  x.fill();
+  const g = x.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.05, 0, 0, r);
+  g.addColorStop(0, '#fff7c9');
+  g.addColorStop(0.35, '#ffd84a');
+  g.addColorStop(0.8, '#eaa514');
+  g.addColorStop(1, '#b67606');
+  x.fillStyle = g;
+  x.beginPath();
+  x.arc(0, 0, r, 0, TAU);
+  x.fill();
+  x.lineWidth = r * 0.12;
+  x.strokeStyle = '#c4850a';
+  x.beginPath();
+  x.arc(0, 0, r * 0.82, 0, TAU);
+  x.stroke();
+  starPath(x, 0, r * 0.03, r * 0.46, r * 0.2);
+  x.fillStyle = '#fff1a8';
+  x.fill();
+  x.lineWidth = r * 0.05;
+  x.strokeStyle = 'rgba(150,90,0,0.6)';
+  x.stroke();
+  x.restore();
+}
+
+const ICONS = {
+  konfetti(x) {
+    const rnd = seeded(11);
+    tile(x, '#ff5aa0', '#6a2cf0', [62, 36, 62, '#ffd23f', 0.7]);
+    const cols = ['#ffffff', '#ffd23f', '#3fe0ff', '#7dff7a', '#ff8a3d', '#ff3b6b', '#b98bff'];
+    // streamers curling out of the popper
+    x.lineCap = 'round';
+    x.lineWidth = 3.4;
+    for (const [c, a, b, d] of [['#3fe0ff', 46, 30, 18], ['#ffd23f', 64, 50, 30], ['#ffffff', 30, 18, 28]]) {
+      x.strokeStyle = c;
+      x.beginPath();
+      x.moveTo(36, 62);
+      x.bezierCurveTo(a - 8, b + 14, a + 10, b - 4, a + d * 0.6, b - 6);
+      x.stroke();
+    }
+    for (let i = 0; i < 26; i++) {
+      const a = -1.45 + rnd() * 1.55;
+      const d = 16 + rnd() * 54;
+      const px = 34 + Math.cos(a) * d;
+      const py = 64 + Math.sin(a) * d;
+      x.save();
+      x.translate(px, py);
+      x.rotate(rnd() * TAU);
+      x.fillStyle = cols[i % cols.length];
+      const k = rnd();
+      if (k < 0.55) x.fillRect(-4, -2.6, 8, 5.2);
+      else if (k < 0.85) x.fillRect(-1.6, -5.5, 3.2, 11);
+      else { x.beginPath(); x.arc(0, 0, 3, 0, TAU); x.fill(); }
+      x.restore();
+    }
+    // the popper: a striped gold cone pointing up and to the right
+    x.save();
+    x.translate(27, 75);
+    x.rotate(0.72);
+    x.beginPath();
+    x.moveTo(0, 22);
+    x.lineTo(13, -14);
+    x.lineTo(-13, -14);
+    x.closePath();
+    const g = x.createLinearGradient(-13, 0, 13, 0);
+    g.addColorStop(0, '#ffe98a');
+    g.addColorStop(0.55, '#ffc21a');
+    g.addColorStop(1, '#d98a00');
+    x.fillStyle = g;
+    x.fill();
+    x.save();
+    x.clip();
+    x.fillStyle = '#ff3b6b';
+    for (let k = -3; k < 4; k++) {
+      x.beginPath();
+      x.moveTo(-20, k * 9 - 6);
+      x.lineTo(20, k * 9 + 6);
+      x.lineTo(20, k * 9 + 10);
+      x.lineTo(-20, k * 9 - 2);
+      x.closePath();
+      x.fill();
+    }
+    x.restore();
+    x.fillStyle = '#5a1030';
+    x.beginPath();
+    x.ellipse(0, -14, 13, 4.6, 0, 0, TAU);
+    x.fill();
+    x.lineWidth = 2.4;
+    x.strokeStyle = '#fff1b0';
+    x.stroke();
+    x.restore();
+    sparkle(x, 74, 22, 9);
+    sparkle(x, 86, 52, 6);
+    sparkle(x, 52, 14, 5);
+    finish(x);
+  },
+
+  vuurwerk(x) {
+    const rnd = seeded(7);
+    tile(x, '#3a1f8a', '#05061c', [56, 40, 58, '#7a3cff', 0.55]);
+    x.fillStyle = '#ffffff';
+    for (let i = 0; i < 26; i++) {
+      x.globalAlpha = 0.3 + rnd() * 0.5;
+      x.fillRect(rnd() * 100, rnd() * 100, 1.2, 1.2);
+    }
+    x.globalAlpha = 1;
+    // the rocket's trail up to the big burst
+    x.save();
+    x.globalCompositeOperation = 'lighter';
+    const tr = x.createLinearGradient(66, 100, 58, 50);
+    tr.addColorStop(0, 'rgba(255,220,140,0)');
+    tr.addColorStop(1, 'rgba(255,230,170,0.9)');
+    x.strokeStyle = tr;
+    x.lineWidth = 2.2;
+    x.beginPath();
+    x.moveTo(68, 100);
+    x.quadraticCurveTo(62, 76, 58, 52);
+    x.stroke();
+    const burst = (bx, by, R, n, c, c2) => {
+      const gl = x.createRadialGradient(bx, by, 0, bx, by, R * 1.25);
+      gl.addColorStop(0, rgba(c, 0.55));
+      gl.addColorStop(1, rgba(c, 0));
+      x.fillStyle = gl;
+      x.fillRect(bx - R * 1.3, by - R * 1.3, R * 2.6, R * 2.6);
+      x.lineCap = 'round';
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * TAU + 0.2;
+        const g = x.createLinearGradient(bx + Math.cos(a) * R * 0.2, by + Math.sin(a) * R * 0.2, bx + Math.cos(a) * R, by + Math.sin(a) * R);
+        g.addColorStop(0, rgba(c, 0));
+        g.addColorStop(1, rgba(c, 1));
+        x.strokeStyle = g;
+        x.lineWidth = 2.4;
+        x.beginPath();
+        x.moveTo(bx + Math.cos(a) * R * 0.2, by + Math.sin(a) * R * 0.2);
+        x.lineTo(bx + Math.cos(a) * R * 0.92, by + Math.sin(a) * R * 0.92);
+        x.stroke();
+        x.fillStyle = c2;
+        x.beginPath();
+        x.arc(bx + Math.cos(a) * R, by + Math.sin(a) * R, 2.1, 0, TAU);
+        x.fill();
+      }
+      x.fillStyle = '#ffffff';
+      x.beginPath();
+      x.arc(bx, by, R * 0.12, 0, TAU);
+      x.fill();
+    };
+    burst(58, 40, 31, 20, '#ffcf4a', '#fff4c2');
+    burst(25, 26, 17, 14, '#ff4fa3', '#ffd1e8');
+    burst(27, 70, 15, 12, '#4fd8ff', '#e2fbff');
+    burst(84, 76, 10, 10, '#7dff7a', '#e2ffd9');
+    x.restore();
+    finish(x);
+  },
+
+  vuvuzela(x) {
+    tile(x, '#0e9a58', '#033a22', [66, 34, 50, '#ffd23f', 0.5]);
+    // the flag's Y as a soft band behind it all
+    x.save();
+    x.globalAlpha = 0.28;
+    x.lineCap = 'butt';
+    x.lineJoin = 'miter';
+    x.strokeStyle = '#ffffff';
+    x.lineWidth = 26;
+    x.beginPath();
+    x.moveTo(-6, 4);
+    x.lineTo(38, 50);
+    x.lineTo(-6, 96);
+    x.moveTo(38, 50);
+    x.lineTo(106, 50);
+    x.stroke();
+    x.globalAlpha = 1;
+    x.restore();
+    // the sound: flag-colour arcs out of the bell
+    x.lineCap = 'round';
+    const arcs = [['#ffb612', 20], ['#de3831', 29], ['#ffffff', 38], ['#2453e0', 47]];
+    for (const [c, r] of arcs) {
+      x.strokeStyle = c;
+      x.lineWidth = 5;
+      x.beginPath();
+      x.arc(64, 36, r, -1.95, 0.35);
+      x.stroke();
+    }
+    // the horn, mouthpiece bottom-left, bell top-right
+    x.save();
+    x.translate(14, 88);
+    x.rotate(-0.81);
+    const g = x.createLinearGradient(0, -12, 0, 12);
+    g.addColorStop(0, '#fff3a0');
+    g.addColorStop(0.45, '#ffc21a');
+    g.addColorStop(1, '#c97f00');
+    x.beginPath();
+    x.moveTo(0, -2.6);
+    x.lineTo(64, -11);
+    x.lineTo(64, 11);
+    x.lineTo(0, 2.6);
+    x.closePath();
+    x.fillStyle = g;
+    x.fill();
+    x.save();
+    x.clip();
+    for (const [c, a] of [['#007a4d', 38], ['#ffffff', 44], ['#de3831', 48], ['#2453e0', 54]]) {
+      x.fillStyle = c;
+      x.fillRect(a, -14, 4, 28);
+    }
+    x.restore();
+    x.fillStyle = '#1a1a1a';
+    x.beginPath();
+    x.ellipse(0, 0, 2.4, 3.6, 0, 0, TAU);
+    x.fill();
+    x.fillStyle = '#3b2600';
+    x.beginPath();
+    x.ellipse(65, 0, 4.4, 13.5, 0, 0, TAU);
+    x.fill();
+    x.lineWidth = 2.6;
+    x.strokeStyle = '#ffe27a';
+    x.stroke();
+    x.restore();
+    finish(x);
+  },
+
+  braai(x) {
+    const rnd = seeded(5);
+    tile(x, '#ff9a2e', '#4a0f05', [50, 86, 62, '#ffcf4a', 0.9]);
+    // the grill
+    x.lineCap = 'round';
+    for (let i = 0; i < 6; i++) {
+      const y = 28 + i * 11;
+      x.strokeStyle = 'rgba(255,170,70,0.7)';
+      x.lineWidth = 1.2;
+      x.beginPath();
+      x.moveTo(8, y + 2.2);
+      x.lineTo(92, y + 2.2);
+      x.stroke();
+      x.strokeStyle = '#2a1510';
+      x.lineWidth = 3.4;
+      x.beginPath();
+      x.moveTo(8, y);
+      x.lineTo(92, y);
+      x.stroke();
+    }
+    // a boerewors coil on it
+    const pts = [];
+    for (let a = 0; a <= 4.6 * Math.PI; a += 0.12) {
+      const r = 4 + (a / (4.6 * Math.PI)) * 27;
+      pts.push(50 + Math.cos(a) * r, 54 + Math.sin(a) * r * 0.86);
+    }
+    const coil = (w, c, dx = 0, dy = 0) => {
+      x.strokeStyle = c;
+      x.lineWidth = w;
+      x.beginPath();
+      x.moveTo(pts[0] + dx, pts[1] + dy);
+      for (let i = 2; i < pts.length; i += 2) x.lineTo(pts[i] + dx, pts[i + 1] + dy);
+      x.stroke();
+    };
+    x.lineJoin = 'round';
+    coil(10.5, '#4a1606');
+    coil(8, '#a8461f');
+    coil(2.6, 'rgba(255,170,120,0.85)', -1, -1.6);
+    // grill marks across the coil
+    x.strokeStyle = 'rgba(60,15,4,0.85)';
+    x.lineWidth = 1.6;
+    for (let i = 8; i < pts.length - 2; i += 10) {
+      const dx = pts[i + 2] - pts[i];
+      const dy = pts[i + 3] - pts[i + 1];
+      const l = Math.hypot(dx, dy) || 1;
+      const nx = -dy / l;
+      const ny = dx / l;
+      x.beginPath();
+      x.moveTo(pts[i] - nx * 3, pts[i + 1] - ny * 3);
+      x.lineTo(pts[i] + nx * 3, pts[i + 1] + ny * 3);
+      x.stroke();
+    }
+    // embers and a puff of steam
+    x.save();
+    x.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 14; i++) {
+      const ex = 8 + rnd() * 84;
+      const ey = 6 + rnd() * 30;
+      const er = 1 + rnd() * 2;
+      const gl = x.createRadialGradient(ex, ey, 0, ex, ey, er * 3);
+      gl.addColorStop(0, 'rgba(255,240,170,1)');
+      gl.addColorStop(0.4, 'rgba(255,140,40,0.8)');
+      gl.addColorStop(1, 'rgba(255,90,20,0)');
+      x.fillStyle = gl;
+      x.fillRect(ex - er * 3, ey - er * 3, er * 6, er * 6);
+    }
+    x.restore();
+    x.strokeStyle = 'rgba(255,255,255,0.85)';
+    x.lineWidth = 3;
+    for (const sx of [80, 88]) {
+      x.beginPath();
+      x.moveTo(sx, 26);
+      x.quadraticCurveTo(sx + 5, 20, sx, 14);
+      x.quadraticCurveTo(sx - 5, 8, sx, 3);
+      x.stroke();
+    }
+    finish(x);
+  },
+
+  skrum(x) {
+    const rnd = seeded(3);
+    tile(x, '#1cb867', '#03462a', [50, 50, 50, '#ffe27a', 0.6]);
+    // the gold sunburst
+    x.save();
+    x.translate(50, 50);
+    x.fillStyle = 'rgba(255,205,60,0.34)';
+    x.beginPath();
+    for (let i = 0; i < 14; i++) {
+      const a0 = (i / 14) * TAU;
+      x.moveTo(0, 0);
+      x.lineTo(Math.cos(a0) * 80, Math.sin(a0) * 80);
+      x.lineTo(Math.cos(a0 + TAU / 28) * 80, Math.sin(a0 + TAU / 28) * 80);
+      x.closePath();
+    }
+    x.fill();
+    x.restore();
+    for (const [r, a] of [[37, 0.75], [45, 0.4]]) {
+      x.globalAlpha = a;
+      x.strokeStyle = '#ffd23f';
+      x.lineWidth = 3;
+      x.beginPath();
+      x.arc(50, 50, r, 0, TAU);
+      x.stroke();
+    }
+    x.globalAlpha = 1;
+    for (let i = 0; i < 16; i++) {
+      x.save();
+      x.translate(6 + rnd() * 88, 6 + rnd() * 88);
+      x.rotate(rnd() * TAU);
+      x.fillStyle = i % 3 ? '#ffc928' : '#ffffff';
+      x.fillRect(-3, -1.8, 6, 3.6);
+      x.restore();
+    }
+    // the ball: white leather, Springbok bands, seams
+    x.save();
+    x.translate(50, 51);
+    x.rotate(-0.62);
+    x.shadowColor = 'rgba(0,0,0,0.35)';
+    x.shadowBlur = 6;
+    x.shadowOffsetY = 3;
+    x.beginPath();
+    x.ellipse(0, 0, 31, 19.5, 0, 0, TAU);
+    const g = x.createRadialGradient(-9, -8, 2, 0, 0, 32);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.6, '#e9edf2');
+    g.addColorStop(1, '#a9b3c0');
+    x.fillStyle = g;
+    x.fill();
+    x.shadowColor = 'transparent';
+    x.save();
+    x.clip();
+    for (const sx of [-1, 1]) {
+      x.fillStyle = '#ffb612';
+      x.fillRect(sx * 19 - 3, -22, 6, 44);
+      x.fillStyle = '#007a4d';
+      x.fillRect(sx * 19 + (sx > 0 ? 3 : -6), -22, 3, 44);
+    }
+    x.restore();
+    x.strokeStyle = 'rgba(70,85,100,0.55)';
+    x.lineWidth = 1.3;
+    x.beginPath();
+    x.moveTo(-30, 0);
+    x.quadraticCurveTo(0, -3, 30, 0);
+    x.stroke();
+    x.beginPath();
+    x.ellipse(0, 0, 31, 19.5, 0, 0, TAU);
+    x.stroke();
+    x.restore();
+    sparkle(x, 78, 22, 8);
+    sparkle(x, 20, 80, 6);
+    finish(x);
+  },
+
+  weerlig(x) {
+    tile(x, '#2347c7', '#040822', [50, 20, 58, '#9fd4ff', 0.7]);
+    const rnd = seeded(9);
+    x.save();
+    x.globalCompositeOperation = 'lighter';
+    // thin side branches
+    x.lineCap = 'round';
+    x.lineJoin = 'round';
+    for (const [sx, sy, ex, ey] of [[20, 0, 8, 46], [84, 0, 94, 40]]) {
+      const p = jagSeeded(rnd, sx, sy, ex, ey, 0.22, 4);
+      x.strokeStyle = 'rgba(140,200,255,0.5)';
+      x.lineWidth = 4;
+      x.beginPath();
+      x.moveTo(p[0], p[1]);
+      for (let i = 2; i < p.length; i += 2) x.lineTo(p[i], p[i + 1]);
+      x.stroke();
+      x.strokeStyle = 'rgba(235,248,255,0.95)';
+      x.lineWidth = 1.3;
+      x.stroke();
+    }
+    // sparks at the bottom tip
+    x.strokeStyle = '#d9f3ff';
+    x.lineWidth = 1.6;
+    for (let i = 0; i < 9; i++) {
+      const a = -Math.PI / 2 + (i - 4) * 0.33;
+      x.beginPath();
+      x.moveTo(40 + Math.cos(a) * 7, 90 + Math.sin(a) * 7);
+      x.lineTo(40 + Math.cos(a) * (14 + rnd() * 8), 90 + Math.sin(a) * (14 + rnd() * 8));
+      x.stroke();
+    }
+    const gl = x.createRadialGradient(40, 92, 0, 40, 92, 24);
+    gl.addColorStop(0, 'rgba(200,235,255,0.9)');
+    gl.addColorStop(1, 'rgba(100,170,255,0)');
+    x.fillStyle = gl;
+    x.fillRect(10, 64, 60, 36);
+    x.restore();
+    // the bolt
+    const bolt = () => {
+      x.beginPath();
+      x.moveTo(60, 5);
+      x.lineTo(27, 53);
+      x.lineTo(47, 53);
+      x.lineTo(37, 93);
+      x.lineTo(74, 39);
+      x.lineTo(54, 39);
+      x.lineTo(68, 5);
+      x.closePath();
+    };
+    x.save();
+    x.shadowColor = '#4fc3ff';
+    x.shadowBlur = 16;
+    bolt();
+    const g = x.createLinearGradient(30, 5, 70, 93);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.5, '#d4f1ff');
+    g.addColorStop(1, '#6fc8ff');
+    x.fillStyle = g;
+    x.fill();
+    x.fill();
+    x.shadowBlur = 0;
+    x.lineJoin = 'round';
+    x.lineWidth = 1.6;
+    x.strokeStyle = '#ffffff';
+    x.stroke();
+    x.restore();
+    finish(x, 'rgba(160,215,255,0.75)');
+  },
+
+  goudreen(x) {
+    tile(x, '#8a5600', '#241200', [50, 42, 62, '#ffd25a', 0.75]);
+    // the stack
+    for (let k = 0; k < 4; k++) {
+      const y = 86 - k * 7;
+      x.fillStyle = '#9a6406';
+      x.beginPath();
+      x.ellipse(50, y + 4, 24, 7.5, 0, 0, TAU);
+      x.fill();
+      x.fillRect(26, y, 48, 4);
+      const g = x.createLinearGradient(26, y - 7, 74, y + 7);
+      g.addColorStop(0, '#fff3b0');
+      g.addColorStop(0.5, '#ffcf3a');
+      g.addColorStop(1, '#d99500');
+      x.fillStyle = g;
+      x.beginPath();
+      x.ellipse(50, y, 24, 7.5, 0, 0, TAU);
+      x.fill();
+      x.lineWidth = 1.2;
+      x.strokeStyle = '#b07206';
+      x.stroke();
+    }
+    // flying coins, turned this way and that
+    iconCoin(x, 28, 30, 14, 0.62, -0.4);
+    iconCoin(x, 70, 24, 13, 0.95, 0.15);
+    iconCoin(x, 80, 54, 9, 0.35, 0.5);
+    iconCoin(x, 50, 46, 10, 0.8, -0.2);
+    sparkle(x, 36, 20, 8);
+    sparkle(x, 76, 15, 6);
+    sparkle(x, 62, 62, 7);
+    sparkle(x, 16, 56, 5);
+    finish(x, 'rgba(255,214,90,0.8)');
+  },
+
+  laser(x) {
+    tile(x, '#3b0a72', '#05000f', [50, 52, 50, '#a24bff', 0.5]);
+    x.save();
+    x.globalCompositeOperation = 'lighter';
+    const haze = (hx, hy, c) => {
+      const g = x.createRadialGradient(hx, hy, 0, hx, hy, 40);
+      g.addColorStop(0, rgba(c, 0.6));
+      g.addColorStop(1, rgba(c, 0));
+      x.fillStyle = g;
+      x.fillRect(hx - 40, hy - 40, 80, 80);
+    };
+    haze(0, 100, '#ff2bd6');
+    haze(100, 100, '#19f0ff');
+    x.lineCap = 'round';
+    const beam = (x0, y0, x1, y1, c) => {
+      x.strokeStyle = rgba(c, 0.22);
+      x.lineWidth = 8;
+      x.beginPath();
+      x.moveTo(x0, y0);
+      x.lineTo(x1, y1);
+      x.stroke();
+      x.strokeStyle = rgba(c, 0.6);
+      x.lineWidth = 3.4;
+      x.stroke();
+      x.strokeStyle = '#ffffff';
+      x.lineWidth = 1.1;
+      x.stroke();
+    };
+    beam(0, 100, 104, 6, '#19f0ff');
+    beam(0, 100, 80, -4, '#3dff7a');
+    beam(0, 100, 104, 38, '#ff2bd6');
+    beam(100, 100, -4, 8, '#ff2bd6');
+    beam(100, 100, 20, -4, '#19f0ff');
+    beam(100, 100, -4, 40, '#3dff7a');
+    const g = x.createRadialGradient(50, 52, 0, 50, 52, 26);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)');
+    g.addColorStop(0.35, 'rgba(255,150,240,0.5)');
+    g.addColorStop(1, 'rgba(120,80,255,0)');
+    x.fillStyle = g;
+    x.fillRect(20, 22, 60, 60);
+    x.restore();
+    sparkle(x, 50, 53, 18);
+    sparkle(x, 22, 24, 5);
+    sparkle(x, 80, 18, 4);
+    finish(x, 'rgba(230,140,255,0.75)');
+  },
+
+  sterrestof(x) {
+    const rnd = seeded(21);
+    roundRect(x, 0, 0, 100, 100, 22);
+    x.save();
+    x.clip();
+    const bg = x.createRadialGradient(50, 48, 4, 50, 50, 74);
+    bg.addColorStop(0, '#5b26b8');
+    bg.addColorStop(0.45, '#1f0c55');
+    bg.addColorStop(1, '#04021a');
+    x.fillStyle = bg;
+    x.fillRect(0, 0, 100, 100);
+    x.fillStyle = '#ffffff';
+    for (let i = 0; i < 30; i++) {
+      x.globalAlpha = 0.3 + rnd() * 0.6;
+      x.fillRect(rnd() * 100, rnd() * 100, 1.1, 1.1);
+    }
+    x.globalAlpha = 1;
+    // the galaxy: two arms of dust, tilted
+    x.save();
+    x.globalCompositeOperation = 'lighter';
+    x.translate(50, 50);
+    x.rotate(-0.42);
+    const cols = ['#ffe9a8', '#ff8ad8', '#b07cff', '#6f8bff', '#4fd2ff'];
+    for (let i = 0; i < 150; i++) {
+      const arm = i % 2;
+      const q = rnd();
+      const r = 6 + q * 42;
+      const a = arm * Math.PI + q * 4.4 + (rnd() - 0.5) * 0.55;
+      const px = Math.cos(a) * r;
+      const py = Math.sin(a) * r * 0.55;
+      const sz = (0.7 + rnd() * 1.6) * (1 - q * 0.45);
+      const c = cols[Math.min(cols.length - 1, (q * cols.length) | 0)];
+      const g = x.createRadialGradient(px, py, 0, px, py, sz * 2.6);
+      g.addColorStop(0, rgba(c, 1));
+      g.addColorStop(1, rgba(c, 0));
+      x.fillStyle = g;
+      x.fillRect(px - sz * 2.6, py - sz * 2.6, sz * 5.2, sz * 5.2);
+    }
+    x.restore();
+    // the core, the star and its flares
+    x.save();
+    x.globalCompositeOperation = 'lighter';
+    const core = x.createRadialGradient(50, 49, 0, 50, 49, 30);
+    core.addColorStop(0, 'rgba(255,240,210,0.95)');
+    core.addColorStop(0.4, 'rgba(210,150,255,0.45)');
+    core.addColorStop(1, 'rgba(140,80,255,0)');
+    x.fillStyle = core;
+    x.fillRect(0, 0, 100, 100);
+    for (const [w, h] of [[88, 2.6], [2.4, 64]]) {
+      const f = x.createRadialGradient(50, 49, 0, 50, 49, Math.max(w, h) / 2);
+      f.addColorStop(0, 'rgba(255,240,200,0.95)');
+      f.addColorStop(1, 'rgba(255,220,160,0)');
+      x.fillStyle = f;
+      x.fillRect(50 - w / 2, 49 - h / 2, w, h);
+    }
+    x.restore();
+    x.save();
+    x.shadowColor = '#ffc94a';
+    x.shadowBlur = 12;
+    starPath(x, 50, 50, 20, 8.6);
+    const sg = x.createRadialGradient(50, 47, 0, 50, 50, 21);
+    sg.addColorStop(0, '#ffffff');
+    sg.addColorStop(0.35, '#fff2b0');
+    sg.addColorStop(0.75, '#ffcc3a');
+    sg.addColorStop(1, '#f39a12');
+    x.fillStyle = sg;
+    x.lineJoin = 'round';
+    x.fill();
+    x.shadowBlur = 0;
+    x.lineWidth = 1.4;
+    x.strokeStyle = '#fff6c8';
+    x.stroke();
+    x.restore();
+    sparkle(x, 20, 22, 7);
+    sparkle(x, 82, 76, 6);
+    sparkle(x, 80, 20, 4);
+    // the legendary's gold rim
+    const g = x.createLinearGradient(0, 0, 100, 100);
+    g.addColorStop(0, '#fff3b0');
+    g.addColorStop(0.5, '#ffb612');
+    g.addColorStop(1, '#fff3b0');
+    finish(x, g);
+  },
+};
+
+/** jag() with a seeded random (the tile art stays the same). */
+function jagSeeded(rnd, x0, y0, x1, y1, rough, levels) {
+  let pts = [x0, y0, x1, y1];
+  for (let l = 0; l < levels; l++) {
+    const out = [pts[0], pts[1]];
+    for (let i = 0; i + 3 < pts.length; i += 2) {
+      const ax = pts[i];
+      const ay = pts[i + 1];
+      const bx = pts[i + 2];
+      const by = pts[i + 3];
+      const len = Math.hypot(bx - ax, by - ay) || 1;
+      const off = (rnd() * 2 - 1) * len * rough;
+      out.push((ax + bx) / 2 + ((ay - by) / len) * off, (ay + by) / 2 + ((bx - ax) / len) * off, bx, by);
+    }
+    pts = out;
+  }
+  return pts;
+}
+
+const ICON_CACHE = new Map();
+/** The tile art for `id` at `px` device pixels, drawn once and kept (the Winkel redraws its grid on every buy). */
+function iconArt(doc, id, px) {
+  const key = `${id}@${px}`;
+  let art = ICON_CACHE.get(key);
+  if (!art || art.ownerDocument !== doc) {
+    art = doc.createElement('canvas');
+    art.width = px;
+    art.height = px;
+    const x = art.getContext('2d');
+    x.setTransform(px / 100, 0, 0, px / 100, 0, 0);
+    ICONS[id](x);
+    ICON_CACHE.set(key, art);
+  }
+  return art;
+}
+
+/**
+ * Draws celebration `id`'s shop tile on `canvas` (unknown ids: konfetti's) at the canvas's CSS size (or `size` css
+ * px, default 64) times the screen's pixel ratio. Size the canvas in CSS; a canvas with no class and no inline width
+ * gets `size` px inline. Returns the canvas.
+ */
+export function drawCelebrationIcon(canvas, id, size = 0) {
+  if (!canvas || typeof canvas.getContext !== 'function') return canvas;
+  const key = ICONS[id] ? id : 'konfetti';
+  const doc = canvas.ownerDocument || globalThis.document;
+  const win = (doc && doc.defaultView) || globalThis;
+  const css = size || canvas.clientWidth || parseFloat(canvas.style.width) || 64;
+  const px = Math.max(32, Math.round(css * Math.min(ICON_DPR, win.devicePixelRatio || 1)));
+  if (!canvas.style.width && !canvas.className) {
+    canvas.style.width = `${css}px`;
+    canvas.style.height = `${css}px`;
+  }
+  canvas.width = px;
+  canvas.height = px;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+  ctx.drawImage(iconArt(doc, key, px), 0, 0);
+  return canvas;
+}
+
+// ---------------------------------------------------------------------------
+// Playing a show
+// ---------------------------------------------------------------------------
+const PLAYING = new WeakMap();   // root → the show playing in it (a new one replaces it: no stacked canvases)
+
+function layer(doc, background, extra = '') {
+  const d = doc.createElement('div');
+  d.style.cssText = `position:absolute;inset:0;opacity:0;pointer-events:none;${background ? `background:${background};` : ''}${extra}`;
+  return d;
+}
+function canvasLayer(doc, W, H, dpr) {
+  const c = doc.createElement('canvas');
+  c.width = Math.max(1, Math.round(W * dpr));
+  c.height = Math.max(1, Math.round(H * dpr));
+  c.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;display:block;pointer-events:none;';
+  return c;
+}
+
+/** The caption: a big white pill at the top ("Bennie vier!"); it pops in (fades in with reduced motion). */
+function captionEl(doc, text, look, W, reduced) {
+  const wrap = doc.createElement('div');
+  wrap.style.cssText = 'position:absolute;left:0;right:0;top:max(6%, calc(env(safe-area-inset-top, 0px) + 12px));display:flex;justify-content:center;padding:0 5%;box-sizing:border-box;pointer-events:none;';
+  const pill = doc.createElement('span');
+  pill.className = 'cel-cap';
+  pill.textContent = text;
+  const fs = Math.round(Math.max(18, Math.min(40, W * 0.068)));
+  pill.style.cssText = `display:block;width:auto;max-width:100%;margin:0;box-sizing:border-box;padding:0.3em 0.95em 0.34em;border-radius:1.1em;background:rgba(14,16,36,0.82);color:#fff;font:900 ${fs}px/1.18 var(--font, "Trebuchet MS", system-ui, sans-serif);text-align:center;overflow-wrap:anywhere;letter-spacing:0.01em;text-shadow:0 2px 0 rgba(0,0,0,0.35);box-shadow:0 0 0 2px ${rgba(look.accent, 0.9)},0 8px 26px rgba(0,0,0,0.35),0 0 30px ${rgba(look.accent, 0.55)};`;
+  wrap.append(pill);
+  if (typeof pill.animate === 'function') {
+    pill.animate(reduced
+      ? [{ opacity: 0 }, { opacity: 1 }]
+      : [{ opacity: 0, transform: 'translateY(-24px) scale(0.6)' }, { opacity: 1, transform: 'translateY(0) scale(1.08)', offset: 0.6 }, { opacity: 1, transform: 'none' }],
+    { duration: reduced ? 300 : 520, delay: reduced ? 0 : 120, easing: 'ease-out', fill: 'backwards' });
+  }
+  return wrap;
+}
+
+/**
+ * Plays celebration `id` (unknown ids: konfetti) over `root` (a positioned element; the show fills it, above
+ * everything, and takes no taps), with an optional `caption` pill at the top. `reduced` (the player's reduced motion):
+ * no movement, a soft glow with the celebration's emblem and the caption, fading in and out. Removes itself after
+ * ~3.6 s; a new show in the same root replaces the old one. Returns a function that stops it at once.
+ */
+export function playCelebration(root, id, { caption = '', reduced = false } = {}) {
+  const noop = () => {};
+  if (!root || !root.ownerDocument) return noop;
+  const doc = root.ownerDocument;
+  const win = doc.defaultView || globalThis;
+  PLAYING.get(root)?.();
+  const key = FX[id] ? id : 'konfetti';
+  const look = LOOK[key];
+  const box = doc.createElement('div');
+  box.className = `celebrate cel-${key}`;
+  box.setAttribute('aria-hidden', 'true');
+  box.style.cssText = 'position:absolute;inset:0;z-index:30;pointer-events:none;overflow:hidden;';
+  const tint = layer(doc, look.tint);
+  const flash = layer(doc, look.flash);
+  box.append(tint, flash);
+  root.append(box);
+  const W = box.clientWidth || win.innerWidth || 390;
+  const H = box.clientHeight || win.innerHeight || 844;
+  const dpr = Math.min(MAX_DPR, win.devicePixelRatio || 1);
+  const s = Math.max(0.7, Math.min(2.2, Math.min(W / 390, H / 720)));
+  const cv = canvasLayer(doc, W, H, dpr);
+  box.append(cv);
+  const ctx = cv.getContext('2d');
+  let done = false;
+  let raf = 0;
+  let timer = 0;
+  const stats = { frames: 0, workMs: 0, workMax: 0, gapMs: 0, gapMax: 0 };
+  const stop = () => {
+    if (done) return;
+    done = true;
+    if (raf && win.cancelAnimationFrame) win.cancelAnimationFrame(raf);
+    clearTimeout(timer);
+    box.remove();
+    if (PLAYING.get(root) === stop) PLAYING.delete(root);
+  };
+  stop.stats = stats;
+  PLAYING.set(root, stop);
+  if (caption) box.append(captionEl(doc, String(caption), look, W, reduced));
+  if (!ctx) { timer = setTimeout(stop, DUR * 1000); return stop; }
+
+  if (reduced) {
+    // no motion: the tint, one soft glow and the emblem (the shop tile's art), faded in and out
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const R = Math.min(W, H) * 0.55;
+    const g = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, R);
+    g.addColorStop(0, rgba(look.accent, 0.55));
+    g.addColorStop(1, rgba(look.accent, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    const size = Math.round(Math.min(W, H) * 0.36);
+    ctx.drawImage(iconArt(doc, key, Math.round(size * dpr)), W / 2 - size / 2, H * 0.42 - size / 2, size, size);
+    tint.style.opacity = look.tint ? '0.7' : '0';
+    if (typeof box.animate === 'function') {
+      box.animate([{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.84 }, { opacity: 0 }], { duration: DUR * 1000, easing: 'linear', fill: 'forwards' });
+      flash.animate([{ opacity: 0 }, { opacity: 0.55, offset: 0.3 }, { opacity: 0 }], { duration: 900, easing: 'ease-out' });
+    }
+    timer = setTimeout(stop, DUR * 1000);
+    return stop;
+  }
+
+  const env = { doc, W, H, s, dpr, ctx };
+  const fx = FX[key](env);
+  let top = ctx;
+  let tcv = null;
+  if (fx.trail) {   // streaks: this canvas fades a little each frame; a clear one on top holds what mustn't smear
+    tcv = canvasLayer(doc, W, H, dpr);
+    box.insertBefore(tcv, cv.nextSibling);
+    top = tcv.getContext('2d') || ctx;
+  }
+  let t = 0;
+  let last = -1;
+  let start = -1;
+  let tintOp = -1;
+  let flashOp = -1;
+  const frame = (now) => {
+    if (done) return;
+    if (start < 0) { start = now; last = now; }
+    const gap = now - last;
+    last = now;
+    const dt = Math.min(gap, 50) / 1000;   // a slow frame slows the show rather than skipping it
+    t += dt;
+    const w0 = win.performance ? win.performance.now() : 0;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    if (fx.trail) {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.globalAlpha = 1 - Math.exp(-fx.trail * Math.max(dt, 0.001));
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      top.setTransform(1, 0, 0, 1, 0, 0);
+      top.clearRect(0, 0, tcv.width, tcv.height);
+      top.setTransform(dpr, 0, 0, dpr, 0, 0);
+    } else ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fx.step(ctx, t, dt, top);
+    // the screen's tint and the bang's flash (opacity only: the compositor's cheap work)
+    const ti = look.tint ? (fx.tintAt ? fx.tintAt(t) : Math.min(1, t / 0.3)) : 0;
+    if (Math.abs(ti - tintOp) > 0.01) { tintOp = ti; tint.style.opacity = ti.toFixed(3); }
+    const fl = fx.flash > 0.004 ? fx.flash : 0;
+    if (Math.abs(fl - flashOp) > 0.01 || (fl === 0 && flashOp !== 0)) { flashOp = fl; flash.style.opacity = fl.toFixed(3); }
+    fx.flash *= Math.exp(-9 * dt);
+    if (t > DUR - OUT) box.style.opacity = clamp01((DUR - t) / OUT).toFixed(3);
+    if (win.performance) {
+      const w = win.performance.now() - w0;
+      stats.frames++;
+      stats.workMs += w;
+      if (w > stats.workMax) stats.workMax = w;
+      if (stats.frames > 1) {
+        stats.gapMs += gap;
+        if (gap > stats.gapMax) stats.gapMax = gap;
+      }
+    }
+    if (t >= DUR || now - start > DUR * 1000 + 2500) { stop(); return; }
+    raf = win.requestAnimationFrame(frame);
+  };
+  raf = win.requestAnimationFrame(frame);
+  timer = setTimeout(stop, DUR * 1000 + 4000);   // a hidden page runs no frames: the show still goes away
+  return stop;
+}

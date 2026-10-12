@@ -117,7 +117,9 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
       if (method !== 'GET') return methodNotAllowed('GET');
       // (1.14) `signin`: Sign in with Google is open (the client ID and AUTH_SECRET are both set); the game shows
       // the sign-in only then, so a website or app ahead of the server never offers a sign-in that can't work
-      return json(200, { free: ctx.cfg.dailyFreeTries, from: ctx.cfg.dailyFreeFrom, signin: !!(ctx.cfg.googleClientId && ctx.cfg.authSecret) }, { 'Cache-Control': 'public, max-age=300' });
+      const body = { free: ctx.cfg.dailyFreeTries, from: ctx.cfg.dailyFreeFrom, signin: !!(ctx.cfg.googleClientId && ctx.cfg.authSecret) };
+      if (ctx.cfg.appLatest) body.app = ctx.cfg.appLatest;   // (1.15) the newest Android app on Google Play
+      return json(200, body, { 'Cache-Control': 'public, max-age=300' });
     }
     if (path === '/subscribe') return method === 'POST' ? subscribe(request, ctx) : methodNotAllowed('POST');
     if (path.startsWith('/account/')) return routeAccount(request, path, ctx);

@@ -2,7 +2,7 @@
 // pause/visibility, settings, service worker and debug hooks.
 // First of all: the language, before any other module reads a string (js/core/langboot.js).
 import { SAVED_LANG, PREVIEW_LANG } from './core/langboot.js';
-import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL, TESTER_GIFT, REFILL, AUTH } from './config.js';
+import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL, TESTER_GIFT, REFILL, AUTH, VERSION } from './config.js';
 import { bus } from './core/bus.js';
 import { S, POWERUP_INFO, COSMETIC_INFO, RANK_INFO } from './core/strings.js';
 import { fmtDateKey, fmtM, fmtInt } from './core/format.js';
@@ -929,10 +929,32 @@ async function loadDailyTries() {
     signinOpen = true;
     ui.setAccount(accountStatus());
   }
+  // (1.15, the owner: "Isnt there a way to do it through a app notification?") a newer app on Google Play: one card per version
+  if (IN_APP && typeof cfg.app === 'string' && newerVersion(cfg.app, VERSION)) offerUpdate(cfg.app);
   const before = JSON.stringify(store.getDailyTries());
   store.setDailyTries(cfg);
   if (JSON.stringify(store.getDailyTries()) !== before && screen === 'menu') showMenu();
 }
+/** (1.15) True when version `a` ("1.15.2") is newer than `b`. */
+function newerVersion(a, b) {
+  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  return false;
+}
+const PLAY_URL = 'https://play.google.com/store/apps/details?id=com.lekkerlocal.stapel';
+const UPDATE_SEEN = 'stapel.v1.updateSeen';
+/** (1.15) "Nuwe weergawe!": once per version, on the menu (never during a tower or over another sheet). */
+function offerUpdate(version) {
+  let seen = '';
+  try { seen = localStorage.getItem(UPDATE_SEEN) || ''; } catch { /* private mode: it may show again */ }
+  if (seen === version || screen !== 'menu') return;
+  if (ui.showUpdate(version, PLAY_URL)) {
+    try { localStorage.setItem(UPDATE_SEEN, version); } catch { /* fine */ }
+  }
+}
+// (a test page: ?debug=1&update=1.99.0 shows the card as an older app would)
+if (DEBUG && /^\d+\.\d+\.\d+$/.test(params.get('update') || '')) setTimeout(() => offerUpdate(params.get('update')), 1500);
 if (DEBUG && /^\d+(,\d{4}-\d{2}-\d{2})?$/.test(params.get('tries') || '')) {
   const [free, from] = params.get('tries').split(',');
   store.setDailyTries({ free: Number(free), from: from || undefined });
