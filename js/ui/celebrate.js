@@ -2412,7 +2412,9 @@ export function playCelebration(root, id, { caption = '', reduced = false } = {}
     if (start < 0) { start = now; last = now; }
     const gap = now - last;
     last = now;
-    const dt = Math.min(gap, 50) / 1000;   // a slow frame slows the show rather than skipping it
+    // a slow frame slows the show rather than skipping it; a phone that can't keep up at all still gets the whole show
+    // and its fade-out, about a second late (once it lags that far behind the clock, it catches up)
+    const dt = Math.min(gap, (now - start) / 1000 - t > 0.9 ? 250 : 50) / 1000;
     t += dt;
     const w0 = now;
     ctx.setTransform(1, 0, 0, 1, 0, 0);

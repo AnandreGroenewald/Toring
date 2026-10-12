@@ -2621,3 +2621,6 @@ button.chip { font: inherit; border: 0; cursor: pointer; -webkit-tap-highlight-c
   100% { opacity: 0; transform: translate(calc((var(--k) - 2) * 14 * var(--u)), calc(-46 * var(--u))) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) { .wk-chest.is-today .chest, .rw-week .chest.is-opening, .rw-week .chest.is-opening .chest-lid, .wk-chest.is-big::after { animation: none; } }
+/* (1.15) the candy sky went mint and lavender (it looked too like the cherry blossom) */
+.skin-scene-lekkergoed { background: linear-gradient(180deg, #b3a2ff, #8fe9da 55%, #fff6fb); }
+.skin-scene-lekkergoed::after { background: linear-gradient(180deg, #ffb3d9, #8ee6c9); }

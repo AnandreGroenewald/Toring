@@ -9,7 +9,7 @@
 import { GAME_W, LAYOUT, PX_PER_M, WATER } from '../config.js';
 import { canvasTexture, clamp, lerpColor } from '../game/effects.js';
 import { emojiTexture } from '../game/emojitex.js';
-import { SkinLayers } from './bgskins.js';
+import { SkinLayers, ensureScenery } from './bgskins.js';
 
 const HORIZON0 = LAYOUT.dropLineY + WATER.startOffsetPx - 8;   // screen y of the bay horizon at 0 m
 const SCENERY_PARALLAX = 0.12;
@@ -60,14 +60,17 @@ const smooth = (e0, e1, x) => {
 // size, how low), and for the night the moon and the stars from the ground up. 'dag' is the game's own Cape Town day.
 const BG_SKINS = {
   dag: null,
-  sonsondergang: { sky: [[0xff7e5f, 0xffd194], [0x7b4397, 0xff8c7a]], scen: 0xffc2b0, cloud: 0xffd9c9, sunTint: 0xff9b4a, sunScale: 1.5, sunDrop: 90 },
-  lekkergoed: { sky: [[0xff9ad5, 0xfff0fb], [0xb28dff, 0xffc4ea]], scen: 0xffd6ee, cloud: 0xffffff, sunTint: 0xfff59d, sunScale: 1.15 },
-  nag: { sky: [[0x0b1640, 0x24396f], [0x070f30, 0x1a2a5e]], scen: 0x55639e, cloud: 0x7f8bb8, sun: 0, moon: 1, stars: 0.95 },
+  // (1.15, the owner: "most of them has the mountain please change that") `scenery`: the world's own land instead of Table
+  // Mountain (js/scenes/bgskins.js), shown untinted by `scen` (which still tints the bay)
+  sonsondergang: { sky: [[0xff7e5f, 0xffd194], [0x7b4397, 0xff8c7a]], scen: 0xffc2b0, cloud: 0xffd9c9, sunTint: 0xff9b4a, sunScale: 1.5, sunDrop: 90, scenery: 'bgs_land_savanna' },
+  // (1.15, the owner: "Candy blossem and cany sky looks very simular") the candy sky went mint and lavender
+  lekkergoed: { sky: [[0x8fe9da, 0xfff6fb], [0xb3a2ff, 0xc9fff0]], scen: 0xe6fff8, cloud: 0xffffff, sunTint: 0xfff59d, sunScale: 1.15, scenery: 'bgs_land_candy' },
+  nag: { sky: [[0x0b1640, 0x24396f], [0x070f30, 0x1a2a5e]], scen: 0x55639e, cloud: 0x7f8bb8, sun: 0, moon: 1, stars: 0.95, scenery: 'bgs_land_lighthouse' },
   // (1.15) four worlds with their own layers (js/scenes/bgskins.js); `cloudA` thins the clouds, `gulls` 0 sends them away
-  kersieblom: { sky: [[0xff9ec4, 0xffe3ed], [0xff86b6, 0xffcfe1]], scen: 0xffd2e3, cloud: 0xfff1f6, sunTint: 0xfff0d0, sunScale: 1.2, sunDrop: 40 },
-  noorderlig: { sky: [[0x041428, 0x0b3a48], [0x030c1f, 0x062a3a]], scen: 0x3b5266, cloud: 0x5d7286, sun: 0, moon: 0.45, stars: 0.95, cloudA: 0.45, gulls: 0 },
-  ruimte: { sky: [[0x07051a, 0x1c0c3e], [0x05031a, 0x140934]], scen: 0x46395f, cloud: 0x6a5c8c, sun: 0, stars: 1, cloudA: 0.18, gulls: 0 },
-  sintgolf: { sky: [[0x1a0533, 0xff4f8b], [0x14042c, 0x8a2299]], scen: 0x5e2f8c, cloud: 0xd08ad8, sun: 0, stars: 0.55, cloudA: 0.55, gulls: 0 },
+  kersieblom: { sky: [[0xff9ec4, 0xffe3ed], [0xff86b6, 0xffcfe1]], scen: 0xffd2e3, cloud: 0xfff1f6, sun: 0, cloudA: 0.8, scenery: 'bgs_land_fuji' },
+  noorderlig: { sky: [[0x041428, 0x0b3a48], [0x030c1f, 0x062a3a]], scen: 0x3b5266, cloud: 0x5d7286, sun: 0, moon: 0.45, stars: 0.95, cloudA: 0.45, gulls: 0, scenery: 'bgs_land_nordic' },
+  ruimte: { sky: [[0x07051a, 0x1c0c3e], [0x05031a, 0x140934]], scen: 0x46395f, cloud: 0x6a5c8c, sun: 0, stars: 1, cloudA: 0.18, gulls: 0, scenery: 'bgs_land_moon' },
+  sintgolf: { sky: [[0x1a0533, 0xff4f8b], [0x14042c, 0x8a2299]], scen: 0x5e2f8c, cloud: 0xd08ad8, sun: 0, stars: 0.55, cloudA: 0.55, gulls: 0, scenery: 'bgs_land_wire' },
 };
 const BG_SKIN_IDS = Object.keys(BG_SKINS);
 /** Per-channel multiply of two 0xRRGGBB colours (a tint over a tint). */
@@ -1110,6 +1113,10 @@ export class BgScene extends Phaser.Scene {
       this.lastTint = -1;
       this.sun.setTint(sk?.sunTint ?? 0xffffff);
       this.skinFx.setSkin(sid);
+      // (1.15) the world's own land in place of Table Mountain (the Cape day keeps the mountain and its tablecloth)
+      const land = sk?.scenery ? ensureScenery(this, sk.scenery, MTN_W, MTN_H) : null;
+      this.mountains.setTexture(land || 'bg_mountains');
+      this.ownLand = !!land;
     }
     const sk = this.bgSkin;
 
@@ -1145,7 +1152,7 @@ export class BgScene extends Phaser.Scene {
     const sceneryOn = horizon - MTN_H < H && ground > 0.01;
     this.mountains.setVisible(sceneryOn).y = horizon;
     this.mountains.alpha = ground;
-    this.tablecloth.setVisible(sceneryOn).y = horizon - PLATEAU_H - 28 + Math.sin(this.t * 0.4) * 1.5;
+    this.tablecloth.setVisible(sceneryOn && !this.ownLand).y = horizon - PLATEAU_H - 28 + Math.sin(this.t * 0.4) * 1.5;
     this.skyline.setVisible(sceneryOn && this.skylineOn).y = horizon;
     this.skyline.alpha = 0.9 * (1 - smooth(60, 200, alt)) * (1 - dark * 0.3) * ground;
     this.tablecloth.alpha = (0.9 - dark * 0.3) * ground;
@@ -1173,9 +1180,10 @@ export class BgScene extends Phaser.Scene {
     const tintKey = Math.round(dark * 60) * 100 + Math.round(night * 60) + Math.max(0, BG_SKIN_IDS.indexOf(this.skinId)) * 100000;
     if (tintKey !== this.lastTint) {
       this.lastTint = tintKey;
-      let scen = lerpColor(lerpColor(0xffffff, 0x8f97c8, night), 0x7a8290, dark);
+      const base = lerpColor(lerpColor(0xffffff, 0x8f97c8, night), 0x7a8290, dark);
+      let scen = base;
       if (sk) scen = mulColor(scen, sk.scen);
-      this.mountains.setTint(scen);
+      this.mountains.setTint(this.ownLand ? base : scen);   // (1.15) a world's own land keeps its colours
       this.skyline.setTint(scen);
       this.tablecloth.setTint(scen);
       this.sea.setTint(scen);
