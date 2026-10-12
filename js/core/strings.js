@@ -48,6 +48,8 @@ export const S = {
   height: 'Hoogte',
   points: 'Punte',
   extraTries: 'Ekstra pogings',
+  boardPlace: 'Plek vandag',
+  boardShort: 'Ranglys',
   lives: 'Hartjies',
   next: 'Volgende',
   combo: 'Kombo',

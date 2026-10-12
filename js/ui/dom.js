@@ -886,8 +886,13 @@ export function createUI(bus) {
       'aria-label': m.boardPlace ? `${S.boardTitle}: #${m.boardPlace}` : S.boardTitle, title: S.boardTitle,
       onclick: () => { audio.play('click'); bus.emit('ui:board'); },
     }, emo('🏆'), m.boardPlace ? h('span', { text: `#${m.boardPlace}` }) : null) : null;
-    // a brand-new player sees no grey "🔥 0" before they have played
-    const card = h('div', { class: 'card daily-card' }, trophy, (stats.played | 0) > 0 ? streakChip(stats.currentStreak) : null, head, weekStrip(m.week, m.dateKey));
+    // a brand-new player sees no grey "🔥 0" before they have played. (1.15, the owner: "What if we move the flame to the
+    // weekly challenge, still on the right side, and the trophy to the Done for today") the flame sits on the weekly
+    // chests' strip; once today is done the leaderboard is a tile of the done card
+    const strip = weekStrip(m.week, m.dateKey);
+    const flame = (stats.played | 0) > 0 ? streakChip(stats.currentStreak) : null;
+    if (strip && flame) strip.append(flame);
+    const card = h('div', { class: 'card daily-card' }, done ? null : trophy, strip ? null : flame, head, strip);
     if (done) {
       // (1.12) the try that counts (the better of two, 🔁 when there were two), and "Nog 'n kans"
       const r = m.best || entry.result || {};
@@ -904,7 +909,12 @@ export function createUI(bus) {
           h('div', { class: 'done-stats' },
             doneTile('🏗️', fmtM(r.heightM || 0), S.height),
             doneTile('⭐', fmtInt(r.score || 0), S.points),
-            r.retried ? doneTile('🔁', String((r.tries || 2) - 1), S.extraTries, 'done-retry') : null),
+            r.retried ? doneTile('🔁', String((r.tries || 2) - 1), S.extraTries, 'done-retry') : null,
+            m.boardOn ? h('button', {
+              type: 'button', class: 'done-tile done-board', 'aria-label': m.boardPlace ? `${S.boardTitle}: #${m.boardPlace}` : S.boardTitle,
+              onclick: () => { audio.play('click'); bus.emit('ui:board'); },
+            }, h('span', { class: 'done-tile-top' }, emo('🏆'), m.boardPlace ? h('b', { text: `#${m.boardPlace}` }) : null),
+            h('small', { text: m.boardPlace ? S.boardPlace : S.boardShort })) : null),
           countdownEl('done-count')));
       if (rt && rt.status === 'ready') {
         // bought, not played yet: it's the big button now

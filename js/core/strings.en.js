@@ -49,6 +49,8 @@ export const S_EN = {
   height: 'Height',
   points: 'Points',
   extraTries: 'Extra tries',
+  boardPlace: 'Place today',
+  boardShort: 'Leaderboard',
   lives: 'Hearts',
   next: 'Next',
   combo: 'Combo',

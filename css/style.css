@@ -2884,9 +2884,6 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .duel-card .mode-btn[data-mode="race"] .emoji { background: linear-gradient(145deg, #ff9a6b, #d9381e); }
 .duel-card .mode-btn[data-mode="turns"] .emoji { background: linear-gradient(145deg, #7cc0ff, #2a62c9); }
 .duel-card .mode-btn[aria-pressed="false"] .emoji { opacity: 0.8; }
-.duel-card .pcard:not(.frame-holo) { background: linear-gradient(180deg, #2a3a68, #172244); color: #fff; }
-.duel-card .pcard .pc-title { color: #9fb0d0; }
-.duel-card .pcard .pc-rank { color: #fff; }
 /* (1.15, the owner: "And the chest also") the weekly chests on the same dark glass, the title and the amounts in gold */
 .week-strip {
   background: radial-gradient(120% 120% at 50% 0%, #2a3a68 0%, #17213f 60%, #0f162d 100%); color: #ffd75a;
@@ -2898,3 +2895,66 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .week-strip .wk-line { color: #fff; }
 .week-strip .wk-line .coin-ic, .week-strip .wk-line .emoji { filter: drop-shadow(0 0 calc(4 * var(--u)) rgba(255, 200, 60, 0.6)); }
 .week-strip .wk-chest:not(.is-done):not(.is-today) .chest { opacity: 0.92; filter: saturate(0.85); }
+/* (1.15) the flame on the weekly chests' strip (its right edge), the leaderboard a tile of the done card */
+.week-strip { position: relative; }
+.week-strip > .streak {
+  position: absolute; top: calc(-22 * var(--u)); right: calc(14 * var(--u)); height: calc(50 * var(--u)); min-height: 36px;
+  padding: 0 calc(18 * var(--u)) 0 calc(12 * var(--u)); font-size: calc(26 * var(--u));
+  background: linear-gradient(180deg, #ffb35c, #f06a1a); color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 0 calc(12 * var(--u)) rgba(255, 140, 40, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.5); transform: rotate(3deg);
+}
+.week-strip > .streak.is-zero { background: rgba(255, 255, 255, 0.14); color: #c9d4ea; box-shadow: none; text-shadow: none; }
+.week-strip > .streak .emoji { font-size: calc(30 * var(--u)); }
+.done-board { border: 0; font: inherit; color: inherit; cursor: pointer; background: linear-gradient(180deg, rgba(255, 215, 90, 0.22), rgba(255, 215, 90, 0.1)); box-shadow: inset 0 0 0 1px rgba(255, 215, 90, 0.45); }
+.done-board b { color: #ffd75a; }
+.done-board small { color: #ffe9a8; }
+.done-board:active { transform: scale(0.97); }
+
+/* (1.15, the owner: "Make a white outline on this") */
+.duel-card .nick-input { border: 2px solid rgba(255, 255, 255, 0.85); }
+
+/* (1.15, the owner: "it still doesnt fit, it needs to pop out. People needs to buy it for a reason") the player card as a
+   collectible: each frame its own rich card and glow (wood, sea, gold, Springbok, fire, neon, holo, diamond), a shine that
+   sweeps across, the medal standing out over the left edge, the title on a nameplate, the rank in a pill. The shop's
+   frame swatches show the same card colours. */
+.frame-hout { --pc-a: #a8743c; --pc-b: #5a3518; --pc-glow: rgba(200, 140, 70, 0.4); }
+.frame-see { --pc-a: #34c4bd; --pc-b: #0f5a78; --pc-glow: rgba(47, 181, 176, 0.5); }
+.frame-goud { --pc-a: #f7cf55; --pc-b: #a86e00; --pc-glow: rgba(255, 200, 60, 0.6); }
+.frame-springbok { --pc-a: #23a35a; --pc-b: #0b4526; --pc-glow: rgba(247, 201, 72, 0.45); }
+.frame-vuur { --pc-a: #ff7f3f; --pc-b: #9e1d0c; --pc-glow: rgba(255, 110, 40, 0.6); }
+.frame-neon { --pc-a: #33115c; --pc-b: #12062a; --pc-glow: rgba(255, 63, 164, 0.65); }
+.frame-diamant { --pc-a: #9fe8fb; --pc-b: #2a86b8; --pc-glow: rgba(127, 220, 240, 0.75); }
+:where(.pcard) { --pc-a: #3a4a7a; --pc-b: #1a2346; --pc-glow: rgba(120, 150, 255, 0.35); }
+.pcard {
+  position: relative; isolation: isolate; color: #fff;
+  padding: calc(14 * var(--u)) calc(20 * var(--u)) calc(14 * var(--u)) calc(16 * var(--u));
+  background: linear-gradient(135deg, var(--pc-a), var(--pc-b));
+  box-shadow: 0 calc(10 * var(--u)) calc(24 * var(--u)) rgba(5, 10, 30, 0.35), 0 0 calc(20 * var(--u)) var(--pc-glow);
+}
+.pcard::after {
+  content: ''; position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(115deg, transparent 36%, rgba(255, 255, 255, 0.32) 47%, transparent 58%) no-repeat;
+  background-size: 260% 100%; animation: medal-shine 4.4s ease-in-out infinite;
+}
+.pcard .pc-name { color: #fff; text-shadow: 0 calc(2 * var(--u)) calc(4 * var(--u)) rgba(0, 0, 0, 0.4); }
+.pcard .pc-title { align-self: center; margin-top: calc(4 * var(--u)); padding: calc(2 * var(--u)) calc(12 * var(--u)); border-radius: 999px; background: rgba(0, 0, 0, 0.28); color: #ffe9a8; }
+.pcard .pc-rank { padding: calc(4 * var(--u)) calc(12 * var(--u)) calc(4 * var(--u)) calc(6 * var(--u)); border-radius: 999px; background: rgba(0, 0, 0, 0.26); color: #fff; }
+/* the medal bigger than the card is tall: it stands out above and below it */
+.pcard .pc-badge { position: relative; z-index: 2; margin: calc(-18 * var(--u)) 0; }
+.pcard .pc-badge .medal { width: calc(98 * var(--u)); height: calc(98 * var(--u)); filter: drop-shadow(0 calc(6 * var(--u)) calc(8 * var(--u)) rgba(0, 0, 0, 0.45)); }
+.pcard .pc-badge .medal .emoji { font-size: calc(52 * var(--u)); }
+.pcard.is-compact .pc-badge { margin: calc(-12 * var(--u)) 0; }
+.pcard.is-compact .pc-badge .medal { width: calc(66 * var(--u)); height: calc(66 * var(--u)); }
+.rank-box { padding-top: calc(24 * var(--u)); }
+.pcard.frame-holo {
+  border: calc(5 * var(--u)) solid rgba(255, 255, 255, 0.7); color: #1d2b45;
+  background: linear-gradient(115deg, #ffb3e0, #a8f0ff, #c9b3ff, #fff7b0, #a8ffd8, #ffb3e0); background-size: 300% 300%;
+  animation: holo-card 5s linear infinite; box-shadow: 0 calc(10 * var(--u)) calc(24 * var(--u)) rgba(5, 10, 30, 0.3), 0 0 calc(22 * var(--u)) rgba(178, 141, 255, 0.7);
+}
+@keyframes holo-card { from { background-position: 0% 50%; } to { background-position: 300% 50%; } }
+.pcard.frame-holo .pc-name { color: #1d2b45; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7); }
+.pcard.frame-holo .pc-title, .pcard.frame-holo .pc-rank { background: rgba(255, 255, 255, 0.55); color: #2a2050; }
+.pcard.frame-goud .pc-name, .pcard.frame-diamant .pc-name { text-shadow: 0 calc(2 * var(--u)) calc(5 * var(--u)) rgba(60, 30, 0, 0.55); }
+.frame-swatch:not(.frame-holo) { background: linear-gradient(135deg, var(--pc-a, #fff), var(--pc-b, #fff)); box-shadow: 0 0 calc(10 * var(--u)) var(--pc-glow, transparent); }
+@media (prefers-reduced-motion: reduce) { .pcard::after, .pcard.frame-holo { animation: none; } }
+#ui.rm .pcard::after, #ui.rm .pcard.frame-holo { animation: none; }

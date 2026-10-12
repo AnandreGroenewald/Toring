@@ -48,7 +48,7 @@ const PILL_NAME_MAX = 10;   // characters of a name in a pill (then "…")
 const PILL_HEART = 0.56;    // heart scale in a pill
 const PILL_GAP = 25;        // between hearts
 const TRACK_W = 26;         // Wedloop: the race track on the right edge (1.9 had 18)
-const TRACK_DOT = 40;       // a player's marker on it
+const TRACK_DOT = 22;       // a player's marker: (1.15, the owner: "make the sircles smaller or replace it") a small pointer
 const YOU_TINT = 0xffc23d;
 const THEM_TINT = 0x4fb3ff;
 const LEAD_M = 1;           // Wedloop: who leads changes by this much before it's said
@@ -606,23 +606,24 @@ export class HudScene extends Phaser.Scene {
     const top = Math.round(H * 0.25);
     const bottom = Math.round(H * 0.52);   // (clear of the island's sign at the start)
     const x = this.W - 10 - TRACK_W / 2;
-    const dot = (key, fill, label) => {
+    // a marker: a small pointer in the player's colour, beside the track, pointing at how high their tower is
+    const dot = (key, fill) => {
       if (this.textures.exists(key)) return key;
-      const tex = this.textures.createCanvas(key, TRACK_DOT + 4, TRACK_DOT + 4);
+      const S2 = TRACK_DOT + 6;
+      const tex = this.textures.createCanvas(key, S2, S2);
       const ctx = tex.getContext();
-      const c = (TRACK_DOT + 4) / 2;
       ctx.beginPath();
-      ctx.arc(c, c, TRACK_DOT / 2 - 2, 0, Math.PI * 2);
+      ctx.moveTo(3, 4);
+      ctx.lineTo(S2 - 3, S2 / 2);
+      ctx.lineTo(3, S2 - 4);
+      ctx.quadraticCurveTo(7, S2 / 2, 3, 4);
+      ctx.closePath();
+      ctx.lineJoin = 'round';
       ctx.fillStyle = rgba(fill, 1);
       ctx.fill();
-      ctx.lineWidth = 4;
+      ctx.lineWidth = 3;
       ctx.strokeStyle = '#1d2b45';
       ctx.stroke();
-      ctx.fillStyle = '#1d2b45';
-      ctx.font = `900 ${Math.round(TRACK_DOT * 0.42)}px ${FONT}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, c, c + 1);
       tex.refresh();
       return key;
     };
@@ -634,11 +635,12 @@ export class HudScene extends Phaser.Scene {
     const themFill = add(this.add.image(x + fillW / 2 + 1, bottom, 'fx_px').setOrigin(0.5, 1).setDisplaySize(fillW, 1).setTint(THEM_TINT));
     const ticks = DUEL.marks.map((m) => add(this.add.image(x, this.trackY(m, top, bottom), 'fx_px').setDisplaySize(TRACK_W + 10, 5).setAlpha(0.8)));
     const flag = add(text(this, x - 2, top - 24, '🏁', 34, { emoji: true, stroke: false }).setOrigin(0.5));
-    const them = add(this.add.image(x, bottom, dot('hud_dot_them2', THEM_TINT, '')));
-    const you = add(this.add.image(x, bottom, dot('hud_dot_you2', YOU_TINT, '')));
+    const px = x - TRACK_W / 2 - TRACK_DOT / 2 - 2;
+    const them = add(this.add.image(px, bottom, dot('hud_ptr_them', THEM_TINT)));
+    const you = add(this.add.image(px, bottom, dot('hud_ptr_you', YOU_TINT)));
     // each marker's name and how far to the finish ride along beside it
-    const themLabel = add(text(this, x - TRACK_DOT / 2 - 6, bottom, '', 24, { strokeMul: 0.22, emoji: true }).setOrigin(1, 0.5));
-    const youLabel = add(text(this, x - TRACK_DOT / 2 - 6, bottom, '', 24, { strokeMul: 0.22 }).setOrigin(1, 0.5));
+    const themLabel = add(text(this, px - TRACK_DOT / 2 - 4, bottom, '', 22, { strokeMul: 0.22, emoji: true }).setOrigin(1, 0.5));
+    const youLabel = add(text(this, px - TRACK_DOT / 2 - 4, bottom, '', 22, { strokeMul: 0.22 }).setOrigin(1, 0.5));
     const t = { x, top, bottom, bg, ticks, flag, them, you, themLabel, youLabel, youFill, themFill, fillW, youY: bottom, themY: bottom, youStr: '', themStr: '', claimed: '' };
     for (const o of [bg, ...ticks, flag, them, you, themLabel, youLabel]) o.setAlpha(0.95);
     for (const o of [youFill, themFill]) o.setAlpha(0.9);
