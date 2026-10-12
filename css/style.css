@@ -2531,6 +2531,8 @@ canvas.skin-swatch { display: block; width: 100%; height: 100%; }
 }
 /* (1.15) the "Nuut" dot on the menu's Winkel button */
 .dock-ic { position: relative; }
-.dock-new { position: absolute; top: calc(-8 * var(--u)); right: calc(-10 * var(--u)); padding: calc(2 * var(--u)) calc(7 * var(--u)); border-radius: 999px; background: #ff3b5c; color: #fff; font: 900 max(9px, calc(14 * var(--u))) / 1.2 var(--font); text-transform: uppercase; box-shadow: 0 0 0 calc(2 * var(--u)) #fff, 0 0 calc(10 * var(--u)) rgba(255, 59, 92, 0.6); animation: dock-new-pulse 1.8s ease-in-out infinite; }
+.dock-new { position: absolute; top: calc(-12 * var(--u)); left: calc(-22 * var(--u)); padding: calc(2 * var(--u)) calc(7 * var(--u)); border-radius: 999px; background: #ff3b5c; color: #fff; font: 900 max(9px, calc(14 * var(--u))) / 1.2 var(--font); text-transform: uppercase; box-shadow: 0 0 0 calc(2 * var(--u)) #fff, 0 0 calc(10 * var(--u)) rgba(255, 59, 92, 0.6); animation: dock-new-pulse 1.8s ease-in-out infinite; }
 @keyframes dock-new-pulse { 50% { transform: scale(1.12); } }
 @media (prefers-reduced-motion: reduce) { .dock-new { animation: none; } }
+/* (1.15) a celebration's shop tile art (js/ui/celebrate.js drawCelebrationIcon) */
+canvas.cel-icon { display: block; width: calc(84 * var(--u)); height: calc(84 * var(--u)); filter: drop-shadow(0 calc(4 * var(--u)) calc(6 * var(--u)) rgba(0, 0, 0, 0.25)); }

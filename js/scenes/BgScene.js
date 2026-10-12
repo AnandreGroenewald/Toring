@@ -9,6 +9,7 @@
 import { GAME_W, LAYOUT, PX_PER_M, WATER } from '../config.js';
 import { canvasTexture, clamp, lerpColor } from '../game/effects.js';
 import { emojiTexture } from '../game/emojitex.js';
+import { SkinLayers } from './bgskins.js';
 
 const HORIZON0 = LAYOUT.dropLineY + WATER.startOffsetPx - 8;   // screen y of the bay horizon at 0 m
 const SCENERY_PARALLAX = 0.12;
@@ -62,6 +63,11 @@ const BG_SKINS = {
   sonsondergang: { sky: [[0xff7e5f, 0xffd194], [0x7b4397, 0xff8c7a]], scen: 0xffc2b0, cloud: 0xffd9c9, sunTint: 0xff9b4a, sunScale: 1.5, sunDrop: 90 },
   lekkergoed: { sky: [[0xff9ad5, 0xfff0fb], [0xb28dff, 0xffc4ea]], scen: 0xffd6ee, cloud: 0xffffff, sunTint: 0xfff59d, sunScale: 1.15 },
   nag: { sky: [[0x0b1640, 0x24396f], [0x070f30, 0x1a2a5e]], scen: 0x55639e, cloud: 0x7f8bb8, sun: 0, moon: 1, stars: 0.95 },
+  // (1.15) four worlds with their own layers (js/scenes/bgskins.js); `cloudA` thins the clouds, `gulls` 0 sends them away
+  kersieblom: { sky: [[0xff9ec4, 0xffe3ed], [0xff86b6, 0xffcfe1]], scen: 0xffd2e3, cloud: 0xfff1f6, sunTint: 0xfff0d0, sunScale: 1.2, sunDrop: 40 },
+  noorderlig: { sky: [[0x041428, 0x0b3a48], [0x030c1f, 0x062a3a]], scen: 0x3b5266, cloud: 0x5d7286, sun: 0, moon: 0.45, stars: 0.95, cloudA: 0.45, gulls: 0 },
+  ruimte: { sky: [[0x07051a, 0x1c0c3e], [0x05031a, 0x140934]], scen: 0x46395f, cloud: 0x6a5c8c, sun: 0, stars: 1, cloudA: 0.18, gulls: 0 },
+  sintgolf: { sky: [[0x1a0533, 0xff4f8b], [0x14042c, 0x8a2299]], scen: 0x5e2f8c, cloud: 0xd08ad8, sun: 0, stars: 0.55, cloudA: 0.55, gulls: 0 },
 };
 const BG_SKIN_IDS = Object.keys(BG_SKINS);
 /** Per-channel multiply of two 0xRRGGBB colours (a tint over a tint). */
@@ -931,6 +937,7 @@ export class BgScene extends Phaser.Scene {
     this.flyers = [];
     this.flyerNext = FLYERS.map((f) => f.every[0] * Math.random());
 
+    this.skinFx = new SkinLayers(this, W, H);   // (1.15) the four new worlds' own layers
     this.t = 0;
     this.dark = 0;
     this.rain = 0;
@@ -1102,6 +1109,7 @@ export class BgScene extends Phaser.Scene {
       this.skyKey = -1;
       this.lastTint = -1;
       this.sun.setTint(sk?.sunTint ?? 0xffffff);
+      this.skinFx.setSkin(sid);
     }
     const sk = this.bgSkin;
 
@@ -1187,13 +1195,14 @@ export class BgScene extends Phaser.Scene {
       else if (c.x < -half - 20) c.x = W + half + 10;
       const y = ((((c.y0 + altPx * L.p + 180) % span) + span) % span) - 180;
       c.img.setPosition(c.x, y);
-      c.img.alpha = L.alpha * thin;
+      c.img.alpha = L.alpha * thin * (sk?.cloudA ?? 1);
     }
 
     this._updateZones(alt, dt, dark, horizon);
+    this.skinFx.update(dt, { alt, horizon, wind: this.wind, dark, reduced: !!this.scene.get('Game')?.reducedMotion });
 
     // seagulls at low altitude
-    const gullA = 1 - smooth(15, 50, alt);
+    const gullA = (1 - smooth(15, 50, alt)) * (sk?.gulls ?? 1);
     for (const g of this.gulls) {
       const vis = gullA > 0.01;
       g.img.setVisible(vis);

@@ -12,6 +12,7 @@ const WEEK_SHIELD_PRICE = WEEK.shieldPrice;
 import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO, COSMETIC_INFO } from '../core/strings.js';
 import { COIN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic, SKINS, SKIN_KINDS, tierOf } from '../core/economy.js';
 import * as BLOCKS from '../game/blocks.js';
+import { playCelebration, drawCelebrationIcon } from './celebrate.js';
 import { EMOTES, EMOTE_PICKS } from '../config.js';
 import { fmtM, fmtInt, fmtClock, fmtDuration, dayName, monthName } from '../core/format.js';
 import { shareResult } from '../core/share.js';
@@ -1154,6 +1155,7 @@ export function createUI(bus) {
     if (kind === 'frame') return h('span', { class: `frame-swatch frame-${item.id}` });
     if (kind === 'title') return h('span', { class: 'title-prev', text: COSMETIC_INFO.title[item.id].name });
     if (kind === 'style') return stylePreview(item);
+    if (kind === 'celebration') return celebrationIcon(item);
     if (kind === 'badge') return item.emoji ? medal(item) : h('span', { class: 'medal medal-none', 'aria-hidden': 'true' }, h('i', { class: 'medal-face' }));
     return emo(item.emoji || '–');
   }
@@ -1341,25 +1343,26 @@ export function createUI(bus) {
    */
   function celebrate(id, { caption = '', sound = true } = {}) {
     const c = cosmetic('celebration', id) || cosmetic('celebration', 'konfetti');
-    const box = h('div', { class: `celebrate cel-${c.id}`, 'aria-hidden': 'true' });
-    const n = reducedMotion() ? 0 : 24;
-    for (let i = 0; i < n; i++) {
-      box.append(h('i', {
-        text: c.emoji,
-        vars: {
-          '--x': `${(Math.random() * 100).toFixed(1)}%`,
-          '--s': (40 + Math.random() * 40).toFixed(0),
-          '--t': `${(1.8 + Math.random() * 1.4).toFixed(2)}s`,
-          '--d': `${(Math.random() * 0.8).toFixed(2)}s`,
-          '--dx': (Math.random() * 200 - 100).toFixed(0),
-          '--rot': `${(Math.random() * 720 - 360).toFixed(0)}deg`,
-        },
-      }));
-    }
-    box.append(h('b', { class: 'cel-big' }, emo(c.emoji), caption ? h('span', { class: 'cel-cap', text: caption }) : null));
-    root.append(box);
     if (sound) audio.play('record');
-    setTimeout(() => box.remove(), 4300);
+    // (1.15, the owner: "the celebration icons is very meh") each celebration is its own show (js/ui/celebrate.js)
+    try {
+      playCelebration(root, c.id, { caption, reduced: reducedMotion() });
+    } catch {
+      // the show is decoration: never let it stop the results
+    }
+  }
+
+  /** (1.15) A celebration's shop tile: its own art (js/ui/celebrate.js), the emoji when a canvas can't be drawn. */
+  function celebrationIcon(item) {
+    try {
+      const c = doc.createElement('canvas');
+      drawCelebrationIcon(c, item.id);
+      c.className = 'cel-icon';
+      c.setAttribute('aria-hidden', 'true');
+      return c;
+    } catch {
+      return emo(item.emoji || '🎊');
+    }
   }
 
   // ---------------------------------------------------------------------------

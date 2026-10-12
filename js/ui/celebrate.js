@@ -20,11 +20,11 @@ const EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", s
 const LOOK = {
   konfetti: { accent: '#ff4f9a', tint: null, flash: 'radial-gradient(ellipse at 50% 100%, rgba(255,250,230,0.85), rgba(255,250,230,0) 70%)' },
   vuurwerk: { accent: '#ffcf4a', tint: 'radial-gradient(ellipse at 50% 30%, rgba(34,24,86,0.62), rgba(4,5,22,0.9))', flash: 'rgba(255,236,200,0.55)' },
-  vuvuzela: { accent: '#ffb612', tint: 'linear-gradient(to top, rgba(0,90,52,0.5), rgba(0,60,35,0.12) 60%, rgba(0,0,0,0))', flash: 'radial-gradient(ellipse at 50% 85%, rgba(255,214,90,0.8), rgba(255,214,90,0) 70%)' },
-  braai: { accent: '#ff8a2a', tint: 'linear-gradient(to top, rgba(120,32,0,0.62), rgba(70,18,0,0.22) 55%, rgba(30,8,0,0.05))', flash: 'radial-gradient(ellipse at 50% 85%, rgba(255,190,90,0.8), rgba(255,190,90,0) 70%)' },
+  vuvuzela: { accent: '#ffb612', tint: 'radial-gradient(ellipse at 50% 100%, rgba(255,196,40,0.45), rgba(0,122,77,0.18) 55%, rgba(0,0,0,0) 80%)', flash: 'radial-gradient(ellipse at 50% 85%, rgba(255,214,90,0.8), rgba(255,214,90,0) 70%)' },
+  braai: { accent: '#ff8a2a', tint: 'linear-gradient(to top, rgba(255,120,30,0.5), rgba(130,40,30,0.4) 38%, rgba(36,14,44,0.62))', flash: 'radial-gradient(ellipse at 50% 85%, rgba(255,190,90,0.8), rgba(255,190,90,0) 70%)' },
   skrum: { accent: '#ffc928', tint: 'radial-gradient(circle at 50% 42%, rgba(18,120,62,0.34), rgba(0,46,24,0.72))', flash: 'radial-gradient(circle at 50% 42%, rgba(255,246,200,0.9), rgba(255,246,200,0) 65%)' },
   weerlig: { accent: '#6fd0ff', tint: 'radial-gradient(ellipse at 50% 18%, rgba(40,62,150,0.6), rgba(3,6,24,0.92))', flash: 'linear-gradient(to bottom, rgba(225,240,255,0.95), rgba(170,205,255,0.55))' },
-  goudreen: { accent: '#ffd23f', tint: 'radial-gradient(ellipse at 50% 32%, rgba(255,196,60,0.26), rgba(58,30,0,0.66))', flash: 'radial-gradient(ellipse at 50% 30%, rgba(255,232,150,0.9), rgba(255,232,150,0) 70%)' },
+  goudreen: { accent: '#ffd23f', tint: 'radial-gradient(ellipse 90% 45% at 50% 0%, rgba(255,214,90,0.55), rgba(255,214,90,0) 100%), radial-gradient(ellipse at 50% 32%, rgba(255,196,60,0.26), rgba(58,30,0,0.66))', flash: 'radial-gradient(ellipse at 50% 30%, rgba(255,232,150,0.9), rgba(255,232,150,0) 70%)' },
   laser: { accent: '#ff3bd8', tint: 'radial-gradient(ellipse at 50% 100%, rgba(70,0,110,0.6), rgba(6,0,22,0.92))', flash: 'radial-gradient(ellipse at 50% 80%, rgba(255,140,240,0.55), rgba(90,230,255,0.18) 60%, rgba(0,0,0,0))' },
   sterrestof: { accent: '#c18bff', tint: 'radial-gradient(ellipse at 50% 42%, rgba(70,26,130,0.58), rgba(7,3,26,0.94))', flash: 'radial-gradient(circle at 50% 42%, rgba(255,246,220,0.95), rgba(200,160,255,0.35) 45%, rgba(0,0,0,0) 80%)' },
 };
@@ -589,79 +589,80 @@ function konfettiFx(env) {
 
 const FW = ['#ff4fa3', '#ffcf4a', '#4fd8ff', '#7dff7a', '#b07cff', '#ff6a3d', '#ffffff', '#ffe9a8'];
 
-/** Vuurwerk: six rockets with sparkling trails burst into peonies, a willow, a ring and a double finale. */
+/** Vuurwerk: rockets with glowing trails burst into peonies, a gold willow and a ring, then a double finale. */
 function vuurwerkFx(env) {
   const { doc, W, H, s } = env;
   const imgs = FW.map((c) => glowSprite(doc, c));
   const head = glowSprite(doc, '#fff3c4');
-  const P = sparks(260);
+  const P = sparks(270);
   const sky = nightSky(env, 36, 0.7);
-  const RISE = 0.6;
+  const RISE = 0.58;
   const plan = [
     { t: 0.0, x: 0.28, y: 0.3, kind: 'peony', c: 0, c2: 6 },
-    { t: 0.3, x: 0.74, y: 0.21, kind: 'peony', c: 2, c2: 4 },
-    { t: 0.66, x: 0.52, y: 0.4, kind: 'willow', c: 7 },
-    { t: 1.02, x: 0.22, y: 0.16, kind: 'ring', c: 3, c2: 6 },
-    { t: 1.36, x: 0.79, y: 0.37, kind: 'peony', c: 4, c2: 1 },
-    { t: 1.82, x: 0.5, y: 0.22, kind: 'finale', c: 0, c2: 1 },
+    { t: 0.28, x: 0.74, y: 0.2, kind: 'peony', c: 2, c2: 4 },
+    { t: 0.6, x: 0.5, y: 0.37, kind: 'willow', c: 7 },
+    { t: 0.95, x: 0.22, y: 0.16, kind: 'ring', c: 3, c2: 6 },
+    { t: 1.28, x: 0.8, y: 0.36, kind: 'peony', c: 4, c2: 1 },
+    { t: 1.72, x: 0.3, y: 0.24, kind: 'finale', c: 0, c2: 1 },
+    { t: 1.84, x: 0.72, y: 0.19, kind: 'finale', c: 2, c2: 6 },
   ];
   for (const r of plan) {
     r.x0 = (r.x + rand(-0.07, 0.07)) * W;
     r.tx = r.x * W;
     r.ty = r.y * H;
     r.bt = -9;
+    r.px = r.x0;
+    r.py = H + 20;
   }
   function burst(r) {
     const big = r.kind === 'finale';
-    const R = (big ? 0.37 : 0.26) * W;
+    const R = (big ? 0.34 : 0.29) * W;
     if (r.kind === 'willow') {
-      for (let i = 0; i < 44; i++) {
-        const a = (i / 44) * TAU + rand(-0.06, 0.06);
+      for (let i = 0; i < 36; i++) {
+        const a = (i / 36) * TAU + rand(-0.06, 0.06);
         const v = R * 2.7 * rand(0.72, 1);
-        P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(1.6, 2.1), 7 * s, 2.7, 95 * s, r.c, 1);
+        P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(1.7, 2.2), 7.5 * s, 2.7, 95 * s, r.c, 1);
       }
       return;
     }
     if (r.kind === 'ring') {
-      for (let i = 0; i < 36; i++) {
-        const a = (i / 36) * TAU;
-        const v = R * 2.4;
-        P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(1.05, 1.25), 6.5 * s, 2.4, 110 * s, r.c, 0);
+      for (let i = 0; i < 28; i++) {
+        const a = (i / 28) * TAU;
+        P.emit(r.tx, r.ty, Math.cos(a) * R * 2.4, Math.sin(a) * R * 2.4, rand(1.05, 1.25), 7 * s, 2.4, 110 * s, r.c, 0);
       }
-      for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * TAU;
-        const v = R * 1.1;
-        P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(0.8, 1), 5 * s, 2.4, 110 * s, r.c2, 1);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * TAU;
+        P.emit(r.tx, r.ty, Math.cos(a) * R * 1.1, Math.sin(a) * R * 1.1, rand(0.8, 1), 6 * s, 2.4, 110 * s, r.c2, 1);
       }
       return;
     }
-    const n = big ? 62 : 46;
+    const n = big ? 48 : 40;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * TAU + rand(-0.05, 0.05);
       const v = R * 2.4 * rand(0.84, 1);
-      P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(1.0, 1.4), 6.5 * s, 2.4, 135 * s, r.c, 1);
+      P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(1.0, 1.45), 7 * s, 2.4, 135 * s, r.c, 1);
     }
-    const n2 = big ? 22 : 16;
-    for (let i = 0; i < n2; i++) {
-      const a = (i / n2) * TAU + rand(-0.1, 0.1);
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * TAU + rand(-0.1, 0.1);
       const v = R * 2.4 * rand(0.38, 0.5);
-      P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(0.75, 1.0), 5.5 * s, 2.4, 120 * s, r.c2, 0);
+      P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(0.75, 1.0), 6 * s, 2.4, 120 * s, r.c2, 0);
     }
-    if (big) {
-      for (let i = 0; i < 34; i++) {
-        const a = (i / 34) * TAU + rand(-0.08, 0.08);
+    if (big && r.c === 0) {   // the first finale also drops a curtain of gold
+      for (let i = 0; i < 22; i++) {
+        const a = (i / 22) * TAU + rand(-0.08, 0.08);
         const v = R * 2.7 * rand(0.55, 0.75);
-        P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(1.5, 1.9), 6.5 * s, 2.7, 90 * s, 7, 1);
+        P.emit(r.tx, r.ty, Math.cos(a) * v, Math.sin(a) * v, rand(1.5, 1.9), 7 * s, 2.7, 90 * s, 7, 1);
       }
     }
   }
   const fx = {
-    trail: 11,
+    trail: 8,
     flash: 0,
     step(ctx, t, dt, top) {
       sky.step(top, t);
       ctx.globalCompositeOperation = 'lighter';
       top.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round';
       for (let i = 0; i < plan.length; i++) {
         const r = plan[i];
         const age = t - r.t;
@@ -671,17 +672,25 @@ function vuurwerkFx(env) {
           const e = 1 - (1 - p) * (1 - p);
           const x = r.x0 + (r.tx - r.x0) * e;
           const y = H + 20 + (r.ty - H - 20) * e;
-          const rr = 7.5 * s;
+          ctx.strokeStyle = 'rgba(255,226,160,0.85)';   // a solid streak (the fade turns it into a trail)
+          ctx.lineWidth = 2.6 * s;
+          ctx.beginPath();
+          ctx.moveTo(r.px, r.py);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+          r.px = x;
+          r.py = y;
+          const rr = 8 * s;
           ctx.drawImage(head, x - rr, y - rr, rr * 2, rr * 2);
-          if (Math.random() < 0.85) P.emit(x, y, rand(-18, 18) * s, rand(30, 90) * s, rand(0.3, 0.6), 3.4 * s, 2, 220 * s, 7, 1);
+          if (Math.random() < 0.7) P.emit(x, y, rand(-18, 18) * s, rand(30, 90) * s, rand(0.3, 0.55), 3.4 * s, 2, 220 * s, 7, 1);
         } else if (r.bt < 0) {
           r.bt = t;
           burst(r);
-          fx.flash = Math.max(fx.flash, r.kind === 'finale' ? 0.55 : 0.3);
+          fx.flash = Math.max(fx.flash, r.kind === 'finale' ? 0.5 : 0.3);
         }
         const ba = t - r.bt;
         if (r.bt >= 0 && ba < 0.4) {
-          const R = (r.kind === 'finale' ? 0.8 : 0.55) * W * (0.55 + ba);
+          const R = (r.kind === 'finale' ? 0.8 : 0.6) * W * (0.55 + ba);
           top.globalAlpha = (1 - ba / 0.4) * 0.6;
           top.drawImage(imgs[r.c], r.tx - R, r.ty - R, R * 2, R * 2);
           top.globalAlpha = 1;
@@ -697,128 +706,61 @@ function vuurwerkFx(env) {
 }
 
 const SA_PAPER = [['#00a862', '#00703f'], ['#ffb612', '#d18e00'], ['#e8423a', '#a82520'], ['#2453e0', '#0b2a8a'], ['#1c1c1c', '#454545'], ['#ffffff', '#d5d9e2']];
-const SA_STREAM = ['#00a05a', '#ffb612', '#de3831', '#1f48d6', '#151515', '#ffffff'];
+const SA_STREAM = ['#00a05a', '#ffb612', '#de3831', '#1f48d6', '#ffffff', '#00a05a', '#ffb612'];   // no black: a dark ribbon reads as a string
 const SA_RING = ['#00a05a', '#ffb612', '#de3831', '#1f48d6', '#ffffff'];
 
-/** Vuvuzela: the horn blasts five times; sound-wave rings, curling flag-colour streamers and flag confetti. */
+/** Vuvuzela: the horn blasts five times; flag-colour sound rings, twisting flag-colour streamers and flag confetti. */
 function vuvuzelaFx(env) {
   const { doc, W, H, s, dpr } = env;
   const hx = W * 0.5;
   const hy = H * 0.84;
   const ry = hy - 26 * s;                       // the rings and streamers leave just above the horn
-  const horn = emojiSprite(doc, '📯', Math.round(150 * s * dpr));
+  const horn = emojiSprite(doc, '📯', Math.round(160 * s * dpr));
   const hornGlow = glowSprite(doc, '#ffd23f');
   const paper = confetti(env, 130, SA_PAPER);
-  const NS = 30;
-  const HN = 18;
-  const SEG = 9 * s;
-  const str = [];
-  for (let i = 0; i < NS; i++) str.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, k: 0, fall: 0, term: 0, ph: 0, cf: 0, ca: 0, col: '', w: 0, hist: new Float32Array(HN * 2), hn: 0, hi: 0 });
-  let si = 0;
+  const flags = ribbons(env, 30, SA_STREAM, 13);
   const blasts = [0.05, 0.72, 1.38, 2.04, 2.66];
   let b = 0;
   let last = -9;
-  function streamer(ang, v) {
-    const q = str[si];
-    si = (si + 1) % NS;
-    q.on = true;
-    q.x = hx + Math.cos(ang) * 30 * s;
-    q.y = ry + Math.sin(ang) * 30 * s;
-    q.vx = Math.cos(ang) * v;
-    q.vy = Math.sin(ang) * v;
-    q.k = rand(2, 2.8);
-    q.fall = 0;
-    q.term = rand(55, 95) * s;
-    q.ph = Math.random() * TAU;
-    q.cf = rand(5, 9);
-    q.ca = rand(500, 900) * s;
-    q.col = SA_STREAM[(Math.random() * SA_STREAM.length) | 0];
-    q.w = rand(5, 7.5) * s;
-    q.hn = 1;
-    q.hi = 0;
-    q.hist[0] = q.x;
-    q.hist[1] = q.y;
-  }
   const fx = {
     flash: 0,
     step(ctx, t, dt) {
       while (b < blasts.length && t >= blasts[b]) {
         const count = b === 0 ? 12 : b < 3 ? 9 : 0;
-        for (let i = 0; i < count; i++) streamer(-Math.PI / 2 + rand(-1, 1), H * rand(1.1, 1.9));
+        if (count) flags.fire(count, hx, ry, -Math.PI / 2, 1.0, H * 1.1, H * 1.9);
         if (b === 0 || b === 2) {
-          const n = b ? 50 : 72;
-          paper.fire(n / 2, -8 * s, H + 8, -1.1, 0.3, H * 1.2, H * 2.4, 0.14);
-          paper.fire(n / 2, W + 8 * s, H + 8, -Math.PI + 1.1, 0.3, H * 1.2, H * 2.4, 0.14);
+          const n = b ? 25 : 36;
+          paper.fire(n, -8 * s, H + 8, -1.1, 0.3, H * 1.2, H * 2.4, 0.14);
+          paper.fire(n, W + 8 * s, H + 8, -Math.PI + 1.1, 0.3, H * 1.2, H * 2.4, 0.14);
         }
         last = blasts[b];
         b++;
         fx.flash = 0.45;
       }
       // the sound waves: three rings a blast, flag colours
-      ctx.lineCap = 'round';
       for (let k = 0; k < b; k++) {
         const age = t - blasts[k];
         if (age > 1.3) continue;
         for (let j = 0; j < 3; j++) {
           const p = (age - j * 0.09) / 1.15;
           if (p < 0 || p > 1) continue;
-          ring(ctx, hx, ry, 30 * s + easeOutCubic(p) * H * 0.95, (15 * (1 - p) + 2) * s, SA_RING[(k + j) % SA_RING.length], (1 - p) ** 1.2 * 0.85);
+          ring(ctx, hx, ry, 30 * s + easeOutCubic(p) * H * 0.95, (16 * (1 - p) + 2.5) * s, SA_RING[(k + j) % SA_RING.length], (1 - p) ** 1.2 * 0.9);
         }
       }
       ctx.globalAlpha = 1;
-      // the streamers: a fixed-length ribbon trails each head (a point is kept every SEG px)
-      ctx.lineJoin = 'round';
-      const ease = Math.min(1, 2 * dt);
-      for (let i = 0; i < NS; i++) {
-        const q = str[i];
-        if (!q.on) continue;
-        const d = Math.exp(-q.k * dt);
-        q.vx *= d;
-        q.vy *= d;
-        q.fall += (q.term - q.fall) * ease;
-        q.ph += q.cf * dt;
-        const sp = Math.hypot(q.vx, q.vy) + 1;
-        const c = Math.sin(q.ph) * q.ca * dt;
-        q.vx += (-q.vy / sp) * c;
-        q.vy += (q.vx / sp) * c;
-        q.x += (q.vx + Math.sin(q.ph * 0.5) * 30 * s) * dt;
-        q.y += (q.vy + q.fall) * dt;
-        const lx = q.hist[q.hi * 2];
-        const ly = q.hist[q.hi * 2 + 1];
-        if (Math.hypot(q.x - lx, q.y - ly) >= SEG) {
-          q.hi = (q.hi + 1) % HN;
-          q.hist[q.hi * 2] = q.x;
-          q.hist[q.hi * 2 + 1] = q.y;
-          if (q.hn < HN) q.hn++;
-        }
-        let low = q.y;
-        ctx.beginPath();
-        ctx.moveTo(q.x, q.y);
-        for (let j = 0; j < q.hn; j++) {
-          const idx = ((q.hi - j + HN) % HN) * 2;
-          ctx.lineTo(q.hist[idx], q.hist[idx + 1]);
-          if (q.hist[idx + 1] < low) low = q.hist[idx + 1];
-        }
-        if (low > H + 20) { q.on = false; continue; }
-        ctx.lineWidth = q.w;
-        ctx.strokeStyle = q.col;
-        ctx.stroke();
-        ctx.lineWidth = q.w * 0.32;
-        ctx.strokeStyle = q.col === '#ffffff' ? 'rgba(170,180,200,0.7)' : 'rgba(255,255,255,0.4)';
-        ctx.stroke();
-      }
+      flags.step(ctx, dt);
       paper.step(ctx, dt);
       // the horn: rises in, then pumps on every blast
       const pump = Math.exp(-(t - last) * 7);
       const rise = t < 0.32 ? 1 - easeOutBack(t / 0.32) : 0;
       ctx.globalCompositeOperation = 'lighter';
-      const gr = (120 + 70 * pump) * s;
-      ctx.globalAlpha = 0.45 + 0.4 * pump;
-      ctx.drawImage(hornGlow, hx - gr, hy + rise * 160 * s - gr, gr * 2, gr * 2);
+      const gr = (130 + 80 * pump) * s;
+      ctx.globalAlpha = 0.5 + 0.4 * pump;
+      ctx.drawImage(hornGlow, hx - gr, hy + rise * 170 * s - gr, gr * 2, gr * 2);
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
-      const hs = 150 * s * (1 + 0.2 * pump);
-      stamp(ctx, dpr, horn, hx, hy + rise * 160 * s, hs, hs, -0.3 + 0.07 * Math.sin(t * 24) * pump);
+      const hs = 160 * s * (1 + 0.2 * pump);
+      stamp(ctx, dpr, horn, hx, hy + rise * 170 * s, hs, hs, -0.3 + 0.07 * Math.sin(t * 24) * pump);
     },
   };
   return fx;
@@ -826,57 +768,166 @@ function vuvuzelaFx(env) {
 
 const EMBER = ['#fff3b0', '#ffb43a', '#ff6a1f', '#e2421c'];
 
-/** Braai: a glowing bed of coals, rising embers, soft smoke wisps, sizzle pops and a happy 🍖 with cartoon steam. */
+/** A boerewors coil seen from above, centred on (cx, cy), radius R (the shop tile and the show draw the same one). */
+function drawCoil(x, cx, cy, R) {
+  const k = R / 31;
+  const pts = [];
+  const turns = 4.6 * Math.PI;
+  for (let a = 0; a <= turns; a += 0.12) {
+    const r = R * (0.13 + 0.87 * (a / turns));
+    pts.push(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.86);
+  }
+  const coil = (w, c, dx = 0, dy = 0) => {
+    x.strokeStyle = c;
+    x.lineWidth = w;
+    x.beginPath();
+    x.moveTo(pts[0] + dx, pts[1] + dy);
+    for (let i = 2; i < pts.length; i += 2) x.lineTo(pts[i] + dx, pts[i + 1] + dy);
+    x.stroke();
+  };
+  x.lineCap = 'round';
+  x.lineJoin = 'round';
+  coil(10.5 * k, '#4a1606');
+  coil(8 * k, '#a8461f');
+  coil(2.6 * k, 'rgba(255,170,120,0.85)', -1 * k, -1.6 * k);
+  x.strokeStyle = 'rgba(60,15,4,0.85)';   // grill marks across the coil
+  x.lineWidth = 1.6 * k;
+  for (let i = 8; i < pts.length - 2; i += 10) {
+    const dx = pts[i + 2] - pts[i];
+    const dy = pts[i + 3] - pts[i + 1];
+    const l = Math.hypot(dx, dy) || 1;
+    const nx = (-dy / l) * 3 * k;
+    const ny = (dx / l) * 3 * k;
+    x.beginPath();
+    x.moveTo(pts[i] - nx, pts[i + 1] - ny);
+    x.lineTo(pts[i] + nx, pts[i + 1] + ny);
+    x.stroke();
+  }
+}
+
+/** The braai along the bottom (drawn once): glowing coals under a grid whose bars run away from us. */
+function grillSprite(doc, W, GH, dpr) {
+  const w = Math.max(1, Math.round(W * dpr));
+  const h = Math.max(1, Math.round(GH * dpr));
+  return sprite(doc, `grill${w}x${h}`, w, h, (x) => {
+    const rnd = seeded(4);
+    x.scale(dpr, dpr);
+    const g = x.createLinearGradient(0, 0, 0, GH);
+    g.addColorStop(0, 'rgba(255,130,40,0)');
+    g.addColorStop(0.35, 'rgba(255,110,30,0.9)');
+    g.addColorStop(1, '#9c2408');
+    x.fillStyle = g;
+    x.fillRect(0, 0, W, GH);
+    const n = Math.round(W / 6);
+    for (let i = 0; i < n; i++) {
+      const cx = rnd() * W;
+      const cy = GH * (0.45 + rnd() * 0.6);
+      const r = 7 + rnd() * 10;
+      const cg = x.createRadialGradient(cx - r * 0.3, cy - r * 0.35, r * 0.1, cx, cy, r);
+      if (rnd() < 0.3) {
+        cg.addColorStop(0, '#fff0a0');
+        cg.addColorStop(0.45, '#ff8a2a');
+        cg.addColorStop(1, 'rgba(200,50,10,0)');
+      } else {
+        cg.addColorStop(0, '#5a372a');
+        cg.addColorStop(0.55, '#2a150d');
+        cg.addColorStop(0.85, '#5a1a06');
+        cg.addColorStop(1, 'rgba(255,120,30,0)');
+      }
+      x.fillStyle = cg;
+      x.beginPath();
+      x.ellipse(cx, cy, r, r * 0.7, 0, 0, TAU);
+      x.fill();
+    }
+    const top = GH * 0.16;
+    const bot = GH * 0.7;
+    x.lineCap = 'round';
+    for (const [c, lw, dy] of [['#141418', 3.4, 0], ['rgba(200,200,215,0.7)', 1, -1.3]]) {
+      x.strokeStyle = c;
+      x.lineWidth = lw;
+      x.beginPath();
+      for (let bx = -W * 0.1; bx <= W * 1.1; bx += 17) {
+        x.moveTo(bx, bot + dy);
+        x.lineTo(W / 2 + (bx - W / 2) * 0.84, top + dy);
+      }
+      x.moveTo(0, top + dy);
+      x.lineTo(W, top + dy);
+      x.moveTo(0, bot + dy);
+      x.lineTo(W, bot + dy);
+      x.stroke();
+    }
+  });
+}
+
+/**
+ * Braai: a glowing braai rises along the bottom with a boerewors coil on the grid; a 🍖 lands with a sizzle and is
+ * flipped twice (sparks and steam on every landing); embers rise, steam curls. Warm dusk, cosy, nothing scary.
+ */
 function braaiFx(env) {
   const { doc, W, H, s, dpr } = env;
-  const mx = W * 0.5;
-  const my = H * 0.79;
+  const GH = H * 0.19;
+  const gy = H - GH * 0.58;          // where things rest on the grid
+  const grill = grillSprite(doc, W, GH, dpr);
+  const CD = Math.round(160 * s * dpr);
+  const coil = sprite(doc, `coil${CD}`, CD, CD, (x) => { x.scale(CD / 76, CD / 76); drawCoil(x, 38, 38, 31); });
   const meat = emojiSprite(doc, '🍖', Math.round(140 * s * dpr));
   const E = EMBER.map((c) => glowSprite(doc, c));
-  const heat = softSprite(doc, '#ff7a1a', 0.8);
-  const coal = glowSprite(doc, '#ff5314');
-  const smoke = softSprite(doc, '#f1e6dc', 0.5);
-  const P = sparks(200);
-  const NC = 9;
-  const coals = [];
-  for (let i = 0; i < NC; i++) coals.push({ x: ((i + 0.5) / NC) * W + rand(-12, 12) * s, r: rand(55, 85) * s, ph: Math.random() * TAU, sp: rand(3, 6) });
+  const heat = softSprite(doc, '#ff7a1a', 0.85);
+  const smoke = softSprite(doc, '#f6eee6', 0.55);
+  const P = sparks(210);
   const NP = 16;
   const puffs = [];
   for (let i = 0; i < NP; i++) puffs.push({ x: 0, y: 0, r: 0, age: 0, life: 0, vx: 0, vy: 0 });
   let pi = 0;
-  let puffAt = 0.1;
+  let puffAt = 0.3;
   let acc = 0;
-  const pops = [0.1, 0.86, 1.62, 2.38];
-  let pop = 0;
-  let lastPop = -9;
+  const kx = W * 0.32;               // the wors
+  const mx = W * 0.68;               // the meat
+  const MY = gy - 46 * s;            // the meat's resting height
+  const LAND = [0.32, 1.9, 2.95];
+  const FLIP = [[1.15, 1.9, 0.3, 1], [2.4, 2.95, 0.17, -1]];   // [from, to, height (share of H), turn direction]
+  let land = 0;
+  let lastLand = -9;
+  function puff(x, y, big) {
+    const q = puffs[pi];
+    pi = (pi + 1) % NP;
+    q.x = x;
+    q.y = y;
+    q.r = rand(26, 46) * s * (big ? 1.3 : 1);
+    q.age = 0;
+    q.life = rand(1.5, 2.3);
+    q.vx = rand(-25, 25) * s;
+    q.vy = -rand(55, 95) * s;
+  }
   const fx = {
     flash: 0,
     step(ctx, t, dt) {
-      const on = Math.min(1, t / 0.35);
-      // the coals' glow along the bottom
+      const on = Math.min(1, t / 0.3);
+      const lift = (1 - easeOutCubic(on)) * GH;   // the braai slides up into view
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = on * (0.62 + 0.12 * Math.sin(t * 7.3) + 0.08 * Math.sin(t * 13.1));
-      ctx.drawImage(heat, -W * 0.35, H - H * 0.26, W * 1.7, H * 0.52);
-      for (let i = 0; i < NC; i++) {
-        const c = coals[i];
-        ctx.globalAlpha = on * (0.5 + 0.4 * Math.sin(t * c.sp + c.ph));
-        ctx.drawImage(coal, c.x - c.r, H - c.r * 0.55, c.r * 2, c.r * 2);
-      }
+      ctx.globalAlpha = on * (0.6 + 0.12 * Math.sin(t * 7.3) + 0.08 * Math.sin(t * 13.1));
+      ctx.drawImage(heat, -W * 0.3, H - GH * 1.7 + lift, W * 1.6, GH * 2.4);
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
-      // smoke wisps (soft, light: steam more than smoke)
-      while (t >= puffAt && puffAt < 2.7) {
-        const q = puffs[pi];
-        pi = (pi + 1) % NP;
-        const nearMeat = Math.random() < 0.55;
-        q.x = nearMeat ? mx + rand(-60, 60) * s : rand(0.05, 0.95) * W;
-        q.y = nearMeat ? my - 30 * s : H - rand(0, 30) * s;
-        q.r = rand(28, 50) * s;
-        q.age = 0;
-        q.life = rand(1.6, 2.4);
-        q.vx = rand(-25, 25) * s;
-        q.vy = -rand(55, 95) * s;
-        puffAt += 0.17;
+      ctx.drawImage(grill, 0, H - GH + lift, W, GH);
+      const cw = 160 * s;
+      ctx.drawImage(coil, kx - cw / 2, gy - cw * 0.36 + lift, cw, cw * 0.62);
+      // landings: sparks, steam and a warm flash
+      while (land < LAND.length && t >= LAND[land]) {
+        for (let i = 0; i < 26; i++) {
+          const a = -Math.PI / 2 + rand(-1.3, 1.3);
+          const v = rand(260, 640) * s;
+          P.emit(mx + rand(-45, 45) * s, gy - 8 * s, Math.cos(a) * v, Math.sin(a) * v, rand(0.5, 0.9), rand(6, 9) * s, 2.3, 520 * s, 0, 1);
+        }
+        for (let i = 0; i < 3; i++) puff(mx + rand(-40, 40) * s, gy - 30 * s, true);
+        lastLand = LAND[land];
+        land++;
+        fx.flash = Math.max(fx.flash, land === 1 ? 0.5 : 0.32);
+      }
+      // steam wisps
+      while (t >= puffAt && puffAt < 2.8) {
+        puff(Math.random() < 0.5 ? kx + rand(-50, 50) * s : rand(0.05, 0.95) * W, gy - 20 * s, false);
+        puffAt += 0.2;
       }
       for (let i = 0; i < NP; i++) {
         const q = puffs[i];
@@ -886,27 +937,17 @@ function braaiFx(env) {
         q.x += (q.vx + Math.sin(q.age * 2 + i) * 20 * s) * dt;
         q.y += q.vy * dt;
         const r = q.r + q.age * 60 * s;
-        ctx.globalAlpha = 0.3 * Math.sin(Math.PI * (q.age / q.life));
+        ctx.globalAlpha = 0.34 * Math.sin(Math.PI * (q.age / q.life));
         ctx.drawImage(smoke, q.x - r, q.y - r, r * 2, r * 2);
       }
       ctx.globalAlpha = 1;
-      // embers rise from the coals; a sizzle pop sprays bright sparks off the meat
-      if (t < 2.85) {
-        acc += dt * 72;
+      // embers rise off the coals
+      if (t < 2.9) {
+        acc += dt * 64;
         while (acc >= 1) {
           acc -= 1;
-          P.emit(rand(0.03, 0.97) * W, H + rand(0, 16) * s, rand(-25, 25) * s, -rand(130, 320) * s, rand(1.2, 2.3), rand(4, 8) * s, 0.25, -25 * s, 0, 0);
+          P.emit(rand(0.03, 0.97) * W, H - GH * rand(0.15, 0.75), rand(-25, 25) * s, -rand(150, 380) * s, rand(1.3, 2.5), rand(5, 10) * s, 0.25, -25 * s, 0, 0);
         }
-      }
-      while (pop < pops.length && t >= pops[pop]) {
-        for (let i = 0; i < 16; i++) {
-          const a = -Math.PI / 2 + rand(-1.3, 1.3);
-          const v = rand(220, 520) * s;
-          P.emit(mx + rand(-30, 30) * s, my - 20 * s, Math.cos(a) * v, Math.sin(a) * v, rand(0.45, 0.8), rand(5, 8) * s, 2.6, 380 * s, 0, 1);
-        }
-        lastPop = pops[pop];
-        pop++;
-        fx.flash = Math.max(fx.flash, pop === 1 ? 0.5 : 0.25);
       }
       P.step(dt);
       ctx.globalCompositeOperation = 'lighter';
@@ -922,29 +963,40 @@ function braaiFx(env) {
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
-      // the meat bounces in, sizzles (wobbles) and squashes on every pop
-      const pin = t < 0.5 ? easeOutBack(t / 0.5) : 1;
-      const sq = 1 + 0.14 * Math.exp(-(t - lastPop) * 10);
-      const ms = 140 * s * pin;
-      if (ms > 1) {
-        const y = my + Math.sin(t * 6) * 3 * s - (1 - pin) * 40 * s;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        const a = -0.18 + 0.07 * Math.sin(t * 9);
-        const ca = Math.cos(a) * dpr;
-        const sa = Math.sin(a) * dpr;
-        ctx.setTransform(ca * sq, sa * sq, -sa / sq, ca / sq, mx * dpr, y * dpr);
-        ctx.drawImage(meat, -ms / 2, -ms / 2, ms, ms);
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // the meat: drops in, sizzles, flips
+      let y = MY + Math.sin(t * 9) * 1.5 * s;
+      let rot = -0.15 + 0.06 * Math.sin(t * 9);
+      if (t < LAND[0]) {
+        const p = t / LAND[0];
+        y = MY - (1 - p * p) * H * 0.6;
+        rot = -0.15 - 0.8 * (1 - p);
       }
-      // cartoon steam above the meat
-      if (t > 0.35) {
+      for (let k = 0; k < FLIP.length; k++) {
+        const [a, b, h, dir] = FLIP[k];
+        if (t >= a && t < b) {
+          const p = (t - a) / (b - a);
+          y = MY - 4 * h * H * p * (1 - p);
+          rot = -0.15 + dir * TAU * smooth(p);
+        }
+      }
+      const e = Math.exp(-(t - lastLand) * 12);
+      const sx = 1 + 0.24 * e;
+      const sy = 1 - 0.2 * e;
+      const ms = 140 * s;
+      const ca = Math.cos(rot) * dpr;
+      const sa = Math.sin(rot) * dpr;
+      ctx.setTransform(ca * sx, sa * sx, -sa * sy, ca * sy, mx * dpr, (y + lift) * dpr);
+      ctx.drawImage(meat, -ms / 2, -ms / 2, ms, ms);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // cartoon steam over the wors and the meat
+      if (t > 0.4) {
         ctx.lineCap = 'round';
         ctx.lineWidth = 5 * s;
         ctx.strokeStyle = '#ffffff';
-        for (let k = 0; k < 3; k++) {
-          const ph = ((t - 0.35 + k * 0.33) % 1) / 1;
-          const x = mx + (k - 1) * 34 * s;
-          const y0 = my - 78 * s - ph * 70 * s;
+        for (let k = 0; k < 4; k++) {
+          const ph = (t - 0.4 + k * 0.27) % 1;
+          const x = k < 2 ? kx + (k ? 26 : -26) * s : mx + (k === 3 ? 28 : -28) * s;
+          const y0 = (k < 2 ? gy - 50 * s : MY - 80 * s) - ph * 70 * s;
           ctx.globalAlpha = Math.sin(Math.PI * ph) * 0.85;
           ctx.beginPath();
           ctx.moveTo(x, y0 + 20 * s);
@@ -1174,7 +1226,6 @@ function goudreenFx(env) {
   const face = coinFace(doc, D);
   const edge = coinEdge(doc, D);
   const glint = sparkSprite(doc, '#ffffff');
-  const sun = softSprite(doc, '#ffd25a', 0.7);
   const dust = twinkles(env, 34, ['#ffe680', '#ffffff', '#ffd23f'], 0.02, 0.02, 0.98, 0.9, 11, 60);
   const N = 92;
   const FOUNT = 30;
@@ -1191,11 +1242,6 @@ function goudreenFx(env) {
     flash: 0,
     step(ctx, t, dt) {
       if (t < 0.05) fx.flash = 0.6;
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = Math.min(1, t / 0.4) * (0.55 + 0.1 * Math.sin(t * 4));
-      ctx.drawImage(sun, -W * 0.3, -H * 0.3, W * 1.6, H * 0.75);
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
       const floor = H * 0.97;
       for (let i = 0; i < N; i++) {
         const c = coins[i];
@@ -1252,7 +1298,7 @@ function goudreenFx(env) {
         if (!c.live || c.dead) continue;
         const cs = Math.abs(Math.cos(c.ph));
         if (cs < 0.9) continue;
-        const r = c.r * 1.3 * (cs - 0.9) * 10;
+        const r = c.r * (cs - 0.9) * 10;
         ctx.globalAlpha = (cs - 0.9) * 10;
         ctx.drawImage(glint, c.x - c.r * 0.35 - r, c.y - c.r * 0.35 - r, r * 2, r * 2);
       }
@@ -1283,7 +1329,7 @@ function laserFx(env) {
   const star = sparkSprite(doc, '#ffffff');
   const hz = [softSprite(doc, '#ff2bd6', 0.42), softSprite(doc, '#19f0ff', 0.42), softSprite(doc, '#8a3dff', 0.5)];
   const haze = [];
-  for (let i = 0; i < 6; i++) haze.push({ x: rand(0, 1) * W, y: rand(0.45, 1) * H, r: rand(140, 230) * s, vx: rand(-25, 25) * s, img: hz[i % 3] });
+  for (let i = 0; i < 4; i++) haze.push({ x: rand(0.1, 0.9) * W, y: rand(0.5, 1) * H, r: rand(120, 190) * s, vx: rand(-25, 25) * s, img: hz[i % 3] });
   const dust = twinkles(env, 30, ['#ffffff', '#bff8ff', '#ffc6f2'], 0.02, 0.05, 0.98, 0.95, 8);
   const P = sparks(110);
   const imgs = [hot[0], hot[1], hot[2], white];
@@ -1387,10 +1433,11 @@ function laserFx(env) {
             ctx.lineWidth = 2.4 * s;
             ctx.stroke();
           }
-          const gr = W * (0.35 + age * 0.6);
-          ctx.globalAlpha = fade;
+          const gr = W * (0.2 + age * 0.4);
+          ctx.globalAlpha = fade * 0.8;
           ctx.drawImage(white, bx - gr, by - gr, gr * 2, gr * 2);
-          const sr = W * 0.42 * (0.6 + 0.4 * fade);
+          const sr = W * 0.3 * (0.6 + 0.4 * fade);
+          ctx.globalAlpha = fade;
           ctx.drawImage(star, bx - sr, by - sr, sr * 2, sr * 2);
           ctx.globalAlpha = 1;
         }
@@ -1618,12 +1665,12 @@ const ICONS = {
     const cols = ['#ffffff', '#ffd23f', '#3fe0ff', '#7dff7a', '#ff8a3d', '#ff3b6b', '#b98bff'];
     // streamers curling out of the popper
     x.lineCap = 'round';
-    x.lineWidth = 3.4;
-    for (const [c, a, b, d] of [['#3fe0ff', 46, 30, 18], ['#ffd23f', 64, 50, 30], ['#ffffff', 30, 18, 28]]) {
+    x.lineWidth = 3.8;
+    for (const [c, p] of [['#3fe0ff', [38, 58, 26, 36, 58, 44, 50, 14]], ['#ffd23f', [42, 62, 64, 62, 62, 34, 88, 30]]]) {
       x.strokeStyle = c;
       x.beginPath();
-      x.moveTo(36, 62);
-      x.bezierCurveTo(a - 8, b + 14, a + 10, b - 4, a + d * 0.6, b - 6);
+      x.moveTo(p[0], p[1]);
+      x.bezierCurveTo(p[2], p[3], p[4], p[5], p[6], p[7]);
       x.stroke();
     }
     for (let i = 0; i < 26; i++) {
@@ -1760,12 +1807,12 @@ const ICONS = {
     x.restore();
     // the sound: flag-colour arcs out of the bell
     x.lineCap = 'round';
-    const arcs = [['#ffb612', 20], ['#de3831', 29], ['#ffffff', 38], ['#2453e0', 47]];
+    const arcs = [['#ffb612', 14], ['#de3831', 21], ['#ffffff', 28], ['#2453e0', 35]];
     for (const [c, r] of arcs) {
       x.strokeStyle = c;
-      x.lineWidth = 5;
+      x.lineWidth = 4.6;
       x.beginPath();
-      x.arc(64, 36, r, -1.95, 0.35);
+      x.arc(61, 40, r, -1.9, 0.3);
       x.stroke();
     }
     // the horn, mouthpiece bottom-left, bell top-right
@@ -1808,78 +1855,47 @@ const ICONS = {
 
   braai(x) {
     const rnd = seeded(5);
-    tile(x, '#ff9a2e', '#4a0f05', [50, 86, 62, '#ffcf4a', 0.9]);
-    // the grill
+    tile(x, '#2c1240', '#ff6a14', [50, 96, 66, '#ffd04a', 0.95]);   // dusk above, the coals' glow below
+    // the grid
     x.lineCap = 'round';
     for (let i = 0; i < 6; i++) {
-      const y = 28 + i * 11;
-      x.strokeStyle = 'rgba(255,170,70,0.7)';
+      const y = 30 + i * 11;
+      x.strokeStyle = 'rgba(255,170,70,0.75)';
       x.lineWidth = 1.2;
       x.beginPath();
       x.moveTo(8, y + 2.2);
       x.lineTo(92, y + 2.2);
       x.stroke();
-      x.strokeStyle = '#2a1510';
+      x.strokeStyle = '#1e0f0c';
       x.lineWidth = 3.4;
       x.beginPath();
       x.moveTo(8, y);
       x.lineTo(92, y);
       x.stroke();
     }
-    // a boerewors coil on it
-    const pts = [];
-    for (let a = 0; a <= 4.6 * Math.PI; a += 0.12) {
-      const r = 4 + (a / (4.6 * Math.PI)) * 27;
-      pts.push(50 + Math.cos(a) * r, 54 + Math.sin(a) * r * 0.86);
-    }
-    const coil = (w, c, dx = 0, dy = 0) => {
-      x.strokeStyle = c;
-      x.lineWidth = w;
-      x.beginPath();
-      x.moveTo(pts[0] + dx, pts[1] + dy);
-      for (let i = 2; i < pts.length; i += 2) x.lineTo(pts[i] + dx, pts[i + 1] + dy);
-      x.stroke();
-    };
-    x.lineJoin = 'round';
-    coil(10.5, '#4a1606');
-    coil(8, '#a8461f');
-    coil(2.6, 'rgba(255,170,120,0.85)', -1, -1.6);
-    // grill marks across the coil
-    x.strokeStyle = 'rgba(60,15,4,0.85)';
-    x.lineWidth = 1.6;
-    for (let i = 8; i < pts.length - 2; i += 10) {
-      const dx = pts[i + 2] - pts[i];
-      const dy = pts[i + 3] - pts[i + 1];
-      const l = Math.hypot(dx, dy) || 1;
-      const nx = -dy / l;
-      const ny = dx / l;
-      x.beginPath();
-      x.moveTo(pts[i] - nx * 3, pts[i + 1] - ny * 3);
-      x.lineTo(pts[i] + nx * 3, pts[i + 1] + ny * 3);
-      x.stroke();
-    }
-    // embers and a puff of steam
+    drawCoil(x, 50, 56, 31);
+    // embers rising into the dusk, and a curl of steam
     x.save();
     x.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 13; i++) {
       const ex = 8 + rnd() * 84;
-      const ey = 6 + rnd() * 30;
-      const er = 1 + rnd() * 2;
-      const gl = x.createRadialGradient(ex, ey, 0, ex, ey, er * 3);
-      gl.addColorStop(0, 'rgba(255,240,170,1)');
-      gl.addColorStop(0.4, 'rgba(255,140,40,0.8)');
+      const ey = 5 + rnd() * 26;
+      const er = 0.9 + rnd() * 1.3;
+      const gl = x.createRadialGradient(ex, ey, 0, ex, ey, er * 3.2);
+      gl.addColorStop(0, 'rgba(255,248,200,1)');
+      gl.addColorStop(0.3, 'rgba(255,160,50,0.9)');
       gl.addColorStop(1, 'rgba(255,90,20,0)');
       x.fillStyle = gl;
-      x.fillRect(ex - er * 3, ey - er * 3, er * 6, er * 6);
+      x.fillRect(ex - er * 3.2, ey - er * 3.2, er * 6.4, er * 6.4);
     }
     x.restore();
     x.strokeStyle = 'rgba(255,255,255,0.85)';
     x.lineWidth = 3;
-    for (const sx of [80, 88]) {
+    for (const sx of [78, 87]) {
       x.beginPath();
-      x.moveTo(sx, 26);
-      x.quadraticCurveTo(sx + 5, 20, sx, 14);
-      x.quadraticCurveTo(sx - 5, 8, sx, 3);
+      x.moveTo(sx, 25);
+      x.quadraticCurveTo(sx + 5, 19, sx, 13);
+      x.quadraticCurveTo(sx - 5, 7, sx, 2);
       x.stroke();
     }
     finish(x);
@@ -2230,21 +2246,17 @@ function iconArt(doc, id, px) {
 }
 
 /**
- * Draws celebration `id`'s shop tile on `canvas` (unknown ids: konfetti's) at the canvas's CSS size (or `size` css
- * px, default 64) times the screen's pixel ratio. Size the canvas in CSS; a canvas with no class and no inline width
- * gets `size` px inline. Returns the canvas.
+ * Draws celebration `id`'s shop tile on `canvas` (unknown ids: konfetti's) and returns the canvas. Size the canvas in
+ * CSS (dom.js: canvas.cel-icon); its pixels are its CSS width (or `size` css px; 88 while it isn't in the page yet)
+ * times the screen's pixel ratio, so the tile is sharp at any size the CSS gives it.
  */
 export function drawCelebrationIcon(canvas, id, size = 0) {
   if (!canvas || typeof canvas.getContext !== 'function') return canvas;
   const key = ICONS[id] ? id : 'konfetti';
   const doc = canvas.ownerDocument || globalThis.document;
   const win = (doc && doc.defaultView) || globalThis;
-  const css = size || canvas.clientWidth || parseFloat(canvas.style.width) || 64;
+  const css = size || canvas.clientWidth || 88;
   const px = Math.max(32, Math.round(css * Math.min(ICON_DPR, win.devicePixelRatio || 1)));
-  if (!canvas.style.width && !canvas.className) {
-    canvas.style.width = `${css}px`;
-    canvas.style.height = `${css}px`;
-  }
   canvas.width = px;
   canvas.height = px;
   const ctx = canvas.getContext('2d');
@@ -2370,14 +2382,16 @@ export function playCelebration(root, id, { caption = '', reduced = false } = {}
   let start = -1;
   let tintOp = -1;
   let flashOp = -1;
-  const frame = (now) => {
+  const clock = win.performance && typeof win.performance.now === 'function' ? win.performance : null;
+  const frame = (stamp) => {
     if (done) return;
+    const now = clock ? clock.now() : stamp;
     if (start < 0) { start = now; last = now; }
     const gap = now - last;
     last = now;
     const dt = Math.min(gap, 50) / 1000;   // a slow frame slows the show rather than skipping it
     t += dt;
-    const w0 = win.performance ? win.performance.now() : 0;
+    const w0 = now;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
     if (fx.trail) {
@@ -2400,8 +2414,8 @@ export function playCelebration(root, id, { caption = '', reduced = false } = {}
     if (Math.abs(fl - flashOp) > 0.01 || (fl === 0 && flashOp !== 0)) { flashOp = fl; flash.style.opacity = fl.toFixed(3); }
     fx.flash *= Math.exp(-9 * dt);
     if (t > DUR - OUT) box.style.opacity = clamp01((DUR - t) / OUT).toFixed(3);
-    if (win.performance) {
-      const w = win.performance.now() - w0;
+    if (clock) {
+      const w = clock.now() - w0;
       stats.frames++;
       stats.workMs += w;
       if (w > stats.workMax) stats.workMax = w;

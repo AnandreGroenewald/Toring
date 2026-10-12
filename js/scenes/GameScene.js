@@ -313,6 +313,25 @@ function loadWidth(geom) {
 
 /** Dotted guide line texture (drawn once; cropped to length per frame). */
 function ensureAimTexture(scene) {
+  // (1.15, the owner: "a small arrow that shows the middle of the previous block in practice") Oefen's Perfek arrow
+  if (!scene.textures.exists('mid_arrow')) {
+    const t = scene.textures.createCanvas('mid_arrow', 30, 26);
+    if (t) {
+      const c = t.getContext();
+      c.lineJoin = 'round';
+      c.beginPath();
+      c.moveTo(4, 4);
+      c.lineTo(26, 4);
+      c.lineTo(15, 21);
+      c.closePath();
+      c.lineWidth = 5;
+      c.strokeStyle = '#1d2b45';
+      c.stroke();
+      c.fillStyle = '#ffffff';
+      c.fill();
+      t.refresh();
+    }
+  }
   // (1.15) one dot of the guide (the guide is a row of these along the block's real, wind-bent path)
   if (!scene.textures.exists('aim_dot')) {
     const dot = scene.textures.createCanvas('aim_dot', 8, 8);
@@ -572,6 +591,9 @@ export class GameScene extends Phaser.Scene {
     // in wind a block drops almost straight at first and drifts more and more, so a straight line from the hook to the
     // ghost wasn't the path it takes. A row of dots, AIM_STEP apart along the predicted path (placed each frame, drawn once).
     this.aimDots = [];
+    // (1.15, the owner: "a small arrow that shows the middle of the previous block in practice") in Oefen, a small arrow
+    // points at the middle of the block you build on: land your block's middle there for a Perfek
+    this.midArrow = this.mode === 'practice' ? this.add.image(0, 0, 'mid_arrow').setOrigin(0.5, 1).setDepth(DEPTH.ghost + 0.4).setAlpha(0.9).setVisible(false) : null;
     this.aimOn = false;
     this.ghostPath = new Float32Array(2 * 920);
     this.ghostPathN = 0;
@@ -3088,6 +3110,12 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.setGhostVisible(showGhost);
+    if (this.midArrow) {
+      const t = this.supportTop(this.topBlock);
+      const on = showGhost && t.flat;
+      if (on) this.midArrow.setPosition(t.x, t.y - 6 - (this.reducedMotion ? 0 : 4 * (0.5 + 0.5 * Math.sin(this.now / 260))));
+      if (this.midArrow.visible !== on) this.midArrow.setVisible(on);
+    }
     if (this.autoOn) this.autoCheck(p.x, p.targetX);
   }
 
@@ -3098,6 +3126,7 @@ export class GameScene extends Phaser.Scene {
     this.ghostEdge.setVisible(on);
     this.aimOn = on;
     if (!on) for (const d of this.aimDots) d.setVisible(false);
+    if (!on && this.midArrow?.visible) this.midArrow.setVisible(false);
   }
 
   /**
