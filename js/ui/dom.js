@@ -174,6 +174,7 @@ export function createUI(bus) {
     board: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-board-title', tabindex: '-1' }),
     remind: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-remind-title', tabindex: '-1' }),
     name: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-name-title', tabindex: '-1' }),
+    account: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-account-title', tabindex: '-1' }),
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -214,7 +215,7 @@ export function createUI(bus) {
   // buttons take taps: a tap anywhere else still drops a block)
   const emoteBar = h('div', { class: 'emote-bar', role: 'group', 'aria-label': S.emoteLabel, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.account, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // Measures env(safe-area-inset-*) so layout() can work out how much of each
@@ -1057,6 +1058,8 @@ export function createUI(bus) {
     if (st.remindOn) sheet.querySelector('.stats-foot').prepend(button('btn-white', [emo('🔔'), h('span', { text: S.remindButton(st.remindTime) })], () => bus.emit('ui:remind'), { nav: false }));
     // (1.12.1) your nickname (the ranglys and your opponents see it)
     sheet.querySelector('.stats-foot').prepend(button('btn-white btn-mini', [emo('✏️'), h('span', { text: S.nameChange })], () => bus.emit('ui:name', 'stats'), { nav: false }));
+    // (1.14) Sign in with Google: save the progress (only where sign-in is on; never needed to play)
+    if (st.account) sheet.querySelector('.stats-foot').prepend(button('btn-white', [emo('☁️'), h('span', { text: S.accountButton(st.account.signedIn) })], () => bus.emit('ui:account'), { nav: false }));
     // today's leaderboard (only when the game can reach the server)
     if (st.boardOn) sheet.querySelector('.stats-foot').prepend(button('btn-blue', [emo('🏆'), h('span', { text: S.board })], () => bus.emit('ui:board'), { nav: false }));
     modals.stats.replaceChildren(sheet);
@@ -1249,6 +1252,8 @@ export function createUI(bus) {
         : (m.coins | 0) < m.refillTo
           ? button('btn-green btn-mini', [emo(COIN), h('span', { text: S.refillBtn(fmtInt(m.refillTo), m.refillLeft) })], () => bus.emit('ui:shop-refill'), { nav: false })
           : h('p', { class: 'shop-note', text: S.refillFull(fmtInt(m.refillTo)) })) : null,
+      // (1.14) just bought something: the one gentle "save your progress" offer (when it's due), above the tabs
+      m.signinOffer ? signinOfferEl('shop') : null,
       tabs,
       body,
       h('div', { class: 'sheet-foot' }, button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false })));
@@ -1844,7 +1849,7 @@ export function createUI(bus) {
       h('p', { class: 'res-sub', text: why }));
   }
 
-  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null, againStake = 0, freeTry = null, bestStays = null, switchTo = null } = {}) {
+  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null, againStake = 0, freeTry = null, bestStays = null, switchTo = null, signinOffer = false } = {}) {
     if (st.modal) closeModal();
     const r = result || {};
     const m = mode || r.mode || 'practice';
@@ -1936,6 +1941,8 @@ export function createUI(bus) {
       const inst = empty ? null : installRow(install);
       if (inst) wrap.append(inst);
     }
+    // (1.14) a new best: the one gentle "save your progress" offer (when it's due), never in the way
+    if (signinOffer) wrap.append(signinOfferEl('results'));
     // what next: another match; or (after a tower) the two ways to keep playing, side by side as on the
     // start screen (testers: a lone "Oefen" floating over the card looked like the only thing left)
     wrap.append(duel
@@ -2104,6 +2111,157 @@ export function createUI(bus) {
   }
 
   /** "Moet ek jou elke dag herinner?": three times, and no (or off, once it is on). Emits 'ui:remind-pick'. */
+  // ---------------------------------------------------------------------------
+  // Bêre jou vordering (1.13): Sign in with Google (js/account.js), from the Statistiek sheet
+  // ---------------------------------------------------------------------------
+  // The Google "G" on the app's own sign-in button (drawn as Google's sign-in guidelines ask). Static markup.
+  const GOOGLE_G = '<svg class="gsi-g" viewBox="0 0 48 48" aria-hidden="true" focusable="false">'
+    + '<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>'
+    + '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>'
+    + '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>'
+    + '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+
+  /**
+   * (1.14, the owner: "people want it as simple as possible") the gentle offer: one line, Google's own one-tap
+   * button (the website) or the phone's own sign-in (the app), and ✕ "Nie nou nie". Never a gate: closing it
+   * or ignoring it changes nothing.
+   */
+  function signinOfferEl(where) {
+    const slot = h('div', { class: 'signin-offer-btn' });
+    if (st.account?.native) slot.append(googleBtn());
+    const el = h('div', { class: `card signin-offer signin-offer-${where}`, role: 'note' },
+      h('p', { class: 'signin-offer-text' }, emo('☁️'), h('span', { text: S.signinOffer })),
+      slot,
+      h('button', {
+        type: 'button', class: 'icon-btn signin-offer-no', 'aria-label': S.signinOfferNo, title: S.signinOfferNo,
+        onclick: () => {
+          audio.play('click');
+          bus.emit('ui:signin-offer-no');
+        },
+      }, icon('close')));
+    // the website: Google's own button, once the slot is in the page (js/account.js renderButton)
+    if (!st.account?.native) queueMicrotask(() => { if (slot.isConnected) bus.emit('ui:account-slot', slot); });
+    return el;
+  }
+
+  /** (1.14) The offer goes (waved away, or signed in): from the page and from the shop's next drawing. */
+  function hideSigninOffer() {
+    if (st.shopModel) st.shopModel = { ...st.shopModel, signinOffer: false };
+    for (const el of root.querySelectorAll('.signin-offer')) el.remove();
+  }
+
+  /** (1.14) Is the account sheet open (a sign-in from it shows its notes there)? */
+  const accountSheetOpen = () => st.modal === 'account';
+
+  function googleBtn() {
+    const g = document.createElement('span');
+    g.innerHTML = GOOGLE_G;
+    return h('button', {
+      type: 'button', class: 'gsi-native',
+      onclick: () => {
+        if (st.accountWorking) return;
+        audio.play('click');
+        bus.emit('ui:account-native');
+      },
+    }, g.firstChild, h('span', { text: S.accountSignIn }));
+  }
+
+  /** What the account sheet shows (js/account.js status()); null or `on` false: sign-in is off here. */
+  function setAccount(status) {
+    st.account = status && status.on ? status : null;
+    if (st.modal === 'account') renderAccount();
+  }
+
+  /** The account sheet. */
+  function showAccount(status) {
+    if (status !== undefined) st.account = status && status.on ? status : null;
+    if (!st.account) return;
+    st.accountAsk = null;
+    st.accountMsg = null;
+    st.accountWorking = false;
+    st.accountView = null;
+    renderAccount();
+    openModal('account');
+  }
+
+  /** A line under the buttons (a sign-in that didn't work, or no internet for signing out); `working`: wait. */
+  function setAccountNote(text = null, { working = false } = {}) {
+    st.accountMsg = text;
+    st.accountWorking = !!working;
+    if (st.modal === 'account') renderAccount();
+  }
+
+  function renderAccount() {
+    const a = st.account;
+    if (!a) return;
+    const ask = st.accountAsk;
+    const min = a.at ? Math.max(0, Math.floor((Date.now() - a.at) / 60000)) : null;
+    // the same view again (a sync started or ended with nothing new to show): leave Google's button alone
+    const view = JSON.stringify([ask, a.signedIn, a.out, a.native, a.busy, a.error, min, st.accountMsg, st.accountWorking]);
+    if (view === st.accountView && modals.account.firstChild) return;
+    st.accountView = view;
+    const wait = st.accountWorking;
+    if (ask) {
+      const del = ask === 'delete';
+      const back = () => {
+        st.accountAsk = null;
+        st.accountMsg = null;
+        renderAccount();
+      };
+      modals.account.replaceChildren(h('div', { class: 'card sheet account-sheet' },
+        closeX(back),
+        h('div', { class: 'sheet-head' }, emo(del ? '⚠️' : '☁️'), h('h2', { id: 'stapel-account-title', text: del ? S.accountDelete : S.accountSignOut })),
+        h('div', { class: 'sheet-body' },
+          h('p', { class: 'account-ask', text: del ? S.accountDeleteAsk : S.accountSignOutAsk }),
+          st.accountMsg ? h('p', { class: 'account-msg', role: 'alert', text: st.accountMsg }) : null),
+        h('div', { class: 'sheet-foot account-foot' },
+          button(del ? 'btn-klei' : 'btn-blue', h('span', { text: wait ? '…' : del ? S.accountDeleteYes : S.accountSignOut }), () => {
+            if (st.accountWorking) return;
+            bus.emit(del ? 'ui:account-delete' : 'ui:account-signout');
+          }, { nav: false, attrs: wait ? { disabled: true } : {} }),
+          button('btn-white', h('span', { text: S.accountCancel }), back, { nav: false }))));
+      return;
+    }
+    const body = h('div', { class: 'sheet-body account-body' });
+    let foot = null;
+    if (a.signedIn) {
+      body.append(
+        h('p', { class: 'account-in' }, h('span', { class: 'account-tick', 'aria-hidden': 'true', text: '✓' }), h('span', { text: S.accountSignedIn })),
+        h('p', { class: 'account-line', role: 'status', text: a.busy ? S.accountSaving : a.error === 'offline' ? S.accountOffline : min !== null ? S.accountSaved(S.accountAgo(min)) : S.accountNotYet }));
+      if (st.accountMsg) body.append(h('p', { class: 'account-msg', role: 'alert', text: st.accountMsg }));
+      foot = h('div', { class: 'sheet-foot account-foot' },
+        button('btn-white', h('span', { text: S.accountSignOut }), () => {
+          st.accountAsk = 'signout';
+          st.accountMsg = null;
+          renderAccount();
+        }, { nav: false }),
+        h('button', {
+          type: 'button', class: 'account-delete', text: S.accountDelete,
+          onclick: () => {
+            audio.play('click');
+            st.accountAsk = 'delete';
+            st.accountMsg = null;
+            renderAccount();
+          },
+        }));
+    } else {
+      if (a.out) body.append(h('p', { class: 'account-msg', text: S.accountOut }));
+      const slot = h('div', { class: 'account-google' });
+      if (a.native) slot.append(googleBtn());
+      body.append(h('p', { class: 'account-why', text: S.accountWhy }), slot);
+      if (wait) body.append(h('p', { class: 'account-line', role: 'status', text: S.accountSaving }));
+      if (st.accountMsg) body.append(h('p', { class: 'account-msg', role: 'alert', text: st.accountMsg }));
+      body.append(h('p', { class: 'account-keeps', text: S.accountKeeps }));
+      // Google's own button on the website (js/account.js renderButton), once the slot is in the page
+      if (!a.native) queueMicrotask(() => { if (slot.isConnected) bus.emit('ui:account-slot', slot); });
+    }
+    modals.account.replaceChildren(h('div', { class: 'card sheet account-sheet' },
+      closeX(() => closeModal()),
+      h('div', { class: 'sheet-head' }, emo('☁️'), h('h2', { id: 'stapel-account-title', text: a.signedIn ? S.accountTitleIn : S.accountTitle })),
+      body,
+      foot));
+  }
+
   function showReminder({ time = null } = {}) {
     const pick = (v) => {
       audio.play('click');
@@ -2466,6 +2624,11 @@ export function createUI(bus) {
     setPauseTimer,
     setPauseCount,
     setAgain,
+    setAccount,
+    showAccount,
+    setAccountNote,
+    hideSigninOffer,
+    accountSheetOpen,
     setBoardOn,
     showBoard,
     showInGame,

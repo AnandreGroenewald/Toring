@@ -12,6 +12,8 @@ import * as stats from './stats.js';
 import * as board from './board.js';
 import { readJsonObject } from './http.js';
 import { handleWebhook } from './webhook.js';
+import { routeAccount, pruneAccounts } from './account.js';
+import { createGoogleKeys } from './google.js';
 import { rand32 } from './match.js';
 import { isRoomCode, newRoomCode } from '../../js/core/duel.js';
 
@@ -61,6 +63,8 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
   // Rate limits for the anonymous counts live in memory only (see stats.js).
   const rate = stats.createRateLimiter();
   const statsBuffer = stats.createStatsBuffer();
+  // (1.13) Google's signing keys for "Sign in with Google", kept in this isolate
+  const googleKeys = createGoogleKeys({ fetch: fetchImpl, now });
   // Mark stale rather than delete, so a stale copy is still there if D1 fails right after.
   const invalidate = () => {
     for (const entry of feedCache.values()) entry.at = -Infinity;
@@ -111,9 +115,12 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
     // (1.13.1) the Daaglikse Toring's free tries (the game asks at its start; a phone keeps the last answer)
     if (path === '/daily/config') {
       if (method !== 'GET') return methodNotAllowed('GET');
-      return json(200, { free: ctx.cfg.dailyFreeTries, from: ctx.cfg.dailyFreeFrom }, { 'Cache-Control': 'public, max-age=300' });
+      // (1.14) `signin`: Sign in with Google is open (the client ID and AUTH_SECRET are both set); the game shows
+      // the sign-in only then, so a website or app ahead of the server never offers a sign-in that can't work
+      return json(200, { free: ctx.cfg.dailyFreeTries, from: ctx.cfg.dailyFreeFrom, signin: !!(ctx.cfg.googleClientId && ctx.cfg.authSecret) }, { 'Cache-Control': 'public, max-age=300' });
     }
     if (path === '/subscribe') return method === 'POST' ? subscribe(request, ctx) : methodNotAllowed('POST');
+    if (path.startsWith('/account/')) return routeAccount(request, path, ctx);
     if (path === '/status') return method === 'GET' ? status(url, ctx) : methodNotAllowed('GET');
     if (path === '/paystack/webhook') return method === 'POST' ? handleWebhook(request, ctx) : methodNotAllowed('POST');
 
@@ -253,6 +260,7 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
         planCache,
         rate,
         statsBuffer,
+        googleKeys,
         paystack: createPaystack({
           secretKey: cfg.paystackSecret,
           fetch: fetchImpl,
@@ -286,6 +294,12 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
             Object.assign(counts, await board.pruneBoard(env.DB, at));
           } catch (err) {
             log('error', 'board_prune_failed', { message: String(err?.message || err) });
+          }
+          // (1.13) sessions and accounts nobody used for a long time
+          try {
+            Object.assign(counts, await pruneAccounts(env.DB, at));
+          } catch (err) {
+            log('error', 'account_prune_failed', { message: String(err?.message || err) });
           }
           // Once the owner switched to a live key, sponsors "paid" with test cards lose that time.
           if (cfg.paystackMode === 'live') {

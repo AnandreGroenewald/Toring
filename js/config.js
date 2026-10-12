@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.13.4';
+export const VERSION = '1.14.0';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -330,6 +330,11 @@ export const DAILY_TRIES = Object.freeze({ free: 3, from: '2026-10-12', maxFree:
 // (12 Oct 04:05, the owner in the Stapel terminal: "if the skin is 2000 coins lets give them 4000 coins per reload") up to 4 000
 export const REFILL = Object.freeze({ on: true, to: 4000, times: 3, per: 'day', from: '2026-10-12', days: 5 });
 export const TESTER_GIFT = Object.freeze({ on: true, coins: 100000, hash: '7b325f2da84141879a5a4b6ab2f0a72a0386a3d7a3519ece2f6a5a075553792d' });
+
+// (1.13) Sign in with Google (js/account.js): the web client ID from Google Cloud (Google Auth Platform >
+// Clients > "Stapel web"; public, not a secret; the Worker's GOOGLE_CLIENT_ID is the same). Empty: the
+// sign-in stays hidden. The Android app asks Google for tokens for this same ID.
+export const AUTH = Object.freeze({ googleClientId: '338179953021-qocupp0icc6764ik3gm3lskbbftvnqt4.apps.googleusercontent.com' });
 
 // ---------------------------------------------------------------------------
 // Daily tower

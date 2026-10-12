@@ -18,6 +18,8 @@ public class MainActivity extends BridgeActivity {
         // theme again after super.onCreate; Android 12+'s launch screen comes from the manifest theme, before this runs.
         setTheme(R.style.AppTheme_NoActionBar);
         EdgeToEdge.enable(this);
+        // (1.14) Sign in with Google: the app's own plugin (StapelGooglePlugin), registered before the bridge starts
+        registerPlugin(StapelGooglePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

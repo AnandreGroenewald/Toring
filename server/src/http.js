@@ -26,6 +26,14 @@ export function json(status, body, headers = {}) {
   });
 }
 
+/** Like json(), for a body already serialised (a stored save goes back as it was kept, not parsed again). */
+export function jsonText(status, text, headers = {}) {
+  return new Response(text, {
+    status,
+    headers: { ...BASE_HEADERS, 'Cache-Control': 'no-store', ...headers },
+  });
+}
+
 export function errorResponse(err) {
   return json(err.status, { error: err.code, ...err.extra });
 }

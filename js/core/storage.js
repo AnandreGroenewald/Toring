@@ -184,6 +184,85 @@ function sanitize(raw) {
 const clone = (x) => (x == null ? x : JSON.parse(JSON.stringify(x)));
 const laterKey = (a, b) => (!a ? b : !b ? a : daysBetween(a, b) > 0 ? b : a);
 
+/** (1.12) The second daily tries, checked: { [dateKey]: { status: 'ready'|'playing'|'done', result, ... } }. */
+function cleanRetryMap(o) {
+  const out = {};
+  if (!o || typeof o !== 'object') return out;
+  for (const [k, r] of Object.entries(o)) {
+    if (!isDateKey(k) || !r || !['ready', 'playing', 'done'].includes(r.status)) continue;
+    // (1.12.1) up to 4 a day: `n` the tries bought (1-4), `paid` the last one's price (a refund gives that
+    // back), `best` the best finished extra try (an entry from 1.12.0 is one try, its result the best)
+    const maxN = MAX_EXTRA;   // (1.13.1: the free extra tries, then "Nog 'n kans")
+    const n = Number.isInteger(r.n) && r.n >= 1 && r.n <= maxN ? r.n : 1;
+    const result = r.status === 'ready' ? null : normalizeResult(r.result, k);
+    out[k] = {
+      status: r.status,
+      result,
+      startedAt: num(r.startedAt, null),
+      finishedAt: num(r.finishedAt, null),
+      beatAt: num(r.beatAt, null),
+      owner: typeof r.owner === 'string' ? r.owner : null,
+      n,
+      // (a 1.12.0 entry keeps no price: that version only sold "Nog 'n kans", never a free try)
+      paid: Number.isInteger(r.paid) && r.paid >= 0 && r.paid <= 100000 ? r.paid : DAILY_RETRY.prices[n - 1] ?? 0,
+      best: r.best && typeof r.best === 'object' ? normalizeResult(r.best, k) : r.status === 'done' ? result : null,
+    };
+  }
+  return out;
+}
+
+const PLAYER_ID_RE = /^[a-z0-9]{12,32}$/;
+const sortedMap = (o) => Object.fromEntries(Object.keys(o).sort().map((k) => [k, o[k]]));
+
+// --- The saved progress (1.13: Sign in with Google) ------------------------------------------------------
+// What an account keeps of a player: the finished towers and their stats, Oefen's best, the Uitdagersreeks
+// name and record, the wallet (coins, power-ups, looks, ranks, (1.14) the tower's skins), the extra daily tries
+// (free and "Nog 'n kans", with how many were used), the weekkis, the leaderboard number, (1.14) the testers'
+// gift day (it keeps a tester off the leaderboard on every device) and the Winkel refill count. Not kept: this
+// device's settings, language and reminder, the free-tries setting (the Worker's word), a tower being played
+// right now (another device must never finish it) and (1.14) a coin match's held stake (one device, one match:
+// another device must never pay it out or refund it). js/core/cloudsave.js merges two of these.
+export const SAVE_V = 1;
+
+/** A save, checked (every part rebuilt as the store would; day maps in date order, so equal saves compare equal). */
+export function cleanSave(raw) {
+  const s = raw && typeof raw === 'object' ? raw : {};
+  const d = sanitize({ ...(s.main && typeof s.main === 'object' ? s.main : {}), settings: {} });
+  const daily = {};
+  for (const [k, e] of Object.entries(d.daily)) {
+    if (e.status !== 'done') continue;
+    daily[k] = { status: 'done', result: e.result, startedAt: e.startedAt, finishedAt: e.finishedAt, ...(e.newBest ? { newBest: e.newBest } : {}) };
+  }
+  const retry = {};
+  for (const [k, r] of Object.entries(cleanRetryMap(s.retry))) {
+    if (r.status === 'playing') continue;
+    // (1.14) with the tries used (`n`), the last one's price and the best finished one: a signed-in reinstall
+    // gets the day's used tries back (no fresh free tries)
+    retry[k] = { status: r.status, result: r.result, startedAt: r.startedAt, finishedAt: r.finishedAt, n: r.n, paid: r.paid, best: r.best };
+  }
+  const b = s.board && typeof s.board === 'object' ? s.board : {};
+  const tester = isDateKey(b.tester) ? b.tester : null;
+  const econ = cleanEconomy(s.econ);
+  econ.stake = null;   // (1.14) never in a save: see above
+  const f = s.refill && typeof s.refill === 'object' ? s.refill : {};
+  const count = (x) => (Number.isInteger(x) && x >= 0 && x <= 100000 ? x : 0);
+  return {
+    v: SAVE_V,
+    main: { tutorialSeen: d.tutorialSeen, daily: sortedMap(daily), stats: d.stats, practice: d.practice, duel: d.duel },
+    econ,
+    retry: sortedMap(retry),
+    week: cleanWeek(s.week),
+    board: {
+      player: typeof b.player === 'string' && PLAYER_ID_RE.test(b.player) ? b.player : null,
+      hidden: b.hidden === true || !!tester,
+      // (the leaderboard numbers this account's devices used before they joined it: the newest 8)
+      past: [...new Set((Array.isArray(b.past) ? b.past : []).filter((p) => typeof p === 'string' && PLAYER_ID_RE.test(p)))].slice(-8),
+      tester,   // (1.14) the day the testers' gift was taken: off the leaderboard and the ranks for good
+    },
+    refill: { day: isDateKey(f.day) ? f.day : null, n: count(f.n), total: count(f.total) },   // (1.14) the Winkel refill count
+  };
+}
+
 // --- Store -----------------------------------------------------------------------
 
 /**
@@ -350,35 +429,11 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
   }
 
   function cleanRetries(raw) {
-    const out = {};
-    let o = null;
     try {
-      o = raw ? JSON.parse(raw) : null;
+      return cleanRetryMap(raw ? JSON.parse(raw) : null);
     } catch {
-      o = null;
+      return {};
     }
-    if (!o || typeof o !== 'object') return out;
-    for (const [k, r] of Object.entries(o)) {
-      if (!isDateKey(k) || !r || !['ready', 'playing', 'done'].includes(r.status)) continue;
-      // (1.12.1) up to 4 a day: `n` the tries bought (1-4), `paid` the last one's price (a refund gives that
-      // back), `best` the best finished extra try (an entry from 1.12.0 is one try, its result the best)
-      const maxN = MAX_EXTRA;   // (1.13.1: the free extra tries, then "Nog 'n kans")
-      const n = Number.isInteger(r.n) && r.n >= 1 && r.n <= maxN ? r.n : 1;
-      const result = r.status === 'ready' ? null : normalizeResult(r.result, k);
-      out[k] = {
-        status: r.status,
-        result,
-        startedAt: num(r.startedAt, null),
-        finishedAt: num(r.finishedAt, null),
-        beatAt: num(r.beatAt, null),
-        owner: typeof r.owner === 'string' ? r.owner : null,
-        n,
-        // (a 1.12.0 entry keeps no price: that version only sold "Nog 'n kans", never a free try)
-        paid: Number.isInteger(r.paid) && r.paid >= 0 && r.paid <= 100000 ? r.paid : DAILY_RETRY.prices[n - 1] ?? 0,
-        best: r.best && typeof r.best === 'object' ? normalizeResult(r.best, k) : r.status === 'done' ? result : null,
-      };
-    }
-    return out;
   }
 
   function persistRetry() {
@@ -1273,6 +1328,58 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       sync();
       const reward = rollSeasons();
       return rankView(mode, { reward });
+    },
+
+    // --- The saved progress (1.13: Sign in with Google; js/account.js) -----------------------------------
+    /** This device's progress as a save (js/core/storage.js cleanSave). */
+    exportSave() {
+      sync();
+      return cleanSave({ main: data, econ, retry: retries, week: readWeek(), board: readBoard(), refill: readRefill() });
+    },
+
+    /**
+     * Take a (merged) save as this device's progress. This device's settings stay, and so does a tower being
+     * played here right now (a second try still being played too, unless the save has it done).
+     */
+    importSave(raw) {
+      sync();
+      const save = cleanSave(raw);
+      const playing = Object.entries(data.daily).filter(([, e]) => e.status === 'playing');
+      data = sanitize({ ...save.main, settings: data.settings });
+      for (const [k, e] of playing) if (!data.daily[k]) data.daily[k] = e;
+      const playingTries = Object.entries(retries).filter(([, r]) => r.status === 'playing');
+      retries = cleanRetryMap(save.retry);
+      for (const [k, r] of playingTries) if (!retries[k] || retries[k].status === 'ready') retries[k] = r;
+      // (1.14) a coin match's stake held here stays here (a save never carries one)
+      econ = cleanEconomy({ ...save.econ, stake: econ.stake });
+      persist();
+      persistEcon();
+      persistRetry();
+      writeWeek(save.week);
+      const b = readBoard();
+      // (1.14) the testers' gift day: the earlier of the two, and a tester stays off the leaderboard
+      const tester = [b.tester, save.board.tester].filter(Boolean).sort()[0] || null;
+      writeBoard({ ...b, player: save.board.player || b.player, hidden: save.board.hidden || !!tester, tester });
+      writeRefill(save.refill);
+    },
+
+    /** Signed out (or the account deleted): this device starts over. Its settings, language and reminder stay. */
+    resetProgress() {
+      sync();
+      const settings = data.settings;
+      data = defaultData();
+      data.settings = settings;
+      // (1.14) a coin match's stake held here stays (its match still settles it); so does the testers' gift day (once
+      // per device: signing out must not hand out a second gift or put a tester back on the leaderboard), and the
+      // refill count (its own key)
+      econ = cleanEconomy({ ...defaultEconomy(), stake: econ.stake });
+      retries = {};
+      persist();
+      persistEcon();
+      persistRetry();
+      writeWeek(cleanWeek(null));
+      const tester = readBoard().tester;
+      writeBoard({ player: null, hidden: !!tester, posted: null, pending: false, tester });
     },
 
     recordPractice(result) {

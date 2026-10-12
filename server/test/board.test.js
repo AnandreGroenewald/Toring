@@ -247,12 +247,12 @@ test('1.13.1 GET /daily/config: the free tries and their first day (the game ask
   const h = createHarness();
   const r = await h.request('GET', '/daily/config');
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json, { free: 3, from: '2026-10-12' });
+  assert.deepEqual(r.json, { free: 3, from: '2026-10-12', signin: false });
   assert.match(r.headers.get('Cache-Control') || '', /max-age=300/);
   const h2 = createHarness({ DAILY_FREE_TRIES: '2', DAILY_FREE_FROM: '2026-11-01' });
-  assert.deepEqual((await h2.request('GET', '/daily/config')).json, { free: 2, from: '2026-11-01' });
+  assert.deepEqual((await h2.request('GET', '/daily/config')).json, { free: 2, from: '2026-11-01', signin: false });
   const h3 = createHarness({ DAILY_FREE_TRIES: '9', DAILY_FREE_FROM: 'soon' });
-  assert.deepEqual((await h3.request('GET', '/daily/config')).json, { free: 4, from: '2026-10-12' }, 'kept within 1-4 and a real day');
+  assert.deepEqual((await h3.request('GET', '/daily/config')).json, { free: 4, from: '2026-10-12', signin: false }, 'kept within 1-4 and a real day');
   assert.equal((await h.request('POST', '/daily/config')).status, 405);
 });
 

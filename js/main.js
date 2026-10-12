@@ -2,12 +2,12 @@
 // pause/visibility, settings, service worker and debug hooks.
 // First of all: the language, before any other module reads a string (js/core/langboot.js).
 import { SAVED_LANG, PREVIEW_LANG } from './core/langboot.js';
-import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL, TESTER_GIFT, REFILL } from './config.js';
+import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL, TESTER_GIFT, REFILL, AUTH } from './config.js';
 import { bus } from './core/bus.js';
 import { S, POWERUP_INFO, COSMETIC_INFO, RANK_INFO } from './core/strings.js';
 import { fmtDateKey, fmtM, fmtInt } from './core/format.js';
 import { createStore } from './core/storage.js';
-import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate, isDateKey, addDays } from './core/daily.js';
+import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate, isDateKey, addDays, daysBetween } from './core/daily.js';
 import { createSequence } from './core/sequence.js';
 import { buildShareText, buildDuelShareText } from './core/share.js';
 import { parseChallengeQuery, parseRoomQuery, defaultNicknameFor } from './core/duel.js';
@@ -26,6 +26,7 @@ import { tutorialDone } from './core/coach.js';
 import { loadSponsors } from './sponsorsFeed.js';
 import { sendStats, dailyPercentile, sendShareCount, request as apiRequest, base as apiBase } from './audience.js';
 import { postBoard, getBoard } from './board.js';
+import { createAccount } from './account.js';
 import { SPONSOR_API_URL, salesEnabled, matchApiUrl } from './sponsorConfig.js';
 import { createUI } from './ui/dom.js';
 import { getLanguage, isLang } from './core/i18n.js';
@@ -243,6 +244,108 @@ bus.on('game:audience', (a) => {
 // (its autoplay and ?date= would post); ?board=1 lets a test on this computer use a local server.
 const LOCAL_PAGE = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 const BOARD_ON = !!matchApiUrl() && (!DEBUG || (params.get('board') === '1' && LOCAL_PAGE));
+
+// (1.13) Sign in with Google: the saved progress (js/account.js). Off until js/config.js has Google's client
+// ID. A debug session uses it only on this computer, with ?cloud=1 (and ?gcid= a test client ID): never the
+// real accounts. A sync never runs while a tower is being built; it waits for the tower to end.
+const ACCOUNT_ON = !DEBUG || (params.get('cloud') === '1' && LOCAL_PAGE);
+const account = createAccount({
+  store,
+  bus,
+  apiUrl: ACCOUNT_ON ? matchApiUrl() : '',
+  clientId: DEBUG && params.get('gcid') ? params.get('gcid') : AUTH.googleClientId,
+  storageKey: DEBUG ? `${STORAGE_KEY}.debug` : STORAGE_KEY,
+  today: todayKey,
+  canApply: () => screen !== 'game' && screen !== 'pause',
+});
+// (1.14, the owner: "people skipped the payment section due to login, people want it as simple as possible")
+// Sign-in is never a gate: everything works as a guest. It shows only once the server says it is open
+// (GET /daily/config `signin`), or for a device already signed in; a test page with ?cloud=1 has it open.
+let signinOpen = ACCOUNT_ON && DEBUG;
+/** The account's status for the screens: `on` only where sign-in can work right now. */
+function accountStatus() {
+  const a = account.status();
+  return { ...a, on: a.on && (signinOpen || a.signedIn || a.out) };
+}
+ui.setAccount(accountStatus());
+if (DEBUG) window.__stapel.account = account;
+
+// (1.14) one gentle offer, at a good moment (a new best on the results, or just after a purchase in the Winkel):
+// "Bêre jou vordering met Google · een tik", at most once every SIGNIN_OFFER_DAYS (shown or waved away)
+const SIGNIN_OFFER_DAYS = 60;
+const signinOfferKey = `${DEBUG ? `${STORAGE_KEY}.debug` : STORAGE_KEY}.signoffer`;
+function signinOfferDue() {
+  const a = accountStatus();
+  if (!a.on || a.signedIn || a.out) return false;
+  try {
+    const last = JSON.parse(localStorage.getItem(signinOfferKey) || 'null')?.at;
+    return !isDateKey(last) || daysBetween(last, todayKey()) >= SIGNIN_OFFER_DAYS;
+  } catch {
+    return false;   // (no storage: never nag)
+  }
+}
+function signinOfferShown() {
+  try {
+    localStorage.setItem(signinOfferKey, JSON.stringify({ at: todayKey() }));
+  } catch {
+    // private mode: it may come again next visit, still at most once a visit
+  }
+}
+let signinOfferVisit = false;   // once a visit at most, whatever storage says
+function takeSigninOffer() {
+  if (signinOfferVisit || !signinOfferDue()) return false;
+  signinOfferVisit = true;
+  signinOfferShown();
+  return true;
+}
+bus.on('ui:signin-offer-no', () => ui.hideSigninOffer());
+
+bus.on('account:changed', ({ why } = {}) => {
+  ui.setAccount(accountStatus());
+  if (account.status().signedIn) ui.hideSigninOffer();
+  // the account brought progress here (or this device started over): the menu shows it at once
+  if ((why === 'merged' || why === 'signed-out' || why === 'deleted') && screen === 'menu') showMenu();
+});
+function signedIn(err, out) {
+  if (!err) {
+    ui.setAccountNote(null);
+    // signed in, but the first save hasn't gone through yet (no internet): it goes as soon as it can
+    ui.toast(out === 'saved' || out === 'same' ? S.accountWelcome : S.accountWelcomeLater, 2800);
+    if (screen === 'menu') showMenu();
+    return;
+  }
+  const note = err.message === 'canceled' ? null : err.message === 'out' ? S.accountOut : S.accountErr(err.message);
+  ui.setAccountNote(note);
+  // (1.14) from the gentle offer (no sheet open): a cancel shows nothing, a failure a small toast; the game goes on
+  if (note && !ui.accountSheetOpen()) ui.toast(note, 2600);
+}
+bus.on('ui:account', () => {
+  ui.showAccount(accountStatus());
+  account.wake();
+});
+// the website: Google's own button in the sheet
+bus.on('ui:account-slot', (slot) => {
+  account.renderButton(slot, { lang: getLanguage(), onDone: signedIn }).catch(() => ui.setAccountNote(S.accountErr('offline')));
+});
+// the app: the phone's own Google sign-in
+bus.on('ui:account-native', () => {
+  ui.setAccountNote(null, { working: true });
+  account.signInNative().then((out) => signedIn(null, out), signedIn);
+});
+bus.on('ui:account-signout', () => {
+  ui.setAccountNote(null, { working: true });
+  account.signOut().then(() => {
+    ui.closeModal();
+    ui.toast(S.accountBye, 3000);
+  }, (err) => ui.setAccountNote(err.message === 'out' ? S.accountOut : S.accountErr(err.message)));
+});
+bus.on('ui:account-delete', () => {
+  ui.setAccountNote(null, { working: true });
+  account.deleteAccount().then(() => {
+    ui.closeModal();
+    ui.toast(S.accountDeleted, 3000);
+  }, (err) => ui.setAccountNote(err.message === 'out' ? S.accountOut : S.accountErr(err.message)));
+});
 ui.setBoardOn(BOARD_ON);
 const BOARD_FRESH_MS = 60 * 1000;   // an answer this recent is shown again without asking the server
 let boardLast = null;   // { dateKey, board, at }: the last answer, so the sheet opens on it at once
@@ -358,6 +461,7 @@ bus.on('ui:board', openBoard);
 bus.on('ui:board-hide', (hide) => {
   store.setBoardHidden(!!hide);
   boardChanged();
+  account.soon();
 });
 
 /** At start: a change that didn't reach the server last time goes now (one about an older day is let go). */
@@ -463,10 +567,13 @@ bus.on('ui:skin-buy', ({ kind, id } = {}) => {
     ui.toast(S.bought(S.skinNames[kind]?.[id] || id));
     coinsChanged();
   }
-  ui.showShop(shopModel(), 'skins');
+  ui.showShop({ ...shopModel(), signinOffer: r.ok && takeSigninOffer() }, 'skins');
 });
 bus.on('ui:skin-wear', ({ kind, id } = {}) => {
-  if (store.wearSkin(kind, id).ok) applySkins();
+  if (store.wearSkin(kind, id).ok) {
+    applySkins();
+    account.soon();
+  }
   ui.showShop(shopModel(), 'skins');
 });
 
@@ -494,7 +601,7 @@ bus.on('ui:shop-buy', ({ kind, id } = {}) => {
     const name = kind === 'powerup' ? POWERUP_INFO[id]?.name : COSMETIC_INFO[kind]?.[id]?.name;
     if (name) ui.toast(S.bought(name));
   }
-  ui.showShop(shopModel());
+  ui.showShop({ ...shopModel(), signinOffer: r.ok && takeSigninOffer() });
   if (r.ok && kind !== 'powerup') lookChanged();
   if (r.ok) coinsChanged();
 });
@@ -502,6 +609,7 @@ bus.on('ui:shop-wear', ({ kind, id } = {}) => {
   store.wearCosmetic(kind, id);
   ui.showShop(shopModel());
   lookChanged();
+  account.soon();
 });
 
 function gameScene() {
@@ -694,6 +802,7 @@ function showMenu() {
   screen = 'menu';
   pushSkyline();
   ui.showMenu(menuModel());
+  account.soon();
   wakeLoop();
   armMenuSleep();
   requestAnimationFrame(updateMenuAnchor);
@@ -814,6 +923,11 @@ async function loadDailyTries() {
   if (!root || DEBUG) return;   // (a test page keeps the game's own setting, or ?tries=…)
   const cfg = await apiRequest(`${root}/daily/config`, { method: 'GET' });
   if (!cfg) return;
+  // (1.14) Sign in with Google is open on the server: the button (Statistiek) and the gentle offer may show
+  if (cfg.signin === true && !signinOpen) {
+    signinOpen = true;
+    ui.setAccount(accountStatus());
+  }
   const before = JSON.stringify(store.getDailyTries());
   store.setDailyTries(cfg);
   if (JSON.stringify(store.getDailyTries()) !== before && screen === 'menu') showMenu();
@@ -1129,7 +1243,22 @@ window.addEventListener('popstate', () => {
 // ---------------------------------------------------------------------------
 // Bus wiring
 // ---------------------------------------------------------------------------
-bus.on('ui:play-daily', playDaily);
+// (1.13) signed in: the towers played on another device come in first (a short wait at most), so this one never
+// builds today's tower again or restarts the weekkis on an old copy
+let dailyWaiting = false;
+bus.on('ui:play-daily', () => {
+  if (!account.stale()) {
+    playDaily();
+    return;
+  }
+  if (dailyWaiting) return;
+  dailyWaiting = true;
+  ui.toast(S.accountWaiting, 1600);
+  account.settle(3000).then(() => {
+    dailyWaiting = false;
+    if (screen === 'menu') playDaily();
+  });
+});
 bus.on('ui:install', async () => {
   await promptInstall();
   ui.setInstall(installMode());
@@ -1212,6 +1341,11 @@ window.addEventListener('stapel:link', (e) => {
   // (1.13.3) the testers' gift opened in the app while it runs (App Links: …/?toetser=CODE): given at once
   const gift = new URLSearchParams(q).get('toetser');
   if (gift !== null) claimTesterGift(gift);
+  // (1.14) ?rekening (the privacy page's deletion link) opened the app: the account sheet
+  if (/[?&]rekening(?:[=&#]|$)/.test(q) && account.on) {
+    ui.showAccount(accountStatus());
+    return;
+  }
   const klop = /[?&]klop=/.test(q) ? loadChallenge(q, todayKey()) : null;
   if (klop) {
     challengeRaw = klop;   // "Kan jy my klop?": on the daily card (now, or when the menu comes back)
@@ -1358,8 +1492,15 @@ bus.on('ui:lang', (lang) => {
     return;
   }
   ui.closeModal();
-  if (first && !openDuelLink()) firstVisit();
+  if (first && !openAccountLink() && !openDuelLink()) firstVisit();
 });
+
+/** (1.13) ?rekening (the privacy page's "delete your account" link, for those without the app): the account sheet. */
+function openAccountLink() {
+  if (!params.has('rekening') || !account.on) return false;
+  ui.showAccount(accountStatus());
+  return true;
+}
 
 /** A new player's first visit (no link): "Hoe speel ek?" opens by itself, once; its "Kom ons bou!" starts the lesson. */
 function firstVisit() {
@@ -1583,6 +1724,7 @@ bus.on('ui:duel-stake', (n) => ui.setDuelStake(store.setDuelStake(n), coinsNow()
 
 /** (1.13) The coins changed while the Uitdagersreeks screen is up (the Winkel): the stake picker follows. */
 function coinsChanged() {
+  account.soon();   // (1.14) the wallet goes to the account (signed in only; a guest: nothing)
   if (screen !== 'duel') return;
   const coins = coinsNow();
   ui.setDuelStake(duelStake() <= coins ? duelStake() : store.setDuelStake(0), coins);
@@ -1761,6 +1903,7 @@ function startDuelGame(m) {
 }
 
 function showDuelResults(r) {
+  account.soon();   // (1.13) the match's coins and rank go to the account
   if (screen === 'results' || run.mode !== 'duel') return;
   ui.setEmotes(null);
   const d = duel.summary() || {};
@@ -1871,6 +2014,7 @@ bus.on('ui:duel-name', (text) => {
   if (saved?.ok) {
     clearTimeout(nameBoardTimer);
     nameBoardTimer = setTimeout(boardChanged, NAME_BOARD_MS);   // the latest leaderboard row takes the new name
+    account.soon();
   }
 });
 // (1.12.1) the nickname from the ranglys or Statistiek too (before, only in the Uitdagersreeks): saved through
@@ -2209,10 +2353,13 @@ bus.on('game:over', (result) => {
     mode: r.mode,
     // (1.13.4, the owner) an Oefen tower while a search runs: "Verander na Blok vir Blok / Wedloop"
     switchTo: r.mode === 'practice' && duel.searching ? otherMode(duelMode()) : null,
+    // (1.14) a new best: the one gentle "save your progress" offer (when due; never a popup)
+    signinOffer: !!f.isNewBest && takeSigninOffer(),
     ...resultsExtras(r),
   });
   showPercentile(r);
   sleepLoop(RESULTS_SLEEP_MS);
+  account.soon();   // (1.13) the tower goes to the account (a finished daily: done on the other devices too)
   if (r.mode === 'daily') {
     planReminders();   // today is built: no reminder today
     if (REMIND && !store.getReminder().asked) setTimeout(askReminder, 2600);
@@ -2227,10 +2374,12 @@ document.addEventListener('visibilitychange', () => {
     duel.away();
     if (canPause()) pauseGame();
     else audio.suspend();
+    account.sync();   // (1.13) what was done here goes to the account (a tower in progress waits)
   } else {
     duel.back();
     planReminders();
     if (!run.paused) audio.resume();
+    account.wake();
   }
 });
 window.addEventListener('pagehide', saveProgressNow);
@@ -2398,11 +2547,12 @@ function onReady() {
   startIdle();
   showMenu();
   loadDailyTries();   // (1.13.1) the free tries a day: the Worker's word (the menu follows when it changes)
+  account.sync();   // (1.14) signed in: the account's latest at once
   retryBoard();
   planReminders();
   // a new player chooses a language first; a challenge link waits for that choice
   if (askLanguage) ui.showLanguage({ first: true });
-  else if (!openDuelLink()) firstVisit();
+  else if (!openAccountLink() && !openDuelLink()) firstVisit();
   ui.setLoading(false);
   if (recovered.length) ui.toast(recoveredCoins ? `${S.unfinished} +${recoveredCoins} 🪙` : S.unfinished, 3600);
   else if (liveElsewhere(todayKey())) ui.toast(S.otherTab, 3000);

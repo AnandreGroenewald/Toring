@@ -85,11 +85,20 @@ export function loadConfig(env) {
       boardGetPerHour: int(e.RATE_LIMIT_BOARD_GET_PER_HOUR, 240, 1),
       // Wrong admin tokens per hashed address and hour before even the right one is refused.
       adminFailsPerHour: int(e.RATE_LIMIT_ADMIN_FAILS_PER_HOUR, 20, 1),
+      // (1.13) Sign in with Google, and the saved progress (a game saves after each tower; many players
+      // can share one address)
+      signInPerHour: int(e.RATE_LIMIT_SIGNIN_PER_HOUR, 60, 1),
+      accountPerHour: int(e.RATE_LIMIT_ACCOUNT_PER_HOUR, 900, 1),
     },
     // (1.13.1) The Daaglikse Toring's free tries a day from DAILY_FREE_FROM (the days before: one), for GET /daily/config:
     // the game asks at its start, so this changes without a new app (1..4; the game's own default is 3 from 2026-10-12).
     dailyFreeTries: int(e.DAILY_FREE_TRIES, 3, 1, 4),
     dailyFreeFrom: /^\d{4}-\d{2}-\d{2}$/.test(str(e.DAILY_FREE_FROM)) ? str(e.DAILY_FREE_FROM) : '2026-10-12',
+    // (1.13) Sign in with Google: the web client ID (public; the app asks Google for tokens for it too)
+    // and the secret that turns a Google account's number into Stapel's account number. Without both,
+    // /account/* answers 503 not_configured and the game hides the sign-in.
+    googleClientId: /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(str(e.GOOGLE_CLIENT_ID)) ? str(e.GOOGLE_CLIENT_ID) : '',
+    authSecret: str(e.AUTH_SECRET).length >= 32 ? str(e.AUTH_SECRET) : '',
     // Audience counts are added up in memory and written at most this often (D1 write budget).
     statsFlushMs: int(e.STATS_FLUSH_SECONDS, 60, 0, 3600) * 1000,
     // A secret salt: a fixed public fallback would let anyone reverse the stored address hashes.

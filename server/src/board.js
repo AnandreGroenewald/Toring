@@ -90,7 +90,7 @@ export function validateEntry(body, now) {
 }
 
 /** The whole metre a height counts in (daily_board_hist). */
-const metre = (heightDm) => Math.floor(heightDm / 10);
+export const metre = (heightDm) => Math.floor(heightDm / 10);
 
 /** The day's top, the number of players, and `player`'s own place (null when they have no result). */
 export async function boardOf(db, dateKey, player = null) {

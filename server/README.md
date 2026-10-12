@@ -118,6 +118,8 @@ npx wrangler d1 execute stapel-borge --remote --file=./schema.sql
 
 It's safe to run this again later; it only creates what is missing.
 
+> **Migration note (Sign in with Google, 1.13).** Run once: `./wr.sh d1 execute stapel-borge --remote --file=./migrations/0006_accounts.sql` (it only adds the tables `accounts`, `account_sessions` and `account_pushes` and their indexes; safe to repeat), set the secret `AUTH_SECRET` (section 3.3) and `GOOGLE_CLIENT_ID` (section 3.2), then deploy. Until then `/account/*` answers `503 not_configured` and the game keeps the sign-in hidden.
+
 > **Migration note (daily leaderboard, 1.9.2).** Run once: `./wr.sh d1 execute stapel-borge --remote --file=./migrations/0003_board.sql` (it only adds the tables `daily_board`, `daily_board_days` and `daily_board_hist` and an index; safe to repeat), then deploy. Until the tables exist, `/board` answers `500` and the game simply shows no place.
 
 > **Migration note (anonymous audience counts).** If your database already exists from before the audience counts were added, run the very same command again. Because every statement is `CREATE TABLE IF NOT EXISTS`, it only adds the two new tables `stats_daily` and `daily_scores` and leaves everything else untouched. Then `wrangler deploy` the new Worker. Until the tables exist, `POST /stats` and `/score` answer `500` and the game silently ignores that; nothing else is affected.
@@ -143,6 +145,7 @@ Open `wrangler.toml` and fill in:
 | `RATE_LIMIT_ADMIN_FAILS_PER_HOUR` | Optional. Wrong admin tokens one address may try per hour before it has to wait (default `20`), even with the right token. |
 | `RATE_LIMIT_STATS_PER_HOUR` / `RATE_LIMIT_SCORE_PER_HOUR` | Optional. How many anonymous counts (`POST /stats`) and daily-percentile requests (`/score`) one network address may send per hour: `120` and `60` by default. Generous on purpose, because a school or a mobile network can put many players behind one address. |
 | `PAYSTACK_IP_ALLOWLIST` | `false` by default. `true` also checks that webhooks come from Paystack's published IP addresses. The signature check is the main protection either way. |
+| `GOOGLE_CLIENT_ID` | (1.13) Sign in with Google: the web client ID from Google Cloud (Google Auth Platform → Clients → "Stapel web", ends in `.apps.googleusercontent.com`). Public, not a secret; the game's `js/config.js` `AUTH.googleClientId` is the same. Empty: sign-in is off. The owner's steps: `~/Desktop/Stapel app (Google Play)/Google sign-in steps.txt`. |
 
 ### 3.3 Secrets (never in files)
 
@@ -159,6 +162,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 It must be at least 32 characters. If it's shorter or missing, the admin API stays switched off.
+
+(1.13) Sign in with Google needs one more secret, made the same way (at least 32 characters): `./wr.sh secret put AUTH_SECRET`. It turns a Google account's number into Stapel's account number (an HMAC), so the Google number itself is never stored. **Never change it once players have signed in**: every account number would change, and their saved progress would no longer be found.
 
 Optional: `npx wrangler secret put IP_HASH_SALT` (any long random string) to key the IP fingerprints used for rate limiting. If you don't set it, the admin token is used (or, without one, the Paystack secret key).
 
@@ -371,6 +376,7 @@ Check current prices on the providers' pages. They change.
 - **Payments are checked**, not trusted: the plan must be the sponsor's plan, the currency must be ZAR, and premium payments can't be less than `PREMIUM_PRICE_CENTS`. This stops someone paying R1 with a copied sponsor id.
 - **Paystack test keys** never pay for anything once a live key (`sk_live_...`) is set: test-mode charges are refused and old test payments stop counting.
 - **Admin token:** at least 32 characters, compared in constant time, sent only in the `Authorization` header (never in a URL or the logs). After 20 wrong tokens from one address in an hour, that address has to wait. If it leaks, run `npx wrangler secret put ADMIN_TOKEN` with a new one; the old one stops working immediately.
+- **Sign in with Google (1.13):** only Google ID tokens made for Stapel's client ID get in (signature, issuer, audience and expiry checked; Google's keys are cached as long as Google allows). The account number is an HMAC of the Google account's number with `AUTH_SECRET`; the Google number, name, email and photo in the token are never stored or logged. Sessions are random tokens of which only the SHA-256 is stored. A save is the game's own progress (no personal data beyond the optional nickname and the leaderboard's random player number). Sessions unused for 400 days end and accounts unused for 2 years are deleted (cron); a player can delete their account in the game or at `?rekening` on the website (the privacy page's `#uitvee` explains both).
 - **Public data:** `GET /sponsors` returns only names, taglines and website addresses of live sponsors. It never returns e-mails, phone numbers or Paystack details.
 - **Card details** never touch this server. Paystack's checkout handles them. Stored webhook copies have card and IP details removed.
 - **POPIA:** the server stores the business name, contact name, e-mail, phone number and a consent record. The consent record holds the terms and privacy versions, the time, and a keyed hash of the IP address, never the IP itself. Retention is described in section 9. Mention Cloudflare (hosting) and Paystack (payments) as operators in `privaatheid.html`.
@@ -406,6 +412,11 @@ All endpoints answer JSON. Errors look like `{ "error": "<code>", "field"?: "<fi
 | `GET /score?dateKey=&heightM=` | site origins | The same answer without adding anything (for revisiting the results). |
 | `POST /board` | site origins | The daily leaderboard (`src/board.js`): `{ dateKey, dayNumber, player, name, heightM, blocks, durationMs, hidden, retry? }` (1.12 `retry`: "Nog 'n kans", a second try bought with coins: once a day it keeps the better height and marks the entry `retried`, shown as 🔁; migration `0004_board_retry.sql`). `player` is the phone's random number (`[a-z0-9]{12,32}`); `name` goes through the name rules (else `Bouer`). `dateKey` must be the date somewhere on earth now (UTC+14 to UTC-12), or have been within the last 6 hours. The first post of a day is kept; later ones only change `name` and `hidden` (not for an entry the owner blocked). Impossible towers are refused with `422` (more than 4 m a block plus 8 blocks, faster than 700 ms a block, or more than 2 m/s after 10 m). Returns `{ dateKey, players, top: [{ rank, name, heightM, you }], you: { rank, heightM, hidden } \| null }`; ranks are true places (a hidden or blocked player keeps theirs; `you.hidden` is true for both). Rate limit: `RATE_LIMIT_BOARD_POST_PER_HOUR` (60). |
 | `GET /board?dateKey=&player=` | site origins | The same answer without posting (`player` optional). Rate limit: `RATE_LIMIT_BOARD_GET_PER_HOUR` (240). |
+| `POST /account/google` | site origins | (1.13, `src/account.js` + `src/google.js`) Sign in with Google: `{ idToken }` (text/plain JSON). The token is checked against Google's published keys (`aud` = `GOOGLE_CLIENT_ID`, `iss` Google, not expired). Answers `{ ok, token, account, gen, rev, save }`: a new session token (64 hex; only its SHA-256 is kept; at most 10 devices an account, the one unused longest goes first), a 12-character account reference, `gen` (16 hex, random, made with the account: a game tells an account deleted and made anew from the old one by it), and the saved progress (`null` before the first store). `401 bad_token`, `503 google_unreachable`, `503 not_configured`. Rate limit: `RATE_LIMIT_SIGNIN_PER_HOUR` (60). |
+| `POST /account/load` | site origins | `{ token, rev? }` → `{ ok, rev, save }`, or `{ ok, rev, same: true }` when `rev` is still the latest. `401 signed_out` for an unknown or ended session. |
+| `POST /account/store` | site origins | `{ token, rev, save, push }` → `{ ok, rev }`. Only on top of the version read (`rev`): otherwise `409 { error: "conflict", rev, save }` with the newer save, which the game merges (`js/core/cloudsave.js`) and stores again. `push` (16-40 of `a-z0-9`) makes a store sent twice count once: every store's id is kept 90 days in `account_pushes` (sent again: `{ ok, rev, again: true }`), and a stale store is checked against them once more before the `409`. `save` must be an object with `v: 1`, at most 256 KB. Rate limit (load, store, sign-out, delete together): `RATE_LIMIT_ACCOUNT_PER_HOUR` (900). |
+| `POST /account/signout` | site origins | `{ token }`: that session ends (always `{ ok: true }`). |
+| `POST /account/delete` | site origins | `{ token }`: the account, its save, its store ids, every session and the leaderboard rows of every number the save lists (`board.player` and `board.past`, the numbers its devices used before they joined; at most 9) go for good, the day's counts with them. `{ ok, boardRows }`. |
 | `POST /paystack/webhook` | Paystack only | Needs a valid `x-paystack-signature`. |
 | `GET /match/lobby` | site origins, WebSocket | Uitdagersreeks: looking for a random opponent. Client sends `{ t: "hello", v: 1, name }`; the server answers `{ t: "wait" }` and, once paired, `{ t: "match", room }` and closes. |
 | `POST /match/room` | site origins | A new friend room: `{ code }` (6 characters from `ABCDEFGHJKMNPQRSTUVWXYZ23456789`). Body `{ "mode": "turns" }` for Blok vir Blok (anything else: Wedloop); `"stake"` (1.13: 20, 50, 100, 200 or 500 coins each; anything else: none) makes a coin match. Waits 10 minutes. Rate limit: 30 per network address per hour. |
@@ -480,6 +491,8 @@ Code map:
 | `src/billing.js` | Applying a payment to a sponsor (shared by the webhook and `/status`) |
 | `src/entitlement.js` | The "who is live" rule and the paid-until calculation |
 | `src/admin.js` | Owner endpoints |
+| `src/account.js` | (1.13) Sign in with Google and the saved progress: `/account/google`, `/load`, `/store`, `/signout`, `/delete`, and the clean-up of old sessions and accounts |
+| `src/google.js` | (1.13) Checks a Google ID token against Google's published keys (no library) |
 | `src/stats.js` | Anonymous audience counts (`/stats`), the daily percentile (`/score`), the in-memory rate limiter and `GET /admin/stats`. It imports `js/core/daily.js` for the date rules, so deploy from a full checkout. |
 | `src/moderation.js` | Name, tagline and website rules. It re-exports `js/core/nameRules.js` (one copy, shared with the sign-up page and the game; `wrangler deploy` bundles it into the Worker, so always deploy from a full checkout of the repository) |
 | `src/validate.js` | Request validation |
