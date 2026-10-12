@@ -534,6 +534,7 @@ export const S = {
   // (1.14) the one gentle offer (a new best, or just after a purchase): never needed to play
   signinOffer: 'Bêre jou vordering met Google · een tik',
   signinOfferNo: 'Nie nou nie',
+  signinOfferFail: 'Inteken het nie nou gewerk nie. Jy speel gewoon verder.',
   accountTitle: 'Bêre jou vordering',
   accountTitleIn: 'Jou rekening',
   accountWhy: 'Teken in met Google, dan is jou torings, munte, voorkoms en range veilig, en dieselfde op jou foon en die webwerf.',

@@ -261,7 +261,7 @@ const account = createAccount({
 // (1.14, the owner: "people skipped the payment section due to login, people want it as simple as possible")
 // Sign-in is never a gate: everything works as a guest. It shows only once the server says it is open
 // (GET /daily/config `signin`), or for a device already signed in; a test page with ?cloud=1 has it open.
-let signinOpen = ACCOUNT_ON && DEBUG;
+let signinOpen = ACCOUNT_ON && DEBUG && params.get('signin') !== '0';   // (a test page: ?signin=0 = the server not open yet)
 /** The account's status for the screens: `on` only where sign-in can work right now. */
 function accountStatus() {
   const a = account.status();
@@ -317,7 +317,7 @@ function signedIn(err, out) {
   const note = err.message === 'canceled' ? null : err.message === 'out' ? S.accountOut : S.accountErr(err.message);
   ui.setAccountNote(note);
   // (1.14) from the gentle offer (no sheet open): a cancel shows nothing, a failure a small toast; the game goes on
-  if (note && !ui.accountSheetOpen()) ui.toast(note, 2600);
+  if (note && !ui.accountSheetOpen()) ui.toast(S.signinOfferFail, 2600);
 }
 bus.on('ui:account', () => {
   ui.showAccount(accountStatus());

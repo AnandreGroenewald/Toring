@@ -502,6 +502,7 @@ export const S_EN = {
   accountButton: (signedIn) => (signedIn ? 'Your account' : 'Save your progress'),
   signinOffer: 'Save your progress with Google · one tap',
   signinOfferNo: 'Not now',
+  signinOfferFail: 'Signing in didn’t work just now. You just play on.',
   accountTitle: 'Save your progress',
   accountTitleIn: 'Your account',
   accountWhy: 'Sign in with Google to keep your towers, coins, looks and ranks safe, and the same on your phone and the website.',
