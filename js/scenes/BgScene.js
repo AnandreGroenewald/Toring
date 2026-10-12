@@ -62,13 +62,13 @@ const BG_SKINS = {
   dag: null,
   // (1.15, the owner: "most of them has the mountain please change that") `scenery`: the world's own land instead of Table
   // Mountain (js/scenes/bgskins.js), shown untinted by `scen` (which still tints the bay)
-  sonsondergang: { sky: [[0xff7e5f, 0xffd194], [0x7b4397, 0xff8c7a]], scen: 0xffc2b0, cloud: 0xffd9c9, sunTint: 0xff9b4a, sunScale: 1.5, sunDrop: 90, scenery: 'bgs_land_savanna' },
+  sonsondergang: { sky: [[0xff7e5f, 0xffd194], [0x7b4397, 0xff8c7a]], scen: 0xffc2b0, cloud: 0xffd9c9, sunTint: 0xff9b4a, sunScale: 1.5, sunDrop: 90, scenery: 'bgs_land_savanna', cloudTop: 520 },
   // (1.15, the owner: "Candy blossem and cany sky looks very simular") the candy sky went mint and lavender
   lekkergoed: { sky: [[0x8fe9da, 0xfff6fb], [0xb3a2ff, 0xc9fff0]], scen: 0xe6fff8, cloud: 0xffffff, sunTint: 0xfff59d, sunScale: 1.15, scenery: 'bgs_land_candy' },
   nag: { sky: [[0x0b1640, 0x24396f], [0x070f30, 0x1a2a5e]], scen: 0x55639e, cloud: 0x7f8bb8, sun: 0, moon: 1, stars: 0.95, scenery: 'bgs_land_lighthouse' },
   // (1.15) four worlds with their own layers (js/scenes/bgskins.js); `cloudA` thins the clouds, `gulls` 0 sends them away
-  kersieblom: { sky: [[0xff9ec4, 0xffe3ed], [0xff86b6, 0xffcfe1]], scen: 0xffd2e3, cloud: 0xfff1f6, sun: 0, cloudA: 0.8, scenery: 'bgs_land_fuji' },
-  noorderlig: { sky: [[0x041428, 0x0b3a48], [0x030c1f, 0x062a3a]], scen: 0x3b5266, cloud: 0x5d7286, sun: 0, moon: 0.45, stars: 0.95, cloudA: 0.45, gulls: 0, scenery: 'bgs_land_nordic' },
+  kersieblom: { sky: [[0xff9ec4, 0xffe3ed], [0xff86b6, 0xffcfe1]], scen: 0xffd2e3, cloud: 0xfff1f6, sun: 0, cloudA: 0.8, scenery: 'bgs_land_fuji', cloudTop: 470 },
+  noorderlig: { sky: [[0x041428, 0x0b3a48], [0x030c1f, 0x062a3a]], scen: 0x3b5266, cloud: 0x5d7286, sun: 0, moon: 0.45, stars: 0.95, cloudA: 0, gulls: 0, scenery: 'bgs_land_nordic' },   // (1.15, the owner: "What are these? Please remove it": the faint clouds)
   ruimte: { sky: [[0x07051a, 0x1c0c3e], [0x05031a, 0x140934]], scen: 0x46395f, cloud: 0x6a5c8c, sun: 0, stars: 1, cloudA: 0.18, gulls: 0, scenery: 'bgs_land_moon' },
   // (1.15, the owner: "also make a accerium background") under the sea: no sun, no clouds, no gulls; a reef for land
   akwarium: { sky: [[0x0b6a8a, 0x5ad6c8], [0x075474, 0x2aa7bd]], scen: 0x8fe0e8, cloud: 0xffffff, sun: 0, cloudA: 0, gulls: 0, scenery: 'bgs_land_reef' },
@@ -943,6 +943,8 @@ export class BgScene extends Phaser.Scene {
     this.flyerNext = FLYERS.map((f) => f.every[0] * Math.random());
 
     this.skinFx = new SkinLayers(this, W, H);   // (1.15) the four new worlds' own layers
+    this.skinFx.landW = MTN_W;                    // (the lighthouse's beam starts at its lamp in the land)
+    this.skinFx.landH = MTN_H;
     this.t = 0;
     this.dark = 0;
     this.rain = 0;
@@ -1203,7 +1205,10 @@ export class BgScene extends Phaser.Scene {
       const half = c.img.displayWidth / 2;
       if (c.x > W + half + 20) c.x = -half - 10;
       else if (c.x < -half - 20) c.x = W + half + 10;
-      const y = ((((c.y0 + altPx * L.p + 180) % span) + span) % span) - 180;
+      // (1.15, the owner: "make this cloud a little higher for the trees and animals to be more visible") `cloudTop`: the
+      // low clouds float higher over a world whose land has things to see
+      const y0 = sk?.cloudTop ? Math.min(c.y0, sk.cloudTop) : c.y0;
+      const y = ((((y0 + altPx * L.p + 180) % span) + span) % span) - 180;
       c.img.setPosition(c.x, y);
       c.img.alpha = L.alpha * thin * (sk?.cloudA ?? 1);
     }

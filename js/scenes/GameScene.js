@@ -3097,7 +3097,8 @@ export class GameScene extends Phaser.Scene {
   // Landing ghost + autoplay
   // -------------------------------------------------------------------------
   updateGhostAndAutoplay() {
-    const hanging = this.crane.hasBlock() && !this.over && !this.idleResetting;
+    // (a block on the hook always has its shape; never let one without stop the whole game)
+    const hanging = this.crane.hasBlock() && !this.over && !this.idleResetting && !!this.curGeom;
     if (!hanging) {
       this.setGhostVisible(false);
       return;
@@ -3842,6 +3843,9 @@ export class GameScene extends Phaser.Scene {
       releaseNamedTextures(this.textures, [craneKey]);   // the crane may still show its block
       this.stepCtx.dynamicBlocks = this.dyn;
       this.stepCtx.falling = null;
+      // (1.15) a reset that finds a block on the hook (the Winkel's Try it started one moments before) lets it go: the
+      // new tower starts with its own first block (else the hook would hold a block the run no longer knows)
+      if (this.crane.hasBlock()) this.crane.release();
       this.spawnBlock(0);
     };
     if (!imgs.length) {

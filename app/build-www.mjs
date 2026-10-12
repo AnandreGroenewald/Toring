@@ -10,7 +10,7 @@ const www = join(here, 'www');
 // no sw.js (the files are in the app), no admin or sponsor-sales pages (those stay on the website)
 // (1.12.1) the sponsorship terms stay out until sponsor sales open (the page is still a template)
 const FILES = ['index.html', 'manifest.webmanifest', 'sponsors.json', 'privaatheid.html', 'privacy.html'];
-const DIRS = ['css', 'js', 'lib', 'icons'];
+const DIRS = ['css', 'js', 'lib', 'icons', 'img'];
 
 rmSync(www, { recursive: true, force: true });
 mkdirSync(www, { recursive: true });

@@ -356,6 +356,11 @@ export function ensureSkinTextures(scene) {
   canvasTexture(scene, 'bgs_jpsun', 260, 260, drawRisingSun);
   canvasTexture(scene, 'bgs_rays', 720, 700, drawLightRays);
   canvasTexture(scene, 'bgs_school', 36, 16, drawSchoolFish);
+  canvasTexture(scene, 'bgs_beam', 420, 120, drawBeam);
+  canvasTexture(scene, 'bgs_jelly', 60, 92, drawJelly);
+  canvasTexture(scene, 'bgs_turtle', 120, 80, drawTurtle);
+  canvasTexture(scene, 'bgs_whale', 300, 110, drawWhale);
+  canvasTexture(scene, 'bgs_flare', 160, 160, drawFlare);
   canvasTexture(scene, 'bgs_bubble', 18, 18, drawBubble);
 }
 
@@ -397,7 +402,17 @@ export class SkinLayers {
     const rs = seeded(9);
     this.school = Array.from({ length: 9 }, (_, i) => ({ img: scene.add.image(0, 0, 'bgs_school').setDepth(0.3).setVisible(false), dx: (i % 3) * 30 + rs() * 12, dy: Math.floor(i / 3) * 18 + rs() * 8, ph: rs() * 6 }));
     this.schoolX = -200;
+    // (1.15, the owner: "Its one too simple for the amount of coins") jellyfish drifting, a turtle and a far whale gliding by
+    this.jellies = [[0.16, 0.3, 0.9], [0.84, 0.42, 0.75], [0.62, 0.22, 0.6]].map(([x, y, s], i) => ({ img: scene.add.image(W * x, H * y, 'bgs_jelly').setDepth(0.32).setVisible(false), x, y, s: s * Math.max(1, k), ph: i * 2.1 }));
+    this.turtle = scene.add.image(-150, H * 0.46, 'bgs_turtle').setDepth(0.34).setScale(0.8 * Math.max(1, k)).setVisible(false);
+    this.turtleX = -150;
+    this.whale = scene.add.image(W + 400, H * 0.16, 'bgs_whale').setDepth(0.04).setScale(1.3 * Math.max(1, k)).setAlpha(0.35).setVisible(false);
+    this.whaleX = W + 300;
     this.bubbles = Array.from({ length: 18 }, () => ({ img: scene.add.image(rs() * W, rs() * H, 'bgs_bubble').setDepth(3.15).setVisible(false), v: 30 + rs() * 50, ph: rs() * 6, s: 0.5 + rs() * 0.9 }));
+    // the lighthouse (Sterrenag): its beam turns round, flaring when it swings past you
+    this.beam = scene.add.image(0, 0, 'bgs_beam').setOrigin(0, 0.5).setDepth(0.52).setBlendMode('ADD').setVisible(false);
+    this.flare = scene.add.image(0, 0, 'bgs_flare').setDepth(0.53).setBlendMode('ADD').setVisible(false);
+    this.beamT = Math.PI;   // pointing left over the bay (and so it stays with "Minder beweging")
     const r = seeded(5);
     this.petals = Array.from({ length: PETALS }, () => ({
       img: scene.add.image(r() * W, r() * H, 'bgs_petal').setDepth(3.2).setVisible(false),
@@ -418,13 +433,14 @@ export class SkinLayers {
     on([this.synthSun, this.grid, ...this.gridRows], id === 'sintgolf');
     for (const p of this.petals) p.img.setVisible(id === 'kersieblom');
     on([this.jpSun, this.pagoda, this.torii, this.toriiMirror, this.branchL, this.branchR], id === 'kersieblom');
-    on([this.rays, ...this.school.map((f) => f.img), ...this.bubbles.map((b) => b.img)], id === 'akwarium');
+    on([this.rays, ...this.school.map((f) => f.img), ...this.bubbles.map((b) => b.img), ...this.jellies.map((j) => j.img), this.turtle, this.whale], id === 'akwarium');
+    on([this.beam, this.flare], id === 'nag');
   }
 
   /** alt (m), horizon (screen y of the bay's horizon), wind (px/s²), dark (storm 0..1), reduced (no motion). */
   update(dt, { alt = 0, horizon = this.H * 0.6, wind = 0, dark = 0, reduced = false } = {}) {
     const id = this.id;
-    if (!id || id === 'dag' || id === 'sonsondergang' || id === 'lekkergoed' || id === 'nag') return;
+    if (!id || id === 'dag' || id === 'sonsondergang' || id === 'lekkergoed') return;
     if (!reduced) this.t += dt;
     const t = this.t;
     const W = this.W;
@@ -468,6 +484,18 @@ export class SkinLayers {
         row.setDisplaySize(W * 1.35, 2 + 5 * f);
         row.setAlpha((0.25 + 0.75 * f) * low);
       }
+    } else if (id === 'nag') {
+      // one turn every 7 s, seen from the side: the beam reaches left, shortens as it turns to you (the lamp flares),
+      // reaches right, and shortens again as it turns away behind the tower
+      if (!reduced) this.beamT += dt * (TAU / 7);
+      const c = Math.cos(this.beamT);
+      const toYou = Math.max(0, Math.sin(this.beamT));
+      const [lx, ly] = LAMP_AT(this.landW || W, this.landH || 340);
+      const y = horizon - (this.landH || 340) + ly;
+      const k = Math.max(1, W / 720);
+      this.beam.setPosition(lx, y).setScale(-c * 1.15 * k, (0.85 + 0.25 * Math.abs(c)) * k);
+      this.beam.setAlpha(low * (0.25 + 0.75 * Math.abs(c)) * (1 - 0.35 * (1 - toYou) * (Math.sin(this.beamT) < 0 ? 1 : 0)));
+      this.flare.setPosition(lx, y).setScale((0.45 + 1.1 * toYou ** 6) * k).setAlpha(low * (0.35 + 0.65 * toYou ** 4));
     } else if (id === 'akwarium') {
       this.rays.setAlpha((0.75 + 0.25 * Math.sin(t * 0.6)) * low);
       this.rays.x = W / 2 + Math.sin(t * 0.25) * 18;
@@ -478,6 +506,19 @@ export class SkinLayers {
       for (const f of this.school) {
         f.img.setPosition(this.schoolX + f.dx, sy + f.dy + Math.sin(t * 1.4 + f.ph) * 4).setAlpha(low).setFlipX(true);
       }
+      for (const j of this.jellies) {   // a slow pulse, drifting up and down
+        const p = Math.sin(t * 1.6 + j.ph);
+        j.img.setPosition(W * j.x + Math.sin(t * 0.3 + j.ph) * 14, H * j.y + alt * 0.3 + Math.sin(t * 0.5 + j.ph) * 18);
+        j.img.setScale(j.s * (1 + 0.06 * p), j.s * (1 - 0.08 * p)).setAlpha(0.85 * low);
+      }
+      if (!reduced) {
+        this.turtleX += 26 * dt;
+        if (this.turtleX > W + 160) this.turtleX = -900;   // a rest before it comes again
+        this.whaleX -= 12 * dt;
+        if (this.whaleX < -500) this.whaleX = W + 900;
+      }
+      this.turtle.setPosition(this.turtleX, H * 0.47 + alt * 0.3 + Math.sin(t * 0.8) * 6).setAlpha(low).setAngle(Math.sin(t * 0.8) * 3);
+      this.whale.setPosition(this.whaleX, H * 0.15 + alt * 0.2 + Math.sin(t * 0.25) * 6).setAlpha(0.32 * low);
       for (const b of this.bubbles) {
         if (!reduced) {
           b.img.y -= b.v * dt;
@@ -559,26 +600,37 @@ const vgrad = (ctx, h, a, b, y0 = 0) => {
 /** Kersiebloeisels: Mount Fuji, its snowcap, soft hills in front. */
 function drawFuji(ctx, w, h) {
   ridge(ctx, w, h, [[0, 0.8], [0.15, 0.74], [0.3, 0.8], [0.45, 0.76], [1, 0.82]], 'rgba(180,140,200,0.55)');
+  // (1.15, the owner: "still looks off") a narrow summit with a little crater, concave slopes sweeping out to the foot
   const cx = 0.6;
-  const top = 0.16;
+  const top = 0.2;
   const pts = [];
-  for (let i = 0; i <= 40; i++) {
-    const u = i / 40;                       // 0..1 across the cone
+  for (let i = 0; i <= 80; i++) {
+    const u = i / 80;                       // 0..1 across the cone
     const d = Math.abs(u - 0.5) * 2;        // 0 at the top, 1 at the foot
     const x = cx - 0.5 + u * 1.0;
-    const y = top + (1 - top) * Math.pow(d, 0.62) * (d < 0.08 ? 0.6 + d * 5 : 1);
-    pts.push([x, Math.min(0.98, d < 0.06 ? top : y)]);
+    const y = d < 0.03 ? top + 0.008 * Math.sin((d / 0.03) * Math.PI) : top + (1 - top) * Math.pow((d - 0.03) / 0.97, 0.72);
+    pts.push([x, Math.min(0.98, y)]);
   }
   ridge(ctx, w, h, pts, vgrad(ctx, h, '#8f84c4', '#6b5e9e', top * h));
-  // the snowcap with a ragged lower edge
+  // the snowcap with a ragged lower edge, drawn inside the cone so it follows the slopes (1.15, the owner: "This looks
+  // off": it stood out past them like a hat); tongues of snow run down the gullies
   ctx.save();
   ctx.beginPath();
-  ctx.moveTo((cx - 0.06) * w, top * h);
-  ctx.lineTo((cx + 0.06) * w, top * h);
-  const snowEdge = [[0.21, 0.36], [0.17, 0.42], [0.13, 0.37], [0.09, 0.44], [0.05, 0.39], [0, 0.46], [-0.05, 0.39], [-0.09, 0.45], [-0.13, 0.38], [-0.17, 0.43], [-0.21, 0.36]];
-  for (const [dx, y] of snowEdge) ctx.lineTo((cx + dx) * w, y * h);
+  ctx.moveTo(pts[0][0] * w, h);
+  for (const [x, y] of pts) ctx.lineTo(x * w, y * h);
+  ctx.lineTo(pts[pts.length - 1][0] * w, h);
   ctx.closePath();
-  ctx.fillStyle = vgrad(ctx, h * 0.45, '#ffffff', '#e8e3f7', top * h);
+  ctx.clip();
+  ctx.beginPath();
+  ctx.moveTo((cx - 0.32) * w, 0);
+  ctx.lineTo((cx + 0.32) * w, 0);
+  for (let i = 0; i <= 40; i++) {
+    const dx = 0.2 - i * 0.01;
+    const y = 0.34 + (i % 2 ? 0.045 : 0) + (i % 4 === 1 ? 0.035 : 0) + Math.abs(dx) * 0.08;
+    ctx.lineTo((cx + dx) * w, y * h);
+  }
+  ctx.closePath();
+  ctx.fillStyle = vgrad(ctx, h * 0.6, '#ffffff', '#e4def5', top * h);
   ctx.fill();
   ctx.restore();
   // the near hills
@@ -682,7 +734,7 @@ function drawCandyLand(ctx, w, h) {
   lolly(0.83, 64, 15, ['#8a5cff', '#ffffff']);
 }
 
-/** Sonsondergang: the bushveld at dusk, flat-topped acacias and a giraffe against the sky. */
+/** Sonsondergang ("Safari"): the bushveld at dusk, flat-topped acacias, an elephant and a giraffe against the sky. */
 function drawSavanna(ctx, w, h) {
   ridge(ctx, w, h, [[0, 0.7], [0.1, 0.66], [0.2, 0.68], [0.28, 0.6], [0.4, 0.6], [0.46, 0.68], [0.7, 0.66], [0.78, 0.58], [0.9, 0.58], [1, 0.66]], 'rgba(120,50,90,0.55)');
   ridge(ctx, w, h, [[0, 0.84], [0.3, 0.8], [0.6, 0.84], [1, 0.8]], '#4a2140');
@@ -707,6 +759,47 @@ function drawSavanna(ctx, w, h) {
   acacia(0.12, 0.83, 64, 46);
   acacia(0.36, 0.81, 48, 34);
   acacia(0.83, 0.82, 70, 52);
+  // (1.15, the owner: "add one more animal and make it say Safari") an elephant walking between the first trees, trunk down
+  ctx.save();
+  ctx.translate(0.245 * w, 0.835 * h);
+  ctx.fillStyle = '#3a1834';
+  ctx.strokeStyle = '#3a1834';
+  ctx.lineCap = 'round';
+  for (const [x, lift] of [[-17, 0], [-8, 2], [8, 1], [16, 0]]) {
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(x - 3.6, -24, 7.2, 24 - lift, 2.5) : ctx.rect(x - 3.6, -24, 7.2, 24 - lift);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.ellipse(-1, -31, 24, 15, -0.04, 0, TAU);   // the body, a little higher at the shoulders
+  ctx.ellipse(-6, -38, 15, 9, -0.1, 0, TAU);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(24, -35, 10.5, 0, TAU);                // the head
+  ctx.fill();
+  ctx.lineWidth = 6.5;                           // the trunk, swinging down and curling forward
+  ctx.beginPath();
+  ctx.moveTo(31, -31);
+  ctx.quadraticCurveTo(37, -18, 33, -6);
+  ctx.quadraticCurveTo(32, -2, 36, -2);
+  ctx.stroke();
+  ctx.fillStyle = '#5a2a52';                     // the big ear, a shade lighter
+  ctx.beginPath();
+  ctx.ellipse(17, -33, 7.5, 11, 0.15, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = '#e9d3bd';                   // a tusk catching the last light
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(30, -27);
+  ctx.quadraticCurveTo(35, -22, 39, -24);
+  ctx.stroke();
+  ctx.strokeStyle = '#3a1834';                   // the tail
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-24, -34);
+  ctx.quadraticCurveTo(-29, -28, -27, -19);
+  ctx.stroke();
+  ctx.restore();
   // a giraffe browsing by the last tree: long legs, a sloping back, the long neck up into the branches
   ctx.save();
   ctx.translate(0.7 * w, 0.825 * h);
@@ -786,128 +879,143 @@ function drawLighthouseCoast(ctx, w, h) {
   ctx.lineTo(x, base - 122);
   ctx.lineTo(x + 9, base - 112);
   ctx.fill();
-  // a soft beam out over the sea
-  const beam = ctx.createLinearGradient(x, 0, x - w * 0.5, 0);
-  beam.addColorStop(0, 'rgba(255,240,170,0.38)');
-  beam.addColorStop(1, 'rgba(255,240,170,0)');
-  ctx.fillStyle = beam;
+  // (1.15, the owner: "Please make the lighthouse have more movement ... The light specifiaclly") its beam turns: SkinLayers
+}
+/** Where the lighthouse's lamp is in its land texture (w x h): the turning beam starts there. */
+export const LAMP_AT = (w, h) => [0.86 * w, 0.7 * h - 106];
+
+/** The lighthouse's beam: a cone of light from the lamp (left middle) to the right, fading out. */
+function drawBeam(ctx, w, h) {
+  const g = ctx.createLinearGradient(0, 0, w, 0);
+  g.addColorStop(0, 'rgba(255,244,190,0.75)');
+  g.addColorStop(0.35, 'rgba(255,236,160,0.32)');
+  g.addColorStop(1, 'rgba(255,236,160,0)');
+  ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.moveTo(x - 4, base - 106);
-  ctx.lineTo(x - w * 0.55, base - 150);
-  ctx.lineTo(x - w * 0.55, base - 70);
+  ctx.moveTo(0, h / 2 - 3);
+  ctx.lineTo(w, 0);
+  ctx.lineTo(w, h);
+  ctx.lineTo(0, h / 2 + 3);
   ctx.closePath();
   ctx.fill();
+}
+/** The lamp's flare (when the beam swings round towards you). */
+function drawFlare(ctx, w, h) {
+  const g = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+  g.addColorStop(0, 'rgba(255,255,235,1)');
+  g.addColorStop(0.18, 'rgba(255,240,170,0.75)');
+  g.addColorStop(0.5, 'rgba(255,220,120,0.18)');
+  g.addColorStop(1, 'rgba(255,220,120,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = 'rgba(255,250,220,0.55)';   // a thin horizontal streak
+  ctx.fillRect(0, h / 2 - 1.5, w, 3);
 }
 
 /** Noorderlig: snowy peaks and a dark pine forest with snow on its tips. */
 function drawNordic(ctx, w, h) {
-  const peaks = [[0, 0.62], [0.1, 0.4], [0.18, 0.55], [0.3, 0.3], [0.42, 0.52], [0.52, 0.42], [0.64, 0.58], [0.76, 0.34], [0.88, 0.5], [1, 0.44]];
-  ridge(ctx, w, h, peaks, vgrad(ctx, h, '#3c5770', '#1d2f42', 0.3 * h));
-  // snow on the peaks
-  ctx.fillStyle = 'rgba(235,245,255,0.92)';
-  for (let i = 1; i < peaks.length - 1; i++) {
-    const [px, py] = peaks[i];
-    if (py > 0.5) continue;
+  // (1.15, the owner: "The mountains looks off") a hazy far range, then the main peaks lit from the left (the aurora's side)
+  // and shaded on the right, snow that follows the slopes with a ragged edge; the forest in front
+  const clipTo = (pts) => {
     ctx.beginPath();
-    ctx.moveTo(px * w, py * h);
-    ctx.lineTo((px - 0.045) * w, (py + 0.12) * h);
-    ctx.lineTo((px - 0.015) * w, (py + 0.09) * h);
-    ctx.lineTo(px * w, (py + 0.13) * h);
-    ctx.lineTo((px + 0.02) * w, (py + 0.09) * h);
-    ctx.lineTo((px + 0.05) * w, (py + 0.12) * h);
+    ctx.moveTo(-2, h + 2);
+    for (const [x, y] of pts) ctx.lineTo(x * w, y * h);
+    ctx.lineTo(w + 2, h + 2);
     ctx.closePath();
-    ctx.fill();
-  }
-  // the forest
-  const r = seeded(17);
-  for (let x = -10; x < w + 10; x += 13 + r() * 9) {
-    const th = 40 + r() * 46;
-    const base = h * (0.94 + r() * 0.06);
-    ctx.fillStyle = '#0d1a24';
-    ctx.beginPath();
-    ctx.moveTo(x, base - th);
-    ctx.lineTo(x - th * 0.26, base);
-    ctx.lineTo(x + th * 0.26, base);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = 'rgba(230,242,255,0.75)';
-    ctx.beginPath();
-    ctx.moveTo(x, base - th);
-    ctx.lineTo(x - th * 0.07, base - th * 0.78);
-    ctx.lineTo(x + th * 0.07, base - th * 0.78);
-    ctx.closePath();
-    ctx.fill();
-  }
+    ctx.clip();
+  };
+  const snowcaps = (pts, depth, fill) => {
+    ctx.save();
+    clipTo(pts);
+    ctx.fillStyle = fill;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const [px, py] = pts[i];
+      if (py > 0.52) continue;
+      ctx.beginPath();
+      ctx.moveTo((px - 0.13) * w, (py - 0.05) * h);
+      ctx.lineTo((px + 0.13) * w, (py - 0.05) * h);
+      for (let k = 0; k <= 13; k++) {
+        const x = px + 0.13 - k * 0.02;
+        const y = py + depth * (k % 2 ? 1 : 0.62) + (k % 3 === 1 ? depth * 0.25 : 0);
+        ctx.lineTo(x * w, y * h);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+  const shade = (pts, a) => {
+    ctx.save();
+    clipTo(pts);
+    ctx.fillStyle = `rgba(6,14,28,${a})`;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const [px, py] = pts[i];
+      const [vx, vy] = pts[i + 1];
+      if (vy < py) continue;   // (not a peak)
+      ctx.beginPath();
+      ctx.moveTo(px * w, py * h);
+      ctx.lineTo(vx * w, vy * h);
+      ctx.lineTo(vx * w, h + 2);
+      ctx.lineTo((px + 0.035) * w, h + 2);
+      ctx.lineTo((px + 0.012) * w, (py + 0.12) * h);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+  const far = [[0, 0.55], [0.08, 0.43], [0.16, 0.5], [0.25, 0.37], [0.36, 0.48], [0.48, 0.35], [0.6, 0.47], [0.7, 0.39], [0.82, 0.5], [0.92, 0.37], [1, 0.45]];
+  ridge(ctx, w, h, far, vgrad(ctx, h, '#5d7a96', '#344c63', 0.35 * h));
+  snowcaps(far, 0.06, 'rgba(228,240,252,0.6)');
+  shade(far, 0.18);
+  const peaks = [[0, 0.64], [0.1, 0.43], [0.2, 0.59], [0.31, 0.32], [0.43, 0.57], [0.53, 0.45], [0.65, 0.61], [0.77, 0.34], [0.89, 0.53], [1, 0.47]];
+  ridge(ctx, w, h, peaks, vgrad(ctx, h, '#4a6884', '#1c2e41', 0.3 * h));
+  snowcaps(peaks, 0.1, '#eef6ff');
+  shade(peaks, 0.34);
+  // (1.15, the owner: "those black pointy stuff at the bottom, please remove it for now": the pine forest is gone)
 }
 
-/** Diep ruimte: an alien moonscape with craters and sharp rocks. */
-function drawMoonscape(ctx, w, h) {
-  ridge(ctx, w, h, [[0, 0.7], [0.08, 0.6], [0.14, 0.62], [0.2, 0.5], [0.24, 0.52], [0.3, 0.66], [0.5, 0.64], [0.58, 0.56], [0.62, 0.57], [0.7, 0.68], [0.85, 0.6], [0.9, 0.48], [0.94, 0.5], [1, 0.62]], vgrad(ctx, h, '#4b3a73', '#241a3d', 0.48 * h));
-  ridge(ctx, w, h, [[0, 0.84], [0.25, 0.8], [0.5, 0.86], [0.75, 0.8], [1, 0.84]], '#1a1230');
-  const r = seeded(41);
-  for (let k = 0; k < 9; k++) {
-    const cx = r() * w;
-    const cy = h * (0.88 + r() * 0.1);
-    const rx = 10 + r() * 22;
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rx, rx * 0.28, 0, 0, TAU);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(160,140,220,0.35)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy - 1, rx, rx * 0.28, 0, Math.PI * 1.05, TAU * 0.98);
-    ctx.stroke();
-  }
-  // a rim light along the far ridge
-  ctx.strokeStyle = 'rgba(190,150,255,0.45)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (const [x, y] of [[0, 0.7], [0.08, 0.6], [0.14, 0.62], [0.2, 0.5], [0.24, 0.52], [0.3, 0.66]]) ctx.lineTo(x * w, y * h);
-  ctx.stroke();
+/** Diep ruimte: no land at all (1.15). */
+function drawMoonscape() {
+  // (1.15, the owner: "The stuff that looks like mountains in the deep space, please remove it") open space down to the
+  // water: the nebula, the planet and the stars have the sky to themselves
 }
 
 /** Retro-neon: wireframe mountains, dark inside, glowing pink and cyan edges. */
 function drawWireMountains(ctx, w, h) {
-  const peaks = [[0, 0.7], [0.1, 0.5], [0.2, 0.66], [0.32, 0.36], [0.46, 0.64], [0.6, 0.42], [0.74, 0.62], [0.86, 0.4], [1, 0.6]];
-  ridge(ctx, w, h, peaks, vgrad(ctx, h, '#2a0b4a', '#120326', 0.36 * h));
-  ctx.lineJoin = 'round';
-  const edge = (col, lw, blur) => {
+  // (1.15, the owner: "The lights on the mountains looks off", then "The mountens looks off") low, uneven ranges under the
+  // sun: dark silhouettes, a thin neon rim on each (cyan far, pink near), no lines inside
+  const r = seeded(77);
+  const range = (keys, jag) => {
+    const pts = [];
+    for (let k = 0; k < keys.length - 1; k++) {
+      const [x0, y0] = keys[k];
+      const [x1, y1] = keys[k + 1];
+      for (let s = 0; s < 4; s++) {
+        const f = s / 4;
+        pts.push([x0 + (x1 - x0) * f, y0 + (y1 - y0) * f + (s ? (r() - 0.5) * jag : 0)]);
+      }
+    }
+    pts.push(keys[keys.length - 1]);
+    return pts;
+  };
+  const rim = (pts, col, lw, blur) => {
     ctx.save();
+    ctx.lineJoin = 'round';
     ctx.shadowColor = col;
     ctx.shadowBlur = blur;
     ctx.strokeStyle = col;
     ctx.lineWidth = lw;
     ctx.beginPath();
-    for (const [x, y] of peaks) ctx.lineTo(x * w, y * h);
+    pts.forEach(([x, y], k) => (k ? ctx.lineTo(x * w, y * h) : ctx.moveTo(x * w, y * h)));
     ctx.stroke();
     ctx.restore();
   };
-  edge('#ff3fa4', 3, 10);
-  // the wireframe: lines from each peak down its flanks
-  ctx.strokeStyle = 'rgba(41,240,255,0.55)';
-  ctx.lineWidth = 1.2;
-  for (let i = 1; i < peaks.length - 1; i++) {
-    const [px, py] = peaks[i];
-    for (let k = -3; k <= 3; k++) {
-      ctx.beginPath();
-      ctx.moveTo(px * w, py * h);
-      ctx.lineTo((px + k * 0.03) * w, h);
-      ctx.stroke();
-    }
-  }
-  for (let y = 0.5; y < 1; y += 0.1) {
-    ctx.strokeStyle = `rgba(41,240,255,${0.15 + (y - 0.5) * 0.6})`;
-    ctx.beginPath();
-    ctx.moveTo(0, y * h);
-    ctx.lineTo(w, y * h);
-    ctx.stroke();
-  }
-  // keep the lines inside the mountains
-  ctx.globalCompositeOperation = 'destination-in';
-  ridge(ctx, w, h, peaks.map(([x, y]) => [x, y - 0.01]), '#000');
-  ctx.globalCompositeOperation = 'source-over';
-  edge('#ff7ccf', 2, 0);
+  const far = range([[0, 0.62], [0.1, 0.52], [0.2, 0.44], [0.3, 0.56], [0.42, 0.6], [0.56, 0.58], [0.68, 0.5], [0.8, 0.42], [0.9, 0.53], [1, 0.58]], 0.035);
+  ridge(ctx, w, h, far, vgrad(ctx, h, '#4a1670', '#22093f', 0.42 * h));
+  rim(far, 'rgba(80,235,255,0.85)', 1.6, 6);
+  const near = range([[0, 0.76], [0.12, 0.68], [0.26, 0.74], [0.36, 0.64], [0.48, 0.73], [0.6, 0.7], [0.72, 0.62], [0.84, 0.72], [1, 0.68]], 0.03);
+  ridge(ctx, w, h, near, vgrad(ctx, h, '#2a0b4a', '#0e0320', 0.62 * h));
+  rim(near, 'rgba(255,79,180,0.95)', 2, 9);
 }
 
 /** (1.15, the owner: "also make a accerium background") the aquarium's floor: rocks, corals and swaying weed (drawn still). */
@@ -973,16 +1081,88 @@ function drawReef(ctx, w, h) {
       ctx.fill();
     }
   }
+  // (1.15, the owner: "Its one too simple for the amount of coins") a sunken treasure chest, lid ajar and gold glowing
+  // inside, a few coins spilled; an old anchor half in the sand. Up on the reef's slope, clear of the foundation and the rocks
+  ctx.save();
+  ctx.translate(0, -h * 0.215);   // standing on the back ridge of the reef
+  const cx = w * 0.37;
+  const glow = ctx.createRadialGradient(cx, h - 26, 2, cx, h - 26, 40);
+  glow.addColorStop(0, 'rgba(255,224,110,0.75)');
+  glow.addColorStop(1, 'rgba(255,224,110,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(cx - 40, h - 66, 80, 66);
+  ctx.fillStyle = '#5a3416';
+  ctx.fillRect(cx - 22, h - 22, 44, 22);                       // the box
+  ctx.fillStyle = '#7a4a22';
+  ctx.fillRect(cx - 20, h - 20, 40, 18);
+  ctx.save();                                                // the lid, tipped open
+  ctx.translate(cx - 22, h - 22);
+  ctx.rotate(-0.38);
+  ctx.fillStyle = '#6b3f1c';
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(44, 0);
+  ctx.quadraticCurveTo(44, -14, 22, -16);
+  ctx.quadraticCurveTo(0, -14, 0, 0);
+  ctx.fill();
+  ctx.fillStyle = '#f2c230';
+  ctx.fillRect(6, -13, 4, 13);
+  ctx.fillRect(34, -13, 4, 13);
+  ctx.restore();
+  ctx.fillStyle = '#ffd84d';                                 // the gold heaped inside
+  ctx.beginPath();
+  ctx.ellipse(cx, h - 22, 18, 6, 0, Math.PI, TAU);
+  ctx.fill();
+  ctx.fillStyle = '#f2c230';                                 // the bands and the lock
+  ctx.fillRect(cx - 16, h - 22, 4, 22);
+  ctx.fillRect(cx + 12, h - 22, 4, 22);
+  ctx.fillRect(cx - 3, h - 16, 6, 7);
+  for (const [dx, dy] of [[28, -3], [34, -2], [31, -6], [-30, -2]]) {   // spilled coins
+    ctx.fillStyle = '#ffd84d';
+    ctx.beginPath();
+    ctx.ellipse(cx + dx, h + dy, 4, 2.4, 0, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = '#b8860b';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  ctx.save();                                                // the anchor
+  ctx.translate(w * 0.56, h - 4);
+  ctx.rotate(0.35);
+  ctx.strokeStyle = '#3b4a55';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, -46);
+  ctx.moveTo(-12, -38);
+  ctx.lineTo(12, -38);
+  ctx.moveTo(-16, -8);
+  ctx.quadraticCurveTo(0, 8, 16, -8);
+  ctx.stroke();
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(0, -51, 5, 0, TAU);
+  ctx.stroke();
+  ctx.restore();
+  ctx.restore();
 }
 
 function drawLightRays(ctx, w, h) {
   ctx.globalCompositeOperation = 'lighter';
+  // (1.15, the owner: "Make the lights signing downwards a little lighter") the surface glows, and the rays shine brighter
+  const top = ctx.createLinearGradient(0, 0, 0, h * 0.35);
+  top.addColorStop(0, 'rgba(200,255,250,0.22)');
+  top.addColorStop(1, 'rgba(200,255,250,0)');
+  ctx.fillStyle = top;
+  ctx.fillRect(0, 0, w, h * 0.35);
   const r = seeded(61);
   for (let k = 0; k < 7; k++) {
     const x = (0.05 + k * 0.15 + (r() - 0.5) * 0.05) * w;
     const wd = 26 + r() * 40;
     const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, 'rgba(220,255,250,0.32)');
+    g.addColorStop(0, 'rgba(230,255,252,0.5)');
+    g.addColorStop(0.6, 'rgba(220,255,250,0.16)');
     g.addColorStop(1, 'rgba(220,255,250,0)');
     ctx.fillStyle = g;
     ctx.beginPath();
@@ -992,6 +1172,91 @@ function drawLightRays(ctx, w, h) {
     ctx.lineTo(x - 60, h);
     ctx.closePath();
     ctx.fill();
+  }
+}
+
+/** (1.15) a jellyfish: a glowing translucent bell, a scalloped rim, wavy tentacles. */
+function drawJelly(ctx, w, h) {
+  const g = ctx.createRadialGradient(w / 2, 22, 2, w / 2, 26, 26);
+  g.addColorStop(0, 'rgba(255,220,245,0.95)');
+  g.addColorStop(0.6, 'rgba(255,140,215,0.7)');
+  g.addColorStop(1, 'rgba(170,90,255,0.45)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(w / 2, 30, 24, 22, 0, Math.PI, TAU);
+  for (let k = 0; k <= 6; k++) ctx.quadraticCurveTo(w / 2 + 24 - k * 8 + 4, 36, w / 2 + 24 - k * 8, 30);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,185,235,0.6)';
+  ctx.lineCap = 'round';
+  for (let k = 0; k < 5; k++) {
+    const x = w / 2 - 16 + k * 8;
+    ctx.lineWidth = k % 2 ? 1.6 : 2.4;
+    ctx.beginPath();
+    ctx.moveTo(x, 32);
+    ctx.bezierCurveTo(x - 6, 48, x + 6, 62, x - 2, h - 4 - (k % 2) * 10);
+    ctx.stroke();
+  }
+}
+/** (1.15) a sea turtle seen from the side, facing right. */
+function drawTurtle(ctx, w, h) {
+  ctx.fillStyle = '#6fb36a';
+  for (const [x, y, rx, ry, a] of [[78, 60, 16, 6, 0.6], [30, 60, 12, 5, -0.5], [76, 22, 18, 6, -0.6]]) {
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, a, 0, TAU);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(100, 40, 10, 0, TAU);
+  ctx.fill();
+  ctx.fillStyle = '#1d2b20';
+  ctx.beginPath();
+  ctx.arc(104, 37, 2, 0, TAU);
+  ctx.fill();
+  const g = ctx.createLinearGradient(0, 18, 0, 62);
+  g.addColorStop(0, '#5a8f3c');
+  g.addColorStop(1, '#2f5a2a');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(55, 42, 36, 22, 0, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(200,230,150,0.55)';
+  ctx.lineWidth = 2;
+  for (const [x, y] of [[40, 34], [56, 30], [72, 34], [48, 48], [64, 48]]) {
+    ctx.beginPath();
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * TAU;
+      ctx.lineTo(x + Math.cos(a) * 8, y + Math.sin(a) * 6);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  }
+}
+/** (1.15) a whale far off: a dark silhouette facing left, its tail up. */
+function drawWhale(ctx, w, h) {
+  ctx.fillStyle = 'rgba(4,46,66,0.95)';
+  ctx.beginPath();
+  ctx.moveTo(10, 58);
+  ctx.bezierCurveTo(10, 24, 90, 18, 160, 34);
+  ctx.bezierCurveTo(210, 44, 240, 52, 262, 46);
+  ctx.lineTo(296, 22);
+  ctx.lineTo(288, 52);
+  ctx.lineTo(298, 82);
+  ctx.lineTo(262, 62);
+  ctx.bezierCurveTo(220, 76, 150, 92, 80, 86);
+  ctx.bezierCurveTo(30, 82, 10, 74, 10, 58);
+  ctx.fill();
+  ctx.beginPath();                                            // the flipper
+  ctx.moveTo(90, 80);
+  ctx.quadraticCurveTo(110, 104, 130, 102);
+  ctx.quadraticCurveTo(116, 90, 112, 82);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(120,200,220,0.25)';                 // the throat grooves
+  ctx.lineWidth = 2;
+  for (let k = 0; k < 4; k++) {
+    ctx.beginPath();
+    ctx.moveTo(24, 66 + k * 4);
+    ctx.quadraticCurveTo(70, 80 + k * 3, 120, 80 + k * 3);
+    ctx.stroke();
   }
 }
 

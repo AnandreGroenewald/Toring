@@ -2722,3 +2722,13 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 @keyframes try-in { from { opacity: 0; transform: translate(-50%, 30px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @media (max-width: 380px) { .try-back { padding: 6px 10px; font-size: 13px; } .try-txt b { font-size: 16px; } }
 @media (prefers-reduced-motion: reduce) { .try-bar { animation: none; } }
+/* (1.15, the owner: "Can you do the same for the backgrounds please") the world's own photo, as big as a block swatch */
+.skin-prev.has-photo { position: relative; width: calc(132 * var(--u)); height: calc(92 * var(--u)); border-radius: calc(14 * var(--u)); overflow: hidden; box-shadow: 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(10, 34, 78, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.35); }
+.skin-prev.has-photo .world-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; }
+.skin-item .shop-prev:has(.has-photo), .skin-item .shop-prev:has(.has-swatch) { height: calc(96 * var(--u)); }
+/* (1.15, the owner: "These are to simple") the crane tile: a little tower crane in its paint */
+.skin-prev.skin-crane.has-art { display: block; width: calc(132 * var(--u)); height: calc(92 * var(--u)); border-radius: calc(14 * var(--u)); background: none; padding: 0; box-shadow: 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(10, 34, 78, 0.22); }
+.skin-prev.skin-crane.has-art svg { display: block; width: 100%; height: 100%; }
+.skin-prev.skin-crane-goud.has-art { box-shadow: 0 0 calc(10 * var(--u)) rgba(255, 210, 80, 0.9), 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(10, 34, 78, 0.22); }
+.skin-item .shop-prev:has(.has-art) { height: calc(96 * var(--u)); }
+.skin-prev.skin-crane-neon.has-art { box-shadow: 0 0 calc(10 * var(--u)) rgba(255, 63, 164, 0.75), 0 0 calc(18 * var(--u)) rgba(41, 240, 255, 0.35); }

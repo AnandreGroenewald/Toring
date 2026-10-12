@@ -367,9 +367,9 @@ export const S = {
   shopSkinsNote: 'Net vir jou oë: jou agtergrond, hyskraan en blokke. Dit verander niks aan die spel nie. Koop dit met munte; die gewone een van elke soort is gratis.',
   skinKinds: { scene: 'Agtergrond', crane: 'Hyskraan', blocks: 'Blokke' },
   skinNames: {
-    scene: { dag: 'Kaapse dag', sonsondergang: 'Sonsondergang', lekkergoed: 'Lekkergoedlug', nag: 'Sterrenag', kersieblom: 'Kersiebloeisels',
+    scene: { dag: 'Kaapse dag', sonsondergang: 'Safari', lekkergoed: 'Lekkergoedlug', nag: 'Sterrenag', kersieblom: 'Kersiebloeisels',
       noorderlig: 'Noorderlig', ruimte: 'Diep ruimte', akwarium: 'Akwarium', sintgolf: 'Retro-neon' },
-    crane: { geel: 'Klassieke geel', rooi: 'Brandweer-rooi', blou: 'Oseaanblou', pienk: 'Pienk pret', goud: 'Goud' },
+    crane: { geel: 'Klassieke geel', rooi: 'Brandweer-rooi', blou: 'Oseaanblou', pienk: 'Pienk pret', goud: 'Goud', neon: 'Neon' },
     blocks: { kleur: 'Kleurvol', lekkergoed: 'Lekkergoed', klip: 'Klip', neon: 'Neon', goud: 'Goudstawe', piksel: 'Retro-piksel',
       koolstof: 'Koolstofvesel', ys: 'Yskristal', marmer: 'Marmer', lawa: 'Lawa', chroom: 'Chroom', holo: 'Holografies', heelal: 'Sterrestelsel' },
   },
@@ -391,7 +391,7 @@ export const S = {
   updateBtn: 'Dateer op',
   updateLater: 'Later',
   lockedRank: (rank) => `🔒 ${rank}-rang`,
-  lockedWeek: '🔒 ’n Volle weekkis',
+  lockedWeek: '🔒 Speel 7 dae na mekaar',
   // die weekkis (1.10, js/core/week.js)
   weekTitle: 'Weekkis',
   // (1.15) a tap on a chest

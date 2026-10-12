@@ -32,7 +32,7 @@ const FISH = ['🐟', '🐠', '🐡'];
 // (1.15, the owner: "make each background have different kind of fish") what swims past in each world (bgSkin)
 const FISH_BY_SKIN = {
   sonsondergang: ['🐠', '🦈'], lekkergoed: ['🐡', '🐙'], nag: ['🦑', '🐟'], kersieblom: ['🐠', '🦐'], noorderlig: ['🐋', '🦭'],
-  ruimte: ['🦑', '🐙'], sintgolf: ['🐬', '🐠'], akwarium: ['🐠', '🐡', '🐢', '🦀', '🐟'],
+  ruimte: [], sintgolf: ['🐬', '🐠'], akwarium: ['🐠', '🐡', '🐢', '🦀', '🐟'],
 };
 const FISH_EVERY_S = [9, 18];  // a fish swims past this often (looks only)
 const rgba = ([r, g, b, a], aMul = 1) => `rgba(${r},${g},${b},${a * aMul})`;
@@ -310,6 +310,10 @@ export class Water {
     const depth = Math.min(viewBottom - this.displayY - 50, 50 + Math.random() * 140);
     // (1.12.1) an image drawn once a session (js/game/emojitex.js), not a new text for every fish
     const kinds = FISH_BY_SKIN[this.scene.registry?.get('bgSkin')] || FISH;
+    if (!kinds.length) {   // (1.15, the owner: "This should not be in space") nothing swims there
+      this.fishAt = this.t + 30;
+      return;
+    }
     const txt = emojiImage(this.scene, fromLeft ? -90 : GAME_W + 90, this.displayY + depth, kinds[Math.floor(Math.random() * kinds.length)], 46, {
       font: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
     }).setDepth(DEPTH.water + 0.12).setAlpha(0.8);

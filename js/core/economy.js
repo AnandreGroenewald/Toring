@@ -115,6 +115,7 @@ export const SKINS = Object.freeze({
     { id: 'blou', price: 500, tier: 'common' },
     { id: 'pienk', price: 700, tier: 'rare' },
     { id: 'goud', price: 1500, tier: 'epic' },
+    { id: 'neon', price: 2500, tier: 'legendary' },   // (1.15) neon tubes on dark steel, a glow running along
   ]),
   blocks: Object.freeze([
     { id: 'kleur', price: 0, tier: 'common' },

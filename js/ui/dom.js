@@ -1210,12 +1210,82 @@ export function createUI(bus) {
 
   /** (1.13.4) A skin's little picture in the Winkel (css: .skin-prev): the sky, the crane's lattice, three blocks. */
   function skinPreview(kind, id) {
-    if (kind === 'scene') return h('span', { class: `skin-prev skin-scene skin-scene-${id}`, 'aria-hidden': 'true' }, h('i', { class: 'scene-fx' }), emo(SCENE_EMOJI[id] || '☀️'));
-    if (kind === 'crane') return h('span', { class: `skin-prev skin-crane skin-crane-${id}`, 'aria-hidden': 'true' }, h('i'), h('i'));
+    // (1.15, the owner: "Can you do the same for the backgrounds please") a photo of the world itself (img/worlds/), on its
+    // painted sky in case the photo can't load
+    if (kind === 'scene') {
+      const box = h('span', { class: `skin-prev skin-scene skin-scene-${id} has-photo`, 'aria-hidden': 'true' }, h('i', { class: 'scene-fx' }), emo(SCENE_EMOJI[id] || '☀️'));
+      const img = h('img', { class: 'world-photo', src: `img/worlds/${id}.jpg`, alt: '', loading: 'lazy', decoding: 'async', draggable: 'false' });
+      img.onerror = () => img.remove();
+      box.append(img);
+      return box;
+    }
+    if (kind === 'crane') {
+      // (1.15, the owner: "These are to simple") a little tower crane in that paint, a block on its hook
+      const box = h('span', { class: `skin-prev skin-crane skin-crane-${id} has-art`, 'aria-hidden': 'true' });
+      box.innerHTML = craneArt(id);   // the game's own constant markup, never player text
+      return box;
+    }
     // (1.15) the blocks drawn by the game's own block painter in that skin (exactly what you'll build with)
     const swatch = blockSwatch(id);
     if (swatch) return h('span', { class: `skin-prev skin-blocks skin-blocks-${id} has-swatch`, 'aria-hidden': 'true' }, swatch);
     return h('span', { class: `skin-prev skin-blocks skin-blocks-${id}`, 'aria-hidden': 'true' }, h('i'), h('i'), h('i'));
+  }
+  const CRANE_PAINT = {
+    geel: ['#f5b800', '#ffd84d', '#c48a00', '#5a4100'],
+    rooi: ['#e53935', '#ff7a73', '#a3201c', '#5c0f0f'],
+    blou: ['#1e88e5', '#6ab7ff', '#0b5aa8', '#0a2d55'],
+    pienk: ['#ff5fa8', '#ffa3cf', '#c4307a', '#5e1236'],
+    goud: ['#f7c531', '#fff7c2', '#9c6a00', '#3f2a00'],
+    neon: ['#ff3fa4', '#ffc2e8', '#29f0ff', '#160b2a'],
+  };
+  /** A crane tile's drawing (SVG markup): the mast and jib as lattice in the skin's paint, the cab, the counterweight, a block. */
+  function craneArt(id) {
+    const [m, l, d, e] = CRANE_PAINT[id] || CRANE_PAINT.geel;
+    const zigH = (x0, x1, y0, y1, n) => {
+      const st = (x1 - x0) / n;
+      let p = `M${x0} ${y1}`;
+      for (let i = 0; i < n; i++) p += `L${(x0 + st * (i + 0.5)).toFixed(1)} ${y0}L${(x0 + st * (i + 1)).toFixed(1)} ${y1}`;
+      return p;
+    };
+    const zigV = (x0, x1, y0, y1, n) => {
+      const st = (y1 - y0) / n;
+      let p = `M${x0} ${y0}`;
+      for (let i = 0; i < n; i++) p += `L${x1} ${(y0 + st * (i + 0.5)).toFixed(1)}L${x0} ${(y0 + st * (i + 1)).toFixed(1)}`;
+      return p;
+    };
+    const chord = (x, y, w, hh) => `<rect x="${x}" y="${y}" width="${w}" height="${hh}" rx="1" fill="${m}" stroke="${e}" stroke-width=".8"/>`;
+    const gold = id === 'goud'
+      ? [[60, 10], [112, 12], [24, 46], [70, 40]].map(([x, y]) => `<path d="M${x} ${y - 4}l1.2 2.8 2.8 1.2-2.8 1.2-1.2 2.8-1.2-2.8-2.8-1.2 2.8-1.2z" fill="#fff"/>`).join('')
+      : '';
+    const night = id === 'neon';   // the neon crane against a night sky, glowing
+    return `<svg viewBox="0 0 132 92" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="cs-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${night ? '#14062e' : '#9fd8ff'}"/><stop offset="1" stop-color="${night ? '#4a1470' : '#e8f6ff'}"/></linearGradient>`
+      + (night ? `<filter id="cg-${id}" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` : '')
+      + '</defs>'
+      + `<rect width="132" height="92" fill="url(#cs-${id})"/>`
+      + (night ? '<circle cx="20" cy="40" r=".9" fill="#fff"/><circle cx="70" cy="44" r=".7" fill="#fff"/><circle cx="118" cy="36" r=".9" fill="#fff"/><circle cx="60" cy="8" r=".7" fill="#fff"/>'
+        : '<ellipse cx="104" cy="74" rx="26" ry="7" fill="#fff" opacity=".8"/><ellipse cx="18" cy="58" rx="16" ry="5" fill="#fff" opacity=".7"/>')
+      + (night ? `<g filter="url(#cg-${id})">` : '<g>')
+      + '<rect x="26" y="84" width="30" height="8" fill="#9aa4b2"/><rect x="26" y="84" width="30" height="2" fill="#c3cad4"/>'
+      // the ties from the top of the mast to both ends
+      + `<path d="M39 5L124 15M39 5L8 18" stroke="${e}" stroke-width="1" fill="none"/>`
+      // the mast: two rails and the bracing between
+      + `<path d="${zigV(35.5, 42.5, 22, 84, 9)}" stroke="${d}" stroke-width="1.6" fill="none" stroke-linejoin="round"/>`
+      + chord(34, 20, 2.6, 64) + chord(41.4, 20, 2.6, 64)
+      + `<path d="M33 21L39 5L45 21z" fill="${m}" stroke="${e}" stroke-width=".8" stroke-linejoin="round"/>`
+      // the jib and the counter-jib: chords and zigzag
+      + `<path d="${zigH(45, 126, 16.5, 23, 11)}" stroke="${d}" stroke-width="1.6" fill="none" stroke-linejoin="round"/>`
+      + chord(44, 14.5, 83, 2.6) + chord(44, 22, 83, 2.6)
+      + `<path d="${zigH(7, 34, 18.5, 23, 4)}" stroke="${d}" stroke-width="1.6" fill="none" stroke-linejoin="round"/>`
+      + chord(6, 17, 28, 2.4) + chord(6, 22, 28, 2.4)
+      + `<rect x="${44.5}" y="15" width="81" height="1" fill="${l}" opacity=".9"/>`
+      + '<rect x="8" y="24.5" width="13" height="10" rx="1" fill="#8d96a3" stroke="#4b5563" stroke-width=".8"/>'
+      // the cab, its window
+      + `<rect x="44" y="24.5" width="12" height="10" rx="1.5" fill="${m}" stroke="${e}" stroke-width=".8"/><rect x="47" y="26.5" width="7" height="5" rx="1" fill="#bfe8ff"/>`
+      // the trolley, the rope, the hook and a block
+      + '<rect x="91" y="24.6" width="12" height="4" rx="1" fill="#2a2f3a"/><path d="M97 28.6V52" stroke="#3a3f4a" stroke-width="1"/>'
+      + '<rect x="94" y="51" width="6" height="2.6" rx=".8" fill="#e5483b"/>'
+      + '<rect x="83" y="54" width="28" height="11" rx="2" fill="#ff6b8a" stroke="#8a1d3c" stroke-width="1"/><rect x="85" y="55.5" width="24" height="2" rx="1" fill="#ffc2d0" opacity=".9"/>'
+      + '</g>' + gold + '</svg>';
   }
   const SCENE_EMOJI = { dag: '☀️', sonsondergang: '🌅', lekkergoed: '🍭', nag: '🌙', kersieblom: '🌸', noorderlig: '✨', ruimte: '🪐', akwarium: '🐠', sintgolf: '🌆' };
 
@@ -1345,7 +1415,7 @@ export function createUI(bus) {
 
   // (1.15) what's new in this version: a "Nuut" tag in the Winkel
   const NEW_ITEMS = new Set(['scene:akwarium', 'scene:kersieblom', 'scene:noorderlig', 'scene:ruimte', 'scene:sintgolf', 'blocks:piksel', 'blocks:koolstof',
-    'blocks:ys', 'blocks:marmer', 'blocks:lawa', 'blocks:chroom', 'blocks:holo', 'blocks:heelal', 'frame:neon', 'frame:holo', 'badge:weerlig',
+    'crane:neon', 'blocks:ys', 'blocks:marmer', 'blocks:lawa', 'blocks:chroom', 'blocks:holo', 'blocks:heelal', 'frame:neon', 'frame:holo', 'badge:weerlig',
     'badge:haai', 'badge:vuurpyl', 'badge:goat', 'badge:draak', 'title:ikoon', 'celebration:weerlig', 'celebration:goudreen',
     'celebration:laser', 'celebration:sterrestof']);
   /** (1.15) A shop tile's corner tags: how rare it is (not on the free defaults) and "Nuut". */
@@ -1627,7 +1697,9 @@ export function createUI(bus) {
     if (st.modal) closeModal();
     const d = m.duel || {};
     const input = h('input', {
-      class: 'nick-input', type: 'text', maxlength: '16', autocomplete: 'nickname', autocapitalize: 'words',
+      class: 'nick-input', type: 'text', maxlength: '16', autocomplete: 'off', autocapitalize: 'words',
+      // (1.15, the owner: "The blue shield?") a game name, not a login or your real name: password managers keep out
+      'data-bwignore': 'true', 'data-1p-ignore': 'true', 'data-lpignore': 'true', 'data-form-type': 'other',
       spellcheck: 'false', enterkeyhint: 'done', 'aria-label': S.duelNick, placeholder: m.placeholder || '',
     });
     input.value = d.name || '';
@@ -2347,7 +2419,9 @@ export function createUI(bus) {
     st.nameBack = back;
     st.namePlaceholder = placeholder;
     const input = h('input', {
-      class: 'nick-input', type: 'text', maxlength: '16', autocomplete: 'nickname', autocapitalize: 'words',
+      class: 'nick-input', type: 'text', maxlength: '16', autocomplete: 'off', autocapitalize: 'words',
+      // (1.15, the owner: "The blue shield?") a game name, not a login or your real name: password managers keep out
+      'data-bwignore': 'true', 'data-1p-ignore': 'true', 'data-lpignore': 'true', 'data-form-type': 'other',
       spellcheck: 'false', enterkeyhint: 'done', 'aria-label': S.duelNick, placeholder,
     });
     input.value = name || '';

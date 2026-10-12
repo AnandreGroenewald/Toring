@@ -68,6 +68,8 @@ const PRECACHE = [
   'js/scenes/GameScene.js',
   'js/scenes/HudScene.js',
   'icons/icon.svg',
+  // (1.15) the Winkel's world photos
+  ...['dag', 'sonsondergang', 'lekkergoed', 'nag', 'kersieblom', 'noorderlig', 'ruimte', 'akwarium', 'sintgolf'].map((id) => `img/worlds/${id}.jpg`),
   'icons/icon-192.png',
   'icons/apple-touch-icon.png',
   // the 512 px icons are only for installing; the browser fetches them itself
