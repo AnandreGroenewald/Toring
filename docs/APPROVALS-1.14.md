@@ -128,6 +128,9 @@ step c. Both restart the match rooms, so a live match drops. So:
     not shared, optional, for App functionality and Account management.
   - App activity › the game save (coins, looks, ranks, the day's tries, the nickname choice, the refill count) for
     signed-in players: collected, not shared, optional, for App functionality and Account management.
+  - Personal info › Email address (round 1, the Guardian + the Advocate): Google's sign-in proof carries it to the
+    server, which only checks it: collected, processed ephemerally, not shared, optional, Account management. Name and
+    Device or other IDs also get the purpose Account management. No Photos entry (the token holds only a link).
   - Account creation: yes, with Sign in with Google (OAuth); no username/password.
   - Data deletion: yes; account deletion URL https://stapelspel.pages.dev/privaatheid#uitvee (in the game, on the web
     at ?rekening, or by email).
