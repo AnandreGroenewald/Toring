@@ -3179,3 +3179,5 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .punish-btn small { font-size: max(9px, calc(14 * var(--u))); }
 .punish-btn .pk-go { display: none; }
 .punish-track { margin-top: calc(8 * var(--u)); }
+/* the round buttons' light falls straight from above (the off-centre highlight made them look lopsided) */
+.dock-ic { background: radial-gradient(circle at 50% 18%, #34467c 0%, #1b2548 58%, #10172f 100%); }
