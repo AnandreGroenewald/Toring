@@ -1257,6 +1257,8 @@ export function createUI(bus) {
     + [[12, 38, -50], [10, 30, -20], [12, 22, 10], [52, 38, 50], [54, 30, 20], [52, 22, -10]].map(([x, y, a]) => `<ellipse cx="${x}" cy="${y}" rx="4.2" ry="2.2" transform="rotate(${a} ${x} ${y})" fill="rgba(255,255,255,.8)"/>`).join('');
   const STAR = '<path d="M32 12l5.9 12 13.2 1.9-9.6 9.3 2.3 13.1L32 42.1 20.2 48.3l2.3-13.1-9.6-9.3 13.2-1.9z" fill="#fff" stroke="rgba(0,0,0,.18)" stroke-width="1.5" stroke-linejoin="round"/>';
   const MEDAL_ART = {
+    // (1.15, the owner: "this looks like a meerkant not a lion, the best versions are usually the ones that roars")
+    leeu: '<svg viewBox="0 0 64 64"><defs><radialGradient id="lm" cx="50%" cy="48%" r="55%"><stop offset="0" stop-color="#f4b14a"/><stop offset="1" stop-color="#a8521a"/></radialGradient></defs><polygon points="32.0,4.0 35.7,11.8 41.9,5.7 42.8,14.4 50.6,10.8 48.5,19.2 57.1,18.5 52.2,25.6 60.6,28.0 53.5,33.0 60.6,38.0 52.2,40.4 57.1,47.5 48.5,46.8 50.6,55.2 42.8,51.6 41.9,60.3 35.7,54.2 32.0,62.0 28.3,54.2 22.1,60.3 21.2,51.6 13.4,55.2 15.5,46.8 6.9,47.5 11.8,40.4 3.4,38.0 10.5,33.0 3.4,28.0 11.8,25.6 6.9,18.5 15.5,19.2 13.4,10.8 21.3,14.4 22.1,5.7 28.3,11.8" fill="url(#lm)" stroke="#5e2d0c" stroke-width="1.6" stroke-linejoin="round"/><circle cx="20" cy="20" r="5" fill="#e6963c" stroke="#5e2d0c" stroke-width="1.2"/><circle cx="44" cy="20" r="5" fill="#e6963c" stroke="#5e2d0c" stroke-width="1.2"/><circle cx="20" cy="20" r="2.4" fill="#b8642a"/><circle cx="44" cy="20" r="2.4" fill="#b8642a"/><ellipse cx="32" cy="34" rx="15" ry="16" fill="#f2bb6b" stroke="#5e2d0c" stroke-width="1.4"/><path d="M21 26.5l8 3.2M43 26.5l-8 3.2" stroke="#3b1f0a" stroke-width="2.6" stroke-linecap="round"/><ellipse cx="26.5" cy="31" rx="2.2" ry="1.7" fill="#2b1708"/><ellipse cx="37.5" cy="31" rx="2.2" ry="1.7" fill="#2b1708"/><circle cx="27.2" cy="30.5" r=".6" fill="#fff"/><circle cx="38.2" cy="30.5" r=".6" fill="#fff"/><ellipse cx="32" cy="40" rx="9.5" ry="6.5" fill="#f9d9a3"/><path d="M27.5 34.5h9l-4.5 4.5z" fill="#4a2510" stroke-linejoin="round"/><path d="M24.5 42q7.5 15 15 0q-7.5 3-15 0z" fill="#7a1420" stroke="#3b0a10" stroke-width="1.2" stroke-linejoin="round"/><ellipse cx="32" cy="49.5" rx="3.6" ry="2.3" fill="#e85a6a"/><path d="M26.4 42.6l1.6 4.6 1.4-4.2zM37.6 42.6l-1.6 4.6-1.4-4.2z" fill="#fff" stroke="#c8c0b0" stroke-width=".5"/><circle cx="25" cy="39" r=".7" fill="#7a4a20"/><circle cx="23.6" cy="41" r=".7" fill="#7a4a20"/><circle cx="39" cy="39" r=".7" fill="#7a4a20"/><circle cx="40.4" cy="41" r=".7" fill="#7a4a20"/></svg>',
     rugby: '<svg viewBox="0 0 64 64"><defs><clipPath id="rb"><ellipse cx="32" cy="32" rx="25" ry="15.5" transform="rotate(-32 32 32)"/></clipPath></defs>'
       + '<ellipse cx="32" cy="32" rx="25" ry="15.5" transform="rotate(-32 32 32)" fill="#fbf6ea"/>'
       + '<g clip-path="url(#rb)" transform="rotate(-32 32 32)"><rect x="12" y="10" width="5" height="44" fill="#157a3f"/><rect x="17" y="10" width="3" height="44" fill="#f7c948"/>'
@@ -1496,11 +1498,17 @@ export function createUI(bus) {
   // ---------------------------------------------------------------------------
   // Pause
   // ---------------------------------------------------------------------------
-  function showPause({ mode, started = true, note = '', stake = null } = {}) {
+  function showPause({ mode, started = true, note = '', stake = null, sofar = null } = {}) {
     if (st.modal) closeModal();
+    // (1.15, the owner: "This window still doesnt look like a pause menu, it looks plain") a game's pause: a dark glass card,
+    // a gold title band, and the tower so far (height, points, Perfeks)
     const card = h('div', { class: 'card pause-card' },
       h('div', { class: 'pause-ic', 'aria-hidden': 'true' }, icon('pause')),
       h('h2', { text: S.paused }),
+      sofar ? h('div', { class: 'pause-sofar' },
+        h('span', null, h('b', { text: fmtM(sofar.heightM || 0) }), h('small', { text: S.pauseHeight })),
+        h('span', null, h('b', { text: fmtInt(sofar.score || 0) }), h('small', { text: S.pauseScore })),
+        h('span', null, h('b', { text: fmtInt(sofar.perfects || 0) }), h('small', { text: S.pausePerfects }))) : null,
       // (1.12.1) a friend match: whose pause it is (both games wait), and the 3-2-1 back
       h('p', { class: 'pause-note', role: 'status', 'aria-live': 'polite', text: note, hidden: !note }),
       h('p', { class: 'pause-timer', hidden: true }),

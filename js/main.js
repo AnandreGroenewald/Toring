@@ -1028,7 +1028,11 @@ function pauseLocal() {
   // (1.13) a coin match: the card says what "Hou op" costs
   const m = duel.match;
   const atStake = run.mode === 'duel' && m && m.stakeHeld && !m.stakeDone && m.stakeOn !== false && !m.outcome;
-  ui.showPause({ mode: run.mode, started: run.started, stake: atStake ? { n: m.stake, name: m.oppName } : null });
+  // (1.15) the tower so far, on the pause card
+  let now = null;
+  try { now = gameScene()?.getState?.() || null; } catch { now = null; }
+  ui.showPause({ mode: run.mode, started: run.started, stake: atStake ? { n: m.stake, name: m.oppName } : null,
+    sofar: now && run.started ? { heightM: now.heightM, score: now.score, perfects: now.perfects } : null });
   // (1.12, the owner: "If i pause while looking for an opponent make it stop looking") a pause, or the
   // game out of sight, ends the search: nobody is paired with a player who isn't there
   if (duel.searching) {
