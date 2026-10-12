@@ -5,7 +5,9 @@ the web key, both Android keys and "Publish app") is **done** (Anandre, 12 Oct ~
 
 ## Anandre's answers (12 Oct ~06:00, typed in the Stapel terminal)
 - **The push plan:** "Website + server now, app after my phone test". So **a–e are approved** to go, each
-  after its Critic Panel, in this order. **f waits for his phone test.**
+  after its Critic Panel, in this order. ~~f waits for his phone test~~ → **12 Oct ~14:05 the owner: "Please push it to
+  the playstore for testing"**: f goes to internal testing (after its full panel) so his phone test runs on that build;
+  the STOP rule (Pause track) stays. Done so far: a-c live 13:40-13:42, d (the website) live ~14:00.
 - **Sign-out keeps everything:** "Yes it need to keep everything hense the Google sign in." Signing out only ends
   that device's session. The phone keeps its coins, skins, ranks, tries, nickname and everything else, and the account
   keeps its copy. Deleting the account deletes the account and its leaderboard rows; the phone's own progress
@@ -121,13 +123,22 @@ step c. Both restart the match rooms, so a live match drops. So:
 - **Way back:** a Pages rollback to the 1.13.4 deployment, plus a revert push.
 
 ### e. Play Console › App content › Data safety (full panel: a store listing change; needed before f)
-- **What it does:**
-  - "User IDs": collected, not shared, optional, used for App functionality and Account management.
-  - "Account deletion": yes, link https://stapelspel.pages.dev/privaatheid#uitvee
+- **What it does** (exactly as `~/Desktop/Stapel app (Google Play)/Upload 1.14.0 internal/data-safety.txt`):
+  - Personal info › "User IDs": Stapel's own account number (never Google's number, name, email or photo): collected,
+    not shared, optional, for App functionality and Account management.
+  - App activity › the game save (coins, looks, ranks, the day's tries, the nickname choice, the refill count) for
+    signed-in players: collected, not shared, optional, for App functionality and Account management.
+  - Account creation: yes, with Sign in with Google (OAuth); no username/password.
+  - Data deletion: yes; account deletion URL https://stapelspel.pages.dev/privaatheid#uitvee (in the game, on the web
+    at ?rekening, or by email).
+  - Everything already declared for 1.13.x stays (the nickname, the random leaderboard number, game results).
+- **Send for review:** only this change, if Play asks. STOP on any other listed change, a new declaration or terms page.
 - **Way back:** edit the form again.
 
-### f. The app 1.14.0 (versionCode 11400) to internal testing: WAITS for Anandre's phone test (full panel)
-- **The phone test (about 10 minutes):**
+### f. The app 1.14.0 (versionCode 11400) to internal testing (full panel; the owner ~14:05: "Please push it to the playstore for testing")
+- **Folder:** `~/Desktop/Stapel app (Google Play)/Upload 1.14.0 internal` (Stapel-1.14.0.aab SHA-256 0226df5e…eda7e6,
+  release-notes.txt af 446 / en 446, README.txt with the steps, data-safety.txt). Order: e first, then f, same session.
+- **The phone test (about 10 minutes), on the internal-testing build:**
   - ⚙️ Instellings › ☁️ › pick his Google account › "Ingeteken met Google ✓".
   - His coins and skins are still there.
   - The website, signed in with the same account, shows the same progress.
