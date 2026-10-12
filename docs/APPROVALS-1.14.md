@@ -187,8 +187,14 @@ step c. Both restart the match rooms, so a live match drops. So:
 - **Records to fix right after the send:** Google Play steps.txt section 2 "Content rating ... no gambling ... Expect
   'Everyone' / 3+" (lines 27-30) → the new answers and ratings; this file's "Before production" IARC line → done
   (12 Oct), keep "could it appeal to children?"; HANDOVER's 1.13.5-list IARC item.
+- **DONE 12 Oct 19:07:** the questionnaire was saved at 18:38 (the owner's own click on the summary page; the saved
+  ratings = content-rating.txt exactly); the panel: round 1 33/40 → round 2 36/40 (all four 9) + the Final Boss 9; Internal
+  testing › 11400 › Promote release › Closed testing - Alpha (the notes pasted again and checked by SHA-256 c7983181…;
+  only the deobfuscation warning; no devices lost) › Save; Publishing overview listed exactly 2 changes (the Alpha
+  release + the Content Rating) → sent for review. Data safety (step e) was already approved by then.
 
 ## Before production (not now)
-REFILL and TESTER_GIFT off; the IARC gambling answers and Play's "could it appeal to children?" answered again;
+REFILL and TESTER_GIFT off; Play's "could it appeal to children?" answered again (the IARC gambling answers: done 12 Oct, step g);
+Australia (18+): the lawyer on the Online Safety codes, or coin matches off / Australia dropped;
 the SA gambling-law opinion **before coins are ever sold for money** (Anandre: "we will sort out gambling laws if
 it works").
