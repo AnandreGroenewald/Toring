@@ -137,6 +137,8 @@ async function store(request, ctx) {
   await limit(ctx, request, 'account', ctx.cfg.rate.accountPerHour);
   const { body } = await readObject(request, SAVE_MAX_BYTES + 1024);
   const { account } = await sessionOf(ctx, body.token);
+  // (1.14) saves per account and hour (config.js accountStoresPerHour): the game hears 429 and saves again later
+  if (!ctx.rate.allow(`store:${account}`, ctx.cfg.rate.accountStoresPerHour, ctx.now)) throw new HttpError(429, 'rate_limited');
   if (!Number.isInteger(body.rev) || body.rev < 0) throw new HttpError(400, 'invalid_field', { field: 'rev' });
   if (typeof body.push !== 'string' || !PUSH_RE.test(body.push)) throw new HttpError(400, 'invalid_field', { field: 'push' });
   const text = cleanSave(body.save);

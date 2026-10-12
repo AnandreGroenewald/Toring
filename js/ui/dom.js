@@ -2136,6 +2136,7 @@ export function createUI(bus) {
     const el = h('div', { class: `card signin-offer signin-offer-${where}`, role: 'note' },
       h('p', { class: 'signin-offer-text' }, emo('☁️'), h('span', { text: S.signinOffer })),
       slot,
+      h('p', { class: 'account-under18', text: S.accountUnder18 }),   // (1.14, POPIA s35)
       h('button', {
         type: 'button', class: 'icon-btn signin-offer-no', 'aria-label': S.signinOfferNo, title: S.signinOfferNo,
         onclick: () => {
@@ -2231,7 +2232,7 @@ export function createUI(bus) {
       // (never Google's name, email or photo: Stapel keeps only a number made from the account)
       box.replaceChildren(...[
         h('p', { class: 'account-in' }, emo('☁️'), h('span', { text: S.accountSignedIn })),
-        h('p', { class: 'account-line', role: 'status', text: a.busy ? S.accountSaving : a.error === 'offline' ? S.accountOffline : min !== null ? S.accountSaved(S.accountAgo(min)) : S.accountNotYet }),
+        h('p', { class: 'account-line', role: 'status', text: a.busy ? S.accountSaving : a.error === 'offline' ? S.accountOffline : a.error === 'limited' ? S.accountBusy : min !== null ? S.accountSaved(S.accountAgo(min)) : S.accountNotYet }),
         msg,
         h('div', { class: 'account-foot' },
           button('btn-white', h('span', { text: S.accountSignOut }), () => {
@@ -2255,10 +2256,13 @@ export function createUI(bus) {
     box.replaceChildren(...[
       h('p', { class: 'account-title' }, emo('☁️'), h('span', { text: S.accountTitle })),
       a.out ? h('p', { class: 'account-msg', text: S.accountOut }) : null,
-      h('p', { class: 'account-why', text: S.accountWhy }),
+      // (the website: the app with sign-in comes later, 1.14's app upload)
+      h('p', { class: 'account-why', text: a.native ? S.accountWhy : `${S.accountWhy} ${S.accountAppSoon}` }),
       slot,
       wait ? h('p', { class: 'account-line', role: 'status', text: S.accountSaving }) : null,
       msg,
+      // (1.14, POPIA s35) beside every sign-in: a calm line, no extra tap
+      h('p', { class: 'account-under18', text: S.accountUnder18 }),
       h('p', { class: 'account-keeps', text: S.accountKeeps })].filter(Boolean));
     // Google's own button on the website (js/account.js renderButton), once the slot is in the page
     if (!a.native) queueMicrotask(() => { if (slot.isConnected) bus.emit('ui:account-slot', slot); });

@@ -538,7 +538,11 @@ export const S = {
   accountTitle: 'Bêre jou vordering',
   accountTitleIn: 'Jou rekening',
   accountWhy: 'Teken in met Google, dan is jou torings, munte, voorkoms en range veilig, en dieselfde op jou foon en die webwerf.',
-  accountKeeps: 'Stapel hou net ’n nommer wat van jou Google-rekening gemaak is: nie jou naam, e-pos of foto nie.',
+  accountKeeps: 'Stapel hou jou vordering en ’n nommer wat van jou Google-rekening gemaak is: nie jou naam, e-pos of foto nie.',
+  // (1.14, POPIA s35: a child is under 18) beside every sign-in, no extra tap
+  accountUnder18: 'Jonger as 18? Vra eers jou ouer of voog.',
+  accountAppSoon: 'Binnekort ook in die Stapel-toep.',
+  accountBusy: 'Stapel is nou besig. Ons bêre later weer.',
   accountSignIn: 'Teken in met Google',
   accountSignedIn: 'Ingeteken met Google ✓',
   accountSaved: (ago) => `Gebêre ${ago}`,
@@ -562,7 +566,8 @@ export const S = {
   accountErr: (code) => ({
     offline: 'Kon nie Google of Stapel bereik nie. Probeer weer as jy internet het.',
     google_unreachable: 'Kon nie Google bereik nie. Probeer later weer.',
-    bad_token: 'Google het nie ingeteken nie. Probeer weer.',
+    bad_token: 'Google het jou nie ingeteken nie. Probeer weer.',
+    rate_limited: 'Stapel is nou besig. Ons bêre later weer.',
     no_account: 'Daar is nog geen Google-rekening op hierdie foon nie.',
     not_configured: 'Inteken is nog nie oop nie.',
     refused: 'Kon nie jou vordering bêre nie. Probeer later weer.',

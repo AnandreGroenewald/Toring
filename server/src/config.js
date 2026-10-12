@@ -89,6 +89,12 @@ export function loadConfig(env) {
       // can share one address)
       signInPerHour: int(e.RATE_LIMIT_SIGNIN_PER_HOUR, 60, 1),
       accountPerHour: int(e.RATE_LIMIT_ACCOUNT_PER_HOUR, 900, 1),
+      // (1.14) saves per ACCOUNT and hour, whatever the address: a real player saves after each tower (one every
+      // 1-3 minutes at the most, plus a purchase or a new name now and then: a few dozen an hour on two devices), so
+      // 120 is far above real play, while one scripted account can't eat the free plan's 100 000 D1 rows a day
+      // (120 x ~5 rows x 24 h = ~14 400). Like every limit here it counts per isolate (memory only), so it bounds
+      // the damage rather than counting exactly.
+      accountStoresPerHour: int(e.RATE_LIMIT_ACCOUNT_STORES_PER_HOUR, 120, 1),
     },
     // (1.13.1) The Daaglikse Toring's free tries a day from DAILY_FREE_FROM (the days before: one), for GET /daily/config:
     // the game asks at its start, so this changes without a new app (1..4; the game's own default is 3 from 2026-10-12).

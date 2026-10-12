@@ -1,5 +1,7 @@
 -- 1.13: Sign in with Google and the saved progress (src/account.js). Safe to run more than once.
---   ./wr.sh d1 execute stapel-borge --remote --file=./migrations/0006_accounts.sql
+--   Run the statements below ONE BY ONE with --command (Cloudflare refused --file on 10 Oct 2026, error 10000):
+--   ./wr.sh d1 execute stapel-borge --remote --command "CREATE TABLE IF NOT EXISTS accounts (...);" (the exact seven
+--   commands and the check are in docs/APPROVALS-1.14.md step b)
 -- An account is a number made from the Google account's number with a secret (AUTH_SECRET); the Google
 -- number, name, email and photo are never kept. A session keeps only the SHA-256 of its token.
 CREATE TABLE IF NOT EXISTS accounts (

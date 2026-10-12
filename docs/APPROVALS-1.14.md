@@ -39,51 +39,81 @@ the web key, both Android keys and "Publish app") is **done** (Anandre, 12 Oct ~
 
 ## The steps, in order (all run from `~/Desktop/Toring/server` on the 1.14 commit)
 
+**One quiet window for a, b and c.** `wrangler secret put` (step a) deploys a new Worker version at once, and so does
+step c. Both restart the match rooms, so a live match drops. So:
+- **First:** check that nobody is in a live match (the Uitdagersreeks lobby is empty, and Anandre or Alfred knows of
+  no match going on).
+- **Then:** run a, b and c back to back in that one window.
+- **If the window breaks:** stop after a whole step, never in the middle of one.
+
 ### a. The server secret `AUTH_SECRET`: once, never changed (full panel: a live secret)
 - **What it does:** turns a Google account's number into Stapel's own account number. Players see nothing yet.
-- **Commands.** Make it on this Mac and keep it in the Keychain (nothing is printed):
+- **Before:** the quiet window (above). Also note the Worker version that is live now:
   ```sh
-  security add-generic-password -a stapel -s "Stapel AUTH_SECRET" -w "$(openssl rand -hex 32)"
-  security find-generic-password -s "Stapel AUTH_SECRET" -w | awk '{print length($0)}'   # shows 64 (only the length)
-  security find-generic-password -s "Stapel AUTH_SECRET" -w | ./wr.sh secret put AUTH_SECRET
-  ./wr.sh secret list   # AUTH_SECRET is listed (names only)
+  ./wr.sh deployments list   # write down the newest id (on 12 Oct: 594c7235-b8d2-455a-8932-0489502d9736, from 1.13.1)
   ```
-  The value is only in that first command for a moment, on this Mac. It is never typed, shown or committed.
-- **Way back:** an unused secret does nothing (`./wr.sh secret delete AUTH_SECRET` before c). After players sign in
-  it must **never change**, because their account numbers come from it.
+- **Commands.** The value is made in Python and handed to the Keychain through `security -i`'s input, so it never
+  appears on a command line or in the process list:
+  ```sh
+  python3 -I - <<'PY'
+  import secrets, subprocess
+  v = secrets.token_hex(32)
+  subprocess.run(['security', '-i'], input=f'add-generic-password -a stapel -s "Stapel AUTH_SECRET" -w {v}\n', text=True, capture_output=True, check=True)
+  PY
+  security find-generic-password -s "Stapel AUTH_SECRET" -w | tr -d '\n' | wc -c   # must say 64 (only the length is shown)
+  security find-generic-password -s "Stapel AUTH_SECRET" -w | ./wr.sh secret put AUTH_SECRET
+  ./wr.sh secret list          # AUTH_SECRET is listed (names only)
+  ./wr.sh deployments list     # write down the NEW id this made (the secret's own Worker version)
+  ```
+- **Anandre's step:** keep a second safe copy in his password manager. Keychain Access › "Stapel AUTH_SECRET" ›
+  show password, then paste it into the password manager. It must never be lost or changed.
+- **Way back:** before c, an unused secret does nothing (`./wr.sh secret delete AUTH_SECRET`). After players sign
+  in it must **never change**, because their account numbers come from it.
 
 ### b. The database change `0006_accounts.sql` (full panel: a live database)
-- **What it does:** adds three empty tables (accounts, sessions, save history) and their indexes. Nothing else is
-  touched, and it's safe to run twice. Use `--command`, because the `--file` route was refused on 10 Oct
-  (Cloudflare error 10000).
+- **What it does:** adds three empty tables (accounts, sessions, save history) and their 4 indexes. Nothing else is
+  touched, and it's safe to run twice. Run the statements **one by one with `--command`**, because the `--file`
+  route was refused on 10 Oct (Cloudflare error 10000).
 - **Commands:**
   ```sh
-./wr.sh d1 execute stapel-borge --remote --command "CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY, created INTEGER NOT NULL, seen INTEGER NOT NULL, rev INTEGER NOT NULL DEFAULT 0, save TEXT, saved INTEGER, last_push TEXT, gen TEXT);"
-./wr.sh d1 execute stapel-borge --remote --command "CREATE INDEX IF NOT EXISTS idx_accounts_seen ON accounts (seen);"
-./wr.sh d1 execute stapel-borge --remote --command "CREATE TABLE IF NOT EXISTS account_sessions (hash TEXT PRIMARY KEY, account TEXT NOT NULL, created INTEGER NOT NULL, seen INTEGER NOT NULL);"
-./wr.sh d1 execute stapel-borge --remote --command "CREATE INDEX IF NOT EXISTS idx_account_sessions_account ON account_sessions (account, seen);"
-./wr.sh d1 execute stapel-borge --remote --command "CREATE INDEX IF NOT EXISTS idx_account_sessions_seen ON account_sessions (seen);"
-./wr.sh d1 execute stapel-borge --remote --command "CREATE TABLE IF NOT EXISTS account_pushes (account TEXT NOT NULL, push TEXT NOT NULL, rev INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (account, push));"
-./wr.sh d1 execute stapel-borge --remote --command "CREATE INDEX IF NOT EXISTS idx_account_pushes_at ON account_pushes (at);"
-  ./wr.sh d1 execute stapel-borge --remote --command "SELECT name FROM sqlite_master WHERE name LIKE 'account%';"   # 3 tables + 4 indexes
+  ./wr.sh d1 execute stapel-borge --remote --command "CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY, created INTEGER NOT NULL, seen INTEGER NOT NULL, rev INTEGER NOT NULL DEFAULT 0, save TEXT, saved INTEGER, last_push TEXT, gen TEXT);"
+  ./wr.sh d1 execute stapel-borge --remote --command "CREATE INDEX IF NOT EXISTS idx_accounts_seen ON accounts (seen);"
+  ./wr.sh d1 execute stapel-borge --remote --command "CREATE TABLE IF NOT EXISTS account_sessions (hash TEXT PRIMARY KEY, account TEXT NOT NULL, created INTEGER NOT NULL, seen INTEGER NOT NULL);"
+  ./wr.sh d1 execute stapel-borge --remote --command "CREATE INDEX IF NOT EXISTS idx_account_sessions_account ON account_sessions (account, seen);"
+  ./wr.sh d1 execute stapel-borge --remote --command "CREATE INDEX IF NOT EXISTS idx_account_sessions_seen ON account_sessions (seen);"
+  ./wr.sh d1 execute stapel-borge --remote --command "CREATE TABLE IF NOT EXISTS account_pushes (account TEXT NOT NULL, push TEXT NOT NULL, rev INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (account, push));"
+  ./wr.sh d1 execute stapel-borge --remote --command "CREATE INDEX IF NOT EXISTS idx_account_pushes_at ON account_pushes (at);"
+  ./wr.sh d1 execute stapel-borge --remote --command "SELECT type, name FROM sqlite_master WHERE tbl_name LIKE 'account%' AND name NOT LIKE 'sqlite_%' ORDER BY type, name;"
+  #   → exactly 7 rows: index idx_account_pushes_at, idx_account_sessions_account, idx_account_sessions_seen,
+  #     idx_accounts_seen; table account_pushes, account_sessions, accounts
+  ./wr.sh d1 execute stapel-borge --remote --command "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name LIKE 'account%';"
+  #   → the real columns: accounts has gen and last_push; account_pushes has account, push, rev, at
   ```
-- **Way back:** the tables can stay unused, or be dropped (`DROP TABLE IF EXISTS account_pushes; … account_sessions;
-  … accounts;`). Do that only before players have signed in.
+  **STOP before c** unless all 7 show and the columns match. A Worker with sign-in on but no tables would answer
+  500 to every sign-in.
+- **Way back:** the tables can stay unused, or be dropped (`DROP TABLE IF EXISTS account_pushes;`, then
+  `account_sessions`, then `accounts`, each with `--command`). Do that only before players have signed in.
 
-### c. The Worker deploy: sign-in routes plus `signin: true` (quick security scan; best when nobody is in a live match)
+### c. The Worker deploy: sign-in routes plus `signin: true` (quick security scan; the same quiet window)
 - **Commands:**
   ```sh
-  ./wr.sh deployments list   # note the newest id (on 12 Oct: 594c7235-b8d2-455a-8932-0489502d9736, from 1.13.1)
   ./wr.sh deploy
   curl -s -H "Origin: https://stapelspel.pages.dev" https://stapel-borge.bonkers-bunch-online.workers.dev/daily/config
   #   → {"free":3,"from":"2026-10-12","signin":true}
+  curl -s -X POST -H "Origin: https://stapelspel.pages.dev" -H "content-type: text/plain;charset=UTF-8" \
+    -d '{"token":"0000000000000000000000000000000000000000000000000000000000000000"}' \
+    https://stapel-borge.bonkers-bunch-online.workers.dev/account/load
+  #   → 401 {"error":"signed_out"...}: the route, the tables and the secret are live
+  #     (503 not_configured = no secret; 500 = no tables: roll back, see below)
   curl -s -H "Origin: https://stapelspel.pages.dev" "https://stapel-borge.bonkers-bunch-online.workers.dev/board?dateKey=$(TZ=Africa/Johannesburg date +%F)" | head -c 300
-  #   → today's board still answers
+  #   → today's board still answers ("players")
   ```
 - **Who it reaches:** games on 1.14.0 (website or app) now show the ☁️ account section and the gentle offer. Games on
   1.13.x ignore it.
-- **Way back:** `./wr.sh rollback <the id noted above> --yes --message "back to 1.13"`. Sign-in hides again
-  (no `signin`), and saved progress stays in the database.
+- **Way back:** `./wr.sh rollback <the id noted in a, BEFORE the secret> --yes --message "back to 1.13"`. Sign-in
+  hides again (no `signin`), and saved progress stays in the database. A rollback may report AUTH_SECRET as
+  changed: afterwards run `./wr.sh secret list`, and if AUTH_SECRET is missing, put it back from the Keychain (the
+  same pipe as in a). It must keep the same value.
 
 ### d. The website 1.14.0: push plus Pages (quick security scan)
 - **What it does:** the web game with ⚙️ Instellings, sign-in (hidden until c), the privacy pages with the account

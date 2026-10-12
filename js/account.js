@@ -159,6 +159,7 @@ export function createAccount({
         continue;
       }
       if (put.status === 401) return signedOutHere(link);
+      if (put.status === 429) return 'limited';   // (1.14) too many saves this hour: `pending` stays, it goes again later
       if (put.status === 400 || put.status === 413) {
         // refused for good (fitSave keeps a save far below the limit, so this shouldn't happen): never sent again
         writeLink({ ...link, pending: null });
@@ -202,6 +203,7 @@ export function createAccount({
         // it never got there (the server checks its ids again before saying so): the merge below has it
         else if (r.status === 409 || r.status === 400 || r.status === 413) link = { ...link, pending: null };
         else if (r.status === 401) return signedOutHere(link);
+        else if (r.status === 429) return (state.error = 'limited');   // (1.14) the server is busy: it saves again later
         else return (state.error = 'offline');
         writeLink(link);
       }
@@ -209,10 +211,11 @@ export function createAccount({
       link = readLink();
       if (!link?.token) return 'out';
       if (res.status === 401) return signedOutHere(link);
+      if (res.status === 429) return (state.error = 'limited');
       if (res.status !== 200 || !res.json?.ok) return (state.error = 'offline');
       const cloud = res.json.same ? { rev: link.rev, save: link.base } : { rev: res.json.rev | 0, save: res.json.save ?? null };
       const out = await mergeLoop(cloud);
-      state.error = out === 'offline' || out === 'refused' ? out : null;
+      state.error = out === 'offline' || out === 'refused' || out === 'limited' ? out : null;
       return out;
     } finally {
       state.busy = false;
@@ -331,7 +334,7 @@ export function createAccount({
       signedOutHere(link);
       throw new Error('out');
     }
-    if (r.status !== 200 || !r.json?.ok) throw new Error(r.status === 0 ? 'offline' : 'error');
+    if (r.status !== 200 || !r.json?.ok) throw new Error(r.status === 0 ? 'offline' : r.status === 429 ? 'rate_limited' : 'error');
     await locked(async () => {
       googleSignOut();
       writeLink(null);   // (the account is gone: a sign-in later makes a new one, this device's progress joining it)

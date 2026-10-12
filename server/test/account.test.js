@@ -240,3 +240,37 @@ test('1.14 GET /daily/config says whether sign-in is open (the client ID and AUT
   assert.equal((await createHarness({ GOOGLE_CLIENT_ID: CLIENT_ID, AUTH_SECRET: 'too-short' }).request('GET', '/daily/config')).json.signin, false);
   assert.equal((await createHarness({ AUTH_SECRET }).request('GET', '/daily/config')).json.signin, false, 'no client ID: closed');
 });
+
+// --- (1.14) the limits (per isolate, in memory: they bound the damage, they don't count exactly) ----------------
+test('1.14 rate limits: the 61st sign-in from one address in an hour, and the 901st account call, get 429', async () => {
+  const { h, signIn, post } = await setup();
+  for (let k = 0; k < 60; k++) assert.notEqual((await signIn(`3000000000000000000${String(k).padStart(2, '0')}`)).status, 429, `sign-in ${k + 1}`);
+  const over = await signIn('300000000000000000099');
+  assert.deepEqual([over.status, over.json.error], [429, 'rate_limited']);
+  assert.equal(over.headers.get('Retry-After'), '3600');
+  // account calls (load, store, sign-out, delete) share 900 an hour per address
+  const { post: post2 } = await setup();
+  for (let k = 0; k < 900; k++) assert.notEqual((await post2('/account/load', { token: 'a'.repeat(64) })).status, 429, `call ${k + 1}`);
+  const call901 = await post2('/account/load', { token: 'a'.repeat(64) });
+  assert.deepEqual([call901.status, call901.json.error], [429, 'rate_limited']);
+  void h; void post;
+});
+
+test('1.14 one account saves at most 120 times an hour (any address); the next save gets 429 and nothing changes', async () => {
+  const { h, signIn, post } = await setup();
+  const { token } = (await signIn()).json;
+  let rev = 0;
+  for (let k = 0; k < 120; k++) {
+    const r = await post('/account/store', { token, rev, save: save({ econ: { coins: k } }), push: `p${String(k).padStart(15, '0')}` }, { headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'CF-Connecting-IP': `198.51.100.${k % 200}` } });
+    assert.equal(r.status, 200, `save ${k + 1}`);
+    rev = r.json.rev;
+  }
+  const over = await post('/account/store', { token, rev, save: save({ econ: { coins: 999 } }), push: 'q000000000000001' }, { headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'CF-Connecting-IP': '203.0.113.9' } });
+  assert.deepEqual([over.status, over.json.error], [429, 'rate_limited'], 'another address doesn\'t help');
+  const row = h.db.q('SELECT rev FROM accounts')[0];
+  assert.equal(row.rev, 120, 'the refused save changed nothing');
+  // another account isn't held back; loading the save still works
+  const other = (await signIn('400000000000000000001')).json.token;
+  assert.equal((await post('/account/store', { token: other, rev: 0, save: save(), push: 'r000000000000001' })).status, 200);
+  assert.equal((await post('/account/load', { token })).status, 200);
+});

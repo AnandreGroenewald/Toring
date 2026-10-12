@@ -2428,3 +2428,5 @@ canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 
 .settings-label { flex: 1 1 auto; min-width: 0; }
 .settings-value { flex: none; color: var(--muted); font-weight: 900; }
 .settings-row.is-on .settings-value { color: var(--bosveld-d); }
+.account-under18 { margin: calc(8 * var(--u)) 0 0; font-size: max(12px, calc(22 * var(--u))); font-weight: 700; line-height: 1.35; color: var(--ink-soft); }
+.signin-offer .account-under18 { margin: 0; }

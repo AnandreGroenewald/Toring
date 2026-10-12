@@ -12,8 +12,8 @@ const D1 = '2026-10-06';
 const at = (key, h = 10) => Date.UTC(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10), h);
 const result = (dateKey, heightM) => ({ mode: 'daily', dateKey, heightM, score: heightM * 10, perfects: 2, blocksDropped: 20, grid: 'PG' });
 
-async function world() {
-  const h = createHarness({ GOOGLE_CLIENT_ID: CLIENT_ID, AUTH_SECRET });
+async function world(over = {}) {
+  const h = createHarness({ GOOGLE_CLIENT_ID: CLIENT_ID, AUTH_SECRET, ...over });
   h.outside.google = await fakeGoogle();
   const net = { drop: null, down: false };
   // the browser's fetch, to the Worker in this process (`drop`: the request arrives, its answer is lost)
@@ -288,4 +288,23 @@ test('the first sync after start: stale() until it is done; settle() waits for i
   assert.equal(again.stale(), true);
   await again.settle(3000);
   assert.equal(again.stale(), false);
+});
+
+test('1.14 a busy server (429: the per-account save limit) is calm: "Stapel is busy", nothing lost, it saves again later', async () => {
+  const { device, token, h } = await world({ RATE_LIMIT_ACCOUNT_STORES_PER_HOUR: '1' });
+  const phone = device();
+  phone.store.earnCoins(30, { capped: false });
+  assert.equal(await phone.account.signInWithToken(await token()), 'saved', 'the first save');
+  phone.store.earnCoins(20, { capped: false });
+  assert.equal(await phone.account.sync(), 'limited', 'the second save this hour: held back');
+  assert.equal(phone.account.status().error, 'limited');
+  assert.equal(phone.account.status().signedIn, true, 'still signed in');
+  assert.equal(phone.store.getEconomy().coins, 50, 'nothing lost here');
+  h.clock.now += 61 * 60 * 1000;   // an hour later
+  phone.clock.t = h.clock.now;
+  assert.ok(['saved', 'same'].includes(await phone.account.sync()), 'the held-back save goes first (then nothing is new)');
+  assert.equal(phone.account.status().error, null);
+  const web = device();
+  await web.account.signInWithToken(await token());
+  assert.equal(web.store.getEconomy().coins, 50, 'it reached the account');
 });
