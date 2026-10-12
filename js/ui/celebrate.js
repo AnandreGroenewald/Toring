@@ -24,7 +24,7 @@ const LOOK = {
   braai: { accent: '#ff8a2a', tint: 'linear-gradient(to top, rgba(255,120,30,0.5), rgba(130,40,30,0.4) 38%, rgba(36,14,44,0.62))', flash: 'radial-gradient(ellipse at 50% 85%, rgba(255,190,90,0.8), rgba(255,190,90,0) 70%)' },
   skrum: { accent: '#ffc928', tint: 'radial-gradient(circle at 50% 42%, rgba(18,120,62,0.34), rgba(0,46,24,0.72))', flash: 'radial-gradient(circle at 50% 42%, rgba(255,246,200,0.9), rgba(255,246,200,0) 65%)' },
   weerlig: { accent: '#6fd0ff', tint: 'radial-gradient(ellipse at 50% 18%, rgba(40,62,150,0.6), rgba(3,6,24,0.92))', flash: 'linear-gradient(to bottom, rgba(225,240,255,0.95), rgba(170,205,255,0.55))' },
-  goudreen: { accent: '#ffd23f', tint: 'radial-gradient(ellipse 90% 45% at 50% 0%, rgba(255,214,90,0.55), rgba(255,214,90,0) 100%), radial-gradient(ellipse at 50% 32%, rgba(255,196,60,0.26), rgba(58,30,0,0.66))', flash: 'radial-gradient(ellipse at 50% 30%, rgba(255,232,150,0.9), rgba(255,232,150,0) 70%)' },
+  goudreen: { accent: '#ffd23f', tint: 'radial-gradient(ellipse 90% 45% at 50% 0%, rgba(255,226,120,0.7), rgba(255,214,90,0) 100%), radial-gradient(ellipse at 50% 34%, rgba(255,184,40,0.42), rgba(96,48,0,0.82))', flash: 'radial-gradient(ellipse at 50% 30%, rgba(255,232,150,0.9), rgba(255,232,150,0) 70%)' },
   laser: { accent: '#ff3bd8', tint: 'radial-gradient(ellipse at 50% 100%, rgba(70,0,110,0.6), rgba(6,0,22,0.92))', flash: 'radial-gradient(ellipse at 50% 80%, rgba(255,140,240,0.55), rgba(90,230,255,0.18) 60%, rgba(0,0,0,0))' },
   sterrestof: { accent: '#c18bff', tint: 'radial-gradient(ellipse at 50% 42%, rgba(70,26,130,0.58), rgba(7,3,26,0.94))', flash: 'radial-gradient(circle at 50% 42%, rgba(255,246,220,0.95), rgba(200,160,255,0.35) 45%, rgba(0,0,0,0) 80%)' },
 };
@@ -81,13 +81,13 @@ function roundRect(x, X, Y, w, h, r) {
 // Sprites: drawn once (per document), stamped many times
 // ---------------------------------------------------------------------------
 const SPRITES = new Map();
-function sprite(doc, key, w, h, draw) {
+function sprite(doc, key, w, h, draw, cpu = false) {
   let c = SPRITES.get(key);
   if (!c || c.ownerDocument !== doc) {
     c = doc.createElement('canvas');
     c.width = w;
     c.height = h;
-    draw(c.getContext('2d'), w, h);
+    draw(cpu ? c.getContext('2d', { willReadFrequently: true }) : c.getContext('2d'), w, h);
     SPRITES.set(key, c);
   }
   return c;
@@ -1626,6 +1626,16 @@ function sparkle(x, cx, cy, r, color = '#ffffff') {
   x.fill();
   x.restore();
 }
+function tileDot(doc, hex) {
+  return sprite(doc, `td${hex}`, 32, 32, (x) => {
+    const g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+    g.addColorStop(0, rgba(hex, 1));
+    g.addColorStop(0.35, rgba(hex, 0.75));
+    g.addColorStop(1, rgba(hex, 0));
+    x.fillStyle = g;
+    x.fillRect(0, 0, 32, 32);
+  }, true);
+}
 function iconCoin(x, cx, cy, r, sx, rot) {
   x.save();
   x.translate(cx, cy);
@@ -1758,22 +1768,26 @@ const ICONS = {
       x.fillStyle = gl;
       x.fillRect(bx - R * 1.3, by - R * 1.3, R * 2.6, R * 2.6);
       x.lineCap = 'round';
+      const rg = x.createRadialGradient(bx, by, R * 0.15, bx, by, R);   // the rays brighten towards their tips
+      rg.addColorStop(0, rgba(c, 0));
+      rg.addColorStop(1, rgba(c, 1));
+      x.strokeStyle = rg;
+      x.lineWidth = 2.4;
+      x.beginPath();
       for (let i = 0; i < n; i++) {
         const a = (i / n) * TAU + 0.2;
-        const g = x.createLinearGradient(bx + Math.cos(a) * R * 0.2, by + Math.sin(a) * R * 0.2, bx + Math.cos(a) * R, by + Math.sin(a) * R);
-        g.addColorStop(0, rgba(c, 0));
-        g.addColorStop(1, rgba(c, 1));
-        x.strokeStyle = g;
-        x.lineWidth = 2.4;
-        x.beginPath();
         x.moveTo(bx + Math.cos(a) * R * 0.2, by + Math.sin(a) * R * 0.2);
         x.lineTo(bx + Math.cos(a) * R * 0.92, by + Math.sin(a) * R * 0.92);
-        x.stroke();
-        x.fillStyle = c2;
-        x.beginPath();
-        x.arc(bx + Math.cos(a) * R, by + Math.sin(a) * R, 2.1, 0, TAU);
-        x.fill();
       }
+      x.stroke();
+      x.fillStyle = c2;
+      x.beginPath();
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * TAU + 0.2;
+        x.moveTo(bx + Math.cos(a) * R + 2.1, by + Math.sin(a) * R);
+        x.arc(bx + Math.cos(a) * R, by + Math.sin(a) * R, 2.1, 0, TAU);
+      }
+      x.fill();
       x.fillStyle = '#ffffff';
       x.beginPath();
       x.arc(bx, by, R * 0.12, 0, TAU);
@@ -1853,7 +1867,7 @@ const ICONS = {
     finish(x);
   },
 
-  braai(x) {
+  braai(x, doc) {
     const rnd = seeded(5);
     tile(x, '#2c1240', '#ff6a14', [50, 96, 66, '#ffd04a', 0.95]);   // dusk above, the coals' glow below
     // the grid
@@ -1877,16 +1891,14 @@ const ICONS = {
     // embers rising into the dusk, and a curl of steam
     x.save();
     x.globalCompositeOperation = 'lighter';
+    const hot = tileDot(doc, '#ffa53a');
+    const core = tileDot(doc, '#fff8c8');
     for (let i = 0; i < 13; i++) {
       const ex = 8 + rnd() * 84;
       const ey = 5 + rnd() * 26;
       const er = 0.9 + rnd() * 1.3;
-      const gl = x.createRadialGradient(ex, ey, 0, ex, ey, er * 3.2);
-      gl.addColorStop(0, 'rgba(255,248,200,1)');
-      gl.addColorStop(0.3, 'rgba(255,160,50,0.9)');
-      gl.addColorStop(1, 'rgba(255,90,20,0)');
-      x.fillStyle = gl;
-      x.fillRect(ex - er * 3.2, ey - er * 3.2, er * 6.4, er * 6.4);
+      x.drawImage(hot, ex - er * 3.2, ey - er * 3.2, er * 6.4, er * 6.4);
+      x.drawImage(core, ex - er * 1.2, ey - er * 1.2, er * 2.4, er * 2.4);
     }
     x.restore();
     x.strokeStyle = 'rgba(255,255,255,0.85)';
@@ -2124,7 +2136,7 @@ const ICONS = {
     finish(x, 'rgba(230,140,255,0.75)');
   },
 
-  sterrestof(x) {
+  sterrestof(x, doc) {
     const rnd = seeded(21);
     roundRect(x, 0, 0, 100, 100, 22);
     x.save();
@@ -2147,6 +2159,7 @@ const ICONS = {
     x.translate(50, 50);
     x.rotate(-0.42);
     const cols = ['#ffe9a8', '#ff8ad8', '#b07cff', '#6f8bff', '#4fd2ff'];
+    const dots = cols.map((c) => tileDot(doc, c));
     for (let i = 0; i < 150; i++) {
       const arm = i % 2;
       const q = rnd();
@@ -2155,12 +2168,7 @@ const ICONS = {
       const px = Math.cos(a) * r;
       const py = Math.sin(a) * r * 0.55;
       const sz = (0.7 + rnd() * 1.6) * (1 - q * 0.45);
-      const c = cols[Math.min(cols.length - 1, (q * cols.length) | 0)];
-      const g = x.createRadialGradient(px, py, 0, px, py, sz * 2.6);
-      g.addColorStop(0, rgba(c, 1));
-      g.addColorStop(1, rgba(c, 0));
-      x.fillStyle = g;
-      x.fillRect(px - sz * 2.6, py - sz * 2.6, sz * 5.2, sz * 5.2);
+      x.drawImage(dots[Math.min(cols.length - 1, (q * cols.length) | 0)], px - sz * 2.6, py - sz * 2.6, sz * 5.2, sz * 5.2);
     }
     x.restore();
     // the core, the star and its flares
@@ -2237,9 +2245,9 @@ function iconArt(doc, id, px) {
     art = doc.createElement('canvas');
     art.width = px;
     art.height = px;
-    const x = art.getContext('2d');
+    const x = art.getContext('2d', { willReadFrequently: true });   // one-off art: drawn on the CPU, then only copied
     x.setTransform(px / 100, 0, 0, px / 100, 0, 0);
-    ICONS[id](x);
+    ICONS[id](x, doc);
     ICON_CACHE.set(key, art);
   }
   return art;
@@ -2262,6 +2270,13 @@ export function drawCelebrationIcon(canvas, id, size = 0) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
   ctx.drawImage(iconArt(doc, key, px), 0, 0);
+  // nothing outside the tile's rounded corners (an arc or a confetti bit drawn past the edge)
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-in';
+  roundRect(ctx, 0, 0, px, px, px * 0.22);
+  ctx.fillStyle = '#000';
+  ctx.fill();
+  ctx.restore();
   return canvas;
 }
 
