@@ -333,7 +333,7 @@ export const S_EN = {
   shopPowerups: 'Power-ups',
   shopLooks: 'Challenger style',
   shopSkins: 'Tower style',
-  shopSkinsNote: 'Just for your eyes: your background, crane and blocks. They change nothing in the game. Buy them with coins; the first of each is free.',
+  shopSkinsNote: 'Only you see these: your background, crane and blocks. They change nothing in the game. Buy them with coins; the standard one of each is free.',
   skinKinds: { scene: 'Background', crane: 'Crane', blocks: 'Blocks' },
   skinNames: {
     scene: { dag: 'Cape day', sonsondergang: 'Sunset', lekkergoed: 'Candy sky', nag: 'Starry night' },
