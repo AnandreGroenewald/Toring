@@ -326,8 +326,9 @@ export const DAILY_TRIES = Object.freeze({ free: 3, from: '2026-10-12', maxFree:
 // sees it; players stay on the leaderboard and in the ranks. `on: false` takes it away (before production: the store texts say
 // coins are earned by playing); coins already given stay on the phones.
 // (22:08-22:09) "Make it work 3 times." … "Make it 3 times a day for 5 days.": `times` presses a day, on the `days` days from
-// `from` (South African dates: Mon 12 - Fri 16 Oct 2026); from the day after, the button is gone by itself
-export const REFILL = Object.freeze({ on: true, to: 2000, times: 3, per: 'day', from: '2026-10-12', days: 5 });
+// `from` (South African dates: Mon 12 - Fri 16 Oct 2026); from the day after, the button is gone by itself.
+// (12 Oct 04:05, the owner in the Stapel terminal: "if the skin is 2000 coins lets give them 4000 coins per reload") up to 4 000
+export const REFILL = Object.freeze({ on: true, to: 4000, times: 3, per: 'day', from: '2026-10-12', days: 5 });
 export const TESTER_GIFT = Object.freeze({ on: true, coins: 100000, hash: '7b325f2da84141879a5a4b6ab2f0a72a0386a3d7a3519ece2f6a5a075553792d' });
 
 // ---------------------------------------------------------------------------

@@ -72,16 +72,16 @@ test('the gift and tutorial words exist in both languages', () => {
   assert.match(EN.howToSteps.find((x) => x.icon === '⚔️').text, /Challenger Series/);
 });
 
-test('(1.13.4) the Winkel refill: up to 2 000, 3 presses a day, Mon 12 - Fri 16 Oct', async () => {
+test('(1.13.4) the Winkel refill: up to 4 000 (was 2 000), 3 presses a day, Mon 12 - Fri 16 Oct', async () => {
   const { REFILL } = await import('../js/config.js');
-  assert.deepEqual({ ...REFILL }, { on: true, to: 2000, times: 3, per: 'day', from: '2026-10-12', days: 5 });
+  assert.deepEqual({ ...REFILL }, { on: true, to: 4000, times: 3, per: 'day', from: '2026-10-12', days: 5 });
   let t = Date.UTC(2026, 9, 12, 8);
   const backend = memoryBackend();
   const store = createStore(backend, { now: () => t });
   store.earnCoins(33);
   assert.equal(store.refillsLeft(REFILL), 3);
-  assert.deepEqual(store.refillCoins(REFILL.to, REFILL), { added: 1967, coins: 2000, left: 2, reason: null });
-  assert.deepEqual(store.refillCoins(REFILL.to, REFILL), { added: 0, coins: 2000, left: 2, reason: 'full' }, 'a full wallet: nothing, not counted');
+  assert.deepEqual(store.refillCoins(REFILL.to, REFILL), { added: 3967, coins: 4000, left: 2, reason: null });
+  assert.deepEqual(store.refillCoins(REFILL.to, REFILL), { added: 0, coins: 4000, left: 2, reason: 'full' }, 'a full wallet: nothing, not counted');
   assert.equal(store.getBoardHidden(), false, 'a refill keeps the player on the leaderboard');
   assert.equal(store.getTester(), null);
   // spend and refill twice more: the day's three are used
@@ -90,7 +90,7 @@ test('(1.13.4) the Winkel refill: up to 2 000, 3 presses a day, Mon 12 - Fri 16 
     const e = JSON.parse(backend.getItem('stapel.v1.econ') || '{}');
     e.coins = 100;
     backend.setItem('stapel.v1.econ', JSON.stringify(e));
-    assert.equal(store.refillCoins(REFILL.to, REFILL).added, 1900);
+    assert.equal(store.refillCoins(REFILL.to, REFILL).added, 3900);
   }
   assert.equal(store.refillsLeft(REFILL), 0);
   const e = JSON.parse(backend.getItem('stapel.v1.econ') || '{}');
@@ -100,7 +100,7 @@ test('(1.13.4) the Winkel refill: up to 2 000, 3 presses a day, Mon 12 - Fri 16 
   // the next day: three again
   t = Date.UTC(2026, 9, 13, 8);
   assert.equal(store.refillsLeft(REFILL), 3);
-  // more than 2 000 already: nothing taken away
+  // more than 4 000 already: nothing taken away
   const big = createStore(memoryBackend(), { now: () => Date.UTC(2026, 9, 12, 8) });
   big.claimTesterGift(100000);
   assert.equal(big.refillCoins(REFILL.to, REFILL).reason, 'full');
