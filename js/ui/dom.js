@@ -461,6 +461,8 @@ export function createUI(bus) {
     const key = e.key;
     if (key === 'Escape' || key === 'Esc') {
       goBack();
+    } else if (st.trying && (key === 'ArrowLeft' || key === 'ArrowRight')) {
+      st.tryStep?.(key === 'ArrowLeft' ? -1 : 1);
     } else if (punishPick && !e.repeat && key >= '1' && key <= '4') {
       punishPick(Number(key) - 1);
     } else if ((key === 'p' || key === 'P') && !e.repeat && !st.modal) {
@@ -1571,7 +1573,7 @@ export function createUI(bus) {
     audio.play('click');
     const m = st.shopModel || {};
     const name = S.skinNames[kind]?.[item.id] || item.id;
-    st.tryScroll = modals.shop.querySelector('.sheet-body')?.scrollTop || 0;
+    if (st.modal === 'shop') st.tryScroll = modals.shop.querySelector('.sheet-body')?.scrollTop || 0;
     stopTry(false);
     closeModal();
     const owned = !!m.skins?.owned?.[kind]?.includes(item.id);
@@ -1579,11 +1581,24 @@ export function createUI(bus) {
     if (m.skins?.wear?.[kind] === item.id) action = h('span', { class: 'shop-on', text: S.wearing });
     else if (owned) action = h('button', { type: 'button', class: 'shop-wear', text: S.wear, onclick: () => { audio.play('click'); stopTry(false); bus.emit('ui:skin-wear', { kind, id: item.id }); } });
     else action = buyBtn(item.price, m.coins, () => { stopTry(false); bus.emit('ui:skin-buy', { kind, id: item.id }); });
+    // (1.15, the owner: "can we make it that they can go next and back ... instead of clicking try then go back the try
+    // then go back") ‹ and › step through this kind's styles right here
+    const list = SKINS[kind] || [];
+    const at = list.findIndex((c) => c.id === item.id);
+    const step = (d) => {
+      const next = list[(at + d + list.length) % list.length];
+      if (next) trySkin(kind, next);
+    };
     const bar = h('div', { class: `try-bar tier-${tierOf(item)}`, role: 'dialog', 'aria-label': `${S.preview}: ${name}` },
-      h('span', { class: 'try-txt' }, h('small', { text: S.tryNow }), h('b', { text: name })),
-      action,
-      h('button', { type: 'button', class: 'try-back', text: S.tryBack, onclick: () => { audio.play('click'); stopTry(true); bus.emit('ui:shop', 'skins'); } }));
+      h('div', { class: 'try-top' },
+        h('button', { type: 'button', class: 'try-step', 'aria-label': S.tryPrev, title: S.tryPrev, text: '‹', onclick: () => step(-1) }),
+        h('span', { class: 'try-txt' }, h('small', { text: `${S.tryNow} · ${at + 1}/${list.length}` }), h('b', { text: name })),
+        h('button', { type: 'button', class: 'try-step', 'aria-label': S.tryNext, title: S.tryNext, text: '›', onclick: () => step(1) })),
+      h('div', { class: 'try-actions' },
+        action,
+        h('button', { type: 'button', class: 'try-back', text: S.tryBack, onclick: () => { audio.play('click'); stopTry(true); bus.emit('ui:shop', 'skins'); } })));
     st.trying = bar;
+    st.tryStep = step;
     root.append(bar);
     doc.body.classList.add('is-trying');
     bus.emit('ui:skin-try', { kind, id: item.id });
@@ -1594,6 +1609,7 @@ export function createUI(bus) {
     if (!st.trying) return;
     st.trying.remove();
     st.trying = null;
+    st.tryStep = null;
     doc.body.classList.remove('is-trying');
     if (restore) bus.emit('ui:skin-try', null);
   }

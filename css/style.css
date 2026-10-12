@@ -3020,3 +3020,49 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
   width: max(30px, calc(46 * var(--u))); height: max(30px, calc(46 * var(--u)));
   background: #1d2b45; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(0, 0, 0, 0.3);
 }
+/* (1.15, the owner: "This looks wonky") the done card's tiles: equal widths and heights, the label on one centred line,
+   the leaderboard the same glass with a gold edge */
+.done-stats { grid-auto-columns: minmax(0, 1fr); align-items: stretch; }
+.done-tile { justify-content: center; min-width: 0; padding: calc(12 * var(--u)) calc(4 * var(--u)); }
+.done-tile-top { min-height: max(24px, calc(44 * var(--u))); }
+.done-tile b { font-size: max(16px, calc(34 * var(--u))); white-space: nowrap; }
+.done-tile small { white-space: nowrap; text-align: center; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.done-board { background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04)); box-shadow: inset 0 0 0 1px rgba(255, 215, 90, 0.7), 0 0 calc(10 * var(--u)) rgba(255, 200, 60, 0.25); }
+.done-board .done-tile-top .emoji { font-size: max(20px, calc(38 * var(--u))); }
+/* (1.15) the try bar in two rows: ‹ the name (3/9) › on top, buy or wear and the way back under it */
+.try-bar { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px 12px; background: rgba(13, 19, 40, 0.94); color: #f2f5ff; box-shadow: 0 10px 30px rgba(5, 10, 30, 0.5), inset 0 0 0 2px var(--tier, rgba(255, 255, 255, 0.18)); }
+.try-top { display: flex; align-items: center; gap: 8px; }
+.try-top .try-txt { align-items: center; text-align: center; }
+.try-txt small { color: #9fb0d0; }
+.try-txt b { color: #fff; }
+.try-step { flex: none; width: 46px; height: 46px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.12); color: #fff; font: 900 30px / 1 var(--font); cursor: pointer; padding-bottom: 4px; }
+.try-step:active { transform: scale(0.94); }
+.try-actions { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.try-bar .shop-on { color: #6ee08f; }
+.try-back { background: transparent; color: #cfe3ff; border-color: rgba(207, 227, 255, 0.7); }
+/* (1.15, the owner: "It looks a lot better, but I need more a premium look here") the Winkel's tiles: each item in a
+   spotlight of its rarity's colour, a sheen across the top, slim gold price pills, outlined Wear, quiet Try it */
+.card .shop-item { --spot: rgba(160, 180, 220, 0.28); padding-bottom: calc(14 * var(--u)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 calc(6 * var(--u)) calc(14 * var(--u)) rgba(0, 0, 0, 0.25); transition: transform 0.12s ease, box-shadow 0.2s; }
+.card .shop-item.tier-rare { --spot: rgba(80, 150, 255, 0.45); }
+.card .shop-item.tier-epic { --spot: rgba(185, 120, 255, 0.5); }
+.card .shop-item.tier-legendary { --spot: rgba(255, 200, 70, 0.55); }
+.card .shop-item .shop-prev { position: relative; }
+.card .shop-item .shop-prev::before {
+  content: ''; position: absolute; left: 50%; top: 50%; width: calc(150 * var(--u)); height: calc(120 * var(--u)); transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, var(--spot), transparent); pointer-events: none; z-index: -1;
+}
+.card .shop-item::after { content: ''; position: absolute; inset: 0 0 auto; height: 38%; border-radius: inherit; pointer-events: none; background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0)); }
+.card .shop-item:active { transform: translateY(calc(2 * var(--u))) scale(0.985); }
+.card .shop-name { color: #fff; font-weight: 800; letter-spacing: 0.01em; }
+.card .shop-item .shop-buy {
+  min-height: 36px; padding: calc(6 * var(--u)) calc(18 * var(--u)) calc(6 * var(--u)) calc(8 * var(--u)); gap: calc(6 * var(--u));
+  background: linear-gradient(180deg, #ffe58f, #f5b800); color: #2a1d00; font-size: max(13px, calc(23 * var(--u)));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 0 1px rgba(255, 220, 120, 0.6), 0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(245, 184, 0, 0.3);
+}
+.card .shop-item .shop-buy.is-poor { opacity: 1; background: rgba(255, 255, 255, 0.06); color: #ffd75a; box-shadow: inset 0 0 0 1px rgba(255, 215, 90, 0.45); }
+.card .shop-item .shop-wear {
+  min-height: 36px; padding: calc(6 * var(--u)) calc(22 * var(--u)); background: transparent; color: #fff; font-size: max(13px, calc(23 * var(--u)));
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.75);
+}
+.card .shop-item .shop-buy:active, .card .shop-item .shop-wear:active { transform: scale(0.96); }
+.card .shop-item .shop-try { min-height: 32px; padding: 2px 10px; border: 0; background: none; color: #9fd0ff; font-size: max(12px, calc(20 * var(--u))); text-decoration: underline; text-underline-offset: 3px; }
