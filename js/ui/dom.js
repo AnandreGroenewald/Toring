@@ -1516,9 +1516,12 @@ export function createUI(bus) {
           })));
       }
     } else {
-      body.append(playerCard({ name: m.name, card: m.card }), h('p', { class: 'shop-note', text: S.shopLooksNote }));
+      // (1.15, the owner: "Make this banner go down with you ... It needs to be just until here then it disappears") your
+      // card rides along over the frames, medals and titles (what it shows), then scrolls away with them
+      const zone = h('div', { class: 'look-zone' }, playerCard({ name: m.name, card: m.card }), h('p', { class: 'shop-note', text: S.shopLooksNote }));
+      body.append(zone);
       for (const kind of LOOK_KINDS) {
-        body.append(h('h3', { class: 'label shop-kind', text: S.lookKinds[kind] }),
+        (['frame', 'badge', 'title'].includes(kind) ? zone : body).append(h('h3', { class: 'label shop-kind', text: S.lookKinds[kind] }),
           h('div', { class: 'shop-grid' }, COSMETICS[kind].map((c) => {
             const owned = !!m.owned?.[kind]?.includes(c.id);
             const on = m.look?.[kind] === c.id;

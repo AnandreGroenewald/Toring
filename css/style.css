@@ -3157,10 +3157,25 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .card .tile span { color: #c9d4ea; }
 /* (1.15, the owner: "Make this banner go down with you so that for each change you make it is visible") your player card
    stays at the top of the Uitdager-styl tab while you scroll, so every frame, medal or title you wear shows on it */
-.shop-body > .pcard { position: sticky; top: calc(20 * var(--u)); z-index: 4; margin-top: calc(22 * var(--u)); margin-bottom: calc(20 * var(--u)); }
+.look-zone > .pcard { position: sticky; top: calc(20 * var(--u)); z-index: 4; margin-top: calc(22 * var(--u)); margin-bottom: calc(20 * var(--u)); }
 /* the common title plates: silver with dark words (the dark sheets made their words white on white) */
 .card .title-plate.tier-common { background: linear-gradient(180deg, #f4f7fb, #c9d4e2); color: #1d2b45; text-shadow: none; box-shadow: 0 calc(3 * var(--u)) 0 #8796a8, inset 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.6); }
 /* the sticky card: a ring of the sheet's own colour around it, so the tiles scrolling under it stay hidden */
-.shop-body > .pcard { box-shadow: 0 0 calc(20 * var(--u)) var(--pc-glow), 0 0 0 calc(18 * var(--u)) #121a34; }
+.look-zone > .pcard { box-shadow: 0 0 calc(20 * var(--u)) var(--pc-glow), 0 calc(10 * var(--u)) calc(22 * var(--u)) rgba(5, 10, 30, 0.6), 0 0 0 calc(12 * var(--u)) rgba(18, 26, 52, 0.88); }
 .punish-title { display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u)); flex-wrap: wrap; }
 .punish-m { padding: calc(3 * var(--u)) calc(12 * var(--u)); border-radius: 999px; background: linear-gradient(180deg, #ffe08a, #f0a500); color: #2a1d00; font-weight: 900; box-shadow: 0 0 calc(10 * var(--u)) rgba(255, 200, 60, 0.45); }
+/* (1.15, the owner: "the punishement needs to be more compact on the left") two by two: small tiles, the icon on top,
+   the name and what it does under it */
+.punish { width: calc(300 * var(--u)); min-width: 150px; padding: calc(8 * var(--u)); }
+.punish-title { margin-bottom: calc(8 * var(--u)); font-size: max(11px, calc(19 * var(--u))); gap: calc(8 * var(--u)); }
+.punish-btns { grid-template-columns: 1fr 1fr; gap: calc(6 * var(--u)); }
+.punish-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: calc(3 * var(--u));
+  padding: calc(8 * var(--u)) calc(4 * var(--u)) calc(7 * var(--u)); text-align: center; min-height: 0;
+}
+.punish-btn .pk-ic { width: max(30px, calc(50 * var(--u))); height: max(30px, calc(50 * var(--u))); border-radius: calc(13 * var(--u)); }
+.punish-btn .pk-ic .emoji { font-size: max(18px, calc(30 * var(--u))); }
+.punish-btn b { font-size: max(11px, calc(19 * var(--u))); }
+.punish-btn small { font-size: max(9px, calc(14 * var(--u))); }
+.punish-btn .pk-go { display: none; }
+.punish-track { margin-top: calc(8 * var(--u)); }

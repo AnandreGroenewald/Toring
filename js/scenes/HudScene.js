@@ -649,6 +649,10 @@ export class HudScene extends Phaser.Scene {
     const youLabel = add(text(this, px - TRACK_DOT / 2 - 4, bottom, '', 22, { strokeMul: 0.22 }).setOrigin(1, 0.5));
     const t = { x, top, bottom, bg, ticks, flag, them, you, themLabel, youLabel, youFill, themFill, fillW, youY: bottom, themY: bottom, youStr: '', themStr: '', claimed: '' };
     for (const o of [bg, ...ticks, flag, them, you, themLabel, youLabel]) o.setAlpha(0.95);
+    // (1.15, the owner: "then robot rikus name needs to be removed here ... I don't even know if its necessary?") no names
+    // on the track: the colours say who is who (yours gold on the left, theirs blue on the right, like the names up top)
+    themLabel.setVisible(false);
+    youLabel.setVisible(false);
     for (const o of [youFill, themFill]) o.setAlpha(0.9);
     return t;
   }
