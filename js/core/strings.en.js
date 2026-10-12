@@ -347,7 +347,7 @@ export const S_EN = {
   shopPowerups: 'Power-ups',
   shopLooks: 'Challenger style',
   shopSkins: 'Tower style',
-  shopSkinsNote: 'Only you see your background and crane; in Block by Block the other player sees your blocks too. They change nothing in the game. Buy them with coins; the standard one of each is free.',
+  shopSkinsNote: 'Only you see your background and crane; in Block by Block the other player sees your blocks too. They change nothing in the game. Buy them with coins; the standard one of each is free.',
   skinKinds: { scene: 'Background', crane: 'Crane', blocks: 'Blocks' },
   skinNames: {
     scene: { dag: 'Cape day', sonsondergang: 'Safari', lekkergoed: 'Candy sky', nag: 'Starry night', kersieblom: 'Cherry blossom',

@@ -370,7 +370,7 @@ export const S = {
   shopLooks: 'Uitdager-styl',
   // (1.13.4) the tower's skins (bought with coins; each kind's first is free)
   shopSkins: 'Toring-styl',
-  shopSkinsNote: 'Jou agtergrond en hyskraan sien net jy; in Blok vir Blok sien jou teenstander ook jou blokke. Dit verander niks aan die spel nie. Koop dit met munte; die gewone een van elke soort is gratis.',
+  shopSkinsNote: 'Jou agtergrond en hyskraan sien net jy; in Blok vir Blok sien jou teenstander ook jou blokke. Dit verander niks aan die spel nie. Koop dit met munte; die gewone een van elke soort is gratis.',
   skinKinds: { scene: 'Agtergrond', crane: 'Hyskraan', blocks: 'Blokke' },
   skinNames: {
     scene: { dag: 'Kaapse dag', sonsondergang: 'Safari', lekkergoed: 'Lekkergoedlug', nag: 'Sterrenag', kersieblom: 'Kersiebloeisels',
