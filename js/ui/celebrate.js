@@ -853,87 +853,353 @@ function drawCoil(x, cx, cy, R) {
   }
 }
 
-/** The braai along the bottom (drawn once): glowing coals under a grid whose bars run away from us. */
-function grillSprite(doc, W, GH, dpr) {
-  const w = Math.max(1, Math.round(W * dpr));
-  const h = Math.max(1, Math.round(GH * dpr));
-  return sprite(doc, `grill${w}x${h}`, w, h, (x) => {
-    const rnd = seeded(4);
-    x.scale(dpr, dpr);
-    const g = x.createLinearGradient(0, 0, 0, GH);
-    g.addColorStop(0, 'rgba(255,130,40,0)');
-    g.addColorStop(0.35, 'rgba(255,110,30,0.9)');
-    g.addColorStop(1, '#9c2408');
-    x.fillStyle = g;
-    x.fillRect(0, 0, W, GH);
-    const n = Math.round(W / 6);
-    for (let i = 0; i < n; i++) {
-      const cx = rnd() * W;
-      const cy = GH * (0.45 + rnd() * 0.6);
-      const r = 7 + rnd() * 10;
-      const cg = x.createRadialGradient(cx - r * 0.3, cy - r * 0.35, r * 0.1, cx, cy, r);
-      if (rnd() < 0.3) {
-        cg.addColorStop(0, '#fff0a0');
-        cg.addColorStop(0.45, '#ff8a2a');
-        cg.addColorStop(1, 'rgba(200,50,10,0)');
+/**
+ * (1.15, the owner: "This is not a braai, please change it to look like a proper SA braai") a drum braai: half a 44-gallon
+ * drum on its legs, the lid open behind, the coals glowing under the grid, boerewors, tjops, sosaties and a mielie on it.
+ * Drawn in a 300 x 220 design box (the grid's back edge at y 72, its front edge at y 112).
+ */
+const GRID_BACK = [40, 260, 72];
+const GRID_FRONT = [18, 282, 112];
+function drawDrumBraai(x, { coals = true } = {}) {
+  const rnd = seeded(8);
+  x.lineCap = 'round';
+  x.lineJoin = 'round';
+  // the lid, open and leaning back: its dark inside
+  let g = x.createLinearGradient(0, 14, 0, 74);
+  g.addColorStop(0, '#2c2c33');
+  g.addColorStop(1, '#0e0e12');
+  x.fillStyle = g;
+  x.beginPath();
+  x.ellipse(150, 74, 112, 58, 0, Math.PI, TAU);
+  x.closePath();
+  x.fill();
+  x.strokeStyle = '#4a4a55';
+  x.lineWidth = 4;
+  x.beginPath();
+  x.ellipse(150, 74, 112, 58, 0, Math.PI, TAU);
+  x.stroke();
+  x.fillStyle = '#7a4a22';                                  // the lid's wooden handle
+  x.fillRect(122, 8, 56, 8);
+  x.fillStyle = '#3a3a42';
+  x.fillRect(128, 14, 5, 6);
+  x.fillRect(167, 14, 5, 6);
+  // the fire bed seen through the grid
+  x.beginPath();
+  x.moveTo(GRID_BACK[0], GRID_BACK[2]);
+  x.lineTo(GRID_BACK[1], GRID_BACK[2]);
+  x.lineTo(GRID_FRONT[1], GRID_FRONT[2]);
+  x.lineTo(GRID_FRONT[0], GRID_FRONT[2]);
+  x.closePath();
+  x.fillStyle = '#1c0b05';
+  x.fill();
+  if (coals) {
+    x.save();
+    x.clip();
+    for (let i = 0; i < 70; i++) {
+      const u = rnd();
+      const v = rnd();
+      const y = 72 + v * 40;
+      const x0 = 40 - 22 * v;
+      const cx = x0 + u * (220 + 44 * v);
+      const r = 5 + rnd() * 7;
+      const cg = x.createRadialGradient(cx - r * 0.3, y - r * 0.3, 0.5, cx, y, r);
+      if (rnd() < 0.55) {
+        cg.addColorStop(0, '#fff2a8');
+        cg.addColorStop(0.35, '#ff9a2a');
+        cg.addColorStop(1, 'rgba(190,40,8,0)');
       } else {
-        cg.addColorStop(0, '#5a372a');
-        cg.addColorStop(0.55, '#2a150d');
-        cg.addColorStop(0.85, '#5a1a06');
-        cg.addColorStop(1, 'rgba(255,120,30,0)');
+        cg.addColorStop(0, '#6a3b2a');
+        cg.addColorStop(0.5, '#2a120a');
+        cg.addColorStop(1, 'rgba(255,110,30,0.3)');
       }
       x.fillStyle = cg;
       x.beginPath();
-      x.ellipse(cx, cy, r, r * 0.7, 0, 0, TAU);
+      x.ellipse(cx, y, r, r * 0.6, 0, 0, TAU);
       x.fill();
     }
-    const top = GH * 0.16;
-    const bot = GH * 0.7;
-    x.lineCap = 'round';
-    for (const [c, lw, dy] of [['#141418', 3.4, 0], ['rgba(200,200,215,0.7)', 1, -1.3]]) {
-      x.strokeStyle = c;
-      x.lineWidth = lw;
+    x.restore();
+  }
+  // the grid: a frame and bars running back to front
+  x.strokeStyle = '#26262b';
+  x.lineWidth = 3;
+  for (let i = 0; i <= 18; i++) {
+    const f = i / 18;
+    x.beginPath();
+    x.moveTo(GRID_BACK[0] + f * (GRID_BACK[1] - GRID_BACK[0]), GRID_BACK[2]);
+    x.lineTo(GRID_FRONT[0] + f * (GRID_FRONT[1] - GRID_FRONT[0]), GRID_FRONT[2]);
+    x.stroke();
+  }
+  x.strokeStyle = 'rgba(200,200,215,0.55)';
+  x.lineWidth = 0.9;
+  for (let i = 0; i <= 18; i++) {
+    const f = i / 18;
+    x.beginPath();
+    x.moveTo(GRID_BACK[0] + f * (GRID_BACK[1] - GRID_BACK[0]) - 0.8, GRID_BACK[2]);
+    x.lineTo(GRID_FRONT[0] + f * (GRID_FRONT[1] - GRID_FRONT[0]) - 0.8, GRID_FRONT[2]);
+    x.stroke();
+  }
+  x.strokeStyle = '#3d3d45';
+  x.lineWidth = 4;
+  x.beginPath();
+  x.moveTo(GRID_BACK[0], GRID_BACK[2]);
+  x.lineTo(GRID_BACK[1], GRID_BACK[2]);
+  x.lineTo(GRID_FRONT[1], GRID_FRONT[2]);
+  x.lineTo(GRID_FRONT[0], GRID_FRONT[2]);
+  x.closePath();
+  x.stroke();
+  // on the grid: a mielie at the back, the boerewors coil, two tjops, two sosaties
+  x.save();
+  x.translate(232, 80);
+  x.rotate(-0.12);
+  x.scale(1, 0.62);
+  g = x.createLinearGradient(0, -8, 0, 8);
+  g.addColorStop(0, '#ffe27a');
+  g.addColorStop(1, '#d9a51c');
+  x.fillStyle = g;
+  x.beginPath();
+  x.ellipse(0, 0, 26, 9, 0, 0, TAU);
+  x.fill();
+  x.fillStyle = 'rgba(120,70,10,0.5)';
+  for (let k = -20; k <= 20; k += 5) for (const dy of [-4, 0, 4]) x.fillRect(k, dy - 1, 2.5, 2);
+  x.fillStyle = 'rgba(60,30,8,0.6)';                         // charred spots
+  for (const [cx, cy] of [[-10, -3], [4, 3], [14, -2]]) { x.beginPath(); x.arc(cx, cy, 2.6, 0, TAU); x.fill(); }
+  x.fillStyle = '#8fbf5a';                                   // the husk
+  x.beginPath();
+  x.moveTo(24, -6);
+  x.quadraticCurveTo(40, -12, 46, -2);
+  x.quadraticCurveTo(38, 0, 24, 6);
+  x.fill();
+  x.restore();
+  x.save();
+  x.translate(92, 92);
+  x.scale(1, 0.62);
+  drawCoil(x, 0, 0, 30);
+  x.restore();
+  for (const [cx, cy, a] of [[176, 84, 0.3], [206, 100, -0.4]]) {
+    x.save();
+    x.translate(cx, cy);
+    x.scale(0.78, 0.5);
+    x.rotate(a);
+    drawChop(x, true);
+    x.restore();
+  }
+  for (const [x0, y0, x1, y1] of [[136, 106, 216, 96], [150, 76, 196, 70]]) sosatie(x, x0, y0, x1, y1);
+  // the drum's front: half a drum, black steel, the coals' light on its rim
+  g = x.createLinearGradient(0, 112, 0, 176);
+  g.addColorStop(0, '#45454f');
+  g.addColorStop(0.45, '#22222a');
+  g.addColorStop(1, '#0c0c10');
+  x.fillStyle = g;
+  x.beginPath();
+  x.moveTo(GRID_FRONT[0], 112);
+  x.ellipse(150, 112, 132, 64, 0, Math.PI, 0, true);
+  x.closePath();
+  x.fill();
+  x.fillStyle = 'rgba(255,255,255,0.07)';                     // a long highlight along the drum
+  x.beginPath();
+  x.ellipse(150, 128, 110, 10, 0, 0, TAU);
+  x.fill();
+  x.strokeStyle = '#5c5c68';                                 // the rolled rim
+  x.lineWidth = 5;
+  x.beginPath();
+  x.moveTo(GRID_FRONT[0] - 2, 112);
+  x.lineTo(GRID_FRONT[1] + 2, 112);
+  x.stroke();
+  x.strokeStyle = 'rgba(255,150,60,0.75)';
+  x.lineWidth = 1.6;
+  x.beginPath();
+  x.moveTo(GRID_FRONT[0], 110);
+  x.lineTo(GRID_FRONT[1], 110);
+  x.stroke();
+  x.fillStyle = '#6a6a76';                                   // rivets and an air vent
+  for (let k = 0; k < 9; k++) {
+    x.beginPath();
+    x.arc(40 + k * 27.5, 120, 1.8, 0, TAU);
+    x.fill();
+  }
+  x.fillStyle = '#0a0a0d';
+  for (let k = -2; k <= 2; k++) {
+    x.beginPath();
+    x.ellipse(150 + k * 9, 150, 2.4, 6, 0, 0, TAU);
+    x.fill();
+  }
+  // the legs: an A-frame at each end, a bar between
+  x.strokeStyle = '#1a1a1f';
+  x.lineWidth = 7;
+  for (const [x0, a, b] of [[64, 34, 96], [236, 204, 266]]) {
+    x.beginPath();
+    x.moveTo(x0, 150);
+    x.lineTo(a, 218);
+    x.moveTo(x0, 150);
+    x.lineTo(b, 218);
+    x.stroke();
+  }
+  x.lineWidth = 5;
+  x.beginPath();
+  x.moveTo(52, 196);
+  x.lineTo(248, 196);
+  x.stroke();
+  x.strokeStyle = 'rgba(255,255,255,0.12)';
+  x.lineWidth = 1.5;
+  x.beginPath();
+  x.moveTo(52, 194);
+  x.lineTo(248, 194);
+  x.stroke();
+}
+/** A sosatie: a skewer of lamb, onion, red pepper and dried apricot, lying from (x0, y0) to (x1, y1). */
+function sosatie(x, x0, y0, x1, y1) {
+  x.strokeStyle = '#d9b77a';
+  x.lineWidth = 2.4;
+  x.beginPath();
+  x.moveTo(x0 - (x1 - x0) * 0.08, y0 - (y1 - y0) * 0.08);
+  x.lineTo(x1 + (x1 - x0) * 0.08, y1 + (y1 - y0) * 0.08);
+  x.stroke();
+  const cols = ['#7a3416', '#f1e3c8', '#7a3416', '#d8352a', '#7a3416', '#f39a2b', '#7a3416'];
+  for (let k = 0; k < cols.length; k++) {
+    const f = (k + 0.5) / cols.length;
+    const cx = x0 + (x1 - x0) * f;
+    const cy = y0 + (y1 - y0) * f;
+    x.fillStyle = cols[k];
+    x.beginPath();
+    x.ellipse(cx, cy, 5.6, 4, Math.atan2(y1 - y0, x1 - x0), 0, TAU);
+    x.fill();
+    x.fillStyle = 'rgba(40,12,2,0.55)';
+    x.fillRect(cx - 1, cy - 3, 1.6, 6);
+  }
+}
+/** A lamb chop seen from above, about 52 x 36 round (0, 0): the eye of the meat, its fat edge, the tail and the bone. */
+function drawChop(x, grilled) {
+  const meat = grilled ? '#86391a' : '#d0695a';
+  const meatD = grilled ? '#5a2210' : '#a8463a';
+  const fat = grilled ? '#d6a25c' : '#f4ddb8';
+  x.fillStyle = fat;                                         // the fat around the eye and along the tail
+  x.beginPath();
+  x.ellipse(7, -1, 20, 15.5, 0, 0, TAU);
+  x.fill();
+  x.beginPath();
+  x.moveTo(-6, -8);
+  x.quadraticCurveTo(-20, -6, -25, 4);
+  x.quadraticCurveTo(-20, 12, -4, 12);
+  x.closePath();
+  x.fill();
+  const g = x.createRadialGradient(4, -4, 2, 7, 0, 18);
+  g.addColorStop(0, meat);
+  g.addColorStop(1, meatD);
+  x.fillStyle = g;
+  x.beginPath();
+  x.ellipse(8, 0, 16, 12, 0, 0, TAU);
+  x.fill();
+  x.beginPath();
+  x.moveTo(-5, -4);
+  x.quadraticCurveTo(-16, -2, -19, 4);
+  x.quadraticCurveTo(-15, 8, -4, 8);
+  x.closePath();
+  x.fill();
+  x.fillStyle = grilled ? '#ead3b0' : '#fbf1e2';             // the bone
+  x.beginPath();
+  x.arc(-26, 4, 4.6, 0, TAU);
+  x.fill();
+  x.fillStyle = 'rgba(120,80,40,0.45)';
+  x.beginPath();
+  x.arc(-26, 4, 1.8, 0, TAU);
+  x.fill();
+  if (grilled) {                                             // the grill's marks
+    x.strokeStyle = 'rgba(30,8,2,0.85)';
+    x.lineWidth = 2.6;
+    for (const dx of [-10, 2, 14]) {
       x.beginPath();
-      for (let bx = -W * 0.1; bx <= W * 1.1; bx += 17) {
-        x.moveTo(bx, bot + dy);
-        x.lineTo(W / 2 + (bx - W / 2) * 0.84, top + dy);
-      }
-      x.moveTo(0, top + dy);
-      x.lineTo(W, top + dy);
-      x.moveTo(0, bot + dy);
-      x.lineTo(W, bot + dy);
+      x.moveTo(dx - 5, -11);
+      x.lineTo(dx + 5, 11);
       x.stroke();
     }
-  });
+  } else {
+    x.fillStyle = 'rgba(255,255,255,0.35)';                  // raw: a little shine
+    x.beginPath();
+    x.ellipse(4, -5, 6, 2.5, -0.3, 0, TAU);
+    x.fill();
+  }
+}
+/** Braai tongs: the jaws at (tx, ty), the arms reaching up and right at `ang`, `open` how far the jaws stand apart. */
+function drawTongs(ctx, tx, ty, ang, open, L) {
+  const ux = Math.cos(ang);
+  const uy = -Math.sin(ang);
+  const nx = -uy;
+  const ny = ux;
+  const hx = tx + ux * L;
+  const hy = ty + uy * L;
+  ctx.lineCap = 'round';
+  for (const side of [-1, 1]) {
+    const jx = tx + nx * side * (3 + open * L * 0.12);
+    const jy = ty + ny * side * (3 + open * L * 0.12);
+    const mx = jx + (hx - jx) * 0.62;
+    const my = jy + (hy - jy) * 0.62;
+    ctx.strokeStyle = '#3a3d44';
+    ctx.lineWidth = L * 0.045;
+    ctx.beginPath();
+    ctx.moveTo(jx, jy);
+    ctx.lineTo(hx, hy);
+    ctx.stroke();
+    ctx.strokeStyle = '#c9ced6';
+    ctx.lineWidth = L * 0.026;
+    ctx.beginPath();
+    ctx.moveTo(jx, jy);
+    ctx.lineTo(mx, my);
+    ctx.stroke();
+    ctx.strokeStyle = '#7a4a22';                             // the wooden grips
+    ctx.lineWidth = L * 0.06;
+    ctx.beginPath();
+    ctx.moveTo(mx + (hx - mx) * 0.15, my + (hy - my) * 0.15);
+    ctx.lineTo(hx, hy);
+    ctx.stroke();
+    ctx.fillStyle = '#9aa0a8';                               // the scalloped jaw
+    ctx.beginPath();
+    ctx.arc(jx, jy, L * 0.03, 0, TAU);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#2a2d33';
+  ctx.beginPath();
+  ctx.arc(hx, hy, L * 0.035, 0, TAU);
+  ctx.fill();
 }
 
 /**
- * Braai: a glowing braai rises along the bottom with a boerewors coil on the grid; a 🍖 lands with a sizzle and is
- * flipped twice (sparks and steam on every landing); embers rise, steam curls. Warm dusk, cosy, nothing scary.
+ * Braai: the drum braai rises at the bottom, flames lick up through the grid, the braaier's tongs bring a tjop, set it
+ * down with a sizzle, click twice ("klik-klik"), then flip it to its grilled side; embers rise and smoke curls up.
  */
 function braaiFx(env) {
   const { doc, W, H, s, dpr } = env;
-  const GH = H * 0.19;
-  const gy = H - GH * 0.58;          // where things rest on the grid
-  const grill = grillSprite(doc, W, GH, dpr);
-  const CD = Math.round(160 * s * dpr);
-  const coil = sprite(doc, `coil${CD}`, CD, CD, (x) => { x.scale(CD / 76, CD / 76); drawCoil(x, 38, 38, 31); });
-  const meat = emojiSprite(doc, '🍖', Math.round(140 * s * dpr));
+  const BW = Math.min(W * 0.94, 540 * s);
+  const k = BW / 300;
+  const BH = 220 * k;
+  const bx = W / 2 - BW / 2;
+  const by = H - BH * 0.96;
+  const pw = Math.max(1, Math.round(BW * dpr));
+  const ph = Math.max(1, Math.round(BH * dpr));
+  const braai = sprite(doc, `drum${pw}x${ph}`, pw, ph, (x) => { x.scale(pw / 300, ph / 220); drawDrumBraai(x); });
+  const CS = Math.round(70 * k * dpr);
+  const chopRaw = sprite(doc, `chopR${CS}`, CS, CS, (x) => { x.scale(CS / 70, CS / 70); x.translate(36, 35); drawChop(x, false); });
+  const chopDone = sprite(doc, `chopD${CS}`, CS, CS, (x) => { x.scale(CS / 70, CS / 70); x.translate(36, 35); drawChop(x, true); });
   const E = EMBER.map((c) => glowSprite(doc, c));
+  const flameA = glowSprite(doc, '#ffb43a');
+  const flameB = glowSprite(doc, '#ff6a1f');
   const heat = softSprite(doc, '#ff7a1a', 0.85);
   const smoke = softSprite(doc, '#f6eee6', 0.55);
-  const P = sparks(210);
+  const P = sparks(200);
+  const NF = 34;
+  const fl = [];
+  for (let i = 0; i < NF; i++) fl.push({ x: 0, y: 0, age: 1, life: 0, r: 0, vy: 0 });
+  let fi = 0;
   const NP = 16;
   const puffs = [];
   for (let i = 0; i < NP; i++) puffs.push({ x: 0, y: 0, r: 0, age: 0, life: 0, vx: 0, vy: 0 });
   let pi = 0;
-  let puffAt = 0.3;
+  let puffAt = 0.4;
   let acc = 0;
-  const kx = W * 0.32;               // the wors
-  const mx = W * 0.68;               // the meat
-  const MY = gy - 46 * s;            // the meat's resting height
-  const LAND = [0.32, 1.9, 2.95];
-  const FLIP = [[1.15, 1.9, 0.3, 1], [2.4, 2.95, 0.17, -1]];   // [from, to, height (share of H), turn direction]
+  let flameAcc = 0;
+  const P2 = (dx, dy) => [bx + dx * k, by + dy * k];          // a design point on the screen
+  const [cx, cy] = P2(150, 98);                               // where the tjop lies
+  const L = 210 * k;                                         // the tongs' length
+  const LAND = [0.78, 2.12];
   let land = 0;
   let lastLand = -9;
   function puff(x, y, big) {
@@ -941,41 +1207,119 @@ function braaiFx(env) {
     pi = (pi + 1) % NP;
     q.x = x;
     q.y = y;
-    q.r = rand(26, 46) * s * (big ? 1.3 : 1);
+    q.r = rand(22, 40) * s * (big ? 1.35 : 1);
     q.age = 0;
-    q.life = rand(1.5, 2.3);
-    q.vx = rand(-25, 25) * s;
+    q.life = rand(1.4, 2.2);
+    q.vx = rand(-20, 20) * s;
     q.vy = -rand(55, 95) * s;
   }
+  // the tongs' jaw position, angle and opening at time t
+  function tongs(t) {
+    const home = [W + 60 * s, cy - H * 0.32];                // off screen, up on the right
+    const over = [cx + 4 * k, cy - 34 * k];                 // just above the tjop
+    const down = [cx + 4 * k, cy - 6 * k];                  // gripping it on the grid
+    const mix = (a, b, f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+    if (t < 0.25) return { p: home, open: 0, hold: true };
+    if (t < 0.78) return { p: mix(home, down, easeOutCubic((t - 0.25) / 0.53)), open: 0, hold: true };
+    if (t < 0.95) return { p: mix(down, over, smooth((t - 0.78) / 0.17)), open: 0.35, hold: false };
+    if (t < 1.4) {                                           // klik-klik
+      const c = Math.abs(Math.sin(((t - 0.95) / 0.45) * Math.PI * 2));
+      return { p: over, open: 0.05 + 0.4 * c, hold: false, click: true };
+    }
+    if (t < 1.62) return { p: mix(over, down, smooth((t - 1.4) / 0.22)), open: 0.35 * (1 - (t - 1.4) / 0.22), hold: false };
+    if (t < 2.12) {                                          // lift and flip
+      const f = (t - 1.62) / 0.5;
+      const up = Math.sin(f * Math.PI) * 70 * k;
+      return { p: [down[0], down[1] - up], open: 0, hold: true, flip: f };
+    }
+    if (t < 2.25) return { p: mix(down, over, (t - 2.12) / 0.13), open: 0.35, hold: false };
+    return { p: mix(over, home, easeOutCubic(Math.min(1, (t - 2.25) / 0.5))), open: 0.2, hold: false };
+  }
+  let clicks = 0;
   const fx = {
     flash: 0,
     step(ctx, t, dt) {
       const on = Math.min(1, t / 0.3);
-      const lift = (1 - easeOutCubic(on)) * GH;   // the braai slides up into view
+      const lift = (1 - easeOutCubic(on)) * BH * 0.8;       // the braai rises into view
+      // the heat's glow behind it
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = on * (0.6 + 0.12 * Math.sin(t * 7.3) + 0.08 * Math.sin(t * 13.1));
-      ctx.drawImage(heat, -W * 0.3, H - GH * 1.7 + lift, W * 1.6, GH * 2.4);
+      ctx.globalAlpha = on * (0.55 + 0.12 * Math.sin(t * 7.3) + 0.08 * Math.sin(t * 13.1));
+      ctx.drawImage(heat, bx - BW * 0.2, by + 20 * k - BH * 0.5 + lift, BW * 1.4, BH * 1.3);
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
-      ctx.drawImage(grill, 0, H - GH + lift, W, GH);
-      const cw = 160 * s;
-      ctx.drawImage(coil, kx - cw / 2, gy - cw * 0.36 + lift, cw, cw * 0.62);
-      // landings: sparks, steam and a warm flash
-      while (land < LAND.length && t >= LAND[land]) {
-        for (let i = 0; i < 26; i++) {
-          const a = -Math.PI / 2 + rand(-1.3, 1.3);
-          const v = rand(260, 640) * s;
-          P.emit(mx + rand(-45, 45) * s, gy - 8 * s, Math.cos(a) * v, Math.sin(a) * v, rand(0.5, 0.9), rand(6, 9) * s, 2.3, 520 * s, 0, 1);
+      ctx.drawImage(braai, bx, by + lift, BW, BH);
+      // flames licking up through the grid
+      if (t < 3.1) {
+        flameAcc += dt * 70;
+        while (flameAcc >= 1) {
+          flameAcc -= 1;
+          const q = fl[fi];
+          fi = (fi + 1) % NF;
+          const v = Math.random();
+          const [fx0, fy0] = P2(40 - 22 * v + Math.random() * (220 + 44 * v), 74 + v * 36);
+          q.x = fx0;
+          q.y = fy0;
+          q.age = 0;
+          q.life = rand(0.28, 0.55);
+          q.r = rand(9, 17) * k;
+          q.vy = -rand(50, 110) * k;
         }
-        for (let i = 0; i < 3; i++) puff(mx + rand(-40, 40) * s, gy - 30 * s, true);
+      }
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < NF; i++) {
+        const q = fl[i];
+        if (q.age >= q.life) continue;
+        q.age += dt;
+        q.y += q.vy * dt;
+        const f = q.age / q.life;
+        const r = q.r * (1 - 0.6 * f);
+        ctx.globalAlpha = (1 - f) * 0.9;
+        ctx.drawImage(f < 0.4 ? flameA : flameB, q.x - r, q.y - r * 1.6 + lift, r * 2, r * 3.2);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      // the tjop and the tongs
+      const tg = tongs(t);
+      let chopX = cx;
+      let chopY = cy;
+      let sy = 1;
+      let done = t >= 1.87;
+      if (tg.hold) {
+        chopX = tg.p[0] - 4 * k;
+        chopY = tg.p[1] + 6 * k;
+        if (tg.flip !== undefined) {
+          sy = Math.cos(tg.flip * Math.PI);
+          done = tg.flip >= 0.5;
+        }
+      }
+      const visible = t >= 0.25;
+      if (visible) {
+        const e = Math.exp(-(t - lastLand) * 12);
+        const cw = 70 * k * (1 + 0.15 * e);
+        const ch = 70 * k * 0.55 * Math.max(0.06, Math.abs(sy)) * (1 - 0.12 * e);
+        ctx.drawImage(done ? chopDone : chopRaw, chopX - cw / 2, chopY - ch / 2 + lift, cw, ch);
+      }
+      while (land < LAND.length && t >= LAND[land]) {         // sizzle: sparks, smoke and a warm flash
+        for (let i = 0; i < 24; i++) {
+          const a = -Math.PI / 2 + rand(-1.2, 1.2);
+          const v = rand(240, 560) * s;
+          P.emit(cx + rand(-30, 30) * k, cy, Math.cos(a) * v, Math.sin(a) * v, rand(0.45, 0.8), rand(5, 8) * s, 2.3, 520 * s, 0, 1);
+        }
+        for (let i = 0; i < 3; i++) puff(cx + rand(-30, 30) * k, cy - 20 * k, true);
         lastLand = LAND[land];
         land++;
-        fx.flash = Math.max(fx.flash, land === 1 ? 0.5 : 0.32);
+        fx.flash = Math.max(fx.flash, land === 1 ? 0.45 : 0.32);
       }
-      // steam wisps
-      while (t >= puffAt && puffAt < 2.8) {
-        puff(Math.random() < 0.5 ? kx + rand(-50, 50) * s : rand(0.05, 0.95) * W, gy - 20 * s, false);
-        puffAt += 0.2;
+      if (visible && t < 2.9) drawTongs(ctx, tg.p[0], tg.p[1] + lift, 0.95, tg.open, L);
+      if (tg.click && tg.open < 0.08 && t - clicks > 0.15) {  // each close of the klik-klik: a little flash of sparks
+        clicks = t;
+        for (let i = 0; i < 6; i++) P.emit(tg.p[0], tg.p[1], rand(-120, 120) * s, rand(-160, -40) * s, rand(0.25, 0.4), rand(3, 5) * s, 3, 300 * s, 1, 1);
+      }
+      // smoke curling up off the grid
+      while (t >= puffAt && puffAt < 3) {
+        const [px, py] = P2(60 + Math.random() * 180, 84);
+        puff(px, py, false);
+        puffAt += 0.22;
       }
       for (let i = 0; i < NP; i++) {
         const q = puffs[i];
@@ -984,17 +1328,18 @@ function braaiFx(env) {
         if (q.age >= q.life) { q.life = 0; continue; }
         q.x += (q.vx + Math.sin(q.age * 2 + i) * 20 * s) * dt;
         q.y += q.vy * dt;
-        const r = q.r + q.age * 60 * s;
-        ctx.globalAlpha = 0.34 * Math.sin(Math.PI * (q.age / q.life));
-        ctx.drawImage(smoke, q.x - r, q.y - r, r * 2, r * 2);
+        const r = q.r + q.age * 55 * s;
+        ctx.globalAlpha = 0.32 * Math.sin(Math.PI * (q.age / q.life));
+        ctx.drawImage(smoke, q.x - r, q.y - r + lift, r * 2, r * 2);
       }
       ctx.globalAlpha = 1;
-      // embers rise off the coals
+      // embers rising off the coals
       if (t < 2.9) {
-        acc += dt * 64;
+        acc += dt * 40;
         while (acc >= 1) {
           acc -= 1;
-          P.emit(rand(0.03, 0.97) * W, H - GH * rand(0.15, 0.75), rand(-25, 25) * s, -rand(150, 380) * s, rand(1.3, 2.5), rand(5, 10) * s, 0.25, -25 * s, 0, 0);
+          const [ex, ey] = P2(50 + Math.random() * 200, 92);
+          P.emit(ex, ey, rand(-25, 25) * s, -rand(150, 360) * s, rand(1.2, 2.3), rand(4, 8) * s, 0.25, -25 * s, 0, 0);
         }
       }
       P.step(dt);
@@ -1002,58 +1347,15 @@ function braaiFx(env) {
       for (let i = 0; i < P.n; i++) {
         if (P.life[i] <= 0) continue;
         const f = P.age[i] / P.life[i];
-        P.x[i] += Math.sin(P.age[i] * 4 + i) * 38 * s * dt;   // embers waver as they rise
+        P.x[i] += Math.sin(P.age[i] * 4 + i) * 34 * s * dt;
         const c = f < 0.22 ? 0 : f < 0.5 ? 1 : f < 0.78 ? 2 : 3;
         const a = Math.min(1, f * 10) * (1 - f) ** 0.6 * (0.72 + 0.28 * Math.sin(P.age[i] * 26 + i));
         const r = P.size[i] * (1 - 0.45 * f);
         ctx.globalAlpha = a;
-        ctx.drawImage(E[c], P.x[i] - r, P.y[i] - r, r * 2, r * 2);
+        ctx.drawImage(E[c], P.x[i] - r, P.y[i] - r + lift, r * 2, r * 2);
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
-      // the meat: drops in, sizzles, flips
-      let y = MY + Math.sin(t * 9) * 1.5 * s;
-      let rot = -0.15 + 0.06 * Math.sin(t * 9);
-      if (t < LAND[0]) {
-        const p = t / LAND[0];
-        y = MY - (1 - p * p) * H * 0.6;
-        rot = -0.15 - 0.8 * (1 - p);
-      }
-      for (let k = 0; k < FLIP.length; k++) {
-        const f = FLIP[k];
-        if (t >= f[0] && t < f[1]) {
-          const p = (t - f[0]) / (f[1] - f[0]);
-          y = MY - 4 * f[2] * H * p * (1 - p);
-          rot = -0.15 + f[3] * TAU * smooth(p);
-        }
-      }
-      const e = Math.exp(-(t - lastLand) * 12);
-      const sx = 1 + 0.24 * e;
-      const sy = 1 - 0.2 * e;
-      const ms = 140 * s;
-      const ca = Math.cos(rot) * dpr;
-      const sa = Math.sin(rot) * dpr;
-      ctx.setTransform(ca * sx, sa * sx, -sa * sy, ca * sy, mx * dpr, (y + lift) * dpr);
-      ctx.drawImage(meat, -ms / 2, -ms / 2, ms, ms);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      // cartoon steam over the wors and the meat
-      if (t > 0.4) {
-        ctx.lineCap = 'round';
-        ctx.lineWidth = 5 * s;
-        ctx.strokeStyle = '#ffffff';
-        for (let k = 0; k < 4; k++) {
-          const ph = (t - 0.4 + k * 0.27) % 1;
-          const x = k < 2 ? kx + (k ? 26 : -26) * s : mx + (k === 3 ? 28 : -28) * s;
-          const y0 = (k < 2 ? gy - 50 * s : MY - 80 * s) - ph * 70 * s;
-          ctx.globalAlpha = Math.sin(Math.PI * ph) * 0.85;
-          ctx.beginPath();
-          ctx.moveTo(x, y0 + 20 * s);
-          ctx.quadraticCurveTo(x + 10 * s, y0 + 10 * s, x, y0);
-          ctx.quadraticCurveTo(x - 10 * s, y0 - 10 * s, x, y0 - 20 * s);
-          ctx.stroke();
-        }
-        ctx.globalAlpha = 1;
-      }
     },
   };
   return fx;
@@ -1916,46 +2218,40 @@ const ICONS = {
   },
 
   braai(x, doc) {
+    // (1.15) the drum braai: dusk above, the coals' glow, flames, embers and smoke
     const rnd = seeded(5);
-    tile(x, '#2c1240', '#ff6a14', [50, 96, 66, '#ffd04a', 0.95]);   // dusk above, the coals' glow below
-    // the grid
-    x.lineCap = 'round';
-    for (let i = 0; i < 6; i++) {
-      const y = 30 + i * 11;
-      x.strokeStyle = 'rgba(255,170,70,0.75)';
-      x.lineWidth = 1.2;
-      x.beginPath();
-      x.moveTo(8, y + 2.2);
-      x.lineTo(92, y + 2.2);
-      x.stroke();
-      x.strokeStyle = '#1e0f0c';
-      x.lineWidth = 3.4;
-      x.beginPath();
-      x.moveTo(8, y);
-      x.lineTo(92, y);
-      x.stroke();
-    }
-    drawCoil(x, 50, 56, 31);
-    // embers rising into the dusk, and a curl of steam
+    tile(x, '#2c1240', '#ff6a14', [50, 70, 60, '#ffd04a', 0.9]);
+    x.save();
+    x.translate(4, 34);
+    x.scale(0.307, 0.307);
+    drawDrumBraai(x);
+    x.restore();
     x.save();
     x.globalCompositeOperation = 'lighter';
+    const flame = tileDot(doc, '#ff9a2a');
     const hot = tileDot(doc, '#ffa53a');
     const core = tileDot(doc, '#fff8c8');
-    for (let i = 0; i < 13; i++) {
-      const ex = 8 + rnd() * 84;
-      const ey = 5 + rnd() * 26;
-      const er = 0.9 + rnd() * 1.3;
+    for (let i = 0; i < 9; i++) {                            // flames through the grid
+      const fx = 18 + rnd() * 64;
+      const fy = 52 + rnd() * 8;
+      x.drawImage(flame, fx - 4, fy - 9, 8, 14);
+    }
+    for (let i = 0; i < 12; i++) {                           // embers rising into the dusk
+      const ex = 10 + rnd() * 80;
+      const ey = 6 + rnd() * 34;
+      const er = 0.9 + rnd() * 1.2;
       x.drawImage(hot, ex - er * 3.2, ey - er * 3.2, er * 6.4, er * 6.4);
       x.drawImage(core, ex - er * 1.2, ey - er * 1.2, er * 2.4, er * 2.4);
     }
     x.restore();
-    x.strokeStyle = 'rgba(255,255,255,0.85)';
-    x.lineWidth = 3;
-    for (const sx of [78, 87]) {
+    x.strokeStyle = 'rgba(255,255,255,0.8)';
+    x.lineWidth = 2.6;
+    x.lineCap = 'round';
+    for (const sx of [30, 62]) {
       x.beginPath();
-      x.moveTo(sx, 25);
-      x.quadraticCurveTo(sx + 5, 19, sx, 13);
-      x.quadraticCurveTo(sx - 5, 7, sx, 2);
+      x.moveTo(sx, 40);
+      x.quadraticCurveTo(sx + 5, 33, sx, 26);
+      x.quadraticCurveTo(sx - 5, 19, sx, 12);
       x.stroke();
     }
     finish(x);

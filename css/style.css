@@ -2732,3 +2732,70 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .skin-prev.skin-crane-goud.has-art { box-shadow: 0 0 calc(10 * var(--u)) rgba(255, 210, 80, 0.9), 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(10, 34, 78, 0.22); }
 .skin-item .shop-prev:has(.has-art) { height: calc(96 * var(--u)); }
 .skin-prev.skin-crane-neon.has-art { box-shadow: 0 0 calc(10 * var(--u)) rgba(255, 63, 164, 0.75), 0 0 calc(18 * var(--u)) rgba(41, 240, 255, 0.35); }
+
+/* (1.15, the owner's wife: "can this be more animated, once you challenge someone it pops out") the versus screen: each
+   card slides in, its medal pops out of it with a burst of light, then hovers */
+.vs-cards .pcard { animation: vs-card-in 0.5s cubic-bezier(0.2, 1.3, 0.4, 1) both; }
+.vs-cards .pcard + .pcard { animation-delay: 0.35s; }
+.vs-cards .pc-badge { position: relative; isolation: isolate; }
+.vs-cards .pc-badge .medal { animation: medal-pop 0.9s cubic-bezier(0.2, 1.6, 0.4, 1) 0.35s both, medal-hover 2.4s ease-in-out 1.25s infinite; }
+.vs-cards .pcard + .pcard .pc-badge .medal { animation-delay: 0.7s, 1.6s; }
+.vs-cards .pc-badge::before {
+  content: ''; position: absolute; inset: -70%; z-index: -1; border-radius: 50%; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle, rgba(255, 240, 170, 0.95), rgba(255, 200, 60, 0.45) 35%, rgba(255, 200, 60, 0) 65%);
+  animation: medal-burst 0.9s ease-out 0.45s both;
+}
+.vs-cards .pcard + .pcard .pc-badge::before { animation-delay: 0.8s; }
+@keyframes vs-card-in { from { opacity: 0; transform: translateY(24px) scale(0.92); } to { opacity: 1; transform: none; } }
+@keyframes medal-pop { 0% { transform: scale(0) rotate(-40deg); } 55% { transform: scale(1.55) rotate(10deg); } 75% { transform: scale(1.12) rotate(-4deg); } 100% { transform: scale(1.25) rotate(0deg); } }
+@keyframes medal-hover { 0%, 100% { transform: scale(1.25) translateY(0); } 50% { transform: scale(1.25) translateY(calc(-5 * var(--u))); } }
+@keyframes medal-burst { 0% { opacity: 0; transform: scale(0.3); } 30% { opacity: 1; } 100% { opacity: 0; transform: scale(1.4); } }
+/* the Winkel's medals: rare ones shine too, and a tap gives one a little hop */
+.medal.tier-rare::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.6) 48%, transparent 58%) no-repeat;
+  background-size: 260% 100%; animation: medal-shine 4.6s ease-in-out infinite;
+}
+.shop-item:active .medal { animation: medal-hop 0.35s ease-out; }
+@keyframes medal-hop { 50% { transform: scale(1.15) rotate(-6deg); } }
+@media (prefers-reduced-motion: reduce) { .vs-cards .pcard, .vs-cards .pc-badge .medal, .vs-cards .pc-badge::before, .medal.tier-rare::after, .shop-item:active .medal { animation: none; } }
+#ui.rm .vs-cards .pcard, #ui.rm .vs-cards .pc-badge .medal, #ui.rm .vs-cards .pc-badge::before, #ui.rm .medal.tier-rare::after, #ui.rm .shop-item:active .medal { animation: none; }
+/* (1.15, the owner: "This keep practicing does not fit") the lesson's last card sits low over the sea, clear of the height,
+   the hearts and the crane, its buttons small and side by side */
+.tutor.is-done {
+  top: auto; bottom: calc(var(--sab) + 28 * var(--u)); left: calc(var(--sal) + 16 * var(--u)); right: calc(var(--sar) + 16 * var(--u));
+  max-width: 560px; margin: 0 auto; gap: calc(6 * var(--u)); padding: calc(14 * var(--u)) calc(16 * var(--u));
+}
+.tutor.is-done .tutor-text { font-size: max(13px, calc(23 * var(--u))); }
+.tutor.is-done .tutor-btns { grid-auto-flow: column; grid-auto-columns: 1fr; margin-top: calc(4 * var(--u)); }
+.tutor.is-done .btn { min-height: 44px; }
+.tutor.is-done .btn { padding: calc(8 * var(--u)) calc(14 * var(--u)); font-size: max(14px, calc(26 * var(--u))); --depth: calc(5 * var(--u)); border-radius: calc(22 * var(--u)); }
+
+/* (1.15, the owner: "I really do not like this menu it feels old mixed with new ... All menus for that matter") one modern
+   look for every button and picker: a clean gradient and a soft lift instead of the glossy stripe and outlined letters, the
+   leading emoji in a little round chip; the pickers like the Winkel's tabs (a white pill, a gold line under the chosen one) */
+.btn {
+  --depth: calc(6 * var(--u));
+  border-radius: calc(28 * var(--u));
+  background: linear-gradient(160deg, var(--bg-l) 0%, var(--bg) 58%, var(--bg-d) 150%);
+  letter-spacing: 0;
+  text-shadow: 0 calc(2 * var(--u)) calc(4 * var(--u)) rgba(0, 0, 0, 0.22);
+  box-shadow:
+    0 var(--depth) 0 var(--bg-d),
+    0 calc(var(--depth) + 8 * var(--u)) calc(18 * var(--u)) rgba(10, 34, 78, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.btn::after { display: none; }
+.btn-white { background: var(--bg); text-shadow: none; }
+.btn > .emoji:first-child {
+  display: inline-grid; place-items: center; flex: none; width: 1.75em; height: 1.75em; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28); font-size: 0.86em; line-height: 1;
+}
+.btn-white > .emoji:first-child { background: rgba(10, 34, 78, 0.06); box-shadow: none; }
+.btn-big { border-radius: calc(32 * var(--u)); }
+/* the pickers: the chosen mode a white pill with the gold line, the chosen stake a gold coin pill */
+.mode-btn[aria-pressed="true"] { border-color: transparent; box-shadow: inset 0 calc(-4 * var(--u)) 0 #ffc928, 0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(10, 34, 78, 0.12); }
+.stake-btn[aria-pressed="true"] { border-color: transparent; background: linear-gradient(180deg, #ffe27a, #ffc928); color: #4a3500; box-shadow: 0 calc(3 * var(--u)) 0 #c99a0c, 0 calc(5 * var(--u)) calc(10 * var(--u)) rgba(10, 34, 78, 0.14); }
+/* the Uitdagersreeks heading on one line */
+.duel-head { padding: 0 calc(70 * var(--u)); }
+.duel-head h2 { font-size: calc(44 * var(--u)); text-wrap: balance; }

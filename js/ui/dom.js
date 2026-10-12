@@ -2959,8 +2959,8 @@ export function createUI(bus) {
       tutorBar.replaceChildren(
         h('p', { class: 'tutor-text', text: S.lessonDone }),
         h('div', { class: 'tutor-btns' },
-          o.daily ? button('btn-green', [emo('🏗️'), h('span', { text: S.lessonDaily })], () => bus.emit('ui:lesson-daily'), { nav: false }) : null,
-          button('btn-white', h('span', { text: S.lessonMore }), () => bus.emit('ui:lesson-close'), { nav: false })));
+          o.daily ? button('btn-green btn-mini', [emo('🏗️'), h('span', { text: S.lessonDaily })], () => bus.emit('ui:lesson-daily'), { nav: false }) : null,
+          button('btn-white btn-mini', h('span', { text: S.lessonMore }), () => bus.emit('ui:lesson-close'), { nav: false })));
     } else {
       tutorBar.replaceChildren(
         h('span', { class: 'tutor-step', text: `${o.step}/${o.total}` }),
