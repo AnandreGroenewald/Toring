@@ -701,27 +701,60 @@ export function createUI(bus) {
    * Die weekkis on the daily card: seven boxes (opened ones ticked, today's lit) and what today's or
    * tomorrow's box holds. `w` is js/core/week.js weekView().
    */
-  function weekStrip(w) {
+  // (1.15, the owner: "This should wiggle or something for the user to open it up it should not be opned automatically")
+  // the day's chest stays shut and wiggles until the player taps it open (its coins are in the wallet from the tower on;
+  // the tap is the moment you see them). Which day's chest was opened by a tap: stapel.v1.chestSeen.
+  const CHEST_SEEN = 'stapel.v1.chestSeen';
+  function chestSeen(key) {
+    try { return localStorage.getItem(CHEST_SEEN) === key; } catch { return true; }
+  }
+  function markChestSeen(key) {
+    try { localStorage.setItem(CHEST_SEEN, key); } catch { /* fine */ }
+  }
+  /** Opens a chest button (the strip's, or the results' pill): lid up, coins out, then it stays open. */
+  function openChest(el, coins, key) {
+    markChestSeen(key);
+    audio.play('record');
+    haptics.tap?.();
+    const chest = el.querySelector('.chest');
+    if (chest) {
+      chest.classList.add('is-opening');
+      if (!reducedMotion()) for (let k = 0; k < 5; k++) chest.append(h('i', { class: 'coin-ic chest-coin', 'aria-hidden': 'true', vars: { '--k': k } }));
+    }
+    el.classList.remove('is-ready');
+    el.classList.add('is-done', 'is-opened-now');
+    const amt = el.querySelector('.wk-amt, .rw-chest-amt');
+    if (amt) amt.textContent = `+${coins}`;
+    toast(S.weekChestOpened(coins), 3000);
+  }
+
+  function weekStrip(w, dateKey = '') {
     if (!w) return null;
     // (1.15, the owner: "The chest needs an upgrade, it needs to be more interactive") seven drawn chests: the opened ones
     // with their lids up, today's glowing, the big golden one on day 7; a tap says what's in it and how to open it
     const cells = [];
     for (let d = 1; d <= 7; d++) {
-      const opened = d <= w.done;
+      // today's chest earned by today's tower but not tapped open yet: shut, wiggling, "Tik!"
+      const ready = w.opened && d === w.day && !!dateKey && !chestSeen(dateKey);
+      const opened = d <= w.done && !ready;
       const today = !w.opened && d === w.day;
       const coins = WEEK_COINS[d - 1];
-      const tip = opened ? S.weekChestDone(d, coins) : today ? S.weekChestToday(d, coins) : d === 7 ? S.weekChestBig(coins) : S.weekChestLater(d, coins);
+      const tip = ready ? S.weekChestReady(coins) : opened ? S.weekChestDone(d, coins) : today ? S.weekChestToday(d, coins) : d === 7 ? S.weekChestBig(coins) : S.weekChestLater(d, coins);
       cells.push(h('button', {
         type: 'button',
-        class: `wk-chest${opened ? ' is-done' : ''}${today ? ' is-today' : ''}${d === 7 ? ' is-big' : ''}`,
+        class: `wk-chest${opened ? ' is-done' : ''}${today ? ' is-today' : ''}${ready ? ' is-ready' : ''}${d === 7 ? ' is-big' : ''}`,
         'aria-label': tip,
         onclick: (e) => {
           e.stopPropagation();
+          if (e.currentTarget.classList.contains('is-ready')) {
+            openChest(e.currentTarget, coins, dateKey);
+            return;
+          }
           audio.play('click');
           toast(tip, 3600);
         },
       }, h('i', { class: 'chest', 'aria-hidden': 'true' }, h('i', { class: 'chest-lid' }), h('i', { class: 'chest-lock' })),
-      h('span', { class: 'wk-amt', text: opened ? '✓' : `+${coins}` })));
+      h('span', { class: 'wk-amt', text: ready ? S.weekTap : opened ? '✓' : `+${coins}` })));
     }
     const line = w.opened ? (w.next ? S.weekTomorrow(w.next.coins) : '') : S.weekToday(w.coins);
     return h('div', { class: 'week-strip', role: 'group', 'aria-label': `${S.weekTitle}: ${S.weekDay(w.opened ? w.day : w.day)}. ${line}` },
@@ -847,7 +880,7 @@ export function createUI(bus) {
       onclick: () => { audio.play('click'); bus.emit('ui:board'); },
     }, emo('🏆'), m.boardPlace ? h('span', { text: `#${m.boardPlace}` }) : null) : null;
     // a brand-new player sees no grey "🔥 0" before they have played
-    const card = h('div', { class: 'card daily-card' }, trophy, (stats.played | 0) > 0 ? streakChip(stats.currentStreak) : null, head, weekStrip(m.week));
+    const card = h('div', { class: 'card daily-card' }, trophy, (stats.played | 0) > 0 ? streakChip(stats.currentStreak) : null, head, weekStrip(m.week, m.dateKey));
     if (done) {
       // (1.12) the try that counts (the better of two, 🔁 when there were two), and "Nog 'n kans"
       const r = m.best || entry.result || {};
@@ -1212,8 +1245,38 @@ export function createUI(bus) {
   /** (1.15, the owner: "the icons like the lion is also not very impressive") a badge as a minted medal: its tier's metal
    * rim, a jewel-toned face, light rays behind a legendary one; the emoji sits in the middle with a soft shadow. */
   function medal(item, { big = false } = {}) {
+    const art = MEDAL_ART[item.id];
     return h('span', { class: `medal tier-${tierOf(item)} medal-${item.id}${big ? ' is-big' : ''}`, 'aria-hidden': 'true' },
-      h('i', { class: 'medal-rays' }), h('i', { class: 'medal-face' }), emo(item.emoji));
+      h('i', { class: 'medal-rays' }), h('i', { class: 'medal-face' }), art ? svgArt(art) : emo(item.emoji));
+  }
+
+  // (1.15, the owner: "this does not look like a rugby ball", "this does not look like platinum") the badges whose emoji
+  // differ too much from phone to phone get their own drawing: a real rugby ball, and the season medals' star in a wreath
+  // (the medal's face is the season's metal, css .medal-s-*), the diamond season a cut gem
+  const WREATH = '<path d="M14 44c-6-8-6-20 1-28M50 44c6-8 6-20-1-28" fill="none" stroke="rgba(255,255,255,.75)" stroke-width="2.5" stroke-linecap="round"/>'
+    + [[12, 38, -50], [10, 30, -20], [12, 22, 10], [52, 38, 50], [54, 30, 20], [52, 22, -10]].map(([x, y, a]) => `<ellipse cx="${x}" cy="${y}" rx="4.2" ry="2.2" transform="rotate(${a} ${x} ${y})" fill="rgba(255,255,255,.8)"/>`).join('');
+  const STAR = '<path d="M32 12l5.9 12 13.2 1.9-9.6 9.3 2.3 13.1L32 42.1 20.2 48.3l2.3-13.1-9.6-9.3 13.2-1.9z" fill="#fff" stroke="rgba(0,0,0,.18)" stroke-width="1.5" stroke-linejoin="round"/>';
+  const MEDAL_ART = {
+    rugby: '<svg viewBox="0 0 64 64"><defs><clipPath id="rb"><ellipse cx="32" cy="32" rx="25" ry="15.5" transform="rotate(-32 32 32)"/></clipPath></defs>'
+      + '<ellipse cx="32" cy="32" rx="25" ry="15.5" transform="rotate(-32 32 32)" fill="#fbf6ea"/>'
+      + '<g clip-path="url(#rb)" transform="rotate(-32 32 32)"><rect x="12" y="10" width="5" height="44" fill="#157a3f"/><rect x="17" y="10" width="3" height="44" fill="#f7c948"/>'
+      + '<rect x="44" y="10" width="3" height="44" fill="#f7c948"/><rect x="47" y="10" width="5" height="44" fill="#157a3f"/></g>'
+      + '<path d="M13 41C24 34 40 30 51 23" transform="rotate(0)" fill="none" stroke="#c9bfa6" stroke-width="1.6"/>'
+      + '<path d="M28 33l3 4M31 31l3 4M34 29l3 4" stroke="#7a6a4a" stroke-width="1.6" stroke-linecap="round"/>'
+      + '<ellipse cx="32" cy="32" rx="25" ry="15.5" transform="rotate(-32 32 32)" fill="none" stroke="#3b3424" stroke-width="2"/></svg>',
+    's-brons': `<svg viewBox="0 0 64 64">${WREATH}${STAR}</svg>`,
+    's-silwer': `<svg viewBox="0 0 64 64">${WREATH}${STAR}</svg>`,
+    's-goud': `<svg viewBox="0 0 64 64">${WREATH}${STAR}</svg>`,
+    's-platinum': `<svg viewBox="0 0 64 64">${WREATH}${STAR}</svg>`,
+    's-diamant': '<svg viewBox="0 0 64 64">' + WREATH + '<path d="M20 24h24l6 8-18 20-18-20z" fill="#e9fbff" stroke="#2b8fb8" stroke-width="2" stroke-linejoin="round"/>'
+      + '<path d="M14 32h36M24 24l-4 8 12 20 12-20-4-8M32 24l-8 8 8 20 8-20z" fill="none" stroke="#5cc3e6" stroke-width="1.4" stroke-linejoin="round"/>'
+      + '<path d="M22 27l4-2" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>',
+  };
+  /** An inline drawing from MEDAL_ART (the game's own constant markup, never player text). */
+  function svgArt(markup) {
+    const box = h('i', { class: 'medal-art', 'aria-hidden': 'true' });
+    box.innerHTML = markup;
+    return box;
   }
 
   function lookPreview(kind, item) {
@@ -2032,7 +2095,7 @@ export function createUI(bus) {
           tile(fmtInt(r.blocksPlaced || 0), S.blocks),
           tile(fmtInt(r.perfects || 0), S.perfects),
           tile(fmtInt(r.maxCombo || 0), S.bestCombo)),
-      rewardEl(reward),
+      rewardEl(reward, result?.mode === 'daily' ? result.dateKey : ''),
       empty ? null : gridEl(r.grid, r.reason),
       empty ? null : weatherEl(r.weather),
       empty ? null : visitorsEl(r.visitors),
@@ -2126,7 +2189,7 @@ export function createUI(bus) {
   }
 
   /** "🪙 +18 · jy het 250", the weekkis box, and, after a match, the rank points ("🥈 Silwer +25"). */
-  function rewardEl(reward) {
+  function rewardEl(reward, dateKey = '') {
     const c = reward?.coins;
     const rk = reward?.rank;
     const wk = reward?.week;
@@ -2153,10 +2216,18 @@ export function createUI(bus) {
       if (wk.shield) notes.push(S.weekShieldWon);
       if (wk.look) notes.push(S.weekLook(COSMETIC_INFO[wk.look.kind]?.[wk.look.id]?.name || ''));
       notes.push(wk.day < 7 ? S.weekTomorrow(WEEK_COINS[wk.day]) : S.weekTomorrow(WEEK_COINS[0]));
-      // (1.15) today's chest pops open on the results: a shake, the lid flies up, coins burst out
-      const burst = reducedMotion() ? [] : [0, 1, 2, 3, 4].map((k) => h('i', { class: 'coin-ic chest-coin', 'aria-hidden': 'true', vars: { '--k': k } }));
-      kids.push(h('span', { class: `rw-week${wk.day === 7 ? ' is-full' : ''}` },
-        h('i', { class: `chest is-opening${wk.day === 7 ? ' is-big' : ''}`, 'aria-hidden': 'true' }, h('i', { class: 'chest-lid' }), h('i', { class: 'chest-lock' }), burst),
+      // (1.15) today's chest on the results: shut and wiggling until the player taps it open
+      const ckey = dateKey || '';
+      const shut = !!ckey && !chestSeen(ckey);
+      kids.push(h('button', {
+        type: 'button',
+        class: `rw-week rw-chest${wk.day === 7 ? ' is-full' : ''}${shut ? ' is-ready' : ' is-done'}`,
+        'aria-label': shut ? S.weekChestReady(wk.coins) : S.weekBox(wk.day, wk.coins),
+        onclick: (e) => {
+          if (e.currentTarget.classList.contains('is-ready')) openChest(e.currentTarget, wk.coins, ckey);
+        },
+      },
+        h('i', { class: `chest${wk.day === 7 ? ' is-big' : ''}${shut ? '' : ' is-opening'}`, 'aria-hidden': 'true' }, h('i', { class: 'chest-lid' }), h('i', { class: 'chest-lock' })),
         h('b', { text: S.weekBox(wk.day, wk.coins) }),
         h('span', { class: 'rw-sub', text: notes.join(' · ') })));
     }
@@ -2189,7 +2260,7 @@ export function createUI(bus) {
   function setResultReward(reward) {
     const card = screens.results.querySelector('.res-card');
     if (!card) return;
-    const el = rewardEl(reward);
+    const el = rewardEl(reward);   // (a coin match settling: no weekkis here)
     const old = card.querySelector('.res-reward');
     if (old && el) old.replaceWith(el);
     else if (old) old.remove();
