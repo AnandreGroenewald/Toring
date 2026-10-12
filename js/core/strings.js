@@ -164,7 +164,9 @@ export const S = {
   nothingToShare: 'Niks om te deel nie — probeer weer!',
   otherTab: 'Jy bou reeds in ’n ander oortjie.',
   reloadNeeded: 'Die skerm het gevries. Laai die bladsy weer as dit nie regkom nie.',
-  highContrast: 'Kontras',
+  highContrast: 'Kleurblindmodus',   // (1.15: was "Kontras"; it swaps the results' green and yellow for blue and orange)
+  highContrastOn: 'Kleurblindmodus aan: jou uitslag wys blou en oranje in plaas van groen en geel.',
+  highContrastOff: 'Kleurblindmodus af: jou uitslag wys weer groen en geel.',
   peek: 'Toring',
   peekBack: 'Uitslag',
   wobbleTitle: 'Balans',
@@ -190,7 +192,8 @@ export const S = {
   challengeWon: 'Jy het jou vriend geklop! 🎉',
   // tomorrow teaser on the daily results
   tomorrow: 'Môre',
-  tomorrowLine: (emoji) => `Môre: ${emoji} — kom terug!`,
+  streakWhat: (n) => `🔥 ${n}: soveel dae op ’n ry het jy die Daaglikse Toring gebou. Speel elke dag om jou reeks te hou!`,   // (1.15) a tap on the streak
+  tomorrowLine: (emoji) => `Môre se weer en besoekers: ${emoji}`,   // (1.15, the owner: "what does tomorrow mean?")
   // add to home screen
   installBtn: '📲 Sit Stapel op jou tuisskerm',
   installTipIos: 'Tik ⬆️ (Share) en dan “Add to Home Screen”',

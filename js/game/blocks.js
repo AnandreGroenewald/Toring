@@ -244,6 +244,20 @@ const BLOCK_SKINS = {
 };
 let blockSkin = 'kleur';
 /** (1.13.4) The blocks' skin from now on (new textures; a block already drawn keeps its own). */
+/**
+ * (1.15, the owner: "Robut rikus needs to have the standard blocks and the user needs to have the fancy ones") paints with
+ * another skin for a moment (Blok vir Blok: Robot Rikus's plain blocks, a friend's own skin), then back to this player's.
+ */
+export function withBlockSkin(id, fn) {
+  const own = blockSkin;
+  blockSkin = Object.prototype.hasOwnProperty.call(BLOCK_SKINS, id) ? id : 'kleur';
+  try {
+    return fn();
+  } finally {
+    blockSkin = own;
+  }
+}
+
 export function setBlockSkin(id) {
   blockSkin = Object.prototype.hasOwnProperty.call(BLOCK_SKINS, id) ? id : 'kleur';
 }

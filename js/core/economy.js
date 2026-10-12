@@ -556,6 +556,9 @@ export function cleanCard(raw) {
   const out = {};
   for (const kind of COSMETIC_KINDS) out[kind] = cosmetic(kind, r[kind]) ? r[kind] : DEFAULT_LOOK[kind];
   out.rank = RANK_IDS.includes(r.rank) ? r.rank : 'brons';
+  // (1.15, the owner: "for the friends playing eachother, they should show what the other one has but just for the block for
+  // block") the block skin this player wears: in Blok vir Blok their blocks are drawn in it on the other phone too
+  out.bs = skin('blocks', r.bs) ? r.bs : DEFAULT_SKIN.blocks;
   // (1.12) the rank in the mode being played, on the ladder of 23 (a 1.11 card has only the tier), and
   // both modes' ranks: a friend's link doesn't say the mode until the match starts
   out.rl = LADDER_IDS.includes(r.rl) ? r.rl : `${out.rank}-1`;
@@ -579,5 +582,5 @@ export function cardOf(eco, mode = 'race') {
   const e = cleanEconomy(eco);
   const now = ladderAt(e.ranks[modeOf(mode)].points);
   const rk = { race: ladderAt(e.ranks.race.points).id, turns: ladderAt(e.ranks.turns.points).id };
-  return cleanCard({ ...e.look, rank: now.tier, rl: now.id, rk });
+  return cleanCard({ ...e.look, rank: now.tier, rl: now.id, rk, bs: e.skins?.wear?.blocks });
 }

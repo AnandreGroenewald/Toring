@@ -972,11 +972,11 @@ function braaiFx(env) {
         rot = -0.15 - 0.8 * (1 - p);
       }
       for (let k = 0; k < FLIP.length; k++) {
-        const [a, b, h, dir] = FLIP[k];
-        if (t >= a && t < b) {
-          const p = (t - a) / (b - a);
-          y = MY - 4 * h * H * p * (1 - p);
-          rot = -0.15 + dir * TAU * smooth(p);
+        const f = FLIP[k];
+        if (t >= f[0] && t < f[1]) {
+          const p = (t - f[0]) / (f[1] - f[0]);
+          y = MY - 4 * f[2] * H * p * (1 - p);
+          rot = -0.15 + f[3] * TAU * smooth(p);
         }
       }
       const e = Math.exp(-(t - lastLand) * 12);
@@ -2360,8 +2360,9 @@ export function playCelebration(root, id, { caption = '', reduced = false } = {}
   };
   stop.stats = stats;
   PLAYING.set(root, stop);
+  timer = setTimeout(stop, DUR * 1000 + 4000);   // whatever happens (a hidden page runs no frames), the show goes away
   if (caption) box.append(captionEl(doc, String(caption), look, W, reduced));
-  if (!ctx) { timer = setTimeout(stop, DUR * 1000); return stop; }
+  if (!ctx) return stop;
 
   if (reduced) {
     // no motion: the tint, one soft glow and the emblem (the shop tile's art), faded in and out
@@ -2379,12 +2380,19 @@ export function playCelebration(root, id, { caption = '', reduced = false } = {}
       box.animate([{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.84 }, { opacity: 0 }], { duration: DUR * 1000, easing: 'linear', fill: 'forwards' });
       flash.animate([{ opacity: 0 }, { opacity: 0.55, offset: 0.3 }, { opacity: 0 }], { duration: 900, easing: 'ease-out' });
     }
+    clearTimeout(timer);
     timer = setTimeout(stop, DUR * 1000);
     return stop;
   }
 
   const env = { doc, W, H, s, dpr, ctx };
-  const fx = FX[key](env);
+  let fx;
+  try {
+    fx = FX[key](env);
+  } catch (e) {
+    stop();
+    throw e;
+  }
   let top = ctx;
   let tcv = null;
   if (fx.trail) {   // streaks: this canvas fades a little each frame; a clear one on top holds what mustn't smear
@@ -2421,7 +2429,12 @@ export function playCelebration(root, id, { caption = '', reduced = false } = {}
       top.setTransform(dpr, 0, 0, dpr, 0, 0);
     } else ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    fx.step(ctx, t, dt, top);
+    try {
+      fx.step(ctx, t, dt, top);
+    } catch (e) {
+      stop();   // decoration only: a broken frame takes the show away, never the screen under it
+      throw e;
+    }
     // the screen's tint and the bang's flash (opacity only: the compositor's cheap work)
     const ti = look.tint ? (fx.tintAt ? fx.tintAt(t) : Math.min(1, t / 0.3)) : 0;
     if (Math.abs(ti - tintOp) > 0.01) { tintOp = ti; tint.style.opacity = ti.toFixed(3); }
@@ -2443,6 +2456,5 @@ export function playCelebration(root, id, { caption = '', reduced = false } = {}
     raf = win.requestAnimationFrame(frame);
   };
   raf = win.requestAnimationFrame(frame);
-  timer = setTimeout(stop, DUR * 1000 + 4000);   // a hidden page runs no frames: the show still goes away
   return stop;
 }

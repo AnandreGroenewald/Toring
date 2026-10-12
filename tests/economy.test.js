@@ -184,8 +184,11 @@ test('ranks (1.12): a wallet from before keeps its tier, as that tier\'s first r
 
 test('the player card: only known looks travel; the rank in the mode played; Robot Rikus has his own', () => {
   assert.deepEqual(cleanCard({ frame: 'goud', badge: '<script>', title: 'toringkoning', celebration: 'braai', style: 'pet', rank: 'goud', rl: 'goud-3', rk: { race: 'goud-3', turns: 'mega' }, extra: 1 }),
-    { frame: 'goud', badge: 'geen', title: 'toringkoning', celebration: 'braai', style: 'pet', rank: 'goud', rl: 'goud-3', rk: { race: 'goud-3', turns: 'goud-3' } });
-  assert.deepEqual(cleanCard(null), { ...DEFAULT_LOOK, rank: 'brons', rl: 'brons-1', rk: { race: 'brons-1', turns: 'brons-1' } });
+    { frame: 'goud', badge: 'geen', title: 'toringkoning', celebration: 'braai', style: 'pet', rank: 'goud', bs: 'kleur', rl: 'goud-3', rk: { race: 'goud-3', turns: 'goud-3' } });
+  assert.deepEqual(cleanCard(null), { ...DEFAULT_LOOK, rank: 'brons', bs: 'kleur', rl: 'brons-1', rk: { race: 'brons-1', turns: 'brons-1' } });
+  // (1.15) the block skin travels (Blok vir Blok draws the other player's blocks in it); an unknown one is plain
+  assert.equal(cleanCard({ bs: 'holo' }).bs, 'holo');
+  assert.equal(cleanCard({ bs: '<img>' }).bs, 'kleur');
   assert.equal(cleanCard({ rank: 'silwer' }).rl, 'silwer-1', 'a 1.11 card (a tier only): its first rank');
   assert.deepEqual(cleanCard(BOT_CARD), BOT_CARD);
   const e = wearCosmetic(buyCosmetic(earnCoins(defaultEconomy(), 500, { capped: false }).economy, 'badge', 'leeu').economy, 'badge', 'leeu').economy;

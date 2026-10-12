@@ -154,7 +154,7 @@ test('teaser: the first three weather events of tomorrow, as emoji (and its visi
   assert.deepEqual(t.emoji, want.map((x) => WEATHER_INFO[x].emoji));
   assert.deepEqual(t.visitors, seq.visitorForecast());
   const who = t.visitors.map((x) => VISITOR_INFO[x].emoji);
-  assert.equal(t.text, `Môre: ${t.emoji.join(' ')}${who.length ? ` · ${who.join(' ')}` : ''} — kom terug!`);
+  assert.equal(t.text, `Môre se weer en besoekers: ${t.emoji.join(' ')}${who.length ? ` · ${who.join(' ')}` : ''}`);
   // across a month of days the visitors part is there when tomorrow has visitors in its first 45 blocks
   for (let k = 0; k < 30; k++) {
     const day = addDays(TODAY, k);

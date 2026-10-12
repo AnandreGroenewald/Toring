@@ -223,6 +223,36 @@ export function createUI(bus) {
   root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
+  // (1.15, the owner: "We need a better way to display the coins please") every 🪙 the UI shows becomes the game's own
+  // gold coin (css .coin-ic): some phones draw the emoji silver. Text that is shared or spoken keeps the emoji.
+  const COIN_CH = '🪙';
+  function goldCoins(node) {
+    if (node.nodeType === 3) {
+      const t = node.nodeValue;
+      if (!t || !t.includes(COIN_CH) || !node.parentNode || node.parentNode.closest?.('.coin-ic, textarea, [contenteditable]')) return;
+      const frag = doc.createDocumentFragment();
+      t.split(COIN_CH).forEach((part, i) => {
+        if (i) frag.append(h('i', { class: 'coin-ic', role: 'img', 'aria-label': COIN_CH }));
+        if (part) frag.append(part);
+      });
+      node.parentNode.replaceChild(frag, node);
+      return;
+    }
+    if (node.nodeType !== 1 || !node.textContent.includes(COIN_CH)) return;
+    const walker = doc.createTreeWalker(node, 4);
+    const hits = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.nodeValue.includes(COIN_CH)) hits.push(n);
+    hits.forEach(goldCoins);
+  }
+  if (typeof MutationObserver === 'function') {
+    new MutationObserver((list) => {
+      for (const m of list) {
+        if (m.type === 'characterData') goldCoins(m.target);
+        else m.addedNodes.forEach(goldCoins);
+      }
+    }).observe(root, { subtree: true, childList: true, characterData: true });
+  }
+
   // Measures env(safe-area-inset-*) so layout() can work out how much of each
   // inset actually overlaps the canvas rect.
   const probe = h('div', {
@@ -591,10 +621,15 @@ export function createUI(bus) {
     }, h('span', { class: 'dock-ic' }, icon(iconName)), h('span', { class: 'dock-label', text: label }));
   }
 
-  /** The menu's Winkel button, with the player's coins on it. */
+  /** (1.15, the owner: "We need a better way to display the coins please") the game's own gold coin (css .coin-ic): the same on
+   * every phone, where the 🪙 emoji is silver on some. In text (toasts, share lines) the emoji stays. */
+  function coinIc() {
+    return h('i', { class: 'coin-ic', 'aria-hidden': 'true' });
+  }
+
+  /** The menu's Winkel button (1.15: the coins moved to the wallet at the top right). */
   function shopBtn(coins) {
     const b = dockBtn('shop', S.shop, () => { audio.play('click'); bus.emit('ui:shop'); }, { class: 'dock-btn dock-shop' });
-    b.querySelector('.dock-ic').append(h('span', { class: 'dock-coins' }, emo(COIN), h('b', { text: fmtInt(coins || 0) })));
     // (1.15) a "Nuut" dot until the Winkel has been opened once in this version (new skins, medals and celebrations)
     if (!shopSeen()) b.querySelector('.dock-ic').append(h('span', { class: 'dock-new', text: S.newTag }));
     return b;
@@ -607,7 +642,7 @@ export function createUI(bus) {
 
   /** New coin balance on the menu's Winkel button (after buying, or a game). */
   function setMenuCoins(n) {
-    const el = screens.menu.querySelector('.dock-coins b');
+    const el = screens.menu.querySelector('.wallet-n');
     if (el) el.textContent = fmtInt(n || 0);
   }
 
@@ -634,6 +669,8 @@ export function createUI(bus) {
       haptics.tap();
     } else if (key === 'highContrast') {
       root.classList.toggle('hc', val);
+      // (1.15, the owner: "what does contrast mean, if I click it nothing happens?") it changes the results' colours: say so
+      toast(val ? S.highContrastOn : S.highContrastOff, 3800);
     }
   }
 
@@ -683,11 +720,17 @@ export function createUI(bus) {
 
   function streakChip(n) {
     const v = Math.max(0, n | 0);
-    return h('div', {
+    // (1.15, the owner: "If you click on the fire it shouls show what it means") a tap explains the streak
+    return h('button', {
+      type: 'button',
       class: `chip streak${v ? '' : ' is-zero'}`,
-      role: 'img',
       'aria-label': `${S.currentStreak}: ${v}`,
       title: S.currentStreak,
+      onclick: (e) => {
+        e.stopPropagation();
+        audio.play('click');
+        toast(S.streakWhat(fmtInt(v)), 3600);
+      },
     }, emo('🔥'), h('span', { text: fmtInt(v) }));
   }
 
@@ -829,7 +872,7 @@ export function createUI(bus) {
           const short = Math.max(0, price - (m.coins | 0));
           card.append(h('div', { class: 'retry-row' },
             button(`btn-white btn-mini retry-buy${short ? ' is-short' : ''}`,
-              [h('span', { text: S.retryBtn }), h('span', { class: 'retry-price' }, emo(COIN), h('b', { text: String(price) }))],
+              [h('span', { text: S.retryBtn }), h('span', { class: 'retry-price' }, coinIc(), h('b', { text: String(price) }))],
               () => bus.emit('ui:daily-retry'), { nav: false, attrs: { 'aria-label': `${S.retryBtn}: ${price}` } }),
             h('p', { class: 'retry-note', text: short ? S.retryNeed(short) : t.free > 1 ? S.retryHowAfterFree(t.free, Math.max(1, t.maxExtra - t.extra)) : S.retryHow })));
         }
@@ -894,8 +937,17 @@ export function createUI(bus) {
         showLanguage({ current: lang });
       },
     }, emo('🌐'), h('span', { text: lang.toUpperCase() }));
+    // (1.15) the wallet, top right: your coins, and a tap opens the Winkel
+    const wallet = h('button', {
+      type: 'button', class: 'menu-wallet', 'aria-label': `${S.shop}: ${fmtInt(m.coins || 0)}`, title: S.shop,
+      onclick: () => {
+        if (!guard()) return;
+        audio.play('click');
+        bus.emit('ui:shop');
+      },
+    }, coinIc(), h('b', { class: 'wallet-n', text: fmtInt(m.coins || 0) }), h('span', { class: 'wallet-plus', 'aria-hidden': 'true', text: '+' }));
     screens.menu.replaceChildren(brand, gap,
-      h('div', { class: 'menu-stack' }, card, playRow, dock, adSlot), langChip);
+      h('div', { class: 'menu-stack' }, card, playRow, dock, adSlot), langChip, wallet);
     // the gap shrinks when the sponsor feed adds the ad card later, so re-check whenever it resizes
     if (saying && typeof ResizeObserver === 'function') {
       if (!st.sayingRO) st.sayingRO = new ResizeObserver(() => fitSaying());
@@ -1236,7 +1288,7 @@ export function createUI(bus) {
         }
         onBuy();
       },
-    }, emo(COIN), h('span', { text: fmtInt(price) }));
+    }, coinIc(), h('span', { text: fmtInt(price) }));
   }
 
   /**
@@ -1315,12 +1367,12 @@ export function createUI(bus) {
     const sheet = h('div', { class: 'card sheet shop-sheet' },
       h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); } }, icon('close')),
       h('div', { class: 'sheet-head' }, emo('🛒'), h('h2', { id: 'stapel-shop-title', text: S.shop }),
-        h('span', { class: 'shop-coins', role: 'status' }, emo(COIN), h('b', { text: fmtInt(m.coins || 0) }))),
+        h('span', { class: 'shop-coins', role: 'status' }, coinIc(), h('b', { text: fmtInt(m.coins || 0) }))),
       // (1.13.4) "Vul my munte aan": up to m.refillTo coins (for testers, for now; REFILL in js/config.js)
       m.refillTo ? h('div', { class: 'shop-refill' }, !m.refillLeft
         ? h('p', { class: 'shop-note', text: S.refillUsed(m.refillTimes, m.refillPerDay && !m.refillLast) })
         : (m.coins | 0) < m.refillTo
-          ? button('btn-green btn-mini', [emo(COIN), h('span', { text: S.refillBtn(fmtInt(m.refillTo), m.refillLeft) })], () => bus.emit('ui:shop-refill'), { nav: false })
+          ? button('btn-green btn-mini', [coinIc(), h('span', { text: S.refillBtn(fmtInt(m.refillTo), m.refillLeft) })], () => bus.emit('ui:shop-refill'), { nav: false })
           : h('p', { class: 'shop-note', text: S.refillFull(fmtInt(m.refillTo)) })) : null,
       // (1.14) just bought something: the one gentle "save your progress" offer (when it's due), above the tabs
       m.signinOffer ? signinOfferEl('shop') : null,
@@ -1535,7 +1587,7 @@ export function createUI(bus) {
     };
     // (one row of six: the play buttons stay in sight on a phone; the coin sits on the label)
     return h('div', { class: 'stake-pick' },
-      h('span', { class: 'label' }, emo(COIN), h('span', { text: S.stakeLabel })),
+      h('span', { class: 'label' }, coinIc(), h('span', { text: S.stakeLabel })),
       h('div', { class: 'stake-btns', role: 'group', 'aria-label': S.stakeLabel }, [0, ...DUEL.stakes].map(opt)),
       h('p', { class: 'stake-what', 'aria-live': 'polite', text: stakeWhat(stake) }),
       h('p', { class: 'stake-have', text: `${S.stakeHave(fmtInt(coins))} ${S.stakeNote}` }));
@@ -2072,7 +2124,7 @@ export function createUI(bus) {
       // won: both stakes; back: the match played for none; else lost (a loss, or the connection didn't come back)
       const won = sk.outcome === 'won';
       const back = sk.outcome === 'refund';
-      kids.push(h('span', { class: `rw-stake${won ? ' is-won' : back ? '' : ' is-lost'}` }, emo(COIN),
+      kids.push(h('span', { class: `rw-stake${won ? ' is-won' : back ? '' : ' is-lost'}` }, coinIc(),
         h('b', { text: won || back ? `+${fmtInt(sk.paid)}` : `−${fmtInt(sk.n)}` }),
         h('span', {
           class: 'rw-sub',
@@ -2093,7 +2145,7 @@ export function createUI(bus) {
         h('span', { class: 'rw-sub', text: notes.join(' · ') })));
     }
     if (c) {
-      kids.push(h('span', { class: 'rw-coins' }, emo(COIN), h('b', { text: `+${fmtInt(c.added)}` }),
+      kids.push(h('span', { class: 'rw-coins' }, coinIc(), h('b', { text: `+${fmtInt(c.added)}` }),
         h('span', { class: 'rw-sub', text: c.short ? S.coinsCapped : S.coinsTotal(fmtInt(c.total)) })));
     }
     if (rk && LADDER_IDS.includes(rk.id)) {

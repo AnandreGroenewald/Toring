@@ -2536,3 +2536,34 @@ canvas.skin-swatch { display: block; width: 100%; height: 100%; }
 @media (prefers-reduced-motion: reduce) { .dock-new { animation: none; } }
 /* (1.15) a celebration's shop tile art (js/ui/celebrate.js drawCelebrationIcon) */
 canvas.cel-icon { display: block; width: calc(84 * var(--u)); height: calc(84 * var(--u)); filter: drop-shadow(0 calc(4 * var(--u)) calc(6 * var(--u)) rgba(0, 0, 0, 0.25)); }
+
+/* (1.15, the owner: "We need a better way to display the coins please") the game's own gold coin, and the menu's wallet */
+.coin-ic {
+  position: relative; display: inline-block; flex: none; width: 1.15em; height: 1.15em; border-radius: 50%; vertical-align: -0.2em; font-style: normal;
+  background: radial-gradient(circle at 34% 28%, #fffbe0 0 9%, rgba(255, 251, 224, 0) 30%), radial-gradient(circle, #ffe25c 0 50%, #f0b41a 51% 60%, #ffd23f 61% 100%);
+  box-shadow: inset 0 -0.08em 0 #b67b00, inset 0 0 0 0.06em #c98d07, 0 0.05em 0.14em rgba(0, 0, 0, 0.3);
+}
+.coin-ic::after { content: '★'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 0.6em; line-height: 1; color: #d39500; text-shadow: 0 0.05em 0 #fff2a8; }
+.menu-wallet {
+  position: absolute; top: calc(var(--sat) + 14 * var(--u)); right: calc(var(--sar) + 16 * var(--u)); z-index: 2;
+  display: inline-flex; align-items: center; gap: calc(8 * var(--u)); min-height: 44px;
+  padding: calc(6 * var(--u)) calc(7 * var(--u)) calc(6 * var(--u)) calc(12 * var(--u)); border: 0; border-radius: 999px;
+  background: linear-gradient(180deg, #24365a, #15213b); color: #ffe27a; font: 900 max(14px, calc(25 * var(--u))) / 1 var(--font);
+  box-shadow: 0 calc(6 * var(--u)) calc(14 * var(--u)) rgba(10, 34, 78, 0.3), inset 0 0 0 calc(2 * var(--u)) rgba(255, 210, 63, 0.6);
+  cursor: pointer; font-variant-numeric: tabular-nums;
+}
+.menu-wallet .coin-ic { font-size: 1.2em; }
+.menu-wallet .wallet-plus {
+  display: grid; place-items: center; width: calc(30 * var(--u)); height: calc(30 * var(--u)); min-width: 22px; min-height: 22px; border-radius: 50%;
+  background: #4fd66a; color: #fff; font-size: 0.95em; line-height: 1; box-shadow: inset 0 calc(-3 * var(--u)) 0 #2f9e48;
+}
+.menu-wallet:active { transform: translateY(calc(2 * var(--u))); }
+.shop-coins { background: linear-gradient(180deg, #24365a, #15213b) !important; color: #ffe27a !important; box-shadow: inset 0 0 0 calc(2 * var(--u)) rgba(255, 210, 63, 0.6); }
+.shop-coins b { color: #ffe27a; }
+.shop-buy .coin-ic, .btn .coin-ic { font-size: 1em; }
+/* (1.15, the owner: "this looks off center") a result pill with a note: the title on one line (never broken), the note
+   centred under it; a short pill without a note stays one round pill */
+.res-reward b { white-space: nowrap; }
+.res-reward > span:has(.rw-sub) { flex-wrap: wrap; justify-content: center; text-align: center; row-gap: calc(2 * var(--u)); border-radius: calc(22 * var(--u)); padding: calc(8 * var(--u)) calc(16 * var(--u)); }
+.res-reward > span:has(.rw-sub) .rw-sub { flex-basis: 100%; }
+button.chip { font: inherit; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }

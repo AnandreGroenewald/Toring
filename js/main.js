@@ -1915,7 +1915,7 @@ function startDuelGame(m) {
   startGame({
     mode: 'duel',
     seed: m.seed,
-    duel: { name: m.oppName, youName: duelNick(), mode: m.mode, you: m.you, bot: m.kind !== 'live', oppGo: m.kind === 'live' && (m.oppV || 1) >= 4, rounds: m.rounds === true,
+    duel: { name: m.oppName, youName: duelNick(), mode: m.mode, you: m.you, bot: m.kind !== 'live', oppBlocks: m.kind === 'live' ? m.oppCard?.bs || '' : '', oppGo: m.kind === 'live' && (m.oppV || 1) >= 4, rounds: m.rounds === true,
       // (1.12) both ranks in this mode, in front of the names at the top ('🥇II'); a recording has none
       oppRank: m.kind === 'live' || m.kind === 'bot' ? rankShortOf(m.oppCard?.rl) : '', youRank: rankShortOf(store.getCard(m.mode).rl) },
     autoplay: AUTO,

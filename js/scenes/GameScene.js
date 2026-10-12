@@ -14,7 +14,7 @@ import { S, VISITOR_INFO, WEATHER_INFO } from '../core/strings.js';
 import { fmtM, fmtMShort } from '../core/format.js';
 import { createSequence } from '../core/sequence.js';
 import { audio, haptics } from '../audio.js';
-import { Block, ensureTexture, getGeometry, releaseNamedTextures, FROZEN_TINT } from '../game/blocks.js';
+import { Block, ensureTexture, getGeometry, releaseNamedTextures, FROZEN_TINT, withBlockSkin } from '../game/blocks.js';
 import { ZONES, zoneAt } from '../core/zones.js';
 import { createBillboard, BILLBOARD_LEFT } from '../game/billboard.js';
 import { createBlockNamer } from '../core/sponsors.js';
@@ -421,6 +421,7 @@ export class GameScene extends Phaser.Scene {
     this.duel = this.mode === 'duel' ? {
       name: typeof d.duel?.name === 'string' ? d.duel.name : '',
       youName: typeof d.duel?.youName === 'string' ? d.duel.youName : '',
+      oppBlocks: typeof d.duel?.oppBlocks === 'string' ? d.duel.oppBlocks : '',   // (1.15) the other player's block skin
       mode: d.duel?.mode === 'turns' ? 'turns' : 'race',
       // (1.12) both ranks in this mode ('🥇II'), shown in front of the names at the top
       oppRank: typeof d.duel?.oppRank === 'string' ? d.duel.oppRank : '',
@@ -979,7 +980,7 @@ export class GameScene extends Phaser.Scene {
     // tower); the ghost below tints it into a plain silhouette
     this.curName = this.nameFor(spec);
     this.curNameId = this.curName ? (this.namer?.idAt?.(spec.i) ?? null) : null;
-    const key = ensureTexture(this, spec, this.curName);
+    const key = this.withTurnSkin(() => ensureTexture(this, spec, this.curName));
     this.curKey = key;
     this.crane.setBlock(spec, key, this.curGeom);
     this.nextSpec = this.sequence.block(i + 1);
@@ -990,6 +991,16 @@ export class GameScene extends Phaser.Scene {
     this.ghostEdge.setTexture(key).setOrigin(geo.originX, geo.originY).setTintFill(0x1d2b45)
       .setScale((geo.w + GHOST_PAD) / geo.w, (geo.h + GHOST_PAD) / geo.h);
     this.planAutoplay();
+  }
+
+  /**
+   * (1.15) Blok vir Blok: a block is drawn in the skin of whoever's turn it is: this player's own, Robot Rikus's plain
+   * blocks, or the friend's skin from their card ('' from a 1.14 game or server: plain). Outside Blok vir Blok, your own.
+   */
+  withTurnSkin(fn) {
+    const c = this.turns?.cur;
+    if (!c || c.mine) return fn();
+    return withBlockSkin(c.botTurn ? 'kleur' : this.duel?.oppBlocks || 'kleur', fn);
   }
 
   /** Deterministic sponsor names for this tower's blocks (same seed and order as the block sequence). */
@@ -1094,7 +1105,7 @@ export class GameScene extends Phaser.Scene {
    * step. A tap (tryDrop), or in Blok vir Blok the other player's tap, passed on exactly (onRemoteDrop).
    */
   launchBlock([x, y, angle, vx, vy]) {
-    const block = new Block(this, this.curSpec, x, y, angle, this.curName);
+    const block = this.withTurnSkin(() => new Block(this, this.curSpec, x, y, angle, this.curName));
     block.special = this.curSpec.foundation ? 'foundation' : null;
     block.setVelocityPxS(vx, vy);
     block.setFriction(this.weather.frictionMul);

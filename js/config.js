@@ -166,7 +166,7 @@ export const WEATHER_TUNING = {
   rainSkidPx: 26,        // rain: a landing that isn't a Perfek skids this far with the rain (x strength)
   rainSkidMs: 450,
   rainWaterMul: 2,
-  heatCraneMul: 1.5,     // heat wave: the crane races (eased in and out with the heat)
+  heatCraneMul: 1.3,     // heat wave: the crane races (eased in and out with the heat). (1.15, the owner: "The heat wave needs to be difficult but not that difficult. Please take it down a notch": 1.5 -> 1.3)
   rainbowScoreMul: 2,    // Perfek bonus multiplier during a rainbow
   stormWarnMs: 2000,
   hailCount: 10,         // hailstones per hail event at strength 1
