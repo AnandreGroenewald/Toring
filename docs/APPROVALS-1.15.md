@@ -112,3 +112,16 @@ review counts from the last change sent). The folder's README holds both clicks,
 - The board's daily players on Wed 14 and Sat 17 Oct against the 1.14 days (about 5-12); Thu 15 Oct ask the Family which
   new look they tried and bought; the morning after each step, no match complaints and no new Worker errors. The refill
   ends Fri 16 Oct, so the week after is the real test of "want to buy".
+
+## 1.15.1 (13 Oct, morning): the Winkel's Uitdager-styl glitch on Android
+- The owner (Telegram via Alfred, 07:02): "The menu glitches out, please send it to the stapel terminal" (photos: cards
+  losing their words while scrolling, the Play app 1.15.0). Cause: the round-2 band on the sticky player card (a 100vw
+  box-shadow trimmed by clip-path); Android's WebView skips the trim while scrolling. Fix 3147788: a plain 12u ring.
+- His proof on a private preview (07:45, via Alfred): "Okay, it looks good. Thank you. If you can just ask the terminal to
+  push this one to the web and to the Google Play. That will be highly appreciated. Thank you."
+- Panel: web 38 → 40/40 + the Final Boss 10 (07:58); Play folder "Upload 1.15.1 internal" 33 → 40/40 + the Final Boss 10
+  (07:59). Website live 07:59 (push 8df42bb..3147788, Pages abab85d3), `check-all.sh live` ALL CLEAR 08:07.
+- Play order (the folder's README): internal 11501 → the owner's phone (Weergawe 1.15.1, a clean scroll; STOP RULE) →
+  only then 11501 to Closed testing – Alpha (which already published 11500 at ~07:26) → only then the Family message.
+- The rule from now on: no huge box-shadow trimmed by clip-path, above all on a sticky element; anything painting outside
+  its box gets a real Android check (a Pages preview branch).

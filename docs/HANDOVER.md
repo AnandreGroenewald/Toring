@@ -736,6 +736,34 @@ Later the owner added (decisions are final unless they say otherwise):
     re-checked right before each click. Found on the way: 1.14.0's closed release + the content rating (submission 8,
     12 Oct 19:08) were already PUBLISHED, so the closed test gives 1.14.0 until 1.15.0 is approved. The way back: Internal
     testing > Pause track; before Google decides, Publishing overview > Remove changes; after: Closed testing > Halt.
+- **1.15.1 WEBSITE LIVE, 13 Oct 2026 07:59 (commit 3147788): the Winkel's Uitdager-styl glitch on Android fixed.** The
+  owner's phone (the Play app 1.15.0, Telegram via Alfred 07:02, "The menu glitches out", photos 06:59 + 07:00): cards lost
+  their words, prices, tags and even borders depending on the scroll position; the canvas icons still showed. Cause: the
+  round-2 band on the sticky player card (`.look-zone > .pcard`: a 100vw box-shadow trimmed by `clip-path: inset(-12u
+  -100vw)`), added overnight for the Customer's "nothing peeks past the card" lift; Android's WebView doesn't always apply
+  the trim while scrolling, so the solid band painted over the cards. Desktop Chrome and the desk checks never showed it
+  (elementFromPoint can't see box-shadow paint). Fix: a plain `0 0 0 12u rgb(18, 26, 52)` ring, `top: 0` kept; VERSION /
+  sw 1.15.1. The small tile-edge peek beside the pinned card comes back (1.15.2: a card as wide as the grid, checked on a
+  real Android phone first).
+  - **RULE from 1.15.1 on: no 100vw (or any huge) box-shadow trimmed by clip-path, above all on a position:sticky
+    element.** Android's WebView can skip the trim while scrolling. Anything that paints outside its own box must be
+    checked on a real Android phone (a private Pages preview branch works: `wrangler pages deploy . --branch <name>`).
+  - **Proof before the release:** the exact 3147788 site on a private preview (branch hotfix-1151, deployment 1fadfc99,
+    noindex; the Worker refuses its origin, so nothing is sent); the owner scrolled it on his Android phone: "Okay, it looks
+    good. Thank you. If you can just ask the terminal to push this one to the web and to the Google Play." (07:45 via Alfred).
+  - **Panel:** web round 1 38/40 (Guardian 9, Customer 9: the real-Android proof), round 2 40/40 + the Final Boss 10/10
+    (07:58); Play folder round 1 33/40, round 2 40/40 after the README order (the phone check before the closed test, a
+    STOP rule), the Family message (everyone through the internal link; wait for Weergawe 1.15.1) and true times; the Final
+    Boss 10/10 on Play (07:59).
+  - **Release:** push 8df42bb..3147788 (with the three docs commits) and Pages abab85d3 (07:59); both addresses
+    stapel-v1.15.1 / VERSION 1.15.1; the served style.css has the plain ring once and "100vw rgb" zero times; the Worker
+    unchanged (94ca5595, "app":"1.14.0"). `check-all.sh live` ALL CLEAR (08:00-08:07). The way back: Pages rollback to 9881b426 (1.15.0).
+  - **Found on the way:** Google approved 11500 for the closed test within the hour (submission 9 Published, seen ~07:26 and
+    07:54), so Family closed-test phones get 1.15.0 (the glitch) until 11501 there; the Family message now sends everyone
+    through the internal link and waits for Weergawe 1.15.1. The "Nuut" dot lights once more for players who opened the
+    Winkel in 1.15.0 (`shopSeen` keys on VERSION; 1.15.2: a SHOP_NEW constant). Cloudflare's Johannesburg edge still serves
+    old cached copies of /terme (the sponsor-terms template) and /adverteer (HIT, ~2.75 days; s-maxage 604800; both left
+    out of the build since 1.12.1, noindex, unlinked): re-check after 17 Oct that both show the game, else purge the cache.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
