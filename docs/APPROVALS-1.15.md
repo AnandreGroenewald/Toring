@@ -136,3 +136,31 @@ review counts from the last change sent). The folder's README holds both clicks,
 - His word, typed in the Stapel terminal at 14:46, after the question whether to skip the Critic Panel for the Play upload:
   "No need for the critic panel, please proceed". So 1.15.2 goes out WITHOUT the panel, on his word: the website (push +
   Pages; quick lane, security scan clear) and the app 11502 to Play internal testing. The closed test waits for his app check.
+
+## 1.15.3 and 1.15.4 (13 Oct, evening): the owner's notes from his phone, the Family's and Alfred's photos
+
+- **His words (this terminal, AskUserQuestion ~19:30):** "Update the match server", "Play internal 11503", "Skip Critic Panel
+  for 11503", "Please make sure the game developer tester test it". Earlier: "Hold 1.15.3 for them" (the lobby offers and
+  "Speel weer" for another stake), "Wait, I'll check the preview".
+- **Done on that word:**
+  - Worker 5b9725b2 deployed ~19:30 (the way back: `./wr.sh rollback 94ca5595-029a-4c81-aec4-d99b59556088 --yes`).
+    Board read 7 players; /daily/config unchanged; the live gate (`LIVE=1 friends1121.mjs turns`, two 1.15.3 games, Blok vir
+    Blok through the live room): all ok.
+  - Play internal **11503 (1.15.3)** from eb11e64, released 19:55 (release 18): 0 devices lost, the usual deobfuscation
+    warning, notes "Nuut: bring ’n krag na elke Daaglikse Toring." No Critic Panel (his word).
+  - The website stays 1.15.2 (no word for the Pages deploy yet). Preview: https://hotfix-1153.stapelspel.pages.dev (1.15.4).
+- **Rule decisions he made tonight (his words):**
+  - "I do not want the hearts to be lost per block but just make sure its per incident", then via Alfred: "lets make it you
+    loose a heart for every throw instead of every instance".
+  - Power-ups: "everyone get one powerup and its available immediately", "Make the player choose the one they want to use
+    before the match", then "it shows what you have purchased already and then you can also purchase new once in this meny,
+    which you then decide on one".
+  - The weekkis: "the chest should open everyday you login not when you play the daily challenge".
+  - The leaderboard name: "if they get a new highscore and they have changed their nickname then only it should change else
+    it should stay the same".
+  - Blok vir Blok: "Crane speeds up", "3 perfect throws then you get a punishment" (his picks: Wankelblok, Haastig, Gladde
+    blok; 3 Perfeks in a row).
+  - The lobby: "the guy playing for 100 coins should get a notification that there is someone willing to play for 50 coins
+    do you accept? Also the same for wedloop and block for block".
+- **Still to decide:** Play internal 11504 (1.15.4); the website deploy; the closed test and the Family message; heavier
+  planks (a game-feel change) after his physics report.

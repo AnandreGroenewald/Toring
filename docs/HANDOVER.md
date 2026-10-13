@@ -828,6 +828,37 @@ Later the owner added (decisions are final unless they say otherwise):
   - Next: the owner's word to release (the panel waiver of 14:46 was for 1.15.2) → website (push + Pages) → Play internal
     11503 → his phone (the bottom row above the buttons; the pick sheet; the launch picture) → closed test → the Family
     message (to be updated to 1.15.3).
+- **1.15.3 → Play internal 11503 (19:55) + the Worker 5b9725b2 (~19:30); 1.15.4 in progress (13 Oct 2026, evening).** On the
+  owner's word (AskUserQuestion ~19:30: "Update the match server", "Play internal 11503", "Skip Critic Panel for 11503",
+  "Please make sure the game developer tester test it"); the website stays 1.15.2. Details and his words: APPROVALS-1.15.
+  - **Protocol 7** (js/duel.js PROTOCOL 7, server PROTOCOL_V7; older games play as before):
+    - the lobby's offers: two 1.15.3 players looking for another stake or mode; the one looking for more coins is asked
+      about the lower stake, else the one who waited longer about the other mode; one at a time, never the same pair twice;
+      15 s, then no ("Iemand wil speel!");
+    - "Speel weer" in a friend room may ask for another stake (the other hears it; the same ask from both starts it);
+      after a random match the coin chips set the next search's stake;
+    - Blok vir Blok `v7` (the start says it when both games know it): a joker for 3 Perfeks in a row; Wankelblok (the
+      pillar), Haastig (4 s to aim), Gladde blok (ice: slides unless Perfek) beside Mis, Hittegolf, Reën; the crane speeds
+      up faster (TURNS.omegaPerBlock7); "Die toring kom tot rus…" while the tower settles.
+    - The board keeps the name a row was played with; a new best brings the new name.
+  - **The Daily Tower:** "Bring ’n krag saam" before each tower (the player's own power-ups, Koop beside each, "Speel sonder
+    krag"; used up only when tapped; the 55 m Fondamentblok is gone). The weekkis opens on the day's first visit.
+  - **Hearts: one per throw** (not per block, not per 1.5 s window): a block that never came to rest counts for its own
+    throw; one that stood counts for the newest throw that touched it; what falls within 3 s of a loss is that incident.
+    qa/hearts1153.mjs: two quick misses / two quick edge drops: two hearts each.
+  - **Looks and words:** the app clear of Android's Back/Home bar (SystemBars insetsHandling "css"); readable ranglys row,
+    Google card, streak line, "Aan", rank lock, sub-lines; no weekkis on the results; "Blokke" = the grid's tiles; the grid key
+    says the lost blocks a visitor took ("geen hartjie"); 💔 at the top (💥 stays at the grid's end); Hanswors "niks gebring
+    nie"; the block waits while Hanswors sets his gifts; the celebration preview dims and closes on a tap; the confetti keeps
+    falling while the screen rests; the match's outcome big and gold, the Tower button a round eye; "Nog ’n wedstryd"
+    under the players; the heart power-up "VOL"; a gentler wind; the launch picture with Lawa + Heelal; a fuller braai (drum
+    hoops, flame tongues); the Vuvuzela is a Protea (same id); a reopened result's Toring shows the tower's picture (this
+    session) or no button.
+  - **Checks:** game 413, server 258; qa fixes1153, contrast1153, offers1153 (two players through matchhost), hearts1153,
+    cubeplank1154 (a cube on a plank's left: stays in 6 drops, even 22 px over the edge). check-all full gained fixes1153,
+    contrast, hearts-per-throw, offers. The new game-tester skill is running its full pass on 5fb7a45 (frozen copy).
+  - **Next:** the game-tester's report → fixes → Play internal 11504 (1.15.4) + the website (his word) → the closed test →
+    the Family message (to 1.15.4). Open: heavier planks? (his physics report: likely a plank tipping on a narrow support).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
