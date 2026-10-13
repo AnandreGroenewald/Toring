@@ -11,7 +11,7 @@ import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate, isDat
 import { createSequence } from './core/sequence.js';
 import { buildShareText, buildDuelShareText } from './core/share.js';
 import { parseChallengeQuery, parseRoomQuery, defaultNicknameFor } from './core/duel.js';
-import { coinsForGame, cosmetic, POWERUP_IDS, rankShortOf, SKINS } from './core/economy.js';
+import { coinsForGame, cosmetic, POWERUP_IDS, POWERUPS, rankShortOf, SKINS } from './core/economy.js';
 import { weekView, WEEK } from './core/week.js';
 
 const WEEK_COINS = WEEK.coins;
@@ -891,6 +891,14 @@ function pickModel() {
   const e = store.getEconomy();
   return { stock: { ...e.stock }, coins: e.coins };
 }
+/**
+ * (1.15.4, the game-tester: a new player's first sheet had every row and every Koop greyed out) the sheet only when there
+ * is something to choose: a power-up the player has, or the coins for one. Otherwise the tower starts without one.
+ */
+function pickHasChoice() {
+  const e = store.getEconomy();
+  return POWERUP_IDS.some((id) => e.stock[id] > 0 || e.coins >= POWERUPS[id].price);
+}
 function armPick(pick) {
   pw.pick = pick || null;
   pw.free = !!pw.pick;
@@ -926,7 +934,7 @@ function playDaily(pick = presetPick()) {
       rt = store.getDailyRetry(dateKey);
     }
     if (rt && rt.status === 'ready') {
-      if (pick === undefined) {
+      if (pick === undefined && pickHasChoice()) {
         ui.showPowerPick(pickModel());
         return;
       }
@@ -942,7 +950,7 @@ function playDaily(pick = presetPick()) {
     showDoneResults(dateKey, store.getDailyBest(dateKey) || entry.result);
     return;
   }
-  if (pick === undefined) {
+  if (pick === undefined && pickHasChoice()) {
     ui.showPowerPick(pickModel());
     return;
   }

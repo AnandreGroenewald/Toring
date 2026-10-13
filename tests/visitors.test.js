@@ -276,3 +276,16 @@ const GOLDEN_VISITORS = [
   { type: 'clown', at: 49, side: -1, strength: 0.93 },
   { type: 'monkey', at: 61, side: 1, strength: 0.98 },
 ];
+
+// (1.15.4, the game-tester: "✕ 3 Verlore (1 deur Blouaap)" with 3 hearts spent) the key's note counts only the ✕ cells
+// a visitor cost (`x`); a tower block Blouaap knocks off or Skelm Sakkie takes keeps its own cell
+test('visitorLosses: only the ✕s a visitor cost, with their names; older towers (no x) get no note', async () => {
+  const { visitorLosses, cleanVisit } = await import('../js/core/visitorrules.js');
+  assert.deepEqual(visitorLosses([{ type: 'monkey', outcome: 'shoved', n: 2 }]), { n: 0, who: '' }, 'knocked-off tower blocks: not ✕s');
+  assert.deepEqual(visitorLosses([{ type: 'thief', outcome: 'stole', n: 3 }]), { n: 0, who: '' });
+  assert.deepEqual(visitorLosses([{ type: 'monkey', outcome: 'shoved', n: 2, x: 1 }]), { n: 1, who: 'Blouaap' });
+  const both = visitorLosses([{ type: 'monkey', outcome: 'shoved', n: 1, x: 1 }, { type: 'thief', outcome: 'stole', n: 2, x: 2 }, { type: 'monkey', outcome: 'shooed', n: 0 }]);
+  assert.equal(both.n, 3);
+  assert.equal(both.who, 'Blouaap & Skelm Sakkie');
+  assert.deepEqual(cleanVisit({ type: 'clown', outcome: 'gift', n: 1, x: -4 }), { type: 'clown', outcome: 'gift', n: 1 }, 'a broken x is dropped');
+});

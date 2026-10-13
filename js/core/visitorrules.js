@@ -67,7 +67,8 @@ export function cleanVisit(v) {
   if (!v || typeof v !== 'object' || !VISITOR_TYPES.includes(v.type)) return null;
   const outcome = OUTCOMES[v.type].includes(v.outcome) ? v.outcome : 'came';
   const n = Number.isFinite(v.n) ? Math.min(99, Math.max(0, Math.round(v.n))) : 0;
-  return { type: v.type, outcome, n };
+  const x = Number.isFinite(v.x) ? Math.min(99, Math.max(0, Math.round(v.x))) : 0;
+  return x ? { type: v.type, outcome, n, x } : { type: v.type, outcome, n };
 }
 
 export function cleanVisits(list) {
@@ -93,18 +94,17 @@ export function visitorEmoji(visits) {
 }
 
 /**
- * (1.15.3) The lost blocks a visitor took (they cost no heart): { n, who } — Blouaap's knock-offs and Skelm Sakkie's
- * steals, `who` the visitor's name (both names when both took some).
+ * (1.15.3) The grid's ✕ cells a visitor cost (they cost no heart): { n, who }, `who` the visitors' names.
+ * (1.15.4, the game-tester) Only the blocks that became a ✕ (`x` on the visit: a block in the air when the visitor
+ * changed the tower); a tower block Blouaap knocks off or Skelm Sakkie takes keeps its own cell, so it is not among the ✕s.
+ * A tower before 1.15.4 has no `x`: no note.
  */
 export function visitorLosses(visits) {
-  let monkey = 0;
-  let thief = 0;
-  for (const v of cleanVisits(visits)) {
-    if (v.type === 'monkey' && v.outcome === 'shoved') monkey += v.n;
-    if (v.type === 'thief' && v.outcome === 'stole') thief += v.n;
-  }
-  const names = [monkey > 0 ? VISITOR_INFO.monkey.name : null, thief > 0 ? VISITOR_INFO.thief.name : null].filter(Boolean);
-  return { n: monkey + thief, who: names.join(' & ') };
+  const by = new Map();
+  for (const v of cleanVisits(visits)) if (v.x) by.set(v.type, (by.get(v.type) || 0) + v.x);
+  let n = 0;
+  for (const k of by.values()) n += k;
+  return { n, who: [...by.keys()].map((t) => VISITOR_INFO[t].name).join(' & ') };
 }
 
 /** One line for the results card about the most memorable visit (thief, then monkey, then clown), or ''. */

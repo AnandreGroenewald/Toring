@@ -3306,3 +3306,12 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .punish-track { margin-top: calc(8 * var(--u)); }
 /* the round buttons' light falls straight from above (the off-centre highlight made them look lopsided) */
 .dock-ic { background: radial-gradient(circle at 50% 18%, #34467c 0%, #1b2548 58%, #10172f 100%); }
+/* (1.15.4, the game-tester: on a 360 phone the round Tower eye sat on a match's outcome card) the card keeps clear of the
+   eye on both sides (it stays centred); its title a little smaller on narrow phones so it still fits on one line */
+.screen-results .res-duel { max-width: calc(100vw - 2 * (var(--sal) + 20 * var(--u) + max(44px, 64 * var(--u)))); }
+.screen-results .res-duel .res-title { font-size: min(calc(62 * var(--u)), 7.4vw); }
+/* (1.15.4, the game-tester: endless shines still played in screens that scroll: the Winkel's pinned card, the
+   Uitdagersreeks card, a long-time player's holo frame) a player card's shine, rays and holo play three times and rest
+   (the 1.15.2 rule: endless work in a scrolling screen is what Android's WebView loses tiles over) */
+.pcard::after, .pcard.frame-holo, .pcard .medal::after, .pcard .medal .medal-rays, .pcard .title-plate { animation-iteration-count: 3; }
+.vs-cards .pc-badge .medal { animation-iteration-count: 1, 3; }   /* its pop once, its hover three times */

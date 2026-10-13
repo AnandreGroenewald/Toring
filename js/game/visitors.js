@@ -317,9 +317,9 @@ export class Visitors {
     return this.cur;
   }
 
-  /** The visits of this tower, oldest first: [{ type, outcome, n }]. */
+  /** The visits of this tower, oldest first: [{ type, outcome, n, x }] (x: the grid's ✕ cells it cost, no heart). */
   log() {
-    return this.records.map((r) => ({ type: r.type, outcome: r.outcome, n: r.n }));
+    return this.records.map((r) => ({ type: r.type, outcome: r.outcome, n: r.n, ...(r.x ? { x: r.x } : {}) }));
   }
 
   // --- schedule -------------------------------------------------------------
@@ -798,12 +798,16 @@ export class Visitors {
     c.verdictAt = c.t;
   }
 
-  /** A block a visitor is to blame for went into the sea (the monkey's count for the results). */
-  freeLoss(type) {
+  /**
+   * A block a visitor is to blame for went into the sea (the monkey's count for the results); `cell` (1.15.4): it became
+   * a ✕ in the grid, without a heart (the results' key says how many, js/core/visitorrules.js visitorLosses).
+   */
+  freeLoss(type, cell = false) {
     for (let k = this.records.length - 1; k >= 0; k--) {
       const r = this.records[k];
       if (r.type !== type) continue;
       if (type === 'monkey') r.n++;
+      if (cell) r.x = (r.x || 0) + 1;
       return;
     }
   }

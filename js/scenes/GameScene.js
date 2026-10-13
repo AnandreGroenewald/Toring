@@ -2478,7 +2478,10 @@ export class GameScene extends Phaser.Scene {
       this.collapseUntil = Math.max(this.collapseUntil, this.now + COLLAPSE_MS);
     }
     const blame = block.gift ? 'clown' : this.visitorBlame;
-    if (blame === 'monkey') this.visitors.freeLoss('monkey');
+    // (1.15.4, the game-tester: the key's "(1 deur Blouaap)" sat on the player's own ✕s) a ✕ without a heart is counted
+    // on the visit to blame; a tower block it knocked off keeps its own cell
+    const cell = wasFalling && !block.gift;
+    if (blame === 'monkey' || (cell && VISITOR_INFO[blame])) this.visitors.freeLoss(blame, cell);
     if (!block.gift && VISITOR_INFO[blame] && !this.graceToast) {
       this.graceToast = true;
       bus.emit('hud:toast', { text: S.visitorFree(VISITOR_INFO[blame].name), color: '#c9ffb8', visitor: true });
