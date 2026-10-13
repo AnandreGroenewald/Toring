@@ -57,6 +57,7 @@ const AIM_ALPHA = 0.32;     // a ghost for a drop that misses the tower is shown
 const PREWARM_AHEAD = 2;         // block textures drawn ahead while a block falls (see prewarmTextures)
 const FLOOD_TAG_MS = 1000;       // the flood tag's text redraws at most this often (each redraw is a canvas + upload)
 const COLLAPSE_MS = 1500;        // tower blocks lost this soon after another loss are the same collapse: one life
+const INCIDENT_MS = 3000;        // (1.15.3) a block that stood, lost this soon after a loss: the same incident (no heart more)
 const TIP_LEAN = 1.02;           // a block whose load is this far past the middle of its support (1 = the edge) tips
 // (1.13.3) wakeUnsupported: a contact is where a block's bottom is within `gap` px of what's under it (Matter lets
 // resting bodies sink up to ~slop + a px); its weight may be `margin` px past its contacts (friction, rounding) before
@@ -507,6 +508,8 @@ export class GameScene extends Phaser.Scene {
     // (its block's index) and the throws that already cost a heart: a throw that loses blocks costs one, never more
     this.lastThrow = -1;
     this.throwHearts = new Set();
+    this.lastLossAt = -1e9;     // ...and the last loss: what falls soon after it is the same incident
+    this.lastLossThrow = -1;
     this.spawnDue = null;      // sim time the next block may appear (waits for a calm tower after a collapse)
     this.calmCap = 0;
     this.stepTimers = [];
@@ -1955,7 +1958,9 @@ export class GameScene extends Phaser.Scene {
     o.ev = c && c.ev ? c.ev.kind : null;
     o.streaks = T.streaks;
     o.left = c && c.mine && !c.dropped ? Math.max(0, Math.ceil((c.deadline - nowMs()) / 1000)) : null;
-    o.phase = !c ? 'wait' : !c.dropped ? 'aim' : c.ended ? 'wait' : 'drop';
+    // (1.15.3, the owner's screenshot: "It freezes on the crane for a second or two") the block landed and the turn waits
+    // for the tower to come to rest (up to TURNS.settleMaxMs): 'settle', which the pill says
+    o.phase = !c ? 'wait' : !c.dropped ? 'aim' : c.ended ? 'wait' : this.falling ? 'drop' : 'settle';
     return o;
   }
 
@@ -2078,6 +2083,9 @@ export class GameScene extends Phaser.Scene {
       if (a === fb) other = b;
       else if (b === fb) other = a;
       else continue;
+      // (1.15.3) the newest throw that touched a tower block: a block it knocks off counts for that throw
+      const og = other.gameBlock;
+      if (og && og !== f && og.index < f.index) og.touchedBy = Math.max(og.touchedBy ?? -1, f.index);
       if (this.colN >= this.colQueue.length) this.colQueue.push({ body: null, ny: 0, cy: 0, speed: 0 });
       const q = this.colQueue[this.colN++];
       q.body = other;
@@ -2425,9 +2433,19 @@ export class GameScene extends Phaser.Scene {
         this.lastTowerLossAt = this.now;
       }
     } else {
-      const which = wasFalling ? block.index : this.lastThrow;
+      // (1.15.3, the owner: "I've just played one brick and it fell off then immediately played another which also
+      // fell off but I did not loose a heart for the second one") a block that never came to rest is its own throw's;
+      // only a block that stood in the tower counts for the latest throw (it knocked it off)
+      // (a block that stood counts for the newest throw that touched it; what falls within INCIDENT_MS of a loss is that
+      // same incident, so a collapse's stragglers never cost again)
+      let which;
+      if (wasFalling || !block.rested) which = block.index;
+      else if (this.now - this.lastLossAt < INCIDENT_MS) which = this.lastLossThrow;
+      else which = Number.isInteger(block.touchedBy) ? block.touchedBy : block.index;
       free = which < 0 || this.throwHearts.has(which);
       if (!free) this.throwHearts.add(which);
+      this.lastLossAt = this.now;
+      this.lastLossThrow = which;
       if (!wasFalling) this.lastTowerLossAt = this.now;
     }
     if (turn) turn.lost.push(block.index);
@@ -2862,11 +2880,13 @@ export class GameScene extends Phaser.Scene {
     const dyn = this.dyn;
     for (let k = 0; k < dyn.length; k++) {
       const b = dyn[k];
+      if (b.state === 'settled') b.rested = true;   // (1.15.3: it came to rest once: part of the tower from now on)
       const quiet = b.quietSteps >= SETTLE.steps || b.body.isSleeping;
       if (quiet && b.knockedUntil) b.knockedUntil = 0;   // knocked loose, but it came to rest: the player's again
       if (b.state === 'landed') {
         if (quiet) {
           b.state = 'settled';
+          b.rested = true;
           if (b.pendingRate && !b.rating) this.applyRating(b, 'S');
         }
       } else if (b.state === 'settled' && b.quietSteps === 0 && !b.body.isSleeping && b.body.speed > 0.6) {
@@ -2930,6 +2950,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   freezeBlock(b, quiet = false) {
+    b.rested = true;   // (1.15.3) set in cement: it came to rest
     b.freeze();
     b.sync();
     this.dynDirty = true;

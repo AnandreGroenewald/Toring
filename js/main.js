@@ -777,15 +777,17 @@ function renderTray() {
     const id = pw.pick;
     const have = id ? store.getEconomy().stock[id] > 0 : false;
     const active = (id === 'slow' && e.slowLeft > 0) || (id === 'shield' && !!e.shield) || (id === 'foundation' && !!e.foundation);
-    const enabled = pw.free && have && !active && !(id === 'heart' && e.heartRoom === false);
-    if (id && ((pw.free && have) || active)) items.push({ id, count: pw.free ? 1 : 0, active, glow: enabled, enabled });
+    const full = id === 'heart' && e.heartRoom === false;
+    const enabled = pw.free && have && !active && !full;
+    if (id && ((pw.free && have) || active)) items.push({ id, count: pw.free ? 1 : 0, active, glow: enabled, enabled, full: full && pw.free && have });
   } else {
     const stock = store.getEconomy().stock;
     for (const id of POWERUP_IDS) {
       const active = (id === 'slow' && e.slowLeft > 0) || (id === 'shield' && !!e.shield) || (id === 'foundation' && !!e.foundation);
       if (!(stock[id] > 0) && !active) continue;
-      const enabled = !active && stock[id] > 0 && !(id === 'heart' && e.heartRoom === false);
-      items.push({ id, count: stock[id], active, enabled });
+      const full = id === 'heart' && e.heartRoom === false;
+      const enabled = !active && stock[id] > 0 && !full;
+      items.push({ id, count: stock[id], active, enabled, full: full && stock[id] > 0 });
     }
   }
   ui.setPowerups(items);

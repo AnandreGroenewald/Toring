@@ -766,7 +766,8 @@ export class HudScene extends Phaser.Scene {
     const mine = t.seat === t.you;
     // (1.12) a round on this turn: its weather or visitor rides along in the pill
     const ev = t.ev ? (WEATHER_INFO[t.ev] || VISITOR_INFO[t.ev])?.emoji || '' : '';
-    const str = `${mine ? `🎯 ${S.turnsYourTurn}${t.left != null ? `  ${t.left}` : ''}` : `⏳ ${S.turnsTheirTurn(oppName)}`}${ev ? `  ${ev}` : ''}`;
+    const str = t.phase === 'settle' ? `⏳ ${S.turnsSettling}`
+      : `${mine ? `🎯 ${S.turnsYourTurn}${t.left != null ? `  ${t.left}` : ''}` : `⏳ ${S.turnsTheirTurn(oppName)}`}${ev ? `  ${ev}` : ''}`;
     const key = `${t.n}|${str}`;
     if (key === tp.key) return;
     const newTurn = tp.key.split('|')[0] !== String(t.n);

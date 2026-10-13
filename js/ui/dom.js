@@ -2388,8 +2388,10 @@ export function createUI(bus) {
       why = d.reason === 'goal' ? S.duelWhyTheyGoal(name) : d.reason === 'quit' ? S.duelWhyYouQuit : S.duelWhyYouFell;
     }
     const turns = d.mode === 'turns';
-    return h('div', { class: 'res-head' },
-      h('div', { class: 'chip' }, emo(turns ? '🧱' : '⚔️'), h('span', { text: `${S.duel} · ${turns ? S.modeTurns : S.modeRace}` })),
+    // (1.15.3, the owner: "Can you make this show up infront, Its hard to realize who won") the outcome first and big
+    // (gold for a win), the mode a small chip
+    return h('div', { class: `res-head res-duel${won ? ' is-won' : ' is-lost'}` },
+      h('div', { class: 'chip' }, emo(turns ? '🧱' : '⚔️'), h('span', { text: turns ? S.modeTurns : S.modeRace })),
       h('h2', { class: 'res-title' }, emo(badge), h('span', { text: d.outcome === 'none' ? S.duel : title })),
       h('p', { class: 'res-sub', text: why }));
   }
@@ -2514,6 +2516,7 @@ export function createUI(bus) {
         const on = !screens.results.classList.contains('peek');
         screens.results.classList.toggle('peek', on);
         peek.setAttribute('aria-pressed', String(on));
+        peek.setAttribute('aria-label', on ? S.peekBack : S.peek);
         peek.querySelector('.peek-lbl').textContent = on ? S.peekBack : S.peek;
         audio.play('click');
       },
@@ -3132,6 +3135,17 @@ export function createUI(bus) {
     st.trayKey = key;
     powerTray.replaceChildren(...items.filter((it) => POWERUP_INFO[it.id]).map((it) => {
       const info = POWERUP_INFO[it.id];
+      // (1.15.3, the owner: "The heart is also confusing, it needs to be more clear that you can only use it once one of
+      // your hearts are used") a heart with all hearts full says "Vol", and a tap says when it can be used
+      if (it.full) {
+        return h('button', {
+          type: 'button', class: 'power-btn is-full', 'aria-disabled': 'true', 'aria-label': `${info.name}: ${S.heartWait}`, title: S.heartWait,
+          onclick: () => {
+            audio.play('click');
+            toast(S.heartWait, 2600);
+          },
+        }, emo(info.emoji), h('span', { class: 'power-tag', text: S.powerFull }));
+      }
       return h('button', {
         type: 'button',
         class: `power-btn${it.active ? ' is-active' : ''}${it.glow ? ' is-glow' : ''}`,
