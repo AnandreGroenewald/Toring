@@ -1307,28 +1307,43 @@ export function createUI(bus) {
   }
   const SCENE_EMOJI = { dag: '☀️', sonsondergang: '🌅', lekkergoed: '🍭', nag: '🌙', kersieblom: '🌸', noorderlig: '✨', ruimte: '🪐', akwarium: '🐠', sintgolf: '🌆' };
 
-  /** (1.15) Three sample blocks in a block skin, drawn once per skin and then copied (null if the painter can't). */
-  const swatchCache = new Map();
+  /**
+   * (1.15.2) A Winkel tile's drawn picture goes into the page as a plain image, drawn once per item: a live <canvas> is a
+   * layer of its own on a phone, and a scrolling list with a dozen of them under the pinned player card lost the tiles'
+   * words, prices and borders in Android's WebView (the owner's phone, 13 Oct 07:00 and again on 1.15.1 at 14:11).
+   * Falls back to the canvas itself when it can't be read.
+   */
+  const pictureCache = new Map();
+  function asPicture(key, cls, draw) {
+    let url = pictureCache.get(key);
+    if (!url) {
+      const c = draw();
+      try {
+        url = c.toDataURL('image/png');
+      } catch {
+        c.className = cls;
+        c.setAttribute('aria-hidden', 'true');
+        return c;
+      }
+      pictureCache.set(key, url);
+    }
+    return h('img', { class: cls, src: url, alt: '', 'aria-hidden': 'true', draggable: 'false' });
+  }
+
+  /** (1.15) Three sample blocks in a block skin, drawn once per skin (null if the painter can't). */
   function blockSwatch(id) {
     if (typeof BLOCKS.drawSkinSwatch !== 'function') return null;
     try {
       const W = 132;
       const H = 92;
       const dpr = Math.min(3, Math.max(1, globalThis.devicePixelRatio || 1));
-      let src = swatchCache.get(id);
-      if (!src) {
-        src = doc.createElement('canvas');
-        src.width = Math.round(W * dpr);
-        src.height = Math.round(H * dpr);
-        BLOCKS.drawSkinSwatch(src, id);
-        swatchCache.set(id, src);
-      }
-      const c = doc.createElement('canvas');
-      c.width = src.width;
-      c.height = src.height;
-      c.getContext('2d').drawImage(src, 0, 0);
-      c.className = 'skin-swatch';
-      return c;
+      return asPicture(`blocks:${id}:${dpr}`, 'skin-swatch', () => {
+        const c = doc.createElement('canvas');
+        c.width = Math.round(W * dpr);
+        c.height = Math.round(H * dpr);
+        BLOCKS.drawSkinSwatch(c, id);
+        return c;
+      });
     } catch {
       return null;
     }
@@ -1390,45 +1405,48 @@ export function createUI(bus) {
    */
   function stylePreview(item) {
     try {
-      const font = `${EMOJI_NOTO_FIRST ? '"Noto Color Emoji", ' : ''}"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
-      const G = 160;
-      const glyph = (txt) => {
-        const k = doc.createElement('canvas');
-        k.width = G;
-        k.height = G;
-        const x = k.getContext('2d', { willReadFrequently: true });
-        x.font = `100px ${font}`;
-        x.textAlign = 'center';
-        x.textBaseline = 'middle';
-        x.fillText(txt, G / 2, G / 2 + 4);
-        return { k, img: x.getImageData(0, 0, G, G) };
-      };
-      const S = 144;   // canvas pixels, shown at about 60 units: sharp on 2-3x screens
-      const c = doc.createElement('canvas');
-      c.width = S;
-      c.height = S;
-      const m = glyph('🐒');
-      const mBox = opaqueBox(m.img);
-      if (!mBox) throw new Error('no monkey');
-      const k = (S * 0.72) / Math.max(mBox.w, mBox.h);
-      const ox = S / 2 - (mBox.l + mBox.w / 2) * k;
-      const oy = S - 4 - (mBox.b + 1) * k;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(m.k, ox, oy, G * k, G * k);
-      if (item.emoji) {
-        const a = glyph(item.emoji);
-        const aBox = opaqueBox(a.img);
-        const place = accessoryPlace(item.id, headOf(m.img), aBox);
-        if (!place) throw new Error('no place');
-        const sc = place.scale * k;
-        ctx.drawImage(a.k, ox + place.cx * k - (aBox.l + aBox.w / 2) * sc, oy + place.cy * k - (aBox.t + aBox.h / 2) * sc, G * sc, G * sc);
-      }
-      c.className = 'style-prev';
-      c.setAttribute('aria-hidden', 'true');
-      return c;
+      return asPicture(`style:${item.id}`, 'style-prev', () => drawStyle(item));
     } catch {
       return h('span', { class: 'style-prev-plain' }, emo('🐒'), item.emoji ? emo(item.emoji) : null);
     }
+  }
+
+  /** The monkey wearing a style, on a canvas (throws when this phone's emoji can't be read). */
+  function drawStyle(item) {
+    const font = `${EMOJI_NOTO_FIRST ? '"Noto Color Emoji", ' : ''}"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+    const G = 160;
+    const glyph = (txt) => {
+      const k = doc.createElement('canvas');
+      k.width = G;
+      k.height = G;
+      const x = k.getContext('2d', { willReadFrequently: true });
+      x.font = `100px ${font}`;
+      x.textAlign = 'center';
+      x.textBaseline = 'middle';
+      x.fillText(txt, G / 2, G / 2 + 4);
+      return { k, img: x.getImageData(0, 0, G, G) };
+    };
+    const S = 144;   // canvas pixels, shown at about 60 units: sharp on 2-3x screens
+    const c = doc.createElement('canvas');
+    c.width = S;
+    c.height = S;
+    const m = glyph('🐒');
+    const mBox = opaqueBox(m.img);
+    if (!mBox) throw new Error('no monkey');
+    const k = (S * 0.72) / Math.max(mBox.w, mBox.h);
+    const ox = S / 2 - (mBox.l + mBox.w / 2) * k;
+    const oy = S - 4 - (mBox.b + 1) * k;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(m.k, ox, oy, G * k, G * k);
+    if (item.emoji) {
+      const a = glyph(item.emoji);
+      const aBox = opaqueBox(a.img);
+      const place = accessoryPlace(item.id, headOf(m.img), aBox);
+      if (!place) throw new Error('no place');
+      const sc = place.scale * k;
+      ctx.drawImage(a.k, ox + place.cx * k - (aBox.l + aBox.w / 2) * sc, oy + place.cy * k - (aBox.t + aBox.h / 2) * sc, G * sc, G * sc);
+    }
+    return c;
   }
 
   // (1.15) what's new in this version: a "Nuut" tag in the Winkel
@@ -1637,11 +1655,7 @@ export function createUI(bus) {
   /** (1.15) A celebration's shop tile: its own art (js/ui/celebrate.js), the emoji when a canvas can't be drawn. */
   function celebrationIcon(item) {
     try {
-      const c = doc.createElement('canvas');
-      drawCelebrationIcon(c, item.id);
-      c.className = 'cel-icon';
-      c.setAttribute('aria-hidden', 'true');
-      return c;
+      return asPicture(`celebration:${item.id}`, 'cel-icon', () => drawCelebrationIcon(doc.createElement('canvas'), item.id));
     } catch {
       return emo(item.emoji || '🎊');
     }

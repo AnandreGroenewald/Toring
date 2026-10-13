@@ -1681,7 +1681,7 @@ svg.ic {
 /* the celebration preview: a real button (at least 32px high), not a thin underlined word */
 .shop-try { min-height: 40px; min-width: 56px; padding: 4px 12px; border: 2px solid var(--hemel-d); border-radius: 999px; background: #fff; color: var(--hemel-d); font: 800 max(12px, calc(19 * var(--u))) / 1.1 var(--font); cursor: pointer; }
 .title-prev { padding: calc(6 * var(--u)) calc(10 * var(--u)); border-radius: calc(10 * var(--u)); background: #fff; font: 900 max(11px, calc(19 * var(--u))) / 1.1 var(--font); color: var(--ink); }
-canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 * var(--u)); }
+.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 * var(--u)); }
 .style-prev-plain { display: inline-flex; align-items: flex-end; gap: calc(2 * var(--u)); }
 .frame-swatch { display: block; width: calc(64 * var(--u)); height: calc(44 * var(--u)); border-radius: calc(12 * var(--u)); background: #fff; }
 /* the frames, on a swatch and on a player card */
@@ -2462,7 +2462,7 @@ canvas.style-prev { display: block; width: calc(60 * var(--u)); height: calc(60 
 .shop-prev { height: calc(92 * var(--u)); }
 /* the real blocks in a block skin (drawn by js/game/blocks.js) */
 .skin-prev.has-swatch { width: calc(132 * var(--u)); height: calc(92 * var(--u)); background: transparent; box-shadow: none; }
-canvas.skin-swatch { display: block; width: 100%; height: 100%; }
+.skin-swatch { display: block; width: 100%; height: 100%; }
 
 /* the medal: a badge as a minted coin (the face's colour and the rim's metal by tier) */
 .medal { position: relative; display: inline-grid; place-items: center; width: calc(76 * var(--u)); height: calc(76 * var(--u)); border-radius: 50%; isolation: isolate; }
@@ -2540,7 +2540,7 @@ canvas.skin-swatch { display: block; width: 100%; height: 100%; }
 @keyframes dock-new-pulse { 50% { transform: scale(1.12); } }
 @media (prefers-reduced-motion: reduce) { .dock-new { animation: none; } }
 /* (1.15) a celebration's shop tile art (js/ui/celebrate.js drawCelebrationIcon) */
-canvas.cel-icon { display: block; width: calc(84 * var(--u)); height: calc(84 * var(--u)); filter: drop-shadow(0 calc(4 * var(--u)) calc(6 * var(--u)) rgba(0, 0, 0, 0.25)); }
+.cel-icon { display: block; width: calc(84 * var(--u)); height: calc(84 * var(--u)); filter: drop-shadow(0 calc(4 * var(--u)) calc(6 * var(--u)) rgba(0, 0, 0, 0.25)); }
 
 /* (1.15, the owner: "We need a better way to display the coins please") the game's own gold coin, and the menu's wallet */
 .coin-ic {
@@ -3160,6 +3160,8 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .card .tile-them b { color: #7cc4ff; }
 .card .label { color: #c9d4ea; }
 .card .tile span { color: #c9d4ea; }
+/* (1.15.2, the owner: "The colour of the "current streak" cant be read") the streak's tile stays light peach: dark words on it */
+.card .tile.hot span { color: #7a4300; }
 /* (1.15, the owner: "Make this banner go down with you so that for each change you make it is visible") your player card
    stays at the top of the Uitdager-styl tab while you scroll, so every frame, medal or title you wear shows on it */
 .look-zone > .pcard { position: sticky; top: calc(20 * var(--u)); z-index: 4; margin-top: calc(22 * var(--u)); margin-bottom: calc(20 * var(--u)); }
@@ -3170,6 +3172,18 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
    (1.15.0): Android's WebView doesn't always apply the trim while scrolling, so the band painted over the cards' words
    further down the Winkel (the owner's phone, 13 Oct 07:00) */
 .look-zone > .pcard { top: 0; box-shadow: 0 0 calc(20 * var(--u)) var(--pc-glow), 0 calc(10 * var(--u)) calc(22 * var(--u)) rgba(5, 10, 30, 0.6), 0 0 0 calc(12 * var(--u)) rgb(18, 26, 52); }
+/* (1.15.2) the Winkel's list stands still. On 1.15.1 the owner's phone (13 Oct 14:11) still lost the words, prices and
+   borders of the tiles just under the pinned card: every endless sweep, turning ray and shine in a scrolling list is work
+   Android's WebView must keep in step with the scroll (the golden sweep and the rays each made a layer of their own, and
+   ~40 more layers came from overlapping them). The tiles keep their tier colours, rims, rays and foils, standing still;
+   the pinned player card keeps its own shine. The tiles' drawn pictures are plain images (dom.js asPicture). */
+.shop-body .shop-item.tier-legendary::before { display: none; }
+.shop-body .shop-item .medal::after, .shop-body .shop-item .medal .medal-rays, .shop-body .shop-item .frame-swatch.frame-holo,
+.shop-body .shop-item .title-plate, .shop-body .shop-item:active .medal, .shop-body .pcard .medal::after, .shop-body .pcard .medal .medal-rays { animation: none; }
+/* (1.15.2) the pinned card as wide as the tiles under it (it stopped at 560u), so no tile edge or heading peeks out beside
+   it; a title's one long word stays whole on its plate ("Wolkekrabbe / r" at 360 px) */
+.look-zone > .pcard { max-width: none; }
+.shop-item .title-plate { padding-left: calc(8 * var(--u)); padding-right: calc(8 * var(--u)); font-size: max(11px, calc(19 * var(--u))); overflow-wrap: normal; }
 .punish-title { display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u)); flex-wrap: wrap; }
 .punish-m { padding: calc(3 * var(--u)) calc(12 * var(--u)); border-radius: 999px; background: linear-gradient(180deg, #ffe08a, #f0a500); color: #2a1d00; font-weight: 900; box-shadow: 0 0 calc(10 * var(--u)) rgba(255, 200, 60, 0.45); }
 /* (1.15, the owner: "the punishement needs to be more compact on the left") two by two: small tiles, the icon on top,
