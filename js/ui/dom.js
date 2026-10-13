@@ -896,7 +896,8 @@ export function createUI(bus) {
     // weekly challenge, still on the right side, and the trophy to the Done for today") the flame sits on the weekly
     // chests' strip; once today is done the leaderboard is a tile of the done card
     const strip = weekStrip(m.week, m.dateKey);
-    const flame = (stats.played | 0) > 0 ? streakChip(stats.currentStreak) : null;
+    // (1.15.4, the game-tester: a faded "🔥 0" sat on the day-7 chest) only a streak that is on
+    const flame = (stats.played | 0) > 0 && (stats.currentStreak | 0) > 0 ? streakChip(stats.currentStreak) : null;
     if (strip && flame) strip.append(flame);
     const card = h('div', { class: 'card daily-card' }, done ? null : trophy, strip ? null : flame, head, strip);
     if (done) {
