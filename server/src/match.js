@@ -23,7 +23,7 @@ import {
   isPunishment,
 } from '../../js/core/duel.js';
 import { cleanCard } from '../../js/core/economy.js';
-import { createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, firstSeat, SABOTAGES, cleanVis } from '../../js/core/turns.js';
+import { createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, firstSeat, sabotagesFor, cleanVis } from '../../js/core/turns.js';
 
 const MSG_MAX = 512;                   // characters per message (the lobby)
 const ROOM_MSG_MAX = 2048;             // in a room: a Blok vir Blok turn's report carries the loose top
@@ -45,6 +45,9 @@ const PROTOCOL_TURNS = 3;   // a game older than this can't play Blok vir Blok: 
 const PROTOCOL_ROUNDS = 4;  // 1.12: Blok vir Blok rondtes (weather and visitors), only when both games know them
 const PROTOCOL_V5 = 5;      // 1.12.1: back after a dropped connection, "Sorry, besig nou", "Speel weer", a pause for both
 const PROTOCOL_STAKES = 6;  // 1.13: coin matches (a room's stake); a staked room is "gone" for an older game
+// 1.15.3: Blok vir Blok's newer rules (a joker for 3 Perfeks in a row, Wankelblok / Haastig / Gladde blok, a faster
+// crane) when both games know them; the lobby's offers (another stake or mode); "Speel weer" for another stake
+const PROTOCOL_V7 = 7;
 /** (1.13) A stake as asked for: one of DUEL.stakes, else 0 (no stake). */
 const stakeOf = (n) => (DUEL.stakes.includes(Number(n)) ? Number(n) : 0);
 /**
@@ -337,7 +340,7 @@ export class MatchRoom {
     }
     if (seat < 0) return;
     if (msg.t === 'again') {
-      await this.again(seat, now);
+      await this.again(seat, now, msg.stake);
       return;
     }
     if (!m.started || m.result) return;
@@ -623,8 +626,13 @@ export class MatchRoom {
     }
   }
 
-  /** (1.12.1) "Speel weer" after a friend match: once both said it, a new match in the same room. */
-  async again(seat, now) {
+  /**
+   * (1.12.1) "Speel weer" after a friend match: once both said it, a new match in the same room. (1.15.3, the owner:
+   * "there is no way to change the stake after we have played") between two protocol-7 games each "Speel weer" says
+   * the stake it wants (`ask`); the match starts once both asked for the same one. Asking for another stake than the
+   * other player's makes theirs a question again: they hear `again` with the new stake. Older games: the same stake.
+   */
+  async again(seat, now, ask) {
     const m = this.m;
     if (!m.result || m.kind !== 'friend') return;
     const me = this.socketFor(seat);
@@ -633,23 +641,29 @@ export class MatchRoom {
       if (me) sendJson(me, { t: 'bye' });
       return;
     }
-    (m.again ||= [false, false])[seat] = true;
-    if (m.again[1 - seat]) {
-      await this.restart(now);
+    const v7 = !!me && version(me) >= PROTOCOL_V7 && version(other) >= PROTOCOL_V7;
+    const want = v7 && ask !== undefined && ask !== null ? stakeOf(ask) : m.stake || 0;
+    m.again ||= [false, false];
+    m.againStake ||= [null, null];
+    m.again[seat] = true;
+    m.againStake[seat] = want;
+    if (m.again[1 - seat] && (m.againStake[1 - seat] ?? (m.stake || 0)) === want) {
+      await this.restart(now, want);
       return;
     }
-    sendJson(other, { t: 'again' });
+    m.again[1 - seat] = false;   // (they asked for another stake: theirs is a question again)
+    sendJson(other, v7 ? { t: 'again', stake: want } : { t: 'again' });
     await this.save();
   }
 
   /** A new match in this room: a new seed, the same mode and players (their sockets carry name, card and key). */
-  async restart(now) {
+  async restart(now, stake = this.m.stake || 0) {
     const old = this.m;
     this.m = {
       seed: newMatchSeed(randFloat), kind: old.kind, mode: old.mode, createdAt: now, names: [null, null], started: false,
       startAt: 0, ref: null, samples: [[], []], ends: [null, null], result: null, done: false, host: old.host || null,
       declines: [], round: (old.round || 1) + 1,
-      stake: old.stake || 0,   // (1.13) "Speel weer" plays for the same stake
+      stake: stakeOf(stake),   // (1.13) "Speel weer" plays for the same stake; (1.15.3) or the one both asked for
     };
     this.emoteState = null;
     await this.start(now);
@@ -725,13 +739,16 @@ export class MatchRoom {
     m.paused = null;
     m.pauses = [DUEL.pauses, DUEL.pauses];
     m.again = [false, false];
+    m.againStake = [null, null];
     if (m.mode !== 'turns') m.endAt = m.startAt + DUEL.maxRunMs;
     // Blok vir Blok: who drops first is drawn here; the first turn goes with the start
     let turn = null;
     if (m.mode === 'turns') {
       // rondtes (1.12) only when both games know them: a match with a 1.11 game plays as in 1.11
       m.rounds = [0, 1].every((k) => version(this.socketFor(k)) >= PROTOCOL_ROUNDS);
-      const ref = createTurnReferee({ first: firstSeat(randFloat), seed: m.seed, rounds: m.rounds });
+      // (1.15.3) the newer rules only when both games know them: a match with an older game plays as before
+      m.v7 = [0, 1].every((k) => version(this.socketFor(k)) >= PROTOCOL_V7);
+      const ref = createTurnReferee({ first: firstSeat(randFloat), seed: m.seed, rounds: m.rounds, v7: m.v7 });
       const [e] = ref.start();
       m.tref = ref.snapshot();
       m.deadline = m.startAt + TURNS.serverTurnMs;
@@ -742,9 +759,10 @@ export class MatchRoom {
       if (k < 0) continue;
       // (opp.v: the other game's protocol; 1.12 shows the other player's Blok vir Blok turn behind their 'go')
       const msg = { t: 'start', seed: m.seed, you: k, opp: { name: m.names[1 - k], card: cleanCard(att(this.socketFor(1 - k)).card), v: version(this.socketFor(1 - k)) } };
-      if (turn) Object.assign(msg, { mode: 'turns', turn, ...(m.rounds ? { rounds: true } : {}) });
+      if (turn) Object.assign(msg, { mode: 'turns', turn, ...(m.rounds ? { rounds: true } : {}), ...(m.v7 ? { v7: true } : {}) });
+      else if (version(s) >= PROTOCOL_V7) msg.mode = 'race';   // (1.15.3: a lobby offer may have changed the mode)
       // (1.12.1) to a game of protocol 5: this room's protocol and kind (a friend room: "Speel weer", pauses)
-      if (version(s) >= PROTOCOL_V5) Object.assign(msg, { sv: Math.min(version(s), PROTOCOL_STAKES), room: m.kind });
+      if (version(s) >= PROTOCOL_V5) Object.assign(msg, { sv: Math.min(version(s), PROTOCOL_V7), room: m.kind });
       if (m.stake) msg.stake = m.stake;   // (1.13) both games hold it now (and say so); the winner takes both
       sendJson(s, msg);
     }
@@ -826,7 +844,8 @@ export class MatchRoom {
         for (const k of [0, 1]) this.tell(k, tm);
       } else if (e.type === 'joker') {
         // (n, to a 1.12.1 game: back on a new connection it hears these again, and knows them by the turn)
-        this.tell(e.seat, { t: 'choose', options: [...SABOTAGES], def: SABOTAGES[0], ...this.turnTag(e.seat, ref.n) });
+        const opts = sabotagesFor(ref.v7);
+        this.tell(e.seat, { t: 'choose', options: [...opts], def: opts[0], ...this.turnTag(e.seat, ref.n) });
       } else if (e.type === 'sent') {
         this.tell(e.seat, { t: 'sent', kind: e.kind, ...this.turnTag(e.seat, ref.n) });
         // a heads-up: it comes with their next block
@@ -981,7 +1000,8 @@ export class MatchLobby {
     if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') return json(426, { error: 'websocket_expected' });
     const [response, server] = this.upgrade();
     this.state.acceptWebSocket(server, ['wait']);
-    server.serializeAttachment({ at: this.now(), hello: false });
+    // (1.15.3) an id: the lobby's offers name the player they are about
+    server.serializeAttachment({ at: this.now(), hello: false, id: `${this.now().toString(36)}${rand32().toString(36)}` });
     return response;
   }
 
@@ -997,6 +1017,10 @@ export class MatchLobby {
   async onMessage(ws, data) {
     if (!this.allow(ws, this.now())) return;
     const msg = parseMsg(data);
+    if (msg && (msg.t === 'offer-yes' || msg.t === 'offer-no')) {
+      await this.offerAnswer(ws, msg);
+      return;
+    }
     if (!msg || msg.t !== 'hello') return;
     const me = att(ws);
     if (me.hello) return;
@@ -1006,7 +1030,10 @@ export class MatchLobby {
     const mode = msg.mode === 'turns' ? 'turns' : 'race';
     // (1.13) a coin match: only players looking for the same stake meet (an older game never asks for one)
     const stake = Math.floor(Number(msg.v)) >= PROTOCOL_STAKES ? stakeOf(msg.stake) : 0;
-    ws.serializeAttachment({ ...me, hello: true, rules, mode, stake });
+    const v = Math.max(0, Math.min(99, Math.floor(Number(msg.v)) || 0));
+    // (1.15.3) an id for the lobby's offers (given at the hello: a host that opens the socket itself gives none)
+    const id = me.id || `${this.now().toString(36)}${rand32().toString(36)}`;
+    ws.serializeAttachment({ ...me, id, hello: true, rules, mode, stake, v, name: cleanNickname(msg.name) || DEFAULT_NAME });
     const waiting = this.state.getWebSockets('wait')
       .filter((s) => s !== ws && att(s).hello && !att(s).paired && (att(s).rules || 0) === rules && (att(s).mode || 'race') === mode
         && (att(s).stake || 0) === stake)
@@ -1014,6 +1041,7 @@ export class MatchLobby {
     const other = waiting[0];
     if (!other) {
       sendJson(ws, { t: 'wait' });
+      this.offerFor(ws);
       return;
     }
     const room = await this.newRoom(mode, stake);
@@ -1021,11 +1049,68 @@ export class MatchLobby {
       sendJson(ws, { t: 'wait' });
       return;
     }
-    for (const s of [other, ws]) {
+    this.pair([other, ws], room);
+  }
+
+  /** Both into the room the lobby made: they hear `match` and go. */
+  pair(socks, room) {
+    for (const s of socks) {
       sendJson(s, { t: 'match', room });
       s.serializeAttachment({ at: 0, hello: false, paired: true });
       closeWs(s, 'paired');
     }
+  }
+
+  /**
+   * (1.15.3, the owner: "there is not a lot of players so maybe we should make it that if someone is playing for 50
+   * coins and someone else is playing for 100 coins the guy playing for 100 coins should get a notification that there
+   * is someone willing to play for 50 coins do you accept? Also the same for wedloop and block for block") a player
+   * nobody looks for the same match as: someone waiting for another stake or mode (both protocol 7, the same rules) is
+   * offered to one of them. Asked: the one looking for more coins (the lower stake is offered), else the one who has
+   * waited longer; one question at a time, never the same pair twice (`declined`).
+   */
+  offerFor(ws) {
+    const me = att(ws);
+    if (!me.hello || me.paired || (me.v || 0) < PROTOCOL_V7) return;
+    const free = (s) => att(s).hello && !att(s).paired && (att(s).v || 0) >= PROTOCOL_V7 && (att(s).rules || 0) === (me.rules || 0);
+    const others = this.state.getWebSockets('wait')
+      .filter((s) => s !== ws && free(s) && ((att(s).mode || 'race') !== (me.mode || 'race') || (att(s).stake || 0) !== (me.stake || 0)))
+      .sort((a, b) => (att(a).at || 0) - (att(b).at || 0));
+    for (const o of others) {
+      const them = att(o);
+      // who is asked: more coins asked for (they're offered the lower stake), else the one who waited longer
+      const askThem = (them.stake || 0) > (me.stake || 0) || ((them.stake || 0) === (me.stake || 0) && (them.at || 0) <= (me.at || 0));
+      const [asked, about] = askThem ? [o, ws] : [ws, o];
+      const a = att(asked);
+      const b = att(about);
+      if (a.offer || (a.declined || []).includes(b.id) || (b.declined || []).includes(a.id)) continue;
+      const offer = { id: `${b.id}`, mode: b.mode || 'race', stake: b.stake || 0 };
+      asked.serializeAttachment({ ...a, offer });
+      sendJson(asked, { t: 'offer', ...offer, name: b.name || DEFAULT_NAME });
+      return;
+    }
+  }
+
+  /** The asked player's answer: yes (the room for the other player's match, if they still look) or no. */
+  async offerAnswer(ws, msg) {
+    const me = att(ws);
+    const offer = me.offer;
+    if (!me.hello || me.paired || !offer || msg.id !== offer.id) return;
+    const other = this.state.getWebSockets('wait').find((s) => s !== ws && att(s).id === offer.id && att(s).hello && !att(s).paired);
+    const declined = [...(me.declined || []), offer.id].slice(-10);
+    if (msg.t === 'offer-no' || !other) {
+      ws.serializeAttachment({ ...me, offer: null, declined });
+      if (msg.t === 'offer-yes') sendJson(ws, { t: 'offer-gone' });
+      this.offerFor(ws);
+      return;
+    }
+    const room = await this.newRoom(offer.mode, offer.stake);
+    if (!room) {
+      ws.serializeAttachment({ ...me, offer: null });
+      sendJson(ws, { t: 'offer-gone' });
+      return;
+    }
+    this.pair([other, ws], room);
   }
 
   async newRoom(mode = 'race', stake = 0) {

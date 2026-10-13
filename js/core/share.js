@@ -10,7 +10,7 @@ import { triesLabel } from './tries.js';
 
 const GRID_COLS = 10;
 const GRID_ROWS = 5;
-const END_EMOJI = { flood: '🌊', lives: '💥' };
+const END_EMOJI = { flood: '🌊', lives: '💥' };   // (1.15.3, the owner: "the explosion at the bottom makes sense the one on top does not")
 
 function gridLines(grid, reason, set = RATING_EMOJI) {
   const cells = [];

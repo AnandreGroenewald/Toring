@@ -140,7 +140,9 @@ export async function boardOf(db, dateKey, player = null) {
 }
 
 /**
- * POST /board — the first post of a day stores the result; later ones may only change the name or hiding.
+ * POST /board — the first post of a day stores the result; later ones may only change the hiding. (1.15.3, the owner:
+ * "if they get a new highscore and they have changed their nickname then only it should change else it should stay the
+ * same") a row keeps the name it was played with; only a better height brings the player's new name.
  * (1.12) A `retry` post ("Nog 'n kans", bought with coins in the game) keeps the better height and marks the
  * entry for good, so the list shows there were more tries. (1.12.1) Up to 4 extra tries a day: each post says
  * how many tries were played (`tries`, 2-5); a post for the same or a later try may raise the height (the same
@@ -161,8 +163,8 @@ export async function postBoard(request, ctx) {
       const stmts = [better
         ? ctx.db.prepare('UPDATE daily_board SET retried = 1, tries = ?8, name = ?3, hidden = ?4, height_dm = ?5, blocks = ?6, duration_s = ?7 WHERE date_key = ?1 AND player = ?2')
           .bind(e.dateKey, e.player, e.name, e.hidden ? 1 : 0, e.heightDm, e.blocks, e.durationS, tries)
-        : ctx.db.prepare('UPDATE daily_board SET retried = 1, tries = ?5, name = ?3, hidden = ?4 WHERE date_key = ?1 AND player = ?2')
-          .bind(e.dateKey, e.player, e.name, e.hidden ? 1 : 0, tries)];
+        : ctx.db.prepare('UPDATE daily_board SET retried = 1, tries = ?4, hidden = ?3 WHERE date_key = ?1 AND player = ?2')
+          .bind(e.dateKey, e.player, e.hidden ? 1 : 0, tries)];
       if (better && metre(e.heightDm) !== metre(row.height_dm)) {
         stmts.push(
           ctx.db.prepare('UPDATE daily_board_hist SET n = MAX(n - 1, 0) WHERE date_key = ?1 AND metre = ?2').bind(e.dateKey, metre(row.height_dm)),
@@ -187,9 +189,9 @@ export async function postBoard(request, ctx) {
         .bind(e.dateKey, metre(e.heightDm)),
     ]);
   } else {
-    // the height stands; an entry the owner blocked stays as it is
-    await ctx.db.prepare('UPDATE daily_board SET name = ?3, hidden = ?4 WHERE date_key = ?1 AND player = ?2 AND blocked = 0')
-      .bind(e.dateKey, e.player, e.name, e.hidden ? 1 : 0).run();
+    // the height and the name stand (1.15.3); an entry the owner blocked stays as it is
+    await ctx.db.prepare('UPDATE daily_board SET hidden = ?3 WHERE date_key = ?1 AND player = ?2 AND blocked = 0')
+      .bind(e.dateKey, e.player, e.hidden ? 1 : 0).run();
   }
   return json(200, await boardOf(ctx.db, e.dateKey, e.player));
 }

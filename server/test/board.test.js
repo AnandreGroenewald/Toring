@@ -41,7 +41,7 @@ test('ranking: taller first, a tie goes to who was first; hidden players keep th
   assert.equal(anna.json.you.rank, 4, 'behind Dawie (hidden), Bennie and Carla');
 });
 
-test('one result a day: a second post can change the name or hide it, never the height', async () => {
+test('one result a day: a second post can hide it, never change the height or (1.15.3) the name', async () => {
   const h = createHarness();
   await h.request('POST', '/board', { body: entry({ heightM: 20 }) });
   const again = await h.request('POST', '/board', { body: entry({ heightM: 90, blocks: 40, durationMs: 300000, name: 'Anna B', hidden: true }) });
@@ -49,8 +49,20 @@ test('one result a day: a second post can change the name or hide it, never the 
   assert.deepEqual(again.json.you, { rank: 1, heightM: 20, hidden: true, retried: false, tries: 1 });
   assert.equal(again.json.top.length, 0, 'hidden now');
   assert.equal(again.json.players, 1, 'still one player');
+  // (the owner: "if they get a new highscore and they have changed their nickname then only it should change")
   const back = await h.request('POST', '/board', { body: entry({ heightM: 90, name: 'Anna B' }) });
-  assert.deepEqual(back.json.top, [{ rank: 1, name: 'Anna B', heightM: 20, you: true, retried: false, tries: 1 }]);
+  assert.deepEqual(back.json.top, [{ rank: 1, name: entry({}).name, heightM: 20, you: true, retried: false, tries: 1 }], 'the name it was played with');
+});
+
+test('(1.15.3) a new nickname reaches the board only with a better try; a lower try keeps the old name', async () => {
+  const h = createHarness();
+  await h.request('POST', '/board', { body: entry({ heightM: 20 }) });
+  const lower = await h.request('POST', '/board', { body: entry({ heightM: 15, retry: true, tries: 2, name: 'Anna B' }) });
+  assert.equal(lower.json.top[0].name, entry({}).name, 'a lower try: the old name stays');
+  assert.equal(lower.json.top[0].heightM, 20);
+  const better = await h.request('POST', '/board', { body: entry({ heightM: 30, blocks: 20, durationMs: 120000, retry: true, tries: 3, name: 'Anna B' }) });
+  assert.equal(better.json.top[0].name, 'Anna B', 'a new best: the new name');
+  assert.equal(better.json.top[0].heightM, 30);
 });
 
 test('impossible towers are refused; real games pass; malformed posts too; rude names become Bouer', async () => {

@@ -20,19 +20,22 @@ import {
 } from './core/duel.js';
 import { cleanCard, cardForMode, cosmetic, BOT_CARD } from './core/economy.js';
 import {
-  createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, isSabotage, botSabotage, firstSeat, SABOTAGES,
+  createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, isSabotage, botSabotage, firstSeat, sabotagesFor, jokerStreakFor,
   cleanRound, cleanVis,
 } from './core/turns.js';
 
 const YOU = 0;
 const THEM = 1;
 const RESULT_WAIT_MS = 2500;   // live: after our tower fell, wait this long for the server's verdict
-const PROTOCOL = 6;            // 2: the first to a height mark chooses the punishment ('choose' / 'punish'); 3: Blok vir Blok;
+const PROTOCOL = 7;            // 2: the first to a height mark chooses the punishment ('choose' / 'punish'); 3: Blok vir Blok;
                               // 4 (1.12): Blok vir Blok 'go' (a turn began) and the report's step count, for a smooth replay;
                               // the rondtes (weather and visitors in the turn messages) and 'visit' (Skelm Sakkie's outcome);
                               // 5 (1.12.1): back on a new connection ('?rejoin=1'), "Sorry, besig nou" ('decline'),
                               // "Speel weer" in the same room ('again'), a pause for both in a friend match ('pause' / 'resume');
                               // 6 (1.13): coin matches (a stake in the lobby's hello and the friend room's POST; the start says it)
+                              // 7 (1.15.3): Blok vir Blok's newer rules when both know them (start `v7`: a joker for 3 Perfeks,
+                              // Wankelblok / Haastig / Gladde blok, a faster crane); the lobby's offers ('offer'); "Speel weer"
+                              // for another stake ('again' with `stake`)
 const V5 = 5;                  // the protocol that brought rejoin, "Speel weer" and the pause for both (a 1.12.1 game has them too)
 const REJOIN_RETRY_MS = [600, 1200, 2000, 3000];   // a dropped match tries its room again after these (then every 3 s)
 // (1.13) a coin match is settled by the room's result only: after our tower ended (or we quit) the game waits this long
@@ -40,6 +43,8 @@ const REJOIN_RETRY_MS = [600, 1200, 2000, 3000];   // a dropped match tries its 
 const STAKE_RESULT_WAIT_MS = 10000;
 const DEFAULT_CARD = cleanCard(null);   // a recording or a link carries no card
 const round1 = (v) => Math.round(v * 10) / 10;
+/** (1.15.3) A sabotage's emoji and name: the weather ones from WEATHER_INFO, Wankelblok / Haastig / Gladde blok from S. */
+const sabotageInfo = (k) => WEATHER_INFO[k] || S.sabotageInfo?.[k] || null;
 /** (1.13) A stake as the room or the player says it: one of DUEL.stakes, else 0 (no coins at stake). */
 const stakeOf = (n) => (DUEL.stakes.includes(Number(n)) ? Number(n) : 0);
 const num = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(DUEL.maxHeightM, Number(v))) : 0);
@@ -113,7 +118,7 @@ export function createDuel({
 
   // ------------------------------------------------------------------------------- a match
   function newMatch({
-    kind, seed, oppName, oppCard = null, run = null, ws = null, you = YOU, mode = 'race', turn = null, oppV = null, rounds = false,
+    kind, seed, oppName, oppCard = null, run = null, ws = null, you = YOU, mode = 'race', turn = null, oppV = null, rounds = false, v7 = false,
     room = null, sv = 0, roomKind = null, stake = 0,
   }) {
     reqGen++;
@@ -126,8 +131,10 @@ export function createDuel({
       // Blok vir Blok: the referee (Robot Rikus: here; live: the server's, whose events come as messages),
       // the turn on now, the hearts, and the game's events held back until the scene is up
       // (rondtes: against Robot Rikus always; live when the room says both games know them)
-      tref: turns && kind !== 'live' ? createTurnReferee({ first: firstSeat(), seed, rounds: true }) : null,
+      tref: turns && kind !== 'live' ? createTurnReferee({ first: firstSeat(), seed, rounds: true, v7: true }) : null,
       rounds: turns && (kind !== 'live' || rounds === true),
+      // (1.15.3) Blok vir Blok's newer rules: against Robot Rikus always; live when the room says both games know them
+      v7: turns && (kind !== 'live' || v7 === true),
       turn: turns ? turn : null,
       hearts: turns ? [TURNS.hearts, TURNS.hearts] : null,
       perfects: [0, 0],
@@ -211,6 +218,10 @@ export function createDuel({
   function canAgain(m) {
     return !!m && m.kind === 'live' && m.roomKind === 'friend' && m.sv >= V5 && (m.oppV || 0) >= V5;
   }
+  /** (1.15.3) Both games and the room know protocol 7: "Speel weer" may ask for another stake. */
+  function canStake(m) {
+    return !!m && m.sv >= 7 && (m.oppV || 0) >= 7;
+  }
 
   /** Referee events (a recording or the computer) and the live result, in one shape. */
   function handle(events) {
@@ -263,11 +274,12 @@ export function createDuel({
       return;
     }
     const joker = m.mode === 'turns';
-    const def = joker ? SABOTAGES[0] : attackFor(mark) || PUNISHMENTS[0];
+    const sabs = sabotagesFor(m.v7);
+    const def = joker ? sabs[0] : attackFor(mark) || PUNISHMENTS[0];
     const ms = joker ? TURNS.chooseMs : DUEL.chooseMs;
     const timer = setTimer(() => choose(mark, def), ms);
     m.choice = { mark, def, timer, joker };
-    bus.emit('duel:choose', { m: mark, opp: m.oppName, def, options: joker ? [...SABOTAGES] : [...PUNISHMENTS], ms, ...(joker ? { joker } : {}) });
+    bus.emit('duel:choose', { m: mark, opp: m.oppName, def, options: joker ? [...sabs] : [...PUNISHMENTS], ms, ...(joker ? { joker, streak: jokerStreakFor(m.v7) } : {}) });
   }
 
   /** The player's pick (or the default): to the server, or straight onto the recording. */
@@ -278,7 +290,7 @@ export function createDuel({
     clearTimer(c.timer);
     m.choice = null;
     if (c.joker) {
-      const k = isSabotage(kind) ? kind : c.def;
+      const k = isSabotage(kind, m.v7) ? kind : c.def;
       bus.emit('duel:chosen', { m: mark, kind: k });
       if (!m.outcome) {
         if (m.kind === 'live') {
@@ -403,7 +415,7 @@ export function createDuel({
       seat: e.seat === 1 ? 1 : 0,
       hearts: pair(e.hearts, TURNS.hearts) || [TURNS.hearts, TURNS.hearts],
       streaks: pair(e.streaks, 1e4) || [0, 0],
-      sab: isSabotage(e.sab) ? e.sab : null,
+      sab: isSabotage(e.sab, true) ? e.sab : null,   // (1.15.3: the referee only sends a newer one when both games know it)
       ev: cleanRound(e.ev),   // (1.12) this turn's round: the weather or visitor both players get
       nx: cleanRound(e.nx),   // ...and the round the next turn begins (shown coming)
     };
@@ -438,7 +450,7 @@ export function createDuel({
         startTurn(m, turnOf(e));
       } else if (e.type === 'joker') {
         if (e.seat === m.you) askChoice(m, 0);
-        else turnEvents(m, m.tref.joker(e.seat, botSabotage(m.seed, m.tref.n)));   // Robot Rikus doesn't wait
+        else turnEvents(m, m.tref.joker(e.seat, botSabotage(m.seed, m.tref.n, m.v7)));   // Robot Rikus doesn't wait
       } else if (e.type === 'sent') {
         if (e.seat === m.you) sabotageOut(m, e.kind);
         else sabotageIn(m, e.kind);
@@ -451,13 +463,13 @@ export function createDuel({
 
   /** Our joker's sabotage is on its way to the other player's next block. */
   function sabotageOut(m, kind) {
-    const info = WEATHER_INFO[kind];
+    const info = sabotageInfo(kind);
     if (info) bus.emit('hud:toast', { text: S.turnsSabotageOut(`${info.emoji} ${info.name}`, m.oppName), color: '#ffe38c', visitor: true });
   }
 
   /** The other player's sabotage comes with our next block (a heads-up now; the banner when it comes). */
   function sabotageIn(m, kind) {
-    const info = WEATHER_INFO[kind];
+    const info = sabotageInfo(kind);
     if (info) bus.emit('hud:toast', { text: S.turnsSabotageIn(m.oppName, `${info.emoji} ${info.name}`), color: '#ffb0a8', visitor: true });
   }
 
@@ -513,7 +525,7 @@ export function createDuel({
         if (!m.choice?.joker && !m.jokerOut && once()) askChoice(m, 0);   // (not again while choosing, or once chosen)
         break;
       case 'sent':
-        if (!isSabotage(msg.kind) || !once()) break;
+        if (!isSabotage(msg.kind, m.v7) || !once()) break;
         m.jokerOut = null;
         if (m.choice && m.choice.joker) {
           clearTimer(m.choice.timer);
@@ -523,7 +535,7 @@ export function createDuel({
         sabotageOut(m, msg.kind);
         break;
       case 'sabotage':
-        if (isSabotage(msg.kind) && once()) sabotageIn(m, msg.kind);
+        if (isSabotage(msg.kind, m.v7) && once()) sabotageIn(m, msg.kind);
         break;
       case 'result':
         if (Array.isArray(msg.hearts) && msg.hearts.length === 2) m.hearts = msg.hearts.map((h) => Math.max(0, Math.floor(Number(h)) || 0));
@@ -730,8 +742,12 @@ export function createDuel({
         return true;
       case 'again':   // the other player wants to play again
         if (m.outcome && m.again !== 'gone') {
-          m.again = m.again === 'asked' ? 'asked' : 'they';
-          bus.emit('duel:again', { state: m.again, name: m.oppName });
+          // (1.15.3) for the stake they say (two protocol-7 games); a different one than ours is a question for us again
+          const ask = msg.stake === undefined ? null : stakeOf(msg.stake);
+          if (ask !== null && m.again === 'asked' && ask !== m.againAsk) m.again = 'they';
+          else m.again = m.again === 'asked' ? 'asked' : 'they';
+          m.theirAsk = ask;
+          bus.emit('duel:again', { state: m.again, name: m.oppName, ...(ask !== null ? { stake: ask } : {}) });
         }
         return true;
       case 'bye':     // ...or went: no "Speel weer" with them now
@@ -762,6 +778,7 @@ export function createDuel({
       kind: 'live', seed: msg.seed, oppName: cleanNickname(msg.opp?.name) || S.duelSomeone, oppCard: msg.opp?.card, ws, you: msg.you,
       // (oppV: null from a Worker older than 1.12, which doesn't say)
       mode: turns ? 'turns' : 'race', turn, oppV: Number.isFinite(msg.opp?.v) ? Math.max(1, Math.min(99, Math.floor(msg.opp.v))) : null, rounds: msg.rounds === true,
+      v7: msg.v7 === true,   // (1.15.3) Blok vir Blok's newer rules: the room says both games know them
       // (1.12.1: the room's protocol and kind, from a Worker of protocol 5)
       room, sv: Number.isFinite(msg.sv) ? Math.floor(msg.sv) : 0, roomKind: msg.room === 'friend' || msg.room === 'random' ? msg.room : null,
       // (1.13) the room's stake, as the room says it (a Worker older than 1.13 says none: no coins at stake)
@@ -1106,7 +1123,21 @@ export function createDuel({
       };
       ws.onmessage = (e) => {
         const msg = parse(e.data);
-        if (!msg || msg.t !== 'match' || !isRoomCode(msg.room) || pending?.ws !== ws) return;
+        if (!msg || pending?.ws !== ws) return;
+        // (1.15.3) the lobby offers someone looking for another stake or mode: the player answers (answerOffer)
+        if (msg.t === 'offer' && typeof msg.id === 'string' && msg.id.length <= 40) {
+          search.offer = msg.id;
+          bus.emit('duel:offer', {
+            id: msg.id, mode: msg.mode === 'turns' ? 'turns' : 'race', stake: stakeOf(msg.stake), name: cleanNickname(msg.name) || S.duelSomeone,
+          });
+          return;
+        }
+        if (msg.t === 'offer-gone') {
+          search.offer = null;
+          bus.emit('duel:offer-gone');
+          return;
+        }
+        if (msg.t !== 'match' || !isRoomCode(msg.room)) return;
         stopPending();
         joinRoom(msg.room, { onStart: onFound, onFail: () => findOpponent({ onFound, onFallback, onRetry, mode, stake: search.stake }), waitMs: PAIR_WAIT_MS });
       };
@@ -1124,6 +1155,15 @@ export function createDuel({
     };
     search.ping = setTimer(ping, SEARCH_PING_MS);
     if (!search.away) search.connect();
+  }
+
+  /** (1.15.3) The player's answer to the lobby's offer: yes (the match comes as 'match') or no (the search goes on). */
+  function answerOffer(id, yes) {
+    const search = pending?.search;
+    if (!search || search.offer !== id || !pending.ws) return false;
+    search.offer = null;
+    send(pending.ws, { t: yes ? 'offer-yes' : 'offer-no', id });
+    return true;
   }
 
   /** Stop looking and play now: a recording of a real match, or Robot Rikus (`onFallback` of the search). */
@@ -1296,6 +1336,7 @@ export function createDuel({
     away,
     back,
     playNow,
+    answerOffer,
     /** Searching the lobby (the waiting screen or Oefen while waiting shows it). */
     /** (1.12) Can this player send an emoji now (and is the match's allowance used up)? */
     emoteState() {
@@ -1356,14 +1397,25 @@ export function createDuel({
       const m = match;
       return !!m && !!m.outcome && canAgain(m) && !!m.ws && m.again !== 'gone';
     },
-    /** "Speel weer": the room starts a new match once both said it ('start' -> the flow's onStart). */
-    again() {
+    /**
+     * "Speel weer": the room starts a new match once both said it ('start' -> the flow's onStart). (1.15.3) `stake`:
+     * the coins asked for the next match, between two protocol-7 games (else the room keeps this match's).
+     */
+    again(stake) {
       const m = match;
       if (!m || !m.outcome || !canAgain(m) || !m.ws || m.again === 'gone') return false;
-      send(m.ws, { t: 'again' });
-      m.again = m.again === 'they' ? 'both' : 'asked';
-      bus.emit('duel:again', { state: m.again, name: m.oppName });
+      const pick = canStake(m) && stake !== undefined ? stakeOf(stake) : null;
+      send(m.ws, pick !== null ? { t: 'again', stake: pick } : { t: 'again' });
+      // the same as theirs: both now; another stake: our question to them
+      const same = m.again === 'they' && (pick === null || m.theirAsk === null || m.theirAsk === undefined || pick === m.theirAsk);
+      m.again = same ? 'both' : 'asked';
+      m.againAsk = pick;
+      bus.emit('duel:again', { state: m.again, name: m.oppName, ...(pick !== null ? { stake: pick } : {}) });
       return true;
+    },
+    /** (1.15.3) Can "Speel weer" ask for another stake here (a friend room of two protocol-7 games)? */
+    canChangeStake() {
+      return !!match && canAgain(match) && canStake(match);
     },
     /** What the results screen needs once the tower has ended. */
     summary() {

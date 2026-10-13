@@ -65,6 +65,28 @@ test('five Perfeks in a row of your own earn a joker; the other player\'s blocks
   assert.deepEqual(ref.streaks, [0, 0]);
 });
 
+test('(1.15.3) v7: three Perfeks in a row earn a joker; it can send Wankelblok, Haastig or Gladde blok (survives a snapshot)', () => {
+  let ref = createTurnReferee({ first: 0, v7: true });
+  ref.start();
+  let n = 1;
+  const events = [];
+  for (let k = 0; k < TURNS.jokerStreak7; k++) {
+    events.push(...ref.settled(0, { n: n++, r: 'P' }));
+    events.push(...ref.settled(1, { n: n++, r: 'S' }));
+  }
+  assert.equal(events.filter((e) => e.type === 'joker' && e.seat === 0).length, 1);
+  ref = createTurnReferee({ init: ref.snapshot() });   // (the server keeps it between messages)
+  assert.equal(ref.v7, true);
+  assert.deepEqual(ref.joker(0, 'ice'), [{ type: 'sent', seat: 0, kind: 'ice' }]);
+  const old = createTurnReferee({ first: 0 });
+  old.start();
+  n = 1;
+  for (let k = 0; k < TURNS.jokerStreak7; k++) {
+    assert.ok(!old.settled(0, { n: n++, r: 'P' }).some((e) => e.type === 'joker'), 'an older match: not after three');
+    old.settled(1, { n: n++, r: 'S' });
+  }
+});
+
 test('the joker\'s sabotage lands on the other player\'s next block, once', () => {
   const ref = createTurnReferee({ first: 0 });
   ref.start();
@@ -143,6 +165,11 @@ test('poses and tower reports from the other game are checked', () => {
 });
 
 test('sabotages: the list, and Robot Rikus picks one the same way for the same match', () => {
+  // (1.15.3) the newer sabotages only in a v7 match
+  assert.equal(isSabotage('wobbly'), false);
+  assert.equal(isSabotage('wobbly', true), true);
+  assert.ok(['rush', 'ice', 'fog'].every((k) => isSabotage(k, true)));
+  for (let n = 1; n < 40; n++) assert.ok(isSabotage(botSabotage('abc123', n, true), true));
   assert.ok(SABOTAGES.length >= 2);
   assert.ok(SABOTAGES.every(isSabotage));
   assert.equal(isSabotage('monkey'), false, 'no visitors on a shared tower');

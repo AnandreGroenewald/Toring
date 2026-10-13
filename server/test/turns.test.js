@@ -190,6 +190,57 @@ test('turns room: five Perfeks in a row -> choose; the sabotage comes with the o
   assert.equal(me.last('turn').sab, 'rain', 'both games show it');
 });
 
+test('(1.15.3) turns room of two protocol-7 games: v7 in the start, a joker for 3 Perfeks, six sabotages incl. Wankelblok', async () => {
+  const { room, first, bySeat } = await turnsRoom({ v: [7, 7] });
+  const me = bySeat[first];
+  const them = bySeat[1 - first];
+  assert.equal(me.last('start').v7, true);
+  assert.equal(them.last('start').v7, true);
+  let n = 1;
+  for (let k = 0; k < TURNS.jokerStreak7 - 1; k++) {
+    await play(room, me, n++, { r: 'P' });
+    await play(room, them, n++, { r: 'G' });
+  }
+  await play(room, me, n++, { r: 'P' });
+  const noN = ({ n: _n, ...o }) => o;   // (a protocol-5 game also hears the turn number)
+  assert.deepEqual(noN(me.last('choose')), { t: 'choose', options: [...TURNS.sabotages7], def: TURNS.sabotages7[0] }, 'three in a row');
+  await say(room, me, { t: 'joker', kind: 'wobbly' });
+  assert.deepEqual(noN(them.last('sabotage')), { t: 'sabotage', kind: 'wobbly' });
+  // it comes with their next block that has no round (both games hear it)
+  let seen = false;
+  for (let k = 0; k < 8 && !seen; k++) {
+    await play(room, them, n++, { r: 'G' });
+    await play(room, me, n++, { r: 'G' });
+    seen = them.last('turn').sab === 'wobbly';
+  }
+  assert.ok(seen, 'Wankelblok came with one of their turns');
+  assert.equal(me.last('turn').sab, 'wobbly', 'both games show it');
+});
+
+test('(1.15.3) a protocol-7 game with an older one: no v7, the older rules (5 in a row, three sabotages, none of the newer)', async () => {
+  const { room, first, bySeat } = await turnsRoom({ v: [7, 6] });
+  const me = bySeat[first];
+  const them = bySeat[1 - first];
+  assert.equal(me.last('start').v7, undefined);
+  let n = 1;
+  for (let k = 0; k < TURNS.jokerStreak7; k++) {
+    await play(room, me, n++, { r: 'P' });
+    await play(room, them, n++, { r: 'G' });
+  }
+  assert.equal(me.of('choose').length, TURNS.jokerStreak7 >= TURNS.jokerStreak ? 1 : 0, 'no joker after three');
+  for (let k = TURNS.jokerStreak7; k < TURNS.jokerStreak - 1; k++) {
+    await play(room, me, n++, { r: 'P' });
+    await play(room, them, n++, { r: 'G' });
+  }
+  await play(room, me, n++, { r: 'P' });
+  const noN = ({ n: _n, ...o }) => o;
+  assert.deepEqual(noN(me.last('choose')), { t: 'choose', options: [...TURNS.sabotages], def: TURNS.sabotages[0] }, 'five in a row');
+  await say(room, me, { t: 'joker', kind: 'ice' });
+  assert.equal(them.of('sabotage').length, 0, 'a newer sabotage is refused');
+  await say(room, me, { t: 'joker', kind: 'rain' });
+  assert.deepEqual(noN(them.last('sabotage')), { t: 'sabotage', kind: 'rain' });
+});
+
 test('turns room: leaving (quit or a closed connection) hands the match to the other player', async () => {
   let { room, first, bySeat } = await turnsRoom();
   await say(room, bySeat[first], { t: 'over', reason: 'quit' });

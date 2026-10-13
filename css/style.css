@@ -2978,6 +2978,17 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .card .icon-btn, .card > .close { background: rgba(255, 255, 255, 0.12); color: #fff; box-shadow: none; }
 .card .btn-white { --bg: rgba(255, 255, 255, 0.08); --bg-l: rgba(255, 255, 255, 0.12); --bg-d: rgba(0, 0, 0, 0.35); --fg: #f2f5ff; box-shadow: 0 var(--depth) 0 rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
 .card .btn-white > .emoji:first-child { background: rgba(255, 255, 255, 0.1); }
+/* (1.15.3, the owner: "The another match is barely visible") the next match right under the players: the button full
+   width, the coin chips (a match against a person) compact under it */
+.again-box { display: grid; gap: calc(8 * var(--u)); margin: calc(12 * var(--u)) 0 calc(4 * var(--u)); }
+.again-box .btn-duel-again { width: 100%; font-size: max(15px, calc(32 * var(--u))); }
+.again-stakes { gap: calc(4 * var(--u)); }
+.again-stakes > .label { font-size: max(11px, calc(20 * var(--u))); color: #c9d4ea; }
+.again-stakes .stake-btn { min-height: 40px; padding: calc(4 * var(--u)) 2px; font-size: max(12px, calc(22 * var(--u))); color: #e6ecfa; }
+.again-stakes .stake-btn[aria-pressed="true"] { color: #6b4d00; }
+.again-stakes .stake-btn:disabled { color: #9fb0d0; }
+/* the grid's key: how many of the lost blocks a visitor took (no heart) */
+.grid-free { margin-left: calc(4 * var(--u)); font-weight: 700; color: #c9d4ea; }
 /* (1.15.3, the contrast sweep qa/contrast1153.mjs after the owner's three finds) the last low words on the dark sheets:
    the streak line, "Aan" in Instellings, a rank lock on the gold tiles, and the small lines under Oefen and the
    Uitdagersreeks (a soft edge like the big words above them) */
@@ -3010,6 +3021,10 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .card .forecast { background: rgba(255, 255, 255, 0.06); }
 .card .daily-date { color: #9fb0d0; }
 .card .lang-btn { background: rgba(255, 255, 255, 0.08); color: #f2f5ff; border-color: rgba(255, 255, 255, 0.18); }
+/* (1.15.3) the lobby's offer: who, what and for how much, then Speel or keep looking (and the time left) */
+.offer-text { margin: 0 0 calc(8 * var(--u)); text-align: center; color: #f2f5ff; font-weight: 800; font-size: max(15px, calc(30 * var(--u))); line-height: 1.3; }
+.offer-note { margin: 0 0 calc(14 * var(--u)); text-align: center; color: #ffd75a; font-weight: 800; font-size: max(12px, calc(22 * var(--u))); }
+.offer-btns { display: grid; gap: calc(10 * var(--u)); margin-bottom: calc(10 * var(--u)); }
 /* (1.15.3) the Daily Tower's free power-up: four big choices, one per row, on the dark sheet */
 .pick-note { margin: 0 0 calc(16 * var(--u)); text-align: center; color: #c9d4ea; font-weight: 700; font-size: max(13px, calc(24 * var(--u))); line-height: 1.3; }
 .pick-btns { display: grid; gap: calc(12 * var(--u)); }
@@ -3178,6 +3193,10 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .pk-heat .pk-ic { background: linear-gradient(145deg, #ff9a6b, #d9381e); }
 .pk-wind .pk-ic { background: linear-gradient(145deg, #9fe2ff, #2f8fd0); }
 .pk-rain .pk-ic, .pk-storm .pk-ic { background: linear-gradient(145deg, #7cc0ff, #2a62c9); }
+/* (1.15.3) Blok vir Blok's newer sabotages */
+.pk-wobbly .pk-ic { background: linear-gradient(145deg, #d6b4ff, #7b46d6); }
+.pk-rush .pk-ic { background: linear-gradient(145deg, #ffe08a, #e08a00); }
+.pk-ice .pk-ic { background: linear-gradient(145deg, #e4fbff, #6cc6e8); }
 .pk-hail .pk-ic { background: linear-gradient(145deg, #e0f4ff, #8fb6d8); }
 .pk-go { grid-row: 1 / 3; grid-column: 3; font-size: max(20px, calc(36 * var(--u))); font-weight: 900; color: rgba(255, 255, 255, 0.5); line-height: 1; }
 .punish-btn b, .punish-btn small { grid-column: 2; }

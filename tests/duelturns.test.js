@@ -70,7 +70,7 @@ test('a friend room in Blok vir Blok: the mode goes to the server; the start car
   assert.deepEqual(JSON.parse(posts[0].body), { mode: 'turns' });
   sockets[0].open();
   assert.equal(sockets[0].sent[0].t, 'hello');
-  assert.equal(sockets[0].sent[0].v, 6, 'protocol 6 (1.13 coin matches; 5: 1.12.1; 4: Blok vir Blok with go and the report\'s steps)');
+  assert.equal(sockets[0].sent[0].v, 7, 'protocol 7 (1.15.3: newer Blok vir Blok rules, lobby offers; 6: 1.13 coin matches; 5: 1.12.1; 4: Blok vir Blok with go and the report\'s steps)');
   sockets[0].hear({ t: 'wait' });
   sockets[0].hear({ t: 'start', seed: 'abcdef12', you: 0, opp: { name: 'Bennie' }, mode: 'turns', turn: T1 });
   assert.equal(started.mode, 'turns');
@@ -119,7 +119,8 @@ test('a joker: the choice (sabotages, the default in time), the pick to the room
   const ws = sockets[0];
   ws.hear({ t: 'choose', options: TURNS.sabotages, def: TURNS.sabotages[0] });
   const c = of('duel:choose')[0];
-  assert.deepEqual({ ...c }, { m: 0, opp: 'Bennie', def: TURNS.sabotages[0], options: [...TURNS.sabotages], ms: TURNS.chooseMs, joker: true });
+  // (a room that didn't say v7: an older game on the other side, the older rules: 5 in a row and three sabotages)
+  assert.deepEqual({ ...c }, { m: 0, opp: 'Bennie', def: TURNS.sabotages[0], options: [...TURNS.sabotages], ms: TURNS.chooseMs, joker: true, streak: TURNS.jokerStreak });
   assert.equal(timers.at(-1).ms, TURNS.chooseMs, 'the default comes by itself');
   bus.emit('ui:duel-punish', { m: 0, kind: 'rain' });
   assert.deepEqual(ws.sent.filter((m) => m.t === 'joker'), [{ t: 'joker', kind: 'rain' }]);

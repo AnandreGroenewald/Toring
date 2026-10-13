@@ -92,6 +92,21 @@ export function visitorEmoji(visits) {
   return out;
 }
 
+/**
+ * (1.15.3) The lost blocks a visitor took (they cost no heart): { n, who } — Blouaap's knock-offs and Skelm Sakkie's
+ * steals, `who` the visitor's name (both names when both took some).
+ */
+export function visitorLosses(visits) {
+  let monkey = 0;
+  let thief = 0;
+  for (const v of cleanVisits(visits)) {
+    if (v.type === 'monkey' && v.outcome === 'shoved') monkey += v.n;
+    if (v.type === 'thief' && v.outcome === 'stole') thief += v.n;
+  }
+  const names = [monkey > 0 ? VISITOR_INFO.monkey.name : null, thief > 0 ? VISITOR_INFO.thief.name : null].filter(Boolean);
+  return { n: monkey + thief, who: names.join(' & ') };
+}
+
 /** One line for the results card about the most memorable visit (thief, then monkey, then clown), or ''. */
 export function visitorResultLine(visits) {
   const list = cleanVisits(visits);
@@ -108,6 +123,10 @@ export function visitorResultLine(visits) {
   if (monkeys.some((v) => v.outcome === 'shooed')) return S.resMonkeyShooed;
   if (monkeys.some((v) => v.outcome === 'blocked')) return S.resMonkeyBlocked;
   const gifts = list.filter((v) => v.type === 'clown' && v.outcome === 'gift');
-  if (gifts.length) return S.resClownGift(gifts.reduce((sum, v) => sum + Math.max(1, v.n), 0));
+  // (a 'gift' visit placed at least one block; an older record has no count: his one log)
+  const brought = gifts.reduce((sum, v) => sum + Math.max(1, v.n), 0);
+  if (brought > 0) return S.resClownGift(brought);
+  // (1.15.3, the owner: "if the clown brings 0 gifts it needs to shows Clown did not bring any gifts")
+  if (list.some((v) => v.type === 'clown')) return S.resClownNone;
   return '';
 }

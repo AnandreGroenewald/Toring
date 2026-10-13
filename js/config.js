@@ -293,6 +293,14 @@ export const TURNS = {
   liveBlocks: 5,          // at the end of each turn all but the newest 5 tower blocks set as cement
   jokerStreak: 5,         // Perfeks in a row (your own blocks) for a joker
   sabotages: ['fog', 'heat', 'rain'],   // Mis, Hittegolf, Reën: on the other player's next block
+  // (1.15.3, protocol 7: only when both games know it; the owner: Blok vir Blok has no "challenge" ... "Crane speeds
+  // up", "What if we make it 3 perfect throws then you get a punishment", then his picks Wankelblok, Haastig, Gladde blok)
+  jokerStreak7: 3,        // three Perfeks in a row for a joker
+  sabotages7: ['fog', 'heat', 'rain', 'wobbly', 'rush', 'ice'],   // + Wankelblok, Haastig, Gladde blok
+  wobblyShape: 'pillar',  // Wankelblok: the next block is the tall thin pillar
+  rushMs: 4000,           // Haastig: this long to aim (not turnMs)
+  iceSkidPx: 48,          // Gladde blok: anything but a Perfek slides this far away from the middle (a Perfek stays)
+  omegaPerBlock7: 0.07,   // the crane speeds up faster than in a daily (CRANE.omegaPerBlock 0.045): every round counts
   chooseMs: 7000,         // time to choose the sabotage (the game goes on meanwhile), then the first one
   maxTurns: 160,          // then the most hearts win, then the most Perfeks, then whoever went second
   serverTurnMs: 45000,    // the server ends a match whose turn doesn't end in this long (that player is gone)

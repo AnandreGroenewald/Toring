@@ -11,7 +11,13 @@ import { TURNS } from '../config.js';
 import { createRng } from './rng.js';
 
 export const SABOTAGES = Object.freeze([...TURNS.sabotages]);
-export const isSabotage = (k) => SABOTAGES.includes(k);
+/** (1.15.3, protocol 7) the joker's choices when both games know the newer rules: + Wankelblok, Haastig, Gladde blok. */
+export const SABOTAGES7 = Object.freeze([...TURNS.sabotages7]);
+export const sabotagesFor = (v7) => (v7 ? SABOTAGES7 : SABOTAGES);
+/** A sabotage this match can use (`v7`: both games know the newer ones). */
+export const isSabotage = (k, v7 = false) => sabotagesFor(v7).includes(k);
+/** Perfeks in a row for a joker in this match. */
+export const jokerStreakFor = (v7) => (v7 ? TURNS.jokerStreak7 : TURNS.jokerStreak);
 
 // ------------------------------------------------------------------------------- rondtes (1.12)
 // What a round can bring per stage, and how often (Hanswors stays out: his log isn't a block the turn
@@ -117,14 +123,15 @@ const seatOk = (s) => s === 0 || s === 1;
 
 /**
  * The referee. `first` is the seat that drops the first block; with `rounds` (1.12, both games know
- * them) and the match `seed`, turns bring the rounds' weather and visitors. Events:
+ * them) and the match `seed`, turns bring the rounds' weather and visitors; with `v7` (1.15.3, both games
+ * know it) three Perfeks in a row earn a joker and it has the newer sabotages. Events:
  *  { type: 'turn', n, seat, hearts, streaks, sab, ev, nx }  turn n is seat's (sab: a sabotage on this block,
  *      ev: this turn's round event, nx: the round that begins with the next turn (to show it coming))
  *  { type: 'joker', seat }                           seat earned a joker: they choose a sabotage
  *  { type: 'sent', seat, kind }                      seat's sabotage waits for the other player's next block
  *  { type: 'result', winner, reason, hearts }        'hearts' | 'quit' | 'timeout' | 'turns'
  */
-export function createTurnReferee({ first = 0, init = null, seed = null, rounds = false } = {}) {
+export function createTurnReferee({ first = 0, init = null, seed = null, rounds = false, v7 = false } = {}) {
   const s = init ? clone(init) : {
     first: seatOk(first) ? first : 0,
     n: 0,
@@ -137,6 +144,7 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
     result: null,
     rounds: !!rounds && typeof seed === 'string' && seed.length > 0,
     seed: typeof seed === 'string' ? seed : null,
+    v7: !!v7,
   };
   let plan = null;
   const planOf = () => plan || (plan = s.rounds ? turnRounds(s.seed) : []);
@@ -190,7 +198,7 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
       if (r === 'P') {
         s.perfects[seat] += 1;
         s.streak[seat] += 1;
-        if (s.streak[seat] % TURNS.jokerStreak === 0) {
+        if (s.streak[seat] % jokerStreakFor(s.v7) === 0) {
           s.jokers[seat] += 1;
           events.push({ type: 'joker', seat });
         }
@@ -211,7 +219,7 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
 
     /** Seat spends a joker: the sabotage waits for the other player's next block. */
     joker(seat, kind) {
-      if (s.result || !seatOk(seat) || s.jokers[seat] < 1 || !isSabotage(kind)) return [];
+      if (s.result || !seatOk(seat) || s.jokers[seat] < 1 || !isSabotage(kind, s.v7)) return [];
       s.jokers[seat] -= 1;
       s.sab[1 - seat] = kind;
       return [{ type: 'sent', seat, kind }];
@@ -236,6 +244,7 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
     get streaks() { return [...s.streak]; },
     get beats() { return [...(s.beats || [0, 0])]; },
     get rounds() { return s.rounds; },
+    get v7() { return !!s.v7; },
     get result() { return s.result ? { ...s.result } : null; },
     snapshot() { return clone(s); },
   };
@@ -253,7 +262,7 @@ function clone(o) {
 }
 
 /** Robot Rikus's sabotage when he earns a joker (seeded, so a match replays the same). */
-export const botSabotage = (seed, n) => createRng(`${seed}/sabotage/${n}`).pick(SABOTAGES);
+export const botSabotage = (seed, n, v7 = false) => createRng(`${seed}/sabotage/${n}`).pick(sabotagesFor(v7));
 
 /** Who drops the first block of a match (seeded by the server: either player, fairly). */
 export const firstSeat = (rand = Math.random) => (rand() < 0.5 ? 0 : 1);

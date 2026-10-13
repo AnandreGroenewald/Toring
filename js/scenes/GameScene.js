@@ -94,7 +94,7 @@ const TWO_PI = Math.PI * 2;
 const PROGRESS_EVERY_MS = 1000;   // (1.12.1) a daily's progress is saved at most this often
 const BOT_AIM_ERROR = 0.32;      // Robot Rikus misses the middle this often (autoplay's aim error)
 const BOT_THINK_MS = [900, 2200]; // ...after looking at the swing this long
-const BOT_SABOTAGED_ERROR = { fog: 0.85, heat: 0.6, rain: 0.45 };   // ...and this often with a sabotage on his block
+const BOT_SABOTAGED_ERROR = { fog: 0.85, heat: 0.6, rain: 0.45, wobbly: 0.55, rush: 0.6, ice: 0.5 };   // ...and this often with a sabotage on his block
 /** Wall-clock ms (a turn's aiming time runs on it, so a paused game has used it up when it comes back). */
 const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 const TURN_BACK_MS = 3000;       // back from a pause or another app: at least this long to aim
@@ -437,6 +437,9 @@ export class GameScene extends Phaser.Scene {
         // it this game shows it, the turn waiting to show, and our turn waiting for the replay to end
         oppGo: d.duel.oppGo === true, buffer: WATCH_BUFFER_MS, goFor: 0, pending: null, queued: null, queuedTimer: null,
         rounds: d.duel.rounds === true,   // (1.12) this match has rondtes (both games know them; Robot Rikus always)
+        // (1.15.3) the newer rules (both games know them; Robot Rikus always): a faster crane, Wankelblok's pillar and
+        // Gladde blok's ice on a turn's block (by block index, the same in both games), Haastig's short aim
+        v7: d.duel.v7 === true, overrides: {},
         hud: { n: 0, seat: 0, you: 0, mine: false, names: ['', ''], hearts: [0, 0], streaks: [0, 0], left: null, phase: 'wait' },
       }
       : null;
@@ -500,6 +503,10 @@ export class GameScene extends Phaser.Scene {
     this.lastWarn = -1e9;
     this.collapseUntil = -1e9;
     this.lastTowerLossAt = -1e9;
+    // (1.15.3, the owner: "lets make it you loose a heart for every throw instead of every instance") the latest throw
+    // (its block's index) and the throws that already cost a heart: a throw that loses blocks costs one, never more
+    this.lastThrow = -1;
+    this.throwHearts = new Set();
     this.spawnDue = null;      // sim time the next block may appear (waits for a calm tower after a collapse)
     this.calmCap = 0;
     this.stepTimers = [];
@@ -957,7 +964,7 @@ export class GameScene extends Phaser.Scene {
     if (this.over) return;
     if (this.crane.hasBlock()) return;   // never two blocks on the hook
     this.i = i;
-    const spec = this.sequence.block(i);
+    const spec = this.specAt(i);
     this.curSpec = spec;
     this.curGeom = getGeometry(spec);
     if (!this.idle) this.emitPowerups();
@@ -993,12 +1000,21 @@ export class GameScene extends Phaser.Scene {
     this.planAutoplay();
   }
 
+  /** Block i's spec: the day's (or match's) sequence, with a Blok vir Blok sabotage's change on it (1.15.3). */
+  specAt(i) {
+    const spec = this.sequence.block(i);
+    const o = this.turns?.overrides?.[i];
+    return o ? { ...spec, ...o } : spec;
+  }
+
   /**
    * (1.15) Blok vir Blok: a block is drawn in the skin of whoever's turn it is: this player's own, Robot Rikus's plain
    * blocks, or the friend's skin from their card ('' from a 1.14 game or server: plain). Outside Blok vir Blok, your own.
    */
   withTurnSkin(fn) {
     const c = this.turns?.cur;
+    // (1.15.3) Gladde blok: this turn's block is ice, whoever's it is
+    if (c && this.turns.overrides[c.n - 1]?.ice) return withBlockSkin('ys', fn);
     if (!c || c.mine) return fn();
     return withBlockSkin(c.botTurn ? 'kleur' : this.duel?.oppBlocks || 'kleur', fn);
   }
@@ -1111,6 +1127,7 @@ export class GameScene extends Phaser.Scene {
     block.setFriction(this.weather.frictionMul);
     block.state = 'falling';
     block.droppedAt = this.now;
+    this.lastThrow = block.index;   // (1.15.3) what is lost from now on counts for this throw
     block.landedAt = 0;
     block.advanced = false;
     block.lostMarked = false;
@@ -1225,7 +1242,9 @@ export class GameScene extends Phaser.Scene {
     // 1. Crane (the swing widens over the first blocks; the crane eases it so the trolley never jumps)
     const w = this.weather;
     const opts = this.craneOpts;
-    opts.omega = Math.min(CRANE.omegaTop, Math.min(CRANE.omegaMax, CRANE.omega0 + CRANE.omegaPerBlock * this.i) * w.craneSpeedMul)
+    // (1.15.3, the owner: Blok vir Blok "Crane speeds up") the newer Blok vir Blok rules speed it up faster, block by block
+    const perBlock = this.turns?.v7 ? TURNS.omegaPerBlock7 : CRANE.omegaPerBlock;
+    opts.omega = Math.min(CRANE.omegaTop, Math.min(CRANE.omegaMax, CRANE.omega0 + perBlock * this.i) * w.craneSpeedMul)
       * (this.slowLeft > 0 ? SLOW_MUL : 1);
     opts.amplitude = this.amplitudeFor(this.i);
     opts.windAccel = w.windAccel;
@@ -1414,10 +1433,16 @@ export class GameScene extends Phaser.Scene {
     const now = nowMs();
     const came = Number.isFinite(t.arrivedAt) ? t.arrivedAt : now;
     const deadline = T.bot ? now + TURNS.turnMs : Math.min(now + TURNS.turnMs, Math.max(came + TURN_LIVE_MAX_MS, now + TURN_BACK_MS));
+    // (1.15.3) Haastig: this turn has TURNS.rushMs to aim
+    const rush = T.v7 && t.sab === 'rush';
     T.cur = {
       n: t.n, seat, mine, botTurn, dropped: false, ended: false, dropAt: 0,
-      startedWall: came, deadline, livesAt: t.hearts[seat], lost: [],
+      startedWall: came, deadline: rush ? Math.min(deadline, now + TURNS.rushMs) : deadline, livesAt: t.hearts[seat], lost: [],
     };
+    // (1.15.3) Wankelblok and Gladde blok change this turn's block itself (both games, by its index)
+    if (T.v7 && (t.sab === 'wobbly' || t.sab === 'ice')) {
+      T.overrides[t.n - 1] = t.sab === 'wobbly' ? { shape: TURNS.wobblyShape, scale: 1 } : { ice: true };
+    }
     this.awayAt = 0;
     // a new turn is its own collapse (the last one's can't cost this player), and a visitor's "not your
     // fault" from the last turn never carries over into this one
@@ -1440,6 +1465,8 @@ export class GameScene extends Phaser.Scene {
     if (this.crane.hasBlock()) this.crane.release(0);
     this.spawnBlock(t.n - 1);
     this.crane.resetSwing(this.amplitudeFor(t.n - 1));
+    // (1.15.3) the newer rules' faster crane: said every 10 turns
+    if (T.v7 && t.n > 1 && t.n % 10 === 1) bus.emit('hud:toast', { text: S.craneFaster, color: '#ffe38c' });
     if (botTurn) this.autoReadyAt = this.now + BOT_THINK_MS[0] + Math.random() * (BOT_THINK_MS[1] - BOT_THINK_MS[0]);
     this.startTurnEvents(t, mine, botTurn);
     if (mine) {
@@ -1484,6 +1511,14 @@ export class GameScene extends Phaser.Scene {
         title: mine ? S.duelAttackIn(T.names[1 - seat] || this.duel.name, info.name) : S.duelAttackOut(info.name, who, info.emoji),
         sub: null,
       };
+    } else if (!ev && t.sab && T.v7 && S.sabotageInfo?.[t.sab]) {
+      // (1.15.3) Wankelblok, Haastig, Gladde blok: no weather, a banner that says what it does
+      const info = S.sabotageInfo[t.sab];
+      bus.emit('hud:banner', {
+        emoji: info.emoji,
+        title: mine ? S.duelAttackIn(T.names[1 - seat] || this.duel.name, info.name) : S.duelAttackOut(info.name, who, info.emoji),
+        subtitle: S.sabotageWhat[t.sab] || '', kind: 'visitor',
+      });
     }
     safely(() => this.weather.turnStart?.(wx, wx?.title, wx?.sub));
     // a round's visitor: Blouaap judges this block; Skelm Sakkie climbs while it waits on the crane
@@ -1859,8 +1894,10 @@ export class GameScene extends Phaser.Scene {
   restoreBlock(i, x, y, a) {
     const old = this.gridBlocks[i];
     if (old && !old.destroyed) old.destroy();
-    const spec = this.sequence.block(i);
-    const b = new Block(this, spec, x, y, a, this.nameFor(spec));
+    const spec = this.specAt(i);
+    const b = this.turns?.overrides[i]?.ice
+      ? withBlockSkin('ys', () => new Block(this, spec, x, y, a, this.nameFor(spec)))
+      : new Block(this, spec, x, y, a, this.nameFor(spec));
     b.special = null;
     b.state = 'settled';
     b.droppedAt = this.now;
@@ -2110,8 +2147,11 @@ export class GameScene extends Phaser.Scene {
       const gTol = Math.min(SCORING.goodTolPx, SCORING.goodTolFrac * t.w);
       // A block that can't stand centred on this support (an arch over a single cell) is never "good".
       const fits = restsOn(f.geom, t.face);
-      // in the rain anything but a Perfek skids with the rain instead of easing to the middle
-      const skid = this.weather.rainSkid();
+      // in the rain anything but a Perfek skids with the rain instead of easing to the middle; (1.15.3) Gladde blok:
+      // anything but a Perfek slides away from the middle
+      const ice = !!this.turns?.overrides[f.index]?.ice;
+      const skid = ice ? { dir: f.centerX >= t.x ? 1 : -1, px: TURNS.iceSkidPx } : this.weather.rainSkid();
+      if (ice && !(adx <= pTol && t.flat && fits)) bus.emit('hud:toast', { text: S.iceSlid, color: '#cfefff' });
       if (adx <= pTol && t.flat && fits) {
         this.snapPerfect(f, t);
         rating = 'P';
@@ -2358,20 +2398,30 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // A collapse (tower blocks falling together) costs one life, not one per block.
-    // A dropped block that misses costs its own, unless the tower was coming down
-    // around it (it was aimed at a top that fell away).
+    // Blok vir Blok: a turn costs its player one heart at most (the referee's rule, js/core/turns.js); its collapse
+    // window decides only what this game shows meanwhile.
+    // (1.15.3, the owner: "lets make it you loose a heart for every throw instead of every instance, because sometimes
+    // the blocks splash in the water then another block falls a few seconds later without throwing anything then you
+    // loose a heart or you can throw a block then it falls and you can immediately through another block then it
+    // doesnt take a heart") everywhere else: one heart per throw. A thrown block that misses costs its throw's heart;
+    // tower blocks that fall count for the latest throw; a throw that already cost a heart costs nothing more.
     let free;
-    if (wasFalling) {
-      free = this.now - this.lastTowerLossAt < COLLAPSE_MS || this.towerFalling();
-      if (!free) this.collapseUntil = this.now + COLLAPSE_MS;
-    } else {
-      free = this.now < this.collapseUntil;
-      this.collapseUntil = this.now + COLLAPSE_MS;
-      this.lastTowerLossAt = this.now;
-    }
-    // Blok vir Blok: a turn costs its player one heart at most (the referee's rule, js/core/turns.js)
     const turn = this.turns?.cur;
+    if (turn) {
+      if (wasFalling) {
+        free = this.now - this.lastTowerLossAt < COLLAPSE_MS || this.towerFalling();
+        if (!free) this.collapseUntil = this.now + COLLAPSE_MS;
+      } else {
+        free = this.now < this.collapseUntil;
+        this.collapseUntil = this.now + COLLAPSE_MS;
+        this.lastTowerLossAt = this.now;
+      }
+    } else {
+      const which = wasFalling ? block.index : this.lastThrow;
+      free = which < 0 || this.throwHearts.has(which);
+      if (!free) this.throwHearts.add(which);
+      if (!wasFalling) this.lastTowerLossAt = this.now;
+    }
     if (turn) turn.lost.push(block.index);
     if (!free && !(turn && turn.lostHeart)) {
       if (turn) {

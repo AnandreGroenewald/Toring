@@ -166,8 +166,11 @@ function lobbyWith() {
   const clk = clock();
   let n = 0;
   const lobby = new MatchLobby(fakeState(), env, { now: clk.now, upgrade, roomCode: () => ['ABCDEF', 'GHJKMN', 'PQRSTU'][n++ % 3] });
-  const open = async () => (await lobby.fetch(new Request('https://x/match/lobby', { headers: { Upgrade: 'websocket' } }))).ws;
-  return { lobby, inits, open };
+  const open = async () => {
+    clk.tick(1000);   // (each player comes a second after the last: who waited longer is clear)
+    return (await lobby.fetch(new Request('https://x/match/lobby', { headers: { Upgrade: 'websocket' } }))).ws;
+  };
+  return { lobby, inits, open, clk };
 }
 
 test('the lobby pairs only players looking for the same stake; an older game is never paired for one', async () => {
@@ -186,6 +189,69 @@ test('the lobby pairs only players looking for the same stake; an older game is 
   await hi(c50, { name: 'Carla', v: 6, stake: 50 });
   assert.deepEqual(c50.last('match'), a50.last('match'));
   assert.equal(inits.at(-1).body.stake, 50, 'their room is a 50 room');
+});
+
+// (1.15.3, protocol 7) the lobby's offers: few players, different stakes or modes
+test('(1.15.3) 100 and 50: the one looking for 100 is offered 50; yes makes a 50 room for both', async () => {
+  const { lobby, inits, open } = lobbyWith();
+  const hi = (ws, o) => lobby.onMessage(ws, JSON.stringify({ t: 'hello', rules: DUEL.rules, ...o }));
+  const a = await open();
+  const b = await open();
+  await hi(a, { name: 'Anna', v: 7, stake: 100 });
+  await hi(b, { name: 'Bennie', v: 7, stake: 50 });
+  const offer = a.last('offer');
+  assert.equal(offer.mode, 'race');
+  assert.equal(offer.stake, 50);
+  assert.equal(offer.name, 'Bennie');
+  assert.equal(b.of('offer').length, 0, 'the one looking for less is not asked');
+  await lobby.onMessage(a, JSON.stringify({ t: 'offer-yes', id: offer.id }));
+  assert.deepEqual(a.last('match'), b.last('match'));
+  assert.equal(inits.at(-1).body.stake, 50);
+  assert.equal(inits.at(-1).body.mode, 'race');
+});
+
+test('(1.15.3) Wedloop and Blok vir Blok: the one who waited longer is offered the other mode; no: never the same pair again', async () => {
+  const { lobby, inits, open } = lobbyWith();
+  const hi = (ws, o) => lobby.onMessage(ws, JSON.stringify({ t: 'hello', rules: DUEL.rules, ...o }));
+  const a = await open();
+  await hi(a, { name: 'Anna', v: 7 });
+  const b = await open();
+  await hi(b, { name: 'Bennie', v: 7, mode: 'turns' });
+  const offer = a.last('offer');
+  assert.equal(offer.mode, 'turns', 'Anna (waiting longer) is asked about Blok vir Blok');
+  await lobby.onMessage(a, JSON.stringify({ t: 'offer-no', id: offer.id }));
+  assert.equal(a.of('match').length + b.of('match').length, 0);
+  const c = await open();
+  await hi(c, { name: 'Carla', v: 7, mode: 'turns' });
+  assert.deepEqual(c.last('match'), b.last('match'), 'the same mode still meets at once');
+  assert.equal(inits.at(-1).body.mode, 'turns');
+  assert.equal(a.of('offer').length, 1, 'Anna was not asked about Bennie again');
+});
+
+test('(1.15.3) an older game is never offered, nor offered to anyone', async () => {
+  const { lobby, open } = lobbyWith();
+  const hi = (ws, o) => lobby.onMessage(ws, JSON.stringify({ t: 'hello', rules: DUEL.rules, ...o }));
+  const a = await open();
+  const old = await open();
+  await hi(a, { name: 'Anna', v: 7, stake: 100 });
+  await hi(old, { name: 'Ouma', v: 6, stake: 50 });
+  assert.equal(a.of('offer').length + old.of('offer').length, 0);
+});
+
+test('(1.15.3) a yes after the other player found someone else: offer-gone, and the search goes on', async () => {
+  const { lobby, open } = lobbyWith();
+  const hi = (ws, o) => lobby.onMessage(ws, JSON.stringify({ t: 'hello', rules: DUEL.rules, ...o }));
+  const a = await open();
+  const b = await open();
+  await hi(a, { name: 'Anna', v: 7, stake: 100 });
+  await hi(b, { name: 'Bennie', v: 7, stake: 50 });
+  const offer = a.last('offer');
+  const c = await open();
+  await hi(c, { name: 'Carla', v: 7, stake: 50 });
+  assert.deepEqual(c.last('match'), b.last('match'), 'Bennie and Carla meet (the same stake)');
+  await lobby.onMessage(a, JSON.stringify({ t: 'offer-yes', id: offer.id }));
+  assert.ok(a.last('offer-gone'));
+  assert.equal(a.of('match').length, 0, 'Anna keeps looking');
 });
 
 test('POST /match/room takes a stake for the friend room (anything else: none)', async () => {
@@ -364,6 +430,51 @@ test('"Speel weer" in a coin room asks both games again', async () => {
   assert.equal(a.of('stake').length, 1, 'the new match waits for both again');
   await say(room, b, { t: 'stake', ok: true });
   assert.deepEqual(a.of('stake').at(-1), { t: 'stake', on: true });
+});
+
+// (1.15.3, protocol 7; the owner: "there is no way to change the stake after we have played")
+async function coinMatchV(stake, v = [7, 7]) {
+  const { room, clk } = await friendRoom(stake);
+  const a = fakeSocket();
+  const b = fakeSocket();
+  await room.join(a);
+  await say(room, a, { t: 'hello', name: 'Anna', v: v[0], key: KEYS[0] });
+  await room.join(b);
+  await say(room, b, { t: 'hello', name: 'Bennie', v: v[1], key: KEYS[1] });
+  clk.tick(DUEL.countdownMs);
+  await say(room, b, { t: 'over', reason: 'quit', best: 0 });
+  clk.tick(1000);
+  return { room, clk, a, b };
+}
+
+test('(1.15.3) "Speel weer" for another stake: the other hears it; both asking the same starts the match for it', async () => {
+  const { room, a, b } = await coinMatchV(100);
+  await say(room, a, { t: 'again', stake: 50 });
+  assert.deepEqual(b.last('again'), { t: 'again', stake: 50 }, 'Bennie hears the stake Anna asks for');
+  assert.equal(a.of('start').length, 1);
+  await say(room, b, { t: 'again', stake: 50 });
+  assert.equal(a.of('start').length, 2);
+  assert.equal(a.last('start').stake, 50);
+  assert.equal(b.last('start').stake, 50);
+});
+
+test('(1.15.3) a counter-ask: the first one becomes a question again; none at all (0) works too', async () => {
+  const { room, a, b } = await coinMatchV(100);
+  await say(room, a, { t: 'again', stake: 200 });
+  await say(room, b, { t: 'again', stake: 0 });   // Bennie would rather play without coins
+  assert.equal(a.of('start').length, 1, 'not the same: no match yet');
+  assert.deepEqual(a.last('again'), { t: 'again', stake: 0 });
+  await say(room, a, { t: 'again', stake: 0 });
+  assert.equal(a.of('start').length, 2);
+  assert.equal(a.last('start').stake, undefined, 'no coins at stake');
+});
+
+test('(1.15.3) with an older game "Speel weer" keeps the stake (a stake it asks for is ignored)', async () => {
+  const { room, a, b } = await coinMatchV(100, [7, 6]);
+  await say(room, a, { t: 'again', stake: 50 });
+  assert.deepEqual(b.last('again'), { t: 'again' }, 'the older game hears the plain question');
+  await say(room, b, { t: 'again' });
+  assert.equal(a.last('start').stake, 100);
 });
 
 test('a friend whose Stapel is too old for coin matches: the one who invited hears why (also when back)', async () => {

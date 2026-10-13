@@ -16,7 +16,7 @@ import { playCelebration, drawCelebrationIcon } from './celebrate.js';
 import { EMOTES, EMOTE_PICKS } from '../config.js';
 import { fmtM, fmtInt, fmtClock, fmtDuration, dayName, monthName } from '../core/format.js';
 import { shareResult } from '../core/share.js';
-import { visitorResultLine } from '../core/visitorrules.js';
+import { visitorResultLine, visitorLosses } from '../core/visitorrules.js';
 import { sayingOfTheDay, resultSaying, pauseSaying } from '../core/sayings.js';
 import { getLanguage, localSaying } from '../core/i18n.js';
 import { SPONSOR } from '../sponsorConfig.js';
@@ -25,9 +25,9 @@ import { audio, haptics } from '../audio.js';
 
 const GRID_COLS = 10;
 const GRID_ROWS = 5;
-const END_EMOJI = { flood: '🌊', lives: '💥' };
+const END_EMOJI = { flood: '🌊', lives: '💥' };   // (1.15.3, the owner: "the explosion at the bottom makes sense the one on top does not")
 const REASONS = {
-  lives: { emoji: '💥', title: S.overLives, sub: S.overLivesSub },
+  lives: { emoji: '💔', title: S.overLives, sub: S.overLivesSub },   // (1.15.3: was 💥, "the one on top does not" make sense)
   flood: { emoji: '🌊', title: S.overFlood, sub: S.overFloodSub },
   quit: { emoji: '🏳️', title: S.overQuit, sub: S.overQuitSub },
 };
@@ -182,6 +182,7 @@ export function createUI(bus) {
     settings: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-settings-title', tabindex: '-1' }),   // (1.14) ⚙️ Instellings (with the account)
     update: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-update-title', tabindex: '-1' }),   // (1.15) a newer app on Google Play
     pick: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-pick-title', tabindex: '-1' }),   // (1.15.3) the Daily Tower's free power-up
+    offer: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-offer-title', tabindex: '-1' }),   // (1.15.3) the lobby's offer
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -222,7 +223,7 @@ export function createUI(bus) {
   // buttons take taps: a tap anywhere else still drops a block)
   const emoteBar = h('div', { class: 'emote-bar', role: 'group', 'aria-label': S.emoteLabel, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // (1.15, the owner: "We need a better way to display the coins please") every 🪙 the UI shows becomes the game's own
@@ -465,7 +466,7 @@ export function createUI(bus) {
       goBack();
     } else if (st.trying && (key === 'ArrowLeft' || key === 'ArrowRight')) {
       st.tryStep?.(key === 'ArrowLeft' ? -1 : 1);
-    } else if (punishPick && !e.repeat && key >= '1' && key <= '4') {
+    } else if (punishPick && !e.repeat && key >= '1' && key <= '6') {   // (1.15.3: six sabotages)
       punishPick(Number(key) - 1);
     } else if ((key === 'p' || key === 'P') && !e.repeat && !st.modal) {
       if (st.screen === 'game' && guard()) bus.emit('ui:pause');
@@ -1169,6 +1170,31 @@ export function createUI(bus) {
     openModal('pick');
   }
 
+  /**
+   * (1.15.3) The lobby's offer while the player looks for a match: someone looks for another stake or mode. Speel says
+   * yes ('ui:offer-yes'), the rest no ('ui:offer-no'; also ✕, or the time running out: main.js).
+   */
+  function showOffer({ name, mode, stake = 0, ms = 15000 } = {}) {
+    const no = () => {
+      audio.play('click');
+      closeModal();
+      bus.emit('ui:offer-no');
+    };
+    modals.offer.replaceChildren(h('div', { class: 'card sheet offer-sheet' },
+      h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: no }, icon('close')),
+      h('div', { class: 'sheet-head' }, emo(mode === 'turns' ? '🧱' : '🏁'), h('h2', { id: 'stapel-offer-title', text: S.offerTitle })),
+      h('p', { class: 'offer-text', text: S.offerText(name, mode === 'turns' ? S.modeTurns : S.modeRace, stake ? fmtInt(stake) : 0) }),
+      stake ? h('p', { class: 'offer-note', text: S.stakeVs(fmtInt(stake), fmtInt(stake * 2)) }) : null,
+      h('div', { class: 'offer-btns' },
+        button('btn-green', h('span', { text: S.offerYes }), () => {
+          closeModal();
+          bus.emit('ui:offer-yes');
+        }, { nav: false }),
+        button('btn-white', h('span', { text: S.offerNo }), no, { nav: false })),
+      h('div', { class: 'punish-track' }, h('div', { class: 'punish-time', vars: { '--ms': `${ms}ms` } }))));
+    openModal('offer');
+  }
+
   // ---------------------------------------------------------------------------
   // Statistics
   // ---------------------------------------------------------------------------
@@ -1723,15 +1749,76 @@ export function createUI(bus) {
     showScreen('pause');
   }
 
-  /** (1.12.1) "Speel weer" after a friend match: waiting for them, they want to, starting, or they went. */
-  function setAgain(state, name) {
+  /**
+   * (1.12.1) "Speel weer" after a friend match: waiting for them, they want to, starting, or they went. (1.15.3) `stake`:
+   * the coins asked for (theirs: their chip is picked here, so a tap says yes to it; another chip asks them back).
+   */
+  function setAgain(state, name, stake = null) {
     const b = screens.results.querySelector('.btn-duel-again');
     const label = b?.querySelector('span');
-    const text = { asked: S.againWait(name), they: S.againThey(name), both: S.againStarting, gone: S.againGone(name) }[state];
+    const asked = Number.isFinite(stake);
+    if (state === 'they' && asked) pickAgainStake(stake, { quiet: true });
+    st.againState = state;
+    const coins = (n) => (n ? ` (${fmtInt(n)} 🪙)` : '');
+    const text = {
+      asked: `${S.againWait(name)}${asked ? coins(stake) : ''}`,
+      they: asked ? S.againTheyStake(name, stake ? fmtInt(stake) : 0) : S.againThey(name),
+      both: S.againStarting,
+      gone: S.againGone(name),
+    }[state];
     if (!b || !label || !text) return;
     label.textContent = text;
     b.classList.toggle('is-waiting', state === 'asked' || state === 'both');
     b.classList.toggle('is-calling', state === 'they');
+  }
+
+  /**
+   * (1.15.3, the owner: "The another match is barely visible with all the blocks in between"; "there is no way to change
+   * the stake after we have played") the next match's button right under the players, and after a live match against a
+   * person the coins for it: one row of chips (none, 20 ... 500; above the player's coins can't be picked). The pick goes
+   * with 'ui:duel-again'; a friend's own ask picks theirs (setAgain).
+   */
+  function againBox({ again = null, againStake = 0, againStakes = null } = {}) {
+    st.againState = null;
+    st.againPick = againStakes ? (againStake > againStakes.coins ? 0 : againStake || 0) : null;
+    st.againLabel = () => {
+      const n = st.againPick ?? againStake;
+      return `${again ? S.againAsk(again.name) : S.duelAgain}${n ? ` (${fmtInt(n)} 🪙)` : ''}`;
+    };
+    const btn = button('btn-purple btn-duel-again', h('span', { text: st.againLabel() }),
+      () => bus.emit('ui:duel-again', st.againPick === null ? {} : { stake: st.againPick }));
+    if (!againStakes) return h('div', { class: 'again-box' }, btn);
+    const chip = (n) => {
+      const short = n > againStakes.coins;
+      return h('button', {
+        type: 'button', class: 'stake-btn', 'data-stake': String(n), 'aria-pressed': String(st.againPick === n),
+        ...(short ? { disabled: true, title: S.stakeNeedMore(fmtInt(n - againStakes.coins)) } : {}),
+        onclick: () => {
+          audio.play('click');
+          pickAgainStake(n);
+        },
+      }, h('span', { text: n ? fmtInt(n) : S.stakeNone }));
+    };
+    return h('div', { class: 'again-box' }, btn,
+      h('div', { class: 'stake-pick again-stakes' },
+        h('span', { class: 'label' }, coinIc(), h('span', { text: S.againStakeLabel })),
+        h('div', { class: 'stake-btns', role: 'group', 'aria-label': S.againStakeLabel }, [0, ...DUEL.stakes].map(chip))));
+  }
+
+  /** (1.15.3) A coin chip under "Nog 'n wedstryd": the button says the coins; `quiet`: the friend's ask (its text stays). */
+  function pickAgainStake(n, { quiet = false } = {}) {
+    const box = screens.results.querySelector('.again-box');
+    if (!box || st.againPick === null || st.againPick === undefined) return;
+    const b = box.querySelector(`.stake-btn[data-stake="${n}"]`);
+    if (!b || b.disabled) return;
+    st.againPick = n;
+    for (const c of box.querySelectorAll('.stake-btn')) c.setAttribute('aria-pressed', String(Number(c.dataset.stake) === n));
+    if (quiet) return;
+    // a different pick after the friend asked: it becomes our question to them
+    const btn = box.querySelector('.btn-duel-again');
+    btn?.classList.remove('is-calling', 'is-waiting');
+    const label = btn?.querySelector('span');
+    if (label) label.textContent = st.againLabel();
   }
 
   /** (1.12.1) The pause card's line: whose pause it is, pauses left (or none). */
@@ -2123,7 +2210,7 @@ export function createUI(bus) {
   // ---------------------------------------------------------------------------
   // Results
   // ---------------------------------------------------------------------------
-  function gridEl(grid, reason) {
+  function gridEl(grid, reason, visits = null) {
     const cells = [];
     const counts = { P: 0, G: 0, S: 0, X: 0, B: 0, F: 0 };
     for (const ch of String(grid || '')) {
@@ -2157,8 +2244,12 @@ export function createUI(bus) {
     // (1.15, the owner: "what is the little orange block?") a title, and a key under the blocks: each kind there was, with
     // its count (the picture itself stays as the share grid draws it)
     const NAMES = { P: S.perfects, G: S.good, S: S.skew, X: S.lostCount, B: S.gifts, F: POWERUP_INFO.foundation.name };
+    // (1.15.3, the owner's brother: "hardjies raak nie op nie maar kyk hoeveel het ek mis gegooi"; a match card with 9
+    // lost and one heart gone) the lost blocks a visitor took cost no heart: the key says how many
+    const free = visitorLosses(visits);
     const key = h('div', { class: 'grid-key', 'aria-hidden': 'true' }, Object.keys(NAMES).filter((k) => counts[k]).map((k) =>
-      h('span', { class: 'grid-key-item' }, h('i', { class: `cell cell-${k}`, text: CELL_GLYPH[k] }), h('b', { text: String(counts[k]) }), h('span', { text: NAMES[k] }))));
+      h('span', { class: 'grid-key-item' }, h('i', { class: `cell cell-${k}`, text: CELL_GLYPH[k] }), h('b', { text: String(counts[k]) }), h('span', { text: NAMES[k] }),
+        k === 'X' && free.n > 0 ? h('small', { class: 'grid-free', text: S.lostFree(Math.min(free.n, counts.X), free.who) }) : null)));
     return h('div', { class: 'grid-box' },
       h('p', { class: 'label grid-title', text: S.gridTitle }),
       h('div', { class: 'grid', role: 'img', 'aria-label': label }, rows),
@@ -2283,7 +2374,7 @@ export function createUI(bus) {
       h('p', { class: 'res-sub', text: why }));
   }
 
-  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null, againStake = 0, freeTry = null, bestStays = null, switchTo = null, signinOffer = false } = {}) {
+  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null, againStake = 0, againStakes = null, freeTry = null, bestStays = null, switchTo = null, signinOffer = false } = {}) {
     if (st.modal) closeModal();
     const r = result || {};
     const m = mode || r.mode || 'practice';
@@ -2323,11 +2414,15 @@ export function createUI(bus) {
           tile(fmtInt(r.perfects || 0), S.perfects))
         : h('div', { class: 'res-stats' },
           h('div', { class: 'tile' }, scoreB, h('span', { text: S.points })),
-          tile(fmtInt(r.blocksPlaced || 0), S.blocks),
+          // (1.15.3, the owner: "the block number is incorrect": 32 beside a grid of 38) the tile counts what the grid
+          // shows: every block you threw (lost ones too), the Fondamentblok and Hanswors's gifts
+          tile(fmtInt([...String(r.grid || '')].filter((c) => RATING_EMOJI[c]).length || r.blocksPlaced || 0), S.blocks),
           tile(fmtInt(r.perfects || 0), S.perfects),
           tile(fmtInt(r.maxCombo || 0), S.bestCombo)),
+      // (1.15.3) the next match right under the players, in sight without scrolling
+      duel ? againBox({ again, againStake, againStakes }) : null,
       rewardEl(reward),
-      empty ? null : gridEl(r.grid, r.reason),
+      empty ? null : gridEl(r.grid, r.reason, r.visitors),
       empty ? null : weatherEl(r.weather),
       empty ? null : visitorsEl(r.visitors),
       empty
@@ -2379,9 +2474,7 @@ export function createUI(bus) {
     if (signinOffer) wrap.append(signinOfferEl('results'));
     // what next: another match; or (after a tower) the two ways to keep playing, side by side as on the
     // start screen (testers: a lone "Oefen" floating over the card looked like the only thing left)
-    wrap.append(duel
-      ? h('div', { class: 'btn-row' }, button('btn-purple btn-duel-again', h('span', { text: `${again ? S.againAsk(again.name) : S.duelAgain}${againStake ? ` (${fmtInt(againStake)} 🪙)` : ''}` }), () => bus.emit('ui:duel-again')))
-      : h('div', { class: 'play-row res-play' },
+    if (!duel) wrap.append(h('div', { class: 'play-row res-play' },
         button('btn-teal btn-practice',
           [icon('again'), h('span', { class: 'btn-txt' }, h('span', { text: daily ? S.practice : S.practiceAgain }), h('span', { class: 'btn-sub', text: S.practiceSubShort }))],
           () => bus.emit('ui:play-practice'), { attrs: { 'aria-label': `${daily ? S.practice : S.practiceAgain}: ${S.practiceSub}` } }),
@@ -2889,12 +2982,15 @@ export function createUI(bus) {
   }
 
   /** "Eerste by 20 m! Kies ’n straf vir Anna:" and the four punishments; DUEL.chooseMs to pick one. */
-  function showPunish({ m, opp, options = [], ms = 7000, joker = false } = {}) {
+  function showPunish({ m, opp, options = [], ms = 7000, joker = false, streak = 5 } = {}) {
     if (st.screen !== 'game') return;
-    // Wedloop: a punishment for the other tower; Blok vir Blok's joker: a sabotage on their next block
-    const infoOf = (k) => (joker
-      ? WEATHER_INFO[k] && { emoji: WEATHER_INFO[k].emoji, name: WEATHER_INFO[k].name, what: S.sabotageWhat[k] || '' }
-      : PUNISH_INFO[k]);
+    // Wedloop: a punishment for the other tower; Blok vir Blok's joker: a sabotage on their next block (1.15.3: also
+    // Wankelblok, Haastig, Gladde blok, which aren't weather)
+    const infoOf = (k) => {
+      if (!joker) return PUNISH_INFO[k];
+      const w = WEATHER_INFO[k] || S.sabotageInfo?.[k];
+      return w && { emoji: w.emoji, name: w.name, what: S.sabotageWhat[k] || '' };
+    };
     const kinds = options.filter((k) => infoOf(k));
     const pick = (k) => {
       if (performance.now() - punishAt < PUNISH_GUARD_MS) return;
@@ -2913,8 +3009,8 @@ export function createUI(bus) {
     punishBar.replaceChildren(
       // (1.15, the owner: "the name ... "Robot Ricus" it feels out of place. Maybe do not any name there?") a gold badge (the
       // height reached, or Blok vir Blok's five Perfects) and what to do; the whole sentence stays for screen readers
-      h('p', { class: 'punish-title', 'aria-label': joker ? S.turnsChoose(opp || S.duelSomeone) : S.duelChoose(m, opp || S.duelSomeone) },
-        h('span', { class: 'punish-m', 'aria-hidden': 'true', text: joker ? '★ ×5' : `🏁 ${m} m` }),
+      h('p', { class: 'punish-title', 'aria-label': joker ? S.turnsChoose(opp || S.duelSomeone, streak) : S.duelChoose(m, opp || S.duelSomeone) },
+        h('span', { class: 'punish-m', 'aria-hidden': 'true', text: joker ? `★ ×${streak}` : `🏁 ${m} m` }),
         h('span', { 'aria-hidden': 'true', text: joker ? S.turnsChooseLabel : S.duelChooseLabel })),
       h('div', { class: 'punish-btns' }, btns),
       h('div', { class: 'punish-track' }, h('div', { class: 'punish-time', vars: { '--ms': `${ms}ms` } })));
@@ -3107,6 +3203,7 @@ export function createUI(bus) {
     showHowTo,
     showLanguage,
     showPowerPick,
+    showOffer,
     closeModal,
     showStats,
     showPause,

@@ -1964,7 +1964,7 @@ function startDuelGame(m) {
   startGame({
     mode: 'duel',
     seed: m.seed,
-    duel: { name: m.oppName, youName: duelNick(), mode: m.mode, you: m.you, bot: m.kind !== 'live', oppBlocks: m.kind === 'live' ? m.oppCard?.bs || '' : '', oppGo: m.kind === 'live' && (m.oppV || 1) >= 4, rounds: m.rounds === true,
+    duel: { name: m.oppName, youName: duelNick(), mode: m.mode, you: m.you, bot: m.kind !== 'live', oppBlocks: m.kind === 'live' ? m.oppCard?.bs || '' : '', oppGo: m.kind === 'live' && (m.oppV || 1) >= 4, rounds: m.rounds === true, v7: m.v7 === true,
       // (1.12) both ranks in this mode, in front of the names at the top ('🥇II'); a recording has none
       oppRank: m.kind === 'live' || m.kind === 'bot' ? rankShortOf(m.oppCard?.rl) : '', youRank: rankShortOf(store.getCard(m.mode).rl) },
     autoplay: AUTO,
@@ -1990,6 +1990,9 @@ function showDuelResults(r) {
     duel: d,
     again: duel.canAgain() ? { name: d.oppName || S.duelSomeone } : null,
     againStake: lastDuelStake > 0 ? lastDuelStake : 0,   // (1.13) "Speel weer" plays for the same coins
+    // (1.15.3) ...or other coins, picked under the button: after a live match against a person (a friend room only when
+    // both games know it); the chips above the player's coins can't be picked
+    againStakes: lastDuelKind === 'live' && duel.live && (!duel.canAgain() || duel.canChangeStake()) ? { coins: coinsNow() } : null,
     reward: matchReward(duel.match),
     shareText: buildDuelShareText({ outcome: d.outcome, youBest: d.youBest, oppName: d.oppName, oppBest: d.oppBest, link, mode: d.mode }),
     nextDayAt: 0,
@@ -2069,6 +2072,45 @@ bus.on('ui:duel-now', () => duel.playNow());
 bus.on('ui:duel-search-stop', () => {
   stopDuelFlow();
   ui.setSearchChip(false);
+});
+
+// (1.15.3, the owner: "there is not a lot of players ... the guy playing for 100 coins should get a notification that
+// there is someone willing to play for 50 coins do you accept? Also the same for wedloop and block for block") the
+// lobby's offer: a question on the waiting screen (or over an Oefen tower built meanwhile); 15 s, then no
+const OFFER_MS = 15000;
+let offerNow = null;
+function answerOffer(yes) {
+  const o = offerNow;
+  if (!o) return;
+  clearTimeout(o.timer);
+  offerNow = null;
+  if (!duel.answerOffer(o.id, yes)) return;
+  if (yes) ui.toast(S.offerGo(o.name), 2600);
+}
+bus.on('duel:offer', (o) => {
+  if (!duel.searching || !o) return;
+  if (o.stake && coinsNow() < o.stake) {   // (never: the one asked looked for more coins; a wallet spent meanwhile)
+    duel.answerOffer(o.id, false);
+    return;
+  }
+  if (offerNow) clearTimeout(offerNow.timer);
+  offerNow = { ...o, timer: setTimeout(() => {
+    if (ui.view().modal === 'offer') ui.closeModal();
+    answerOffer(false);
+  }, OFFER_MS) };
+  ui.showOffer({ name: o.name, mode: o.mode, stake: o.stake, ms: OFFER_MS });
+  audio.play('banner');
+  haptics.tap();
+});
+bus.on('ui:offer-yes', () => answerOffer(true));
+bus.on('ui:offer-no', () => answerOffer(false));
+bus.on('duel:offer-gone', () => {
+  if (offerNow) {
+    clearTimeout(offerNow.timer);
+    offerNow = null;
+    if (ui.view().modal === 'offer') ui.closeModal();
+  }
+  ui.toast(S.offerGone, 3000);
 });
 
 bus.on('ui:duel', showDuelScreen);
@@ -2168,27 +2210,32 @@ bus.on('ui:duel-accept', () => {
   if (m) versus(m);
   else showDuelScreen();
 });
-bus.on('ui:duel-again', () => {
+bus.on('ui:duel-again', (o) => {
+  // (1.15.3, the owner: "there is no way to change the stake after we have played") the results' coin chips: the stake
+  // for the next match (undefined: as before, the same)
+  const pick = Number.isFinite(o?.stake) ? o.stake : undefined;
   // (1.12.1, the owner: "if I say play again after I challenged a friend then it shows finding an opponent")
   // after a friend match: the same friend, in the same room (the match starts once both said it)
   if (duel.canAgain()) {
     const m = duel.match;
-    if (m?.stake && coinsNow() < m.stake) {   // (1.13) a coin match again needs the coins again
-      ui.toast(S.stakeAgainShort(fmtInt(m.stake)), 3400);
+    const want = pick !== undefined && duel.canChangeStake() ? pick : m?.stake || 0;
+    if (want && coinsNow() < want) {   // (1.13) a coin match again needs the coins again
+      ui.toast(S.stakeAgainShort(fmtInt(want)), 3400);
       return;
     }
-    duel.again();
+    duel.again(duel.canChangeStake() ? want : undefined);
     return;
   }
   leaveDuel();
-  // the same way to play as the match just played (1.13: and for the same coins)
+  // the same way to play as the match just played (1.13: and for the same coins; 1.15.3: or the coins picked now)
   store.setDuelMode(lastDuelMode);
-  if (lastDuelStake !== null) store.setDuelStake(lastDuelStake);
+  if (pick !== undefined && lastDuelKind === 'live') store.setDuelStake(pick > coinsNow() ? 0 : pick);
+  else if (lastDuelStake !== null) store.setDuelStake(lastDuelStake);
   if (duel.live && lastDuelKind === 'live' && lastDuelRoom === 'friend') bus.emit('ui:duel-friend');   // a new invite
   else if (duel.live && lastDuelKind !== 'bot') searchOpponent();
   else versus(duel.startBot(lastDuelMode));
 });
-bus.on('duel:again', (e) => ui.setAgain(e?.state, e?.name || S.duelSomeone));
+bus.on('duel:again', (e) => ui.setAgain(e?.state, e?.name || S.duelSomeone, e?.stake));
 bus.on('duel:rematch', (m) => {
   if (screen !== 'results' && screen !== 'duelwait') return;
   stopDuelFlow();

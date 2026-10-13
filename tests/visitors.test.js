@@ -256,8 +256,10 @@ test('results line: the most memorable visit (thief, then monkey, then clown)', 
   assert.equal(line({ type: 'clown', outcome: 'gift', n: 3 }), S.resClownGift(3));
   assert.equal(line({ type: 'clown', outcome: 'gift', n: 3 }, { type: 'clown', outcome: 'gift', n: 1 }), S.resClownGift(4));
   assert.match(S.resClownGift(3), /3 geskenke/);   // (1.12: his log and gift blocks)
-  assert.equal(line({ type: 'clown', outcome: 'came' }), '');
-  assert.equal(line({ type: 'thief', outcome: 'came' }, { type: 'clown', outcome: 'came' }), '', 'nothing happened yet');
+  // (1.15.3, the owner: "if the clown brings 0 gifts it needs to shows Clown did not bring any gifts")
+  assert.equal(line({ type: 'clown', outcome: 'came' }), S.resClownNone);
+  assert.equal(line({ type: 'thief', outcome: 'came' }, { type: 'clown', outcome: 'came' }), S.resClownNone, 'Hanswors came and brought nothing');
+  assert.equal(line({ type: 'thief', outcome: 'came' }), '', 'nothing happened yet');
   assert.equal(visitorResultLine([]), '');
 });
 

@@ -124,7 +124,7 @@ export const S = {
     // (1.13.2, the owner: "add the challenger and brick by brick series to the tutorial")
     { icon: '⚔️', text: 'Uitdagersreeks: speel teen ’n vriend, iemand anders of Robot Rikus. Teen ’n regte speler kan julle vir munte speel: die wenner kry albei se munte.' },
     { icon: '🏁', text: 'Wedloop: elkeen bou sy eie toring met dieselfde blokke. Wie eerste by ’n 10 m-merk kom, kies ’n straf vir die ander. Eerste tot 50 m wen.' },
-    { icon: '🤝', text: 'Blok vir Blok: een toring saam, om die beurt ’n blok, 10 sekondes om te mik. Val jou blok of gooi jy blokke af, kos dit ’n hartjie. 5 Perfeks op ’n ry stuur ’n sabotasie.' },
+    { icon: '🤝', text: 'Blok vir Blok: een toring saam, om die beurt ’n blok, 10 sekondes om te mik. Val jou blok of gooi jy blokke af, kos dit ’n hartjie. 3 Perfeks op ’n ry stuur ’n sabotasie, en die hyskraan swaai al vinniger.' },
     // (1.13.1) with the day's free tries (from 12 Oct 2026: 3)
     { icon: '🗓️', text: (free = 1) => (free > 1
       ? `Een Daaglikse Toring per dag, dieselfde vir almal: ${free} gratis pogings en jou beste poging tel. Daarna kos “Nog ’n kans” munte. Oefen soveel jy wil.`
@@ -222,6 +222,7 @@ export const S = {
   resMonkeyKnocked: (n) => (n === 1 ? 'Blouaap het 1 blok van jou toring afgegooi 🐒' : `Blouaap het ${n} blokke van jou toring afgegooi 🐒`),
   resMonkeyStood: 'Blouaap het gestamp, maar jou toring het bly staan! 🐒',
   resClownGift: (n) => (n > 1 ? `Hanswors het vir jou ${n} geskenke gebring 🎁` : 'Hanswors het vir jou ’n groot boomstam gebring 🪵'),
+  resClownNone: 'Hanswors het hierdie keer niks gebring nie 🤡',
   clownFoundation: 'Nuwe fondament! 🪵 Alles daaronder staan vas',   // Hanswors's log sets as cement
   clownRewardTitle: (n) => `${n} Perfeks op ’n ry!`,
   clownRewardSub: 'Hanswors bring geskenke: ’n boomstam, en dalk ’n paar blokke. Bou daarop verder!',
@@ -297,11 +298,15 @@ export const S = {
   turnsTheyStart: (name) => `${name} begin.`,
   turnsLostHeart: (name) => `${name} verloor ’n hartjie!`,
   turnsYouLostHeart: 'Jy verloor ’n hartjie!',
-  turnsChoose: (name) => `5 Perfeks op ’n ry! Kies ’n sabotasie vir ${name} se volgende blok:`,
+  turnsChoose: (name, n = 3) => `${n} Perfeks op ’n ry! Kies ’n sabotasie vir ${name} se volgende blok:`,
   turnsChooseLabel: 'Kies ’n sabotasie',
   turnsSabotageOut: (what, name) => `${what} gaan na ${name} se volgende blok!`,
   turnsSabotageIn: (name, what) => `${name} stuur ${what} vir jou volgende blok!`,
-  sabotageWhat: { fog: 'Sien skaars waar dit land', heat: 'Die hyskraan jaag', rain: 'Die blok gly' },
+  sabotageWhat: { fog: 'Sien skaars waar dit land', heat: 'Die hyskraan jaag', rain: 'Die blok gly', wobbly: 'Kry die lang dun pilaar', rush: 'Net 4 sekondes om te mik', ice: 'Gly af as dit nie Perfek land nie' },
+  // (1.15.3, the owner's picks) the joker's newer sabotages that aren't weather: their name and emoji (WEATHER_INFO has the rest)
+  sabotageInfo: { wobbly: { emoji: '🗼', name: 'Wankelblok' }, rush: { emoji: '⏱️', name: 'Haastig' }, ice: { emoji: '🧊', name: 'Gladde blok' } },
+  iceSlid: '🧊 Gladde blok: hy gly!',
+  craneFaster: '⚡ Die hyskraan swaai vinniger!',
   turnsWhyTheyOut: (name) => `${name} se hartjies is op!`,
   turnsWhyYouOut: 'Jou hartjies is op.',
   turnsWhyTimeout: (name) => `${name} het te lank gevat.`,
@@ -432,6 +437,13 @@ export const S = {
   freeFoundation: 'Fondamentblok verdien! Tik 🧱 wanneer jy dit wil gebruik',
   // (1.15.3) before each Daily Tower: one free power-up, the player's pick, ready from the first block
   pickTitle: 'Kies jou gratis krag',
+  // (1.15.3) the lobby's offer: someone looks for another stake or mode
+  offerTitle: 'Iemand wil speel!',
+  offerText: (name, mode, n) => (n ? `${name} wil ${mode} vir ${n} 🪙 elk speel.` : `${name} wil ${mode} speel, sonder munte.`),
+  offerYes: 'Speel',
+  offerNo: 'Nee, soek verder',
+  offerGone: 'Hulle het intussen iemand anders gekry. Ons soek verder.',
+  offerGo: (name) => `Ons begin teen ${name}…`,
   pickNote: 'Een vir hierdie toring, almal kry een. Dit wag regs op die skerm: tik dit wanneer jy dit nodig het.',
   pickReady: (emoji, name) => `${emoji} ${name} is gereed: tik dit regs wanneer jy wil`,
   shieldBlocked: (name) => `${name} bons van jou skild af! 🛡️`,
@@ -516,6 +528,11 @@ export const S = {
   againAsk: (name) => `🔁 Weer teen ${name}`,
   againWait: (name) => `Wag vir ${name}…`,
   againThey: (name) => `🔁 ${name} wil weer speel!`,
+  // (1.15.3) "Speel weer" for other coins: the friend's ask, and the chips' label
+  againTheyStake: (name, n) => (n ? `🔁 ${name} wil weer speel vir ${n} 🪙!` : `🔁 ${name} wil weer speel, sonder munte!`),
+  againStakeLabel: 'Volgende wedstryd vir munte:',
+  // (1.15.3) the grid's key: lost blocks a visitor took cost no heart
+  lostFree: (n, who) => `(${n} deur ${who}: geen hartjie)`,
   againStarting: 'Ons begin…',
   againGone: (name) => `${name} het geloop: 📲 daag weer uit`,
   // (1.13, the owner: coin matches with earned coins only) a live match against a real player can be played for
@@ -628,7 +645,8 @@ export const S = {
   boardShowMe: 'Wys my op die ranglys',
   boardAs: (name) => `Jy verskyn as “${name}”.`,
   nameChange: 'Verander jou bynaam',
-  nameHint: (dflt) => `Op die ranglys en vir jou teenstanders (hoogstens 16 letters). Leeg: “${dflt}”.`,
+  // (1.15.3) a row on the ranglys keeps the name it was played with; a new best brings the new name
+  nameHint: (dflt) => `Op die ranglys en vir jou teenstanders (hoogstens 16 letters). Vandag se ranglys kry dit met jou volgende beste toring. Leeg: “${dflt}”.`,
   nameSave: 'Stoor',
   nameRules: 'Kies ’n speelnaam, nie jou regte naam nie. Geen vloekwoorde, haat of ander mense se name nie: ons haal onvanpaste name af. Deur ’n bynaam te gebruik, stem jy in.',
   nameDefault: (dflt) => `Jy speel weer as “${dflt}”.`,
