@@ -786,6 +786,11 @@ Later the owner added (decisions are final unless they say otherwise):
   (WebView) glitched: the real proof is the app. Private preview: https://hotfix-1152.stapelspel.pages.dev (deployment
   ea969267; production still 1.15.1). Next: the owner's phone on the preview → website → the app 11502 to internal testing →
   his app clean → the closed test → the Family message.
+  - **RELEASED without the Critic Panel on the owner's word (typed 14:46): "No need for the critic panel, please proceed".**
+    Website: push 3147788..343988e + Pages 41872991 (14:48); both addresses stapel-v1.15.2 / VERSION 1.15.2. Play: 11502 to
+    internal testing 14:50 (release 17; 0 devices lost; +437 B; notes hash matched). 11501 is published on the closed test.
+    The way back: Pages rollback to abab85d3 (1.15.1); Internal testing > Pause track. Next: his app check → 11502 to the
+    closed test → the Family message.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
