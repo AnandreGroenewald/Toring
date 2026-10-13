@@ -75,8 +75,11 @@ release-notes.txt, README; full panel; the owner's typed word; only "Save and pu
   declared); the Advocate confirms.
 - The way back: Internal testing > Manage track > Pause track.
 
-**e. Later, each with its own yes:** promote to the closed test (Google review); raise `APP_LATEST` to "1.15.0" only once
-Play has 1.15.0 for everyone (then `./wr.sh deploy`).
+**e. The closed test, tonight too (his ~23:04 answer "Also send 1.15 to the closed test"):** promote 11500 to Closed
+testing – Alpha and send exactly that release for Google's review (it replaces 1.14.0's submission of 12 Oct 19:07; the
+review counts from the last change sent). The folder's README holds both clicks, STEP 0 (the web first) and the stop rules.
+
+**f. Later, with its own yes:** raise `APP_LATEST` to "1.15.0" only once Play has 1.15.0 for everyone (then `./wr.sh deploy`).
 
 ## The Critic Panel (his bar: all four 10 + the Final Boss 10)
 - **Round 1 on 6a33cc9 (13 Oct ~00:55-01:10): 30/40, all HOLD:** Guardian 6 (a 1.14 app's sync dropped 1.15 purchases),
@@ -88,8 +91,23 @@ Play has 1.15.0 for everyone (then `./wr.sh deploy`).
   look). Round 3: keepOwned keeps the dropped worn id too; the Customer's polish (Robot Rikus whole in the match pills,
   no split "tot 4 000" / "Robot Rikus", the Afrikaans note's word order, a solid band); the Advocate's lines (the cement
   tip and how long updateSeen stays in §11, "Wat jy koop, bly joune" in §2d); these records.
+- **Round 3 on a60c5b6: 36/40** (all four 9 APPROVE); lifts done in 8df42bb (the race track above the island sign on tall
+  phones, "(up to 4 000)", §11's stapel.v1 line, the keep-ids rule). **Round 4 on 8df42bb: all four 9, then 10 each after
+  the clean full check** (63 ok + 2 timeouts under load re-run alone ok = 65/65; the sign-in check's coin-toast filter
+  fixed to read the gold coin) = **40/40, and the Final Boss 10/10 FINAL APPROVAL (03:29).**
+- **The web went out 03:31-03:35** (b + c below the line in HANDOVER "1.15.0 WEBSITE + WORKER LIVE"): Worker
+  94ca5595-029a-4c81-aec4-d99b59556088, push 812b82a..8df42bb, Pages 9881b426; the live gate and `check-all.sh live`
+  ALL CLEAR (03:43).
+- **The Play upload panel (folder "Upload 1.15.0 internal", aab built 03:23 from 8df42bb):** round 1 32/40 (all 8: STEP 0
+  web-first, the way back, the after-click records, "Try it" promised only for worlds, cranes and blocks); round 2: the
+  Guardian, the Customer and the Advocate 10; the Bottom Line 9 (the Family message for closed-test-only phones, a WATCH
+  target, these records current).
 
 ## Watch after release
+- **Wed 14 Oct 18:00 — the app:** how many of the 17 testers' phones are on 11500 (Play Console > Statistics). Target 5 of
+  17 (on 10 Oct only 1 tester used the Play app). Fewer than 3: the owner sends the internal link again to the testers who
+  aren't on it (the Family message: "Sien jy nog nie Update nie, of is jy nog nie ’n toetser nie? ..."). Also the closed
+  test's review result and Play's pre-launch report for it.
 - The board's daily players on Wed 14 and Sat 17 Oct against the 1.14 days (about 5-12); Thu 15 Oct ask the Family which
   new look they tried and bought; the morning after each step, no match complaints and no new Worker errors. The refill
   ends Fri 16 Oct, so the week after is the real test of "want to buy".
