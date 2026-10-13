@@ -73,7 +73,7 @@ export const COSMETICS = Object.freeze({
   celebration: Object.freeze([
     { id: 'konfetti', price: 0, emoji: '🎊', tier: 'common' },
     { id: 'vuurwerk', price: 150, emoji: '🎆', tier: 'rare' },
-    { id: 'vuvuzela', price: 180, emoji: '📯', tier: 'rare' },
+    { id: 'vuvuzela', price: 180, emoji: '🌸', tier: 'rare' },   // (1.15.4, the owner: "replace the Vuvuzela") the Protea now (same id)
     { id: 'braai', price: 200, emoji: '🍖', tier: 'rare' },
     { id: 'skrum', price: 200, emoji: '🏉', tier: 'rare' },
     { id: 'weerlig', price: 300, emoji: '⚡', tier: 'epic' },

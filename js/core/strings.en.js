@@ -674,7 +674,7 @@ export const COSMETIC_INFO_EN = {
     wolkekrabber: { name: 'Skyscraper' }, toringkoning: { name: 'Tower King' }, ikoon: { name: 'Icon' }, getrou: { name: 'Loyal Builder' },
   },
   celebration: {
-    konfetti: { name: 'Confetti' }, vuurwerk: { name: 'Fireworks' }, vuvuzela: { name: 'Vuvuzela' }, braai: { name: 'Braai' }, skrum: { name: 'Scrum' },
+    konfetti: { name: 'Confetti' }, vuurwerk: { name: 'Fireworks' }, vuvuzela: { name: 'Protea' }, braai: { name: 'Braai' }, skrum: { name: 'Scrum' },
     weerlig: { name: 'Lightning storm' }, goudreen: { name: 'Gold rain' }, laser: { name: 'Laser show' }, sterrestof: { name: 'Stardust' },
   },
   style: {

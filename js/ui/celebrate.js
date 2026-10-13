@@ -20,7 +20,8 @@ const EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", s
 const LOOK = {
   konfetti: { accent: '#ff4f9a', tint: null, flash: 'radial-gradient(ellipse at 50% 100%, rgba(255,250,230,0.85), rgba(255,250,230,0) 70%)' },
   vuurwerk: { accent: '#ffcf4a', tint: 'radial-gradient(ellipse at 50% 30%, rgba(34,24,86,0.62), rgba(4,5,22,0.9))', flash: 'rgba(255,236,200,0.55)' },
-  vuvuzela: { accent: '#ffb612', tint: 'radial-gradient(ellipse at 50% 100%, rgba(255,196,40,0.45), rgba(0,122,77,0.18) 55%, rgba(0,0,0,0) 80%)', flash: 'radial-gradient(ellipse at 50% 85%, rgba(255,214,90,0.8), rgba(255,214,90,0) 70%)' },
+  // (1.15.4) the id stays 'vuvuzela' (whoever owns it keeps it); it is the Protea now
+  vuvuzela: { accent: '#f2709a', tint: 'radial-gradient(ellipse at 50% 90%, rgba(255,170,200,0.5), rgba(120,20,70,0.25) 55%, rgba(40,6,24,0.5))', flash: 'radial-gradient(ellipse at 50% 80%, rgba(255,226,236,0.85), rgba(255,226,236,0) 70%)' },
   braai: { accent: '#ff8a2a', tint: 'linear-gradient(to top, rgba(255,120,30,0.5), rgba(130,40,30,0.4) 38%, rgba(36,14,44,0.62))', flash: 'radial-gradient(ellipse at 50% 85%, rgba(255,190,90,0.8), rgba(255,190,90,0) 70%)' },
   skrum: { accent: '#ffc928', tint: 'radial-gradient(circle at 50% 42%, rgba(18,120,62,0.34), rgba(0,46,24,0.72))', flash: 'radial-gradient(circle at 50% 42%, rgba(255,246,200,0.9), rgba(255,246,200,0) 65%)' },
   weerlig: { accent: '#6fd0ff', tint: 'radial-gradient(ellipse at 50% 18%, rgba(40,62,150,0.6), rgba(3,6,24,0.92))', flash: 'linear-gradient(to bottom, rgba(225,240,255,0.95), rgba(170,205,255,0.55))' },
@@ -814,6 +815,163 @@ function vuvuzelaFx(env) {
   return fx;
 }
 
+
+/**
+ * (1.15.4, the owner: "Also replace the Vuvuzela with soemthing else") a king protea, centred on (cx, cy), about R across
+ * its bracts: two leaves, a crown of pointed pink bracts (the upper ones longer), the soft pink-cream dome with its silvery
+ * rim on top. The shop tile and the show draw the same one (the item keeps its id, so whoever owns the Vuvuzela owns it).
+ */
+function drawProtea(x, cx, cy, R) {
+  const k = R / 40;
+  x.save();
+  x.translate(cx, cy);
+  x.scale(k, k);
+  x.lineJoin = 'round';
+  const leaf = (lx, ly, a) => {
+    x.save();
+    x.translate(lx, ly);
+    x.rotate(a);
+    const g = x.createLinearGradient(0, -6, 0, 6);
+    g.addColorStop(0, '#7fbf5a');
+    g.addColorStop(1, '#2f6d2a');
+    x.fillStyle = g;
+    x.beginPath();
+    x.moveTo(0, 0);
+    x.quadraticCurveTo(14, -9, 30, 0);
+    x.quadraticCurveTo(14, 9, 0, 0);
+    x.fill();
+    x.strokeStyle = 'rgba(20,60,20,0.6)';
+    x.lineWidth = 0.9;
+    x.beginPath();
+    x.moveTo(1, 0);
+    x.lineTo(28, 0);
+    x.stroke();
+    x.restore();
+  };
+  leaf(-6, 22, Math.PI - 0.55);
+  leaf(6, 22, 0.55);
+  const bract = (a, len, w, light, dark) => {
+    x.save();
+    x.rotate(a);
+    const g = x.createLinearGradient(0, 0, len, 0);
+    g.addColorStop(0, dark);
+    g.addColorStop(0.55, light);
+    g.addColorStop(1, '#fff1f5');
+    x.fillStyle = g;
+    x.beginPath();
+    x.moveTo(6, -w * 0.45);
+    x.quadraticCurveTo(len * 0.55, -w, len, 0);
+    x.quadraticCurveTo(len * 0.55, w, 6, w * 0.45);
+    x.closePath();
+    x.fill();
+    x.strokeStyle = 'rgba(120,10,50,0.55)';
+    x.lineWidth = 0.9;
+    x.stroke();
+    x.strokeStyle = 'rgba(255,255,255,0.45)';
+    x.lineWidth = 0.7;
+    x.beginPath();
+    x.moveTo(10, 0);
+    x.lineTo(len * 0.8, 0);
+    x.stroke();
+    x.restore();
+  };
+  // the back crown: long bracts fanning upwards
+  for (let i = 0; i < 11; i++) {
+    const a = -Math.PI + 0.12 + (i / 10) * (Math.PI - 0.24);
+    bract(a, 40 + 4 * Math.sin(i * 1.9), 11, '#f2709a', '#a3134a');
+  }
+  // the lower bracts, shorter, cupping the dome from below (behind it)
+  for (let i = 0; i < 7; i++) {
+    const a = 0.3 + (i / 6) * (Math.PI - 0.6);
+    bract(a, 31, 12, '#ff86ab', '#b5175a');
+  }
+  // the dome: soft pink-cream florets
+  const d = x.createRadialGradient(-4, -8, 2, 0, -2, 22);
+  d.addColorStop(0, '#fff6ef');
+  d.addColorStop(0.55, '#f6c9d4');
+  d.addColorStop(1, '#c7708c');
+  x.fillStyle = d;
+  x.beginPath();
+  x.ellipse(0, -2, 22, 19, 0, 0, TAU);
+  x.fill();
+  x.strokeStyle = 'rgba(255,255,255,0.55)';   // the dome's silvery hairs at its rim
+  x.lineWidth = 0.8;
+  for (let a = 0; a < TAU; a += 0.21) {
+    x.beginPath();
+    x.moveTo(Math.cos(a) * 19, -2 + Math.sin(a) * 16.5);
+    x.lineTo(Math.cos(a) * 23.5, -2 + Math.sin(a) * 20.5);
+    x.stroke();
+  }
+  x.fillStyle = 'rgba(160,60,90,0.35)';
+  for (let r = 4; r < 18; r += 4.2) {
+    for (let a = 0; a < TAU; a += 0.8 - r * 0.02) {
+      x.beginPath();
+      x.arc(Math.cos(a + r) * r, -2 + Math.sin(a + r) * r * 0.86, 1.1, 0, TAU);
+      x.fill();
+    }
+  }
+  x.restore();
+}
+
+/** Protea: three king proteas bloom up from the bottom, a gold glow behind; pink petals drift down all over. */
+function proteaFx(env) {
+  const { doc, W, H, s, dpr } = env;
+  const PS = Math.round(220 * s * dpr);
+  const flower = sprite(doc, `protea${PS}`, PS, PS, (x) => { x.scale(PS / 100, PS / 100); drawProtea(x, 50, 46, 44); });
+  const glow = glowSprite(doc, '#ffd0e0');
+  const gold = glowSprite(doc, '#ffd23f');
+  const blooms = [
+    { x: 0.5, y: 0.8, size: 1.25, at: 0.05 },
+    { x: 0.2, y: 0.88, size: 0.85, at: 0.35 },
+    { x: 0.8, y: 0.88, size: 0.85, at: 0.55 },
+  ];
+  const NP = 70;
+  const petals = [];
+  for (let i = 0; i < NP; i++) {
+    petals.push({
+      x: Math.random() * W, y: -Math.random() * H * 0.9 - 20 * s, vy: rand(70, 140) * s, ph: rand(0, TAU), sw: rand(18, 46) * s,
+      r: rand(6, 11) * s, a: rand(0, TAU), va: rand(-2.5, 2.5), c: ['#f2709a', '#ff9fbe', '#ffd1df', '#c71f5c'][i % 4],
+    });
+  }
+  const fx = {
+    flash: 0.35,
+    step(ctx, t, dt) {
+      // petals behind the flowers
+      for (const p of petals) {
+        p.y += p.vy * dt;
+        p.a += p.va * dt;
+        const px = p.x + Math.sin(t * 1.6 + p.ph) * p.sw;
+        ctx.save();
+        ctx.translate(px, p.y);
+        ctx.rotate(p.a);
+        ctx.fillStyle = p.c;
+        ctx.globalAlpha = 0.9;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, p.r, p.r * 0.48, 0, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+      for (const b of blooms) {
+        const f = clamp01((t - b.at) / 0.7);
+        if (f <= 0) continue;
+        const grow = easeOutBack(f);
+        const size = 220 * s * b.size * grow;
+        const bx = W * b.x;
+        const by = H * b.y;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.55 * f;
+        const gr = size * 0.9;
+        ctx.drawImage(b.size > 1 ? gold : glow, bx - gr, by - gr, gr * 2, gr * 2);
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+        stamp(ctx, dpr, flower, bx, by, size, size, 0.06 * Math.sin(t * 2.2 + b.x * 9) * f);
+      }
+    },
+  };
+  return fx;
+}
+
 const EMBER = ['#fff3b0', '#ffb43a', '#ff6a1f', '#e2421c'];
 
 /** A boerewors coil seen from above, centred on (cx, cy), radius R (the shop tile and the show draw the same one). */
@@ -878,6 +1036,22 @@ function drawDrumBraai(x, { coals = true } = {}) {
   x.beginPath();
   x.ellipse(150, 74, 112, 58, 0, Math.PI, TAU);
   x.stroke();
+  // (1.15.4, the owner: "Improve the braai a little more") the drum's two rolling hoops on the open lid too: a 44-gallon
+  // drum, not a kettle
+  for (const hx of [104, 196]) {
+    x.strokeStyle = 'rgba(0,0,0,0.55)';
+    x.lineWidth = 5;
+    x.beginPath();
+    x.moveTo(hx, 74);
+    x.quadraticCurveTo(hx + (hx < 150 ? -6 : 6), 40, hx + (hx < 150 ? 8 : -8), 22);
+    x.stroke();
+    x.strokeStyle = 'rgba(160,160,180,0.35)';
+    x.lineWidth = 1.6;
+    x.beginPath();
+    x.moveTo(hx - 2, 74);
+    x.quadraticCurveTo(hx - 2 + (hx < 150 ? -6 : 6), 40, hx - 2 + (hx < 150 ? 8 : -8), 22);
+    x.stroke();
+  }
   x.fillStyle = '#7a4a22';                                  // the lid's wooden handle
   x.fillRect(122, 8, 56, 8);
   x.fillStyle = '#3a3a42';
@@ -999,6 +1173,22 @@ function drawDrumBraai(x, { coals = true } = {}) {
   x.beginPath();
   x.ellipse(150, 128, 110, 10, 0, 0, TAU);
   x.fill();
+  // (1.15.4) the drum's two rolling hoops, running round it from the rim to the bottom
+  for (const hx of [100, 200]) {
+    const bend = hx < 150 ? -10 : 10;
+    x.strokeStyle = '#0b0b0e';
+    x.lineWidth = 7;
+    x.beginPath();
+    x.moveTo(hx, 114);
+    x.quadraticCurveTo(hx + bend, 146, hx + bend * 0.4, 172);
+    x.stroke();
+    x.strokeStyle = 'rgba(190,190,210,0.4)';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(hx - 2.5, 114);
+    x.quadraticCurveTo(hx - 2.5 + bend, 146, hx - 2.5 + bend * 0.4, 171);
+    x.stroke();
+  }
   x.strokeStyle = '#5c5c68';                                 // the rolled rim
   x.lineWidth = 5;
   x.beginPath();
@@ -1163,6 +1353,27 @@ function drawTongs(ctx, tx, ty, ang, open, L) {
 }
 
 /**
+ * (1.15.4) One flame tongue: a teardrop from its foot (x, y) up `h`, `w` wide, its tip leaning by `lean` (of w), yellow at the
+ * core, orange to red at its edge, fading to nothing at the tip.
+ */
+function flameTongue(ctx, x, y, w, h, lean, alpha) {
+  if (h <= 1 || alpha <= 0.01) return;
+  const g = ctx.createLinearGradient(x, y, x, y - h);
+  g.addColorStop(0, 'rgba(255,240,170,0.95)');
+  g.addColorStop(0.35, 'rgba(255,170,50,0.85)');
+  g.addColorStop(0.75, 'rgba(240,80,20,0.55)');
+  g.addColorStop(1, 'rgba(200,40,10,0)');
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(x, y + w * 0.12);
+  ctx.bezierCurveTo(x - w * 0.95, y, x - w * 0.55, y - h * 0.55, x + lean * w, y - h);
+  ctx.bezierCurveTo(x + w * 0.55, y - h * 0.55, x + w * 0.95, y, x, y + w * 0.12);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/**
  * Braai: the drum braai rises at the bottom, flames lick up through the grid, the braaier's tongs bring a tjop, set it
  * down with a sizzle, click twice ("klik-klik"), then flip it to its grilled side; embers rise and smoke curls up.
  */
@@ -1276,8 +1487,20 @@ function braaiFx(env) {
         ctx.globalAlpha = (1 - f) * 0.9;
         ctx.drawImage(f < 0.4 ? flameA : flameB, q.x - r, q.y - r * 1.6 + lift, r * 2, r * 3.2);
       }
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
+      // (1.15.4, the owner: "Improve the braai a little more") real flame tongues licking up between the food
+      if (t < 3.3) {
+        ctx.globalCompositeOperation = 'lighter';
+        const fade = Math.min(1, t / 0.4) * (t > 2.8 ? Math.max(0, (3.3 - t) / 0.5) : 1);
+        for (let i = 0; i < 9; i++) {
+          const u = (i + 0.5) / 9;
+          const [fxp, fyp] = P2(30 + u * 240, 104 - 6 * Math.sin(u * Math.PI));
+          const hgt = (34 + 22 * Math.sin(t * 9 + i * 1.7) + 10 * Math.sin(t * 23 + i)) * k;
+          const wid = (22 + 5 * Math.sin(t * 11 + i * 2.3)) * k;
+          flameTongue(ctx, fxp, fyp + lift, wid, hgt, Math.sin(t * 6 + i) * 0.25, fade * 0.85);
+        }
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+      }
       // the tjop and the tongs
       const tg = tongs(t);
       let chopX = cx;
@@ -1915,7 +2138,7 @@ function sterrestofFx(env) {
   return fx;
 }
 
-const FX = { konfetti: konfettiFx, vuurwerk: vuurwerkFx, vuvuzela: vuvuzelaFx, braai: braaiFx, skrum: skrumFx, weerlig: weerligFx, goudreen: goudreenFx, laser: laserFx, sterrestof: sterrestofFx };
+const FX = { konfetti: konfettiFx, vuurwerk: vuurwerkFx, vuvuzela: proteaFx, braai: braaiFx, skrum: skrumFx, weerlig: weerligFx, goudreen: goudreenFx, laser: laserFx, sterrestof: sterrestofFx };
 
 // ---------------------------------------------------------------------------
 // The shop tiles: rounded-square art in a 100 x 100 space
@@ -2152,68 +2375,9 @@ const ICONS = {
   },
 
   vuvuzela(x) {
-    tile(x, '#0e9a58', '#033a22', [66, 34, 50, '#ffd23f', 0.5]);
-    // the flag's Y as a soft band behind it all
-    x.save();
-    x.globalAlpha = 0.28;
-    x.lineCap = 'butt';
-    x.lineJoin = 'miter';
-    x.strokeStyle = '#ffffff';
-    x.lineWidth = 26;
-    x.beginPath();
-    x.moveTo(-6, 4);
-    x.lineTo(38, 50);
-    x.lineTo(-6, 96);
-    x.moveTo(38, 50);
-    x.lineTo(106, 50);
-    x.stroke();
-    x.globalAlpha = 1;
-    x.restore();
-    // the sound: flag-colour arcs out of the bell
-    x.lineCap = 'round';
-    const arcs = [['#ffb612', 14], ['#de3831', 21], ['#ffffff', 28], ['#2453e0', 35]];
-    for (const [c, r] of arcs) {
-      x.strokeStyle = c;
-      x.lineWidth = 4.6;
-      x.beginPath();
-      x.arc(61, 40, r, -1.9, 0.3);
-      x.stroke();
-    }
-    // the horn, mouthpiece bottom-left, bell top-right
-    x.save();
-    x.translate(14, 88);
-    x.rotate(-0.81);
-    const g = x.createLinearGradient(0, -12, 0, 12);
-    g.addColorStop(0, '#fff3a0');
-    g.addColorStop(0.45, '#ffc21a');
-    g.addColorStop(1, '#c97f00');
-    x.beginPath();
-    x.moveTo(0, -2.6);
-    x.lineTo(64, -11);
-    x.lineTo(64, 11);
-    x.lineTo(0, 2.6);
-    x.closePath();
-    x.fillStyle = g;
-    x.fill();
-    x.save();
-    x.clip();
-    for (const [c, a] of [['#007a4d', 38], ['#ffffff', 44], ['#de3831', 48], ['#2453e0', 54]]) {
-      x.fillStyle = c;
-      x.fillRect(a, -14, 4, 28);
-    }
-    x.restore();
-    x.fillStyle = '#1a1a1a';
-    x.beginPath();
-    x.ellipse(0, 0, 2.4, 3.6, 0, 0, TAU);
-    x.fill();
-    x.fillStyle = '#3b2600';
-    x.beginPath();
-    x.ellipse(65, 0, 4.4, 13.5, 0, 0, TAU);
-    x.fill();
-    x.lineWidth = 2.6;
-    x.strokeStyle = '#ffe27a';
-    x.stroke();
-    x.restore();
+    // (1.15.4) the Protea (the item's id stays): a king protea on a deep berry tile, a soft gold glow behind it
+    tile(x, '#7a1946', '#2a0618', [50, 46, 52, '#ffd23f', 0.45]);
+    drawProtea(x, 50, 48, 40);
     finish(x);
   },
 

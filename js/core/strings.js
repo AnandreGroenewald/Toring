@@ -722,7 +722,7 @@ export const COSMETIC_INFO = {
     wolkekrabber: { name: 'Wolkekrabber' }, toringkoning: { name: 'Toringkoning' }, ikoon: { name: 'Ikoon' }, getrou: { name: 'Getroue Bouer' },
   },
   celebration: {
-    konfetti: { name: 'Konfetti' }, vuurwerk: { name: 'Vuurwerk' }, vuvuzela: { name: 'Vuvuzela' }, braai: { name: 'Braai' }, skrum: { name: 'Skrum' },
+    konfetti: { name: 'Konfetti' }, vuurwerk: { name: 'Vuurwerk' }, vuvuzela: { name: 'Protea' }, braai: { name: 'Braai' }, skrum: { name: 'Skrum' },
     weerlig: { name: 'Weerligstorm' }, goudreen: { name: 'Goue reën' }, laser: { name: 'Laserskou' }, sterrestof: { name: 'Sterrestof' },
   },
   style: {
