@@ -1338,6 +1338,9 @@ bus.on('ui:install-dismiss', () => {
 onInstallChange(() => ui.setInstall(installMode()));
 bus.on('ui:play-practice', playPractice);
 // (1.15.3) the Daily Tower's free power-up was picked: the tower starts with it (only from the menu or results)
+bus.on('ui:pick-closed', () => {
+  if (screen === 'menu') showMenu();   // (the daily card shows a try that was taken as ready to play)
+});
 bus.on('ui:power-pick', (id) => {
   if (screen === 'menu' || screen === 'results') playDaily(POWERUP_IDS.includes(id) ? id : null);
 });
@@ -2339,6 +2342,13 @@ bus.on('ui:daily-results', () => {
 // (1.12) "Nog 'n kans": buy the day's second try with coins, and play it at once
 bus.on('ui:daily-retry', () => {
   const dateKey = todayKey();
+  // (1.15.3, the owner's screenshot: "Play your extra try first." and nothing started) a try already taken and still to
+  // play (its power-up sheet was closed, or the menu drawn before it) just starts, the sheet first
+  const ready = store.getDailyRetry(dateKey);
+  if (ready && ready.status === 'ready') {
+    playDaily();
+    return;
+  }
   const r = store.buyDailyRetry(dateKey);
   if (!r.ok) {
     ui.toast(r.reason === 'coins' ? S.retryNeed(r.price - r.coins) : r.reason === 'max' ? S.retryMax : S.retryBusy, 2600);

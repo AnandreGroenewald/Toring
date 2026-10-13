@@ -1163,7 +1163,8 @@ export function createUI(bus) {
       }, h('span', { class: 'pick-ic' }, emo(info.emoji)), h('b', { text: info.name }), h('small', { text: info.what }));
     };
     modals.pick.replaceChildren(h('div', { class: 'card sheet pick-sheet' },
-      h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); } }, icon('close')),
+      // (✕: nothing starts; a try already taken waits, and the menu says so)
+      h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); bus.emit('ui:pick-closed'); } }, icon('close')),
       h('div', { class: 'sheet-head' }, emo('🎁'), h('h2', { id: 'stapel-pick-title', text: S.pickTitle })),
       h('p', { class: 'pick-note', text: S.pickNote }),
       h('div', { class: 'pick-btns' }, POWERUP_IDS.map(pick))));
