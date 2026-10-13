@@ -727,9 +727,9 @@ Later the owner added (decisions are final unless they say otherwise):
     share1133, friends1121, ui1134, signin114 (twice: "Speel gewoon verder.", then coin toasts read with .coin-ic as 🪙),
     balmeter110, privacy1131, skins1134; new: shots115r2.mjs.
   - **Play 11500 (the folder "Upload 1.15.0 internal", built 03:23 from 8df42bb, SHA-256 279e8f0f…):** app panel round 1
-    32/40 → round 2 Guardian, Customer, Advocate 10, Bottom Line 9 (lifts: the Family message for closed-test-only
-    phones; the WATCH target in APPROVALS; these records). The Claude in Chrome extension was not connected at 03:37-03:50
-    (no browser listed), so the two Play Console clicks wait for it or for the owner (the README holds every step).
+    32/40 → round 2 all four 10 = 40/40 + the Final Boss 10/10 FINAL APPROVAL (03:50; gate OPEN until ~15:50). The Claude
+    in Chrome extension was not connected all night (no browser listed, 03:37-04:00), so the two Play Console clicks wait
+    for it or for the owner (README steps 1-2; the morning note on the Desktop's Play folder).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
