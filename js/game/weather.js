@@ -17,7 +17,9 @@ const LVL_KEYS = Object.keys(SKY_DARK);
 const GLOOM_KEYS = Object.keys(GLOOM);
 const RAIN_DROPS = 80;
 const STORM_DROPS = 40;
-const STREAKS = { wind: 14, gust: 22 };
+// (1.15.3, the owner: "the wind is perfect now except it looks very vicious") fewer, softer, slower streaks; the push on
+// the blocks is unchanged (looks only: Math.random, never the day's plan)
+const STREAKS = { wind: 8, gust: 13 };
 const FOG_PUFFS = 8;
 const HAZE_STRIPS = 9;
 const FOG_MAX = 0.8;
@@ -116,18 +118,18 @@ function makeTextures(scene) {
     ctx.lineJoin = 'round';
     const g = ctx.createLinearGradient(0, 0, w, 0);
     g.addColorStop(0, 'rgba(255,255,255,0)');
-    g.addColorStop(0.45, 'rgba(255,255,255,0.9)');
-    g.addColorStop(1, 'rgba(255,255,255,1)');
+    g.addColorStop(0.45, 'rgba(255,255,255,0.75)');
+    g.addColorStop(1, 'rgba(255,255,255,0.85)');
     const e = ctx.createLinearGradient(0, 0, w, 0);
     e.addColorStop(0, 'rgba(40,80,130,0)');
-    e.addColorStop(0.5, 'rgba(40,80,130,0.16)');
-    e.addColorStop(1, 'rgba(40,80,130,0.2)');
+    e.addColorStop(0.5, 'rgba(40,80,130,0.1)');
+    e.addColorStop(1, 'rgba(40,80,130,0.12)');
     ctx.strokeStyle = e;
-    ctx.lineWidth = 7;
+    ctx.lineWidth = 5;
     path();
     ctx.stroke();
     ctx.strokeStyle = g;
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 2.6;
     path();
     ctx.stroke();
   };
@@ -811,7 +813,7 @@ export class Weather {
     if (!this._streaks) {
       this._streaks = [];
       for (let k = 0; k < STREAKS.gust; k++) {
-        const img = this.scene.add.image(0, 0, k % 4 === 1 ? 'wx_curl' : 'wx_streak').setScrollFactor(0).setVisible(false);
+        const img = this.scene.add.image(0, 0, k % 6 === 1 ? 'wx_curl' : 'wx_streak').setScrollFactor(0).setVisible(false);
         img.setOrigin(1, 0.62);   // the head leads
         this.layer.add(img);
         this._streaks.push({ img, x: 0, y: 0, dir: 1, life: 0, max: 1, wob: 0, len: 1, speedMul: 1, on: false });
@@ -829,9 +831,9 @@ export class Weather {
       }
       // a gust flip: streaks keep their heading and fade out fast
       p.life += p.dir === dir ? dt : dt * 4;
-      const speed = (600 + 520 * mag) * p.speedMul;
+      const speed = (300 + 240 * mag) * p.speedMul;
       p.x += p.dir * speed * s;
-      p.y += Math.sin(this._time * 0.004 + p.wob) * 18 * s;
+      p.y += Math.sin(this._time * 0.003 + p.wob) * 10 * s;
       const u = p.life / p.max;
       if (u >= 1 || p.x < -200 || p.x > this._W + 200) {
         p.on = false;
@@ -840,7 +842,7 @@ export class Weather {
       }
       p.img.setPosition(p.x, p.y);
       p.img.scaleX = p.dir * p.len * (0.75 + 0.25 * Math.min(1.5, mag));
-      p.img.alpha = Math.sin(u * Math.PI) * 0.8 * lv;
+      p.img.alpha = Math.sin(u * Math.PI) * 0.48 * lv;
     }
   }
 
@@ -850,7 +852,7 @@ export class Weather {
     p.on = true;
     p.dir = dir;
     p.life = 0;
-    p.max = rand(700, 1300);
+    p.max = rand(1300, 2300);
     p.speedMul = rand(0.8, 1.2);
     p.len = rand(0.55, 1.05);
     p.wob = rand(0, 6.28);

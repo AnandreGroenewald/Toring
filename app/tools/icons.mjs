@@ -7,8 +7,9 @@
 // foreground. The artwork is drawn 64 dp wide in the 108 dp layers, so the tower stays inside the
 // 66 dp circle that every launcher shape shows.
 import { chromium } from 'playwright-core';
-import { mkdirSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -51,6 +52,24 @@ for (const [a, b] of STRAIGHT) {
   towerStraight = towerStraight.replace(a, b);
 }
 
+// (1.15.3, the owner: the launch picture "with the new blocks inbetween ... At this stage its just the normal blocks")
+// two of the launch tower's blocks wear the 1.15 block styles, painted by the game's own block art (js/game/blocks.js
+// drawSkinRect, through a page served from the repo): Lawa in the orange block's place, Heelal (a galaxy) in the green
+// one's; the pink, yellow and teal blocks stay the classic ones. The launcher icon keeps its classic blocks.
+const SKINNED = [
+  { at: '<rect x="182" y="280" width="112" height="84" rx="12" fill="#b86d12"/>', x: 182, y: 280, w: 112, h: 84, skin: 'lawa', color: 1 },
+  { at: '<rect x="230" y="136" width="88" height="84" rx="12" fill="#3b8b3c"/>', x: 230, y: 136, w: 88, h: 84, skin: 'heelal', color: 3 },
+];
+const repo = join(app, '..');
+const TYPES = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.html': 'text/html', '.svg': 'image/svg+xml', '.json': 'application/json' };
+const server = createServer((req, res) => {
+  const path = normalize(join(repo, decodeURIComponent(new URL(req.url, 'http://x').pathname)));
+  if (!path.startsWith(repo) || !existsSync(path) || !statSync(path).isFile()) { res.writeHead(404); res.end(); return; }
+  res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' });
+  res.end(readFileSync(path));
+});
+await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+
 const BIG = '<rect x="-2000" y="-2000" width="4512" height="4512" fill="url(#sky)"/>';
 const DEEP = '<rect x="-2000" y="455" width="4512" height="3000" fill="#2f86d8"/>';
 const backdrop = `${BIG}${clouds}${DEEP}${sea}`;
@@ -85,6 +104,32 @@ jobs.push({ file: join(store, 'play-icon-512.png'), size: 512, svg: svgDoc('0 0 
 // capture a frame that is still the old size)
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
 const page = await browser.newPage({ deviceScaleFactor: 1, viewport: { width: 1100, height: 1100 } });
+// the skinned blocks: painted 6x (crisp at xxxhdpi), each block group's four rects swapped for the painted block
+{
+  await page.goto(`http://127.0.0.1:${server.address().port}/icons/icon.svg`);
+  const urls = await page.evaluate(async (list) => {
+    const B = await import('/js/game/blocks.js');
+    return list.map(({ w, h, skin, color }) => {
+      const K = 6;
+      const c = document.createElementNS('http://www.w3.org/1999/xhtml', 'canvas');   // (the page is the SVG icon)
+      c.width = (w + 6) * K;
+      c.height = (h + 6) * K;
+      const x = c.getContext('2d');
+      x.scale(K, K);
+      B.drawSkinRect(x, skin, color, w, h);
+      return c.toDataURL('image/png');
+    });
+  }, SKINNED.map(({ w, h, skin, color }) => ({ w, h, skin, color })));
+  for (const [i, b] of SKINNED.entries()) {
+    const a = towerStraight.indexOf(b.at);
+    const end = towerStraight.indexOf('</g>', a);
+    if (a < 0 || end < 0) throw new Error(`icon.svg changed: can't find the block at ${b.x},${b.y}`);
+    towerStraight = towerStraight.slice(0, a) + `<image x="${b.x - 3}" y="${b.y - 3}" width="${b.w + 6}" height="${b.h + 6}" href="${urls[i]}"/>\n  ` + towerStraight.slice(end);
+  }
+  for (const j of jobs) if (j.splash) j.svg = svgDoc(LAYER, towerStraight);
+  await page.goto('about:blank');   // (back to an HTML page for the drawing below)
+}
+server.close();
 // ONLY=splash: just the launch-screen pictures (the icons stay byte for byte as they are)
 for (const j of jobs.filter((x) => process.env.ONLY !== 'splash' || x.splash)) {
   const px = Math.round(j.size);

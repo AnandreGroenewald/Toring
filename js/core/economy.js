@@ -3,8 +3,8 @@
 // descriptions live in js/core/strings.js (POWERUP_INFO, COSMETIC_INFO, RANK_INFO).
 //
 // Fairness: the Daily Tower is the same for everyone and compared ("beter as 72%"), and a duel is a
-// race, so bought power-ups never count there. In the daily everyone gets the same free
-// Fondamentblok from FOUNDATION_FREE_M; duels sell looks (a player card, a win celebration, the
+// race, so bought power-ups never count there. In the daily everyone picks one free power-up before each
+// tower (1.15.3; until 1.15.2 a free Fondamentblok from FOUNDATION_FREE_M); duels sell looks (a player card, a win celebration, the
 // punishment's outfit) and ranks, never strength.
 
 import { isDateKey } from './daily.js';
@@ -20,7 +20,7 @@ export const POWERUPS = Object.freeze({
   heart: Object.freeze({ emoji: '❤️', price: 35 }),        // one heart back
 });
 export const POWERUP_IDS = Object.freeze(Object.keys(POWERUPS));
-export const FOUNDATION_FREE_M = 55;
+export const FOUNDATION_FREE_M = 55;   // (until 1.15.2; from 1.15.3 the daily's free power-up is picked before each tower: main.js)
 export const SLOW_BLOCKS = 5;
 export const SLOW_MUL = 0.6;
 export const MAX_STOCK = 99;

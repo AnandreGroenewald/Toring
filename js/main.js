@@ -745,6 +745,7 @@ function resetRun(mode, dateKey = null) {
   quitHome = false;
   pw.effects = {};
   pw.free = false;
+  pw.pick = null;
   if (mode !== 'duel') ui.setEmotes(null);   // (1.12) emojis belong to a match
   run.mode = mode;
   run.dateKey = dateKey;
@@ -756,10 +757,11 @@ function resetRun(mode, dateKey = null) {
 }
 
 // ---------------------------------------------------------------------------
-// Power-ups (1.8; js/core/economy.js): in Oefen from the player's stock; in the Daily Tower only the
-// free Fondamentblok from 55 m (the same for everyone); never in a match.
+// Power-ups (1.8; js/core/economy.js): in Oefen from the player's stock; never in a match. (1.15.3, the owner: "Lets make
+// it fair, everyone get one powerup and its available immediately", "Make the player choose the one they want to use
+// before the match") the Daily Tower: one free power-up per tower, picked before it starts (was a Fondamentblok at 55 m)
 // ---------------------------------------------------------------------------
-const pw = { effects: {}, free: false };
+const pw = { effects: {}, free: false, pick: null };
 
 function renderTray() {
   const mode = run.mode;
@@ -770,7 +772,10 @@ function renderTray() {
   const e = pw.effects || {};
   const items = [];
   if (mode === 'daily') {
-    if (pw.free || e.foundation) items.push({ id: 'foundation', count: pw.free ? 1 : 0, active: !!e.foundation, glow: pw.free && !e.foundation, enabled: pw.free && !e.foundation });
+    const id = pw.pick;
+    const active = (id === 'slow' && e.slowLeft > 0) || (id === 'shield' && !!e.shield) || (id === 'foundation' && !!e.foundation);
+    const enabled = pw.free && !active && !(id === 'heart' && e.heartRoom === false);
+    if (id && (pw.free || active)) items.push({ id, count: pw.free ? 1 : 0, active, glow: enabled, enabled });
   } else {
     const stock = store.getEconomy().stock;
     for (const id of POWERUP_IDS) {
@@ -787,21 +792,12 @@ bus.on('game:powerups', (e) => {
   pw.effects = e || {};
   renderTray();
 });
-bus.on('game:free-foundation', () => {
-  if (run.mode !== 'daily' || !run.dateKey || store.getEconomy().freeFoundation === run.dateKey) return;
-  pw.free = true;
-  bus.emit('hud:toast', { text: S.freeFoundation, color: '#ffe38c' });
-  renderTray();
-});
 bus.on('ui:powerup', (id) => {
   const gs = gameScene();
   if (!gs || run.over || screen !== 'game') return;
   if (run.mode === 'daily') {
-    if (id !== 'foundation' || !pw.free) return;
-    if (gs.applyPowerup('foundation')) {
-      store.takeFreeFoundation(run.dateKey);
-      pw.free = false;
-    }
+    if (id !== pw.pick || !pw.free) return;
+    if (gs.applyPowerup(id)) pw.free = false;
   } else if (run.mode === 'practice') {
     if (!(store.getEconomy().stock[id] > 0)) return;
     if (gs.applyPowerup(id)) store.usePowerup(id);
@@ -849,7 +845,26 @@ function liveElsewhere(dateKey) {
   return !!e && e.status === 'playing' && e.owner !== TAB_ID && Number.isFinite(e.beatAt) && Date.now() - e.beatAt < STALE_AFTER_MS;
 }
 
-function playDaily() {
+/**
+ * (1.15.3) The Daily Tower's free power-up: undefined while not picked yet (playDaily asks first), null for none. Test
+ * runs (?auto=, or window.__stapelPick set by the QA scripts) skip the sheet.
+ */
+function presetPick() {
+  const t = AUTO ? 'none' : globalThis.__stapelPick;
+  if (typeof t !== 'string') return undefined;
+  return POWERUP_IDS.includes(t) ? t : null;
+}
+/** A Daily Tower starts with its pick: the tray shows it at once, glowing, and a toast says where it is. */
+function armPick(pick) {
+  pw.pick = pick || null;
+  pw.free = !!pw.pick;
+  if (pw.pick) {
+    const info = POWERUP_INFO[pw.pick];
+    bus.emit('hud:toast', { text: S.pickReady(info.emoji, info.name), color: '#ffe38c' });
+  }
+}
+
+function playDaily(pick = presetPick()) {
   const dateKey = todayKey();
   let entry = store.getDaily(dateKey);
   if (entry && entry.status === 'playing' && !(run.mode === 'daily' && run.dateKey === dateKey && !run.over)) {
@@ -875,15 +890,24 @@ function playDaily() {
       rt = store.getDailyRetry(dateKey);
     }
     if (rt && rt.status === 'ready') {
+      if (pick === undefined) {
+        ui.showPowerPick();
+        return;
+      }
       resetRun('daily', dateKey);
       run.retry = true;
       startGame({ mode: 'daily', seed: seedFor(dateKey), dayNumber: run.dayNumber, dateKey, autoplay: AUTO, challenge: 0 });
       screen = 'game';
       ui.showInGame();
+      armPick(pick);
       renderTray();
       return;
     }
     showDoneResults(dateKey, store.getDailyBest(dateKey) || entry.result);
+    return;
+  }
+  if (pick === undefined) {
+    ui.showPowerPick();
     return;
   }
   resetRun('daily', dateKey);
@@ -893,6 +917,7 @@ function playDaily() {
   });
   screen = 'game';
   ui.showInGame();
+  armPick(pick);
   renderTray();
 }
 
@@ -1312,6 +1337,10 @@ bus.on('ui:install-dismiss', () => {
 });
 onInstallChange(() => ui.setInstall(installMode()));
 bus.on('ui:play-practice', playPractice);
+// (1.15.3) the Daily Tower's free power-up was picked: the tower starts with it (only from the menu or results)
+bus.on('ui:power-pick', (id) => {
+  if (screen === 'menu' || screen === 'results') playDaily(POWERUP_IDS.includes(id) ? id : null);
+});
 // (1.13.1, the owner via Alfred: "Let's build!" on "How do I play?" closed it and nothing started) "Kom ons bou!" from
 // the menu's "Hoe speel ek?" builds a tower: today's Daaglikse Toring while it isn't played, else an Oefen tower (it
 // never takes one of the day's tries or coins)
@@ -2571,6 +2600,20 @@ if (window.screen && window.screen.orientation && window.screen.orientation.addE
   window.screen.orientation.addEventListener('change', scheduleLayout);
 }
 if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
+// (1.15.3, the owner's photos: in the app the menu's Statistiek and the results' Deel buttons sat under the phone's Back
+// and Home buttons) the app's SystemBars plugin (insetsHandling "css") writes the phone's real bar heights on <html> as
+// --safe-area-inset-* once the page shows, and again when they change; no resize comes with that, so measure again then
+if (typeof MutationObserver === 'function') {
+  const insetVars = () => ['top', 'right', 'bottom', 'left'].map((k) => document.documentElement.style.getPropertyValue(`--safe-area-inset-${k}`)).join();
+  let lastInsets = insetVars();
+  new MutationObserver(() => {
+    const now = insetVars();
+    if (now !== lastInsets) {
+      lastInsets = now;
+      scheduleLayout();
+    }
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+}
 
 // ---------------------------------------------------------------------------
 // Boot

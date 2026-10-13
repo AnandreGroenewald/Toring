@@ -181,6 +181,7 @@ export function createUI(bus) {
     name: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-name-title', tabindex: '-1' }),
     settings: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-settings-title', tabindex: '-1' }),   // (1.14) ⚙️ Instellings (with the account)
     update: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-update-title', tabindex: '-1' }),   // (1.15) a newer app on Google Play
+    pick: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-pick-title', tabindex: '-1' }),   // (1.15.3) the Daily Tower's free power-up
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -221,7 +222,7 @@ export function createUI(bus) {
   // buttons take taps: a tap anywhere else still drops a block)
   const emoteBar = h('div', { class: 'emote-bar', role: 'group', 'aria-label': S.emoteLabel, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // (1.15, the owner: "We need a better way to display the coins please") every 🪙 the UI shows becomes the game's own
@@ -1143,6 +1144,31 @@ export function createUI(bus) {
     openModal('lang');
   }
 
+  /**
+   * (1.15.3, the owner: "People get confused how to use the Power-ups" ... "everyone get one powerup and its available
+   * immediately" ... "Make the player choose the one they want to use before the match") before each Daily Tower: one
+   * free power-up, the same choice for everyone, ready from the first block. A pick says 'ui:power-pick'; ✕ starts nothing.
+   */
+  function showPowerPick() {
+    const pick = (id) => {
+      const info = POWERUP_INFO[id];
+      return h('button', {
+        type: 'button', class: 'pick-btn', 'data-power': id,
+        onclick: () => {
+          audio.play('click');
+          closeModal();
+          bus.emit('ui:power-pick', id);
+        },
+      }, h('span', { class: 'pick-ic' }, emo(info.emoji)), h('b', { text: info.name }), h('small', { text: info.what }));
+    };
+    modals.pick.replaceChildren(h('div', { class: 'card sheet pick-sheet' },
+      h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); } }, icon('close')),
+      h('div', { class: 'sheet-head' }, emo('🎁'), h('h2', { id: 'stapel-pick-title', text: S.pickTitle })),
+      h('p', { class: 'pick-note', text: S.pickNote }),
+      h('div', { class: 'pick-btns' }, POWERUP_IDS.map(pick))));
+    openModal('pick');
+  }
+
   // ---------------------------------------------------------------------------
   // Statistics
   // ---------------------------------------------------------------------------
@@ -1556,7 +1582,8 @@ export function createUI(bus) {
               h('span', { class: 'shop-prev' }, lookPreview(kind, c)),
               kind === 'title' ? null : h('b', { class: 'shop-name', text: COSMETIC_INFO[kind][c.id].name }),
               action,
-              kind === 'celebration' ? h('button', { type: 'button', class: 'shop-try', text: S.preview, onclick: () => celebrate(c.id) }) : null);
+              // (1.15.3) the preview names the celebration it shows, and a tap ends it
+              kind === 'celebration' ? h('button', { type: 'button', class: 'shop-try', text: S.preview, onclick: () => celebrate(c.id, { caption: COSMETIC_INFO.celebration[c.id].name, skip: true }) }) : null);
           })));
       }
     }
@@ -1641,12 +1668,12 @@ export function createUI(bus) {
    * A win celebration (the shop's preview; the winner of a match): its emoji rain down, with a fanfare
    * (`sound`: false for the other player's), and an optional caption ("Bennie vier!").
    */
-  function celebrate(id, { caption = '', sound = true } = {}) {
+  function celebrate(id, { caption = '', sound = true, skip = false } = {}) {
     const c = cosmetic('celebration', id) || cosmetic('celebration', 'konfetti');
     if (sound) audio.play('record');
     // (1.15, the owner: "the celebration icons is very meh") each celebration is its own show (js/ui/celebrate.js)
     try {
-      playCelebration(root, c.id, { caption, reduced: reducedMotion() });
+      playCelebration(root, c.id, { caption, reduced: reducedMotion(), skip });
     } catch {
       // the show is decoration: never let it stop the results
     }
@@ -2299,7 +2326,7 @@ export function createUI(bus) {
           tile(fmtInt(r.blocksPlaced || 0), S.blocks),
           tile(fmtInt(r.perfects || 0), S.perfects),
           tile(fmtInt(r.maxCombo || 0), S.bestCombo)),
-      rewardEl(reward, result?.mode === 'daily' ? result.dateKey : ''),
+      rewardEl(reward),
       empty ? null : gridEl(r.grid, r.reason),
       empty ? null : weatherEl(r.weather),
       empty ? null : visitorsEl(r.visitors),
@@ -2393,12 +2420,11 @@ export function createUI(bus) {
   }
 
   /** "🪙 +18 · jy het 250", the weekkis box, and, after a match, the rank points ("🥈 Silwer +25"). */
-  function rewardEl(reward, dateKey = '') {
+  function rewardEl(reward) {
     const c = reward?.coins;
     const rk = reward?.rank;
-    const wk = reward?.week;
     const sk = reward?.stake;   // (1.13) a coin match: { n, paid, outcome, name }
-    if (!c && !rk && !wk && !sk) return null;
+    if (!c && !rk && !sk) return null;
     const kids = [];
     if (sk && sk.n) {
       // won: both stakes; back: the match played for none; else lost (a loss, or the connection didn't come back)
@@ -2412,29 +2438,8 @@ export function createUI(bus) {
             : sk.outcome === 'none' ? S.stakeConnSub : S.stakeLostSub(sk.name || S.duelSomeone),
         })));
     }
-    if (wk) {
-      const notes = [];
-      if (wk.saved) notes.push(S.weekSaved(wk.saved));
-      else if (wk.restarted) notes.push(S.weekRestart);
-      if (wk.day === 7) notes.push(S.weekFull);
-      if (wk.shield) notes.push(S.weekShieldWon);
-      if (wk.look) notes.push(S.weekLook(COSMETIC_INFO[wk.look.kind]?.[wk.look.id]?.name || ''));
-      notes.push(wk.day < 7 ? S.weekTomorrow(WEEK_COINS[wk.day]) : S.weekTomorrow(WEEK_COINS[0]));
-      // (1.15) today's chest on the results: shut and wiggling until the player taps it open
-      const ckey = dateKey || '';
-      const shut = !!ckey && !chestSeen(ckey);
-      kids.push(h('button', {
-        type: 'button',
-        class: `rw-week rw-chest${wk.day === 7 ? ' is-full' : ''}${shut ? ' is-ready' : ' is-done'}`,
-        'aria-label': shut ? S.weekChestReady(wk.coins) : S.weekBox(wk.day, wk.coins),
-        onclick: (e) => {
-          if (e.currentTarget.classList.contains('is-ready')) openChest(e.currentTarget, wk.coins, ckey);
-        },
-      },
-        h('i', { class: `chest${wk.day === 7 ? ' is-big' : ''}${shut ? '' : ' is-opening'}`, 'aria-hidden': 'true' }, h('i', { class: 'chest-lid' }), h('i', { class: 'chest-lock' })),
-        h('b', { text: S.weekBox(wk.day, wk.coins) }),
-        h('span', { class: 'rw-sub', text: notes.join(' · ') })));
-    }
+    // (1.15.3, the owner: "The Day 2 of 7... needs to stay at the main menu please remove it here") the weekkis lives on the
+    // menu only (its chest opens there); the results keep the coins line, which counts the chest's coins too
     if (c) {
       kids.push(h('span', { class: 'rw-coins' }, coinIc(), h('b', { text: `+${fmtInt(c.added)}` }),
         h('span', { class: 'rw-sub', text: c.short ? S.coinsCapped : S.coinsTotal(fmtInt(c.total)) })));
@@ -3101,6 +3106,7 @@ export function createUI(bus) {
     showMenu,
     showHowTo,
     showLanguage,
+    showPowerPick,
     closeModal,
     showStats,
     showPause,

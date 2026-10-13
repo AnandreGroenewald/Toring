@@ -32,7 +32,7 @@ import { Visitors } from '../game/visitors.js';
 import { topMovable, thiefLoot, visitorFree, gridWithGifts } from '../core/visitorrules.js';
 import { duelSeedKey } from '../core/duel.js';
 import { isRoundVisitor, roundStage, botCatch } from '../core/turns.js';
-import { FOUNDATION_FREE_M, SLOW_BLOCKS, SLOW_MUL } from '../core/economy.js';
+import { SLOW_BLOCKS, SLOW_MUL } from '../core/economy.js';
 
 const FIXED = PHYSICS.fixedDtMs;
 const MAX_FRAME_MS = 100;
@@ -476,7 +476,6 @@ export class GameScene extends Phaser.Scene {
     this.lives = LIVES;
     this.slowLeft = 0;              // power-up: drops the crane still swings slower for (counted at each drop)
     this.shieldOn = false;          // power-up: the next monkey or thief bounces off
-    this.freeFoundationOffered = false;   // the daily's free Fondamentblok (from FOUNDATION_FREE_M)
     this.combo = 0;
     this.maxCombo = 0;
     this.perfects = 0;
@@ -2947,10 +2946,6 @@ export class GameScene extends Phaser.Scene {
       if (h > this.maxHeightM && !this.over) {
         this.maxHeightM = h;
         this.checkMilestone();
-        if (this.mode === 'daily' && !this.freeFoundationOffered && h >= FOUNDATION_FREE_M) {
-          this.freeFoundationOffered = true;
-          bus.emit('game:free-foundation');
-        }
         this.checkChallenge();
         // keep the saved daily up to date with every new best height (a reload must not lose a block)
         if (h - this.progressHeight >= 0.5) {

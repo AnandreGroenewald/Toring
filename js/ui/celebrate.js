@@ -2664,10 +2664,11 @@ function captionEl(doc, text, look, W, reduced) {
 /**
  * Plays celebration `id` (unknown ids: konfetti) over `root` (a positioned element; the show fills it, above
  * everything, and takes no taps), with an optional `caption` pill at the top. `reduced` (the player's reduced motion):
- * no movement, a soft glow with the celebration's emblem and the caption, fading in and out. Removes itself after
- * ~3.6 s; a new show in the same root replaces the old one. Returns a function that stops it at once.
+ * no movement, the screen dimmed, a soft glow with the celebration's emblem and the caption, fading in and out.
+ * `skip` (the Winkel's preview): a tap on the show ends it (the tap stays on the show, never reaching a button under it).
+ * Removes itself after ~3.6 s; a new show in the same root replaces the old one. Returns a function that stops it at once.
  */
-export function playCelebration(root, id, { caption = '', reduced = false } = {}) {
+export function playCelebration(root, id, { caption = '', reduced = false, skip = false } = {}) {
   const noop = () => {};
   if (!root || !root.ownerDocument) return noop;
   const doc = root.ownerDocument;
@@ -2704,13 +2705,24 @@ export function playCelebration(root, id, { caption = '', reduced = false } = {}
   };
   stop.stats = stats;
   PLAYING.set(root, stop);
+  if (skip) {
+    // (1.15.3) a click, not a pointerdown: the show is gone only after the finger lifts, so the click can't land on a
+    // Koop button under it
+    box.style.pointerEvents = 'auto';
+    box.style.touchAction = 'none';
+    box.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); stop(); });
+  }
   timer = setTimeout(stop, DUR * 1000 + 4000);   // whatever happens (a hidden page runs no frames), the show goes away
   if (caption) box.append(captionEl(doc, String(caption), look, W, reduced));
   if (!ctx) return stop;
 
   if (reduced) {
-    // no motion: the tint, one soft glow and the emblem (the shop tile's art), faded in and out
+    // no motion: the tint, one soft glow and the emblem (the shop tile's art), faded in and out. (1.15.3, the owner's
+    // photos: the emblem alone sat on the Winkel's grid like one more tile, hiding a card's name and price) the screen
+    // under it dims first, so the emblem reads as a show on top
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = 'rgba(8, 10, 28, 0.66)';
+    ctx.fillRect(0, 0, W, H);
     const R = Math.min(W, H) * 0.55;
     const g = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, R);
     g.addColorStop(0, rgba(look.accent, 0.55));

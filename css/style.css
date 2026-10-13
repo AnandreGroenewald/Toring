@@ -2978,6 +2978,17 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .card .icon-btn, .card > .close { background: rgba(255, 255, 255, 0.12); color: #fff; box-shadow: none; }
 .card .btn-white { --bg: rgba(255, 255, 255, 0.08); --bg-l: rgba(255, 255, 255, 0.12); --bg-d: rgba(0, 0, 0, 0.35); --fg: #f2f5ff; box-shadow: 0 var(--depth) 0 rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
 .card .btn-white > .emoji:first-child { background: rgba(255, 255, 255, 0.1); }
+/* (1.15.3, the contrast sweep qa/contrast1153.mjs after the owner's three finds) the last low words on the dark sheets:
+   the streak line, "Aan" in Instellings, a rank lock on the gold tiles, and the small lines under Oefen and the
+   Uitdagersreeks (a soft edge like the big words above them) */
+.card .city-streak { color: #ffb35c; }
+.card .settings-row.is-on .settings-value { color: #6fdc7a; }
+.card .shop-lock { color: #e3e9f7; }
+.btn .btn-sub { text-shadow: 0 calc(2 * var(--u)) 0 rgba(0, 0, 0, 0.28), 0 0 calc(6 * var(--u)) rgba(0, 0, 0, 0.25); }
+/* (1.15.3, the owner: "Its not readable") the Google card in Instellings: the same dark glass as the rows under it (it stayed
+   white while its words turned light with the 1.15 sheets); Google's own sign-in button stays white */
+.card .settings-account { background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.14); }
+.card .account-delete, .card .account-msg { color: #ff9a8f; }
 .card .chip { background: rgba(255, 255, 255, 0.12); color: #fff; }
 .card input, .card select, .card textarea { background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.6); }
 .card a { color: #9fd0ff; }
@@ -2999,6 +3010,23 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .card .forecast { background: rgba(255, 255, 255, 0.06); }
 .card .daily-date { color: #9fb0d0; }
 .card .lang-btn { background: rgba(255, 255, 255, 0.08); color: #f2f5ff; border-color: rgba(255, 255, 255, 0.18); }
+/* (1.15.3) the Daily Tower's free power-up: four big choices, one per row, on the dark sheet */
+.pick-note { margin: 0 0 calc(16 * var(--u)); text-align: center; color: #c9d4ea; font-weight: 700; font-size: max(13px, calc(24 * var(--u))); line-height: 1.3; }
+.pick-btns { display: grid; gap: calc(12 * var(--u)); }
+.pick-btn {
+  display: grid; grid-template-columns: calc(76 * var(--u)) 1fr; column-gap: calc(16 * var(--u)); align-items: center;
+  min-height: 52px; padding: calc(14 * var(--u)) calc(18 * var(--u)); border-radius: calc(22 * var(--u));
+  border: 2px solid rgba(255, 215, 90, 0.5); background: rgba(255, 255, 255, 0.08); color: #f2f5ff;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.pick-btn .pick-ic {
+  grid-row: 1 / 3; display: grid; place-items: center; width: calc(76 * var(--u)); height: calc(76 * var(--u));
+  border-radius: 50%; background: rgba(255, 215, 90, 0.16); font-size: calc(42 * var(--u));
+}
+.pick-btn b { font-weight: 900; font-size: max(15px, calc(30 * var(--u))); line-height: 1.15; }
+.pick-btn small { color: #c9d4ea; font-weight: 700; font-size: max(12px, calc(22 * var(--u))); line-height: 1.25; }
+.pick-btn:active { transform: scale(0.98); }
+.pick-btn:focus-visible { outline: 3px solid #ffd75a; outline-offset: 2px; }
 .card .lang-btn.on { background: #fff; color: #1d2b45; border-color: #ffc928; box-shadow: inset 0 calc(-4 * var(--u)) 0 #ffc928; }
 /* white pills keep dark words on the dark sheets (the chosen mode, a title's preview) */
 .card .mode-btn[aria-pressed="true"], .card .title-prev, .card .shop-tab.on { color: #1d2b45; }
@@ -3162,6 +3190,9 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .card .tile span { color: #c9d4ea; }
 /* (1.15.2, the owner: "The colour of the "current streak" cant be read") the streak's tile stays light peach: dark words on it */
 .card .tile.hot span { color: #7a4300; }
+/* (1.15.3, the owner: "I cant read the name") your own row on the ranglys stays light gold: dark words on it too */
+.card .board-row.is-you { color: #3d2a00; }
+.card .board-row.is-you .board-rank { color: #7a4300; }
 /* (1.15, the owner: "Make this banner go down with you so that for each change you make it is visible") your player card
    stays at the top of the Uitdager-styl tab while you scroll, so every frame, medal or title you wear shows on it */
 .look-zone > .pcard { position: sticky; top: calc(20 * var(--u)); z-index: 4; margin-top: calc(22 * var(--u)); margin-bottom: calc(20 * var(--u)); }

@@ -379,7 +379,8 @@ export const S = {
     blocks: { kleur: 'Kleurvol', lekkergoed: 'Lekkergoed', klip: 'Klip', neon: 'Neon', goud: 'Goudstawe', piksel: 'Retro-piksel',
       koolstof: 'Koolstofvesel', ys: 'Yskristal', marmer: 'Marmer', lawa: 'Lawa', chroom: 'Chroom', holo: 'Holografies', heelal: 'Sterrestelsel' },
   },
-  shopPowerupsNote: 'Vir Oefen. In die Daaglikse Toring kry almal ’n gratis Fondamentblok by 55 m.',
+  // (1.15.3, the owner: "People get confused how to use the Power-ups") the Daily Tower's free pick, then Oefen's stock
+  shopPowerupsNote: 'Daaglikse Toring: kies voor elke toring 1 gratis krag. Oefen: gebruik soveel kragte as wat jy hier koop.',
   shopLooksNote: 'Jou teenstander sien dit in die Uitdagersreeks. Dit maak jou nie sterker nie.',
   inBag: (n) => `In jou sak: ${n}`,
   buy: 'Koop',
@@ -429,6 +430,10 @@ export const S = {
   powerupShield: 'Skild aan! Die volgende aap of skelm bons af 🛡️',
   foundationSet: 'Nuwe fondament! 🧱 Alles daaronder staan vas',
   freeFoundation: 'Fondamentblok verdien! Tik 🧱 wanneer jy dit wil gebruik',
+  // (1.15.3) before each Daily Tower: one free power-up, the player's pick, ready from the first block
+  pickTitle: 'Kies jou gratis krag',
+  pickNote: 'Een vir hierdie toring, almal kry een. Dit wag regs op die skerm: tik dit wanneer jy dit nodig het.',
+  pickReady: (emoji, name) => `${emoji} ${name} is gereed: tik dit regs wanneer jy wil`,
   shieldBlocked: (name) => `${name} bons van jou skild af! 🛡️`,
   resMonkeyBlocked: 'Jou skild het Blouaap gekeer! 🛡️',
   resThiefBlocked: 'Jou skild het Skelm Sakkie gekeer! 🛡️',

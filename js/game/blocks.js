@@ -2117,6 +2117,27 @@ export function drawSkinSwatch(canvas, skinId) {
   ctx.restore();
 }
 
+/**
+ * (1.15.3, the owner: the app's launch picture "with the new blocks inbetween") one plain w x h block (game units) in
+ * block skin `skinId` and palette colour `color` (0-7), drawn by the game's own block art at `ctx`'s origin (with the
+ * 3-unit transparent edge, like a texture). Used by app/tools/icons.mjs; the worn skin is left as it was.
+ */
+export function drawSkinRect(ctx, skinId, color, w, h) {
+  if (!ctx) return;
+  const id = Object.prototype.hasOwnProperty.call(BLOCK_SKINS, skinId) ? skinId : 'kleur';
+  const g = {
+    shape: 'block', scale: 1, w, h, pad: PAD, texW: w + 2 * PAD, texH: h + 2 * PAD,
+    parts: [R(0, 0, w, h)], cells: [R(0, 0, w, h)], outline: rectOutline(w, h), cx: w / 2, cy: h / 2,
+  };
+  const worn = blockSkin;
+  blockSkin = id;
+  try {
+    drawBlock(ctx, g, skinned(PALETTE[color] || PALETTE[0]), `rect_${id}_${w}x${h}_${color}`);
+  } finally {
+    blockSkin = worn;
+  }
+}
+
 export function textureKeyFor(spec, name = null) {
   const g = getGeometry(spec);
   if (spec.log) return `log_${Math.round(g.w)}x${Math.round(g.h)}`;
