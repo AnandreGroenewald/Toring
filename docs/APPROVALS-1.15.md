@@ -101,8 +101,8 @@ review counts from the last change sent). The folder's README holds both clicks,
 - **The Play upload panel (folder "Upload 1.15.0 internal", aab built 03:23 from 8df42bb):** round 1 32/40 (all 8: STEP 0
   web-first, the way back, the after-click records, "Try it" promised only for worlds, cranes and blocks); round 2
   (content 5af5f49): all four 10 = **40/40, and the Final Boss 10/10 FINAL APPROVAL (03:50; gate OPEN until ~15:50)**.
-  The clicks wait: the Claude in Chrome extension was offline all night (no browser connected 03:37-04:00); the owner's
-  morning note (Desktop › Stapel app (Google Play) › MORNING NOTE 13 Oct - Stapel 1.15.txt) gives both ways.
+  The clicks waited for the browser (the extension offline 03:37-06:44); on the owner's "please upload it" (06:45):
+  internal testing "Save and publish" 06:49, Closed testing – Alpha sent for review 06:51 (submission 9).
 
 ## Watch after release
 - **Wed 14 Oct 18:00 — the app:** how many of the 17 testers' phones are on 11500 (Play Console > Statistics). Target 5 of
