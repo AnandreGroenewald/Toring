@@ -868,7 +868,15 @@ Later the owner added (decisions are final unless they say otherwise):
   the store texts in the repo (5030b43; Play's listing unchanged: a listing change needs the full panel). Its 6 red
   full-check lines were stale tests (the chest's +10, the heart's VOL): fixes1153, skins1134, coins113 updated; with
   account113 af/en all pass on HEAD. Game 416, server 258. Left: the Daily result's share row under the bar on first view,
-  Blok vir Blok's settle waits, lows. Next: his word for Play internal 11504 (+ panel?) and the website.
+  Blok vir Blok's settle waits, lows.
+- **13 Oct 2026 23:58 — 1.15.4 OUT: the website + Play internal 11504**, on the owner's word (23:50, "Please upload it to the
+  site and the google play, let me and family test it"). Website: check-all quick ALL CLEAR → push 343988e..bc19e93 → Pages
+  main 5cee2354 → both addresses stapel-v1.15.4 → check-all live ALL CLEAR (way back: Pages rollback to 41872991 + a revert
+  push). Play: Critic Panel round 1 on the upload folder: Guardian 9, Customer 9, Bottom Line 9, Advocate 9 = 36/40, scan
+  clear, the Final Boss 9 FINAL APPROVAL → internal testing release 19 = 11504 (1.15.4), 23:58, the deobfuscation warning
+  only, 0 devices lost (way back: Pause track). Worker unchanged (5b9725b2). Next: his phone check → the closed test (its own
+  panel round + his yes) → the Family message (1.15.4). Lifts noted: the Daily results' share row above the bar; 11 px tags;
+  next notes "when you have one or the coins for one"; installs + Android vitals on 14 Oct evening.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

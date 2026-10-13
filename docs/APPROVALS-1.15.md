@@ -162,8 +162,10 @@ review counts from the last change sent). The folder's README holds both clicks,
     blok; 3 Perfeks in a row).
   - The lobby: "the guy playing for 100 coins should get a notification that there is someone willing to play for 50 coins
     do you accept? Also the same for wedloop and block for block".
-- **Still to decide:** Play internal 11504 (1.15.4, built 23:39 from 5030b43, folder "Upload 1.15.4 internal"; with or
-  without the Critic Panel); the website deploy; the closed test and the Family message; the Play listing text (updated
+- **13 Oct 23:50, the owner (Stapel terminal):** "Please upload it to the site and the google play, let me and family test it."
+  → the website 1.15.4 (23:5x) and Play internal 11504 (23:58, after the panel: 36/40 + the Final Boss 9). His earlier words
+  for the Protea: "Also replace the Vuvuzela with soemthing else".
+- **Still to decide:** the closed test and the Family message; the Play listing text (updated
   in the repo only; a listing change needs the full panel); heavier planks (a game-feel change) after his physics report.
 - **Calls made without him (13 Oct ~23:30, from the game-tester's report; easy to change):** a Blouaap knock-off keeps its
   own ★/•/∼ tile (the note under the blocks counts only the ✕s a visitor cost); a new player with no power-up and too few
