@@ -792,6 +792,42 @@ Later the owner added (decisions are final unless they say otherwise):
     `check-all.sh live` on 1.15.2: ALL CLEAR (game 412, server 248, boot, first visit, invites, Blok vir Blok, lobby, board).
     The way back: Pages rollback to abab85d3 (1.15.1); Internal testing > Pause track. Next: his app check → 11502 to the
     closed test → the Family message.
+- **1.15.3 (commit 1c8126d, 13 Oct 2026 ~18:10), NOT released yet: a free power-up picked before each Daily Tower;
+  readable words; the app clear of Android's Back/Home buttons.** The owner's notes (this terminal, and via Alfred with
+  photos 17:21-17:50 in ~/Desktop/Alfred Inbox):
+  - "someone mentioned that their statistics is where the buttons is on the bottom" — the photos show Android's 3-button bar
+    drawn over the menu's dock (Speelreëls, Statistiek, Winkel, Instellings: labels cut off) and the results' share row.
+    The app used Capacitor SystemBars `insetsHandling: "native"`, which never writes `--safe-area-inset-*`, and that phone's
+    WebView gave `env(safe-area-inset-bottom)` 0. Now `"css"` (Capacitor writes the real bar heights on <html>; the game
+    already preferred those vars) and main.js measures again when they change (a MutationObserver: no resize comes with
+    them). App-only: proven only on his phone.
+  - "People get confused how to use the Power-ups" → asked (55 m or 25 m?) → "Lets make it fair, everyone get one powerup
+    and its available immediately" + "Make the player choose the one they want to use before the match": before each Daily
+    Tower (first try, free tries, Nog 'n kans) a sheet "Kies jou gratis krag" offers the four power-ups; the pick waits in
+    the tray, glowing, from the first block, once per tower; ✕ starts nothing (a bought try stays ready). The free
+    Fondamentblok at 55 m is gone (`FOUNDATION_FREE_M` kept, unused). Oefen keeps the bought stock; matches have none. The
+    Kragte note: "Daaglikse Toring: kies voor elke toring 1 gratis krag. Oefen: gebruik soveel kragte as wat jy hier koop."
+    Side effect until phones update: 1.15.2 apps still get the 55 m block on the same board.
+  - "I cant read the name" (his ranglys row: white on light gold) → dark words (12.5:1). "Its not readable" (Instellings'
+    Google card, white on white, signed in and out) → the card is dark glass like the rows; Google's button stays white.
+    A new sweep (`qa/contrast1153.mjs`: every sheet, af + en, two sizes) then lifted the streak line, "Aan", the rank lock
+    and the small lines under Oefen / the Uitdagersreeks: 0 words under 3:1.
+  - "The Day 2 of 7... needs to stay at the main menu please remove it here" → no weekkis on the results card (its coins
+    stay in the coins line; the chest opens on the menu).
+  - The Winkel's celebration "Try it" photos (a big emblem over the grid hiding a card): that phone has reduced motion on,
+    whose preview was a still emblem over the open Winkel. Now the screen dims, the celebration's name shows, and a tap
+    closes it (on a click, so no Koop/Probeer under it is hit).
+  - "the wind is perfect now except it looks very vicious" → 8/13 streaks (was 14/22), half the speed, softer and thinner,
+    fewer curls; the push is unchanged (visuals use Math.random only).
+  - The launch picture "with the new blocks inbetween" → Lawa and Heelal blocks between the classic pink, yellow and teal
+    (painted by the game's block art: `blocks.js drawSkinRect`, `app/tools/icons.mjs` with ONLY=splash); launcher icon
+    unchanged. Before/after: Desktop › Stapel app (Google Play) › Previews › launch-tower-1.15.3-before-after.png.
+  - Checks: game 412; `qa/fixes1153.mjs` ALL OK; `qa/contrast1153.mjs` ALL OK (both in `check-all.sh full`); a full check on
+    1c8126d running. Preview https://hotfix-1153.stapelspel.pages.dev (9b7623dd). Play folder "Upload 1.15.3 internal"
+    (11503, SHA-256 984318e4…, upload key 77:FE…1C:F4). 11502 does not go to the closed test (superseded).
+  - Next: the owner's word to release (the panel waiver of 14:46 was for 1.15.2) → website (push + Pages) → Play internal
+    11503 → his phone (the bottom row above the buttons; the pick sheet; the launch picture) → closed test → the Family
+    message (to be updated to 1.15.3).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
