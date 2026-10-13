@@ -128,3 +128,11 @@ review counts from the last change sent). The folder's README holds both clicks,
 - Play: 11501 on internal testing 08:10. The owner typed in the Stapel terminal at 14:03, after "Reply clean, or send a
   photo": "Can you please proceed". 11501 promoted to Closed testing – Alpha and sent for review 14:07 (one change; Gate:
   OPEN before each click). The Family message waits for his own phone (Weergawe 1.15.1, a clean scroll).
+
+## 1.15.2 (13 Oct, afternoon): the Winkel's list stands still + the streak tile's words
+- The owner (Telegram via Alfred, 14:13): "The colour of the "current streak" cant be read. And also the challenger style
+  still gives the same issue. Please do not use any skill only the game developer skill".
+- Fix 6c64799 (the cause measured: 84 paint layers in the Uitdager-styl tab → 29). Preview hotfix-1152.
+- His word, typed in the Stapel terminal at 14:46, after the question whether to skip the Critic Panel for the Play upload:
+  "No need for the critic panel, please proceed". So 1.15.2 goes out WITHOUT the panel, on his word: the website (push +
+  Pages; quick lane, security scan clear) and the app 11502 to Play internal testing. The closed test waits for his app check.
