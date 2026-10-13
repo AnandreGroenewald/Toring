@@ -2065,7 +2065,9 @@ svg.ic {
   border-radius: calc(9 * var(--u));
   font: 900 calc(24 * var(--u)) / 1 var(--font);
   box-shadow: inset 0 calc(-4 * var(--u)) 0 rgba(0, 0, 0, 0.16);
-  animation: cell-in 0.32s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+  /* (1.15.4, the game-tester: 74 paint layers on a daily's results 7 s after it opened) 'backwards', not 'both': a tile
+     lets go of its pop-in once it ends, so it stops being a layer of its own (Android's WebView and a scrolling card) */
+  animation: cell-in 0.32s cubic-bezier(0.2, 1.6, 0.4, 1) backwards;
   animation-delay: calc(0.2s + var(--i, 0) * 28ms);
 }
 .cell-P { background: #3f9a3e; color: #fff; }
@@ -2999,6 +3001,10 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .res-duel.is-won { box-shadow: inset 0 0 0 calc(3 * var(--u)) rgba(255, 215, 90, 0.85), 0 0 calc(26 * var(--u)) rgba(255, 200, 60, 0.45); }
 .res-duel.is-won .res-title { color: #ffd75a; }
 .res-duel.is-lost .res-title { color: #e6ecfa; }
+/* (1.15.4, the game-tester: the Skeef "∼" was white on orange, 2.04:1, and white on light grey in colour-blind mode,
+   1.03:1) the light tiles keep dark marks on the dark cards */
+.card .cell-G, .card .cell-S { color: #3d2a00; }
+#ui.hc .card .cell-G, #ui.hc .card .cell-S { color: #1d2b45; }
 /* (1.15.4, the game-tester's first pass: "Jy" on a match's results was brown on navy, 1.99:1) your row's name in gold */
 .card .res-vs-row.you b { color: #ffc94a; }
 /* (1.15.3, the owner: "The another match is barely visible") the next match right under the players: the button full

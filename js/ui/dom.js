@@ -2335,6 +2335,8 @@ export function createUI(bus) {
     }
     clearTimeout(st.confettiTimer);
     st.confettiTimer = setTimeout(() => box.remove(), 4400);
+    // (1.15.4) once it has all fallen (the longest piece: 3.3 s + 0.7 s), it goes: held at its end, each piece stayed a layer
+    setTimeout(() => box.remove(), 4300);
     return box;
   }
 
