@@ -771,6 +771,21 @@ Later the owner added (decisions are final unless they say otherwise):
     "clean": 11501 replaces 11500, which already carries the glitch on the closed test, so the step can only help). The
     Family message still waits for his own phone to show Weergawe 1.15.1 and a clean Uitdager-styl scroll. The way back:
     Publishing overview > Remove changes before Google decides; after, Closed testing – Alpha > Halt release.
+- **1.15.2 (commit 6c64799, 13 Oct 2026 ~15:00), NOT released yet: the Winkel's list stands still; the streak tile's words.**
+  The owner's phone on 1.15.1 (14:11, via Alfred, photos 14.13.33 + 14.13.34): the Uitdager-styl tiles under the pinned card
+  still lost their words, prices and borders (the Wenviering row, the first Strafstyl tile), and "Huidige reeks" was near-white
+  on the light peach tile. Cause found by measuring (headless Chrome, CDP LayerTree): the open tab made 84 paint layers (the
+  menu alone 23): 14 live tile canvases (celebrations, monkey styles) + 24 endless tile animations (legendary sweeps, turning
+  rays, shines, holo, foil) + ~40 overlap layers; Android's WebView mispaints a scrolling list that busy, above all under a
+  sticky card. 1.15.1's ring fix removed one cause only. Fix: the drawn pictures are plain images (dom.js `asPicture`, cached),
+  no endless animation on a shop tile (the pinned card keeps its shine) → 29 layers; the pinned card as wide as the grid (no
+  tile edge or heading beside it); title words whole on their plates; `.card .tile.hot span` #7a4300 (6.5:1). Tests: game 412,
+  qa shop18, skins1134, ui1134, refill1134, emoji1121 ok; NEW `qa/shoplayers1152.mjs` (in `check-all.sh full`): fails on
+  1.15.1 (84 layers, 14 canvases, 24 animations), passes on 1.15.2. **RULE: no live <canvas> and no endless animation inside a
+  scrolling sheet; a picture drawn once becomes an image.** Chrome on Android looked fine on 1.15.1's preview while the app
+  (WebView) glitched: the real proof is the app. Private preview: https://hotfix-1152.stapelspel.pages.dev (deployment
+  ea969267; production still 1.15.1). Next: the owner's phone on the preview → website → the app 11502 to internal testing →
+  his app clean → the closed test → the Family message.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
