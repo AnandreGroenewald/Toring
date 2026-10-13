@@ -2118,6 +2118,9 @@ svg.ic {
 .peek-btn .ic { width: 1.3em; height: 1.3em; }
 .screen-results.peek { background: transparent; }
 .screen-results.peek .res-wrap, .screen-results.peek .confetti { visibility: hidden; }
+/* (1.15.4) a reopened result's tower: the picture this session took of it, shown while "Toring" is on */
+.tower-shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; z-index: 1; pointer-events: none; }
+.screen-results.peek .tower-shot { display: block; }
 
 /* stats sheet: the settings that affect sharing */
 .stats-foot { display: flex; flex-direction: column; gap: calc(16 * var(--u)); }

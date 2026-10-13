@@ -2396,7 +2396,7 @@ export function createUI(bus) {
       h('p', { class: 'res-sub', text: why }));
   }
 
-  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null, againStake = 0, againStakes = null, freeTry = null, bestStays = null, switchTo = null, signinOffer = false } = {}) {
+  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null, againStake = 0, againStakes = null, freeTry = null, bestStays = null, switchTo = null, signinOffer = false, revisit = false, towerShot = null } = {}) {
     if (st.modal) closeModal();
     const r = result || {};
     const m = mode || r.mode || 'practice';
@@ -2523,7 +2523,9 @@ export function createUI(bus) {
     }, icon('eye'), h('span', { class: 'peek-lbl', text: S.peek }));
 
     screens.results.classList.remove('peek');
-    screens.results.replaceChildren(peek, wrap);
+    // (1.15.4) a result opened again later: the tower's picture under "Toring" (else no button: the platform is empty)
+    const shot = revisit && towerShot ? h('img', { class: 'tower-shot', src: towerShot, alt: '', 'aria-hidden': 'true', draggable: 'false' }) : null;
+    screens.results.replaceChildren(...[shot, revisit && !towerShot ? null : peek, wrap].filter(Boolean));
     if (isNewBest && !reducedMotion()) screens.results.append(confetti());
     showScreen('results');
     // a daily finished after midnight: the next tower is already open

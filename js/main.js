@@ -966,6 +966,27 @@ function playPractice() {
   renderTray();
 }
 
+/**
+ * (1.15.4, the owner via Alfred, Theo's photo: "Kan nie na jou wen toring kyk nie") a picture of a finished Daily Tower,
+ * kept for this session: a result opened again later (by then the game behind it is the menu's tower) shows it under
+ * "Toring"; without one (the app was closed meanwhile) the button stays away instead of showing an empty platform.
+ */
+const towerShots = new Map();   // dateKey -> { src, heightM } (the day's best try)
+function keepTowerShot(r) {
+  if (!r || r.mode !== 'daily' || !r.dateKey || typeof game.renderer?.snapshot !== 'function') return;
+  const prev = towerShots.get(r.dateKey);
+  if (prev && prev.heightM > (r.heightM || 0)) return;
+  setTimeout(() => {
+    try {
+      game.renderer.snapshot((img) => {
+        if (img?.src) towerShots.set(r.dateKey, { src: img.src, heightM: r.heightM || 0 });
+      }, 'image/jpeg', 0.85);
+    } catch {
+      // the picture is a nice-to-have
+    }
+  }, 500);
+}
+
 function showDoneResults(dateKey, result) {
   screen = 'results';
   // the attract tower keeps still (and its crane out of the title) behind a revisited result
@@ -976,6 +997,8 @@ function showDoneResults(dateKey, result) {
   }
   ui.showResults({
     result,
+    revisit: !!gs?.idle,                               // (1.15.4) the finished tower isn't behind it any more...
+    towerShot: towerShots.get(dateKey)?.src || null,   // ...its picture, when this session took one
     stats: store.getStats(dateKey),
     isNewBest: false,
     shareText: shareTextFor(result),
@@ -2536,6 +2559,7 @@ bus.on('game:over', (result) => {
     ...resultsExtras(r),
   });
   showPercentile(r);
+  keepTowerShot(r);
   sleepLoop(RESULTS_SLEEP_MS);
   account.soon();   // (1.13) the tower goes to the account (a finished daily: done on the other devices too)
   if (r.mode === 'daily') {
