@@ -1085,6 +1085,14 @@ export class GameScene extends Phaser.Scene {
     // Blok vir Blok: only on this player's turn (and Robot Rikus's, by autoplay), once
     const turn = this.turns?.cur;
     if (this.turns && (!turn || turn.dropped || (!turn.mine && !(turn.botTurn && fromAuto)))) return false;
+    // (1.15.3) Hanswors placing his gifts (a new foundation): the block waits on the crane until he's done
+    if (!this.turns && this.visitors.clownPlacing?.()) {
+      if (!fromAuto && this.now - (this.clownHintAt ?? -1e9) > 1500) {
+        this.clownHintAt = this.now;
+        bus.emit('hud:toast', { text: S.clownBusy, color: '#fff27a', visitor: true });
+      }
+      return false;
+    }
     // a round's Skelm Sakkie: catch him first (the block waits on the crane until he's caught or gone)
     if (this.turns && this.visitors.blocksDrop?.()) {
       if (!fromAuto && this.now - (this.thiefHintAt ?? -1e9) > 1500) {

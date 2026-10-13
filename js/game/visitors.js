@@ -399,6 +399,16 @@ export class Visitors {
     return !!c && !this.dead && !!c.v?.turn && c.type === 'thief' && !c.gone;
   }
 
+  /**
+   * (1.15.3, the owner's screenshot: a block dropped while Hanswors set his log "just glitched out"; "make it that if the
+   * hans wors puts the new foundation that the user cant play") Hanswors is placing his gifts: from his first toss until
+   * the last one is set, the player's block waits on the crane.
+   */
+  clownPlacing() {
+    const c = this.cur;
+    return !!c && !this.dead && c.type === 'clown' && !c.gone && (c.phase === 'wait' || c.phase === 'toss' || c.phase === 'gap');
+  }
+
   /** Blok vir Blok: the round's visitor is still doing something to the tower. */
   turnBusy() {
     const c = this.cur;

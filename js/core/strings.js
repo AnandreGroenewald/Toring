@@ -223,6 +223,7 @@ export const S = {
   resMonkeyStood: 'Blouaap het gestamp, maar jou toring het bly staan! 🐒',
   resClownGift: (n) => (n > 1 ? `Hanswors het vir jou ${n} geskenke gebring 🎁` : 'Hanswors het vir jou ’n groot boomstam gebring 🪵'),
   resClownNone: 'Hanswors het hierdie keer niks gebring nie 🤡',
+  clownBusy: 'Wag, Hanswors bou nog 🤡',
   clownFoundation: 'Nuwe fondament! 🪵 Alles daaronder staan vas',   // Hanswors's log sets as cement
   clownRewardTitle: (n) => `${n} Perfeks op ’n ry!`,
   clownRewardSub: 'Hanswors bring geskenke: ’n boomstam, en dalk ’n paar blokke. Bou daarop verder!',

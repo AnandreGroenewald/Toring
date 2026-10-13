@@ -211,6 +211,7 @@ export const S_EN = {
   resMonkeyStood: 'Blouaap stamped, but your tower stood firm! 🐒',
   resClownGift: (n) => (n > 1 ? `Hanswors brought you ${n} gifts 🎁` : 'Hanswors brought you a big log 🪵'),
   resClownNone: 'Hanswors came, but brought no gifts this time 🤡',
+  clownBusy: 'Wait, Hanswors is still building 🤡',
   clownFoundation: 'New foundation! 🪵 Everything under it is set',
   clownRewardTitle: (n) => `${n} Perfects in a row!`,
   clownRewardSub: 'Hanswors brings gifts: a log, and maybe a few blocks. Build on top of it!',
