@@ -3001,6 +3001,9 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .res-duel.is-won { box-shadow: inset 0 0 0 calc(3 * var(--u)) rgba(255, 215, 90, 0.85), 0 0 calc(26 * var(--u)) rgba(255, 200, 60, 0.45); }
 .res-duel.is-won .res-title { color: #ffd75a; }
 .res-duel.is-lost .res-title { color: #e6ecfa; }
+/* (1.15.4) a small phone with Android's 3-button bar ('tight', dom.js): the menu leaves out the tagline and the saying of
+   the day, so its bottom row stays above the phone's buttons */
+#ui.tight .screen-menu .saying-day, #ui.tight .screen-menu .brand .tagline { display: none; }
 /* (1.15.4, the game-tester: the Skeef "∼" was white on orange, 2.04:1, and white on light grey in colour-blind mode,
    1.03:1) the light tiles keep dark marks on the dark cards */
 .card .cell-G, .card .cell-S { color: #3d2a00; }

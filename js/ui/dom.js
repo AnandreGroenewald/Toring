@@ -498,6 +498,10 @@ export function createUI(bus) {
     style.setProperty('--sab', inset(cs.paddingBottom, vh - (top + height)));
     style.setProperty('--sal', inset(cs.paddingLeft, left));
     style.setProperty('--sar', inset(cs.paddingRight, vw - (left + width)));
+    // (1.15.4, the game-tester: on a 360x640 phone with Android's 3-button bar the menu's bottom row sat 14 px under the
+    // buttons) little room left between the bars: 'tight' (the menu leaves out its saying)
+    const room = height - (parseFloat(style.getPropertyValue('--sat')) || 0) - (parseFloat(style.getPropertyValue('--sab')) || 0);
+    root.classList.toggle('tight', room / width < 1.66);
   }
 
   /** Where Phaser's Scale.FIT will put the canvas — used until main.js calls layout(). */
