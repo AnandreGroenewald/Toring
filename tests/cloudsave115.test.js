@@ -63,3 +63,34 @@ test('the first merge still takes the account’s choice', () => {
   assert.equal(out.econ.skins.wear.blocks, 'heelal');
   assert.equal(out.econ.look.badge, 'draak');
 });
+
+// (1.15.4) 1.15.3 opens the day's weekkis box on the day's first visit, so a second device opens it too before it
+// signs in (or while offline): the merge counts that day's box once (the game-tester's sign-in check, 13 Oct 2026).
+function opened(coins, day, last, base = null) {
+  const s = base ? clone(base) : cleanSave(null);
+  s.econ.coins = coins;
+  s.week = { ...s.week, day, last };
+  return cleanSave(s);
+}
+
+test('a second device that opened today’s box before signing in: that box counts once', () => {
+  const account = opened(173, 3, '2026-10-13');
+  const guest = opened(10, 1, '2026-10-13');   // a new device's first visit: box 1
+  const out = mergeSaves(guest, account, null);
+  assert.equal(out.econ.coins, 173, 'the account’s coins, not 183');
+  assert.equal(out.week.day, 3);
+  assert.equal(out.week.last, '2026-10-13');
+});
+
+test('both sides opened today’s box since they last synced: once; a box already in the base or on another day: as before', () => {
+  const base = opened(100, 3, '2026-10-12');
+  const phone = opened(125, 4, '2026-10-13', base);
+  const web = opened(125, 4, '2026-10-13', base);
+  assert.equal(mergeSaves(web, phone, base).econ.coins, 125, 'box 4 (25) once');
+  const synced = opened(125, 4, '2026-10-13', base);
+  assert.equal(mergeSaves(synced, synced, synced).econ.coins, 125, 'the base had it: nothing comes off');
+  const later = opened(150, 4, '2026-10-13', base);
+  assert.equal(mergeSaves(later, synced, synced).econ.coins, 150, 'coins earned since: kept');
+  const yesterday = opened(110, 1, '2026-10-12');
+  assert.equal(mergeSaves(yesterday, opened(125, 4, '2026-10-13'), null).econ.coins, 235, 'different days: both boxes');
+});

@@ -215,6 +215,12 @@ export function mergeSaves(localRaw, cloudRaw, baseRaw = null, { today = null } 
     shields: first ? clamp(lw.shields + cw.shields, 0, WEEK.shieldMax) : add(lw.shields, cw.shields, B.week.shields, WEEK.shieldMax),
     weeks: Math.max(lw.weeks, cw.weeks),
   };
+  // (1.15.4) the day's box opened on both sides since `base` (1.15.3 opens it on the day's first visit: a second
+  // device before it signed in, or offline before the account's save came): its coins went in on both sides, the box
+  // kept counts and the other one comes off
+  if (lw.last && lw.last === cw.last && B.week.last !== lw.last) {
+    econ.coins = clamp(econ.coins - (WEEK.coins[early.day - 1] || 0), 0, MAX_COINS);
+  }
 
   const player = C.board.player || L.board.player;
   // (1.14) the testers' gift (1.13.2): taken on either side, the account is a tester's (the earlier day)
