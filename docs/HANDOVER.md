@@ -859,6 +859,16 @@ Later the owner added (decisions are final unless they say otherwise):
     contrast, hearts-per-throw, offers. The new game-tester skill is running its full pass on 5fb7a45 (frozen copy).
   - **Next:** the game-tester's report → fixes → Play internal 11504 (1.15.4) + the website (his word) → the closed test →
     the Family message (to 1.15.4). Open: heavier planks? (his physics report: likely a plank tipping on a narrow support).
+- **13 Oct 2026 ~23:45 — the game-tester's first full pass, fixed; 1.15.4 = 5030b43 on the preview (545a35f5); Play bundle
+  11504 built (NOT uploaded).** Report: ~/Documents/Test Reports/Stapel/2026-10-13 2013/report.md (on 5fb7a45: 0 critical,
+  4 high, 9 medium, 10 low). Fixed: "Jy" gold + no 🔥 0 (dde1f73); the Skeef ∼ mark + results settle to 19 layers
+  (c398eec); the 'tight' small-phone menu (985dafa); the day's weekkis box counted once when a second device signs in
+  (528f618, js/core/cloudsave.js); the grid key's visitor note counts only visitor ✕s (visit `x`), no empty power-up sheet
+  for a player with nothing to bring, a match's outcome card clear of the eye, player-card shines rest after 3 (391013e);
+  the store texts in the repo (5030b43; Play's listing unchanged: a listing change needs the full panel). Its 6 red
+  full-check lines were stale tests (the chest's +10, the heart's VOL): fixes1153, skins1134, coins113 updated; with
+  account113 af/en all pass on HEAD. Game 416, server 258. Left: the Daily result's share row under the bar on first view,
+  Blok vir Blok's settle waits, lows. Next: his word for Play internal 11504 (+ panel?) and the website.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
