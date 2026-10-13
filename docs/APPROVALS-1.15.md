@@ -125,3 +125,6 @@ review counts from the last change sent). The folder's README holds both clicks,
   only then 11501 to Closed testing – Alpha (which already published 11500 at ~07:26) → only then the Family message.
 - The rule from now on: no huge box-shadow trimmed by clip-path, above all on a sticky element; anything painting outside
   its box gets a real Android check (a Pages preview branch).
+- Play: 11501 on internal testing 08:10. The owner typed in the Stapel terminal at 14:03, after "Reply clean, or send a
+  photo": "Can you please proceed". 11501 promoted to Closed testing – Alpha and sent for review 14:07 (one change; Gate:
+  OPEN before each click). The Family message waits for his own phone (Weergawe 1.15.1, a clean scroll).

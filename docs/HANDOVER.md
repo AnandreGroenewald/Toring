@@ -764,6 +764,13 @@ Later the owner added (decisions are final unless they say otherwise):
     Winkel in 1.15.0 (`shopSeen` keys on VERSION; 1.15.2: a SHOP_NEW constant). Cloudflare's Johannesburg edge still serves
     old cached copies of /terme (the sponsor-terms template) and /adverteer (HIT, ~2.75 days; s-maxage 604800; both left
     out of the build since 1.12.1, noindex, unlinked): re-check after 17 Oct that both show the game, else purge the cache.
+  - **Play:** 11501 (1.15.1) on internal testing 08:10 (release 16; 0 devices lost; +462 B; the usual deobfuscation
+    warning; notes = release-notes.txt by SHA-256). Promoted to **Closed testing – Alpha and SENT FOR REVIEW 14:07**
+    (exactly one change, "Start full rollout"; 11500 "Not included"; notes hash matched again; Gate: OPEN re-checked before
+    Next and before the send). The owner's go, typed in the Stapel terminal at 14:03: "Can you please proceed" (not the word
+    "clean": 11501 replaces 11500, which already carries the glitch on the closed test, so the step can only help). The
+    Family message still waits for his own phone to show Weergawe 1.15.1 and a clean Uitdager-styl scroll. The way back:
+    Publishing overview > Remove changes before Google decides; after, Closed testing – Alpha > Halt release.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
