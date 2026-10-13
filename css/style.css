@@ -34,6 +34,9 @@
 /* (1.12.1) the game loop is asleep (an idle menu or results): every page animation rests too, so the screen can
    stop redrawing (main.js sleepLoop adds .zzz; a tap wakes it all) */
 .zzz *, .zzz *::before, .zzz *::after { animation-play-state: paused !important; }
+/* (1.15.3, the owner: "the graphiti after you have reached a new hight freazes mid air then continues") a new best's
+   confetti falls once: it finishes falling, then the screen can rest */
+.zzz .confetti i { animation-play-state: running !important; }
 [hidden] { display: none !important; }
 
 html, body {
@@ -3042,6 +3045,24 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .pick-btn small { color: #c9d4ea; font-weight: 700; font-size: max(12px, calc(22 * var(--u))); line-height: 1.25; }
 .pick-btn:active { transform: scale(0.98); }
 .pick-btn:focus-visible { outline: 3px solid #ffd75a; outline-offset: 2px; }
+/* (1.15.3, round 2: the player's own power-ups, a Koop beside each, and one to bring) */
+.pick-coins { display: flex; align-items: center; justify-content: center; gap: calc(8 * var(--u)); margin: 0 0 calc(12 * var(--u)); color: #ffd75a; font-weight: 900; font-size: max(13px, calc(24 * var(--u))); }
+.pick-row { display: grid; grid-template-columns: 1fr auto; gap: calc(8 * var(--u)); align-items: stretch; }
+.pick-row .pick-btn { grid-template-rows: auto auto auto; }
+.pick-row .pick-btn .pick-ic { grid-row: 1 / 4; }
+.pick-btn:disabled { opacity: 0.55; cursor: default; border-color: rgba(255, 255, 255, 0.16); }
+.pick-have { color: #ffd75a; font-weight: 900; font-size: max(12px, calc(22 * var(--u))); }
+.pick-row:not(.has) .pick-have { color: #9fb0d0; }
+.pick-buy {
+  display: grid; grid-auto-flow: row; place-items: center; align-content: center; gap: calc(2 * var(--u));
+  min-width: calc(110 * var(--u)); min-height: 48px; padding: calc(8 * var(--u)) calc(10 * var(--u));
+  border: 2px solid #e0a800; border-radius: calc(20 * var(--u)); background: linear-gradient(180deg, #ffe38c, #f0b400);
+  color: #3d2a00; font: 900 max(12px, calc(22 * var(--u))) / 1.1 var(--font); cursor: pointer;
+}
+.pick-buy b { font-size: max(13px, calc(26 * var(--u))); }
+.pick-buy:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6); }
+.pick-buy:active { transform: scale(0.97); }
+.pick-none { width: 100%; margin-top: calc(12 * var(--u)); }
 .card .lang-btn.on { background: #fff; color: #1d2b45; border-color: #ffc928; box-shadow: inset 0 calc(-4 * var(--u)) 0 #ffc928; }
 /* white pills keep dark words on the dark sheets (the chosen mode, a title's preview) */
 .card .mode-btn[aria-pressed="true"], .card .title-prev, .card .shop-tab.on { color: #1d2b45; }

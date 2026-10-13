@@ -1146,28 +1146,47 @@ export function createUI(bus) {
   }
 
   /**
-   * (1.15.3, the owner: "People get confused how to use the Power-ups" ... "everyone get one powerup and its available
-   * immediately" ... "Make the player choose the one they want to use before the match") before each Daily Tower: one
-   * free power-up, the same choice for everyone, ready from the first block. A pick says 'ui:power-pick'; ✕ starts nothing.
+   * (1.15.3, the owner: "People get confused how to use the Power-ups" ... "Make the player choose the one they want to
+   * use before the match"; then, on the free one: "if this is shows then the coins doesnt matter, I will sugest it shows
+   * what you have purchased already and then you can also purchase new once in this meny, which you then decide on one")
+   * before each Daily Tower: the power-ups the player has (bought with earned coins), a Koop beside each, and one to
+   * bring ('ui:power-pick' id; 'none': without). It is used up only when tapped in the tower.
    */
-  function showPowerPick() {
-    const pick = (id) => {
+  function showPowerPick({ stock = {}, coins = 0 } = {}) {
+    const row = (id) => {
       const info = POWERUP_INFO[id];
-      return h('button', {
-        type: 'button', class: 'pick-btn', 'data-power': id,
-        onclick: () => {
-          audio.play('click');
-          closeModal();
-          bus.emit('ui:power-pick', id);
-        },
-      }, h('span', { class: 'pick-ic' }, emo(info.emoji)), h('b', { text: info.name }), h('small', { text: info.what }));
+      const have = Math.max(0, stock[id] | 0);
+      const price = POWERUPS[id].price;
+      return h('div', { class: `pick-row${have ? ' has' : ''}`, 'data-power': id },
+        h('button', {
+          type: 'button', class: 'pick-btn', 'data-power': id, disabled: !have, 'aria-label': `${info.name}: ${info.what} (${S.pickHave(have)})`,
+          onclick: () => {
+            if (!have) return;
+            audio.play('click');
+            closeModal();
+            bus.emit('ui:power-pick', id);
+          },
+        }, h('span', { class: 'pick-ic' }, emo(info.emoji)), h('b', { text: info.name }), h('small', { text: info.what }),
+        h('span', { class: 'pick-have', text: S.pickHave(have) })),
+        h('button', {
+          type: 'button', class: 'pick-buy', 'data-power': id, disabled: coins < price, 'aria-label': `${S.buy} ${info.name}: ${price} 🪙`,
+          onclick: () => {
+            audio.play('click');
+            bus.emit('ui:pick-buy', id);
+          },
+        }, h('span', { text: S.buy }), coinIc(), h('b', { text: fmtInt(price) })));
     };
     modals.pick.replaceChildren(h('div', { class: 'card sheet pick-sheet' },
       // (✕: nothing starts; a try already taken waits, and the menu says so)
       h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); bus.emit('ui:pick-closed'); } }, icon('close')),
-      h('div', { class: 'sheet-head' }, emo('🎁'), h('h2', { id: 'stapel-pick-title', text: S.pickTitle })),
+      h('div', { class: 'sheet-head' }, emo('🎒'), h('h2', { id: 'stapel-pick-title', text: S.pickTitle })),
       h('p', { class: 'pick-note', text: S.pickNote }),
-      h('div', { class: 'pick-btns' }, POWERUP_IDS.map(pick))));
+      h('p', { class: 'pick-coins' }, coinIc(), h('span', { text: S.pickCoins(fmtInt(coins)) })),
+      h('div', { class: 'pick-btns' }, POWERUP_IDS.map(row)),
+      button('btn-white pick-none', h('span', { text: S.pickNone }), () => {
+        closeModal();
+        bus.emit('ui:power-pick', 'none');
+      }, { nav: false })));
     openModal('pick');
   }
 

@@ -757,9 +757,11 @@ function resetRun(mode, dateKey = null) {
 }
 
 // ---------------------------------------------------------------------------
-// Power-ups (1.8; js/core/economy.js): in Oefen from the player's stock; never in a match. (1.15.3, the owner: "Lets make
-// it fair, everyone get one powerup and its available immediately", "Make the player choose the one they want to use
-// before the match") the Daily Tower: one free power-up per tower, picked before it starts (was a Fondamentblok at 55 m)
+// Power-ups (1.8; js/core/economy.js): in Oefen from the player's stock; never in a match. (1.15.3, the owner: "Make
+// the player choose the one they want to use before the match", then "it shows what you have purchased already and then
+// you can also purchase new once in this meny, which you then decide on one") the Daily Tower: one power-up from the
+// player's stock per tower (bought with earned coins, also on the sheet), chosen before it starts; it is used up only
+// when tapped (was a free Fondamentblok at 55 m)
 // ---------------------------------------------------------------------------
 const pw = { effects: {}, free: false, pick: null };
 
@@ -773,9 +775,10 @@ function renderTray() {
   const items = [];
   if (mode === 'daily') {
     const id = pw.pick;
+    const have = id ? store.getEconomy().stock[id] > 0 : false;
     const active = (id === 'slow' && e.slowLeft > 0) || (id === 'shield' && !!e.shield) || (id === 'foundation' && !!e.foundation);
-    const enabled = pw.free && !active && !(id === 'heart' && e.heartRoom === false);
-    if (id && (pw.free || active)) items.push({ id, count: pw.free ? 1 : 0, active, glow: enabled, enabled });
+    const enabled = pw.free && have && !active && !(id === 'heart' && e.heartRoom === false);
+    if (id && ((pw.free && have) || active)) items.push({ id, count: pw.free ? 1 : 0, active, glow: enabled, enabled });
   } else {
     const stock = store.getEconomy().stock;
     for (const id of POWERUP_IDS) {
@@ -796,8 +799,11 @@ bus.on('ui:powerup', (id) => {
   const gs = gameScene();
   if (!gs || run.over || screen !== 'game') return;
   if (run.mode === 'daily') {
-    if (id !== pw.pick || !pw.free) return;
-    if (gs.applyPowerup(id)) pw.free = false;
+    if (id !== pw.pick || !pw.free || !(store.getEconomy().stock[id] > 0)) return;
+    if (gs.applyPowerup(id)) {
+      store.usePowerup(id);
+      pw.free = false;
+    }
   } else if (run.mode === 'practice') {
     if (!(store.getEconomy().stock[id] > 0)) return;
     if (gs.applyPowerup(id)) store.usePowerup(id);
@@ -810,8 +816,31 @@ function startIdle() {
   startGame({ mode: 'idle', seed: randomSeed('idle') });
 }
 
+/**
+ * (1.15.3, the owner: "the chest should open everyday you login not when you play the daily challenge") the day's box of
+ * the weekkis opens on the day's first visit: its coins go in now, the menu's chest says "Tik!" until it is tapped open
+ * (stapel.v1.chestSeen). Signed in: after the account's towers came in (another device may have opened it today).
+ */
+let chestWaiting = false;
+function openTodaysChest() {
+  if (chestWaiting) return false;
+  if (account.stale()) {
+    chestWaiting = true;
+    account.settle(3000).then(() => {
+      chestWaiting = false;
+      if (openTodaysChest() && screen === 'menu') ui.showMenu(menuModel());
+    });
+    return false;
+  }
+  const box = store.openWeekBox(todayKey());
+  if (!box) return false;
+  coinsChanged();
+  return true;
+}
+
 let boardAskedFor = null;   // (1.12) the day whose place the menu's 🏆 asked for this session
 function showMenu() {
+  openTodaysChest();
   screen = 'menu';
   pushSkyline();
   ui.showMenu(menuModel());
@@ -846,8 +875,8 @@ function liveElsewhere(dateKey) {
 }
 
 /**
- * (1.15.3) The Daily Tower's free power-up: undefined while not picked yet (playDaily asks first), null for none. Test
- * runs (?auto=, or window.__stapelPick set by the QA scripts) skip the sheet.
+ * (1.15.3) The Daily Tower's power-up: undefined while not chosen yet (playDaily asks first), null for none. Test runs
+ * (?auto=, or window.__stapelPick set by the QA scripts) skip the sheet.
  */
 function presetPick() {
   const t = AUTO ? 'none' : globalThis.__stapelPick;
@@ -855,6 +884,11 @@ function presetPick() {
   return POWERUP_IDS.includes(t) ? t : null;
 }
 /** A Daily Tower starts with its pick: the tray shows it at once, glowing, and a toast says where it is. */
+/** What the power-up sheet shows: the player's stock and coins. */
+function pickModel() {
+  const e = store.getEconomy();
+  return { stock: { ...e.stock }, coins: e.coins };
+}
 function armPick(pick) {
   pw.pick = pick || null;
   pw.free = !!pw.pick;
@@ -891,7 +925,7 @@ function playDaily(pick = presetPick()) {
     }
     if (rt && rt.status === 'ready') {
       if (pick === undefined) {
-        ui.showPowerPick();
+        ui.showPowerPick(pickModel());
         return;
       }
       resetRun('daily', dateKey);
@@ -907,7 +941,7 @@ function playDaily(pick = presetPick()) {
     return;
   }
   if (pick === undefined) {
-    ui.showPowerPick();
+    ui.showPowerPick(pickModel());
     return;
   }
   resetRun('daily', dateKey);
@@ -1342,7 +1376,20 @@ bus.on('ui:pick-closed', () => {
   if (screen === 'menu') showMenu();   // (the daily card shows a try that was taken as ready to play)
 });
 bus.on('ui:power-pick', (id) => {
-  if (screen === 'menu' || screen === 'results') playDaily(POWERUP_IDS.includes(id) ? id : null);
+  if (screen !== 'menu' && screen !== 'results') return;
+  // one the player has (or none)
+  const pick = POWERUP_IDS.includes(id) && store.getEconomy().stock[id] > 0 ? id : null;
+  playDaily(pick);
+});
+// (1.15.3) "Koop" on the power-up sheet: one more in the player's stock, then the sheet again with it
+bus.on('ui:pick-buy', (id) => {
+  const r = store.buyPowerup(id);
+  if (r.ok) {
+    audio.play('heart');
+    ui.toast(S.bought(POWERUP_INFO[id]?.name || ''), 1800);
+    coinsChanged();
+  }
+  if (screen === 'menu' || screen === 'results') ui.showPowerPick(pickModel());
 });
 // (1.13.1, the owner via Alfred: "Let's build!" on "How do I play?" closed it and nothing started) "Kom ons bou!" from
 // the menu's "Hoe speel ek?" builds a tower: today's Daaglikse Toring while it isn't played, else an Oefen tower (it
@@ -2429,8 +2476,8 @@ function finalize(result) {
   let week = null;
   if (result.mode === 'daily' && stats?.applied && !run.retry) {   // (the second try was bought: it pays nothing)
     coins = awardCoins({ mode: 'daily', heightM: shown.heightM, perfects: shown.perfects, streak: stats.currentStreak });
-    week = store.openWeekBox(result.dateKey);   // the day's box of the weekkis
-    if (week) coins = { ...coins, total: week.total };
+    // (1.15.3, the owner: "the chest should open everyday you login not when you play the daily challenge") the
+    // weekkis opens on the day's first visit (openTodaysChest), no longer here
   } else if (result.mode === 'practice') {
     coins = awardCoins({ mode: 'practice', heightM: result.heightM, perfects: result.perfects });
   }

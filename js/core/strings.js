@@ -385,7 +385,7 @@ export const S = {
       koolstof: 'Koolstofvesel', ys: 'Yskristal', marmer: 'Marmer', lawa: 'Lawa', chroom: 'Chroom', holo: 'Holografies', heelal: 'Sterrestelsel' },
   },
   // (1.15.3, the owner: "People get confused how to use the Power-ups") the Daily Tower's free pick, then Oefen's stock
-  shopPowerupsNote: 'Daaglikse Toring: kies voor elke toring 1 gratis krag. Oefen: gebruik soveel kragte as wat jy hier koop.',
+  shopPowerupsNote: 'Daaglikse Toring: bring een krag na elke toring. Oefen: gebruik soveel kragte as wat jy het.',
   shopLooksNote: 'Jou teenstander sien dit in die Uitdagersreeks. Dit maak jou nie sterker nie.',
   inBag: (n) => `In jou sak: ${n}`,
   buy: 'Koop',
@@ -405,18 +405,18 @@ export const S = {
   updateBtn: 'Dateer op',
   updateLater: 'Later',
   lockedRank: (rank) => `🔒 ${rank}-rang`,
-  lockedWeek: '🔒 Speel 7 dae op ’n ry',
+  lockedWeek: '🔒 Maak Stapel 7 dae op ’n ry oop',   // (1.15.3: the weekkis opens on the day's first visit)
   // die weekkis (1.10, js/core/week.js)
   weekTitle: 'Weekkis',
   // (1.15) a tap on a chest
   weekChestDone: (d, c) => `Dag ${d}: oopgemaak · +${c} 🪙`,
-  weekChestToday: (d, c) => `Dag ${d} is vandag se kis: +${c} 🪙. Speel die Daaglikse Toring om hom oop te maak!`,
+  weekChestToday: (d, c) => `Dag ${d} is vandag se kis: +${c} 🪙. Hy gaan oop as jy Stapel vandag oopmaak!`,
   weekChestLater: (d, c) => `Dag ${d}: +${c} 🪙. Speel elke dag om by hom uit te kom.`,
   weekChestReady: (c) => `Jou kis is gevul! Tik om hom oop te maak (+${c} 🪙)`,
   weekChestOpened: (c) => `+${c} 🪙 uit jou weekkis!`,
   weekTap: 'Tik!',
-  weekChestBig: (c) => `Dag 7, die groot goue kis: +${c} 🪙! Speel 7 dae op ’n ry om hom oop te maak.`,
-  weekToday: (coins) => `Speel vandag: +${coins} 🪙`,
+  weekChestBig: (c) => `Dag 7, die groot goue kis: +${c} 🪙! Maak Stapel 7 dae op ’n ry oop om hom te kry.`,
+  weekToday: (coins) => `Vandag: +${coins} 🪙`,
   weekTomorrow: (coins) => `Môre: +${coins} 🪙`,
   weekDay: (day) => `Dag ${day} van 7`,
   weekBox: (day, coins) => `📦 Dag ${day} van 7: +${coins} 🪙`,
@@ -435,8 +435,8 @@ export const S = {
   powerupShield: 'Skild aan! Die volgende aap of skelm bons af 🛡️',
   foundationSet: 'Nuwe fondament! 🧱 Alles daaronder staan vas',
   freeFoundation: 'Fondamentblok verdien! Tik 🧱 wanneer jy dit wil gebruik',
-  // (1.15.3) before each Daily Tower: one free power-up, the player's pick, ready from the first block
-  pickTitle: 'Kies jou gratis krag',
+  // (1.15.3) before each Daily Tower: one power-up from the player's own (or bought here), ready from the first block
+  pickTitle: 'Bring ’n krag saam',
   // (1.15.3) the lobby's offer: someone looks for another stake or mode
   offerTitle: 'Iemand wil speel!',
   offerText: (name, mode, n) => (n ? `${name} wil ${mode} vir ${n} 🪙 elk speel.` : `${name} wil ${mode} speel, sonder munte.`),
@@ -444,7 +444,10 @@ export const S = {
   offerNo: 'Nee, soek verder',
   offerGone: 'Hulle het intussen iemand anders gekry. Ons soek verder.',
   offerGo: (name) => `Ons begin teen ${name}…`,
-  pickNote: 'Een vir hierdie toring, almal kry een. Dit wag regs op die skerm: tik dit wanneer jy dit nodig het.',
+  pickNote: 'Een vir hierdie toring. Gebruik een wat jy het, of koop nou een met munte. Dit wag regs op die skerm: tik dit wanneer jy dit nodig het.',
+  pickHave: (n) => `jy het ${n}`,
+  pickNone: 'Speel sonder krag',
+  pickCoins: (n) => `Jy het ${n} 🪙`,
   pickReady: (emoji, name) => `${emoji} ${name} is gereed: tik dit regs wanneer jy wil`,
   shieldBlocked: (name) => `${name} bons van jou skild af! 🛡️`,
   resMonkeyBlocked: 'Jou skild het Blouaap gekeer! 🛡️',
