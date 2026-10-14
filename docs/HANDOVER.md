@@ -892,6 +892,15 @@ Later the owner added (decisions are final unless they say otherwise):
   Way back: Pause track stops new installs only (phones keep 1.15.5); 11506 = take hideNavigationBar out (README of the folder).
   Next: his phone check (no bar; swipe up shows it; Back after a swipe; the keyboard; the sharp launch picture; sign-in wait) +
   a Samsung tester's photo → installs + Android vitals tonight ~20:00 → the closed test (own panel + his yes) → the Family message.
+- **14 Oct 2026 ~13:20 — handover: 11505's closed-test step ready, NOT sent.** The owner's choice (~08:45): "A: Closed testing
+  (all testers), after my phone check (recommended)". The panel on the .aab itself: Guardian, Customer, Bottom Line, Advocate
+  9 each = 36/40, scan clear, the Final Boss 9 FINAL APPROVAL (08:58; good until ~20:58). The promote (Internal testing ›
+  11505 › Promote release › Closed testing – Alpha › the same notes › Save › Publishing overview: only the Alpha change ›
+  Send for review) waits for his own word typed in the Stapel terminal ("go closed" / "checked, go closed"); his phone check
+  is not reported yet. Play Console 13:15 (read only): Closed testing – Alpha 11501 (1.15.1), Internal 11505 (1.15.5), nothing
+  in review, Managed publishing off. At 11:49 Alfred relayed "Wait turn off the critics for now." "For all projects" (not
+  typed in the terminal; the hook, quick-lane.txt and ~/.claude/CLAUDE.md unchanged): ask him whether it stands. After
+  Google's approval: the Family message (Play folder), which he sends himself.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

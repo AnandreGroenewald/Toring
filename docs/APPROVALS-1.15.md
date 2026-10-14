@@ -188,3 +188,6 @@ review counts from the last change sent). The folder's README holds both clicks,
 - **Lifts noted:** the phone check (his phone + a Samsung with Game Booster) before the closed test; a one-time "swipe up"
   hint; a counter for signingIn (1.15.6); open-source notices (Capacitor, AndroidX, Google sign-in) before production;
   allowBackup rules and js/pages/admin.js out of the app (1.16); installs + Android vitals tonight ~20:00.
+- **The closed test (step 3):** his choice ~08:45 (Telegram to-do b44dea): "A: Closed testing (all testers), after my phone
+  check (recommended)"; 08:55 via Alfred: "Leave the critics for now, please push." Panel on the .aab: four 9s = 36/40, scan
+  clear, the Final Boss 9 (08:58). NOT sent at handover (13:20): a Play publish needs his word typed in the Stapel terminal.
