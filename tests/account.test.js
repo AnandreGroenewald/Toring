@@ -308,3 +308,23 @@ test('1.14 a busy server (429: the per-account save limit) is calm: "Stapel is b
   await web.account.signInWithToken(await token());
   assert.equal(web.store.getEconomy().coins, 50, 'it reached the account');
 });
+
+test('1.15.5 a tester: "the prompt didn\'t go away" — from Google\'s answer until the server has checked it, the screens are told it is signing in', async () => {
+  const { device, token } = await world();
+  const phone = device();
+  const tok = await token();
+  const seen = [];
+  phone.account.signInWithToken(tok).then((out) => seen.push(['done', out]));
+  assert.equal(phone.account.status().signingIn, true, 'at once, before the server answers');
+  assert.deepEqual(phone.events.at(-1), ['account:changed', 'signing-in']);
+  while (!seen.length) await new Promise((r) => setTimeout(r, 5));
+  assert.equal(phone.account.status().signingIn, false);
+  assert.equal(phone.account.status().signedIn, true);
+  const whys = phone.events.map(([, why]) => why);
+  assert.ok(whys.indexOf('signing-in') < whys.indexOf('signed-in'), 'signing in, then signed in');
+  // the server says no: the wait ends with the error
+  const web = device();
+  await assert.rejects(web.account.signInWithToken('not-a-token'));
+  assert.equal(web.account.status().signingIn, false);
+  assert.deepEqual(web.events.map(([, why]) => why), ['signing-in', 'error']);
+});

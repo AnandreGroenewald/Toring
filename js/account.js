@@ -39,8 +39,9 @@ export function createAccount({
   const root = base(apiUrl);
   const linkKey = `${storageKey}.cloud`;
   const on = !!(root && /\.apps\.googleusercontent\.com$/.test(clientId || ''));
-  // synced: a sync went through since the game started; tried: one finished at all (offline too)
-  const state = { busy: false, error: null, later: false, synced: false, tried: false };
+  // synced: a sync went through since the game started; tried: one finished at all (offline too); signingIn: Google
+  // gave its answer and the server is checking it (1.15.5: the prompt shows "Besig om in te teken…" meanwhile)
+  const state = { busy: false, error: null, later: false, synced: false, tried: false, signingIn: false };
   let soonTimer = null;
   let running = null;
   let inflight = null;   // the sync running now
@@ -256,7 +257,15 @@ export function createAccount({
   /** Signed in with Google: `idToken` from the button or the phone. Throws Error(code) when it didn't work. */
   async function signInWithToken(idToken) {
     if (!on) throw new Error('not_configured');
-    const r = await call('/account/google', { idToken });
+    // (1.15.5, a tester: the prompt stayed after choosing the Google account) it shows the wait at once
+    state.signingIn = true;
+    changed('signing-in');
+    let r;
+    try {
+      r = await call('/account/google', { idToken });
+    } finally {
+      state.signingIn = false;
+    }
     if (r.status !== 200 || !r.json?.ok || !r.json.token) {
       const code = r.status === 0 ? 'offline' : r.json?.error || 'error';
       state.error = code;
@@ -418,6 +427,7 @@ export function createAccount({
         out: !!(link && !link.token && !link.left),   // the server ended the session (not the player's own sign-out)
         at: link?.at || null,
         busy: state.busy,
+        signingIn: state.signingIn,
         error: state.error,
         native: !!native(),
       };

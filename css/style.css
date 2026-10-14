@@ -2301,6 +2301,7 @@ svg.ic {
 .account-in { display: flex; align-items: center; gap: calc(10 * var(--u)); margin: 0 0 calc(8 * var(--u)); font-weight: 900; }
 .account-tick { display: inline-grid; place-items: center; width: 1.5em; height: 1.5em; border-radius: 50%; background: var(--bosveld); color: #fff; font-size: 0.9em; }
 .account-line { margin: 0; font-weight: 700; color: var(--ink-soft); }
+.account-signing { display: flex; align-items: center; justify-content: center; min-height: 44px; margin: 0 0 calc(14 * var(--u)); }
 .account-msg { margin: calc(12 * var(--u)) 0; font-weight: 700; line-height: 1.4; color: var(--klei-d); }
 .account-foot { display: flex; flex-direction: column; gap: calc(12 * var(--u)); }
 .account-delete {
@@ -2415,6 +2416,9 @@ svg.ic {
 .signin-offer-text { display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u)); margin: 0; font-weight: 800; line-height: 1.3; }
 .signin-offer-btn { display: flex; justify-content: center; min-height: 44px; width: 100%; }
 .signin-offer-no { position: absolute; top: 6px; right: 6px; }
+/* (1.15.5) a sign-in on its way: "Besig om in te teken…" in place of Google's button */
+.signin-offer-busy, .signin-offer.is-busy .signin-offer-btn { display: none; }
+.signin-offer.is-busy .signin-offer-busy { display: flex; align-items: center; min-height: 44px; }
 
 /* (1.14, the owner: like 8 Ball Pool) the menu's row: ❓ 📊 🛍️ ⚙️, four bigger buttons */
 .dock-menu .dock-ic { width: calc(100 * var(--u)); height: calc(100 * var(--u)); font-size: calc(46 * var(--u)); }

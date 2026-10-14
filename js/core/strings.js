@@ -614,6 +614,7 @@ export const S = {
   accountSaved: (ago) => `Gebêre ${ago}`,
   accountAgo: (min) => (min < 1 ? 'nou net' : min < 60 ? `${min} min gelede` : min < 48 * 60 ? `${Math.round(min / 60)} uur gelede` : `${Math.round(min / 1440)} dae gelede`),
   accountSaving: 'Besig om te bêre…',
+  accountSigningIn: 'Besig om in te teken…',
   accountNotYet: 'Nog nie gebêre nie.',
   accountOffline: 'Geen internet nie: ons bêre sodra jy weer aanlyn is.',
   accountOut: 'Jy is uitgeteken. Teken weer in om aan te hou bêre.',

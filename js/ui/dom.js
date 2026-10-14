@@ -2683,6 +2683,8 @@ export function createUI(bus) {
     const el = h('div', { class: `card signin-offer signin-offer-${where}`, role: 'note' },
       h('p', { class: 'signin-offer-text' }, emo('☁️'), h('span', { text: S.signinOffer })),
       slot,
+      // (1.15.5) Google answered and the server checks it: this line in place of the button (setAccount, setAccountNote)
+      h('p', { class: 'account-line signin-offer-busy', role: 'status', text: S.accountSigningIn }),
       h('p', { class: 'account-under18', text: S.accountUnder18 }),   // (1.14, POPIA s35)
       h('button', {
         type: 'button', class: 'icon-btn signin-offer-no', 'aria-label': S.signinOfferNo, title: S.signinOfferNo,
@@ -2694,6 +2696,12 @@ export function createUI(bus) {
     // the website: Google's own button, once the slot is in the page (js/account.js renderButton)
     if (!st.account?.native) queueMicrotask(() => { if (slot.isConnected) bus.emit('ui:account-slot', slot); });
     return el;
+  }
+
+  /** (1.15.5) A sign-in on its way (the phone's sheet, or Google answered and the server checks it): the offer says so. */
+  function paintSigninBusy() {
+    const busy = !!(st.accountWorking || st.account?.signingIn);
+    for (const el of root.querySelectorAll('.signin-offer')) el.classList.toggle('is-busy', busy);
   }
 
   /** (1.14) The offer goes (waved away, or signed in): from the page and from the shop's next drawing. */
@@ -2721,6 +2729,7 @@ export function createUI(bus) {
   /** What the account sheet shows (js/account.js status()); null or `on` false: sign-in is off here. */
   function setAccount(status) {
     st.account = status && status.on ? status : null;
+    paintSigninBusy();
     if (st.modal === 'settings') renderAccount();
   }
 
@@ -2734,6 +2743,7 @@ export function createUI(bus) {
   function setAccountNote(text = null, { working = false } = {}) {
     st.accountMsg = text;
     st.accountWorking = !!working;
+    paintSigninBusy();
     if (st.modal === 'settings') renderAccount();
   }
 
@@ -2752,7 +2762,7 @@ export function createUI(bus) {
     const ask = st.accountAsk;
     const min = a.at ? Math.max(0, Math.floor((Date.now() - a.at) / 60000)) : null;
     // the same view again (a sync started or ended with nothing new to show): leave Google's button alone
-    const view = JSON.stringify([ask, a.signedIn, a.out, a.native, a.busy, a.error, min, st.accountMsg, st.accountWorking]);
+    const view = JSON.stringify([ask, a.signedIn, a.out, a.native, a.busy, a.signingIn, a.error, min, st.accountMsg, st.accountWorking]);
     if (view === st.accountView && box.firstChild) return;
     st.accountView = view;
     const wait = st.accountWorking;
@@ -2798,21 +2808,24 @@ export function createUI(bus) {
           }))].filter(Boolean));
       return;
     }
-    const slot = h('div', { class: 'account-google' });
-    if (a.native) slot.append(googleBtn());
+    // (1.15.5, a tester: "the prompt didn't go away") from the tap (the app) or Google's answer (the website) until the
+    // server has checked it: "Besig om in te teken…" in place of the button, so the choice shows it was taken
+    const signing = wait || !!a.signingIn;
+    const slot = signing ? null : h('div', { class: 'account-google' });
+    if (slot && a.native) slot.append(googleBtn());
     box.replaceChildren(...[
       h('p', { class: 'account-title' }, emo('☁️'), h('span', { text: S.accountTitle })),
       a.out ? h('p', { class: 'account-msg', text: S.accountOut }) : null,
       // (the website: the app with sign-in comes later, 1.14's app upload)
       h('p', { class: 'account-why', text: a.native ? S.accountWhy : `${S.accountWhy} ${S.accountAppSoon}` }),
       slot,
-      wait ? h('p', { class: 'account-line', role: 'status', text: S.accountSaving }) : null,
+      signing ? h('p', { class: 'account-line account-signing', role: 'status', text: S.accountSigningIn }) : null,
       msg,
       // (1.14, POPIA s35) beside every sign-in: a calm line, no extra tap
       h('p', { class: 'account-under18', text: S.accountUnder18 }),
       h('p', { class: 'account-keeps', text: S.accountKeeps })].filter(Boolean));
     // Google's own button on the website (js/account.js renderButton), once the slot is in the page
-    if (!a.native) queueMicrotask(() => { if (slot.isConnected) bus.emit('ui:account-slot', slot); });
+    if (slot && !a.native) queueMicrotask(() => { if (slot.isConnected) bus.emit('ui:account-slot', slot); });
   }
 
   /**

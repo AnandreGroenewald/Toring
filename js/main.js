@@ -2590,6 +2590,9 @@ document.addEventListener('visibilitychange', () => {
     planReminders();
     if (!run.paused) audio.resume();
     account.wake();
+    // (1.15.5) back from Google's sign-in (the phone's sheet, or its tab on the website): the sign-in parts show where it stands
+    ui.setAccount(accountStatus());
+    if (account.status().signedIn) ui.hideSigninOffer();
   }
 });
 window.addEventListener('pagehide', saveProgressNow);

@@ -572,6 +572,7 @@ export const S_EN = {
   accountSaved: (ago) => `Saved ${ago}`,
   accountAgo: (min) => (min < 1 ? 'just now' : min < 60 ? `${min} min ago` : min < 48 * 60 ? `${Math.round(min / 60)} h ago` : `${Math.round(min / 1440)} days ago`),
   accountSaving: 'Saving…',
+  accountSigningIn: 'Signing in…',
   accountNotYet: 'Not saved yet.',
   accountOffline: 'No internet: we’ll save as soon as you’re back online.',
   accountOut: 'You were signed out. Sign in again to keep saving.',
