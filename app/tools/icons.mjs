@@ -91,19 +91,21 @@ for (const [d, k] of Object.entries(DENSITIES)) {
   jobs.push({ file: join(dir, 'ic_launcher.png'), size: 48 * k, svg });
   jobs.push({ file: join(dir, 'ic_launcher_round.png'), size: 48 * k, svg: svgDoc(VIEW, `<g clip-path="url(#circle)">${backdrop}${tower}</g>`, ROUND) });
 }
-// launch screen: the tower alone (straight), on the sky colour of the theme — Android 12+ (`splash_icon`, per density, the
-// 108 dp layer like the launcher's foreground) and older phones (`splash_logo`)
+// launch screen: the tower alone (straight), on the sky colour of the theme — Android 12+ (`splash_icon`, per density) and
+// older phones (`splash_logo`). (1.15.5, the owner: "the loading image … still looks very pixelated") Android 12+ draws the
+// launch icon 288 dp across (its middle 192 dp shows), so each density gets 288 dp of pixels: the 108 dp pictures before
+// were stretched 2.7x. Older phones show splash_logo 216 dp across (drawable/splash.xml): 864 px is sharp up to xxxhdpi.
 for (const [d, k] of Object.entries(DENSITIES)) {
-  jobs.push({ file: join(res, `mipmap-${d}`, 'splash_icon.png'), size: 108 * k, svg: svgDoc(LAYER, towerStraight), splash: true });
+  jobs.push({ file: join(res, `mipmap-${d}`, 'splash_icon.png'), size: 288 * k, svg: svgDoc(LAYER, towerStraight), splash: true });
 }
-jobs.push({ file: join(res, 'drawable-nodpi/splash_logo.png'), size: 432, svg: svgDoc(LAYER, towerStraight), splash: true });
+jobs.push({ file: join(res, 'drawable-nodpi/splash_logo.png'), size: 864, svg: svgDoc(LAYER, towerStraight), splash: true });
 // Play Store: 512 × 512, square (Google rounds the corners itself)
 jobs.push({ file: join(store, 'play-icon-512.png'), size: 512, svg: svgDoc('0 0 512 512', backdrop + tower) });
 
 // one fixed window, and a screenshot of the drawing itself (resizing the window between shots can
 // capture a frame that is still the old size)
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
-const page = await browser.newPage({ deviceScaleFactor: 1, viewport: { width: 1100, height: 1100 } });
+const page = await browser.newPage({ deviceScaleFactor: 1, viewport: { width: 1200, height: 1200 } });   // (the largest: 1152 px)
 // the skinned blocks: painted 6x (crisp at xxxhdpi), each block group's four rects swapped for the painted block
 {
   await page.goto(`http://127.0.0.1:${server.address().port}/icons/icon.svg`);
