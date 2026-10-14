@@ -877,6 +877,16 @@ Later the owner added (decisions are final unless they say otherwise):
   only, 0 devices lost (way back: Pause track). Worker unchanged (5b9725b2). Next: his phone check → the closed test (its own
   panel round + his yes) → the Family message (1.15.4). Lifts noted: the Daily results' share row above the bar; 11 px tags;
   next notes "when you have one or the coins for one"; installs + Android vitals on 14 Oct evening.
+- **14 Oct 2026 ~07:15 — 1.15.5 local (f25484c; not pushed, not uploaded; bundle 11505 SHA-256 ab09e3ee…d0b5 in "Upload 1.15.5 internal")**, asked by the owner via Alfred. (1) A tester (06:44):
+  "Na ek gekies het sign in with google het die prompt nie weggegaan nie. Maar toe ek weg kliek en terug gaan toe is hy weg
+  (reg)". Cause: after Google's answer the server checks the sign-in (rate limit, Google's keys, the D1 batch) before the game
+  says 'signed-in'; meanwhile the prompt looked untouched. Fix: "Besig om in te teken…" / "Signing in…" in place of the button
+  from Google's answer (the app: from the tap); then the offer card goes by itself and Instellings flips to "Ingeteken met
+  Google ✓"; a failure brings the button back. (2) The owner (06:49): "Look at the controls at the bottom, is there no way
+  that we can hide it" (a photo: a Samsung's see-through 3-button bar with Game Booster icons over the dock). Fix: the app hides
+  the navigation bar (a swipe up from the bottom shows it for a moment); the status bar stays. Tested: qa/signinwait1155 af+en,
+  the sign-in suites, game 417, server 258, quick ALL CLEAR, the Java compiles; the hidden bar needs a phone check (no
+  emulator). Next: his go → website (quick lane) and Play internal 11505 (full panel + his go) → his phone check.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
