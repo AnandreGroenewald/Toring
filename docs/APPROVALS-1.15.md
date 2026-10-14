@@ -170,3 +170,21 @@ review counts from the last change sent). The folder's README holds both clicks,
 - **Calls made without him (13 Oct ~23:30, from the game-tester's report; easy to change):** a Blouaap knock-off keeps its
   own ★/•/∼ tile (the note under the blocks counts only the ✕s a visitor cost); a new player with no power-up and too few
   coins starts the Daily Tower without the "Bring ’n krag saam" sheet; the 🔥 chip stays where he placed it.
+
+## 1.15.5 (14 Oct, morning): the hidden navigation bar, the sign-in wait, the sharp launch picture
+- **Asks:** via Alfred 06:44, a tester: "Na ek gekies het sign in with google het die prompt nie weggegaan nie. Maar toe ek weg
+  kliek en terug gaan toe is hy weg (reg)"; via Alfred 06:49, the owner with a photo: "Look at the controls at the bottom, is
+  there no way that we can hide it. The problem is mine is still clear but some of the other phones the buttons are a little
+  transparent."; typed in the Stapel terminal ~07:40: "Wait the loading image once you log in still looks very pixelated".
+- **His go (typed in the Stapel terminal, ~07:20):** "Yes please push it lets test it." (to: the website on the quick lane, and
+  the Critic Panel then Play internal 11505). The upload was held at ~07:40 for the launch picture and went with it.
+- **Website:** push bc19e93..e8df2ef, Pages c0e5c76a, both addresses stapel-v1.15.5, check-all live ALL CLEAR.
+- **Play internal 11505 (1.15.5), 14 Oct 08:07** (release 20; bundle SHA-256 2e0029af…d4cc from f7f4a04; only the
+  deobfuscation warning; 0 devices lost; +136 KB). Critic Panel round 1 (the first bundle): Bottom Line 9, Customer 9,
+  Advocate 9, Guardian 6 HOLD (the notes promised the sharp picture before the bundle had it); round 2 (the rebuilt bundle):
+  all four 9 = 36/40, scan clear; the Final Boss 9 FINAL APPROVAL.
+- **Calls made without him (easy to change):** only the navigation bar is hidden (the clock and battery stay); a swipe up
+  shows it for a moment. The notes' word "laaiprent" (the Customer: plainer words next time).
+- **Lifts noted:** the phone check (his phone + a Samsung with Game Booster) before the closed test; a one-time "swipe up"
+  hint; a counter for signingIn (1.15.6); open-source notices (Capacitor, AndroidX, Google sign-in) before production;
+  allowBackup rules and js/pages/admin.js out of the app (1.16); installs + Android vitals tonight ~20:00.
