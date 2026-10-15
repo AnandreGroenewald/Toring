@@ -3,7 +3,7 @@
 // and real buttons lives here, positioned exactly over the canvas by layout().
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
-import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, DUEL, computeGameHeight, IDEAS_VOTE, SITE_URL_FALLBACK } from '../config.js';
+import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, DUEL, computeGameHeight, IDEAS_VOTE } from '../config.js';
 import { WEEK } from '../core/week.js';
 
 const WEEK_COINS = WEEK.coins;
@@ -1950,18 +1950,14 @@ export function createUI(bus) {
   /**
    * (1.15.6, the owner 15 Oct: "build all three with which one do you like most option for the testers"; the vote invite in
    * "Wedloop, BvB + 3 ideas") the Living Tower preview (its own page, lewende-toring/): its three ideas in the Uitdagersreeks
-   * and an invite on a match's results, until IDEAS_VOTE.until. In the Android app the links open the website.
+   * and an invite on a match's results, until IDEAS_VOTE.until; they open the game's own Living Tower ('ui:lewende').
    */
   function ideasOpen(now = Date.now()) {
     return !!IDEAS_VOTE.on && now < Date.parse(`${IDEAS_VOTE.until}T00:00:00+02:00`);
   }
-  function ideasHref(n = 0) {
-    const path = `${IDEAS_VOTE.path}${n ? `?idee=${n}` : ''}`;
-    return window.stapelApp ? `${SITE_URL_FALLBACK}${path}` : path;
-  }
   function ideasBox() {
     if (!ideasOpen()) return null;
-    const idea = (n, name, sub) => h('a', { class: 'idea-card', href: ideasHref(n), 'data-idea': String(n), onclick: () => audio.play('click') },
+    const idea = (n, name, sub) => h('button', { type: 'button', class: 'idea-card', 'data-idea': String(n), onclick: () => { audio.play('click'); bus.emit('ui:lewende', { idea: n }); } },
       h('span', { class: 'idea-n', 'aria-hidden': 'true', text: String(n) }),
       h('span', { class: 'idea-tx' }, h('b', { text: name }), h('small', { text: sub })),
       h('span', { class: 'pl-go', 'aria-hidden': 'true', text: '›' }));
@@ -1973,7 +1969,7 @@ export function createUI(bus) {
   }
   function ideasInvite() {
     if (!ideasOpen()) return null;
-    return h('a', { class: 'ideas-invite', href: ideasHref(0), onclick: () => audio.play('click') },
+    return h('button', { type: 'button', class: 'ideas-invite', onclick: () => { audio.play('click'); bus.emit('ui:lewende', { idea: 0 }); } },
       h('span', { class: 'pl-ic ideas-inv-ic', 'aria-hidden': 'true' }, emo('🗳️')),
       h('span', { class: 'pl-tx' }, h('b', { text: S.ideasInvite }), h('small', { text: S.ideasInviteSub })),
       h('span', { class: 'pl-go', 'aria-hidden': 'true', text: '›' }));

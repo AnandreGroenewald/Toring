@@ -26,6 +26,8 @@ const petals = (c) => [0, 72, 144, 216, 288].map((a) => `<ellipse cx="0" cy="-5"
 const shine = (...xy) => xy.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.25" fill="#fff"/>`).join('');
 // head and shoulders on a 100 × 100 board (the window shows about x 10-90, y 14-104)
 const ART = {
+  rikus: `<rect x="47" y="14" width="6" height="12" fill="#5b6478"/><circle cx="50" cy="13" r="5" fill="#ff5a5a"/><rect x="22" y="26" width="56" height="48" rx="12" fill="#e9eef7" stroke="#5b6478" stroke-width="3"/>
+    <rect x="30" y="36" width="40" height="22" rx="8" fill="#1d2b45"/><circle cx="41" cy="47" r="5" fill="#5ff0ff"/><circle cx="59" cy="47" r="5" fill="#5ff0ff"/><rect x="38" y="63" width="24" height="5" rx="2.5" fill="#5b6478"/><path d="M26 104 Q28 80 50 78 Q72 80 74 104 Z" fill="#c9d2e3"/>`,
   boer: `<path d="M14 104 Q18 76 50 73 Q82 76 86 104 Z" fill="#c9a86b" stroke="#8a6d38" stroke-width="2"/><path d="M42 74 L50 86 L58 74" fill="none" stroke="#8a6d38" stroke-width="2.5"/>
     <circle cx="30" cy="54" r="5.5" fill="#eab48d"/><circle cx="70" cy="54" r="5.5" fill="#eab48d"/><circle cx="50" cy="53" r="20" fill="#f3c29c"/>
     <circle cx="43" cy="50" r="2.8" fill="#2b1a10"/><circle cx="57" cy="50" r="2.8" fill="#2b1a10"/>${shine([44, 49], [58, 49])}<circle cx="38" cy="58" r="3.6" fill="#f59a8b" opacity=".7"/><circle cx="62" cy="58" r="3.6" fill="#f59a8b" opacity=".7"/>
@@ -486,13 +488,14 @@ export function burnBlock(scene, b, { ms = 1700 } = {}) {
   const w = Math.max(40, b.right - b.left);
   const n = Math.max(3, Math.round(w / 26));
   const parts = [];
+  const loops = [];   // the endless flickers, stopped when the fire goes out
   const glow = scene.add.image(0, 0, puff).setDepth(DEPTH.tower + 0.6).setTint(0xff7a1a).setAlpha(0).setScale((w * 2.2) / 64, 2.6);
   if (add) glow.setBlendMode(add);
   glow.lx = 0;
   glow.ly = -0.1;
   parts.push(glow);
   scene.tweens.add({ targets: glow, alpha: 0.75, duration: 220 });
-  scene.tweens.add({ targets: glow, alpha: 0.45, duration: 160, yoyo: true, repeat: -1, delay: 240 });
+  loops.push(scene.tweens.add({ targets: glow, alpha: 0.45, duration: 160, yoyo: true, repeat: -1, delay: 240 }));
   for (let k = 0; k < n; k++) {
     const f = scene.add.image(0, 0, key).setOrigin(0.5, 1).setDepth(DEPTH.tower + 0.85).setScale(0.1);
     f.lx = -w / 2 + (k + 0.5) * (w / n);
@@ -500,7 +503,7 @@ export function burnBlock(scene, b, { ms = 1700 } = {}) {
     parts.push(f);
     const big = 0.62 + ((k * 37) % 10) / 28;
     scene.tweens.add({ targets: f, scaleX: big, scaleY: big, duration: 260, delay: k * 45, ease: 'Back.easeOut' });
-    scene.tweens.add({ targets: f, scaleY: big * 1.3, scaleX: big * 0.92, duration: 110 + (k % 3) * 25, yoyo: true, repeat: -1, delay: 300 + k * 35, ease: 'Sine.easeInOut' });
+    loops.push(scene.tweens.add({ targets: f, scaleY: big * 1.3, scaleX: big * 0.92, duration: 110 + (k % 3) * 25, yoyo: true, repeat: -1, delay: 300 + k * 35, ease: 'Sine.easeInOut' }));
   }
   const follow = () => {
     if (b.destroyed) return;
@@ -533,10 +536,214 @@ export function burnBlock(scene, b, { ms = 1700 } = {}) {
   scene.time.delayedCall(ms * 0.35, () => { if (!b.destroyed) b.image.setTint(0xb08060); });
   scene.time.delayedCall(ms * 0.7, () => { if (!b.destroyed) b.image.setTint(0x6e4a3e); });
   scene.time.delayedCall(ms, () => {
+    for (const t of loops) t.stop();
     scene.tweens.add({
       targets: parts, alpha: 0, duration: 450,
       onComplete: () => { scene.events.off('update', follow); for (const f of parts) f.destroy(); },
     });
   });
   return parts;
+}
+
+// ---------------------------------------------------------------------------------------------- for the screens (DOM)
+const dataUrls = new Map();
+/** A round portrait (the tribe's colour behind, a white ring) as a data URL for the menus; '' until the portraits load. */
+export function portraitDataUrl(id, size = 96) {
+  const key = `${id}@${size}`;
+  if (dataUrls.has(key)) return dataUrls.get(key);
+  const p = portraits.get(id);
+  if (!p || typeof document === 'undefined') return '';
+  const c = document.createElement('canvas');
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext('2d');
+  const tr = TRIBES[CAST[id]?.tribe] || { chute: '#6b7896', chuteL: '#d7def0' };
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+  const bg = ctx.createRadialGradient(size / 2, size * 0.35, 2, size / 2, size / 2, size / 2);
+  bg.addColorStop(0, tr.chuteL);
+  bg.addColorStop(1, tr.chute);
+  ctx.fillStyle = bg;
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  ctx.drawImage(p, 0, size * 0.04, size, size);
+  ctx.restore();
+  ctx.lineWidth = Math.max(2, size * 0.05);
+  ctx.strokeStyle = '#fff';
+  ctx.stroke();
+  const url = c.toDataURL('image/png');
+  dataUrls.set(key, url);
+  return url;
+}
+
+// ---------------------------------------------------------------------------------------------- more missions' effects
+/** A resident falls from a window into the sea and swims off-screen (the water wheel's wash). */
+export function swimAway(scene, x, y, who, { dir = 1, seaY = y + 300, delay = 0 } = {}) {
+  const pk = portraitTexture(scene, who);
+  const face = pk ? scene.add.image(x, y, pk).setScale(0.5) : scene.add.circle(x, y, 14, 0x5ab8ff);
+  face.setDepth(DEPTH.fxWorld).setAlpha(0);
+  scene.tweens.add({ targets: face, alpha: 1, duration: 60, delay });
+  scene.tweens.add({ targets: face, y: seaY + 6, x: x + dir * 30, duration: 520, delay, ease: 'Quad.easeIn' });
+  const t = { p: 0 };
+  scene.tweens.add({
+    targets: t, p: 1, duration: 2200, delay: delay + 520, ease: 'Sine.easeIn',
+    onUpdate: () => { face.x = x + dir * (30 + 420 * t.p); face.y = seaY + 6 + Math.sin(t.p * 22) * 4; face.rotation = Math.sin(t.p * 22) * 0.15; },
+    onComplete: () => face.destroy(),
+  });
+  return face;
+}
+function wheelTexture(scene) {
+  const key = 'lt_wheel';
+  if (scene.textures.exists(key)) return key;
+  const S = 120;
+  const tex = scene.textures.createCanvas(key, S, S);
+  const ctx = tex.getContext();
+  const c = S / 2;
+  ctx.lineCap = 'round';
+  // paddles
+  for (let k = 0; k < 10; k++) {
+    const a = (k * Math.PI * 2) / 10;
+    ctx.save();
+    ctx.translate(c, c);
+    ctx.rotate(a);
+    ctx.fillStyle = '#8a5a2b';
+    ctx.fillRect(-5, -c + 2, 10, 26);
+    ctx.fillStyle = '#5ab8ff';
+    ctx.fillRect(-5, -c + 2, 10, 7);
+    ctx.restore();
+  }
+  // rim and spokes
+  ctx.strokeStyle = '#6b4220';
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.arc(c, c, c - 24, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = 4;
+  for (let k = 0; k < 5; k++) {
+    const a = (k * Math.PI) / 5;
+    ctx.beginPath();
+    ctx.moveTo(c + Math.cos(a) * (c - 24), c + Math.sin(a) * (c - 24));
+    ctx.lineTo(c - Math.cos(a) * (c - 24), c - Math.sin(a) * (c - 24));
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#3d2410';
+  ctx.beginPath();
+  ctx.arc(c, c, 10, 0, Math.PI * 2);
+  ctx.fill();
+  tex.refresh();
+  return key;
+}
+/**
+ * The water wheel: it rises beside the target tower at the floors it washes (world y0..y1), turns, and a sheet of water
+ * pours across those floors. `side` -1 = the wheel stands left of the tower, 1 = right. Resolves when the water has gone.
+ */
+export function waterWheel(scene, towerX, y0, y1, { side = -1, width = 220, ms = 1500 } = {}) {
+  const key = wheelTexture(scene);
+  const cy = (y0 + y1) / 2;
+  const wx = towerX + side * (width / 2 + 70);
+  const wheel = scene.add.image(wx, cy, key).setDepth(DEPTH.tower + 1).setScale(0.1).setAlpha(0);
+  scene.tweens.add({ targets: wheel, scale: 1, alpha: 1, duration: 280, ease: 'Back.easeOut' });
+  scene.tweens.add({ targets: wheel, angle: side * -720, duration: ms + 300, ease: 'Sine.easeInOut' });
+  const sheet = scene.add.graphics().setDepth(DEPTH.tower + 0.9);
+  const t = { p: 0 };
+  const draw = () => {
+    sheet.clear();
+    if (t.p <= 0) return;
+    const reach = Math.min(1, t.p * 1.6);
+    const fade = t.p > 0.8 ? (1 - t.p) / 0.2 : 1;
+    const xa = side < 0 ? wx : towerX - width / 2 - 20;
+    const xb = side < 0 ? towerX + width / 2 + 20 : wx;
+    const x0 = side < 0 ? xa : xb - (xb - xa) * reach;
+    const x1 = side < 0 ? xa + (xb - xa) * reach : xb;
+    sheet.fillStyle(0x6fd0ff, 0.55 * fade);
+    sheet.fillRect(x0, y0, x1 - x0, y1 - y0);
+    sheet.lineStyle(2.5, 0xffffff, 0.8 * fade);
+    for (let yy = y0 + 8; yy < y1 - 4; yy += 14) {
+      sheet.beginPath();
+      for (let xx = x0; xx <= x1; xx += 12) {
+        const yv = yy + Math.sin(xx * 0.08 + t.p * 30) * 3;
+        if (xx === x0) sheet.moveTo(xx, yv);
+        else sheet.lineTo(xx, yv);
+      }
+      sheet.strokePath();
+    }
+  };
+  return new Promise((resolve) => {
+    scene.tweens.add({
+      targets: t, p: 1, duration: ms, delay: 320, onUpdate: draw,
+      onComplete: () => {
+        sheet.destroy();
+        scene.tweens.add({ targets: wheel, alpha: 0, scale: 0.6, duration: 260, onComplete: () => { wheel.destroy(); resolve(); } });
+      },
+    });
+  });
+}
+/** Vines grow up from the base to world point (x, y) (the grass tribe's grab). Resolves when they arrive. */
+export function vinesTo(scene, x, baseY, y, { ms = 700 } = {}) {
+  const g = scene.add.graphics().setDepth(DEPTH.tower + 1);
+  const t = { p: 0 };
+  return new Promise((resolve) => {
+    scene.tweens.add({
+      targets: t, p: 1, duration: ms, ease: 'Sine.easeOut',
+      onUpdate: () => {
+        g.clear();
+        const top = baseY + (y - baseY) * t.p;
+        g.lineStyle(5, 0x2f8f2c, 1);
+        g.beginPath();
+        g.moveTo(x, baseY);
+        for (let yy = baseY; yy >= top; yy -= 6) g.lineTo(x + Math.sin(yy * 0.09) * 9, yy);
+        g.strokePath();
+        g.fillStyle(0x4fcf45, 1);
+        for (let yy = baseY - 12; yy >= top; yy -= 20) g.fillEllipse(x + Math.sin(yy * 0.09) * 9 + (yy % 40 ? 9 : -9), yy, 14, 7);
+      },
+      onComplete: () => {
+        scene.tweens.add({ targets: g, alpha: 0, duration: 600, delay: 500, onComplete: () => g.destroy() });
+        resolve();
+      },
+    });
+  });
+}
+function rugbyTexture(scene) {
+  const key = 'lt_rugby';
+  if (scene.textures.exists(key)) return key;
+  const W = 46, H = 30;
+  const tex = scene.textures.createCanvas(key, W, H);
+  const ctx = tex.getContext();
+  ctx.beginPath();
+  ctx.ellipse(W / 2, H / 2, W / 2 - 2, H / 2 - 2, 0, 0, Math.PI * 2);
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#c8743c');
+  g.addColorStop(1, '#7a3b16');
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#4a2008';
+  ctx.stroke();
+  ctx.strokeStyle = '#fff';
+  ctx.beginPath();
+  ctx.moveTo(W * 0.32, H / 2);
+  ctx.lineTo(W * 0.68, H / 2);
+  for (const k of [0.38, 0.46, 0.54, 0.62]) { ctx.moveTo(W * k, H / 2 - 4); ctx.lineTo(W * k, H / 2 + 4); }
+  ctx.stroke();
+  tex.refresh();
+  return key;
+}
+/** A thrown ball from world (x0, y0) to (x1, y1) in an arc: 'rugby' or 'fire'. Resolves when it hits. */
+export function throwBall(scene, x0, y0, x1, y1, { kind = 'rugby', ms = 620, arc = 110 } = {}) {
+  const ball = kind === 'fire'
+    ? scene.add.image(x0, y0, flameTexture(scene)).setScale(0.55).setDepth(DEPTH.fxWorld)
+    : scene.add.image(x0, y0, rugbyTexture(scene)).setDepth(DEPTH.fxWorld);
+  const t = { p: 0 };
+  return new Promise((resolve) => {
+    scene.tweens.add({
+      targets: t, p: 1, duration: ms, ease: 'Sine.easeIn',
+      onUpdate: () => {
+        ball.x = x0 + (x1 - x0) * t.p;
+        ball.y = y0 + (y1 - y0) * t.p - Math.sin(Math.PI * t.p) * arc;
+        ball.rotation = kind === 'fire' ? Math.atan2(y1 - y0, x1 - x0) + Math.PI / 2 : t.p * 12;
+      },
+      onComplete: () => { ball.destroy(); resolve(); },
+    });
+  });
 }

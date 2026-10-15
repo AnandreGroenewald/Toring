@@ -324,6 +324,8 @@ export class Crane {
     this.windAccel = 0;
     this.amplitude = CRANE.amplitudeStart ?? CRANE.amplitude;
     this.omega = CRANE.omega0;
+    // (1.16, Die Lewende Toring) the middle of the swing: the screen's, or a tower's when there are two
+    this.cx = GAME_W / 2;
     this.tx = GAME_W / 2;
     this.tv = 0;
     this.theta = 0;
@@ -397,7 +399,7 @@ export class Crane {
     if (h !== 0) {
       const phase = this.phase + this.omega * h;
       const A = this.amplitude;
-      tx = GAME_W / 2 + A * Math.sin(phase);
+      tx = this.cx + A * Math.sin(phase);
       tv = A * this.omega * Math.cos(phase);
       const aT = -A * this.omega * this.omega * Math.sin(this.phase);
       const acc = -(G / L) * Math.sin(theta) - ((aT * TROLLEY_COUPLING) / L) * Math.cos(theta)
@@ -439,7 +441,7 @@ export class Crane {
     if (this.destroyed) return;
     this.phase = 0;
     this.amplitude = amplitude;
-    this.tx = GAME_W / 2;
+    this.tx = this.cx;
     this.tv = 0;
     this.theta = 0;
     this.thetaV = (this.spec?.i ?? 0) % 2 ? 0.035 : -0.035;   // setBlock's small jiggle
@@ -481,7 +483,7 @@ export class Crane {
       const A = this.amplitude;
       this.phase += omega * h;
       const sp = Math.sin(this.phase);
-      this.tx = GAME_W / 2 + A * sp;
+      this.tx = this.cx + A * sp;
       this.tv = A * omega * Math.cos(this.phase);
       const aT = -A * omega * omega * sp;
       if (this.reelT < REEL_MS) {
@@ -550,6 +552,12 @@ export class Crane {
   _stopTweens() {
     for (const t of this.tweens) t.stop();
     this.tweens.length = 0;
+  }
+
+  /** (1.16) Swing about screen x `x` from now on (the trolley moves over there with the next update). */
+  setCenter(x) {
+    if (this.destroyed || !Number.isFinite(x)) return;
+    this.cx = x;
   }
 
   /** (1.13.4) Repaint this crane in the skin chosen now (setCraneSkin). */

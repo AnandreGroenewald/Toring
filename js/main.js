@@ -34,6 +34,8 @@ import { audio, haptics } from './audio.js';
 import { BgScene } from './scenes/BgScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { HudScene } from './scenes/HudScene.js';
+import { LewendeScene } from './scenes/LewendeScene.js';
+import { createLewendeUi } from './ui/lewendeUi.js';
 import { setBlockSkin } from './game/blocks.js';
 import { setCraneSkin } from './game/crane.js';
 
@@ -162,7 +164,7 @@ const game = new Phaser.Game({
   fps: { smoothStep: false },
   audio: { noAudio: true },   // all sound is js/audio.js; Phaser's own manager would open a 2nd AudioContext
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BgScene, GameScene, HudScene],
+  scene: [BgScene, GameScene, LewendeScene, HudScene],
 });
 
 window.__stapel = Object.assign(window.__stapel || {}, { game, bus, store, ui, audio });
@@ -189,7 +191,7 @@ const run = {
   started: false,     // first block dropped
   final: null,        // { result, stats, isNewBest, aborted } once the game has ended
 };
-let screen = 'menu';   // 'menu' | 'game' | 'pause' | 'results'
+let screen = 'menu';   // 'menu' | 'game' | 'pause' | 'results' | 'duel' | (1.16) 'lewende'
 const seqCache = new Map();
 
 // ---------------------------------------------------------------------------
@@ -2197,6 +2199,43 @@ bus.on('duel:offer-gone', () => {
 });
 
 bus.on('ui:duel', showDuelScreen);
+
+// (1.16, the owner 15-16 Oct: "Please create the premium look for all three ideas") Die Lewende Toring: its three ideas
+// start from the Uitdagersreeks ('ui:lewende'); the match is LewendeScene over the world (BgScene), the menu's tower sleeps.
+let lewendeEnd = null;
+const lewende = createLewendeUi({
+  root: document.getElementById('ui'),
+  name: () => store.getDuel()?.name || '',
+  apiUrl: () => matchApiUrl(),
+  start: ({ onEnd, ...data }) => {
+    lewendeEnd = onEnd;
+    // a match: the loop never sleeps (the menu's battery saver would freeze it while the robot plays)
+    screen = 'lewende';
+    wakeLoop();
+    ui.hideAll();
+    if (game.scene.isActive('Game')) game.scene.sleep('Game');
+    if (game.scene.isActive('Hud')) game.scene.sleep('Hud');
+    game.scene.start('Lewende', { ...data, reducedMotion: !!settings.reducedMotion, seed: Math.floor(Math.random() * 1e9), onEnd: (r) => { const f = lewendeEnd; lewendeEnd = null; f?.(r); } });
+  },
+  stop: () => { if (game.scene.isActive('Lewende')) game.scene.stop('Lewende'); },
+  quit: () => {
+    const f = lewendeEnd;
+    lewendeEnd = null;
+    if (game.scene.isActive('Lewende')) game.scene.stop('Lewende');
+    f?.(null);
+  },
+  back: () => {
+    if (game.scene.isSleeping('Game')) game.scene.wake('Game');
+    wakeLoop();
+    bus.emit('ui:duel');
+  },
+});
+bus.on('ui:lewende', (o) => {
+  screen = 'lewende';   // (its sheets too: no menu sleep behind them)
+  wakeLoop();
+  lewende.open(o?.idea || 0);
+});
+if (DEBUG) window.__stapel.lewende = lewende;
 // (1.12) the emoji button follows its match: the cooldown after a send, muting, and gone with the match
 bus.on('duel:emotes', (s) => ui.updateEmotes({ left: s?.left || 0, spent: !!s?.spent }));
 bus.on('duel:emote-muted', (muted) => ui.updateEmotes({ muted: !!muted }));
