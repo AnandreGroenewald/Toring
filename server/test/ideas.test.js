@@ -49,9 +49,15 @@ test('cleanReason: emoji and brackets go, rude words and contact details are ref
   assert.deepEqual(cleanReason(undefined), { ok: true, value: null });
   assert.deepEqual(cleanReason(42), { ok: true, value: null });
   assert.equal(cleanReason('dit is shit').ok, false);
-  assert.equal(cleanReason('bel my 082 123 4567').ok, false);
+  // (the review) a phone number or an address is never kept, but the vote still counts
+  assert.deepEqual(cleanReason('bel my 082 123 4567'), { ok: true, value: null, dropped: true });
+  assert.deepEqual(cleanReason('Ek het 12 blokke gestapel en 3 mense gered, 10/10').ok, true);
+  // (the review) naming the game is fine
+  assert.deepEqual(cleanReason('Ek hou meer van gewone Stapel'), { ok: true, value: 'Ek hou meer van gewone Stapel' });
+  assert.deepEqual(cleanReason('It feels like Stapel but with people').value, 'It feels like Stapel but with people');
   assert.equal(cleanReason('a'.repeat(500)).value.length <= 200, true);
   assert.equal(code(() => validateVote(vote({ reason: 'dit is shit' }))), '422 reason_rejected');
+  assert.deepEqual(validateVote(vote({ reason: 'bel my 082 123 4567' })), { ...validateVote(vote({ reason: null })), reasonDropped: true });
 });
 
 function lobbyAt(t = T0) {
@@ -117,12 +123,17 @@ test('routes: /idees/stem takes a vote from the game\'s pages; the owner reads t
   assert.equal((await h.request('GET', '/idees/stem')).status, 405);
   assert.equal((await h.request('POST', '/idees/stem', { body: vote({ voter: voter(3), name: 'fuck' }) })).json.error, 'name_rejected');
   assert.equal((await h.request('POST', '/idees/stem', { body: vote({ voter: voter(4), reason: 'shit idee' }) })).status, 422);
+  // a number in the reason: the vote counts, the reason is left out (and the page is told)
+  const dropped = await h.request('POST', '/idees/stem', { body: vote({ voter: voter(5), name: 'Tannie Sannie', reason: 'whatsapp my 082 123 4567' }) });
+  assert.deepEqual(dropped.json, { ok: true, choice: 2, reasonDropped: true });
   // the owner's list: only with the token
   assert.equal((await h.admin('GET', '/admin/stemme', undefined, null)).status, 401);
   const list = await h.admin('GET', '/admin/stemme');
   assert.equal(list.status, 200);
-  assert.deepEqual(list.json.counts, { 1: 0, 2: 1, 3: 0 });
+  assert.deepEqual(list.json.counts, { 1: 0, 2: 2, 3: 0 });
   assert.equal(list.json.votes[0].name, 'Oom Piet');
+  assert.equal(list.json.votes[1].reason, '');
+  assert.equal(JSON.stringify(list.json).includes('082'), false, 'no number is kept');
   assert.equal(list.json.votes[0].reason, 'Lekker om te bou!');
   // forgetting a test vote
   const f = await h.admin('POST', '/admin/stemme', { names: ['Oom Piet'] });

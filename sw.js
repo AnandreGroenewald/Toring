@@ -55,6 +55,7 @@ const PRECACHE = [
   'js/ui/dom.js',
   'js/ui/celebrate.js',
   'js/game/blocks.js',
+  'js/game/residents.js',
   'js/game/weather.js',
   'js/game/visitors.js',
   'js/game/crane.js',

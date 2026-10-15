@@ -15,6 +15,7 @@ import { fmtM, fmtMShort } from '../core/format.js';
 import { createSequence } from '../core/sequence.js';
 import { audio, haptics } from '../audio.js';
 import { Block, ensureTexture, getGeometry, releaseNamedTextures, FROZEN_TINT, withBlockSkin } from '../game/blocks.js';
+import { windowSlots, castOf, parachute, windowWorld, burnBlock } from '../game/residents.js';
 import { ZONES, zoneAt } from '../core/zones.js';
 import { createBillboard } from '../game/billboard.js';
 import { createBlockNamer } from '../core/sponsors.js';
@@ -375,6 +376,19 @@ function safely(fn) {
   }
 }
 
+const LEWENDE_SKIN = { vuur: 'lawa', water: 'ys', gras: 'klip' };
+/** (1.16 preview) ?lewende=vuur|water|gras: your tribe in Die Lewende Toring (the other tribe is the one after it). */
+function lewendeFromUrl() {
+  try {
+    const q = new URLSearchParams(window.location.search).get('lewende');
+    if (!q) return null;
+    const mine = ['vuur', 'water', 'gras'].includes(q) ? q : 'vuur';
+    return { mine, theirs: { vuur: 'water', water: 'gras', gras: 'vuur' }[mine] };
+  } catch {
+    return null;
+  }
+}
+
 export class GameScene extends Phaser.Scene {
   constructor() {
     super({
@@ -402,6 +416,8 @@ export class GameScene extends Phaser.Scene {
     const d = data || {};
     this.mode = d.mode === 'daily' || d.mode === 'practice' || d.mode === 'duel' ? d.mode : 'idle';
     this.idle = this.mode === 'idle';
+    // (1.16 preview, ?lewende=vuur|water|gras) Die Lewende Toring: people live in the blocks (see lewendeMoveIn)
+    this.lewende = lewendeFromUrl();
     this.ambQ = -1;
     this.seed = String(d.seed ?? `idle-${Math.floor(Math.random() * 1e9)}`);
     this.dayNumber = Number.isFinite(d.dayNumber) ? d.dayNumber : null;
@@ -1015,6 +1031,8 @@ export class GameScene extends Phaser.Scene {
    * blocks, or the friend's skin from their card ('' from a 1.14 game or server: plain). Outside Blok vir Blok, your own.
    */
   withTurnSkin(fn) {
+    // (1.16 preview) Die Lewende Toring: each tribe builds in its own material (Vuur in lava, Water in ice, Gras in stone)
+    if (this.lewende) return withBlockSkin(LEWENDE_SKIN[this.i % 2 === 0 ? this.lewende.mine : this.lewende.theirs], fn);
     const c = this.turns?.cur;
     // (1.15.3) Gladde blok: this turn's block is ice, whoever's it is
     if (c && this.turns.overrides[c.n - 1]?.ice) return withBlockSkin('ys', fn);
@@ -2143,6 +2161,7 @@ export class GameScene extends Phaser.Scene {
     this.lastLandAt = this.now;
     f.quietSteps = 0;
     this.tower.push(f);
+    if (this.lewende) this.lewendeMoveIn(f);
     this.dynDirty = true;
     this.landedCount++;
     this.advance(f);
@@ -3953,6 +3972,56 @@ export class GameScene extends Phaser.Scene {
     if (!this.idle || this.idleResetting || !this.crane) return;
     if (this.crane.hasBlock()) this.crane.release();
     this.idleReset();
+  }
+
+  // -------------------------------------------------------------------------
+  // (1.16 preview) Die Lewende Toring: residents in the blocks
+  // -------------------------------------------------------------------------
+  /**
+   * People move into a block that landed: one block yours (faces in lit windows), the next the other tribe's (drawn
+   * curtains), in turn, as in Een Toring, Twee Stamme. 1 to all of its windows are lived in.
+   */
+  lewendeMoveIn(f) {
+    const spec = f.spec || {};
+    if (spec.gift || spec.log || spec.foundation || f.special) return;
+    const L = this.lewende;
+    const n = windowSlots(f.geom).length;
+    const mine = (f.index ?? this.tower.length - 1) % 2 === 0;   // the same turn order as the blocks' material
+    const tribe = mine ? L.mine : L.theirs;
+    const cast = castOf(tribe);
+    const h = (((f.index ?? this.tower.length) + 7) * 2654435761) >>> 0;
+    const count = Math.max(Math.min(2, n), Math.min(n, 1 + (h % n)));   // (the owner: "more than one person should be in a block")
+    const order = [...Array(n).keys()].sort((a, b) => ((a * 7919 + h) % 13) - ((b * 7919 + h) % 13));
+    const lived = new Set(order.slice(0, count));
+    f.residents = [];
+    const wins = [];
+    for (let k = 0; k < n; k++) {
+      const who = lived.has(k) ? cast[((f.index ?? 0) + k) % cast.length] : null;
+      if (who) f.residents.push({ who, slot: k });
+      wins.push(mine ? (who ? { look: 'face', who, tribe } : { look: 'room', tribe }) : { look: 'curtain', tribe });
+    }
+    f.lewendeMine = mine;
+    f.lewendeTribe = tribe;
+    f.setWindows(wins);
+  }
+
+  /** Everyone in block `b` jumps out by parachute (a fire mission sets it alight first); returns how many. */
+  lewendeHit(b, { fire = true } = {}) {
+    if (!b || b.destroyed || !b.residents) return 0;
+    const sea = this.water ? this.water.surfaceY : b.bottom + 400;
+    const out = b.residents.splice(0);
+    out.forEach((r, i) => {
+      const p = windowWorld(b, r.slot);
+      parachute(this, p.x, p.y, r.who, { dir: i % 2 ? 1 : -1, seaY: sea, delay: 260 + i * 220 });
+    });
+    const n = windowSlots(b.geom).length;
+    b.setWindows(Array.from({ length: n }, () => (b.lewendeMine ? { look: 'room', tribe: b.lewendeTribe } : { look: 'open', tribe: b.lewendeTribe })));
+    if (fire) {
+      burnBlock(this, b);
+      this.effects.shake(0.006, 260);
+      this.effects.vignette(0xff6a00, 0.3, 700);
+    }
+    return out.length;
   }
 
   // -------------------------------------------------------------------------

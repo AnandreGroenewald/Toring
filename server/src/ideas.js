@@ -27,8 +27,14 @@ export function cleanReason(raw) {
   if (!kept) return { ok: true, value: null };
   const c = checkTagline(kept, { max: REASON_MAX });
   if (c.ok) return { ok: true, value: c.value };
-  // a rude word or a phone number/e-mail: say so; anything else (too short, only symbols) is just no reason
-  return c.code === 'tagline_rejected' ? { ok: false } : { ok: true, value: null };
+  if (c.code === 'tagline_rejected') {
+    // (the review, 15 Oct) a tester names the game ("ek hou meer van gewone Stapel"): the sponsors' reserved words are fine here
+    if (c.reason === 'reserved') return { ok: true, value: kept };
+    // something that reads as a phone number, an e-mail or a web address is never kept, but the vote still counts
+    if (c.reason === 'contact') return { ok: true, value: null, dropped: true };
+    return { ok: false };   // a rude word: the tester can say it another way
+  }
+  return { ok: true, value: null };   // too short, only symbols: just no reason
 }
 
 /** A posted vote, checked; throws HttpError 400/422 for anything wrong. */
@@ -40,7 +46,7 @@ export function validateVote(body) {
   const reason = cleanReason(body.reason);
   if (!reason.ok) throw new HttpError(422, 'reason_rejected');
   const played = Array.isArray(body.played) ? [...new Set(body.played.filter((k) => VOTE_CHOICES.includes(k)))].sort() : [];
-  return { voter: body.voter, choice: body.choice, name, reason: reason.value, played };
+  return { voter: body.voter, choice: body.choice, name, reason: reason.value, played, ...(reason.dropped ? { reasonDropped: true } : {}) };
 }
 
 /** POST /idees/stem — the game's own pages only, a few an hour per address. */
@@ -50,10 +56,11 @@ export async function postVote(request, ctx) {
   if (ctx.now >= VOTE_CLOSE) throw new HttpError(410, 'vote_closed');
   if (!ctx.lobby) throw new HttpError(503, 'not_configured');
   const vote = validateVote(await readJsonObject(request, 2048));
-  const res = await ctx.lobby().fetch(new Request('https://lobby/votes', { method: 'POST', body: JSON.stringify({ ...vote, at: ctx.now }) }));
+  const { reasonDropped, ...keep } = vote;
+  const res = await ctx.lobby().fetch(new Request('https://lobby/votes', { method: 'POST', body: JSON.stringify({ ...keep, at: ctx.now }) }));
   if (res.status === 429) throw new HttpError(429, 'rate_limited');
   if (!res.ok) throw new HttpError(503, 'busy');
-  return json(200, { ok: true, choice: vote.choice });
+  return json(200, { ok: true, choice: vote.choice, ...(reasonDropped ? { reasonDropped: true } : {}) });
 }
 
 /** GET /admin/stemme — the counts and every vote (name, choice, reason, when); POST { names } forgets votes (a test, a rude one). */

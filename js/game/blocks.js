@@ -5,6 +5,7 @@
 
 import { PHYSICS, PALETTE, DEPTH, FONT } from '../config.js';
 import { SHAPE_NAMES } from '../core/strings.js';
+import { ensureWindows, whenPortraits } from './residents.js';
 
 const PAD = 3;             // transparent texture padding around the shape
 const CORNER_R = 6;        // visual corner radius (physics corners stay sharp)
@@ -2302,6 +2303,37 @@ export class Block {
     this.image.setPosition(x, y);
     this.image.rotation = a;
     if (this.image.scaleX !== sx || this.image.scaleY !== sy) this.image.setScale(sx, sy);
+    if (this.winImage) {
+      this.winImage.setPosition(x, y);
+      this.winImage.rotation = a;
+      if (this.winImage.scaleX !== sx || this.winImage.scaleY !== sy) this.winImage.setScale(sx, sy);
+    }
+  }
+
+  /**
+   * (1.16, Die Lewende Toring) the block's windows, a picture over its own: [{ look, who, tribe }] in window order
+   * (js/game/residents.js windowSlots); an empty list or null takes them away. Redrawn once the portraits are in.
+   */
+  setWindows(wins) {
+    if (this.destroyed) return;
+    this.wins = wins && wins.length ? wins : null;
+    if (!this.wins) {
+      if (this.winImage) this.winImage.destroy();
+      this.winImage = null;
+      return;
+    }
+    const key = ensureWindows(this.scene, this.geom, this.wins, PAD);
+    if (!this.winImage) {
+      this.winImage = this.scene.add.image(this.image.x, this.image.y, key)
+        .setOrigin(this.geom.originX, this.geom.originY)
+        .setDepth(DEPTH.tower + 0.5);
+    } else {
+      this.winImage.setTexture(key);
+    }
+    this.winImage.rotation = this.image.rotation;
+    this.winImage.setScale(this.image.scaleX, this.image.scaleY);
+    const wins2 = this.wins;
+    whenPortraits(() => { if (!this.destroyed && this.wins === wins2) this.setWindows(wins2); });
   }
 
   /** Tight axis-aligned bounds from the hull vertices (Matter's own bounds include a velocity sweep). */
@@ -2368,5 +2400,6 @@ export class Block {
     this.body.gameBlock = null;
     // keep the (destroyed) image reference so late readers don't crash
     if (this.image) this.image.destroy();
+    if (this.winImage) this.winImage.destroy();
   }
 }
