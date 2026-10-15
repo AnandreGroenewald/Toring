@@ -1,5 +1,5 @@
 // (1.16, the owner 15-16 Oct 2026: "Please create the premium look for all three ideas") Die Lewende Toring as a screen of the
-// real game: the game's own block art in each tribe's material (Vuur lava, Water ice, Gras stone), 2-4 arched windows per
+// real game: the game's own block art in each tribe's material (Vuur lava, Water ice, Gras moss), 2-4 arched windows per
 // block with people living in them, the real crane, the world behind (BgScene), fire, water wheel, vines and parachutes.
 // Three ideas, played against Robot Rikus (or a sample player run by the robot):
 //   1 Wegkruipertjie       both towers stand ready; hide your people; throw at their blocks or send a mission; move one.
@@ -11,13 +11,13 @@
 import { GAME_W, DEPTH, CRANE } from '../config.js';
 import { ensureTexture, getGeometry, withBlockSkin } from '../game/blocks.js';
 import {
-  ensureWindows, whenPortraits, windowSlots, windowWorld, castOf, parachute, burnBlock, swimAway, waterWheel, vinesTo, throwBall,
+  ensureWindows, whenPortraits, windowSlots, windowWorld, castOf, parachute, burnBlock, swimAway, waterWheel, vinesTo, throwBall, prepareFx,
 } from '../game/residents.js';
 import { Crane } from '../game/crane.js';
 import { Effects } from '../game/effects.js';
 import { Water } from '../game/water.js';
 
-export const TRIBE_SKIN = { vuur: 'lawa', water: 'ys', gras: 'klip' };
+export const TRIBE_SKIN = { vuur: 'lawa', water: 'ys', gras: 'mos' };
 export const BEATS = { vuur: 'gras', water: 'vuur', gras: 'water' };
 const SHAPES = ['slab', 'brick', 'slab', 'brick', 'plank', 'crate', 'cube', 'brick'];
 const PAD = 3;
@@ -126,6 +126,7 @@ export class LewendeScene extends Phaser.Scene {
     const H = this.scale.height;
     this.H = H;
     this.effects = new Effects(this, { reducedMotion: !!this.d.reducedMotion });
+    prepareFx(this);
     this.cameras.main.setBackgroundColor('rgba(0,0,0,0)');
     this.baseTop = 0;
     // the game's own sea (waves, shimmer, bubbles, fish); it never rises here
@@ -520,7 +521,7 @@ export class LewendeScene extends Phaser.Scene {
     show();
     this._grass = false;
     const t = await this.tapFor((tap) => (tap.block && tap.block.owner === 'ai' ? tap.block : null));
-    this.bar('…');
+    this.bar(this._grass || mode !== 'throw' ? `⚡ <b>${special}</b>!` : `🏉 Gooi na ${this.sides.ai.name} se blok…`);
     if (this._grass) { await this.special('me', null); return; }
     if (!t) return;
     if (mode === 'throw') {
@@ -572,15 +573,39 @@ export class LewendeScene extends Phaser.Scene {
     else {
       b.know = 'empty';
       b.refresh();
-      this.effects.floatText(b.centerX, b.top - 20, 'Leeg!', { color: '#cfe0ff', size: 36 });
+      this.say(b.centerX, b.top - 20, 'Leeg!', { color: '#cfe0ff', size: 36 });
     }
     await this.wait(500);
   }
   kick(b) {
     this.tweens.add({ targets: [b.image, b.winImage].filter(Boolean), scaleX: 1.06, scaleY: 0.9, duration: 90 / this.speed, yoyo: true });
   }
+  /** A word over the towers (Raak!, Perfek!, …), moved up when another one is still showing there. */
+  say(x, y, text, opts) {
+    const now = this.time.now;
+    this.said = (this.said || []).filter((w) => now - w.t < 850);
+    let yy = y;
+    for (let k = 0; k < 5 && this.said.some((w) => Math.abs(w.x - x) < 150 && Math.abs(w.y - yy) < 46); k++) yy -= 48;
+    this.said.push({ x, y: yy, t: now });
+    this.effects.floatText(x, yy, text, opts);
+  }
+  /** One word for a mission over the blocks it reached: how many people it sent out. */
+  missionWord(list, hit) {
+    const live = list.filter((b) => !b.destroyed);
+    if (!live.length) return;
+    const x = live.reduce((n, b) => n + b.centerX, 0) / live.length;
+    const y = Math.min(...live.map((b) => b.top));
+    this.say(x, y - 34, hit > 1 ? `Raak! ${hit} uit` : hit ? 'Raak!' : 'Leeg!', { color: hit ? '#ffd23f' : '#cfe0ff', size: hit ? 44 : 36 });
+  }
+  /** A block the wave washed over: wet for a moment. */
+  wet(b) {
+    if (b.destroyed) return;
+    b.image.setTint(0xa9dcff);
+    this.time.delayedCall(260 / this.speed, () => { if (!b.destroyed) b.image.setTint(0xd8f0ff); });
+    this.time.delayedCall(600 / this.speed, () => { if (!b.destroyed) b.image.clearTint(); });
+  }
   /** People leave block `b`: by parachute ('chute'), swimming ('swim') or pulled by vines ('grab'). */
-  evict(b, people, how) {
+  evict(b, people, how, { quiet = false } = {}) {
     people.forEach((p, i) => {
       const at = windowWorld(b, p.slot);
       this.moveOut(p);
@@ -590,7 +615,7 @@ export class LewendeScene extends Phaser.Scene {
     });
     if (!b.people().length) b.know = 'empty';   // the side that hit it knows it is empty now
     b.refresh();
-    this.effects.floatText(b.centerX, b.top - 24, people.length > 1 ? `Raak! ${people.length} uit` : 'Raak!', { color: '#ffd23f', size: 40 });
+    if (!quiet) this.say(b.centerX, b.top - 24, people.length > 1 ? `Raak! ${people.length} uit` : 'Raak!', { color: '#ffd23f', size: 40 });
     this.hud();
   }
 
@@ -663,7 +688,7 @@ export class LewendeScene extends Phaser.Scene {
     const s = this.sides[b.owner];
     s.charge = Math.min(this.cost(b.owner), s.charge + (perfect ? 2 : 1));
     if (perfect) {
-      this.effects.floatText(b.centerX, b.top - 30, 'Perfek!', { color: '#ffffff', size: 46 });
+      this.say(b.centerX, b.top - 30, 'Perfek!', { color: '#ffffff', size: 46 });
       this.effects.sparkle(b.centerX, b.top, 18);
     }
     // the people riding in it (idea 3)
@@ -716,9 +741,10 @@ export class LewendeScene extends Phaser.Scene {
     ]);
     await this.tapFor(() => null);
     if (!go) return;
-    if (s.tribe === 'gras') { await this.special('me', null); return; }
+    if (s.tribe === 'gras') { this.bar(`⚡ <b>${special}</b>!`); await this.special('me', null); return; }
     this.bar(`Mik jou <b>${special}</b>: tik ’n blok${this.idea === 3 ? ' (enige een)' : ` op ${this.sides.ai.name} se toring`}`);
     const b = await this.tapFor((t) => (t.block && (this.idea === 3 || t.block.owner === 'ai') ? t.block : null));
+    this.bar(`⚡ <b>${special}</b>!`);
     if (b) await this.special('me', b);
   }
 
@@ -739,7 +765,7 @@ export class LewendeScene extends Phaser.Scene {
     if (!aimB && s.tribe !== 'gras') return;
     s.charge = 0;
     const special = { vuur: 'Veldbrand', water: 'Waterwiel', gras: 'Rankgryp' }[s.tribe];
-    this.ui?.toast?.(`${special}!${dbl ? ' Ekstra sterk' : ''}`, { big: true, ms: 1100 });
+    this.ui?.toast?.(`${special}!`, { big: true, ms: 1100, sub: dbl ? 'Ekstra sterk' : '' });
     this.hud();
     if (s.tribe === 'vuur') {
       const list = this.specialRange(who, tw, aimB);
@@ -747,12 +773,15 @@ export class LewendeScene extends Phaser.Scene {
       this.step = 'fire-ball';
       await throwBall(this, from.x, from.y, aimB.centerX, aimB.centerY, { kind: 'fire', ms: 560 / this.speed, arc: 90 });
       this.effects.shake(0.007, 300);
+      let hit = 0;
       for (const b of list) {
         burnBlock(this, b, { ms: 1500 / this.speed });
         const out = b.people();
-        if (out.length) this.evict(b, out, 'chute');
+        hit += out.length;
+        if (out.length) this.evict(b, out, 'chute', { quiet: true });
         else if (b.owner !== who) { b.know = 'empty'; b.refresh(); }
       }
+      this.missionWord(list, hit);
       await this.wait(1650);
       // the burnt blocks crumble; the ones above come down (and may tip off)
       this.step = 'fire-crumble';
@@ -764,14 +793,20 @@ export class LewendeScene extends Phaser.Scene {
       const side = this.idea === 3 ? (who === 'me' ? -1 : 1) : (tw.x < GAME_W / 2 ? 1 : -1);
       const w = Math.max(...list.map((b) => b.w));
       this.step = 'water-wheel';
-      const done = waterWheel(this, tw.x, Math.min(...ys) - 6, Math.max(...ys) + 6, { side, width: w, ms: 1400 / this.speed });
-      await this.wait(700);
+      let hitNow;
+      const hitP = new Promise((r) => { hitNow = r; });
+      const done = waterWheel(this, tw.x, Math.min(...ys) - 6, Math.max(...ys) + 6, { side, width: w, ms: 1400 / this.speed, seaY: this.seaY, onHit: () => hitNow() });
+      await Promise.race([hitP, this.wait(2600)]);   // the people go when the wave reaches them
+      let hit = 0;
       for (const b of list) {
+        this.wet(b);
         const out = b.people().filter(() => !this.rooted(tw, b));
-        if (this.rooted(tw, b) && b.people().length) this.effects.floatText(b.centerX, b.top - 10, 'Wortels hou!', { color: '#a8f08e', size: 30 });
-        if (out.length) this.evict(b, out, 'swim');
+        if (this.rooted(tw, b) && b.people().length) this.say(b.centerX, b.top - 10, 'Wortels hou!', { color: '#a8f08e', size: 30 });
+        hit += out.length;
+        if (out.length) this.evict(b, out, 'swim', { quiet: true });
         else if (b.owner !== who && !b.people().length) { b.know = 'empty'; b.refresh(); }
       }
+      this.missionWord(list, hit);
       this.step = 'water-done';
       await done;
       this.step = 'water-end';
@@ -781,9 +816,11 @@ export class LewendeScene extends Phaser.Scene {
       const people = [];
       for (const b of theirs) for (const p of b.people()) people.push(p);
       const grabbed = people.sort(() => this.rnd() - 0.5).slice(0, dbl ? 3 : 2);
+      this.step = 'vines';
       if (!grabbed.length) this.ui?.toast?.('Die wortels beskerm almal', { ms: 1200 });
       for (const p of grabbed) {
         const b = p.block;
+        if (!b || b.destroyed || p.state !== 'home') continue;   // gone already (a fall, another mission)
         const at = windowWorld(b, p.slot);
         await vinesTo(this, at.x + (at.x < tw.x ? -14 : 14), this.baseTop, at.y, { ms: 650 / this.speed });
         this.evict(b, [p], 'grab');
@@ -795,8 +832,9 @@ export class LewendeScene extends Phaser.Scene {
         b.refresh();
         this.effects.sparkle(b.centerX, b.centerY, 12);
       }
-      if (show.length) this.effects.floatText(tw.x, this.topY(tw) - 60, `${show.length} blokke lig op!`, { color: '#ffe680', size: 34 });
+      if (show.length) this.say(tw.x, this.topY(tw) - 60, `${show.length} blokke lig op!`, { color: '#ffe680', size: 34 });
       await this.wait(900);
+      this.step = 'vines-end';
     }
     this.hud();
   }
@@ -934,9 +972,10 @@ export class LewendeScene extends Phaser.Scene {
     const cx = tw.x + (top ? top.ox : 0);
     let off = this.rnd() < 0.45 ? (this.rnd() - 0.5) * 8 : (this.rnd() - 0.5) * (top ? top.w * 0.8 : 40);
     if (top && this.rnd() < 0.05) off = (this.rnd() < 0.5 ? -1 : 1) * (top.w / 2 + 14);
-    // wait for the swing to bring the block there (or close), then let go
+    // wait for the swing to bring the block there (or close), then let go: at most 2 s, however slow the phone draws
     const target = cx + off;
-    for (let k = 0; k < 120; k++) {
+    const until = this.time.now + 2000 / this.speed;
+    while (this.time.now < until && this.alive) {
       const p = this.crane.getBlockPose();
       if (Math.abs(p.x - target) < 6) break;
       await this.wait(16);

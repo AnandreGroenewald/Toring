@@ -234,6 +234,16 @@ const BLOCK_SKINS = {
       [0x8ff3ff, 0xf0feff, 0x3a8c9c, 0x8ff3ff, 0x9fffcf, 0xb9a0ff, 0xff9fd6], [0xb9a0ff, 0xf6f0ff, 0x6650b0, 0xb9a0ff, 0xff9fd6, 0x8ff3ff, 0x9fffcf],
       [0x9fb8ff, 0xf0f4ff, 0x4a5fb0, 0x9fb8ff, 0x8ff3ff, 0xb9a0ff, 0xff9fd6], [0xff9f9f, 0xfff0f0, 0xa04848, 0xff9f9f, 0xffbe8f, 0xb9a0ff, 0x8ff3ff]],
   },
+  // (1.16, Die Lewende Toring: the Gras tribe's blocks; not in the shop) moss and grass on built stone:
+  // [stone, moss, outline, the moss's light tips, flowers]
+  mos: {
+    pattern: 'moss',
+    seam: 0.5,
+    pal: [[0x8a7f6e, 0x47a83a, 0x2a2418, 0xa8e86a, 0xffffff], [0x7d7468, 0x3c964a, 0x241f18, 0x93df7d, 0xffd23f],
+      [0x8f8577, 0x56ad37, 0x2b261c, 0xc2f07a, 0xff8fc2], [0x7a7f73, 0x2e8c58, 0x1f241e, 0x7fe0a0, 0xffffff],
+      [0x857a6a, 0x66a530, 0x28221a, 0xd2ee6a, 0xff6a5a], [0x8a8378, 0x45a248, 0x26221b, 0xa6ef8a, 0xb99cff],
+      [0x7b7266, 0x3a923e, 0x221d17, 0x8fdc6a, 0xffd23f], [0x92887a, 0x54b447, 0x2c271e, 0xbaf58c, 0xffffff]],
+  },
   // galaxy: [deep space, nebula, outline, second nebula]
   heelal: {
     pattern: 'galaxy',
@@ -1827,6 +1837,113 @@ function paintLava(ctx, g, pal, rnd) {
   ctx.restore();
 }
 
+// --- mos: moss and grass (1.16) ------------------------------------------------------
+
+function paintMoss(ctx, g, pal, rnd) {
+  const { w, h } = g;
+  const moss = pal.light;
+  const tip = pal.x[0];
+  const bloom = pal.x[1];
+  const stoneHi = mix(pal.fill, 0xffffff, 0.12);
+  const stoneLo = mix(pal.fill, 0x000000, 0.34);
+  const mossLo = mix(moss, 0x000000, 0.42);
+  const ox = rnd() * 50;
+  const oy = rnd() * 50;
+  // built stone, and moss over it: a thick cap on top, patches lower down (one smooth field)
+  paintField(ctx, w, h, 2, (x, y, out) => {
+    const n = fbm((x + ox) / 13, (y + oy) / 13, 3);
+    const top = 1 - y / h;
+    const m = clamp01((n * 0.95 + top * 1.05 - 0.92) * 5.5);
+    const stone = mix(mix(stoneLo, stoneHi, clamp01(top * 0.8 + (n - 0.5) * 0.5)), 0x000000, vnoise((x + ox) / 3, (y + oy) / 3) * 0.14);
+    const green = mix(mix(mossLo, moss, clamp01(m * 1.6)), tip, clamp01((fbm((x + oy) / 5, (y + ox) / 5, 2) - 0.55) * 2.2));
+    const [r, gg, b] = rgbOf(mix(stone, green, m));
+    out[0] = r;
+    out[1] = gg;
+    out[2] = b;
+  });
+  // the stone's joints, faint, where the moss is thin
+  ctx.strokeStyle = rgba(0x000000, 0.18);
+  ctx.lineWidth = 1;
+  const row = Math.max(14, Math.round(h / 2));
+  for (let y = row; y < h - 4; y += row) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+  for (let y = 0, k = 0; y < h; y += row, k++) {
+    for (let x = (k % 2 ? 0.5 : 1) * between(rnd, 20, 30); x < w - 6; x += between(rnd, 26, 40)) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, Math.min(h, y + row));
+      ctx.stroke();
+    }
+  }
+  // grass blades along the top
+  ctx.lineCap = 'round';
+  for (let x = 1; x < w; x += between(rnd, 2.2, 3.6)) {
+    const base = between(rnd, 6, 12);
+    const lean = between(rnd, -2.5, 2.5);
+    ctx.strokeStyle = rnd() < 0.5 ? hex(tip) : hex(mix(moss, tip, 0.4));
+    ctx.lineWidth = between(rnd, 1, 1.7);
+    ctx.beginPath();
+    ctx.moveTo(x, base);
+    ctx.quadraticCurveTo(x + lean * 0.3, base * 0.45, x + lean, -1);
+    ctx.stroke();
+  }
+  // tendrils hanging from the moss, with small leaves
+  const tendrils = 1 + Math.round(w / 90);
+  for (let k = 0; k < tendrils; k++) {
+    let x = between(rnd, w * 0.08, w * 0.92);
+    let y = between(rnd, 8, 13);
+    const len = between(rnd, h * 0.35, h * 0.8);
+    ctx.strokeStyle = hex(mix(moss, 0x000000, 0.2));
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    const leaves = [];
+    for (let d = 0; d < len; d += 3) {
+      x += Math.sin((y + ox) * 0.25) * 0.8;
+      y += 3;
+      ctx.lineTo(x, y);
+      if (d % 9 < 3) leaves.push([x, y, leaves.length % 2 ? 1 : -1]);
+    }
+    ctx.stroke();
+    for (const [lx, ly, sd] of leaves) {
+      ctx.fillStyle = hex(sd > 0 ? tip : moss);
+      ctx.beginPath();
+      ctx.ellipse(lx + sd * 2.4, ly, 2.6, 1.3, sd * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // a few flowers in the moss
+  const flowers = 1 + Math.round(w / 60);
+  for (let k = 0; k < flowers; k++) {
+    const fx = between(rnd, 6, w - 6);
+    const fy = between(rnd, 3, Math.min(14, h * 0.32));
+    const r = between(rnd, 1.5, 2.3);
+    ctx.fillStyle = hex(bloom);
+    for (let q = 0; q < 5; q++) {
+      const a = (q * Math.PI * 2) / 5;
+      ctx.beginPath();
+      ctx.arc(fx + Math.cos(a) * r, fy + Math.sin(a) * r, r * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#ffc21f';
+    ctx.beginPath();
+    ctx.arc(fx, fy, r * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  drawBevel(ctx, g, 0.2, 0.32, 3);
+  // a fresh green rim, so the block shows on a night sky
+  ctx.save();
+  roundedPolyPath(ctx, g.outline, CORNER_R);
+  ctx.strokeStyle = rgba(tip, 0.5);
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.restore();
+}
+
 // --- chroom: chrome -----------------------------------------------------------
 
 function paintChrome(ctx, g, pal, rnd) {
@@ -2010,6 +2127,7 @@ const SKIN_FACE = {
   pixel: paintPixel,
   marble: paintMarble,
   lava: paintLava,
+  moss: paintMoss,
   chrome: paintChrome,
   holo: paintHolo,
   galaxy: paintGalaxy,

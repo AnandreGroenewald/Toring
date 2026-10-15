@@ -148,7 +148,7 @@ export function createLewendeUi(host) {
       };
       const m0 = me();
       const mid = m.idea === 1 ? `Rondte ${m.round}` : `Blok ${Math.min(m.drops + (m.active === 'me' ? 1 : 0), m.maxDrops)}/${m.maxDrops}`;
-      el.querySelector('.lt-hud').innerHTML = `${card(m.sides[0], m0)}<div class="lt-mid"><div class="lt-tag">Idee ${m.idea}</div><b>${m.over ? 'Klaar' : m.active === 'me' ? 'Jou beurt' : `${esc(m.sides[1].name)} se beurt`}</b><small>${mid}</small>
+      el.querySelector('.lt-hud').innerHTML = `${card(m.sides[0], m0)}<div class="lt-mid"><div class="lt-tag">Idee ${m.idea}</div>${m.over || m.active === 'me' ? `<b>${m.over ? 'Klaar' : 'Jou beurt'}</b>` : `<b class="sm">${esc(m.sides[1].name)} se beurt</b>`}<small>${mid}</small>
         <button class="lt-q" data-a="quit" aria-label="Hou op">✕</button></div>${card(m.sides[1], foeNow)}`;
       el.querySelector('[data-a="quit"]').onclick = () => host.quit();
     },
@@ -169,10 +169,10 @@ export function createLewendeUi(host) {
         box.appendChild(x);
       }
     },
-    toast(text, { big = false, ms = 1300 } = {}) {
+    toast(text, { big = false, ms = 1300, sub = '' } = {}) {
       const t = el.querySelector('.lt-toast');
       if (!t) return;
-      t.innerHTML = `<div class="${big ? 'big' : ''}">${esc(text)}</div>`;
+      t.innerHTML = `<div class="${big ? 'big' : ''}">${esc(text)}${sub ? `<small>${esc(sub)}</small>` : ''}</div>`;
       clearTimeout(hudApi.tt);
       hudApi.tt = setTimeout(() => { t.innerHTML = ''; }, ms);
     },

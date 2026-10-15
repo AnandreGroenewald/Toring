@@ -376,7 +376,7 @@ function safely(fn) {
   }
 }
 
-const LEWENDE_SKIN = { vuur: 'lawa', water: 'ys', gras: 'klip' };
+const LEWENDE_SKIN = { vuur: 'lawa', water: 'ys', gras: 'mos' };
 /** (1.16 preview) ?lewende=vuur|water|gras: your tribe in Die Lewende Toring (the other tribe is the one after it). */
 function lewendeFromUrl() {
   try {

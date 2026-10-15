@@ -231,16 +231,48 @@ function drawWindow(ctx, s, v) {
     ctx.fillStyle = sh;
     ctx.fillRect(x, y, s.w, s.h);
   }
-  if (v.look === 'curtain' || v.look === 'open') {
-    // two curtains of the tribe's cloth, tied back (or pulled right aside when the room is known to be empty),
-    // under a scalloped valance; every curtained window looks the same
-    const tie = v.look === 'open' ? 0.08 : 0.3;
+  if (v.look === 'curtain') {
+    // drawn curtains with the lamp on behind them: two drapes of the tribe's cloth meeting in the middle and glowing
+    // through (no bright gap between them: that read as a little flame); every curtained window looks the same
+    for (const side of [-1, 1]) {
+      const ox = side < 0 ? x - 1 : x + s.w + 1;
+      const inner = s.x - side * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(ox, y - 1);
+      ctx.lineTo(inner, y - 1);
+      ctx.bezierCurveTo(inner + side * 1.1, y + s.h * 0.4, inner - side * 1.1, y + s.h * 0.72, inner, y + s.h + 1);
+      ctx.lineTo(ox, y + s.h + 1);
+      ctx.closePath();
+      const c0 = Math.min(ox, inner), c1 = Math.max(ox, inner);
+      const cloth = ctx.createLinearGradient(c0, 0, c1, 0);
+      [t.clothD, t.cloth, t.clothD, t.cloth, t.clothD].forEach((c, k) => cloth.addColorStop(k / 4, c));
+      ctx.fillStyle = cloth;
+      ctx.fill();
+    }
+    // the lamp behind: the cloth lit through in its own colour, warmest in the middle
+    const lamp = ctx.createRadialGradient(s.x, y + s.h * 0.58, 0.5, s.x, y + s.h * 0.58, s.h * 0.62);
+    lamp.addColorStop(0, `${t.clothL}d9`);
+    lamp.addColorStop(0.55, `${t.clothL}55`);
+    lamp.addColorStop(1, `${t.clothL}00`);
+    ctx.fillStyle = lamp;
+    ctx.fillRect(x - 1, y - 1, s.w + 2, s.h + 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.fillRect(s.x - 0.45, y, 0.9, s.h + 1);
+    const shade = ctx.createLinearGradient(0, y, 0, y + s.h);
+    shade.addColorStop(0, 'rgba(255,255,255,0.1)');
+    shade.addColorStop(1, 'rgba(0,0,0,0.34)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(x - 1, y - 1, s.w + 2, s.h + 2);
+  }
+  if (v.look === 'open') {
+    // the curtains pulled right aside: the room is known to be empty
+    const tie = 0.08;
     for (const side of [-1, 1]) {
       const ox = side < 0 ? x : x + s.w;
       const inner = s.x - side * 0.4;
       ctx.beginPath();
       ctx.moveTo(ox, y - 1);
-      ctx.lineTo(v.look === 'open' ? ox - side * s.w * 0.22 : inner, y - 1);
+      ctx.lineTo(ox - side * s.w * 0.22, y - 1);
       ctx.quadraticCurveTo(ox - side * s.w * (tie + 0.2), y + s.h * 0.5, ox - side * s.w * tie, y + s.h * 0.66);
       ctx.quadraticCurveTo(ox - side * s.w * (tie * 0.7), y + s.h * 0.84, ox - side * s.w * (tie + 0.06), y + s.h + 1);
       ctx.lineTo(ox, y + s.h + 1);
@@ -261,17 +293,25 @@ function drawWindow(ctx, s, v) {
       ctx.fillStyle = '#ffd23f';
       ctx.fill();
     }
-    // the valance
+  }
+  if (v.look === 'curtain' || v.look === 'open') {
+    // the scalloped valance with a gold trim
     const vh = s.h * 0.2;
+    const sc = 3;
     ctx.beginPath();
     ctx.moveTo(x - 1, y - 1);
     ctx.lineTo(x + s.w + 1, y - 1);
     ctx.lineTo(x + s.w + 1, y + vh);
-    const sc = 3;
     for (let k = sc; k > 0; k--) ctx.quadraticCurveTo(x + s.w * (k - 0.5) / sc, y + vh * 1.7, x + s.w * (k - 1) / sc, y + vh);
     ctx.closePath();
     ctx.fillStyle = t.clothD;
     ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x + s.w + 1, y + vh);
+    for (let k = sc; k > 0; k--) ctx.quadraticCurveTo(x + s.w * (k - 0.5) / sc, y + vh * 1.7, x + s.w * (k - 1) / sc, y + vh);
+    ctx.lineWidth = 0.9;
+    ctx.strokeStyle = '#ffd23f';
+    ctx.stroke();
   }
   // the glass: a soft reflection across the top-left
   const glass = ctx.createLinearGradient(x, y, x + s.w, y + s.h);
@@ -545,6 +585,19 @@ export function burnBlock(scene, b, { ms = 1700 } = {}) {
   return parts;
 }
 
+/** Draw the missions' pictures up front, so the first fire, wave or parachute doesn't stall a slow phone mid-mission. */
+export function prepareFx(scene) {
+  const keys = [flameTexture(scene), puffTexture(scene), millWheelTexture(scene), waveTexture(scene), jetTexture(scene), rugbyTexture(scene)];
+  for (const t of Object.keys(TRIBES)) keys.push(chuteTexture(scene, t));
+  // draw each once, too small and faint to see, with a circle and an ellipse: the phone readies them now
+  const warm = keys.map((k) => scene.add.image(2, 2, k).setScale(0.02).setAlpha(0.01).setScrollFactor(0));
+  warm.push(scene.add.circle(2, 2, 1, 0xffffff, 0.01).setScrollFactor(0), scene.add.ellipse(2, 2, 2, 1, 0xffffff, 0.01).setScrollFactor(0));
+  const g = scene.add.graphics().setScrollFactor(0).setAlpha(0.01);
+  g.fillStyle(0xffffff, 1).fillPoints([{ x: 1, y: 1 }, { x: 3, y: 1 }, { x: 2, y: 3 }], true).lineStyle(1, 0xffffff, 1).lineBetween(1, 1, 3, 3);
+  warm.push(g);
+  scene.time.delayedCall(120, () => { for (const o of warm) o.destroy(); });
+}
+
 // ---------------------------------------------------------------------------------------------- for the screens (DOM)
 const dataUrls = new Map();
 /** A round portrait (the tribe's colour behind, a white ring) as a data URL for the menus; '' until the portraits load. */
@@ -593,113 +646,427 @@ export function swimAway(scene, x, y, who, { dir = 1, seaY = y + 300, delay = 0 
   });
   return face;
 }
-function wheelTexture(scene) {
-  const key = 'lt_wheel';
+/**
+ * A wooden mill wheel seen from the side: a band of twenty paddle boards held between two rims (the boards stand a
+ * little proud of the outer rim), eight spokes and an iron hub, water clinging to the boards.
+ */
+function millWheelTexture(scene) {
+  const key = 'lt_millwheel';
   if (scene.textures.exists(key)) return key;
-  const S = 120;
+  const S = 192;
+  const c = S / 2;
   const tex = scene.textures.createCanvas(key, S, S);
   const ctx = tex.getContext();
-  const c = S / 2;
-  ctx.lineCap = 'round';
-  // paddles
-  for (let k = 0; k < 10; k++) {
-    const a = (k * Math.PI * 2) / 10;
+  const RO = 74;   // the outer rim
+  const RI = 54;   // the inner rim
+  // the spokes
+  for (let k = 0; k < 8; k++) {
     ctx.save();
     ctx.translate(c, c);
-    ctx.rotate(a);
-    ctx.fillStyle = '#8a5a2b';
-    ctx.fillRect(-5, -c + 2, 10, 26);
-    ctx.fillStyle = '#5ab8ff';
-    ctx.fillRect(-5, -c + 2, 10, 7);
+    ctx.rotate((k * Math.PI) / 4);
+    rr(ctx, -3.5, -RI, 7, RI - 10, 2);
+    ctx.fillStyle = '#7c4a1f';
+    ctx.fill();
+    ctx.lineWidth = 1.1;
+    ctx.strokeStyle = '#3a200b';
+    ctx.stroke();
     ctx.restore();
   }
-  // rim and spokes
-  ctx.strokeStyle = '#6b4220';
-  ctx.lineWidth = 7;
-  ctx.beginPath();
-  ctx.arc(c, c, c - 24, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.lineWidth = 4;
-  for (let k = 0; k < 5; k++) {
-    const a = (k * Math.PI) / 5;
+  // sixteen paddles: a slat between the rims and a wide board standing out past the outer rim
+  for (let k = 0; k < 16; k++) {
+    ctx.save();
+    ctx.translate(c, c);
+    ctx.rotate((k * Math.PI * 2) / 16);
+    rr(ctx, -2.6, -RO, 5.2, RO - RI + 2, 1.2);
+    ctx.fillStyle = '#80501f';
+    ctx.fill();
+    rr(ctx, -9, -(RO + 15), 18, 17, 2.5);
+    const board = ctx.createLinearGradient(-9, 0, 9, 0);
+    board.addColorStop(0, '#d29457');
+    board.addColorStop(1, '#7f4e1f');
+    ctx.fillStyle = board;
+    ctx.fill();
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = '#3a200b';
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(58,32,11,0.4)';
+    ctx.lineWidth = 0.8;
     ctx.beginPath();
-    ctx.moveTo(c + Math.cos(a) * (c - 24), c + Math.sin(a) * (c - 24));
-    ctx.lineTo(c - Math.cos(a) * (c - 24), c - Math.sin(a) * (c - 24));
+    ctx.moveTo(-9, -(RO + 7));
+    ctx.lineTo(9, -(RO + 7));
+    ctx.stroke();
+    // water held on the board
+    ctx.fillStyle = 'rgba(190,238,255,0.9)';
+    rr(ctx, -9, -(RO + 15), 18, 5, 2.5);
+    ctx.fill();
+    ctx.restore();
+  }
+  // the two rims over the boards
+  for (const [r, w] of [[RO, 8], [RI, 7]]) {
+    ctx.beginPath();
+    ctx.arc(c, c, r, 0, Math.PI * 2);
+    ctx.lineWidth = w;
+    ctx.strokeStyle = '#8a5527';
+    ctx.stroke();
+    ctx.lineWidth = 1.3;
+    ctx.strokeStyle = '#3a200b';
+    for (const e of [w / 2, -w / 2]) { ctx.beginPath(); ctx.arc(c, c, r + e, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.beginPath();
+    ctx.arc(c, c, r, Math.PI * 1.08, Math.PI * 1.6);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,224,176,0.6)';
     ctx.stroke();
   }
-  ctx.fillStyle = '#3d2410';
+  // the iron hub with its bolts
+  const hub = ctx.createRadialGradient(c - 4, c - 5, 2, c, c, 15);
+  hub.addColorStop(0, '#aab3c4');
+  hub.addColorStop(1, '#262a33');
   ctx.beginPath();
-  ctx.arc(c, c, 10, 0, Math.PI * 2);
+  ctx.arc(c, c, 14, 0, Math.PI * 2);
+  ctx.fillStyle = hub;
   ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#15181e';
+  ctx.stroke();
+  ctx.fillStyle = '#e3e8f2';
+  for (let k = 0; k < 4; k++) {
+    const a = (k * Math.PI) / 2 + Math.PI / 4;
+    ctx.beginPath();
+    ctx.arc(c + Math.cos(a) * 8, c + Math.sin(a) * 8, 1.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
   tex.refresh();
   return key;
 }
-/**
- * The water wheel: it rises beside the target tower at the floors it washes (world y0..y1), turns, and a sheet of water
- * pours across those floors. `side` -1 = the wheel stands left of the tower, 1 = right. Resolves when the water has gone.
- */
-export function waterWheel(scene, towerX, y0, y1, { side = -1, width = 220, ms = 1500 } = {}) {
-  const key = wheelTexture(scene);
-  const cy = (y0 + y1) / 2;
-  const wx = towerX + side * (width / 2 + 70);
-  const wheel = scene.add.image(wx, cy, key).setDepth(DEPTH.tower + 1).setScale(0.1).setAlpha(0);
-  scene.tweens.add({ targets: wheel, scale: 1, alpha: 1, duration: 280, ease: 'Back.easeOut' });
-  scene.tweens.add({ targets: wheel, angle: side * -720, duration: ms + 300, ease: 'Sine.easeInOut' });
-  const sheet = scene.add.graphics().setDepth(DEPTH.tower + 0.9);
-  const t = { p: 0 };
-  const draw = () => {
-    sheet.clear();
-    if (t.p <= 0) return;
-    const reach = Math.min(1, t.p * 1.6);
-    const fade = t.p > 0.8 ? (1 - t.p) / 0.2 : 1;
-    const xa = side < 0 ? wx : towerX - width / 2 - 20;
-    const xb = side < 0 ? towerX + width / 2 + 20 : wx;
-    const x0 = side < 0 ? xa : xb - (xb - xa) * reach;
-    const x1 = side < 0 ? xa + (xb - xa) * reach : xb;
-    sheet.fillStyle(0x6fd0ff, 0.55 * fade);
-    sheet.fillRect(x0, y0, x1 - x0, y1 - y0);
-    sheet.lineStyle(2.5, 0xffffff, 0.8 * fade);
-    for (let yy = y0 + 8; yy < y1 - 4; yy += 14) {
-      sheet.beginPath();
-      for (let xx = x0; xx <= x1; xx += 12) {
-        const yv = yy + Math.sin(xx * 0.08 + t.p * 30) * 3;
-        if (xx === x0) sheet.moveTo(xx, yv);
-        else sheet.lineTo(xx, yv);
-      }
-      sheet.strokePath();
-    }
+/** A breaking wave rolling to the right: a long swell, a curling crest with foam on its lip, fading out behind. */
+function waveTexture(scene) {
+  const key = 'lt_wave';
+  if (scene.textures.exists(key)) return key;
+  const W = 360;
+  const H = 200;
+  const tex = scene.textures.createCanvas(key, W, H);
+  const ctx = tex.getContext();
+  const shape = () => {
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    ctx.lineTo(0, H * 0.64);
+    ctx.bezierCurveTo(W * 0.25, H * 0.58, W * 0.45, H * 0.52, W * 0.62, H * 0.33);
+    ctx.bezierCurveTo(W * 0.7, H * 0.18, W * 0.78, H * 0.06, W * 0.88, H * 0.07);
+    ctx.bezierCurveTo(W * 0.97, H * 0.08, W * 1.0, H * 0.21, W * 0.95, H * 0.34);
+    ctx.bezierCurveTo(W * 0.92, H * 0.41, W * 0.86, H * 0.37, W * 0.875, H * 0.29);
+    ctx.bezierCurveTo(W * 0.82, H * 0.37, W * 0.84, H * 0.62, W * 0.93, H * 0.8);
+    ctx.lineTo(W * 0.985, H);
+    ctx.closePath();
   };
+  shape();
+  const body = ctx.createLinearGradient(0, 0, 0, H);
+  body.addColorStop(0, '#d2f6ff');
+  body.addColorStop(0.22, '#63cdff');
+  body.addColorStop(0.62, '#1f86df');
+  body.addColorStop(1, '#0b4f98');
+  ctx.fillStyle = body;
+  ctx.fill();
+  ctx.save();
+  shape();
+  ctx.clip();
+  // the barrel under the curl, and light streaks along the swell
+  const barrel = ctx.createRadialGradient(W * 0.9, H * 0.46, 2, W * 0.9, H * 0.46, H * 0.3);
+  barrel.addColorStop(0, 'rgba(3,30,80,0.55)');
+  barrel.addColorStop(1, 'rgba(3,30,80,0)');
+  ctx.fillStyle = barrel;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.32)';
+  ctx.lineCap = 'round';
+  for (const [dy, lw] of [[14, 2.5], [34, 1.6], [58, 1.2]]) {
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(W * 0.05, H * 0.64 + dy);
+    ctx.bezierCurveTo(W * 0.3, H * 0.58 + dy, W * 0.5, H * 0.5 + dy, W * 0.7, H * 0.3 + dy * 1.2);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // foam on the lip
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.shadowColor = 'rgba(255,255,255,0.95)';
+  ctx.shadowBlur = 9;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 6.5;
+  ctx.beginPath();
+  ctx.moveTo(W * 0.64, H * 0.29);
+  ctx.bezierCurveTo(W * 0.71, H * 0.15, W * 0.79, H * 0.065, W * 0.88, H * 0.075);
+  ctx.bezierCurveTo(W * 0.96, H * 0.09, W * 0.99, H * 0.2, W * 0.948, H * 0.33);
+  ctx.stroke();
+  ctx.restore();
+  let seed = 11;
+  const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  ctx.fillStyle = '#ffffff';
+  for (let k = 0; k < 46; k++) {
+    // bubbles along the lip and in a band at the foot of the wave
+    const u = rnd();
+    const lip = k < 30;
+    const bx = lip ? W * (0.66 + 0.31 * u) : W * (0.5 + 0.48 * u);
+    const by = lip ? H * (0.09 + 0.24 * Math.abs(u - 0.75) * 2.2) + (rnd() - 0.5) * 12 : H * (0.66 + rnd() * 0.12);
+    ctx.globalAlpha = 0.55 + rnd() * 0.45;
+    ctx.beginPath();
+    ctx.arc(bx, by, 1.4 + rnd() * 3.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  // fade the long tail away
+  ctx.globalCompositeOperation = 'destination-in';
+  const fade = ctx.createLinearGradient(0, 0, W, 0);
+  fade.addColorStop(0, 'rgba(0,0,0,0)');
+  fade.addColorStop(0.42, 'rgba(0,0,0,1)');
+  fade.addColorStop(1, 'rgba(0,0,0,1)');
+  ctx.fillStyle = fade;
+  ctx.fillRect(0, 0, W, H);
+  const under = ctx.createLinearGradient(0, 0, 0, H);
+  under.addColorStop(0, 'rgba(0,0,0,1)');
+  under.addColorStop(0.68, 'rgba(0,0,0,1)');
+  under.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = under;
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over';
+  tex.refresh();
+  return key;
+}
+/** A jet of sea water (tiles upward): light in the middle, darker at the sides, streaks of foam. */
+function jetTexture(scene) {
+  const key = 'lt_jet';
+  if (scene.textures.exists(key)) return key;
+  const W = 48;
+  const H = 128;
+  const tex = scene.textures.createCanvas(key, W, H);
+  const ctx = tex.getContext();
+  const g = ctx.createLinearGradient(0, 0, W, 0);
+  g.addColorStop(0, 'rgba(20,110,200,0)');
+  g.addColorStop(0.18, 'rgba(40,140,225,0.9)');
+  g.addColorStop(0.5, 'rgba(170,232,255,0.95)');
+  g.addColorStop(0.82, 'rgba(40,140,225,0.9)');
+  g.addColorStop(1, 'rgba(20,110,200,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  for (const [x, y, h] of [[14, 10, 34], [30, 52, 28], [22, 92, 30], [36, 4, 18], [11, 70, 22]]) {
+    ctx.beginPath();
+    ctx.ellipse(x, y + h / 2, 2, h / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  tex.refresh();
+  return key;
+}
+/** A drop of water from (x, y) with speed (vx, vy) px/s, falling for `life` ms. */
+function drop(scene, x, y, vx, vy, life, r, color) {
+  const d = scene.add.circle(x, y, r, color).setDepth(DEPTH.fxWorld);
+  const o = { t: 0 };
+  scene.tweens.add({
+    targets: o, t: 1, duration: life,
+    onUpdate: () => { const s = (o.t * life) / 1000; d.x = x + vx * s; d.y = y + vy * s + 900 * s * s; d.alpha = 1 - o.t * o.t; },
+    onComplete: () => d.destroy(),
+  });
+}
+/**
+ * The water wheel: a wooden mill wheel rises beside the target tower at the floors it washes (world y0..y1) and turns,
+ * water streaming off its paddles; a breaking wave rolls from it across those floors and on past the tower, spray off its
+ * crest and a burst of mist where it hits; then the water runs off down to the sea. `side` -1 = the wheel stands left
+ * of the tower, 1 = right; `onHit` is called once as the wave reaches the tower. Resolves when the water has gone.
+ */
+export function waterWheel(scene, towerX, y0, y1, { side = -1, width = 220, ms = 1500, seaY = null, onHit = null } = {}) {
+  const wheelKey = millWheelTexture(scene);
+  const waveKey = waveTexture(scene);
+  const puff = puffTexture(scene);
+  const h = Math.max(60, y1 - y0);
+  const cy = (y0 + y1) / 2;
+  const ws = Math.max(0.55, Math.min(1.05, (h + 50) / 192));
+  const wx = towerX + side * (width / 2 + 30 + 80 * ws);
+  const dir = -side;   // the way the wave rolls
+  const wheel = scene.add.image(wx, cy + 60, wheelKey).setDepth(DEPTH.tower + 1).setScale(ws * 0.3).setAlpha(0);
+  // a jet of sea water climbs to the wheel and keeps it turning
+  let jet = null;
+  if (seaY != null && seaY - cy > 100 * ws) {
+    const jh = seaY - (cy + 62 * ws);
+    jet = scene.add.tileSprite(wx, seaY + 4, 34 * ws + 10, jh, jetTexture(scene)).setOrigin(0.5, 1).setDepth(DEPTH.tower + 0.95).setScale(1, 0.01);
+    scene.tweens.add({ targets: jet, scaleY: 1, duration: 300, ease: 'Quad.easeOut' });
+    const flow = () => { if (jet.active) jet.tilePositionY += 9; };
+    scene.events.on('update', flow);
+    jet.once('destroy', () => scene.events.off('update', flow));
+    for (let k = 0; k < 8; k++) drop(scene, wx + (Math.random() - 0.5) * 30, seaY, (Math.random() - 0.5) * 120, -(140 + Math.random() * 120), 600, 2 + Math.random() * 2, 0xdff6ff);
+  }
+  scene.tweens.add({ targets: wheel, y: cy, scale: ws, alpha: 1, duration: 340, ease: 'Back.easeOut' });
+  scene.tweens.add({ targets: wheel, angle: dir * 560, duration: ms + 700, ease: 'Sine.easeInOut' });
+  const stream = scene.time.addEvent({
+    delay: 55, repeat: Math.round((ms + 500) / 55),
+    callback: () => {
+      const a = Math.random() * Math.PI * 2;
+      const r = 90 * ws;
+      drop(scene, wx + Math.cos(a) * r, wheel.y + Math.abs(Math.sin(a)) * r * 0.9, dir * (20 + Math.random() * 50), -40 + Math.random() * 60, 650, 1.6 + Math.random() * 1.6, Math.random() < 0.5 ? 0xdff6ff : 0x7fd4ff);
+    },
+  });
+  const waveW = Math.max(240, width * 1.35);
+  const sy = (h * 1.4) / 200;
+  const wave = scene.add.image(wx, cy, waveKey).setDepth(DEPTH.tower + 0.9).setOrigin(0.9, 0.56).setAlpha(0).setScale((dir * waveW) / 360, sy * 0.6);
+  const xa = wx + dir * 24;
+  const xb = towerX + dir * (width / 2 + 120);
+  const t = { p: 0 };
+  let misted = false;
   return new Promise((resolve) => {
     scene.tweens.add({
-      targets: t, p: 1, duration: ms, delay: 320, onUpdate: draw,
+      targets: t, p: 1, duration: ms, delay: 260, ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        const p = t.p;
+        wave.x = xa + (xb - xa) * p;
+        wave.y = cy + Math.sin(p * Math.PI * 3) * 4;
+        wave.setScale((dir * waveW) / 360, sy * (0.6 + 0.4 * Math.min(1, p * 3)) * (1 + 0.08 * Math.sin(p * Math.PI)));
+        wave.alpha = p < 0.12 ? p / 0.12 : p > 0.78 ? Math.max(0, (1 - p) / 0.22) : 1;
+        // spray off the crest
+        if (p < 0.85 && Math.random() < 0.7) {
+          drop(scene, wave.x + dir * (Math.random() * 10), cy - h * 0.62 + Math.random() * h * 0.3, dir * (60 + Math.random() * 120), -(120 + Math.random() * 160), 700, 1.5 + Math.random() * 2.2, Math.random() < 0.6 ? 0xffffff : 0xa8e6ff);
+        }
+        // a burst of mist where it hits the tower
+        if (!misted && dir * (wave.x - (towerX - dir * width / 2)) > -30) {
+          misted = true;
+          onHit?.();
+          for (let k = 0; k < 5; k++) {
+            const m = scene.add.image(towerX - dir * width * 0.4, y0 + (h * (k + 0.5)) / 5, puff).setDepth(DEPTH.fxWorld).setTint(0xe8f8ff).setAlpha(0.7).setScale(0.6);
+            scene.tweens.add({ targets: m, x: m.x + dir * (30 + k * 8), y: m.y - 20 - k * 6, scale: 1.8, alpha: 0, duration: 700, ease: 'Sine.easeOut', onComplete: () => m.destroy() });
+          }
+        }
+      },
       onComplete: () => {
-        sheet.destroy();
-        scene.tweens.add({ targets: wheel, alpha: 0, scale: 0.6, duration: 260, onComplete: () => { wheel.destroy(); resolve(); } });
+        wave.destroy();
+        if (!misted) { misted = true; onHit?.(); }
+        // the water runs off the washed floors down to the sea
+        if (seaY != null) {
+          for (let k = 0; k < 14; k++) {
+            drop(scene, towerX + (Math.random() - 0.5) * width, y1 + Math.random() * 6, (Math.random() - 0.5) * 30, 40 + Math.random() * 60, Math.min(1400, 300 + Math.sqrt(Math.max(0, seaY - y1)) * 30), 1.8 + Math.random() * 2, 0x9fdcff);
+          }
+        }
+        if (jet) scene.tweens.add({ targets: jet, scaleY: 0, alpha: 0, duration: 380, delay: 80, ease: 'Sine.easeIn', onComplete: () => jet.destroy() });
+        scene.tweens.add({
+          targets: wheel, alpha: 0, y: wheel.y + 50, scale: ws * 0.6, duration: 320, delay: 120, ease: 'Sine.easeIn',
+          onComplete: () => { stream.remove(); wheel.destroy(); resolve(); },
+        });
       },
     });
   });
 }
-/** Vines grow up from the base to world point (x, y) (the grass tribe's grab). Resolves when they arrive. */
-export function vinesTo(scene, x, baseY, y, { ms = 700 } = {}) {
+// the vines: a leaf, a small flower, the tip's curl (drawn into a Graphics each frame while they grow)
+function leaf(g, x, y, ang, L, W) {
+  if (L < 1.5) return;
+  const ca = Math.cos(ang);
+  const sa = Math.sin(ang);
+  const P = (u, w) => ({ x: x + ca * u * L - sa * w, y: y + sa * u * L + ca * w });
+  const edge = [];
+  for (let k = 0; k <= 10; k++) { const u = k / 10; edge.push([u, Math.sin(Math.PI * u) * W * (1 - u * 0.35)]); }
+  const top = edge.map(([u, w]) => P(u, w));
+  const bottom = edge.slice().reverse().map(([u, w]) => P(u, -w));
+  g.fillStyle(0x2f8a2a, 1);
+  g.fillPoints([...top, ...bottom], true);
+  g.fillStyle(0x6fd35a, 1);
+  g.fillPoints([...top, ...edge.slice().reverse().map(([u]) => P(u, 0))], true);
+  g.lineStyle(1, 0x184a16, 0.9);
+  g.strokePoints([...top, ...bottom], true);
+  const tip = P(0.88, 0);
+  g.lineStyle(0.9, 0x1d5a1c, 0.8);
+  g.lineBetween(x, y, tip.x, tip.y);
+}
+function flower(g, x, y, r, petal) {
+  if (r < 0.6) return;
+  g.fillStyle(petal, 1);
+  for (let k = 0; k < 5; k++) {
+    const a = (k * Math.PI * 2) / 5 - Math.PI / 2;
+    g.fillCircle(x + Math.cos(a) * r, y + Math.sin(a) * r, r * 0.78);
+  }
+  g.fillStyle(0xffc21f, 1);
+  g.fillCircle(x, y, r * 0.58);
+}
+function curl(g, x, y, r, w = 2.4) {
+  g.lineStyle(w, 0x3f9a35, 1);
+  g.beginPath();
+  for (let k = 0; k <= 26; k++) {
+    const a = k * 0.34;
+    const q = r * (1 - k / 32);
+    const px = x + Math.cos(a) * q;
+    const py = y + Math.sin(a) * q;
+    if (!k) g.moveTo(px, py);
+    else g.lineTo(px, py);
+  }
+  g.strokePath();
+}
+/**
+ * Vines grow from the base up to world point (x, y) (the grass tribe's grab): a tapered stem swaying as it climbs,
+ * leaves that unfold behind the tip, small curls and a flower or two; the tip curls round the window. Resolves when it
+ * arrives; then it pulls back down and fades.
+ */
+export function vinesTo(scene, x, baseY, y, { ms = 700, hold = 420 } = {}) {
   const g = scene.add.graphics().setDepth(DEPTH.tower + 1);
-  const t = { p: 0 };
+  const len = Math.max(24, baseY - y);
+  const sway = Math.min(13, 5 + len * 0.025);
+  const path = [];
+  for (let d = 0; d <= len; d += 4) path.push({ x: x + Math.sin(d * 0.045 + 0.6) * sway * Math.min(1, d / 40), y: baseY - d });
+  const leaves = [];
+  for (let d = 16, k = 0; d < len - 8; d += 18, k++) leaves.push({ i: Math.round(d / 4), side: k % 2 ? 1 : -1, size: 8.5 + (k % 3) * 1.8 });
+  const curls = [];
+  for (let d = 44; d < len - 20; d += 58) curls.push(Math.round(d / 4));
+  const flowers = (len > 130 ? [0.42, 0.78] : [0.6]).map((f, k) => ({ i: Math.round((len * f) / 4), petal: k % 2 ? 0xffb6d5 : 0xffffff }));
+  const t = { p: 0, back: 0 };
+  const draw = () => {
+    g.clear();
+    const n = Math.max(2, Math.round(path.length * t.p * (1 - t.back)));
+    const pts = path.slice(0, n);
+    // the stem: a dark edge, the green body and a light side; thick at the root, thin at the tip
+    const segs = 6;
+    for (const [col, k0, dx] of [[0x184a16, 3, 0], [0x3f9a35, 0, 0], [0x9be37c, -1, -1.4]]) {
+      for (let k = 0; k < segs; k++) {
+        const a = Math.floor((k * (pts.length - 1)) / segs);
+        const b = Math.floor(((k + 1) * (pts.length - 1)) / segs);
+        if (b <= a) continue;
+        const base = 11 - (7.5 * k) / segs;
+        g.lineStyle(k0 < 0 ? base * 0.28 : base + k0, col, 1);
+        g.beginPath();
+        g.moveTo(pts[a].x + dx, pts[a].y);
+        for (let i = a + 1; i <= b; i++) g.lineTo(pts[i].x + dx, pts[i].y);
+        g.strokePath();
+      }
+    }
+    for (const c of curls) {
+      if (c >= n - 3) continue;
+      const p = pts[c];
+      const s = c % 2 ? 1 : -1;
+      curl(g, p.x + s * 7, p.y - 3, Math.min(5.5, (n - c) * 0.7), 1.6);
+    }
+    for (const L of leaves) {
+      if (L.i >= n) continue;
+      const grow = Math.min(1, (n - L.i) / 7);
+      const p = pts[L.i];
+      const q = pts[Math.min(pts.length - 1, L.i + 1)];
+      leaf(g, p.x, p.y, Math.atan2(q.y - p.y, q.x - p.x) + L.side * 1.05, L.size * 1.7 * grow, L.size * 0.72 * grow);
+    }
+    for (const f of flowers) {
+      if (f.i >= n) continue;
+      const p = pts[f.i];
+      flower(g, p.x + (f.i % 2 ? 8 : -8), p.y, 5.6 * Math.min(1, (n - f.i) / 9), f.petal);
+    }
+    if (t.p >= 1 && !t.back) curl(g, pts[pts.length - 1].x, pts[pts.length - 1].y, 11, 3);
+  };
   return new Promise((resolve) => {
     scene.tweens.add({
-      targets: t, p: 1, duration: ms, ease: 'Sine.easeOut',
-      onUpdate: () => {
-        g.clear();
-        const top = baseY + (y - baseY) * t.p;
-        g.lineStyle(5, 0x2f8f2c, 1);
-        g.beginPath();
-        g.moveTo(x, baseY);
-        for (let yy = baseY; yy >= top; yy -= 6) g.lineTo(x + Math.sin(yy * 0.09) * 9, yy);
-        g.strokePath();
-        g.fillStyle(0x4fcf45, 1);
-        for (let yy = baseY - 12; yy >= top; yy -= 20) g.fillEllipse(x + Math.sin(yy * 0.09) * 9 + (yy % 40 ? 9 : -9), yy, 14, 7);
-      },
+      targets: t, p: 1, duration: ms, ease: 'Sine.easeOut', onUpdate: draw,
       onComplete: () => {
-        scene.tweens.add({ targets: g, alpha: 0, duration: 600, delay: 500, onComplete: () => g.destroy() });
+        draw();
+        // the grab: a few leaf bits burst off the tip
+        const tip = path[path.length - 1];
+        for (let k = 0; k < 7; k++) {
+          const bit = scene.add.ellipse(tip.x, tip.y, 7, 3.5, k % 2 ? 0x6fd35a : 0x3f9a35).setDepth(DEPTH.fxWorld).setRotation(Math.random() * 3);
+          const a = (k / 7) * Math.PI * 2;
+          scene.tweens.add({ targets: bit, x: tip.x + Math.cos(a) * 34, y: tip.y + Math.sin(a) * 26 + 14, rotation: bit.rotation + 3, alpha: 0, duration: 620, ease: 'Quad.easeOut', onComplete: () => bit.destroy() });
+        }
         resolve();
+        scene.tweens.add({
+          targets: t, back: 1, duration: 420, delay: hold, ease: 'Sine.easeIn', onUpdate: () => { g.alpha = 1 - t.back * 0.7; draw(); },
+          onComplete: () => g.destroy(),
+        });
       },
     });
   });
