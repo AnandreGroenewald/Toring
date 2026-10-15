@@ -34,7 +34,7 @@
   <main id="main" class="wrap" tabindex="-1">
     <div class="legal-title">
       <h1>Privacy policy</h1>
-      <p>Version: <time datetime="2026-10-13">2026-10-13</time> · <a href="privaatheid.html" hreflang="af" lang="af">Afrikaans</a></p>
+      <p>Version: <time datetime="2026-10-15">2026-10-15</time> · <a href="privaatheid.html" hreflang="af" lang="af">Afrikaans</a></p>
     </div>
 
     <article class="card legal">
@@ -126,6 +126,13 @@
         <li><strong>Signing out:</strong> it only ends that device’s sign-in. Everything stays on the device, and your account keeps its copy until you sign in again.</li>
         <li><strong>Google itself:</strong> the sign-in happens at Google, under Google’s own privacy policy. On the website, Google’s “Sign in with Google” button (from accounts.google.com) only loads when you open ⚙️ Settings, or when the game offers once to save your progress (on the results after a new best, or in the Shop after a purchase), and only while sign-in is open and you aren’t signed in yet; in the Android app the phone itself asks Google.</li>
       </ul>
+      <h3 id="stemming">The testers’ vote on new ideas (October 2026)</h3>
+      <ul>
+        <li><strong>What:</strong> on the preview page “Die Lewende Toring” (<a href="lewende-toring/">stapelspel.pages.dev/lewende-toring/</a>) you can vote for the one of three new ideas you like most. When you vote, you send your name or nickname, your choice, a reason if you write one, and which of the ideas you played, with a random vote number the page keeps on your device (so you can change your vote instead of voting twice). The page fills in the name with your Challenger Series nickname on this device; it is only sent when you tap “Stem” (vote).</li>
+        <li><strong>Why:</strong> so we can see which idea the testers want and read their reasons. Only the owner sees the names and reasons; we don’t publish them.</li>
+        <li><strong>How long:</strong> votes are taken until 31 October 2026, and all of them are deleted automatically on 8 November 2026. To have your vote deleted sooner, write to us (section 9) with the name you voted with.</li>
+        <li><strong>Under 18?</strong> Ask your parent or guardian first. A nickname is enough; never write a phone number or address (the server refuses them).</li>
+      </ul>
       <h3 id="uitvee">Deleting your account</h3>
       <ul>
         <li><strong>In the game:</strong> ⚙️ Settings → “Delete my account”. This deletes your account, your saved progress, all your devices’ sign-ins and your names on the daily leaderboard, at once, and within 7 days also from our database’s restore copy at Cloudflare. What is stored on your device itself (section 11) stays there until you clear it.</li>
@@ -192,6 +199,7 @@
         <li><strong>Anonymous game counts</strong> (section 2): about 13 months, then deleted automatically.</li>
         <li><strong>Recordings of live Challenger Series matches</strong> (section 2): at most 7 days, then deleted automatically.</li>
         <li><strong>The daily leaderboard</strong> (section 2): 30 days, then deleted automatically.</li>
+        <li><strong>The testers’ votes</strong> (section 2): until 8 November 2026, then all of them are deleted automatically.</li>
         <li><strong>Saved progress</strong> (section 2d, only if you sign in): until you delete it; deleted automatically after 2 years without use.</li>
       </ul>
 
@@ -265,6 +273,8 @@
         <dd>Whether you closed the “Put Stapel on your home screen” tip, so that it doesn’t come back. Not sent. Stays until you clear your browser data.</dd>
         <dt><code>stapel.sponsors.v1</code></dt>
         <dd>The latest list of sponsors, so that the game starts quickly and also without internet. No longer used after 7 days and replaced with every update.</dd>
+        <dt><code>lt.profile</code>, <code>lt.mode</code>, <code>lt.tribe</code>, <code>lt.played</code>, <code>lt.vote</code>, <code>lt.voter</code></dt>
+        <dd>Only on the preview page Die Lewende Toring: your preview rank and level, the idea and tribe you chose last, which ideas you played, your vote, and your random vote number (that one goes with your vote, section 2). The rest is not sent. Stays until you clear your browser data.</dd>
         <dt>Service worker cache</dt>
         <dd>The game’s files, so that it works without internet. Stays until a new version replaces it.</dd>
         <dt><code>stapel.launch</code></dt>

@@ -2,7 +2,7 @@
 // the network first so a new version reaches players on their next visit.
 // Bump VERSION (and VERSION in js/config.js) when shipping; old caches are deleted on activate.
 
-const VERSION = 'stapel-v1.15.5';
+const VERSION = 'stapel-v1.15.6';
 
 const PRECACHE = [
   './',
@@ -118,6 +118,8 @@ self.addEventListener('fetch', (event) => {
   // Other origins (the sponsor API among them) are never touched or cached here:
   // js/sponsorsFeed.js keeps its own short-lived copy of the sponsor list.
   if (url.origin !== self.location.origin) return;
+  // (1.15.6) the Living Tower preview is a page of its own: never answered with the game's cached page
+  if (url.pathname.includes('/lewende-toring/')) return;
 
   if (req.mode === 'navigate') {
     event.respondWith(navigate(event));

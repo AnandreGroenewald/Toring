@@ -3,7 +3,7 @@
 // and real buttons lives here, positioned exactly over the canvas by layout().
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
-import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, DUEL, computeGameHeight } from '../config.js';
+import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, DUEL, computeGameHeight, IDEAS_VOTE, SITE_URL_FALLBACK } from '../config.js';
 import { WEEK } from '../core/week.js';
 
 const WEEK_COINS = WEEK.coins;
@@ -979,6 +979,7 @@ export function createUI(bus) {
     const duelBtn = button('btn-purple btn-practice btn-duel',
       [icon('vs'), h('span', { class: 'btn-txt' }, h('span', { text: S.duel }), h('span', { class: 'btn-sub', text: S.duelSubShort }))],
       () => bus.emit('ui:duel'), { attrs: { 'aria-label': `${S.duel}: ${S.duelSub}` } });
+    if (ideasOpen()) duelBtn.append(h('span', { class: 'btn-new-tag', text: S.newTag }));
     const playRow = h('div', { class: 'play-row' }, practice, duelBtn);
 
     const dock = h('div', { class: 'dock dock-menu' },
@@ -1932,6 +1933,8 @@ export function createUI(bus) {
         m.live ? playCard('random', '🔍', S.duelRandom, S.duelRandomSub, 'ui:duel-random', true) : null,
         playCard('friend', '📲', S.duelFriend, S.duelFriendSub, 'ui:duel-friend', !m.live),
         playCard('bot', '🤖', S.duelBot, S.duelBotSub, 'ui:duel-bot', false)),
+      // (1.15.6) the Living Tower preview's three ideas and the testers' vote
+      ideasBox(),
       m.live ? null : h('p', { class: 'note duel-note', text: S.duelOffline }),
       m.rank ? rankBox(m.rank, m.card, d.name || st.duelPlaceholder) : null,
       // (1.12.1) the name rules where a nickname is typed (Google Play's user content policy)
@@ -1942,6 +1945,38 @@ export function createUI(bus) {
       button('btn-white', [icon('home'), h('span', { text: S.back })], () => bus.emit('ui:home'))));
     st.duelMsg = msg;
     showScreen('duel');
+  }
+
+  /**
+   * (1.15.6, the owner 15 Oct: "build all three with which one do you like most option for the testers"; the vote invite in
+   * "Wedloop, BvB + 3 ideas") the Living Tower preview (its own page, lewende-toring/): its three ideas in the Uitdagersreeks
+   * and an invite on a match's results, until IDEAS_VOTE.until. In the Android app the links open the website.
+   */
+  function ideasOpen(now = Date.now()) {
+    return !!IDEAS_VOTE.on && now < Date.parse(`${IDEAS_VOTE.until}T00:00:00+02:00`);
+  }
+  function ideasHref(n = 0) {
+    const path = `${IDEAS_VOTE.path}${n ? `?idee=${n}` : ''}`;
+    return window.stapelApp ? `${SITE_URL_FALLBACK}${path}` : path;
+  }
+  function ideasBox() {
+    if (!ideasOpen()) return null;
+    const idea = (n, name, sub) => h('a', { class: 'idea-card', href: ideasHref(n), 'data-idea': String(n), onclick: () => audio.play('click') },
+      h('span', { class: 'idea-n', 'aria-hidden': 'true', text: String(n) }),
+      h('span', { class: 'idea-tx' }, h('b', { text: name }), h('small', { text: sub })),
+      h('span', { class: 'pl-go', 'aria-hidden': 'true', text: '›' }));
+    return h('div', { class: 'ideas-box' },
+      h('div', { class: 'ideas-head' }, emo('🗳️'), h('b', { text: S.ideasTitle }), h('span', { class: 'ideas-tag', text: S.ideasTag })),
+      h('p', { class: 'ideas-sub', text: S.ideasSub }),
+      idea(1, S.idea1, S.idea1Sub), idea(2, S.idea2, S.idea2Sub), idea(3, S.idea3, S.idea3Sub),
+      S.ideasLangNote ? h('p', { class: 'ideas-note', text: S.ideasLangNote }) : null);
+  }
+  function ideasInvite() {
+    if (!ideasOpen()) return null;
+    return h('a', { class: 'ideas-invite', href: ideasHref(0), onclick: () => audio.play('click') },
+      h('span', { class: 'pl-ic ideas-inv-ic', 'aria-hidden': 'true' }, emo('🗳️')),
+      h('span', { class: 'pl-tx' }, h('b', { text: S.ideasInvite }), h('small', { text: S.ideasInviteSub })),
+      h('span', { class: 'pl-go', 'aria-hidden': 'true', text: '›' }));
   }
 
   /** (1.15) One of the Uitdagersreeks' ways to play, as a card (see the duel card above). */
@@ -2501,6 +2536,11 @@ export function createUI(bus) {
     }
     // (1.14) a new best: the one gentle "save your progress" offer (when it's due), never in the way
     if (signinOffer) wrap.append(signinOfferEl('results'));
+    // (1.15.6) after a match: try the Living Tower's three ideas and vote
+    if (duel) {
+      const invite = ideasInvite();
+      if (invite) wrap.append(invite);
+    }
     // what next: another match; or (after a tower) the two ways to keep playing, side by side as on the
     // start screen (testers: a lone "Oefen" floating over the card looked like the only thing left)
     if (!duel) wrap.append(h('div', { class: 'play-row res-play' },

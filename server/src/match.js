@@ -23,6 +23,7 @@ import {
   isPunishment,
 } from '../../js/core/duel.js';
 import { cleanCard } from '../../js/core/economy.js';
+import { lobbyVotes } from './ideas.js';
 import { createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, firstSeat, sabotagesFor, cleanVis } from '../../js/core/turns.js';
 
 const MSG_MAX = 512;                   // characters per message (the lobby)
@@ -997,6 +998,15 @@ export class MatchLobby {
     if (url.pathname === '/runs/list' && request.method === 'GET') return this.listRuns();
     if (url.pathname === '/runs/forget' && request.method === 'POST') return this.forgetRuns(request);
     if (url.pathname === '/ghost' || url.pathname === '/match/ghost') return this.ghost();
+    // (1.15.6) the testers' vote on the Living Tower ideas (src/ideas.js); only the Worker's own routes reach these
+    if (url.pathname.startsWith('/votes')) {
+      const votes = lobbyVotes(this.state.storage, this.now);
+      if (url.pathname === '/votes' && request.method === 'POST') return votes.add(request);
+      if (url.pathname === '/votes/list' && request.method === 'GET') return votes.list();
+      if (url.pathname === '/votes/forget' && request.method === 'POST') return votes.forget(request);
+      if (url.pathname === '/votes/prune' && request.method === 'POST') return votes.prune();
+      return json(404, { error: 'not_found' });
+    }
     if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') return json(426, { error: 'websocket_expected' });
     const [response, server] = this.upgrade();
     this.state.acceptWebSocket(server, ['wait']);

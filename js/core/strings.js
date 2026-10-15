@@ -403,6 +403,19 @@ export const S = {
   // (1.15) how rare a shop item is (its colour in the Winkel), and the label on what's new
   tierNames: { common: 'Gewoon', rare: 'Skaars', epic: 'Epies', legendary: 'Legendaries' },
   newTag: 'Nuut',
+  // (1.15.6) the Living Tower preview and the testers' vote (js/ui/dom.js ideasBox / ideasInvite)
+  ideasTitle: 'Nuut: Die Lewende Toring',
+  ideasTag: 'proef',
+  ideasSub: 'Drie nuwe idees: speel hulle teen Robot Rikus en stem vir jou gunsteling.',
+  idea1: 'Wegkruipertjie',
+  idea1Sub: 'Versteek jou mense en raai waar syne is',
+  idea2: 'Bou en Beskerm',
+  idea2Sub: 'Elke Perfek bring ’n inwoner; val aan terwyl jy bou',
+  idea3: 'Een Toring, Twee Stamme',
+  idea3Sub: 'Een toring saam: pasop vir joune',
+  ideasLangNote: '',
+  ideasInvite: 'Probeer die 3 nuwe idees en stem!',
+  ideasInviteSub: 'Die Lewende Toring: jou stem besluit wat ons bou.',
   // (1.15) the app: a newer version is on Google Play
   updateTitle: 'Nuwe weergawe!',
   updateBody: (v) => `Stapel ${v} is op Google Play. Dateer op om die nuutste weergawe te kry.`,

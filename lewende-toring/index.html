@@ -1,0 +1,1161 @@
+<!doctype html>
+<html lang="af">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0d1838">
+<link rel="icon" href="data:,">
+<title>Die Lewende Toring · proef</title>
+<style>
+:root{--font:"Trebuchet MS","Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;--emoji:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:#0d1838;overflow:hidden;font-family:var(--font);color:#fff;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.e{font-family:var(--emoji);font-weight:400}
+#stage{position:absolute;top:0;left:0;width:412px;transform-origin:0 0;overflow:hidden}
+#cv{position:absolute;left:0;top:0;width:412px}
+.hidden{display:none!important}
+
+/* the match HUD */
+#hud{position:absolute;left:8px;right:8px;top:10px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none}
+.pc{width:150px;padding:7px 8px 8px;border-radius:18px;background:rgba(12,20,50,.86);border:2px solid rgba(255,255,255,.14);box-shadow:0 6px 18px rgba(0,0,0,.28);transition:border-color .2s}
+.pc.on{border-color:#ffd23f;box-shadow:0 0 0 3px rgba(255,210,63,.28),0 6px 18px rgba(0,0,0,.28)}
+.pc .top{display:flex;gap:7px;align-items:center}
+.pc.r .top{flex-direction:row-reverse;text-align:right}
+.pc img.av{width:42px;height:42px;border-radius:50%;display:block;flex:none}
+.pc .nm{font-size:14.5px;font-weight:900;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:88px}
+.pc .tr{font-size:11.5px;font-weight:800;opacity:.85}
+.rk{display:flex;align-items:center;gap:5px;margin-top:6px;padding:3px 6px 3px 4px;border-radius:10px;background:rgba(255,255,255,.07)}
+.pc.r .rk{flex-direction:row-reverse}
+.rk svg{flex:none}
+.rk b{font-size:12.5px;white-space:nowrap}
+.lv{flex:none;min-width:24px;height:24px;padding:0 5px;border-radius:12px;background:linear-gradient(#7c6cff,#4b3fc4);border:2px solid #fff;display:grid;place-items:center;font-size:11.5px;font-weight:900;margin-left:auto}
+.pc.r .lv{margin-left:0;margin-right:auto}
+.lv small{font-size:8px;opacity:.85;margin-right:1px}
+.pst{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:15px;font-weight:900}
+.pc.r .pst{flex-direction:row-reverse}
+.chg{display:flex;gap:2px;margin-left:auto}
+.pc.r .chg{margin-left:0;margin-right:auto}
+.chg i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.22)}
+.chg i.f{background:#ffd23f;box-shadow:0 0 6px #ffd23f}
+.away{font-size:11px;font-weight:800;opacity:.9}
+#mid{text-align:center;margin-top:4px;text-shadow:0 2px 4px rgba(0,0,0,.5);width:84px}
+#mid .tag{font-size:9.5px;font-weight:900;letter-spacing:1px;opacity:.9;text-transform:uppercase}
+#mid b{display:block;font-size:15px;line-height:1.15;margin-top:2px}
+#mid small{font-size:11.5px;font-weight:800;opacity:.9}
+#help{pointer-events:auto;margin-top:6px;width:30px;height:30px;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(12,20,50,.7);color:#fff;font:inherit;font-weight:900;font-size:16px}
+
+#toast{position:absolute;left:0;right:0;top:150px;text-align:center;pointer-events:none}
+#toast div{display:inline-block;padding:8px 16px;border-radius:999px;background:rgba(10,16,40,.85);font-weight:900;font-size:17px;animation:pop .22s ease-out;max-width:380px}
+#toast div.big{font-size:34px;background:none;color:#ffd23f;text-shadow:0 3px 0 #b86d12,0 0 18px rgba(255,210,60,.55)}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+
+#bar{position:absolute;left:8px;right:8px;bottom:10px;padding:10px 12px 12px;border-radius:22px;background:rgba(12,20,50,.9);border:1.5px solid rgba(255,255,255,.14)}
+#hint{font-size:14.5px;font-weight:800;text-align:center;line-height:1.3;min-height:19px}
+#btns{display:flex;gap:8px;justify-content:center;margin-top:9px;flex-wrap:wrap}
+#btns:empty{display:none}
+.b{border:0;font:inherit;font-weight:900;font-size:15.5px;color:#fff;padding:11px 15px;border-radius:16px;background:linear-gradient(#ffb04a,#f08a14);box-shadow:0 5px 0 #b86d12;cursor:pointer;white-space:nowrap}
+.b:active{transform:translateY(3px);box-shadow:0 2px 0 #b86d12}
+.b.alt{background:linear-gradient(#5b6a96,#3b4870);box-shadow:0 5px 0 #262f4d}
+.b.grn{background:linear-gradient(#4fd86a,#25a845);box-shadow:0 5px 0 #187a30}
+.b.sel{outline:3px solid #ffd23f;outline-offset:2px}
+.b:disabled{opacity:.42;cursor:default}
+
+/* menus */
+.ov{position:absolute;inset:0;overflow-y:auto;padding:16px 14px 28px;background:linear-gradient(#17285e,#0d1838 60%)}
+.ttl{display:flex;align-items:center;gap:10px}
+.ttl h1{font-size:25px;line-height:1.05}
+.proef{display:inline-block;font-size:10.5px;font-weight:900;letter-spacing:1px;background:#ff3d5a;padding:3px 8px;border-radius:99px;vertical-align:middle}
+.sub{font-size:13.5px;opacity:.85;margin-top:4px;line-height:1.35}
+.sec{font-size:12px;font-weight:900;letter-spacing:1.3px;text-transform:uppercase;opacity:.85;margin:18px 2px 8px;display:flex;align-items:center;gap:8px}
+.card{background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.13);border-radius:18px;padding:11px 12px}
+.prof{display:flex;gap:12px;align-items:center;margin-top:14px}
+.prof img{width:62px;height:62px;border-radius:50%}
+.barline{height:8px;border-radius:9px;background:rgba(255,255,255,.15);overflow:hidden;margin-top:4px}
+.barline i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#d8e2ee,#fff)}
+.barline.xp i{background:linear-gradient(90deg,#9d8cff,#6b5cff)}
+.opt{display:flex;gap:10px;align-items:flex-start;margin-top:8px;cursor:pointer}
+.opt .n{flex:none;width:34px;height:34px;border-radius:11px;display:grid;place-items:center;font-weight:900;font-size:19px;background:#2a3a78}
+.opt.on{border-color:#ffd23f;background:rgba(255,210,63,.1)}
+.opt.on .n{background:#ffd23f;color:#4a2c00}
+.opt b{font-size:16px}
+.opt p{font-size:13px;opacity:.85;line-height:1.35;margin-top:2px}
+.pl{display:flex;align-items:center;gap:9px;margin-top:8px;padding:8px 10px}
+.pl img{width:44px;height:44px;border-radius:50%;flex:none}
+.pl .who{flex:1;min-width:0}
+.pl .who b{font-size:15px}
+.pl .who .st{font-size:12px;font-weight:800;opacity:.8}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#3cdc5a;margin-right:4px;box-shadow:0 0 6px #3cdc5a}
+.dot.busy{background:#ffb02e;box-shadow:0 0 6px #ffb02e}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:900;padding:2px 7px 2px 3px;border-radius:9px;background:rgba(255,255,255,.08);margin-top:3px}
+.tribes{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.tc{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.tc img{width:56px;height:56px;border-radius:50%;flex:none}
+.tc b{font-size:18px}
+.tc .ln{font-size:13px;line-height:1.35;margin-top:3px}
+.tc .ln span{font-weight:900}
+.vs{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:radial-gradient(circle at 50% 45%,#2b3f92,#0d1838 70%)}
+.vsrow{display:flex;align-items:center;gap:8px}
+.vsp{width:160px;text-align:center}
+.vsp img{width:104px;height:104px;border-radius:50%;box-shadow:0 0 0 4px rgba(255,255,255,.2),0 10px 24px rgba(0,0,0,.4)}
+.vsp .nm{font-size:20px;font-weight:900;margin-top:6px}
+.vsp .rkbig{display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:6px}
+.vsp .rkbig b{font-size:17px}
+.vsp .lvbig{display:inline-block;margin-top:6px;padding:4px 12px;border-radius:99px;background:linear-gradient(#7c6cff,#4b3fc4);border:2px solid #fff;font-weight:900;font-size:15px}
+.vsx{font-size:44px;font-weight:900;color:#ffd23f;text-shadow:0 3px 0 #b86d12}
+.res{text-align:center}
+.res h2{font-size:38px;margin-top:20px}
+.gain{margin-top:12px;text-align:left}
+.gain .row{display:flex;justify-content:space-between;font-weight:900;font-size:15px}
+.foot{font-size:11.5px;opacity:.6;text-align:center;margin-top:18px;line-height:1.4}
+.rules{position:absolute;inset:0;background:rgba(5,10,30,.82);display:flex;align-items:center;justify-content:center;padding:18px}
+.rules .card{background:#17285e;max-width:380px;font-size:14px;line-height:1.45}
+.rules h3{font-size:19px;margin-bottom:6px}
+.rules li{margin:5px 0 0 18px}
+.votecard{margin-top:12px;border-color:#ffd23f;background:linear-gradient(135deg,rgba(255,210,63,.18),rgba(255,120,60,.12))}
+.votecard b{font-size:17px}
+.vopt{display:flex;gap:10px;align-items:center;margin-top:8px;cursor:pointer;padding:10px 12px}
+.vopt .n{flex:none;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;font-weight:900;background:#2a3a78}
+.vopt.on{border-color:#ffd23f;background:rgba(255,210,63,.13)}
+.vopt.on .n{background:#ffd23f;color:#4a2c00}
+.vopt small{display:block;font-size:12px;opacity:.8}
+.fld{display:block;margin-top:12px;font-size:13px;font-weight:900;letter-spacing:.3px}
+.fld input,.fld textarea{display:block;width:100%;margin-top:5px;padding:10px 12px;border-radius:12px;border:2px solid rgba(255,255,255,.25);background:rgba(0,0,0,.25);color:#fff;font:inherit;font-size:16px;font-weight:700}
+.fld textarea{min-height:70px;resize:none}
+.fld input:focus,.fld textarea:focus{outline:none;border-color:#ffd23f}
+.vmsg{min-height:20px;margin-top:8px;font-size:13.5px;font-weight:800;color:#ffb3a8}
+.vmsg.ok{color:#7dff9a}
+.small{font-size:11.5px;opacity:.75;line-height:1.4;margin-top:10px}
+.small a{color:#9fd4ff}
+.back{display:inline-block;color:#cfe0ff;font-weight:900;font-size:14px;text-decoration:none;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <div id="hud" class="hidden">
+    <div class="pc" id="pcMe"></div>
+    <div id="mid"><div class="tag" id="modeTag"></div><b id="turnLbl"></b><small id="turnCnt"></small><br><button id="help">?</button></div>
+    <div class="pc r" id="pcAi"></div>
+  </div>
+  <div id="toast"></div>
+  <div id="bar" class="hidden"><div id="hint"></div><div id="btns"></div></div>
+  <div id="menu" class="ov"></div>
+  <div id="vs" class="vs hidden"></div>
+  <div id="rules" class="rules hidden"></div>
+  <div id="vote" class="rules hidden"></div>
+</div>
+
+<script>
+'use strict';
+(() => {
+// ============================================================ basics
+const Q = new URLSearchParams(location.search);
+let SPEED = Number(Q.get('speed')) || 1;
+const BOT = Q.get('bot') === '1';
+let seed = Number(Q.get('seed')) || ((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0);
+function rnd() { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }
+const R = (a, b) => a + rnd() * (b - a);
+const pick = (a) => a[Math.floor(rnd() * a.length)];
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms / SPEED));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const ease = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
+const $ = (id) => document.getElementById(id);
+const other = (w) => (w === 'me' ? 'ai' : 'me');
+const vib = (ms) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { /* no vibration */ } };
+const store = { get(k, d) { try { const v = localStorage.getItem('lt.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('lt.' + k, JSON.stringify(v)); } catch (e) { /* private mode */ } } };
+
+// ============================================================ tribes, cast, ranks
+const TR = {
+  vuur: { name: 'Vuur', emoji: '🔥', col: '#e8452c', dark: '#8e1d12', light: '#ffb27a', special: 'Veldbrand', sEmoji: '🔥', beats: 'gras',
+    sText: 'brand 3 blokke waar jy mik', strong: 'Warmkop: jou missie laai vinniger', weak: 'Water tref jou harder', cast: ['braai', 'rissie', 'draakie', 'vuurhoutjie'], hero: 'draakie' },
+  water: { name: 'Water', emoji: '🌊', col: '#1f8fd6', dark: '#134a7d', light: '#9be8ff', special: 'Waterwiel', sEmoji: '🌊', beats: 'vuur',
+    sText: 'spoel 3 vloere uit', strong: 'Swemmers: die eerste een wat val, swem terug', weak: 'Gras tref jou harder', cast: ['haai', 'seekat', 'duiker', 'brandweer'], hero: 'haai' },
+  gras: { name: 'Gras', emoji: '🌱', col: '#3fae3a', dark: '#2a6a24', light: '#a8f08e', special: 'Rankgryp', sEmoji: '🌿', beats: 'water',
+    sText: 'gryp altyd iemand + lig 2 vensters op', strong: 'Wortels: die onderste 3 blokke is veilig', weak: 'Vuur tref jou harder', cast: ['boer', 'bytjie', 'klippie', 'madelief'], hero: 'bytjie' },
+};
+const AVN = { boer: 'Boer die Bouer', bytjie: 'Bytjie', klippie: 'Klippie', madelief: 'Madelief', braai: 'Braai-Boet', rissie: 'Rissie',
+  draakie: 'Draakie', vuurhoutjie: 'Vuurhoutjie', haai: 'Haai-Hennie', seekat: 'Seekat Sannie', duiker: 'Duiker Dirk', brandweer: 'Brandweer-Bettie', rikus: 'Robot Rikus' };
+const AV_TEAM = { boer: 'gras', bytjie: 'gras', klippie: 'gras', madelief: 'gras', braai: 'vuur', rissie: 'vuur', draakie: 'vuur', vuurhoutjie: 'vuur',
+  haai: 'water', seekat: 'water', duiker: 'water', brandweer: 'water', rikus: 'robot' };
+const TEAM_BG = { gras: ['#a8f08e', '#3c9a33'], vuur: ['#ffc37e', '#d9402a'], water: ['#94eaff', '#1878ad'], robot: ['#d7def0', '#6b7896'] };
+// (the owner, 15 Oct: "The rankings needs to be more clear … see the other persons ranking with levels")
+const TIERS = [['Brons', '#f2b27a', '#a0582a'], ['Silwer', '#ffffff', '#8f9db0'], ['Goud', '#fff0a0', '#d0950e'], ['Platinum', '#d6fbff', '#38b6c9'], ['Diamant', '#e6d8ff', '#7c5cf0']];
+const ROMAN = ['I', 'II', 'III'];
+function rankOf(pts) { const d = Math.floor(pts / 100); if (d >= 15) return { name: 'Stapel-legende', tier: 4, div: '★', into: pts - 1500, of: 100 }; return { name: `${TIERS[Math.floor(d / 3)][0]} ${ROMAN[d % 3]}`, tier: Math.floor(d / 3), div: ROMAN[d % 3], into: pts % 100, of: 100 }; }
+function levelOf(xp) { let lv = 1, need = 120; while (xp >= need) { xp -= need; lv++; need = 100 + lv * 20; } return { lv, into: xp, need }; }
+function shieldSVG(tier, div, size) {
+  const [, c1, c2] = TIERS[tier];
+  return `<svg width="${size}" height="${Math.round(size * 1.15)}" viewBox="0 0 100 115"><defs><linearGradient id="sg${tier}${size}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs>
+    <path d="M50 4 L92 18 L88 64 Q82 96 50 111 Q18 96 12 64 L8 18 Z" fill="url(#sg${tier}${size})" stroke="#1b2550" stroke-width="6"/>
+    <path d="M50 30 L56 44 L71 45 L59 55 L63 70 L50 61 L37 70 L41 55 L29 45 L44 44 Z" fill="#fff" stroke="#1b2550" stroke-width="3"/>
+    <text x="50" y="96" text-anchor="middle" font-family="Trebuchet MS" font-weight="900" font-size="24" fill="#1b2550">${div}</text></svg>`;
+}
+
+// the sample players "online now" (made up for the preview: no real people)
+const ONLINE = [
+  { name: 'Ruan', av: 'haai', tribe: 'water', pts: 980, xp: 5200, st: 'in die lobby', busy: false },
+  { name: 'Lize', av: 'bytjie', tribe: 'gras', pts: 760, xp: 3900, st: 'in die lobby', busy: false },
+  { name: 'Jannie', av: 'braai', tribe: 'vuur', pts: 640, xp: 2500, st: 'speel teen Mia', busy: true },
+  { name: 'Mia', av: 'seekat', tribe: 'water', pts: 410, xp: 1400, st: 'speel teen Jannie', busy: true },
+  { name: 'Oom Piet', av: 'boer', tribe: 'gras', pts: 150, xp: 520, st: 'in die lobby', busy: false },
+];
+
+// ============================================================ avatars (SVG → images)
+function flameD(s) { return `M0 0 C ${-s * .75} ${-s * .25} ${-s * .5} ${-s * 1.15} 0 ${-s * 1.75} C ${s * .15} ${-s * 1.15} ${s * .72} ${-s * .95} ${s * .58} ${-s * .3} C ${s * .5} ${-s * .06} ${s * .28} 0 0 0 Z`; }
+const petals = (c) => [0, 72, 144, 216, 288].map((a) => `<ellipse cx="0" cy="-5" rx="3.6" ry="5.5" fill="${c}" transform="rotate(${a})"/>`).join('');
+const AV_ART = {
+  boer: `<path d="M14 104 Q18 76 50 73 Q82 76 86 104 Z" fill="#c9a86b" stroke="#8a6d38" stroke-width="2"/><path d="M42 74 L50 86 L58 74" fill="none" stroke="#8a6d38" stroke-width="2.5"/>
+    <circle cx="30" cy="54" r="5.5" fill="#eab48d"/><circle cx="70" cy="54" r="5.5" fill="#eab48d"/><circle cx="50" cy="53" r="20" fill="#f3c29c"/>
+    <circle cx="43" cy="50" r="2.8" fill="#2b1a10"/><circle cx="57" cy="50" r="2.8" fill="#2b1a10"/><circle cx="38" cy="58" r="3.6" fill="#f59a8b" opacity=".7"/><circle cx="62" cy="58" r="3.6" fill="#f59a8b" opacity=".7"/>
+    <path d="M38 61 Q44 55 50 60 Q56 55 62 61 Q56 65 50 62 Q44 65 38 61 Z" fill="#7a4a22"/><path d="M45 67 Q50 70 55 67" fill="none" stroke="#7a3b22" stroke-width="2" stroke-linecap="round"/>
+    <path d="M27 44 Q29 22 50 21 Q71 22 73 44 Z" fill="#ffcc33" stroke="#c4920f" stroke-width="2"/><rect x="22" y="40" width="56" height="7" rx="3.5" fill="#ffd84d" stroke="#c4920f" stroke-width="2"/><rect x="46.5" y="21.5" width="7" height="19" rx="2" fill="#f0b81e"/>`,
+  bytjie: `<ellipse cx="30" cy="44" rx="13" ry="18" fill="#fff" opacity=".9" stroke="#b9d3e6" stroke-width="2" transform="rotate(-25 30 44)"/><ellipse cx="70" cy="44" rx="13" ry="18" fill="#fff" opacity=".9" stroke="#b9d3e6" stroke-width="2" transform="rotate(25 70 44)"/>
+    <path d="M42 36 Q36 24 30 20" fill="none" stroke="#2b2b2b" stroke-width="2.5"/><circle cx="30" cy="20" r="3.5" fill="#2b2b2b"/><path d="M58 36 Q64 24 70 20" fill="none" stroke="#2b2b2b" stroke-width="2.5"/><circle cx="70" cy="20" r="3.5" fill="#2b2b2b"/>
+    <ellipse cx="50" cy="62" rx="24" ry="26" fill="#ffd23f" stroke="#2b2b2b" stroke-width="2.5"/><path d="M28 70 Q50 76 72 70 L72 77 Q50 84 28 77 Z" fill="#2b2b2b"/><path d="M33 83 Q50 89 67 83 L64 88 Q50 92 36 88 Z" fill="#2b2b2b"/>
+    <circle cx="42" cy="54" r="6.5" fill="#fff"/><circle cx="58" cy="54" r="6.5" fill="#fff"/><circle cx="43" cy="55" r="3.4" fill="#2b2b2b"/><circle cx="59" cy="55" r="3.4" fill="#2b2b2b"/>
+    <circle cx="36" cy="63" r="3.4" fill="#ff9a7a" opacity=".8"/><circle cx="64" cy="63" r="3.4" fill="#ff9a7a" opacity=".8"/><path d="M44 64 Q50 69 56 64" fill="none" stroke="#2b2b2b" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M38 41 Q50 30 62 41 Z" fill="#ff9f1c" stroke="#b86a00" stroke-width="1.8"/><rect x="35" y="39" width="30" height="5" rx="2.5" fill="#ffb347" stroke="#b86a00" stroke-width="1.5"/>`,
+  klippie: `<path d="M18 76 Q12 46 36 34 Q56 24 74 36 Q90 50 84 74 Q78 90 50 90 Q24 90 18 76 Z" fill="#a3abb5" stroke="#5d6670" stroke-width="3"/><ellipse cx="68" cy="76" rx="7" ry="4" fill="#8a929c"/>
+    <path d="M34 36 Q44 26 56 30 Q66 26 72 36 Q62 34 54 38 Q44 33 34 36 Z" fill="#5cc246"/>
+    <circle cx="40" cy="58" r="10" fill="#fff" stroke="#5d6670" stroke-width="1.5"/><circle cx="62" cy="58" r="10" fill="#fff" stroke="#5d6670" stroke-width="1.5"/>
+    <circle cx="42" cy="60" r="5" fill="#2b2b2b"/><circle cx="64" cy="60" r="5" fill="#2b2b2b"/><circle cx="43.5" cy="58" r="1.6" fill="#fff"/><circle cx="65.5" cy="58" r="1.6" fill="#fff"/>
+    <path d="M45 75 Q51 79 57 75" fill="none" stroke="#3d444c" stroke-width="2.4" stroke-linecap="round"/>`,
+  madelief: `<path d="M14 104 Q18 76 50 73 Q82 76 86 104 Z" fill="#ff8ab6" stroke="#c45585" stroke-width="2"/><circle cx="25" cy="60" r="8" fill="#7a4a22"/><circle cx="75" cy="60" r="8" fill="#7a4a22"/>
+    <circle cx="50" cy="54" r="20" fill="#f6cfae"/><path d="M29 52 Q28 30 50 29 Q72 30 71 52 Q66 40 50 40 Q36 40 29 52 Z" fill="#7a4a22"/>
+    <circle cx="43" cy="53" r="2.8" fill="#2b1a10"/><circle cx="57" cy="53" r="2.8" fill="#2b1a10"/><circle cx="38" cy="61" r="3.6" fill="#f59a8b" opacity=".75"/><circle cx="62" cy="61" r="3.6" fill="#f59a8b" opacity=".75"/>
+    <path d="M44 64 Q50 69 56 64" fill="none" stroke="#a0442a" stroke-width="2.2" stroke-linecap="round"/><g transform="translate(66 33)">${petals('#fff')}<circle r="3.4" fill="#ffd23f"/></g>`,
+  braai: `<path d="M14 104 Q18 76 50 73 Q82 76 86 104 Z" fill="#2f6db5"/><path d="M34 76 L66 76 L70 104 L30 104 Z" fill="#f4f1ea" stroke="#c9c2b3" stroke-width="2"/>
+    <circle cx="30" cy="55" r="5.5" fill="#d9a07a"/><circle cx="70" cy="55" r="5.5" fill="#d9a07a"/><circle cx="50" cy="54" r="20" fill="#e8b48c"/>
+    <path d="M31 56 Q32 78 50 79 Q68 78 69 56 Q64 66 50 66 Q36 66 31 56 Z" fill="#5b3a1e"/><circle cx="43" cy="51" r="2.8" fill="#2b1a10"/><circle cx="57" cy="51" r="2.8" fill="#2b1a10"/>
+    <path d="M44 70 Q50 74 56 70" fill="none" stroke="#f3d3b8" stroke-width="2.2" stroke-linecap="round"/><path d="M29 46 Q30 28 50 27 Q70 28 71 46 Z" fill="#e8312a"/><path d="M50 44 Q68 42 82 48 Q70 50 52 49 Z" fill="#b5221c"/>`,
+  rissie: `<path d="M28 38 C 44 24, 80 30, 76 58 C 73 78, 60 88, 44 94 C 55 82, 56 68, 48 58 C 40 50, 28 48, 28 38 Z" fill="#e8312a" stroke="#8e1712" stroke-width="2.5"/>
+    <path d="M28 38 Q 22 26 32 18 Q 34 28 42 30 Q 34 34 28 38 Z" fill="#3f9b35" stroke="#2a6a24" stroke-width="2"/><path d="M40 34 Q 58 30 70 44" fill="none" stroke="#fff" stroke-width="3" opacity=".45" stroke-linecap="round"/>
+    <circle cx="50" cy="52" r="6" fill="#fff"/><circle cx="64" cy="52" r="6" fill="#fff"/><circle cx="51" cy="53" r="3" fill="#2b2b2b"/><circle cx="65" cy="53" r="3" fill="#2b2b2b"/>
+    <path d="M44 44 L54 47 M70 44 L60 47" stroke="#5a0d08" stroke-width="2.6" stroke-linecap="round"/><path d="M51 61 Q58 67 66 61" fill="none" stroke="#5a0d08" stroke-width="2.4" stroke-linecap="round"/>`,
+  draakie: `<path d="M30 40 L24 18 L40 34 Z" fill="#ffd23f" stroke="#b88400" stroke-width="2"/><path d="M70 40 L76 18 L60 34 Z" fill="#ffd23f" stroke="#b88400" stroke-width="2"/>
+    <ellipse cx="50" cy="56" rx="28" ry="24" fill="#4fbf5a" stroke="#2a7a30" stroke-width="2.5"/><ellipse cx="50" cy="70" rx="17" ry="11" fill="#9fe8a6" stroke="#2a7a30" stroke-width="2"/>
+    <circle cx="44" cy="69" r="2.2" fill="#1d4a22"/><circle cx="56" cy="69" r="2.2" fill="#1d4a22"/>
+    <circle cx="39" cy="50" r="6.5" fill="#fff"/><circle cx="61" cy="50" r="6.5" fill="#fff"/><circle cx="40" cy="51" r="3.3" fill="#2b2b2b"/><circle cx="62" cy="51" r="3.3" fill="#2b2b2b"/>
+    <path d="M32 42 L44 45 M68 42 L56 45" stroke="#1d4a22" stroke-width="2.4" stroke-linecap="round"/><path d="M43 79 L46 84 L49 79 Z" fill="#fff"/>
+    <circle cx="78" cy="30" r="5" fill="#cfd6e0" opacity=".9"/><circle cx="86" cy="22" r="3.5" fill="#cfd6e0" opacity=".8"/>`,
+  vuurhoutjie: `<rect x="41" y="52" width="18" height="56" rx="6" fill="#f2d29b" stroke="#b8915a" stroke-width="2"/><ellipse cx="50" cy="46" rx="18" ry="19" fill="#e8312a" stroke="#8e1712" stroke-width="2.5"/>
+    <path transform="translate(50 29)" d="${flameD(13)}" fill="#ffb02e"/><path transform="translate(51 29)" d="${flameD(7)}" fill="#fff3a6"/>
+    <circle cx="44" cy="45" r="4.5" fill="#fff"/><circle cx="56" cy="45" r="4.5" fill="#fff"/><circle cx="44.6" cy="46" r="2.3" fill="#2b2b2b"/><circle cx="56.6" cy="46" r="2.3" fill="#2b2b2b"/>
+    <path d="M43 54 Q50 60 57 54" fill="none" stroke="#5a0d08" stroke-width="2.4" stroke-linecap="round"/>`,
+  haai: `<path d="M46 36 L58 10 L68 38 Z" fill="#6f8499" stroke="#44576b" stroke-width="2"/><path d="M12 74 Q14 38 50 32 Q86 36 90 72 Q72 90 50 90 Q28 90 12 74 Z" fill="#8299ae" stroke="#44576b" stroke-width="2.5"/>
+    <path d="M20 76 Q50 94 82 74 Q68 64 50 64 Q32 64 20 76 Z" fill="#eef3f7"/><circle cx="36" cy="52" r="7" fill="#fff"/><circle cx="64" cy="52" r="7" fill="#fff"/><circle cx="37" cy="53" r="3.6" fill="#1d2b45"/><circle cx="65" cy="53" r="3.6" fill="#1d2b45"/>
+    <path d="M28 68 Q50 84 74 68 Q50 78 28 68 Z" fill="#7a2030"/><polyline points="30,69 34,74 38,71 42,76 46,72 50,77 54,72 58,76 62,71 66,74 70,69" fill="#fff" stroke="#fff" stroke-width="1"/>`,
+  seekat: `${[18, 32, 46, 60, 74].map((x, i) => `<path d="M${x + 4} 60 Q ${x - 6 + i * 2} 80 ${x + 2} 92 Q ${x + 10} 96 ${x + 12} 88" fill="none" stroke="#a066d6" stroke-width="9" stroke-linecap="round"/>`).join('')}
+    <ellipse cx="50" cy="46" rx="27" ry="25" fill="#b07ae0" stroke="#6b3fa0" stroke-width="2.5"/><circle cx="40" cy="46" r="7" fill="#fff"/><circle cx="60" cy="46" r="7" fill="#fff"/><circle cx="41" cy="47" r="3.6" fill="#2b2b2b"/><circle cx="61" cy="47" r="3.6" fill="#2b2b2b"/>
+    <circle cx="33" cy="56" r="3.6" fill="#ff8ab6" opacity=".8"/><circle cx="67" cy="56" r="3.6" fill="#ff8ab6" opacity=".8"/><path d="M44 58 Q50 63 56 58" fill="none" stroke="#4a2275" stroke-width="2.2" stroke-linecap="round"/>
+    <g transform="translate(66 24)">${petals('#ffd23f')}<circle r="3" fill="#ff7a3d"/></g>`,
+  duiker: `<path d="M14 104 Q18 76 50 73 Q82 76 86 104 Z" fill="#1d2b45"/><path d="M46 76 L54 76 L54 104 L46 104 Z" fill="#ffcf2e"/><circle cx="50" cy="54" r="20" fill="#e8b48c"/>
+    <path d="M31 46 Q34 30 50 30 Q66 30 69 46 Q60 38 50 38 Q40 38 31 46 Z" fill="#3a2a1a"/><rect x="29" y="43" width="42" height="20" rx="9" fill="#bfe8ff" stroke="#2a86d6" stroke-width="4"/>
+    <circle cx="42" cy="53" r="3" fill="#1d2b45"/><circle cx="58" cy="53" r="3" fill="#1d2b45"/><path d="M36 47 L44 47" stroke="#fff" stroke-width="2.4" opacity=".8" stroke-linecap="round"/>
+    <path d="M72 52 L78 24" stroke="#ffcf2e" stroke-width="5" stroke-linecap="round"/><path d="M60 68 Q68 70 72 60" fill="none" stroke="#ffcf2e" stroke-width="4" stroke-linecap="round"/><path d="M45 68 Q50 71 55 68" fill="none" stroke="#7a3b22" stroke-width="2" stroke-linecap="round"/>`,
+  brandweer: `<path d="M14 104 Q18 76 50 73 Q82 76 86 104 Z" fill="#f2c12e" stroke="#b88400" stroke-width="2"/><rect x="16" y="88" width="68" height="5" fill="#d8dde6"/>
+    <circle cx="27" cy="62" r="7" fill="#7a4a22"/><circle cx="73" cy="62" r="7" fill="#7a4a22"/><circle cx="50" cy="56" r="20" fill="#f3c29c"/>
+    <circle cx="43" cy="55" r="2.8" fill="#2b1a10"/><circle cx="57" cy="55" r="2.8" fill="#2b1a10"/><circle cx="38" cy="63" r="3.6" fill="#f59a8b" opacity=".75"/><circle cx="62" cy="63" r="3.6" fill="#f59a8b" opacity=".75"/>
+    <path d="M44 66 Q50 71 56 66" fill="none" stroke="#a0442a" stroke-width="2.2" stroke-linecap="round"/><path d="M26 48 Q28 24 50 23 Q72 24 74 48 Z" fill="#e8312a" stroke="#8e1712" stroke-width="2"/>
+    <path d="M20 46 Q50 40 80 46 L80 51 Q50 45 20 51 Z" fill="#c4221b"/><circle cx="50" cy="34" r="6.5" fill="#ffd23f" stroke="#b88400" stroke-width="1.5"/>`,
+  rikus: `<rect x="47" y="14" width="6" height="12" fill="#5b6478"/><circle cx="50" cy="13" r="5" fill="#ff5a5a"/><rect x="22" y="26" width="56" height="48" rx="12" fill="#e9eef7" stroke="#5b6478" stroke-width="3"/>
+    <rect x="30" y="36" width="40" height="22" rx="8" fill="#1d2b45"/><circle cx="41" cy="47" r="5" fill="#5ff0ff"/><circle cx="59" cy="47" r="5" fill="#5ff0ff"/><rect x="38" y="63" width="24" height="5" rx="2.5" fill="#5b6478"/><path d="M26 104 Q28 80 50 78 Q72 80 74 104 Z" fill="#c9d2e3"/>`,
+};
+const IMG = {}, URL_ = {};
+function avatarSVG(id) {
+  const [c1, c2] = TEAM_BG[AV_TEAM[id]];
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="160" height="160"><defs><radialGradient id="bg" cx=".5" cy=".35" r=".7"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></radialGradient><clipPath id="cp"><circle cx="50" cy="50" r="47"/></clipPath></defs>
+    <circle cx="50" cy="50" r="47" fill="url(#bg)"/><g clip-path="url(#cp)">${AV_ART[id]}</g><circle cx="50" cy="50" r="47" fill="none" stroke="#fff" stroke-width="5"/></svg>`;
+}
+async function loadAvatars() {
+  await Promise.all(Object.keys(AV_ART).map(async (id) => {
+    const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(avatarSVG(id));
+    URL_[id] = url; const img = new Image(); img.src = url;
+    try { await img.decode(); } catch (e) { await new Promise((r) => { img.onload = r; img.onerror = r; }); }
+    IMG[id] = img;
+  }));
+}
+
+// ============================================================ stage + canvas
+const stage = $('stage'), cv = $('cv'), ctx = cv.getContext('2d');
+const W = 412; let H = 860, SC = 1, DPR = Math.min(window.devicePixelRatio || 1, 3), BASE = 690, SEA = 712;
+const BH = 28, CRANE_Y = 168;
+function layout() {
+  const iw = window.innerWidth, ih = window.innerHeight;
+  SC = iw / W; if (ih / SC < 700) SC = ih / 700;
+  H = Math.round(ih / SC);
+  stage.style.height = H + 'px'; stage.style.transform = `scale(${SC})`; stage.style.left = Math.max(0, (iw - W * SC) / 2) + 'px';
+  cv.style.height = H + 'px'; cv.width = Math.round(W * SC * DPR); cv.height = Math.round(H * SC * DPR);
+  BASE = H - 182; SEA = BASE + 22;
+}
+window.addEventListener('resize', layout);
+
+// ============================================================ block art (cached canvases)
+const STROKE = { gras: '#4a2f16', vuur: '#4d120d', water: '#134a7d', klip: '#4d5560' };
+const WIDTHS = [98, 106, 114, 122];
+const ART = {};
+function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function lrng(s) { return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; }
+function blockArt(el, w) {
+  const key = el + w; if (ART[key]) return ART[key];
+  const h = BH, K = 3, p = 4, c = document.createElement('canvas'); c.width = (w + p * 2) * K; c.height = (h + p * 2) * K;
+  const g = c.getContext('2d'); g.scale(K, K); g.translate(p, p);
+  const r = lrng(w * 131 + el.length * 977 + 7);
+  g.save(); rr(g, 0, 0, w, h, 7); g.clip();
+  let gr;
+  if (el === 'gras') {
+    gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#b07a44'); gr.addColorStop(1, '#7a4f2a'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(94,58,27,.75)'; for (let k = 0; k < 5; k++) { g.beginPath(); g.arc(8 + r() * (w - 16), h * .62 + r() * h * .3, 1.6 + r() * 1.6, 0, 7); g.fill(); }
+    g.beginPath(); g.moveTo(0, -2); g.lineTo(w, -2); g.lineTo(w, h * .38);
+    for (let x = w; x > -14; x -= 13) g.quadraticCurveTo(x - 6.5, h * .6, x - 13, h * .38);
+    g.closePath(); gr = g.createLinearGradient(0, 0, 0, h * .6); gr.addColorStop(0, '#8be86c'); gr.addColorStop(1, '#4bb13b'); g.fillStyle = gr; g.fill();
+    g.fillStyle = 'rgba(216,255,196,.55)'; rr(g, 6, 3, w * .4, 3, 1.5); g.fill();
+  } else if (el === 'vuur') {
+    gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#f06a3c'); gr.addColorStop(.55, '#c63a22'); gr.addColorStop(1, '#7d1d12'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(255,154,98,.45)'; g.fillRect(0, 0, w, h * .22);
+    g.strokeStyle = '#ffd25a'; g.lineWidth = 2; g.shadowColor = '#ffb000'; g.shadowBlur = 5; g.lineJoin = 'round';
+    g.beginPath(); g.moveTo(w * .12, h * .4); g.lineTo(w * .26, h * .58); g.lineTo(w * .22, h * .82); g.lineTo(w * .34, h); g.stroke();
+    g.beginPath(); g.moveTo(w * .68, 0); g.lineTo(w * .64, h * .32); g.lineTo(w * .8, h * .55); g.lineTo(w * .9, h * .9); g.stroke(); g.shadowBlur = 0;
+  } else if (el === 'water') {
+    gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#9be8ff'); gr.addColorStop(1, '#2a86d6'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(31,111,189,.35)'; g.beginPath(); g.moveTo(0, h * .55); for (let x = 0; x < w; x += 20) g.quadraticCurveTo(x + 10, h * .42, x + 20, h * .55); g.lineTo(w, h); g.lineTo(0, h); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.6)'; rr(g, 6, 4, w * .42, 4, 2); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = 1.4; for (let k = 0; k < 3; k++) { g.beginPath(); g.arc(w * .6 + r() * w * .33, h * .35 + r() * h * .5, 1.8 + r() * 2.4, 0, 7); g.stroke(); }
+  } else {
+    gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#bcc3cd'); gr.addColorStop(1, '#7d8590'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(80,88,100,.35)'; for (let k = 0; k < 6; k++) { g.beginPath(); g.ellipse(6 + r() * (w - 12), 5 + r() * (h - 10), 3 + r() * 5, 2 + r() * 2, 0, 0, 7); g.fill(); }
+  }
+  g.restore(); rr(g, 0, 0, w, h, 7); g.lineWidth = 2.4; g.strokeStyle = STROKE[el]; g.stroke();
+  ART[key] = c; return c;
+}
+
+// ============================================================ game state
+let G = null;
+let bid = 0;
+const mkBlock = (el, owner, x, w) => ({ id: ++bid, el, owner, x, w: w || pick(WIDTHS), res: null, know: 'unknown', litT: 0, dy: 0, sq: 0, rot: R(-.018, .018), burning: false });
+function newSide(who, tribe, name, av, pts, xp) {
+  const cast = TR[tribe].cast;
+  return { who, tribe, name, av, pts, xp, charge: 0, drops: 0,
+    res: [0, 1, 2, 3, 4, 5].map((i) => ({ id: who + i, who, av: cast[(i + (who === 'ai' ? 1 : 0)) % cast.length], state: 'reserve', block: null, home: null })) };
+}
+const MODES = {
+  1: { name: 'Wegkruipertjie', tag: 'Idee 1', short: 'Versteek, raai en skuif',
+    desc: 'Albei torings staan klaar. Versteek jou 6 mense in jou blokke en raai waar die ander speler s’n is. Na elke beurt mag jy een van jou mense skuif.' },
+  2: { name: 'Bou en Beskerm', tag: 'Idee 2', short: 'Bou, kry mense, val aan',
+    desc: 'Jy bou terwyl jy veg: elke Perfek bring ’n nuwe inwoner (jy kies sy blok). Perfeks laai jou missie. 12 blokke elk; wie die meeste mense oor het, wen.' },
+  3: { name: 'Een Toring, Twee Stamme', tag: 'Idee 3', short: 'Een toring, gevaarlik',
+    desc: 'Julle bou saam een toring, ’n blok elk. Versteek jou mense in jou blokke. Pasop: as jy sy blokke afbrand of uitspoel, kan joune saamval.' },
+};
+const cost = (who) => (G.mode === 1 ? (G.sides[who].tribe === 'vuur' ? 2 : 3) : (G.sides[who].tribe === 'vuur' ? 4 : 5));
+const resOf = (who) => G.sides[who].res;
+const homeCount = (who) => resOf(who).filter((r) => r.state === 'home').length;
+const awayCount = (who) => resOf(who).filter((r) => r.state === 'away').length;
+const reserveCount = (who) => resOf(who).filter((r) => r.state === 'reserve').length;
+const aliveCount = (who) => homeCount(who) + awayCount(who) + (G.mode === 3 ? reserveCount(who) : 0);
+const RES = (id) => resOf(id.slice(0, 2))[Number(id.slice(2))];
+const towerOf = (who) => (G.mode === 3 ? G.towers.shared : G.towers[who]);
+const targetTower = (who) => (G.mode === 3 ? G.towers.shared : G.towers[other(who)]);
+const isBot = (who) => who === 'ai' || BOT;
+function blockPos(tw, b) { const i = tw.blocks.indexOf(b); return { x: tw.cx + b.x, y: BASE - (i + .5) * BH + b.dy }; }
+const ownerBlocks = (tw, who) => tw.blocks.filter((b) => b.owner === who);
+const rooted = (tw, b) => { const owner = b.owner; if (!owner || G.sides[owner].tribe !== 'gras') return false; const i = tw.blocks.indexOf(b); return i >= 0 && i < (G.mode === 3 ? 4 : 3); };
+
+// ============================================================ fx
+function fx(o) { o.t = 0; G.fx.push(o); return new Promise((r) => { o.done = r; }); }
+function updateFx(dt) {
+  for (const f of G.fx) { f.t += dt; if (f.t >= f.dur && !f.fin) { f.fin = true; f.done && f.done(); } }
+  G.fx = G.fx.filter((f) => !f.fin);
+}
+function toast(s, big = false, ms = 1400) {
+  const t = $('toast'); const d = document.createElement('div'); if (big) d.className = 'big'; d.textContent = s;
+  t.innerHTML = ''; t.appendChild(d); clearTimeout(toast.h); toast.h = setTimeout(() => { if (t.firstChild === d) t.innerHTML = ''; }, ms / Math.min(SPEED, 3));
+}
+const txt = (x, y, s, col = '#fff') => fx({ type: 'txt', x, y, s, col, dur: 1.2 });
+
+// ============================================================ render
+function drawBg() {
+  const g = ctx, cam = G ? G.camY : 0;
+  let gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#3f93ec'); gr.addColorStop(.7, '#a9dcff'); gr.addColorStop(1, '#d4efff'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  g.fillStyle = 'rgba(255,255,255,.92)';
+  for (const [x, y, s] of [[70, 250, 1.1], [330, 205, .9], [250, 330, .7], [120, 420, .8]]) { const yy = y + cam * .3; g.beginPath(); g.ellipse(x, yy, 34 * s, 15 * s, 0, 0, 7); g.ellipse(x - 22 * s, yy + 4 * s, 22 * s, 11 * s, 0, 0, 7); g.ellipse(x + 24 * s, yy + 4 * s, 24 * s, 12 * s, 0, 0, 7); g.ellipse(x + 4 * s, yy - 10 * s, 20 * s, 13 * s, 0, 0, 7); g.fill(); }
+  const my = BASE - 30 + cam * .6;
+  g.fillStyle = 'rgba(134,167,207,.85)'; g.beginPath(); g.moveTo(0, my); g.lineTo(60, my - 90); g.lineTo(110, my - 40); g.lineTo(170, my - 130); g.lineTo(240, my - 30); g.lineTo(300, my - 100); g.lineTo(412, my - 20); g.lineTo(412, H); g.lineTo(0, H); g.fill();
+  g.fillStyle = 'rgba(111,147,191,.9)'; g.beginPath(); g.moveTo(0, my + 10); g.lineTo(90, my - 50); g.lineTo(160, my); g.lineTo(250, my - 70); g.lineTo(330, my - 10); g.lineTo(412, my - 45); g.lineTo(412, H); g.lineTo(0, H); g.fill();
+}
+function drawSea() {
+  const g = ctx, y = SEA, t = G ? G.time : 0;
+  const gr = g.createLinearGradient(0, y, 0, y + 260); gr.addColorStop(0, '#3cc0ee'); gr.addColorStop(1, '#0f4d86'); g.fillStyle = gr;
+  g.beginPath(); g.moveTo(-10, y); for (let x = -10; x < 430; x += 52) g.quadraticCurveTo(x + 26, y - 8 + Math.sin(t * 2 + x) * 2, x + 52, y); g.lineTo(430, y + 900); g.lineTo(-10, y + 900); g.closePath(); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 3; g.beginPath(); g.moveTo(-10, y + 2); for (let x = -10; x < 430; x += 52) g.quadraticCurveTo(x + 26, y - 6 + Math.sin(t * 2 + x) * 2, x + 52, y + 2); g.stroke();
+}
+function drawRock(cx, top, w, h) {
+  const g = ctx; const gr = g.createLinearGradient(0, top, 0, top + h); gr.addColorStop(0, '#9a9eaa'); gr.addColorStop(1, '#555a68'); g.fillStyle = gr; g.strokeStyle = '#3b3f4a'; g.lineWidth = 2.5;
+  g.beginPath(); g.moveTo(cx - w / 2, top + h); g.lineTo(cx - w / 2 + 6, top + 12); g.quadraticCurveTo(cx - w / 4, top - 4, cx, top + 2); g.quadraticCurveTo(cx + w / 4, top - 6, cx + w / 2 - 6, top + 10); g.lineTo(cx + w / 2, top + h); g.closePath(); g.fill(); g.stroke();
+}
+function drawBlock(b, x, y, alpha = 1) {
+  const g = ctx, art = blockArt(b.el, b.w); g.save(); g.globalAlpha = alpha; g.translate(x, y); g.rotate(b.rot || 0);
+  if (b.sq) g.scale(1 + b.sq * .07, 1 - b.sq * .12);
+  g.drawImage(art, -b.w / 2 - 4, -BH / 2 - 4, b.w + 8, BH + 8); g.restore();
+}
+function drawFace(id, x, y, s) { const im = IMG[id]; if (im) ctx.drawImage(im, x - s / 2, y - s / 2, s, s); }
+function drawWindow(tw, b, x, y) {
+  if (!b.owner) return;
+  const g = ctx, ww = 26, wh = 19, wx = x - ww / 2, wy = y - wh / 2 + 2, viewerOwns = b.owner === 'me';
+  const r = b.res ? RES(b.res) : null, tribe = TR[G.sides[b.owner].tribe];
+  g.save(); g.translate(x, y); g.rotate(b.rot || 0); g.translate(-x, -y);
+  g.fillStyle = '#1b2440'; rr(g, wx - 2.5, wy - 2.5, ww + 5, wh + 5, 6); g.fill();
+  let interior = '#26304f', face = null, curtains = false;
+  if (viewerOwns) { interior = r ? '#ffe9a8' : '#3a4566'; face = r; }
+  else if (b.know === 'lit' && r) { interior = '#fff3b0'; face = r; }
+  else if (b.know === 'empty') interior = '#18203a';
+  else curtains = true;
+  g.fillStyle = interior; rr(g, wx, wy, ww, wh, 4); g.fill();
+  if (face) { g.save(); rr(g, wx, wy, ww, wh, 4); g.clip(); drawFace(face.av, x, wy + wh / 2 + 3, 25); g.restore(); }
+  if (curtains) {
+    g.fillStyle = tribe.dark; rr(g, wx, wy, ww / 2 + .5, wh, 3); g.fill(); rr(g, x - .5, wy, ww / 2 + .5, wh, 3); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,.22)'; g.lineWidth = 1; for (const dx of [-8, -4, 4, 8]) { g.beginPath(); g.moveTo(x + dx, wy + 2); g.lineTo(x + dx, wy + wh - 2); g.stroke(); }
+    g.fillStyle = '#ffd23f'; g.fillRect(x - 1, wy + wh * .45, 2, 3);
+  } else if (!viewerOwns) {
+    g.fillStyle = tribe.dark; g.fillRect(wx, wy, 4, wh); g.fillRect(wx + ww - 4, wy, 4, wh);
+  }
+  if (b.know === 'lit' && !viewerOwns) { g.strokeStyle = '#ffd23f'; g.lineWidth = 2.5; g.shadowColor = '#ffd23f'; g.shadowBlur = 10; rr(g, wx - 3, wy - 3, ww + 6, wh + 6, 7); g.stroke(); g.shadowBlur = 0; }
+  if (rooted(tw, b) && viewerOwns) { g.fillStyle = '#2f8f2c'; g.beginPath(); g.ellipse(x + ww / 2 + 7, y + 6, 5, 3, -.6, 0, 7); g.fill(); }
+  if (G.sel === b) { g.strokeStyle = '#ffd23f'; g.lineWidth = 3; rr(g, x - b.w / 2 - 3, y - BH / 2 - 3, b.w + 6, BH + 6, 9); g.stroke(); }
+  g.restore();
+}
+function drawTower(tw) {
+  for (const b of tw.blocks) { const p = blockPos(tw, b); drawBlock(b, p.x, p.y); }
+  for (const b of tw.blocks) { const p = blockPos(tw, b); drawWindow(tw, b, p.x, p.y); }
+  if (G.aimable && G.aimable.tw === tw) {
+    const g = ctx; g.save(); g.setLineDash([6, 5]); g.strokeStyle = 'rgba(255,210,63,.9)'; g.lineWidth = 2;
+    for (const b of tw.blocks) { if (!G.aimable.ok(b)) continue; const p = blockPos(tw, b); rr(g, p.x - b.w / 2 - 2, p.y - BH / 2 - 2, b.w + 4, BH + 4, 8); g.stroke(); }
+    g.restore();
+  }
+}
+function flamePath(s) { const g = ctx; g.beginPath(); g.moveTo(0, 0); g.bezierCurveTo(-s * .75, -s * .25, -s * .5, -s * 1.15, 0, -s * 1.75); g.bezierCurveTo(s * .15, -s * 1.15, s * .72, -s * .95, s * .58, -s * .3); g.bezierCurveTo(s * .5, -s * .06, s * .28, 0, 0, 0); g.closePath(); }
+function drawFlame(x, y, s, t) {
+  const g = ctx; g.save(); g.translate(x, y); g.scale(1, 1 + Math.sin(t * 17 + x) * .14);
+  const gr = g.createLinearGradient(0, 0, 0, -s * 1.75); gr.addColorStop(0, '#e8401c'); gr.addColorStop(.55, '#ff9a1f'); gr.addColorStop(1, '#ffd34d');
+  g.shadowColor = '#ff7a00'; g.shadowBlur = 12; flamePath(s); g.fillStyle = gr; g.fill(); g.shadowBlur = 0;
+  g.translate(s * .06, 0); flamePath(s * .55); g.fillStyle = '#fff3a6'; g.fill(); g.restore();
+}
+function drawBall(kind, x, y, r, rot = 0) {
+  const g = ctx; g.save(); g.translate(x, y); g.rotate(rot);
+  if (kind === 'rugby') { g.fillStyle = '#a0532a'; g.strokeStyle = '#5e2a10'; g.lineWidth = 2; g.beginPath(); g.ellipse(0, 0, r * 1.35, r * .85, 0, 0, 7); g.fill(); g.stroke(); g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.moveTo(-r * .5, 0); g.lineTo(r * .5, 0); for (const k of [-.3, -.1, .1, .3]) { g.moveTo(r * k, -r * .2); g.lineTo(r * k, r * .2); } g.stroke(); }
+  else if (kind === 'fire') { g.shadowColor = '#ff7a00'; g.shadowBlur = 16; const gr = g.createRadialGradient(-r * .3, -r * .3, 1, 0, 0, r); gr.addColorStop(0, '#fff3a6'); gr.addColorStop(.5, '#ff9a1f'); gr.addColorStop(1, '#e8401c'); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, r, 0, 7); g.fill(); }
+  else { g.fillStyle = '#5ab8ff'; g.beginPath(); g.arc(0, 0, r, 0, 7); g.fill(); }
+  g.restore();
+}
+function drawChute(f) {
+  const g = ctx, p = f.t / f.dur, x = f.x + Math.sin(f.t * 3.2) * 9 + f.vx * f.t, pop = Math.min(f.t / .28, 1);
+  const y = f.y - 34 * ease(pop) + Math.max(0, f.t - .28) * f.fall;
+  const open = clamp((f.t - .2) / .3, 0, 1), col = TR[f.tribe].col;
+  if (open > 0) {
+    g.save(); g.translate(x, y - 30); g.rotate(Math.sin(f.t * 3.2) * .12);
+    g.strokeStyle = 'rgba(40,40,60,.7)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(-20 * open, 0); g.lineTo(-6, 22); g.moveTo(20 * open, 0); g.lineTo(6, 22); g.moveTo(0, 0); g.lineTo(0, 20); g.stroke();
+    g.fillStyle = col; g.beginPath(); g.ellipse(0, 0, 22 * open, 16 * open, 0, Math.PI, 0); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.ellipse(0, 0, 7 * open, 16 * open, 0, Math.PI, 0); g.closePath(); g.fill();
+    g.restore();
+  }
+  g.globalAlpha = p > .85 ? (1 - p) / .15 : 1; drawFace(f.av, x, y, 24); g.globalAlpha = 1;
+}
+function render() {
+  const g = ctx; g.setTransform(SC * DPR, 0, 0, SC * DPR, 0, 0);
+  drawBg();
+  if (!G) return;
+  g.save(); g.translate(0, G.camY);
+  for (const tw of Object.values(G.towers)) drawRock(tw.cx, BASE - 4, G.mode === 3 ? 170 : 128, 70);
+  for (const tw of Object.values(G.towers)) drawTower(tw);
+  for (const f of G.fx) drawFx(f, 'world');
+  g.restore();
+  drawSea();
+  for (const f of G.fx) drawFx(f, 'sea');
+  drawCrane();
+}
+function drawFx(f, layer) {
+  const g = ctx, p = clamp(f.t / f.dur, 0, 1);
+  if (layer === 'world') {
+    if (f.type === 'ball') { const x = f.x0 + (f.x1 - f.x0) * p, y = f.y0 + (f.y1 - f.y0) * p - Math.sin(Math.PI * p) * f.h; drawBall(f.kind, x, y, f.kind === 'fire' ? 13 : 11, p * 9); }
+    else if (f.type === 'flames') { for (const b of f.blocks) { const tw = f.tw; if (!tw.blocks.includes(b)) continue; const q = blockPos(tw, b); for (let k = 0; k < 3; k++) drawFlame(q.x - b.w / 3 + k * b.w / 3, q.y - BH / 2 + 6, 13 + ((k * 7 + b.id) % 9), G.time); } }
+    else if (f.type === 'txt') { g.globalAlpha = 1 - p * p; g.font = '900 20px "Trebuchet MS"'; g.textAlign = 'center'; g.lineWidth = 5; g.strokeStyle = 'rgba(10,16,40,.85)'; const y = f.y - 30 * ease(p); g.strokeText(f.s, f.x, y); g.fillStyle = f.col; g.fillText(f.s, f.x, y); g.globalAlpha = 1; }
+    else if (f.type === 'debris') { for (const d of f.parts) { const t = f.t; g.fillStyle = d.c; g.globalAlpha = 1 - p; g.save(); g.translate(f.x + d.vx * t, f.y + d.vy * t + 480 * t * t); g.rotate(d.vr * t); g.fillRect(-d.s / 2, -d.s / 2, d.s, d.s * .7); g.restore(); } g.globalAlpha = 1; }
+    else if (f.type === 'fall') { const t = f.t; drawBlock({ ...f.b, rot: f.b.rot + f.vr * t, sq: 0 }, f.x + f.vx * t, f.y + 120 * t + 520 * t * t, p > .8 ? (1 - p) * 5 : 1); }
+    else if (f.type === 'vine') { const q = ease(Math.min(1, f.t / .7)); const y = f.y0 + (f.y1 - f.y0) * q; g.strokeStyle = '#2f8f2c'; g.lineWidth = 4; g.lineCap = 'round'; g.beginPath(); g.moveTo(f.x, f.y0); for (let yy = f.y0; yy >= y; yy -= 8) g.lineTo(f.x + Math.sin(yy * .12) * 7, yy); g.stroke(); g.fillStyle = '#3fbf3a'; for (let yy = f.y0 - 10; yy >= y; yy -= 18) { g.beginPath(); g.ellipse(f.x + Math.sin(yy * .12) * 7 + 7, yy, 7, 3.5, -.5, 0, 7); g.fill(); } }
+    else if (f.type === 'glow') { g.strokeStyle = `rgba(255,220,80,${1 - p})`; g.lineWidth = 6; g.beginPath(); g.arc(f.x, f.y, 16 + 30 * p, 0, 7); g.stroke(); }
+    else if (f.type === 'ring') { g.strokeStyle = `rgba(255,230,120,${1 - p})`; g.lineWidth = 4; g.beginPath(); g.ellipse(f.x, f.y, 40 + 70 * p, 10 + 18 * p, 0, 0, 7); g.stroke(); }
+    else if (f.type === 'wheel') {
+      const q = Math.min(1, f.t / .3), a = f.t * 6; g.save(); g.translate(f.x, f.y); g.scale(q, q);
+      g.strokeStyle = '#7a4a22'; g.lineWidth = 6; g.beginPath(); g.arc(0, 0, 34, 0, 7); g.stroke();
+      for (let k = 0; k < 8; k++) { const an = a + k * Math.PI / 4; g.save(); g.rotate(an); g.fillStyle = '#8a5a2b'; g.fillRect(-4, -46, 8, 22); g.fillStyle = '#5ab8ff'; g.fillRect(-4, -46, 8, 7); g.restore(); }
+      g.fillStyle = '#5b3a1e'; g.beginPath(); g.arc(0, 0, 8, 0, 7); g.fill(); g.restore();
+      if (f.t > .35) { const s = Math.min(1, (f.t - .35) / .3), fade = p > .8 ? (1 - p) * 5 : 1; g.fillStyle = `rgba(110,210,255,${.55 * fade})`; const x0 = f.dir < 0 ? f.tx - f.tw2 : f.x; g.fillRect(f.dir < 0 ? f.tx - f.tw2 - 10 : f.x, f.y0, (f.dir < 0 ? f.x - (f.tx - f.tw2 - 10) : f.tx + f.tw2 + 10 - f.x) * s, f.y1 - f.y0);
+        g.strokeStyle = `rgba(255,255,255,${.8 * fade})`; g.lineWidth = 2; for (let yy = f.y0 + 6; yy < f.y1; yy += 12) { g.beginPath(); for (let xx = 0; xx < 180 * s; xx += 10) g.lineTo((f.dir < 0 ? f.x - xx : f.x + xx), yy + Math.sin(xx * .2 + f.t * 12) * 3); g.stroke(); } void x0; }
+    }
+    else if (f.type === 'fly') { const x = f.x0 + (f.x1 - f.x0) * ease(p), y = f.y0 + (f.y1 - f.y0) * ease(p) - Math.sin(Math.PI * p) * 70; g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = 3; g.beginPath(); g.moveTo(x - (f.x1 - f.x0) * .08, y + 6); g.lineTo(x, y); g.stroke(); drawFace(f.av, x, y, 28); }
+  } else if (layer === 'sea') {
+    const cy = G.camY;
+    if (f.type === 'chute') { g.save(); g.translate(0, cy); drawChute(f); g.restore(); }
+    else if (f.type === 'swim') { const t = f.t; let x = f.x, y; if (t < .45) { y = f.y + (SEA - cy + 8 - f.y) * (t / .45) ** 2; x += f.dir * t * 30; } else { y = SEA - cy + 8 + Math.sin(t * 9) * 3; x += f.dir * (13 + (t - .45) * 110); } g.save(); g.translate(0, cy); g.globalAlpha = p > .85 ? (1 - p) / .15 : 1; drawFace(f.av, x, y, 24); g.fillStyle = 'rgba(255,255,255,.7)'; if (t > .45) { g.beginPath(); g.ellipse(x - f.dir * 14, y + 10, 8, 2.5, 0, 0, 7); g.fill(); } g.restore(); g.globalAlpha = 1; }
+    else if (f.type === 'splash') { g.strokeStyle = `rgba(255,255,255,${1 - p})`; g.lineWidth = 3; g.beginPath(); g.ellipse(f.x, SEA + 6, 10 + 26 * p, 4 + 6 * p, 0, 0, 7); g.stroke(); }
+  }
+}
+function drawCrane() {
+  const c = G && G.crane; if (!c) return;
+  const g = ctx, y = CRANE_Y, jx = c.jibX;
+  g.fillStyle = '#f5c23b'; g.strokeStyle = '#a77c10'; g.lineWidth = 2.5; g.fillRect(-10, y, jx + 60, 18); g.strokeRect(-10, y, jx + 60, 18);
+  g.beginPath(); for (let x = -10; x < jx + 40; x += 18) { g.moveTo(x, y + 2); g.lineTo(x + 9, y + 16); g.lineTo(x + 18, y + 2); } g.stroke();
+  g.fillStyle = '#3a3f4f'; g.fillRect(c.x - 12, y + 16, 24, 10);
+  const by = c.state === 'drop' ? c.y : y + 82;
+  if (c.state !== 'drop' && c.state !== 'gone') { g.strokeStyle = '#2b2f3a'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(c.x, y + 26); g.lineTo(c.x, by - BH / 2); g.stroke(); }
+  if (c.state !== 'gone') {
+    drawBlock({ el: c.el, w: c.w, rot: 0, sq: 0 }, c.x, by);
+    if (c.carry) { ctx.fillStyle = '#1b2440'; rr(ctx, c.x - 15, by - 9, 30, 21, 6); ctx.fill(); ctx.fillStyle = '#ffe9a8'; rr(ctx, c.x - 13, by - 7, 26, 17, 4); ctx.fill(); ctx.save(); rr(ctx, c.x - 13, by - 7, 26, 17, 4); ctx.clip(); drawFace(c.carry, c.x, by + 4, 24); ctx.restore(); }
+  }
+}
+
+// ============================================================ main loop
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000) * SPEED; last = now;
+  if (G) {
+    G.time += dt;
+    for (const tw of Object.values(G.towers)) for (const b of tw.blocks) { b.dy *= Math.exp(-dt * 11); if (Math.abs(b.dy) < .3) b.dy = 0; b.sq *= Math.exp(-dt * 9); }
+    const c = G.crane;
+    if (c && c.state === 'swing') { c.phase += c.omega * dt; c.x = c.cx + c.amp * Math.sin(c.phase); }
+    if (c && c.state === 'drop') { c.vy += 2600 * dt; c.y += c.vy * dt; if (c.y >= c.landY) { c.y = c.landY; c.state = 'landed'; c.onLand && c.onLand(); } }
+    let topY = Infinity; for (const tw of Object.values(G.towers)) topY = Math.min(topY, BASE - (tw.blocks.length + 1) * BH);
+    const want = Math.max(0, (G.crane ? 300 : 250) - topY);
+    G.camY += (want - G.camY) * Math.min(1, dt * 4);
+    updateFx(dt);
+  }
+  render();
+  requestAnimationFrame(frame);
+}
+
+// ============================================================ HUD + bar
+function rankRow(side) { const rk = rankOf(side.pts), lv = levelOf(side.xp); return `<div class="rk">${shieldSVG(rk.tier, rk.div, 20)}<b>${rk.name}</b><span class="lv"><small>VLAK</small>${lv.lv}</span></div>`; }
+function hud() {
+  if (!G) return;
+  for (const who of ['me', 'ai']) {
+    const s = G.sides[who], t = TR[s.tribe], n = cost(who);
+    const pips = Array.from({ length: n }, (_, i) => `<i class="${i < s.charge ? 'f' : ''}"></i>`).join('');
+    const away = awayCount(who), resv = G.mode === 3 ? reserveCount(who) : 0;
+    $(who === 'me' ? 'pcMe' : 'pcAi').innerHTML = `<div class="top"><img class="av" src="${URL_[s.av]}"><div><div class="nm">${s.name}</div><div class="tr"><span class="e">${t.emoji}</span> ${t.name}</div></div></div>
+      ${rankRow(s)}<div class="pst"><span><span class="e">🏠</span> ${homeCount(who)}</span>${away ? `<span class="away"><span class="e">✈️</span>${away}</span>` : ''}${resv ? `<span class="away">+${resv} oor</span>` : ''}<span class="chg" title="missie">${pips}</span></div>`;
+    $(who === 'me' ? 'pcMe' : 'pcAi').classList.toggle('on', G.active === who && !G.over);
+  }
+  $('modeTag').textContent = MODES[G.mode].tag;
+  $('turnLbl').textContent = G.over ? 'Klaar' : G.active === 'me' ? 'Jou beurt' : `${G.sides.ai.name} se beurt`;
+  $('turnCnt').textContent = G.mode === 1 ? `Rondte ${G.round}` : `Blok ${Math.min(G.sides.me.drops + (G.active === 'me' ? 1 : 0), G.maxDrops)}/${G.maxDrops}`;
+}
+function bar(hint, buttons = []) {
+  $('hint').innerHTML = hint; const b = $('btns'); b.innerHTML = '';
+  for (const bt of buttons) { const el = document.createElement('button'); el.className = 'b ' + (bt.cls || ''); el.innerHTML = bt.label; if (bt.disabled) el.disabled = true; el.onclick = (e) => { e.stopPropagation(); bt.fn(); }; b.appendChild(el); }
+}
+
+// ============================================================ input
+function hitBlock(tw, sx, sy) {
+  const wy = sy - G.camY;
+  for (let i = tw.blocks.length - 1; i >= 0; i--) { const b = tw.blocks[i], p = blockPos(tw, b); if (Math.abs(sx - p.x) <= b.w / 2 + 4 && Math.abs(wy - p.y) <= BH / 2 + 3) return b; }
+  return null;
+}
+cv.addEventListener('pointerdown', (e) => {
+  if (!G || !G.ui || G.over) return;
+  const r = cv.getBoundingClientRect(), sx = (e.clientX - r.left) / SC, sy = (e.clientY - r.top) / SC;
+  G.ui.tap && G.ui.tap(sx, sy);
+});
+
+// ============================================================ core actions
+function evict(r, how) {
+  const tw = Object.values(G.towers).find((t) => t.blocks.some((b) => b.res === r.id));
+  const b = tw && tw.blocks.find((x) => x.res === r.id);
+  let p = { x: 206, y: BASE - 100 };
+  if (b) { p = blockPos(tw, b); b.res = null; b.know = 'empty'; b.litT = 0; }
+  r.state = 'lost'; r.block = null;
+  const dir = p.x < 206 ? -1 : 1;
+  if (how === 'swim') fx({ type: 'swim', x: p.x, y: p.y, av: r.av, dir, dur: 2.6 });
+  else fx({ type: 'chute', x: p.x + (how === 'grab' ? dir * 46 : 0), y: p.y, av: r.av, tribe: G.sides[r.who].tribe, vx: dir * R(8, 22), fall: (SEA - p.y + 40) / 2.3, dur: 2.6 });
+  fx({ type: 'txt', x: p.x, y: p.y - 18, s: how === 'swim' ? 'Gespoel!' : 'Raak!', col: '#ffd23f', dur: 1.2 });
+  vib(35);
+  if (G.sides[r.who].tribe === 'water' && !G.swimUsed[r.who]) { G.swimUsed[r.who] = true; G.swimBack.push(r); }
+  hud();
+}
+async function settle() {
+  while (G.swimBack.length) {
+    const r = G.swimBack.shift(); const tw = towerOf(r.who);
+    const free = ownerBlocks(tw, r.who).filter((b) => !b.res);
+    if (!free.length) continue;
+    await sleep(500); const b = pick(free); b.res = r.id; b.know = 'unknown'; r.state = 'home'; r.block = b.id;
+    const p = blockPos(tw, b); fx({ type: 'glow', x: p.x, y: p.y, dur: .8 }); toast(`${AVN[r.av]} swem terug huis toe! 🌊`); hud();
+  }
+}
+function moveRes(who, from, to) {
+  const tw = towerOf(who); const r = RES(from.res);
+  to.res = from.res; from.res = null; r.block = to.id;
+  from.know = 'unknown'; to.know = 'unknown'; from.litT = 0; to.litT = 0;
+  // the other side sees that "someone moved" but not where: the destination and up to 2 known-empty windows close again
+  for (const b of shuffle(ownerBlocks(tw, who).filter((x) => x.know === 'empty' && x !== from)).slice(0, 2)) b.know = 'unknown';
+}
+function removeBlocks(tw, list) {
+  const before = new Map(tw.blocks.map((b) => [b, blockPos(tw, b).y]));
+  for (const b of list) {
+    const p = blockPos(tw, b);
+    fx({ type: 'debris', x: p.x, y: p.y, dur: 1, parts: Array.from({ length: 9 }, () => ({ vx: R(-90, 90), vy: R(-160, -40), vr: R(-8, 8), s: R(5, 10), c: b.el === 'vuur' ? '#5a1a10' : b.el === 'water' ? '#2a86d6' : b.el === 'gras' ? '#6a4322' : '#7d8590' })) });
+  }
+  tw.blocks = tw.blocks.filter((b) => !list.includes(b));
+  for (const b of tw.blocks) { const ny = blockPos(tw, b).y; b.dy += before.get(b) - ny; }
+}
+async function collapseCheck(tw) {
+  for (let i = 1; i < tw.blocks.length; i++) {
+    const a = tw.blocks[i - 1], b = tw.blocks[i];
+    if (Math.abs(b.x - a.x) > a.w / 2) {
+      const falling = tw.blocks.slice(i), dir = b.x > a.x ? 1 : -1;
+      toast('Die toring kantel! 😱', false, 1600); vib([40, 40, 80]);
+      for (const fb of falling) {
+        const p = blockPos(tw, fb);
+        if (fb.res) evict(RES(fb.res), 'chute');
+        fx({ type: 'fall', b: { ...fb }, x: p.x, y: p.y, vx: dir * R(60, 140), vr: dir * R(1.5, 4), dur: 1.3 });
+      }
+      tw.blocks = tw.blocks.slice(0, i);
+      await sleep(900);
+      return true;
+    }
+  }
+  return false;
+}
+function launchFrom(who) {
+  if (G.mode === 3) return { x: who === 'me' ? -20 : W + 20, y: BASE - 200 };
+  const tw = G.towers[who], top = tw.blocks[tw.blocks.length - 1];
+  const p = top ? blockPos(tw, top) : { x: tw.cx, y: BASE };
+  return { x: p.x, y: p.y - 30 };
+}
+async function doThrow(who, b) {
+  const tw = targetTower(who), from = launchFrom(who), p = blockPos(tw, b);
+  await fx({ type: 'ball', kind: 'rugby', x0: from.x, y0: from.y, x1: p.x, y1: p.y, h: 90, dur: .62 });
+  b.sq = 1;
+  if (b.res) evict(RES(b.res), 'chute');
+  else { b.know = 'empty'; txt(p.x, p.y - 14, 'Leeg!', '#cfe0ff'); fx({ type: 'debris', x: p.x, y: p.y, dur: .7, parts: Array.from({ length: 6 }, () => ({ vx: R(-60, 60), vy: R(-120, -40), vr: R(-6, 6), s: R(3, 6), c: '#e8eef7' })) }); }
+  await sleep(450);
+}
+function specialRange(who, tw, b) {
+  const tribe = G.sides[who].tribe, foe = other(who), dbl = TR[tribe].beats === G.sides[foe].tribe, i = tw.blocks.indexOf(b);
+  // 3 blocks (fire) or 3 floors (water); one more against the element it beats
+  if (tribe === 'vuur' || tribe === 'water') return tw.blocks.slice(Math.max(0, i - 1), i + (dbl ? 3 : 2));
+  return [];
+}
+function missionRes(who) {
+  const home = resOf(who).filter((r) => r.state === 'home');
+  if (!home.length) return null;
+  const hero = TR[G.sides[who].tribe].hero;
+  return home.find((r) => r.av === hero) || home.find((r) => r.av === TR[G.sides[who].tribe].cast[0]) || home[0];
+}
+async function doSpecial(who, aimB) {
+  const s = G.sides[who], tribe = s.tribe, foe = other(who), tw = targetTower(who), T = TR[tribe];
+  const dbl = T.beats === G.sides[foe].tribe;
+  s.charge = 0;
+  // the mission: one resident leaves home to do the job (back at the start of your next turn)
+  const m = missionRes(who);
+  if (m) {
+    const mtw = towerOf(who), mb = mtw.blocks.find((b) => b.res === m.id), mp = blockPos(mtw, mb);
+    mb.res = null; if (mb.owner === who) mb.know = 'empty'; m.state = 'away'; m.home = mb.id; m.block = null;
+    const tp = aimB ? blockPos(tw, aimB) : { x: tw.cx, y: BASE - 60 };
+    toast(`${AVN[m.av]} gaan op ’n missie: ${T.special}! ${T.sEmoji}`, false, 1700); hud();
+    await fx({ type: 'fly', av: m.av, x0: mp.x, y0: mp.y, x1: tp.x + (tp.x < 206 ? 60 : -60), y1: tp.y - 40, dur: .75 });
+  } else toast(`${T.special}! ${T.sEmoji}`);
+  if (tribe === 'vuur') {
+    const list = specialRange(who, tw, aimB), from = launchFrom(who), p = blockPos(tw, aimB);
+    await fx({ type: 'ball', kind: 'fire', x0: from.x, y0: from.y, x1: p.x, y1: p.y, h: 70, dur: .55 });
+    if (dbl) toast('Ekstra sterk! Vuur brand gras 🔥');
+    for (const b of list) { b.burning = true; if (b.res) evict(RES(b.res), 'chute'); else if (b.owner === foe) b.know = 'empty'; }
+    vib(60);
+    await fx({ type: 'flames', tw, blocks: list, dur: 1.15 });
+    removeBlocks(tw, list); await sleep(380); await collapseCheck(tw);
+  } else if (tribe === 'water') {
+    const list = specialRange(who, tw, aimB);
+    const ps = list.map((b) => blockPos(tw, b)), y0 = Math.min(...ps.map((q) => q.y)) - BH / 2, y1 = Math.max(...ps.map((q) => q.y)) + BH / 2;
+    const dir = G.mode === 3 ? (who === 'me' ? 1 : -1) : (G.towers[who].cx < tw.cx ? 1 : -1);
+    const wx = G.mode === 3 ? (who === 'me' ? 46 : W - 46) : tw.cx - dir * 104;
+    if (dbl) toast('Ekstra sterk! Water blus vuur 🌊');
+    const wheel = fx({ type: 'wheel', x: wx, y: (y0 + y1) / 2, y0, y1, tx: tw.cx, tw2: 70, dir, dur: 1.7 });
+    await sleep(700);
+    for (const b of list) { if (b.res) { const r = RES(b.res); if (rooted(tw, b)) { txt(blockPos(tw, b).x, blockPos(tw, b).y - 12, 'Wortels hou!', '#a8f08e'); continue; } evict(r, 'swim'); } else if (b.owner === foe) b.know = 'empty'; }
+    await wheel;
+  } else {
+    // Rankgryp: vines always find someone (not behind roots) and light up 2 more windows
+    const foes = tw.blocks.filter((b) => b.owner === foe && b.res && !rooted(tw, b));
+    const grabs = shuffle(foes.slice()).slice(0, dbl ? 2 : 1);
+    if (dbl) toast('Ekstra sterk! Gras drink water 🌿');
+    if (!grabs.length) toast('Die wortels beskerm almal 🌱');
+    for (const b of grabs) {
+      const p = blockPos(tw, b), vx = p.x + (p.x < 206 ? -b.w / 2 - 6 : b.w / 2 + 6);
+      await fx({ type: 'vine', x: vx, y0: BASE, y1: p.y, dur: .75 });
+      evict(RES(b.res), 'grab');
+    }
+    const lit = shuffle(tw.blocks.filter((b) => b.owner === foe && b.res)).slice(0, 2);
+    for (const b of lit) { b.know = 'lit'; b.litT = 2; const p = blockPos(tw, b); fx({ type: 'glow', x: p.x, y: p.y, dur: 1.1 }); }
+    if (lit.length) txt(tw.cx, BASE - tw.blocks.length * BH - 30, `${lit.length} vensters lig op!`, '#ffe680');
+    await sleep(900);
+  }
+  hud();
+  await sleep(300);
+}
+async function returnAway(who) {
+  for (const r of resOf(who).filter((x) => x.state === 'away')) {
+    const tw = towerOf(who); let b = tw.blocks.find((x) => x.id === r.home && !x.res);
+    if (!b) b = pick(ownerBlocks(tw, who).filter((x) => !x.res));
+    if (!b) { r.state = 'lost'; toast(`${AVN[r.av]} het nie meer ’n huis nie 😢`); continue; }
+    b.res = r.id; b.know = 'unknown'; r.state = 'home'; r.block = b.id;
+    const p = blockPos(tw, b); await fx({ type: 'fly', av: r.av, x0: who === 'me' ? -30 : W + 30, y0: p.y - 120, x1: p.x, y1: p.y, dur: .6 });
+  }
+  hud();
+}
+function tickLit(who) { for (const tw of Object.values(G.towers)) for (const b of tw.blocks) if (b.owner === other(who) && b.know === 'lit' && --b.litT <= 0) { b.know = 'unknown'; b.litT = 0; } }
+function checkOver() {
+  if (G.over) return true;
+  for (const who of ['me', 'ai']) {
+    const resv = G.mode === 3 ? reserveCount(who) : 0;
+    if (aliveCount(who) === 0 || (homeCount(who) === 0 && resv === 0 && G.active !== who)) { finish(other(who), homeCount(who) === 0 && awayCount(who) ? 'leeg' : 'almal'); return true; }
+  }
+  return false;
+}
+
+// ============================================================ dropping (Ideas 2 + 3)
+function craneFor(who) {
+  const tw = towerOf(who), top = tw.blocks[tw.blocks.length - 1];
+  const el = G.sides[who].tribe, w = pick(WIDTHS);
+  const cx = tw.cx + (top ? top.x : 0);
+  G.crane = { el, w, cx, x: cx, jibX: tw.cx, amp: G.mode === 3 ? 92 : 72, omega: 2.1 + G.sides[who].drops * .07, phase: R(0, 6.28), state: 'swing', carry: null, who };
+}
+function dropCrane() {
+  const c = G.crane; const tw = towerOf(c.who);
+  return new Promise((res) => {
+    c.state = 'drop'; c.vy = 0; c.y = CRANE_Y + 82; c.landY = BASE - (tw.blocks.length + .5) * BH + G.camY; c.onLand = res;
+  });
+}
+async function resolveDrop(who) {
+  const c = G.crane, tw = towerOf(who), top = tw.blocks[tw.blocks.length - 1];
+  const relX = c.x - tw.cx, off = top ? relX - top.x : relX, s = G.sides[who];
+  s.drops++;
+  let perfect = false;
+  if (top && Math.abs(off) > top.w / 2 + 3) {
+    // missed: the block falls into the sea (with whoever was riding in it)
+    fx({ type: 'fall', b: { el: c.el, w: c.w, rot: 0 }, x: c.x, y: c.landY - G.camY, vx: Math.sign(off) * 80, vr: Math.sign(off) * 2.5, dur: 1.2 });
+    G.crane.state = 'gone'; toast('Mis! 💦');
+    if (c.carry) { const r = resOf(who).find((x) => x.state === 'reserve' && x.av === c.carry); if (r) { r.state = 'lost'; fx({ type: 'chute', x: c.x, y: c.landY - G.camY, av: r.av, tribe: s.tribe, vx: 10, fall: 120, dur: 2.4 }); } }
+    await sleep(800); G.crane = null; hud(); return { landed: false };
+  }
+  let x = top ? relX : 0;
+  if (top && Math.abs(off) <= 6) { perfect = true; x = top.x; }
+  const b = mkBlock(c.el, who, x, c.w); b.sq = 1; tw.blocks.push(b); G.crane = null;
+  const p = blockPos(tw, b);
+  if (perfect) { fx({ type: 'ring', x: p.x, y: p.y + BH / 2, dur: .55 }); toast('Perfek! ⭐', true, 900); vib(25); }
+  s.charge = Math.min(cost(who), s.charge + (perfect ? 2 : 1));
+  if (c.carry) { const r = resOf(who).find((q) => q.state === 'reserve' && q.av === c.carry); if (r) { b.res = r.id; r.state = 'home'; r.block = b.id; } }
+  hud(); await sleep(perfect ? 650 : 380);
+  return { landed: true, perfect, b };
+}
+
+// ============================================================ the AI (also plays "me" with ?bot=1)
+function pFor(who, tw) {
+  const foe = other(who), blocks = tw.blocks.filter((b) => b.owner === foe);
+  const lit = blocks.filter((b) => b.know === 'lit').length, unknown = blocks.filter((b) => b.know === 'unknown').length;
+  const p = clamp((homeCount(foe) - lit) / Math.max(1, unknown), 0, 1);
+  return (b) => (b.owner !== foe ? 0 : b.know === 'lit' ? 1 : b.know === 'empty' ? .03 : p);
+}
+function botAim(who) {
+  const tw = targetTower(who), P = pFor(who, tw), tribe = G.sides[who].tribe;
+  let best = null, bs = -1e9;
+  for (const b of tw.blocks) {
+    if (G.mode === 3 && !b.owner) continue;
+    let sc;
+    if (tribe === 'gras') sc = 0;
+    else sc = specialRange(who, tw, b).reduce((a, x) => a + P(x) - (G.mode === 3 && x.owner === who && x.res ? 1.3 : 0) - (rooted(tw, x) && tribe === 'water' ? P(x) : 0), 0);
+    sc += R(0, .05);
+    if (sc > bs) { bs = sc; best = b; }
+  }
+  return { b: best, score: bs };
+}
+async function botActM1(who) {
+  const tw = targetTower(who), P = pFor(who, tw);
+  await sleep(650);
+  if (G.sides[who].charge >= cost(who) && homeCount(who) > 1) { const a = botAim(who); await doSpecial(who, a.b); return; }
+  let best = null, bs = -1;
+  for (const b of tw.blocks) { const sc = P(b) + R(0, .06); if (sc > bs) { bs = sc; best = b; } }
+  await doThrow(who, best);
+  G.sides[who].charge = Math.min(cost(who), G.sides[who].charge + 1);
+}
+async function botMove(who) {
+  const tw = towerOf(who), mine = ownerBlocks(tw, who), occ = mine.filter((b) => b.res), free = mine.filter((b) => !b.res);
+  if (!occ.length || !free.length) return;
+  let from = occ.find((b) => b.know === 'lit');
+  if (!from && rnd() < .4) from = pick(occ);
+  if (!from) return;
+  await sleep(350); moveRes(who, from, pick(free)); if (who === 'ai') toast(`${G.sides.ai.name} het iemand geskuif… 🤫`);
+}
+async function botDrop(who) {
+  craneFor(who);
+  const c = G.crane, tw = towerOf(who), top = tw.blocks[tw.blocks.length - 1];
+  const tx = tw.cx + (top ? top.x : 0);
+  let off = rnd() < .42 ? R(-4, 4) : R(-1, 1) * (top ? top.w * .42 : 30);
+  if (rnd() < .06 && top) off = Math.sign(R(-1, 1) || 1) * (top.w / 2 + 12);
+  c.carry = null;
+  if (G.mode === 3 && reserveCount(who) > 0) {
+    const left = Math.max(1, 8 - s3drops(who));
+    if (reserveCount(who) >= left || rnd() < .6) c.carry = resOf(who).find((r) => r.state === 'reserve').av;
+  }
+  await sleep(700);
+  c.state = 'aim'; c.x = clamp(tx + off, 20, W - 20);
+  await sleep(250);
+  await dropCrane();
+  return resolveDrop(who);
+}
+const s3drops = (who) => G.sides[who].drops;
+async function botPlace(who, b) {
+  // a new resident (Idea 2, after a Perfek): prefers a block nobody knows about
+  const tw = towerOf(who), free = ownerBlocks(tw, who).filter((x) => !x.res);
+  if (!free.length) return;
+  const pref = free.filter((x) => x.know !== 'lit');
+  const blk = pick(pref.length ? pref : free) || b;
+  const r = resOf(who).find((x) => x.state === 'reserve'); if (!r) return;
+  blk.res = r.id; r.state = 'home'; r.block = blk.id; blk.know = 'unknown';
+  for (const k of shuffle(ownerBlocks(tw, who).filter((x) => x.know === 'empty')).slice(0, 2)) k.know = 'unknown';
+  if (who === 'ai') toast(`${G.sides.ai.name} kry ’n nuwe inwoner 🏠`);
+  hud();
+}
+
+// ============================================================ the player's turns (UI)
+function waitUi(o) { return new Promise((res) => { G.ui = { ...o, resolve: (v) => { G.ui = null; G.aimable = null; res(v); } }; }); }
+function aimMode(who, kind) {
+  const tw = targetTower(who), foe = other(who);
+  G.aimable = { tw, ok: (b) => (G.mode === 3 ? !!b.owner : b.owner === foe) };
+  return kind;
+}
+async function meActM1() {
+  const s = G.sides.me, T = TR[s.tribe], tw = targetTower('me');
+  let mode = 'throw';
+  const show = () => {
+    const ready = s.charge >= cost('me') && homeCount('me') > 0;
+    aimMode('me');
+    bar(mode === 'throw' ? `Tik ’n blok op ${G.sides.ai.name} se toring om ’n rugbybal te gooi <span class="e">🏉</span>` : (T.special === 'Rankgryp' ? 'Rankgryp: die ranke soek self iemand.' : `Mik jou <b>${T.special}</b>: tik ’n blok (${T.sText})`), [
+      { label: '<span class="e">🏉</span> Gooi', cls: mode === 'throw' ? 'sel alt' : 'alt', fn: () => { mode = 'throw'; show(); } },
+      { label: `<span class="e">${T.sEmoji}</span> ${T.special} ${s.charge}/${cost('me')}`, cls: mode === 'special' ? 'sel' : '', disabled: !ready, fn: () => { if (T.special === 'Rankgryp') G.ui.resolve({ type: 'special' }); else { mode = 'special'; show(); } } },
+    ]);
+  };
+  const act = await waitUi({ tap: (x, y) => { const b = hitBlock(tw, x, y); if (b && b.owner === 'ai') G.ui.resolve({ type: mode, b }); } , init: show() });
+  bar('…');
+  if (act.type === 'throw') { await doThrow('me', act.b); s.charge = Math.min(cost('me'), s.charge + 1); }
+  else await doSpecial('me', act.b);
+}
+async function meMoveM1() {
+  const tw = towerOf('me');
+  if (!ownerBlocks(tw, 'me').some((b) => b.res) || !ownerBlocks(tw, 'me').some((b) => !b.res)) return;
+  bar(`Skuif een van jou mense? Tik iemand, dan ’n leë blok. <span style="opacity:.8">${G.sides.ai.name} sien net dat jy geskuif het.</span>`, [{ label: 'Klaar ›', cls: 'grn', fn: () => G.ui.resolve(null) }]);
+  await waitUi({ tap: (x, y) => {
+    const b = hitBlock(tw, x, y); if (!b || b.owner !== 'me') return;
+    if (b.res) { G.sel = b; } else if (G.sel) { moveRes('me', G.sel, b); G.sel = null; toast('Geskuif 🤫'); G.ui.resolve(true); }
+  } });
+  G.sel = null;
+}
+async function meHide() {
+  const tw = towerOf('me');
+  const upd = () => { const left = reserveCount('me'); bar(left ? `Versteek jou mense: tik ${left} van jou blokke <span class="e">🏠</span>` : 'Almal is versteek. Reg?', [
+    { label: 'Willekeurig', cls: 'alt', fn: () => { for (const r of resOf('me')) if (r.state === 'reserve') { const b = pick(ownerBlocks(tw, 'me').filter((x) => !x.res)); b.res = r.id; r.state = 'home'; r.block = b.id; } upd(); hud(); } },
+    { label: 'Begin ›', cls: 'grn', disabled: left > 0, fn: () => G.ui.resolve() }]); };
+  await waitUi({ init: upd(), tap: (x, y) => {
+    const b = hitBlock(tw, x, y); if (!b || b.owner !== 'me') return;
+    if (b.res) { const r = RES(b.res); r.state = 'reserve'; r.block = null; b.res = null; }
+    else { const r = resOf('me').find((q) => q.state === 'reserve'); if (r) { b.res = r.id; r.state = 'home'; r.block = b.id; } }
+    upd(); hud();
+  } });
+}
+async function meDrop() {
+  craneFor('me');
+  const s = G.sides.me;
+  const upd = () => {
+    const left = reserveCount('me');
+    const btns = [];
+    if (G.mode === 3 && left > 0) {
+      const forced = left >= Math.max(1, 8 - s.drops);
+      if (forced) G.crane.carry = resOf('me').find((r) => r.state === 'reserve').av;
+      btns.push({ label: G.crane.carry ? `<span class="e">🏠</span> Met inwoner ✓ (${left} oor)` : `<span class="e">🏠</span> Sonder inwoner (${left} oor)`, cls: G.crane.carry ? 'grn' : 'alt', disabled: forced,
+        fn: () => { G.crane.carry = G.crane.carry ? null : resOf('me').find((r) => r.state === 'reserve').av; upd(); } });
+    }
+    bar(G.mode === 2 ? 'Tik om te laat val · <b>Perfek</b> = ’n nuwe inwoner + missie-krag' : 'Tik om te laat val · jou mense ry saam in die blok', btns);
+  };
+  if (G.mode === 3) G.crane.carry = resOf('me').find((r) => r.state === 'reserve') && rnd() < 1 ? resOf('me').find((r) => r.state === 'reserve').av : null;
+  await waitUi({ init: upd(), tap: () => { if (G.crane && G.crane.state === 'swing') G.ui.resolve(); } });
+  bar('…');
+  await dropCrane();
+  return resolveDrop('me');
+}
+async function mePlace() {
+  const tw = towerOf('me');
+  if (!reserveCount('me') || !ownerBlocks(tw, 'me').some((b) => !b.res)) return;
+  bar(`Nuwe inwoner! <span class="e">🏠</span> Tik ’n leë blok vir hom — waar sal ${G.sides.ai.name} nie soek nie?`);
+  await waitUi({ tap: (x, y) => { const b = hitBlock(tw, x, y); if (!b || b.owner !== 'me' || b.res) return; const r = resOf('me').find((q) => q.state === 'reserve'); b.res = r.id; r.state = 'home'; r.block = b.id; hud(); G.ui.resolve(); } });
+}
+async function meMission() {
+  const s = G.sides.me, T = TR[s.tribe];
+  if (s.charge < cost('me') || !homeCount('me')) return;
+  const go = await waitUi({ init: bar(`Jou missie is gelaai! <span class="e">⚡</span> ${homeCount('me') === 1 ? '<b>Pasop:</b> jou laaste mens sal uit wees.' : ''}`, [
+    { label: `<span class="e">${T.sEmoji}</span> ${T.special}`, fn: () => G.ui.resolve(true) }, { label: 'Nie nou nie', cls: 'alt', fn: () => G.ui.resolve(false) }]) });
+  if (!go) return;
+  if (T.special === 'Rankgryp') { await doSpecial('me', null); return; }
+  aimMode('me');
+  bar(`Mik jou <b>${T.special}</b>: tik ’n blok (${T.sText})${G.mode === 3 ? ' — pasop vir joune!' : ''}`);
+  const tw = targetTower('me');
+  const b = await waitUi({ tap: (x, y) => { const q = hitBlock(tw, x, y); if (q && (G.mode === 3 ? q.owner : q.owner === 'ai')) G.ui.resolve(q); } });
+  await doSpecial('me', b);
+}
+
+// ============================================================ turns
+async function turn(who) {
+  G.active = who; hud();
+  if (checkOver()) return;
+  if (who === 'ai' || BOT) toast(who === 'ai' ? `${G.sides.ai.name} se beurt 🤖` : 'Jou beurt', false, 900);
+  await returnAway(who);
+  if (G.mode === 1) {
+    bar(who === 'ai' ? `${G.sides.ai.name} mik…` : '');
+    if (isBot(who)) await botActM1(who); else await meActM1();
+    await settle(); if (checkOver()) return;
+    if (isBot(who)) await botMove(who); else await meMoveM1();
+  } else {
+    bar(who === 'ai' ? `${G.sides.ai.name} bou…` : '');
+    const d = isBot(who) ? await botDrop(who) : await meDrop();
+    await settle(); if (checkOver()) return;
+    if (G.mode === 2 && d.landed && d.perfect && reserveCount(who) > 0) { if (isBot(who)) await botPlace(who, d.b); else await mePlace(); }
+    if (G.sides[who].charge >= cost(who) && homeCount(who) > 0) {
+      if (isBot(who)) { if (homeCount(who) > 1 || rnd() < .4) { const a = botAim(who); if (G.sides[who].tribe === 'gras' || a.score > .4 || G.mode !== 3) await doSpecial(who, a.b); } }
+      else await meMission();
+    }
+  }
+  await settle();
+  tickLit(who); hud();
+  checkOver();
+}
+async function runMatch() {
+  if (G.mode === 1) {
+    if (BOT) { for (const r of resOf('me')) { const b = pick(ownerBlocks(G.towers.me, 'me').filter((x) => !x.res)); b.res = r.id; r.state = 'home'; r.block = b.id; } }
+    else await meHide();
+    toast('Begin! 🎯', true, 900); await sleep(700);
+  }
+  while (!G.over) {
+    await turn('me'); if (G.over) break;
+    await turn('ai'); if (G.over) break;
+    G.round++;
+    if (G.mode === 1 && G.round > 25) { finishByCount(); break; }
+    if (G.mode !== 1 && G.sides.me.drops >= G.maxDrops && G.sides.ai.drops >= G.maxDrops) { finishByCount(); break; }
+  }
+}
+function finishByCount() { const a = aliveCount('me'), b = aliveCount('ai'); finish(a > b ? 'me' : b > a ? 'ai' : null, 'tel'); }
+
+// ============================================================ setup + screens
+function newMatch(mode, tribe, foe) {
+  bid = 0;
+  const prof = profile();
+  G = { mode, round: 1, time: 0, camY: 0, fx: [], ui: null, sel: null, aimable: null, crane: null, over: false, active: 'me', swimUsed: { me: false, ai: false }, swimBack: [],
+    maxDrops: mode === 2 ? 12 : 10, foe,
+    sides: { me: newSide('me', tribe, 'Jy', TR[tribe].hero === 'draakie' ? 'braai' : TR[tribe].hero === 'bytjie' ? 'boer' : 'haai', prof.pts, prof.xp),
+      ai: newSide('ai', foe.tribe, foe.name, foe.av, foe.pts, foe.xp) },
+    towers: mode === 3 ? { shared: { cx: 206, blocks: [] } } : { me: { cx: 108, blocks: [] }, ai: { cx: 304, blocks: [] } } };
+  if (mode === 1) {
+    for (const who of ['me', 'ai']) {
+      const tw = G.towers[who]; let x = 0;
+      for (let i = 0; i < 12; i++) { x = clamp(x + R(-6, 6), -12, 12); tw.blocks.push(mkBlock(G.sides[who].tribe, who, i ? x : 0)); }
+    }
+    const idx = shuffle([...Array(12).keys()]).slice(0, 6);
+    resOf('ai').forEach((r, k) => { const b = G.towers.ai.blocks[idx[k]]; b.res = r.id; r.state = 'home'; r.block = b.id; });
+  } else if (mode === 2) {
+    for (const who of ['me', 'ai']) {
+      const tw = G.towers[who];
+      for (let i = 0; i < 5; i++) tw.blocks.push(mkBlock(G.sides[who].tribe, who, i ? R(-5, 5) : 0));
+      shuffle([0, 1, 2, 3, 4]).slice(0, 3).forEach((k, i) => { const b = tw.blocks[k], r = resOf(who)[i]; b.res = r.id; r.state = 'home'; r.block = b.id; });
+    }
+  } else {
+    G.towers.shared.blocks.push(mkBlock('klip', null, 0, 132));
+  }
+  for (const id of ['menu']) $(id).classList.add('hidden');
+  $('hud').classList.remove('hidden'); $('bar').classList.remove('hidden'); hud();
+}
+function profile() { return store.get('profile', { name: 'Anandre', pts: 640, xp: 1650, wins: 0 }); }
+async function startMatch(mode, tribe, foe) {
+  newMatch(mode, tribe, foe);
+  await showVs();
+  runMatch().catch((e) => { console.error(e); toast('Fout: ' + e.message); });
+}
+function showVs() {
+  const v = $('vs'), me = G.sides.me, ai = G.sides.ai;
+  const col = (s, who) => { const rk = rankOf(s.pts), lv = levelOf(s.xp); return `<div class="vsp"><img src="${URL_[s.av]}"><div class="nm">${who === 'me' ? profile().name : s.name}</div>
+    <div class="rkbig">${shieldSVG(rk.tier, rk.div, 54)}<b>${rk.name}</b></div><div class="lvbig">Vlak ${lv.lv}</div><div style="margin-top:6px;font-weight:900"><span class="e">${TR[s.tribe].emoji}</span> ${TR[s.tribe].name}</div></div>`; };
+  v.innerHTML = `<div class="tag" style="font-size:12px;font-weight:900;letter-spacing:1.5px;opacity:.85">${MODES[G.mode].tag.toUpperCase()} · ${MODES[G.mode].name.toUpperCase()}</div>
+    <div class="vsrow">${col(me, 'me')}<div class="vsx">VS</div>${col(ai, 'ai')}</div>
+    ${TR[me.tribe].beats === ai.tribe ? `<div class="chip" style="font-size:14px;padding:5px 12px"><span class="e">${TR[me.tribe].emoji}</span> klop <span class="e">${TR[ai.tribe].emoji}</span>: jou missie is sterker</div>` : TR[ai.tribe].beats === me.tribe ? `<div class="chip" style="font-size:14px;padding:5px 12px">Pasop: <span class="e">${TR[ai.tribe].emoji}</span> klop <span class="e">${TR[me.tribe].emoji}</span></div>` : ''}
+    <div style="font-size:13px;opacity:.8;margin-top:6px">tik om te begin</div>`;
+  v.classList.remove('hidden');
+  return new Promise((res) => { const go = () => { v.classList.add('hidden'); v.onclick = null; res(); }; v.onclick = go; setTimeout(go, BOT ? 50 : 3200); });
+}
+function finish(winner, why) {
+  if (G.over) return; G.over = true; G.ui = null; hud();
+  const prof = profile(), won = winner === 'me', draw = winner == null;
+  const rp = draw ? 0 : won ? (G.sides.ai.pts > prof.pts ? 30 : 22) : -15;
+  const xpGain = 40 + aliveCount('me') * 10 + (won ? 30 : 0);
+  const before = { rk: rankOf(prof.pts), lv: levelOf(prof.xp) };
+  prof.pts = Math.max(0, prof.pts + rp); prof.xp += xpGain; if (won) prof.wins = (prof.wins || 0) + 1; store.set('profile', prof);
+  const after = { rk: rankOf(prof.pts), lv: levelOf(prof.xp) };
+  if (!BOT) markPlayed(G.mode);
+  const why2 = why === 'leeg' ? 'Die toring was leeg terwyl die missie uit was!' : why === 'almal' ? 'Al die inwoners is uit.' : 'Die blokke is op: die meeste mense oor wen.';
+  setTimeout(() => {
+    $('hud').classList.add('hidden'); $('bar').classList.add('hidden');
+    const m = $('menu'); m.classList.remove('hidden');
+    m.innerHTML = `<div class="res"><h2>${draw ? 'Gelykop! 🤝' : won ? 'Jy wen! 🎉' : `${G.sides.ai.name} wen 😬`}</h2>
+      <div class="sub">${why2}</div>
+      <div class="card" style="margin-top:14px;display:flex;justify-content:space-around;align-items:center">
+        <div><img src="${URL_[G.sides.me.av]}" style="width:54px;border-radius:50%"><div style="font-weight:900">Jy: ${aliveCount('me')} <span class="e">🏠</span></div></div>
+        <div style="font-size:26px;font-weight:900;color:#ffd23f">VS</div>
+        <div><img src="${URL_[G.sides.ai.av]}" style="width:54px;border-radius:50%"><div style="font-weight:900">${G.sides.ai.name}: ${aliveCount('ai')} <span class="e">🏠</span></div></div></div>
+      <div class="card gain">
+        <div class="row"><span>${shieldSVG(after.rk.tier, after.rk.div, 18)} ${after.rk.name}</span><span style="color:${rp >= 0 ? '#7dff9a' : '#ff9a8a'}">${rp >= 0 ? '+' : ''}${rp} rangpunte</span></div>
+        <div class="barline"><i style="width:${after.rk.into}%"></i></div>
+        ${after.rk.name !== before.rk.name ? `<div style="margin-top:6px;font-weight:900;color:#ffd23f">${prof.pts > 0 && rp > 0 ? 'Op na' : 'Af na'} ${after.rk.name}!</div>` : ''}
+        <div class="row" style="margin-top:12px"><span>Vlak ${after.lv.lv}</span><span style="color:#b9b0ff">+${xpGain} XP</span></div>
+        <div class="barline xp"><i style="width:${Math.round(after.lv.into / after.lv.need * 100)}%"></i></div>
+        ${after.lv.lv > before.lv.lv ? `<div style="margin-top:6px;font-weight:900;color:#b9b0ff">Vlak ${after.lv.lv}! ⬆️</div>` : ''}
+      </div>
+      <div class="card votecard" style="text-align:left"><b><span class="e">🗳️</span> Hoe hou jy van “${MODES[G.mode].name}”?</b>
+        <div style="font-size:13px;margin-top:4px;opacity:.9">${played().length < 3 ? `Jy het ${played().length} van die 3 idees gespeel. Probeer die ander ook, dan stem vir jou gunsteling.` : 'Jy het al drie gespeel: watter een is jou gunsteling?'}</div>
+        <div style="margin-top:8px"><button class="b grn" id="voteNow">Stem nou</button></div></div>
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:16px"><button class="b" id="again">Speel weer</button><button class="b alt" id="home">Ander idee</button></div></div>`;
+    $('voteNow').onclick = () => openVote(G.mode);
+    $('again').onclick = () => startMatch(G.mode, G.sides.me.tribe, G.foe);
+    $('home').onclick = () => menu();
+  }, 1600 / Math.min(SPEED, 4));
+}
+let chosenMode = Number(Q.get('idee')) || store.get('mode', 1);
+let chosenTribe = store.get('tribe', 'water');
+function menu() {
+  G = null; $('hud').classList.add('hidden'); $('bar').classList.add('hidden');
+  const m = $('menu'); m.classList.remove('hidden');
+  const prof = profile(), rk = rankOf(prof.pts), lv = levelOf(prof.xp), T = TR[chosenTribe];
+  const mine = store.get('vote', null), pl = played();
+  m.innerHTML = `<a class="back" href="../">‹ Terug na Stapel</a><div class="ttl"><div><h1>Die Lewende Toring</h1><div style="margin-top:4px"><span class="proef">PROEF</span> <span style="font-size:12.5px;opacity:.8">3 idees · speel teen die robot</span></div></div></div>
+    <div class="card prof"><img src="${URL_[T.hero === 'draakie' ? 'braai' : T.hero === 'bytjie' ? 'boer' : 'haai']}"><div style="flex:1">
+      <div style="font-size:19px;font-weight:900">${prof.name}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:4px">${shieldSVG(rk.tier, rk.div, 30)}<div style="flex:1"><div style="display:flex;justify-content:space-between;font-weight:900;font-size:14px"><span>${rk.name}</span><span style="opacity:.75;font-size:12px">${rk.into}/100</span></div><div class="barline"><i style="width:${rk.into}%"></i></div></div></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px"><span class="lv" style="margin:0;min-width:46px;height:28px;font-size:13px"><small>VLAK</small>&nbsp;${lv.lv}</span><div style="flex:1"><div class="barline xp"><i style="width:${Math.round(lv.into / lv.need * 100)}%"></i></div><div style="font-size:11.5px;opacity:.75;margin-top:2px">${lv.into}/${lv.need} XP tot vlak ${lv.lv + 1}</div></div></div>
+    </div></div>
+    <div class="card votecard"><b><span class="e">🗳️</span> Stem: watter idee hou jy die meeste van?</b>
+      <div style="font-size:13px;margin-top:4px;opacity:.9">${mine ? `Jou stem: <b>${MODES[mine.choice].name}</b>. Jy kan dit verander tot Sondag.` : `Speel die drie idees hieronder (${pl.length}/3 gespeel), dan stem. Anandre lees elke stem en rede.`}</div>
+      <div style="margin-top:8px"><button class="b grn" id="voteBtn">${mine ? 'Verander my stem' : 'Stem nou'}</button></div></div>
+    <div class="sec">Kies ’n idee</div>
+    ${[1, 2, 3].map((k) => `<div class="card opt ${chosenMode === k ? 'on' : ''}" data-m="${k}"><div class="n">${k}</div><div><b>${MODES[k].name}</b><p>${MODES[k].desc}</p></div></div>`).join('')}
+    <div class="sec">Jou stam <span style="opacity:.7;text-transform:none;letter-spacing:0;font-weight:700">· kies jou gif</span></div>
+    <div class="tribes">${Object.entries(TR).map(([k, t]) => `<div class="card tc ${chosenTribe === k ? 'opt on' : ''}" data-t="${k}" style="${chosenTribe === k ? 'border-color:#ffd23f;background:rgba(255,210,63,.1)' : ''}"><img src="${URL_[t.hero === 'draakie' ? 'braai' : t.hero === 'bytjie' ? 'boer' : 'haai']}"><div>
+      <b><span class="e">${t.emoji}</span> ${t.name}</b>
+      <div class="ln"><span>Missie · ${t.special}:</span> ${t.sText}</div><div class="ln"><span style="color:#7dff9a">Sterk:</span> ${t.strong}</div><div class="ln"><span style="color:#ff9a8a">Swak:</span> ${t.weak}</div>
+      <div style="margin-top:6px;display:flex;gap:4px">${t.cast.map((c) => `<img src="${URL_[c]}" title="${AVN[c]}" style="width:28px;height:28px">`).join('')}</div></div></div>`).join('')}</div>
+    <div class="sec"><span class="dot"></span> Wie is aanlyn? <span style="opacity:.7;text-transform:none;letter-spacing:0;font-weight:700">· voorbeeld</span></div>
+    ${ONLINE.map((p, i) => { const r = rankOf(p.pts), l = levelOf(p.xp); return `<div class="card pl"><img src="${URL_[p.av]}"><div class="who"><b>${p.name}</b> <span class="e" style="font-size:13px">${TR[p.tribe].emoji}</span>
+      <div class="chip">${shieldSVG(r.tier, r.div, 15)} ${r.name} · <span style="color:#c9c0ff">Vlak ${l.lv}</span></div>
+      <div class="st"><span class="dot ${p.busy ? 'busy' : ''}"></span>${p.st}</div></div>
+      <button class="b ${p.busy ? 'alt' : ''}" data-p="${i}" ${p.busy ? 'disabled' : ''}>${p.busy ? 'Besig' : 'Daag uit'}</button></div>`; }).join('')}
+    <div class="card pl"><img src="${URL_.rikus}"><div class="who"><b>Robot Rikus</b><div class="chip">${shieldSVG(1, 'I', 15)} Oefen · <span style="color:#c9c0ff">enige tyd</span></div><div class="st"><span class="dot"></span>altyd reg</div></div><button class="b grn" data-p="rikus">Speel</button></div>
+    <div class="foot">Proef vir Anandre, 15 Okt 2026 · nie die regte speletjie nie<br>Die spelers hier is voorbeelde: in hierdie proef speel jy altyd teen die robot onder hul naam.</div>`;
+  $('voteBtn').onclick = () => openVote();
+  m.querySelectorAll('[data-m]').forEach((el) => { el.onclick = () => { chosenMode = Number(el.dataset.m); store.set('mode', chosenMode); menu(); }; });
+  m.querySelectorAll('[data-t]').forEach((el) => { el.onclick = () => { chosenTribe = el.dataset.t; store.set('tribe', chosenTribe); menu(); }; });
+  m.querySelectorAll('[data-p]').forEach((el) => { el.onclick = () => {
+    const k = el.dataset.p; const foe = k === 'rikus' ? { name: 'Robot Rikus', av: 'rikus', tribe: pick(Object.keys(TR).filter((t) => t !== chosenTribe)), pts: 350, xp: 900 } : ONLINE[Number(k)];
+    startMatch(chosenMode, chosenTribe, foe);
+  }; });
+}
+$('help').onclick = () => {
+  const r = $('rules'); const T = TR[G.sides.me.tribe];
+  const lines = { 1: ['Albei torings staan klaar; jy sien die ander se toring, maar nie waar hul mense is nie.', 'Elke beurt: gooi ’n rugbybal na een blok, of stuur iemand op ’n missie.', 'Daarna mag jy een van jou mense skuif: die ander sien net dat jy geskuif het.'],
+    2: ['Elke beurt laat jy ’n blok val. ’n Perfek bring ’n nuwe inwoner: jy kies sy blok.', 'Blokke laai jou missie (Perfek = dubbel). Stuur iemand om die ander se toring aan te val.', 'Na 12 blokke elk wen wie die meeste mense oor het.'],
+    3: ['Julle bou saam een toring, ’n blok elk. Jy kan jou mense in jou blokke laat saamry.', 'Jy sien wie se blok wie s’n is, maar nie wie daarin woon nie.', 'Vuur en water tref álmal in daardie blokke: pasop vir jou eie mense!'] }[G.mode];
+  r.innerHTML = `<div class="card"><h3>${MODES[G.mode].tag}: ${MODES[G.mode].name}</h3><ul>${lines.map((l) => `<li>${l}</li>`).join('')}
+    <li><b>Jou mense:</b> wie uit hul blok moet, spring met ’n valskerm. Geen mense oor = jy verloor.</li>
+    <li><b>Missie (${T.special}):</b> ${T.sText}. Een van jou mense gaan doen dit en kom eers jou volgende beurt terug — solank is sy blok leeg.</li>
+    <li><b>Sterk:</b> ${T.strong}. <b>Swak:</b> ${T.weak}.</li></ul>
+    <div style="text-align:center;margin-top:12px"><button class="b" id="rclose">Reg so</button></div></div>`;
+  r.classList.remove('hidden'); $('rclose').onclick = () => r.classList.add('hidden');
+};
+
+// ============================================================ the testers' vote
+// (the owner, 15 Oct: "build all three with which one do you like most option for the testers. Then at the end of the week
+// we can see who voted for what, their opinion matter")
+let API = '';
+const apiReady = import('../js/sponsorConfig.js').then((m) => { API = (m.matchApiUrl && m.matchApiUrl()) || ''; }).catch(() => { API = ''; });
+function voterId() {
+  let id = store.get('voter', null);
+  if (!id || !/^[a-z0-9]{12,32}$/.test(id)) { id = Array.from({ length: 16 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]).join(''); store.set('voter', id); }
+  return id;
+}
+const played = () => store.get('played', []);
+function markPlayed(k) { const p = played(); if (!p.includes(k)) { p.push(k); p.sort(); store.set('played', p); } }
+function gameName() {
+  // the nickname from the real game on this phone (the Uitdagersreeks's "Jou bynaam"), if there is one
+  try { const d = JSON.parse(localStorage.getItem('stapel.v1') || 'null'); const n = d && d.duel && d.duel.name; return typeof n === 'string' ? n : ''; } catch (e) { return ''; }
+}
+function esc(t) { return String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+function openVote(pref) {
+  const v = $('vote');
+  let mine = store.get('vote', null);
+  let choice = pref || (mine && mine.choice) || 0;
+  // what the tester typed stays across redraws (picking another idea, a message after sending)
+  let name = (mine && mine.name) || gameName() || '', reason = (mine && mine.reason) || '';
+  const draw = (msg = '', ok = false) => {
+    const p = played();
+    v.innerHTML = `<div class="card" style="width:100%;max-width:390px;max-height:96%;overflow:auto">
+      <h3><span class="e">🗳️</span> Watter idee hou jy die meeste van?</h3>
+      <div style="font-size:13px;opacity:.85">Jou stem besluit wat ons bou. ${p.length < 3 ? `Jy het al ${p.length} van die 3 gespeel: probeer al drie as jy kan.` : 'Jy het al drie gespeel. 👏'}</div>
+      ${[1, 2, 3].map((k) => `<div class="card vopt ${choice === k ? 'on' : ''}" data-v="${k}"><div class="n">${k}</div><div><b>${MODES[k].name}</b><small>${MODES[k].short}${p.includes(k) ? ' · <span style="color:#7dff9a">gespeel ✓</span>' : ''}</small></div></div>`).join('')}
+      <label class="fld">Jou naam of bynaam<input id="vname" maxlength="16" autocomplete="nickname" placeholder="bv. Oom Piet" value="${esc(name)}"></label>
+      <label class="fld">Hoekom? <span style="opacity:.7;font-weight:700">(nie nodig nie, maar ons lees elke een)</span><textarea id="vwhy" maxlength="200" placeholder="Wat het jy lekker gekry? Wat moet beter?">${esc(reason)}</textarea></label>
+      <div class="vmsg ${ok ? 'ok' : ''}" id="vmsg">${msg}</div>
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:6px"><button class="b grn" id="vsend">${mine ? 'Verander my stem' : 'Stem'}</button><button class="b alt" id="vclose">Later</button></div>
+      <div class="small">Ons bêre net jou naam, jou keuse en jou rede, vir hierdie stemming, en vee dit uit ná 8 November 2026. Jonger as 18? Vra eers jou ouer of voog. <a href="../privaatheid.html#stemming">Privaatheid</a></div></div>`;
+    $('vname').oninput = (e) => { name = e.target.value; };
+    $('vwhy').oninput = (e) => { reason = e.target.value; };
+    v.querySelectorAll('[data-v]').forEach((el) => { el.onclick = () => { choice = Number(el.dataset.v); draw(); }; });
+    $('vclose').onclick = () => { v.classList.add('hidden'); if (!G) menu(); };
+    $('vsend').onclick = () => send();
+  };
+  const send = async () => {
+    name = $('vname').value.trim(); reason = $('vwhy').value.trim();
+    if (!choice) { $('vmsg').textContent = 'Kies eers een van die drie idees.'; return; }
+    if (name.length < 2) { $('vmsg').textContent = 'Skryf jou naam of bynaam, dan weet Anandre wie gestem het.'; return; }
+    $('vsend').disabled = true; $('vmsg').className = 'vmsg'; $('vmsg').textContent = 'Stuur…';
+    await apiReady;
+    const keep = { choice, name, reason, at: Date.now() };
+    if (!API) { $('vmsg').textContent = 'Die stemming is nie hier oop nie (geen bediener).'; $('vsend').disabled = false; return; }
+    try {
+      const res = await fetch(`${API.replace(/\/+$/, '')}/idees/stem`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ voter: voterId(), choice, name, reason, played: played() }) });
+      if (res.ok) { store.set('vote', keep); mine = keep; draw(`Dankie! Jou stem vir “${MODES[choice].name}” tel. 🗳️`, true); $('vsend').disabled = false; vib(30); return; }
+      let code = ''; try { code = (await res.json()).error || ''; } catch (e) { code = ''; }
+      const why = { invalid_field: 'Die naam werk nie: probeer ’n ander een (letters en syfers, geen vloekwoorde nie).', name_rejected: 'Die naam werk nie: probeer ’n ander een.',
+        reason_rejected: 'Jou rede het woorde wat nie mag nie: probeer dit anders sê.', rate_limited: 'Te veel probeer: wag ’n bietjie en probeer weer.', vote_closed: 'Die stemming is klaar. Dankie!' }[code];
+      $('vmsg').textContent = why || `Dit het nie gewerk nie (${res.status}). Probeer weer.`;
+    } catch (e) { $('vmsg').textContent = 'Geen verbinding nie: probeer weer as jy aanlyn is.'; }
+    $('vsend').disabled = false;
+  };
+  draw(); v.classList.remove('hidden');
+}
+
+// ============================================================ hooks for the picture script
+window.__lt = { openVote, markPlayed, get G() { return G; }, setSpeed: (s) => { SPEED = s; }, startMatch, newMatch, showVs, doSpecial, doThrow, evict, botDrop, botPlace, moveRes, menu, hud, bar, toast, fx, sleep,
+  rankOf, levelOf, ONLINE, resOf, towerOf, targetTower, specialRange, craneFor, dropCrane, resolveDrop, turn, runMatch, finish };
+
+(async () => {
+  layout(); await loadAvatars();
+  requestAnimationFrame(frame);
+  if (BOT) { const m = Number(Q.get('idee')) || 1; const t = Q.get('stam') || 'water'; await startMatch(m, t, { ...ONLINE[1], tribe: Q.get('foe') || 'vuur' }); window.__ltDone = () => G.over; }
+  else menu();
+})();
+})();
+</script>
+</body>
+</html>

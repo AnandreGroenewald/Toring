@@ -10,6 +10,7 @@ import { refresh } from './billing.js';
 import * as db from './db.js';
 import * as stats from './stats.js';
 import * as board from './board.js';
+import * as ideas from './ideas.js';
 import { readJsonObject } from './http.js';
 import { handleWebhook } from './webhook.js';
 import { routeAccount, pruneAccounts } from './account.js';
@@ -104,6 +105,8 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
     }
     // (1.13.1) a share-button tap on a results screen: an anonymous count
     if (path === '/stats/share') return method === 'POST' ? stats.postShare(request, ctx) : methodNotAllowed('POST');
+    // (1.15.6) the testers' vote on the three Living Tower ideas
+    if (path === '/idees/stem') return method === 'POST' ? ideas.postVote(request, ctx) : methodNotAllowed('POST');
     if (path === '/score') {
       if (method === 'POST') return stats.postScore(request, ctx);
       return method === 'GET' ? stats.getScore(request, url, ctx) : methodNotAllowed('GET, POST');
@@ -207,6 +210,7 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
       if (method === 'POST') return board.adminBlockEntry(ctx, await readJsonObject(request, 1024));
       return methodNotAllowed('GET, POST');
     }
+    if (path === '/admin/stemme') return method === 'GET' || method === 'POST' ? ideas.adminVotes(request, ctx) : methodNotAllowed('GET, POST');
     if (path === '/admin/runs') {
       if (method === 'GET') return admin.listRuns(ctx);
       if (method === 'POST') return admin.forgetRuns(request, ctx);
@@ -296,6 +300,12 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
             Object.assign(counts, await board.pruneBoard(env.DB, at));
           } catch (err) {
             log('error', 'board_prune_failed', { message: String(err?.message || err) });
+          }
+          // (1.15.6) the testers' votes go after their delete date
+          try {
+            if (env.MATCH_LOBBY) await env.MATCH_LOBBY.get(env.MATCH_LOBBY.idFromName('lobby')).fetch(new Request('https://lobby/votes/prune', { method: 'POST' }));
+          } catch (err) {
+            log('error', 'votes_prune_failed', { message: String(err?.message || err) });
           }
           // (1.13) sessions and accounts nobody used for a long time
           try {

@@ -11,7 +11,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = join(root, 'pages-dist');
 // (1.12.1) adverteer.html and terme.html stay out until sponsor sales open: terme.html is still a template
 const FILES = ['index.html', 'admin.html', 'privaatheid.html', 'privacy.html', 'manifest.webmanifest', 'sponsors.json', 'sw.js'];
-const DIRS = ['css', 'js', 'lib', 'icons', 'img'];
+const DIRS = ['css', 'js', 'lib', 'icons', 'img', 'lewende-toring'];   // (1.15.6) the Living Tower preview
 
 rmSync(out, { recursive: true, force: true });
 mkdirSync(join(out, '.well-known'), { recursive: true });

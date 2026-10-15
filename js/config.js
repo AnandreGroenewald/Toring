@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.15.5';
+export const VERSION = '1.15.6';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -337,6 +337,11 @@ export const DAILY_TRIES = Object.freeze({ free: 3, from: '2026-10-12', maxFree:
 // `from` (South African dates: Mon 12 - Fri 16 Oct 2026); from the day after, the button is gone by itself.
 // (12 Oct 04:05, the owner in the Stapel terminal: "if the skin is 2000 coins lets give them 4000 coins per reload") up to 4 000
 export const REFILL = Object.freeze({ on: true, to: 4000, times: 3, per: 'day', from: '2026-10-12', days: 5 });
+// (1.15.6, the owner 15 Oct: "build all three with which one do you like most option for the testers. Then at the end of
+// the week we can see who voted for what"; "The vote invite" in "Wedloop, BvB + 3 ideas") the Living Tower preview
+// (lewende-toring/, the vote on the server's /idees/stem): its three ideas in the Uitdagersreeks, an invite on a match's
+// results, a "Nuut" tag on the menu's Uitdagersreeks button. Gone by itself from `until` (SAST); `on: false` hides it now.
+export const IDEAS_VOTE = Object.freeze({ on: true, until: '2026-11-01', path: 'lewende-toring/' });
 export const TESTER_GIFT = Object.freeze({ on: true, coins: 100000, hash: '7b325f2da84141879a5a4b6ab2f0a72a0386a3d7a3519ece2f6a5a075553792d' });
 
 // (1.13) Sign in with Google (js/account.js): the web client ID from Google Cloud (Google Auth Platform >
