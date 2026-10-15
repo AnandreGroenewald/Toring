@@ -901,6 +901,21 @@ Later the owner added (decisions are final unless they say otherwise):
   in review, Managed publishing off. At 11:49 Alfred relayed "Wait turn off the critics for now." "For all projects" (not
   typed in the terminal; the hook, quick-lane.txt and ~/.claude/CLAUDE.md unchanged): ask him whether it stands. After
   Google's approval: the Family message (Play folder), which he sends himself.
+- **15 Oct ~19:40 – 16 Oct ~00:40 — 1.16 "Die Lewende Toring": the vote server, a canvas preview (held), then all three
+  ideas playable in the real game with a premium look. LOCAL ONLY (9eae830, df99946, 8c12d12, 1a1b1ac; not pushed; the
+  Worker untouched).** The owner's design asks (15 Oct): residents live in the blocks, more than one per block; the other
+  player's people hidden (you choose where to attack); lose when nobody is left; tribes Vuur / Water / Gras ("choose your
+  poison"); ranks and levels prominent; who is online; the testers vote on three ideas. The canvas preview
+  (`lewende-toring/`) was rejected (~23:00: "it needs to be 'Premium'") and stays ON HOLD. In the game now:
+  `js/scenes/LewendeScene.js` + `js/ui/lewendeUi.js` (Uitdagersreeks › "Nuut: Die Lewende Toring": tribe, sample players +
+  Robot Rikus, VS with ranks + levels, the match on the real crane/blocks/worlds, result with rank points + XP, the vote),
+  `js/game/residents.js` (windows with faces / curtains lit from behind; parachutes; Veldbrand fire; Waterwiel paddle wheel +
+  sea jet + breaking wave; Rankgryp vines; `prepareFx`), Gras's own block skin `mos` (not in the shop). The vote server
+  (`server/src/ideas.js`, POST /idees/stem, /admin/stemme; votes deleted 8 Nov 2026) is built and tested, NOT deployed.
+  Pictures for the owner: Play folder › Previews › "1.16 Lewende Toring (premium) - …" (4). Tests: game 417, server 266
+  (1 skipped), `qa/lewende1160.mjs 123` ALL OK, `qa/lewende_soak1160.mjs` (robot both sides; found the robot's frame-counted
+  aim wait, fixed). The owner turned the full Critic Panel and long test runs OFF for all projects (typed 15 Oct ~23:20,
+  "Both"). Next: his look → a private Pages preview for his phone → the Worker deploy + the Family message (update its link).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
