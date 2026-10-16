@@ -109,3 +109,37 @@ html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50%
 .kh-again { color: #2a1406 !important; background: linear-gradient(180deg, #ffe39a, #ffb84a); box-shadow: 0 5px 0 #a8621a; }
 .kh-done { background: rgba(255, 255, 255, 0.12) !important; border: 1px solid var(--glass-line) !important; }
 .kh-deploy { position: absolute; inset: 0; z-index: 0; }
+
+/* the defence planner */
+.kp-title { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px; padding: 10px 14px; border-radius: 18px;
+  background: linear-gradient(180deg, rgba(16, 10, 28, 0.74), rgba(16, 10, 28, 0.46)); border: 1px solid var(--glass-line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.kp-title small { display: block; font-size: 10px; font-weight: 800; letter-spacing: 0.28em; color: var(--gold); }
+.kp-title b { display: block; font-size: 24px; font-weight: 900; margin-top: 2px; }
+.kp-title p { margin: 4px 0 0; font-size: 12px; opacity: 0.85; }
+.kp-keep { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 96px); left: 12px; display: flex; align-items: center; gap: 6px; padding: 5px 6px;
+  border-radius: 14px; background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.kp-keep button { width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--glass-line); background: rgba(255, 255, 255, 0.08); font-size: 20px !important; font-weight: 900; line-height: 1; }
+.kp-keep small, .kp-budget small { display: block; font-size: 9px; font-weight: 900; letter-spacing: 0.22em; color: var(--gold); }
+.kp-keep b { font-size: 13px; }
+.kp-budget { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 96px); right: 12px; padding: 6px 12px; border-radius: 14px; text-align: right;
+  background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.kp-budget b { font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.kp-budget.is-over b { color: #ff6b5a; }
+.kp-hint { position: absolute; left: 14px; right: 14px; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 168px); margin: 0; text-align: center; font-size: 12px; font-weight: 800;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.75); transition: color 0.2s; }
+.kp-hint.is-flash { color: var(--gold); font-size: 14px; }
+.kp-cards { position: absolute; left: 8px; right: 8px; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 70px); display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.kp-card { position: relative; height: 82px; border-radius: 14px; border: 1px solid var(--glass-line); background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  display: grid; justify-items: center; align-content: center; gap: 3px; padding: 0 2px; }
+.kp-card .kp-ic svg { width: 30px; height: 30px; display: block; }
+.kp-card b { font-size: 8.5px; font-weight: 800; line-height: 1.1; text-align: center; }
+.kp-card i { position: absolute; top: -7px; right: -2px; font-style: normal; font-size: 10px; font-weight: 900; padding: 1px 6px; border-radius: 999px; background: #1d1030; border: 1px solid var(--glass-line); }
+.kp-card.is-on { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 207, 107, 0.35); transform: translateY(-4px); }
+.kp-btns { position: absolute; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; gap: 10px; }
+.kp-btns button { flex: 1; height: 50px; border-radius: 16px; border: 0; font-size: 15px !important; font-weight: 900 !important; letter-spacing: 0.18em; }
+.kp-save { background: rgba(255, 255, 255, 0.12) !important; border: 1px solid var(--glass-line) !important; }
+.kp-save.is-dirty { color: #2a1406 !important; background: linear-gradient(180deg, #ffe39a, #ffb84a) !important; box-shadow: 0 5px 0 #a8621a; }
+.kp-test { color: #2a1406 !important; background: linear-gradient(180deg, #9fd0ff, #4aa3ff) !important; box-shadow: 0 5px 0 #1f5fa8; }
+.kh-mine, .kp-attack { pointer-events: auto; text-decoration: none; color: #fff; font-weight: 900; font-size: 12px; letter-spacing: 0.06em; }
+.kh-mine { position: absolute; right: 14px; top: calc(max(14px, env(safe-area-inset-top)) + 140px); padding: 8px 12px; border-radius: 12px; background: rgba(74, 163, 255, 0.28); border: 1px solid rgba(143, 197, 255, 0.55); }
+.kp-attack { position: absolute; right: 12px; top: 12px; padding: 6px 10px; border-radius: 10px; background: rgba(255, 207, 107, 0.18); border: 1px solid rgba(255, 207, 107, 0.5); color: var(--gold); font-size: 11px; }

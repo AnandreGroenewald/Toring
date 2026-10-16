@@ -291,3 +291,65 @@ export function shot(r = 0.36) {
   o.castShadow = true;
   return o;
 }
+
+// ------------------------------------------------------------------------------------------- the defence's pieces
+/** Boiling oil over the gate: an iron pot on a timber frame, a glow under it, steam above (`pour()` tips it). */
+export function cauldron(mats) {
+  const g = new THREE.Group();
+  const pot = new THREE.Group();
+  const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.7, 18, 12, 0, Math.PI * 2, Math.PI * 0.42, Math.PI * 0.58), mats.iron);
+  bowl.castShadow = true;
+  const oil = new THREE.Mesh(new THREE.CircleGeometry(0.62, 18), new THREE.MeshBasicMaterial({ color: '#ffb547' }));
+  oil.rotation.x = -Math.PI / 2;
+  oil.position.y = 0.16;
+  pot.add(bowl, oil);
+  pot.position.set(0, 0.95, 0.4);
+  g.add(pot);
+  for (const s of [-1, 1]) g.add(beam(new THREE.Vector3(s * 1.0, 0, 0.4), new THREE.Vector3(s * 0.75, 1.4, 0.4), 0.14, mats.timber));
+  g.add(beam(new THREE.Vector3(-0.85, 1.35, 0.4), new THREE.Vector3(0.85, 1.35, 0.4), 0.12, mats.iron));
+  const glow = new THREE.PointLight('#ff8a2a', 10, 7, 1.8);
+  glow.position.set(0, 0.4, 0.4);
+  g.add(glow);
+  g.userData = { pot, kind: 'olie' };
+  return g;
+}
+
+/** A ballista: a great crossbow on a turning stand (faces +z). */
+export function ballista(mats, team) {
+  const g = new THREE.Group();
+  const T = mats.timber;
+  g.add(beam(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1.1, 0), 0.3, T));
+  const head = new THREE.Group();
+  head.position.y = 1.15;
+  head.add(beam(new THREE.Vector3(0, 0, -1.3), new THREE.Vector3(0, 0, 1.4), 0.24, T));
+  for (const s of [-1, 1]) head.add(beam(new THREE.Vector3(0, 0, 1.0), new THREE.Vector3(s * 1.5, 0.12, 0.5), 0.14, T));
+  head.add(beam(new THREE.Vector3(-1.5, 0.12, 0.5), new THREE.Vector3(0, 0.05, -0.9), 0.025, mats.rope));
+  head.add(beam(new THREE.Vector3(1.5, 0.12, 0.5), new THREE.Vector3(0, 0.05, -0.9), 0.025, mats.rope));
+  const bolt = beam(new THREE.Vector3(0, 0.18, -0.9), new THREE.Vector3(0, 0.18, 1.6), 0.06, T);
+  head.add(bolt);
+  const tipM = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.3, 8), mats.iron);
+  tipM.rotation.x = Math.PI / 2;
+  tipM.position.set(0, 0.18, 1.75);
+  head.add(tipM);
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.32), new THREE.MeshStandardMaterial({ color: TEAM[team].main, side: THREE.DoubleSide }));
+  flag.position.set(0, 0.75, -1.1);
+  head.add(flag, beam(new THREE.Vector3(0, 0, -1.1), new THREE.Vector3(0, 0.95, -1.1), 0.04, T));
+  g.add(head);
+  g.userData = { head, kind: 'ballista' };
+  return g;
+}
+
+/** Sharpened stakes in a row, leaning out towards the attacker (+z). */
+export function spikes(mats) {
+  const g = new THREE.Group();
+  for (let i = 0; i < 7; i++) {
+    const st = new THREE.Mesh(new THREE.ConeGeometry(0.16, 2.2, 6), mats.timber);
+    st.position.set(-2.7 + i * 0.9, 0.75, 0);
+    st.rotation.x = 0.75;
+    st.castShadow = true;
+    g.add(st);
+  }
+  g.add(beam(new THREE.Vector3(-3, 0.35, -0.35), new THREE.Vector3(3, 0.35, -0.35), 0.16, mats.timber));
+  g.userData = { kind: 'pieke' };
+  return g;
+}

@@ -1033,6 +1033,18 @@ Later the owner added (decisions are final unless they say otherwise):
   recorded play-through (qa/kasteel_video1170.mjs) in Previews, "1.17 Kasteelreeks - speel-video" (85 s, with sound).
   Opponent for now: Robot Rikus with sample towers. Open: the defence planner, castles from saved Daily layouts,
   friends' castles, the rewards into the wallet, sounds of its own, phone speed.
+- **17 Oct ~00:55 — Die Kasteelreeks: the defence planner (local, nothing live).** His rule (16 Oct): "The oponent needs to
+  be able to strategize what is the best way to defend if they are offline". kasteel.html?plan = "Jou kasteel"
+  (planner.js + plan.js): your castle turns on its hill; ‹ › choose which day's tower stands in the middle as the keep;
+  cards (Boogskutter 1, Spiesman 1, Ridder 2, Kookolie 2, Ballista 3, Pieke 1) and a tap on a gold ring place a piece on
+  its kind of spot (wall, tower top, behind the gate, over the gate, the ground before it); a tap on a piece takes it
+  away; a budget of 16; BÊRE keeps it under `stapel.v1.kasteel` ({ seed, plan: { keep, place } }); TOETS DIT attacks a
+  copy (kasteel.html?teen=my). The siege now builds every defence from a plan (Robot Rikus: archers, two knights,
+  oil, a ballista): oil pours on whoever is at the gate (every 12 s; the ram -45), ballistas shoot the ram first (-30)
+  then soldiers, spikes may drop a man and slow the rest, spearmen throw at 44 m. Links: the scout screen's "Jou
+  kasteel ›", the planner's "Val Robot Rikus aan ›", the end card's KLAAR → your castle. Tests: qa/kasteel_plan1170.mjs
+  8/8, qa/kasteel_siege1170.mjs 8/8. Open: an attacker AI so a friend's offline castle is truly tested by others; the
+  real Daily layouts; friends' castles on the home server; the privacy pages to name `stapel.v1.kasteel` before release.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

@@ -8,7 +8,8 @@ import * as THREE from '../../lib/three.module.min.js';
 import { createStage } from './stage.js';
 import { buildWorld, DIST, rng, groundHeight } from './world.js';
 import { castleMaterials, buildCastle, sampleDaily } from './castle.js';
-import { trebuchet, ram as makeRam, shot } from './army.js';
+import { trebuchet, ram as makeRam, shot, cauldron, ballista as makeBallista, spikes as makeSpikes } from './army.js';
+import { defaultPlan, loadPlan, spotIds } from './plan.js';
 import { createCrowd } from './crowd.js';
 import { createPhysics } from './physics.js';
 import { createFx } from './fx.js';
@@ -16,9 +17,12 @@ import { scoutScreen, createSiegeHud } from './hud.js';
 import { audio, haptics } from '../audio.js';
 
 const q = new URLSearchParams(location.search);
-const seed = Number(q.get('seed')) || (Date.now() % 100000) + 1;
+// whose castle: Robot Rikus's (a castle by `?seed=`), or a copy of your own with your plan (`?teen=my`)
+const MINE = q.get('teen') === 'my' ? loadPlan() : null;
+const seed = MINE?.seed ?? (Number(q.get('seed')) || (Date.now() % 100000) + 1);
 const rand = rng(seed);
-const OPP = 'Robot Rikus';
+const OPP = MINE ? 'Jou kasteel' : 'Robot Rikus';
+const TITLE = MINE ? 'Jou kasteel (toets)' : 'Robot Rikus se kasteel';
 const HALF = 15;
 const G_ACC = 16;   // the world's gravity (m/s²): everything falls with weight
 
@@ -38,7 +42,9 @@ const world = buildWorld(scene, renderer, { seed: 11 });
   sun.shadow.mapSize.set(big ? 4096 : 2048, big ? 4096 : 2048);
 }
 const mats = castleMaterials(renderer);
-const days = [sampleDaily(rand, 16), sampleDaily(rand, 12), sampleDaily(rand, 11), sampleDaily(rand, 13), sampleDaily(rand, 10)];
+const days0 = [sampleDaily(rand, 16), sampleDaily(rand, 12), sampleDaily(rand, 11), sampleDaily(rand, 13), sampleDaily(rand, 10)];
+const keepDay = MINE?.plan?.keep ?? 0;
+const days = [days0[keepDay], ...days0.filter((_, i) => i !== keepDay)];
 const castle = buildCastle({ at: new THREE.Vector3(0, 0, -DIST), days, team: 'red', mats, rand, half: HALF });
 scene.add(castle.group);
 scene.updateMatrixWorld(true);
@@ -100,19 +106,43 @@ for (const d of doors) {
 // ------------------------------------------------------------------------------------------------- soldiers, fx
 const crowd = createCrowd(scene, groundHeight, { capacity: 36 });
 const fx = createFx(scene);
+// their defence, as planned (Robot Rikus's own way, or your saved plan)
+const plan = MINE?.plan || defaultPlan(castle);
 const defenders = [];
-for (const p of castle.spots.wall) {
-  const w = castle.group.localToWorld(p.clone());
-  defenders.push(crowd.add('boog', 'red', w.x, w.z, { y: w.y, heading: 0, role: 'wall', cool: 1 + rand() * 2 }));
+const guards = [];
+const ballistas = [];
+const spikeRows = [];
+let oil = null;
+const relTo = (link, w) => new THREE.Vector3(w.x - link.body.position.x, w.y - link.body.position.y, w.z - link.body.position.z);
+for (const s of spotIds(castle)) {
+  const kind = plan.place[s.id];
+  if (!kind) continue;
+  const w = castle.group.localToWorld(s.p.clone());
+  if (kind === 'boog' || kind === 'spies' || kind === 'ridder') {
+    if (s.kind === 'gate') { guards.push(crowd.add(kind, 'red', w.x, w.z, { heading: 0, role: 'guard' })); continue; }
+    const link = s.kind === 'top' ? castle.towers[s.tower]?.topLink : null;
+    const m = crowd.add(kind, 'red', w.x, w.z, { y: w.y, heading: 0, role: link ? 'tower' : 'wall', link, cool: 1 + rand() * 2 });
+    if (!m) continue;
+    if (link) m.rel = relTo(link, w);
+    defenders.push(m);
+  } else if (kind === 'olie') {
+    const c = cauldron(mats);
+    c.position.copy(w);
+    scene.add(c);
+    oil = { obj: c, cool: 3, pours: 0 };
+  } else if (kind === 'ballista') {
+    const link = castle.towers[s.tower]?.topLink;
+    const b = makeBallista(mats, 'red');
+    b.position.copy(w);
+    scene.add(b);
+    ballistas.push({ obj: b, link, rel: link ? relTo(link, w) : null, cool: 3 + rand() * 2, alive: true });
+  } else if (kind === 'pieke') {
+    const sp = makeSpikes(mats);
+    sp.position.set(w.x, groundHeight(w.x, w.z), w.z);
+    scene.add(sp);
+    spikeRows.push({ obj: sp, x: w.x, z: w.z, hit: new Set() });
+  }
 }
-castle.towers.forEach((t, i) => {
-  if (!t.topLink) return;
-  const w = castle.group.localToWorld(castle.spots.towers[i].clone());
-  const m = crowd.add(i % 2 ? 'spies' : 'boog', 'red', w.x, w.z, { y: w.y, heading: 0, role: 'tower', link: t.topLink, cool: 1 + rand() * 2 });
-  m.rel = new THREE.Vector3(w.x - t.topLink.body.position.x, w.y - t.topLink.body.position.y, w.z - t.topLink.body.position.z);
-  defenders.push(m);
-});
-const guards = [-1.6, 1.6].map((x) => crowd.add('ridder', 'red', x, GATE_Z - 3.5, { heading: 0, role: 'guard' }));
 const blue = [];
 
 // the trebuchet, cocked
@@ -158,20 +188,20 @@ const starCount = () => Object.values(G.stars).filter(Boolean).length;
 // ------------------------------------------------------------------------------------------------------ the screen
 const hudEl = document.getElementById('k-hud');
 let hud = null;
-scoutScreen(hudEl, { name: OPP, towers: castle.towers.length, perfects: days.flat().filter((b) => b.rating === 'P').length, defenders: defenders.length + guards.length, goals: ['Breek die hek', 'Helfte plat', 'Hul vlag val'], coins: 130, trophies: 30 }, () => startSiege());
+scoutScreen(hudEl, { name: OPP, title: TITLE, mineLink: true, towers: castle.towers.length, perfects: days.flat().filter((b) => b.rating === 'P').length, defenders: Object.keys(plan.place).length, goals: ['Breek die hek', 'Helfte plat', 'Hul vlag val'], coins: 130, trophies: 30 }, () => startSiege());
 
 function startSiege() {
   try { audio.unlock(); } catch { /* */ }
   sfx('click');
   G.mode = 'intro';
   G.introT = 0;
-  hud = createSiegeHud(hudEl, { name: `${OPP} se kasteel`, wind: G.wind }, {
+  hud = createSiegeHud(hudEl, { name: TITLE, wind: G.wind }, {
     card: (k) => pickCard(k),
     goDown: () => { if (G.mode === 'aim' && G.trebState === 'ready' && !G.ended) { G.winding = true; G.windPh = 0; sfx('creak'); } },
     goUp: () => { if (G.winding) { G.winding = false; fire(G.power); } },
     back: () => leaveAim(),
     again: () => location.reload(),
-    done: () => { location.href = location.pathname; },
+    done: () => { location.href = `${location.pathname}?plan`; },
   });
   hud.cards(G.cards, G.sel, true);
   hud.hint('Kies ’n kaart, en tik op die veld');
@@ -421,7 +451,8 @@ function think(dt) {
       if (m.duel > 1.2) { m.duel = 0; if (rand() < (m.kind === 'ridder' ? 0.62 : 0.5)) kill(foe); else kill(m); }
       continue;
     }
-    const d = moveTo(m, tx, tz, SPEED[m.kind], dt);
+    const slow = spikeRows.some((row) => Math.abs(m.x - row.x) < 4.5 && Math.abs(m.z - row.z) < 3) ? 0.55 : 1;
+    const d = moveTo(m, tx, tz, SPEED[m.kind] * slow, dt);
     if (d < 0.9) {
       m.state = G.gateBroken ? 'idle' : 'attack';
       if (!G.gateBroken) { face(m, m.x, GATE_Z); damageGate(dt * (m.kind === 'ridder' ? 0.9 : 0.6)); }
@@ -459,8 +490,9 @@ function think(dt) {
       d.y = b.position.y + d.rel.y;
       d.z = b.position.z + d.rel.z;
     }
-    let t = G.ram && G.ram.hp > 0 && Math.hypot(G.ram.obj.position.x - d.x, G.ram.obj.position.z - d.z) < 40 ? G.ram : null;
-    if (!t) t = nearest(targets, d, 66);
+    const reach = d.kind === 'spies' ? 44 : 66;
+    let t = G.ram && G.ram.hp > 0 && Math.hypot(G.ram.obj.position.x - d.x, G.ram.obj.position.z - d.z) < Math.min(40, reach) ? G.ram : null;
+    if (!t) t = nearest(targets, d, reach);
     d.cool -= dt;
     if (!t) { d.state = 'idle'; continue; }
     const tx = t.obj ? t.obj.position.x : t.x;
@@ -473,8 +505,60 @@ function think(dt) {
       if (t.obj) {
         fx.arrow(chest(d), new THREE.Vector3(tx, 2.6, tz), () => { if (G.ram === t) t.hp -= 3; });
       } else {
-        const hit = rand() < HIT[t.kind];
+        const hit = rand() < HIT[t.kind] + (d.kind === 'spies' ? 0.1 : 0);
         fx.arrow(chest(d), chest(t), () => { if (hit && t.alive && --t.hp <= 0) kill(t); });
+      }
+    }
+  }
+  // boiling oil over the gate: on whoever is at the gate (the ram too), now and then
+  if (oil) {
+    oil.cool -= dt;
+    const atGate = blue.filter((m) => m.alive && !G.gateBroken && Math.abs(m.x) < 5 && Math.abs(m.z - (GATE_Z + 3)) < 3.5);
+    const ramAt = G.ram && G.ram.hp > 0 && G.ram.obj.position.z < GATE_Z + 8;
+    if (oil.cool <= 0 && (atGate.length || ramAt)) {
+      oil.cool = 12;
+      oil.pours += 1;
+      const pot = oil.obj.userData.pot;
+      pot.rotation.x = 0.9;
+      setTimeout(() => { pot.rotation.x = 0; }, 900);
+      fx.dust(new THREE.Vector3(0, 5, GATE_Z + 2.6), { n: 14, size: 2.6, up: -1.5, spread: 4, life: 1.8, color: '#e0a04a' });
+      fx.dust(new THREE.Vector3(0, 1, GATE_Z + 3.2), { n: 10, size: 3, up: 2.2, spread: 5, life: 2.4, color: '#d8d0c4' });
+      sfx('splash');
+      for (const m of atGate) if (rand() < 0.55) kill(m);
+      if (ramAt) G.ram.hp -= 45;
+    }
+  }
+  // ballistas on the tower tops: the ram first, else the nearest soldier
+  for (const b of ballistas) {
+    if (!b.alive) continue;
+    if (b.link) {
+      const off = phys.displaced(b.link);
+      if (off.d > 0.7 || off.ang > 22) { b.alive = false; fx.dust(b.obj.position.clone(), { n: 8, size: 2.4, up: 1, spread: 3, life: 2 }); b.obj.visible = false; continue; }
+      b.obj.position.set(b.link.body.position.x + b.rel.x, b.link.body.position.y + b.rel.y, b.link.body.position.z + b.rel.z);
+    }
+    b.cool -= dt;
+    const p = b.obj.position;
+    let t = G.ram && G.ram.hp > 0 && Math.hypot(G.ram.obj.position.x - p.x, G.ram.obj.position.z - p.z) < 100 ? G.ram : null;
+    if (!t) t = nearest(blue, p, 90);
+    if (!t) continue;
+    const tx = t.obj ? t.obj.position.x : t.x;
+    const tz = t.obj ? t.obj.position.z : t.z;
+    b.obj.userData.head.rotation.y = Math.atan2(tx - p.x, tz - p.z);
+    if (b.cool <= 0) {
+      b.cool = 5.5 + rand();
+      const from = p.clone().add(new THREE.Vector3(0, 1.3, 0));
+      sfx('creak');
+      if (t.obj) fx.arrow(from, new THREE.Vector3(tx, 2.2, tz), () => { if (G.ram === t) { t.hp -= 30; fx.chips(new THREE.Vector3(tx, 2, tz), new THREE.Vector3(0, 0, 1), 6, 5); } });
+      else fx.arrow(from, chest(t), () => { if (t.alive && rand() < 0.85) kill(t); });
+    }
+  }
+  // spikes before the gate: a man who runs into them may fall, and all are slowed near them
+  for (const row of spikeRows) {
+    for (const m of blue) {
+      if (!m.alive || m.pusher || row.hit.has(m)) continue;
+      if (Math.abs(m.x - row.x) < 3.3 && Math.abs(m.z - row.z) < 1.4) {
+        row.hit.add(m);
+        if (rand() < 0.45) kill(m);
       }
     }
   }

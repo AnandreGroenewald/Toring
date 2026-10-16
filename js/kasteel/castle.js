@@ -407,7 +407,13 @@ export function buildCastle({ at = new THREE.Vector3(), days, team = 'red', mats
     torches.push(t);
   }
   // where defenders stand: along the front wall's walk, on the gatehouse, on the tower tops
-  const spots = { wall: [], towers: towers.map((t) => new THREE.Vector3(t.pos.x, t.top, t.pos.z + 0.6)) };
+  const spots = {
+    wall: [],
+    towers: towers.map((t) => new THREE.Vector3(t.pos.x, t.top, t.pos.z + 0.6)),
+    gate: [new THREE.Vector3(-1.6, 0, half - 3.5), new THREE.Vector3(1.6, 0, half - 3.5)],
+    oil: new THREE.Vector3(0, 10.2, half + 0.7),
+    field: [new THREE.Vector3(-6.5, 0, half + 9), new THREE.Vector3(0, 0, half + 12), new THREE.Vector3(6.5, 0, half + 9)],
+  };
   for (let x = -half + 3; x <= half - 3; x += 3.6) if (Math.abs(x) > 5.4) spots.wall.push(new THREE.Vector3(x, 7.2, half - 0.35));
   return { group, towers, keep: towers[0], walls, gate, flags, torches, spots };
 }
