@@ -916,6 +916,19 @@ Later the owner added (decisions are final unless they say otherwise):
   (1 skipped), `qa/lewende1160.mjs 123` ALL OK, `qa/lewende_soak1160.mjs` (robot both sides; found the robot's frame-counted
   aim wait, fixed). The owner turned the full Critic Panel and long test runs OFF for all projects (typed 15 Oct ~23:20,
   "Both"). Next: his look → a private Pages preview for his phone → the Worker deploy + the Family message (update its link).
+- **16 Oct ~01:00 – 08:00 — 1.16 "Die Lewende Toring" REDESIGNED: rooms, and every choice exact. LOCAL ONLY (8c512c9; not
+  pushed; the Worker untouched).** The owner (typed): "If I choose the block the it automatically puts it in the first empty
+  space instead of where I want it. It feels like its a 2 year olds game. Please redesign it." Every block is now a floor of
+  three rooms (`js/game/floors.js`: the tribe's block skin as the facade, furnished lamp-lit rooms, people at the window,
+  lights off when empty, the other side behind identical lit blinds, cracks, burnt rooms, roof + flag, plinth + name).
+  `js/scenes/LewendeScene.js` was rewritten: drag a card to the exact room (or tap card → room), drag people between rooms,
+  a hand shows the first drag; aiming is one room with the reach lit before the red button sends it; a miss shows how many
+  live next door; Veldbrand = a cross of 5 (burnt for good), Waterwiel = 2 floors, Rankgryp = a column of 4 + 1 anywhere;
+  the camera frames the tower you work on and pulls back for throws; idea 3 loads riders in a close-up of the floor on the
+  hook. `js/ui/lewendeUi.js` has the tray (people cards, attack cards, buttons). Rules: RULES in the scene. Never name a
+  scene method `sound` (Phaser injects `this.sound`). Pictures: Play folder › Previews › "1.16 Lewende Toring (nuwe ontwerp)
+  - …" (4). Tests: game 417, `qa/lewende1160.mjs` (rewritten, 31 checks) ALL OK, `qa/lewende_soak1160.mjs` 9/9. Next: his
+  look → his word → a private Pages preview for his phone → the Worker deploy (votes) + the Family message (new link).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
