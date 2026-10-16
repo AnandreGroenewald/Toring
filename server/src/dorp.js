@@ -6,20 +6,21 @@
 //                                    `dorp`: an older Worker's says nothing, and the game shows no town button)
 //   POST /dorp/sync   {id, key, name, tribe, gains: [{seq, people, raids, walls}], seen}
 //                                    -> {town, news, bure}: what the phone's games brought, once each (seq)
-//   POST /dorp/raid   {id, key, target, wraak?}  -> {raidId, took, blocked, wraak, town, them}
+//   POST /dorp/raid   {id, key, target, wraak?, hit?}  -> {raidId, took, goldTook, blocked, wraak, town, them}
+//                                    (hit: the tap's aim, 'P' | 'G' | 'S', js/core/dorp.js DORP.hitMul)
 //   POST /dorp/buur   {id, key, buur}            -> {them}: neighbours both ways (a friend's link)
 //   GET  /dorp/raid/<raidId>                     -> the raid as its link shows it (who robbed whom, how many)
 //   GET  /dorp/town/<id>                         -> a town as its neighbours see it
 // `store`: { get(key), put(key, value) } (async; the host keeps it: matchhost.mjs a file, the Worker later its own).
 
-import { DORP, DORP_TRIBES, raidTake, isTownId, isTownKey, isRaidId, newRaidId, cleanTownName, cleanGain } from '../../js/core/dorp.js';
+import { DORP, DORP_TRIBES, raidTake, goldTake, cleanHit, isTownId, isTownKey, isRaidId, newRaidId, cleanTownName, cleanGain } from '../../js/core/dorp.js';
 
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 async function sha256(text) {
   return hex(await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
 }
 
-export function createDorp(store, { now = () => Date.now() } = {}) {
+export function createDorp(store, { now = () => Date.now(), rand = Math.random } = {}) {
   const townKey = (id) => `dorp:${id}`;
   const raidKey = (id) => `raid:${id}`;
 
@@ -32,12 +33,12 @@ export function createDorp(store, { now = () => Date.now() } = {}) {
   }
 
   /** A town as its owner sees it. */
-  const mine = (t) => ({ id: t.id, name: t.name, tribe: t.tribe, people: t.people, raids: t.raids, walls: t.walls, seq: t.seq, newsN: t.newsN, seenN: t.seenN });
+  const mine = (t) => ({ id: t.id, name: t.name, tribe: t.tribe, people: t.people, raids: t.raids, walls: t.walls, gold: t.gold | 0, seq: t.seq, newsN: t.newsN, seenN: t.seenN });
 
   /** A town as a neighbour sees it; `me` (the one looking): the raid they may still avenge on it. */
   function pub(t, me = null) {
     const owed = me ? [...me.news].reverse().find((n) => n.from === t.id && n.took > 0 && !n.wraaked) : null;
-    return { id: t.id, name: t.name, tribe: t.tribe, people: t.people, walls: t.walls, at: t.at, wraak: owed ? owed.raidId : null };
+    return { id: t.id, name: t.name, tribe: t.tribe, people: t.people, walls: t.walls, gold: t.gold | 0, at: t.at, wraak: owed ? owed.raidId : null };
   }
 
   function addBuur(t, id) {
@@ -62,7 +63,7 @@ export function createDorp(store, { now = () => Date.now() } = {}) {
     if (!t) {
       t = {
         id: b.id, keyHash: await sha256(b.key), name: 'Bouer', tribe: 'vuur',
-        people: 0, raids: DORP.startRaids, walls: 0, seq: 0, bure: [], news: [], newsN: 0, seenN: 0, made: now(), at: now(),
+        people: 0, raids: DORP.startRaids, walls: 0, gold: 0, seq: 0, bure: [], news: [], newsN: 0, seenN: 0, made: now(), at: now(),
       };
     }
     const name = cleanTownName(b.name);
@@ -74,6 +75,7 @@ export function createDorp(store, { now = () => Date.now() } = {}) {
       t.people += g.people;
       t.raids = Math.min(DORP.raidsMax, t.raids + g.raids);
       t.walls = Math.min(DORP.wallsMax, t.walls + g.walls);
+      t.gold = Math.min(t.people, (t.gold | 0) + g.gold);
       t.seq = g.seq;
     }
     if (Number.isInteger(b.seen)) t.seenN = Math.max(t.seenN, Math.min(b.seen, t.newsN));
@@ -99,25 +101,30 @@ export function createDorp(store, { now = () => Date.now() } = {}) {
     }
     const raidId = newRaidId();
     let took = 0;
+    let goldTook = 0;
     let blocked = false;
+    const hit = cleanHit(b.hit);
     if (them.walls > 0) {
       them.walls -= 1;   // the wall holds, and breaks
       blocked = true;
     } else {
-      took = raidTake({ people: them.people, mine: t.tribe, theirs: them.tribe, wraak: !!owed });
+      took = raidTake({ people: them.people, mine: t.tribe, theirs: them.tribe, wraak: !!owed, hit });
+      goldTook = goldTake({ gold: them.gold | 0, people: them.people, took, rand });
       them.people -= took;
       t.people += took;
+      them.gold = Math.max(0, (them.gold | 0) - goldTook);
+      t.gold = (t.gold | 0) + goldTook;
     }
     addBuur(t, them.id);
     addBuur(them, t.id);
     const at = now();
     them.newsN += 1;
-    them.news.push({ n: them.newsN, raidId, from: t.id, name: t.name, tribe: t.tribe, took, blocked, wraak: !!owed, at });
+    them.news.push({ n: them.newsN, raidId, from: t.id, name: t.name, tribe: t.tribe, took, goldTook, blocked, wraak: !!owed, hit, at });
     if (them.news.length > DORP.newsMax) them.news.splice(0, them.news.length - DORP.newsMax);
     await store.put(townKey(t.id), t);
     await store.put(townKey(them.id), them);
     await store.put(raidKey(raidId), { raidId, from: t.id, name: t.name, tribe: t.tribe, to: them.id, toName: them.name, took, blocked, wraak: !!owed, at });
-    return [200, { raidId, took, blocked, wraak: !!owed, town: mine(t), them: pub(them, t) }];
+    return [200, { raidId, took, goldTook, blocked, wraak: !!owed, hit, town: mine(t), them: pub(them, t) }];
   }
 
   async function buur(b) {

@@ -2,7 +2,7 @@
 // phone's side (js/dorp.js: reports sent once each, the day's wall, the server's word kept).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DORP, raidTake, dorpTitle, raidsFromRatings, cleanGain, newTownId, newTownKey, isTownId, isTownKey, cleanTownName } from '../js/core/dorp.js';
+import { DORP, raidTake, goldTake, cleanHit, dorpTitle, raidsFromRatings, cleanGain, newTownId, newTownKey, isTownId, isTownKey, cleanTownName } from '../js/core/dorp.js';
 import { createDorp } from '../server/src/dorp.js';
 import { createDorpClient } from '../js/dorp.js';
 
@@ -36,7 +36,7 @@ test('titles, ids, names, reports and strooptogte from a run of Perfeks', () => 
   assert.equal(cleanTownName(''), null);
   assert.equal(raidsFromRatings(['P', 'P', 'P', 'G', 'P', 'P', 'P', 'P', 'P', 'P']), 3);
   assert.equal(raidsFromRatings(['P', 'P', 'G', 'P']), 0);
-  assert.deepEqual(cleanGain({ seq: 2, people: 9999, raids: -3, walls: 5 }), { seq: 2, people: DORP.gainPeople, raids: 0, walls: 1 });
+  assert.deepEqual(cleanGain({ seq: 2, people: 9999, raids: -3, walls: 5, gold: 99 }), { seq: 2, people: DORP.gainPeople, raids: 0, walls: 1, gold: DORP.gainGold });
   assert.equal(cleanGain({ seq: 0, people: 3 }), null);
 });
 
@@ -137,8 +137,8 @@ test('the phone: reports wait for the server, the first tower of a day builds on
   const id = c.id;
   assert.ok(isTownId(id));
   assert.equal(await c.ping(), false);
-  assert.deepEqual(c.queue({ people: 30, raids: 1, dayKey: '2026-10-16' }), { seq: 1, people: 30, raids: 1, walls: 1 });
-  assert.deepEqual(c.queue({ people: 12, raids: 0, dayKey: '2026-10-16' }), { seq: 2, people: 12, raids: 0, walls: 0 });
+  assert.deepEqual(c.queue({ people: 30, raids: 1, gold: 1, dayKey: '2026-10-16' }), { seq: 1, people: 30, raids: 1, walls: 1, gold: 1 });
+  assert.deepEqual(c.queue({ people: 12, raids: 0, dayKey: '2026-10-16' }), { seq: 2, people: 12, raids: 0, walls: 0, gold: 0 });
   assert.equal(c.queue({ people: 0, raids: 0, dayKey: '2026-10-16' }), null);
   assert.equal((await c.sync({ name: 'Anna' })).ok, false);
   assert.equal(c.view().pending.people, 42);
@@ -151,4 +151,28 @@ test('the phone: reports wait for the server, the first tower of a day builds on
   // the same phone later: the same town
   const again = createDorpClient({ api: 'http://host', storage, fetchImpl });
   assert.equal(again.id, id);
+});
+
+test('the aim: a Perfek on the glowing tower takes half again as many, a wonky tap fewer; golden people go with the raid', async () => {
+  assert.equal(raidTake({ people: 100, hit: 'P' }), 18);
+  assert.equal(raidTake({ people: 100, hit: 'G' }), 12);
+  assert.equal(raidTake({ people: 100, hit: 'S' }), 7);
+  assert.equal(cleanHit('X'), 'G');
+  assert.equal(goldTake({ gold: 3, people: 100, took: 50, rand: () => 0.4 }), 3);
+  assert.equal(goldTake({ gold: 3, people: 100, took: 50, rand: () => 0.6 }), 0);
+  assert.equal(goldTake({ gold: 0, people: 100, took: 50 }), 0);
+  // through the server: the aim counts, the gold moves (a rand that always catches)
+  const d = createDorp(memStore(), { rand: () => 0 });
+  const a = town();
+  const b = town();
+  await d.handle('POST', '/dorp/sync', { ...a, name: 'A', tribe: 'vuur', gains: [{ seq: 1, people: 10, raids: 1 }] });
+  await d.handle('POST', '/dorp/sync', { ...b, name: 'B', tribe: 'vuur', gains: [{ seq: 1, people: 100, gold: 2 }] });
+  await d.handle('POST', '/dorp/buur', { ...a, buur: b.id });
+  const [st, r] = await d.handle('POST', '/dorp/raid', { ...a, target: b.id, hit: 'P' });
+  assert.equal(st, 200);
+  assert.equal(r.hit, 'P');
+  assert.equal(r.took, 18);
+  assert.equal(r.goldTook, 2);
+  assert.equal(r.town.gold, 2);
+  assert.equal(r.them.gold, 0);
 });

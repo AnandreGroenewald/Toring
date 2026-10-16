@@ -462,7 +462,7 @@ export function whenPortraits(fn) {
 }
 
 // ---------------------------------------------------------------------------------------------- parachutes
-function chuteTexture(scene, tribe) {
+export function chuteTexture(scene, tribe) {
   const key = `chute_${tribe}`;
   if (scene.textures.exists(key)) return key;
   const t = TRIBES[tribe] || TRIBES.vuur;

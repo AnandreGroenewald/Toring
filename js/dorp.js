@@ -64,7 +64,7 @@ export function createDorpClient({ api = '', storage = typeof localStorage !== '
     /** The last word from the server ({ town, news, bure, at }) or null; `pending`: people not yet sent. */
     view() {
       load();
-      const pending = d.gains.reduce((s, g) => ({ people: s.people + g.people, raids: s.raids + g.raids, walls: s.walls + g.walls }), { people: 0, raids: 0, walls: 0 });
+      const pending = d.gains.reduce((s, g) => ({ people: s.people + g.people, raids: s.raids + g.raids, walls: s.walls + g.walls, gold: s.gold + (g.gold | 0) }), { people: 0, raids: 0, walls: 0, gold: 0 });
       return { id: d.id, last: d.last, pending, shownN: d.shownN | 0 };
     },
     /** Does the server know the towns? Its front door says so (`dorp`): an older Worker's says nothing (no 404). */
@@ -77,12 +77,12 @@ export function createDorpClient({ api = '', storage = typeof localStorage !== '
      * A finished game's gifts to the town: its people, the strooptogte it earned, and (the first tower of `dayKey`) a
      * wall. Kept until the server has them.
      */
-    queue({ people = 0, raids = 0, dayKey = null } = {}) {
+    queue({ people = 0, raids = 0, gold = 0, dayKey = null } = {}) {
       load();
       const walls = dayKey && d.wallDay !== dayKey ? 1 : 0;
       if (walls) d.wallDay = dayKey;
-      const g = { seq: d.seq + 1, people: Math.max(0, people | 0), raids: Math.max(0, raids | 0), walls };
-      if (!g.people && !g.raids && !g.walls) {
+      const g = { seq: d.seq + 1, people: Math.max(0, people | 0), raids: Math.max(0, raids | 0), walls, gold: Math.max(0, gold | 0) };
+      if (!g.people && !g.raids && !g.walls && !g.gold) {
         save();
         return null;
       }
@@ -102,10 +102,10 @@ export function createDorpClient({ api = '', storage = typeof localStorage !== '
       }
       return r;
     },
-    /** A strooptog on `target` (a Wraak with `wraak`: the raid it avenges). */
-    async raid(target, wraak = null) {
+    /** A strooptog on `target` (a Wraak with `wraak`: the raid it avenges; `hit`: the tap's aim, 'P' | 'G' | 'S'). */
+    async raid(target, wraak = null, hit = 'G') {
       load();
-      const r = await call('/dorp/raid', { id: d.id, key: d.key, target, ...(isRaidId(wraak) ? { wraak } : {}) });
+      const r = await call('/dorp/raid', { id: d.id, key: d.key, target, hit, ...(isRaidId(wraak) ? { wraak } : {}) });
       if (r.town) took({ town: r.town });
       return r;
     },

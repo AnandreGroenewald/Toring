@@ -968,6 +968,13 @@ Later the owner added (decisions are final unless they say otherwise):
   js/core/dorp.js, server server/src/dorp.js (only the home matchhost runs it; the Worker needs D1 + his word), phone
   js/dorp.js, picture js/ui/townArt.js. Tests: game 431, server 267, qa dorp1160 9/9, dorpfriend1160 2/2, battle_live1160
   7/7, living1160 18/18, smoke clean. Open: Worker side, town key in the cloud save, push notifications, balance.
+- **16 Oct ~23:00 — Jou dorp is in the game world (local, home Wi-Fi only).** The owner: "Nope, still not 'premium'" and
+  "Again premium with a few more features. It needs to be really good please." The town now stands on the real island
+  (js/scenes/DorpScene.js): real Stapel towers with roofs, faces in the windows, golden people, walls, the flag. A raid
+  flies across the sea; a target sweeps over their town and a tap on the glowing tower is a Perfek (x1.5); their people
+  parachute into your windows; "+N MENSE!" under light rays with your celebration; golden people pay 25 coins. "Terwyl jy
+  weg was" replays in your town and offers "Wraak op …!". The screen over it shows your rank among your neighbours.
+  Tests: game 432, qa dorp1160 12/12, dorpfriend1160 2/2, smoke clean.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

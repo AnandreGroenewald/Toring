@@ -35,6 +35,7 @@ import { BgScene } from './scenes/BgScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { HudScene } from './scenes/HudScene.js';
 import { LewendeScene } from './scenes/LewendeScene.js';
+import { DorpScene } from './scenes/DorpScene.js';
 import { createLewendeUi } from './ui/lewendeUi.js';
 import { createLivingStore, CAST_IDS } from './core/living.js';
 import { createDorpClient } from './dorp.js';
@@ -126,6 +127,8 @@ let dorpJokers = 0;          // this match's jokers (Blok vir Blok's run of 3 Pe
 let dorpMenuKey = '';
 let dorpNameAsked = false;
 const DORP_POLL_MS = 15000;
+let dorpPic = '';           // the town as it last stood in the game world (DorpScene's picture), for the menu's button
+let dorpRaid = null;        // the raid on screen: { target, wraak, them, share }
 /** (1.16) The tribe the player wears (the wallet keeps it: the first one free, the others for coins); Vuur until chosen. */
 const tribeNow = () => store.getTribes().wear || 'vuur';
 /** What the screens show of the tribes: the one worn, the ones owned, the coins. */
@@ -196,7 +199,7 @@ const game = new Phaser.Game({
   fps: { smoothStep: false },
   audio: { noAudio: true },   // all sound is js/audio.js; Phaser's own manager would open a 2nd AudioContext
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BgScene, GameScene, LewendeScene, HudScene],
+  scene: [BgScene, GameScene, LewendeScene, DorpScene, HudScene],
 });
 
 window.__stapel = Object.assign(window.__stapel || {}, { game, bus, store, ui, audio });
@@ -2894,18 +2897,18 @@ function dorpView() {
   const t = v.last?.town;
   const p = v.pending;
   const me = t
-    ? { ...t, people: t.people + p.people, raids: Math.min(DORP.raidsMax, t.raids + p.raids), walls: Math.min(DORP.wallsMax, t.walls + p.walls) }
-    : { id: v.id, name: duelNick(), tribe: tribeNow(), people: p.people, raids: DORP.startRaids + p.raids, walls: p.walls };
+    ? { ...t, people: t.people + p.people, raids: Math.min(DORP.raidsMax, t.raids + p.raids), walls: Math.min(DORP.wallsMax, t.walls + p.walls), gold: (t.gold | 0) + p.gold }
+    : { id: v.id, name: duelNick(), tribe: tribeNow(), people: p.people, raids: DORP.startRaids + p.raids, walls: p.walls, gold: p.gold };
   const seen = Math.max(v.shownN | 0, t?.seenN | 0);
   const bure = v.last?.bure || [];
-  return { on: true, me, unseen: (v.last?.news || []).filter((n) => n.n > seen).length, bure: bure.length, wraak: bure.some((b) => b.wraak) };
+  return { on: true, me, unseen: (v.last?.news || []).filter((n) => n.n > seen).length, bure: bure.length, wraak: bure.some((b) => b.wraak), pic: dorpPic };
 }
 
-/** The town sheet's model: the town, the neighbours, the news. */
-function dorpSheet(online = true) {
+/** The town's own screen (over DorpScene): its numbers, the neighbours, the news. */
+function dorpScreenModel(mode = 'town', extra = {}) {
   const v = dorp.view();
   const m = dorpView();
-  return { me: { ...(m?.me || {}), name: duelNick() }, bure: v.last?.bure || [], news: v.last?.news || [], online };
+  return { mode, me: { ...(m?.me || {}), name: duelNick() }, bure: v.last?.bure || [], news: v.last?.news || [], ...extra };
 }
 
 /** Sends what the games brought and fetches the town (at most every few seconds unless `force`). */
@@ -2922,7 +2925,63 @@ function refreshMenuDorp() {
   if (screen === 'menu') ui.showMenu(menuModel());
 }
 
-/** "Terwyl jy weg was": raids on this town not shown yet (only on the menu, with nothing else open). */
+/** The screen's two panels in game pixels (the town is framed between them). */
+function dorpBarsGame() {
+  const b = ui.dorpBars();
+  const k = b.height ? game.scale.height / b.height : 1;
+  return { top: Math.round(b.top * k), bottom: Math.round(b.bottom * k) };
+}
+
+function stopDorpScene() {
+  if (game.scene.isActive('Dorp') || game.scene.isPaused('Dorp') || game.scene.isSleeping('Dorp')) game.scene.stop('Dorp');
+  if (game.scene.isSleeping('Game')) game.scene.wake('Game');
+}
+
+/**
+ * Into the town, in the game world: the menu's tower sleeps, DorpScene runs (view 'town' | 'raid' | 'news'), and the
+ * town's screen goes over it. `screenExtra`: the screen's model; `scene`: the scene's (the other town, the callbacks).
+ */
+function enterDorp(view = 'town', { mode = view, screenExtra = {}, scene = {} } = {}) {
+  screen = 'dorp';
+  wakeLoop();
+  ui.hideAll();
+  if (game.scene.isActive('Game')) game.scene.sleep('Game');
+  if (game.scene.isActive('Hud')) game.scene.sleep('Hud');
+  if (game.scene.isActive('Dorp') || game.scene.isPaused('Dorp')) game.scene.stop('Dorp');
+  const sm = dorpScreenModel(mode, screenExtra);
+  ui.showDorpScreen(sm);
+  const bars = dorpBarsGame();
+  game.scene.start('Dorp', {
+    view, me: sm.me, reducedMotion: !!settings.reducedMotion, topBar: bars.top, bottomBar: bars.bottom,
+    onPicture: (url) => {
+      dorpPic = url;
+    },
+    ...scene,
+  });
+  // the panels as drawn (fonts, the phone's size): the town framed between them
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const b = dorpBarsGame();
+    game.scene.getScene('Dorp')?.setBars?.(b.top, b.bottom);
+  }));
+}
+
+/** The screen's panels changed (a result, the news): the town framed between them again. */
+function dorpReframe() {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const b = dorpBarsGame();
+    game.scene.getScene('Dorp')?.setBars?.(b.top, b.bottom, 600);
+  }));
+}
+
+/** Out of the town, back to the menu (its tower wakes). */
+function leaveDorp() {
+  stopDorpScene();
+  dorpRaid = null;
+  dorpBusy = false;
+  bus.emit('ui:home');
+}
+
+/** "Terwyl jy weg was": raids on this town not shown yet play in the town (only from the menu, nothing else open). */
 function dorpNewsCheck() {
   if (!dorpOn || screen !== 'menu' || ui.modalOpen()) return;
   const v = dorp.view();
@@ -2931,18 +2990,34 @@ function dorpNewsCheck() {
   const seen = Math.max(v.shownN | 0, t.seenN | 0);
   const items = (v.last.news || []).filter((n) => n.n > seen);
   if (!items.length) return;
-  ui.showDorpNews({ items, me: dorpView().me });
   const top = Math.max(...items.map((n) => n.n));
   dorp.markShown(top);
-  dorpSync({ seen: top, force: true }).then(refreshMenuDorp);
+  dorpSync({ seen: top, force: true });
+  const latest = items[items.length - 1];
+  const owed = [...items].reverse().find((n) => n.took > 0 && !n.blocked && !n.wraaked) || null;
+  const raider = (v.last.bure || []).find((b) => b.id === latest.from);
+  const took = items.reduce((s, n) => s + (n.blocked ? 0 : n.took | 0), 0);
+  enterDorp('news', {
+    mode: 'news',
+    screenExtra: { them: { name: latest.name, people: raider?.people ?? 0 }, items, owed },
+    scene: {
+      news: { took, tribe: latest.tribe, blocked: items.every((n) => n.blocked), goldTook: items.reduce((s, n) => s + (n.goldTook | 0), 0) },
+      onCount: (c) => ui.setDorpCounts(c),
+      onDone: () => { ui.setDorpMode({ mode: 'newsDone' }); dorpReframe(); },
+      onFail: () => { ui.setDorpMode({ mode: 'newsDone' }); dorpReframe(); },
+    },
+  });
 }
 
-/** A finished tower's gifts to the town: its people, its strooptogte, and the day's first wall (results card line). */
+/** A finished tower's gifts to the town: its people, strooptogte, golden people, the day's first wall (results line). */
 function dorpGainFor(result) {
   const jokers = dorpJokers;
   dorpJokers = 0;
   if (!dorpOn || !result?.living || !(result.blocksDropped > 0)) return null;
-  const g = dorp.queue({ people: result.living.people | 0, raids: (result.raids | 0) + jokers, dayKey: result.blocksDropped >= 3 ? todayKey() : null });
+  const g = dorp.queue({
+    people: result.living.people | 0, raids: (result.raids | 0) + jokers, gold: (result.living.gold || []).length,
+    dayKey: result.blocksDropped >= 3 ? todayKey() : null,
+  });
   if (!g) return null;
   dorpSync({ force: true }).then(refreshMenuDorp);
   const v = dorpView();
@@ -2995,7 +3070,7 @@ function dorpWhenFree() {
   if (!dorpOn || screen !== 'menu' || ui.modalOpen()) return;
   if (dorpOpenPending) {
     dorpOpenPending = false;
-    ui.showDorp(dorpSheet());
+    enterDorp('town');
     return;
   }
   dorpNewsCheck();
@@ -3011,11 +3086,12 @@ async function dorpStart() {
   refreshMenuDorp();
   dorpNewsCheck();
   setInterval(() => {
-    if (!dorpOn || document.visibilityState !== 'visible' || (screen !== 'menu' && screen !== 'results')) return;
+    if (!dorpOn || document.visibilityState !== 'visible' || (screen !== 'menu' && screen !== 'results' && screen !== 'dorp')) return;
     dorpSync().then((r) => {
       if (!r?.ok) return;
       refreshMenuDorp();
       dorpNewsCheck();
+      if (screen === 'dorp' && !dorpBusy && ui.dorpMode?.() === 'town') ui.setDorpMode(dorpScreenModel('town'));
     });
   }, DORP_POLL_MS);
   document.addEventListener('visibilitychange', () => {
@@ -3035,36 +3111,98 @@ bus.on('ui:dorp', async () => {
     ui.showName({ name: '', placeholder: sessionNick, back: () => bus.emit('ui:dorp') });
     return;
   }
-  ui.showDorp(dorpSheet());
+  const was = dorpView()?.me?.people;
+  enterDorp('town');
   const r = await dorpSync({ force: true });
-  if (ui.isOpen('dorp')) ui.showDorp(dorpSheet(!!r?.ok));
+  if (screen === 'dorp' && !dorpBusy && ui.dorpMode?.() === 'town') {
+    // the server's word changed the town (a raid while away, another phone's towers): built again as it stands
+    if (dorpView()?.me?.people !== was) enterDorp('town');
+    else ui.setDorpMode(dorpScreenModel('town', { online: !!r?.ok }));
+  }
   refreshMenuDorp();
 });
+bus.on('ui:dorp-back', leaveDorp);
+bus.on('ui:dorp-home', () => {
+  dorpRaid = null;
+  dorpBusy = false;
+  enterDorp('town');
+});
+bus.on('ui:dorp-play', () => {
+  stopDorpScene();
+  bus.emit('ui:play-practice');
+});
+bus.on('ui:dorp-tell', () => {
+  if (dorpRaid?.share) ui.shareText(dorpRaid.share, 'whatsapp');
+});
 
-bus.on('ui:dorp-raid', async ({ target, wraak } = {}) => {
+// a strooptog: over the sea to their town; the tap strikes, and the server settles it then (with the aim)
+bus.on('ui:dorp-raid', async ({ target, wraak = null } = {}) => {
   if (!dorpOn || dorpBusy || !isTownId(target)) return;
   dorpBusy = true;
-  try {
-    await dorpSync({ force: true });   // (the strooptogte the last tower earned reach the server first)
-    const r = await dorp.raid(target, wraak);
-    if (!r.ok) {
-      ui.toast(r.error === 'raids' ? S.dorpNoRaidsLeft : S.dorpOffline, 2800);
-      return;
-    }
-    const took = r.took | 0;
-    const link = `${siteUrl()}?wraak=${r.raidId}`;
-    const them = { ...r.them, people: r.them.people + took, walls: r.them.walls + (r.blocked ? 1 : 0) };
-    const me = { ...r.town, people: r.town.people - took };
-    const faces = castOf(r.them.tribe).map((id) => portraitDataUrl(id, 96)).filter(Boolean);
-    ui.showRaid({
-      me, them, took, blocked: !!r.blocked, wraak: !!r.wraak, raidsLeft: r.town.raids | 0, faces,
-      share: r.wraak ? S.dorpTauntWraak(took, link) : S.dorpTaunt(took, link),
-      celebration: store.getCard().celebration,
-    });
-    dorpSync({ force: true }).then(refreshMenuDorp);
-  } finally {
-    dorpBusy = false;
+  await dorpSync({ force: true });   // (the strooptogte the last tower earned reach the server first)
+  const v = dorp.view();
+  let them = (v.last?.bure || []).find((b) => b.id === target);
+  if (!them) {
+    const t = await dorp.townInfo(target);
+    them = t.ok ? t : null;
   }
+  const me = dorpView()?.me;
+  if (!them || !me) {
+    dorpBusy = false;
+    ui.toast(S.dorpOffline, 2800);
+    return;
+  }
+  if (!wraak && !(me.raids > 0)) {
+    dorpBusy = false;
+    ui.toast(S.dorpNoRaidsLeft, 2800);
+    return;
+  }
+  dorpRaid = { target, wraak, them, share: '' };
+  enterDorp('raid', {
+    mode: 'fly',
+    screenExtra: { them, wraak: !!wraak },
+    scene: {
+      them,
+      onCount: (c) => ui.setDorpCounts(c),
+      onAim: () => ui.setDorpMode({ mode: 'aim' }),
+      onStrike: async (hit) => {
+        ui.setDorpMode({ mode: 'fly' });
+        const r = await dorp.raid(target, wraak, hit);
+        if (r.ok) {
+          const link = `${siteUrl()}?wraak=${r.raidId}`;
+          dorpRaid.share = r.wraak ? S.dorpTauntWraak(r.took | 0, link) : S.dorpTaunt(r.took | 0, link);
+          // golden people caught: coins (the wallet's own, not the day's cap)
+          if (r.goldTook > 0) {
+            r.goldCoins = r.goldTook * DORP.goldCoins;
+            store.earnCoins(r.goldCoins, { capped: false });
+            coinsChanged();
+          }
+        }
+        return r;
+      },
+      onDone: (r) => {
+        dorpBusy = false;
+        if (!r) {
+          bus.emit('ui:dorp-home');
+          return;
+        }
+        ui.setDorpMode({
+          mode: 'result',
+          me: { ...(dorpView()?.me || me), people: r.town?.people ?? me.people },
+          them: { ...them, people: r.them?.people ?? them.people },
+          result: { took: r.took | 0, blocked: !!r.blocked, goldTook: r.goldTook | 0, goldCoins: r.goldCoins | 0, hit: r.hit, raidsLeft: r.town?.raids | 0 },
+        });
+        dorpReframe();
+        if (r.took > 0) ui.celebrate(store.getCard().celebration);
+        dorpSync({ force: true }).then(refreshMenuDorp);
+      },
+      onFail: (r) => {
+        dorpBusy = false;
+        ui.toast(r?.error === 'raids' ? S.dorpNoRaidsLeft : S.dorpOffline, 2800);
+        bus.emit('ui:dorp-home');
+      },
+    },
+  });
 });
 
 bus.on('ui:dorp-invite', () => {

@@ -25,6 +25,12 @@ export const DORP = Object.freeze({
   newsMax: 30,          // news kept per town
   bureMax: 60,          // neighbours per town
   raidStreak: 3,        // Perfeks in a row for a strooptog
+  // (the owner: "Again premium with a few more features") a raid is aimed: a target sweeps over their town and the
+  // tap strikes; on the glowing tower (the fullest) a Perfek takes half again as many, a miss fewer
+  hitMul: Object.freeze({ P: 1.5, G: 1, S: 0.6 }),
+  // golden people (the Living Tower's rare golden residents) live on in the town; a raid may catch some: coins
+  gainGold: 5,
+  goldCoins: 25,
 });
 
 export const DORP_TRIBES = Object.freeze(['vuur', 'water', 'gras']);
@@ -53,13 +59,27 @@ export function dorpTitle(people) {
 }
 
 /** How many people a raid takes (0 when their town is empty): a share of theirs, stronger for a beating tribe or Wraak. */
-export function raidTake({ people = 0, mine = 'vuur', theirs = 'vuur', wraak = false } = {}) {
+export function raidTake({ people = 0, mine = 'vuur', theirs = 'vuur', wraak = false, hit = 'G' } = {}) {
   const p = Math.max(0, Math.floor(Number(people) || 0));
   if (!p) return 0;
   let n = p * DORP.share;
   if (DORP_BEATS[mine] === theirs) n *= DORP.beatsMul;
   if (wraak) n *= DORP.wraakMul;
+  n *= DORP.hitMul[hit] || 1;
   return Math.min(p, Math.round(Math.max(DORP.min, Math.min(DORP.max, n))));
+}
+
+/** A raid's aim, as the game rated the tap ('P' Perfek on the glowing tower, 'G', 'S'); anything else: 'G'. */
+export const cleanHit = (h) => (h === 'P' || h === 'S' ? h : 'G');
+
+/** Golden people a raid catches: each of theirs with the chance took / their people (`rand`: 0-1). */
+export function goldTake({ gold = 0, people = 0, took = 0, rand = Math.random } = {}) {
+  const g = Math.max(0, Math.floor(gold) || 0);
+  if (!g || !(took > 0) || !(people > 0)) return 0;
+  const p = Math.min(1, took / people);
+  let n = 0;
+  for (let k = 0; k < g; k++) if (rand() < p) n += 1;
+  return n;
 }
 
 // ------------------------------------------------------------------------------------------------- ids, keys and names
@@ -91,7 +111,7 @@ export function cleanTownName(raw) {
 export function cleanGain(g) {
   if (!g || typeof g !== 'object' || !Number.isInteger(g.seq) || g.seq < 1) return null;
   const n = (v, max) => (Number.isInteger(v) && v > 0 ? Math.min(v, max) : 0);
-  return { seq: g.seq, people: n(g.people, DORP.gainPeople), raids: n(g.raids, DORP.gainRaids), walls: n(g.walls, 1) };
+  return { seq: g.seq, people: n(g.people, DORP.gainPeople), raids: n(g.raids, DORP.gainRaids), walls: n(g.walls, 1), gold: n(g.gold, DORP.gainGold) };
 }
 
 /** Strooptogte a game's ratings earned: every DORP.raidStreak Perfeks in a row (['P', 'G', ...] in order). */
