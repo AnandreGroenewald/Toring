@@ -18,7 +18,7 @@ import {
 } from './economy.js';
 
 const SCHEMA = 1;
-const SETTING_KEYS = ['sound', 'vibration', 'reducedMotion', 'highContrast', 'howtoSeen', 'cementSeen'];
+const SETTING_KEYS = ['sound', 'vibration', 'reducedMotion', 'highContrast', 'howtoSeen', 'cementSeen', 'living'];
 const HISTORY_DAYS = 7;
 const KEEP_DAILY_DAYS = 90; // older finished entries are pruned (stats are aggregated separately) to keep writes cheap
 
@@ -659,7 +659,8 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
   const api = {
     getSettings() {
       sync();
-      return { sound: true, vibration: true, reducedMotion: prefersReducedMotion(), highContrast: false, ...data.settings };
+      // (1.16) living: Die Lewende Toring's people in the towers (on unless Instellings switched it off)
+      return { sound: true, vibration: true, reducedMotion: prefersReducedMotion(), highContrast: false, living: true, ...data.settings };
     },
 
     setSettings(partial) {

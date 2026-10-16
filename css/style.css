@@ -3535,3 +3535,76 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .lt-btn.red { color: #fff; background: linear-gradient(#ff7a5a, #e0381f); box-shadow: 0 calc(6 * var(--u)) 0 #9c2110, 0 calc(10 * var(--u)) calc(22 * var(--u)) rgba(255, 80, 40, 0.35); }
 .lt-root > .lt-coach { position: fixed; left: 0; top: 0; z-index: 101; pointer-events: none; font-size: calc(78 * var(--u)); line-height: 1; filter: drop-shadow(0 calc(6 * var(--u)) calc(10 * var(--u)) rgba(0, 0, 0, 0.55)); }
 
+
+/* ------------------------------------------------------------------------------------------------------------------
+   (1.16) Die Lewende Toring in the game: the results card's town (how many people, the title, the record, who lived
+   there) and the tribe sheet. Pictures are plain images (no canvas, no endless animation: the sheet scrolls).
+   ------------------------------------------------------------------------------------------------------------------ */
+.res-town {
+  margin-top: calc(16 * var(--u));
+  padding: calc(14 * var(--u)) calc(18 * var(--u)) calc(16 * var(--u));
+  border-radius: calc(24 * var(--u));
+  background: linear-gradient(180deg, #1f2f57 0%, #142042 100%);
+  color: #fff;
+  box-shadow: inset 0 0 0 calc(2 * var(--u)) rgba(255, 210, 63, 0.35), 0 calc(6 * var(--u)) calc(16 * var(--u)) rgba(10, 20, 45, 0.25);
+  text-align: center;
+}
+.res-town .town-head { display: flex; align-items: center; justify-content: center; gap: calc(8 * var(--u)); font-size: max(12px, calc(20 * var(--u))); font-weight: 800; color: #ffe38c; letter-spacing: 0.02em; }
+.res-town .town-main { display: flex; align-items: center; justify-content: center; gap: calc(14 * var(--u)); margin-top: calc(4 * var(--u)); }
+.res-town .town-n { font-size: calc(64 * var(--u)); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; text-shadow: 0 calc(3 * var(--u)) 0 rgba(0, 0, 0, 0.35); }
+.res-town .town-what { display: flex; flex-direction: column; align-items: flex-start; gap: calc(2 * var(--u)); }
+.res-town .town-people { font-size: max(12px, calc(22 * var(--u))); font-weight: 800; color: #cfe0ff; }
+.res-town .town-title { display: inline-flex; align-items: center; gap: calc(6 * var(--u)); padding: calc(3 * var(--u)) calc(12 * var(--u)); border-radius: 999px; background: #ffd23f; color: #4a3300; font-size: max(12px, calc(22 * var(--u))); font-weight: 900; }
+.res-town .town-best { margin: calc(8 * var(--u)) 0 0; font-size: max(12px, calc(20 * var(--u))); font-weight: 800; color: #cfe0ff; }
+.res-town .town-best.is-new { color: #ffd23f; animation: rank-up 0.9s ease-out both; }
+.res-town .town-next { margin: calc(2 * var(--u)) 0 0; font-size: max(11px, calc(18 * var(--u))); font-weight: 700; color: #9fb4dd; }
+.res-town .town-faces { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(6 * var(--u)); margin-top: calc(12 * var(--u)); }
+.res-town .town-face { position: relative; width: calc(56 * var(--u)); height: calc(56 * var(--u)); }
+.res-town .town-face img { width: 100%; height: 100%; display: block; border-radius: 50%; }
+.res-town .town-face.is-gold img { box-shadow: 0 0 0 calc(3 * var(--u)) #ffd23f, 0 0 calc(12 * var(--u)) rgba(255, 210, 63, 0.8); }
+.res-town .town-face i { position: absolute; left: 50%; bottom: calc(-6 * var(--u)); transform: translateX(-50%); padding: 0 calc(6 * var(--u)); border-radius: 999px; background: #2fd47a; color: #06301a; font-style: normal; font-size: max(9px, calc(14 * var(--u))); font-weight: 900; line-height: 1.5; white-space: nowrap; }
+.res-town .town-jumped { margin: calc(10 * var(--u)) 0 0; font-size: max(11px, calc(18 * var(--u))); font-weight: 700; color: #ffb3a8; }
+@media (prefers-reduced-motion: reduce) { .res-town .town-best.is-new { animation: none; } }
+
+.tribe-sheet .tribe-ask { margin: 0 0 calc(12 * var(--u)); text-align: center; font-weight: 800; color: var(--ink-soft); font-size: max(13px, calc(24 * var(--u))); }
+.tribe-sheet .tribe-list { display: grid; gap: calc(12 * var(--u)); }
+.tribe-card {
+  display: grid; grid-template-columns: 1fr; gap: calc(6 * var(--u)); width: 100%;
+  padding: calc(14 * var(--u)) calc(16 * var(--u)); border: 0; border-radius: calc(22 * var(--u));
+  font: inherit; text-align: left; cursor: pointer; color: #fff;
+  box-shadow: 0 calc(5 * var(--u)) 0 rgba(0, 0, 0, 0.22);
+  transition: transform 0.12s ease;
+}
+.tribe-card:active { transform: translateY(calc(3 * var(--u))); box-shadow: 0 calc(2 * var(--u)) 0 rgba(0, 0, 0, 0.22); }
+.tribe-card.tribe-vuur { background: linear-gradient(135deg, #e8452c, #a9230f); }
+.tribe-card.tribe-water { background: linear-gradient(135deg, #1f8fd6, #0c4f8f); }
+.tribe-card.tribe-gras { background: linear-gradient(135deg, #3fae3a, #1d6b1f); }
+.tribe-card.is-on { box-shadow: 0 0 0 calc(4 * var(--u)) #ffd23f, 0 calc(5 * var(--u)) 0 rgba(0, 0, 0, 0.22); }
+.tribe-card .tribe-name { display: flex; align-items: center; gap: calc(8 * var(--u)); font-size: max(14px, calc(30 * var(--u))); font-weight: 900; }
+.tribe-card .tribe-faces { display: flex; gap: calc(8 * var(--u)); }
+.tribe-card .tribe-faces img { width: calc(64 * var(--u)); height: calc(64 * var(--u)); border-radius: 50%; display: block; }
+.tribe-card .tribe-sub { font-size: max(12px, calc(20 * var(--u))); font-weight: 700; opacity: 0.92; }
+.res-town .town-album {
+  margin-top: calc(12 * var(--u)); padding: calc(8 * var(--u)) calc(18 * var(--u)); border: 0; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12); color: #ffe38c; font: inherit; font-weight: 800; font-size: max(12px, calc(20 * var(--u))); cursor: pointer;
+  box-shadow: inset 0 0 0 calc(2 * var(--u)) rgba(255, 210, 63, 0.45);
+}
+.res-town .town-album:active { transform: translateY(calc(2 * var(--u))); }
+.album-sheet .album-count { margin: 0; text-align: center; font-weight: 900; font-size: max(14px, calc(28 * var(--u))); color: var(--ink); }
+.album-sheet .album-gold { margin: calc(2 * var(--u)) 0 calc(12 * var(--u)); text-align: center; font-weight: 800; font-size: max(12px, calc(22 * var(--u))); color: #a86a00; }
+.album-sheet .album-tribe { margin-top: calc(10 * var(--u)); padding: calc(10 * var(--u)) calc(12 * var(--u)) calc(12 * var(--u)); border-radius: calc(20 * var(--u)); color: #fff; }
+.album-sheet .album-tribe.tribe-vuur { background: linear-gradient(135deg, #e8452c, #a9230f); }
+.album-sheet .album-tribe.tribe-water { background: linear-gradient(135deg, #1f8fd6, #0c4f8f); }
+.album-sheet .album-tribe.tribe-gras { background: linear-gradient(135deg, #3fae3a, #1d6b1f); }
+.album-sheet .album-tribe-name { display: flex; align-items: center; gap: calc(8 * var(--u)); margin: 0 0 calc(8 * var(--u)); font-size: max(13px, calc(24 * var(--u))); font-weight: 900; }
+.album-sheet .album-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: calc(8 * var(--u)); }
+.album-sheet .album-slot { display: flex; flex-direction: column; align-items: center; gap: calc(3 * var(--u)); text-align: center; }
+.album-sheet .album-face { position: relative; width: calc(84 * var(--u)); height: calc(84 * var(--u)); }
+.album-sheet .album-face img { width: 100%; height: 100%; display: block; border-radius: 50%; }
+.album-sheet .album-slot.is-gold .album-face img { box-shadow: 0 0 0 calc(4 * var(--u)) #ffd23f, 0 0 calc(14 * var(--u)) rgba(255, 210, 63, 0.9); }
+.album-sheet .album-slot.is-unknown .album-face img { filter: brightness(0) opacity(0.45); }
+.album-sheet .album-slot.is-unknown .album-face b { position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(40 * var(--u)); font-weight: 900; color: rgba(255, 255, 255, 0.85); }
+.album-sheet .album-name { font-size: max(10px, calc(17 * var(--u))); font-weight: 800; line-height: 1.15; }
+.album-sheet .album-slot.is-unknown .album-name { opacity: 0.75; font-weight: 700; }
+.album-sheet .album-times { font-size: max(9px, calc(15 * var(--u))); font-weight: 700; opacity: 0.85; }
+.album-sheet .album-hint { margin: calc(14 * var(--u)) 0 0; text-align: center; font-weight: 700; color: var(--muted); font-size: max(12px, calc(20 * var(--u))); }

@@ -16,6 +16,7 @@ const LIMIT = {
   hail: 4, land: 3, creak: 1, click: 3, perfect: 3, warning: 1, rain: 1,
   zap: 1, wind: 2, freeze: 2, fog: 1, heat: 1, thunder: 2, splash: 3, gull: 1,
   monkey: 1, shoo: 1, clown: 1, thief: 1, escape: 1, caught: 1,
+  room: 4, chute: 2, milestone: 1, gold: 1, board: 1, pop: 2,
 };
 // Minimum ms between two starts of the same sound.
 const THROTTLE = {
@@ -23,11 +24,12 @@ const THROTTLE = {
   freeze: 90, land: 35, splash: 70, click: 35, drop: 60, thunder: 200,
   banner: 250, heart: 200, record: 400, gameover: 400, fog: 400, heat: 400, gull: 2000,
   monkey: 300, shoo: 250, clown: 250, thief: 300, escape: 400, caught: 400,
+  room: 45, chute: 160, milestone: 500, gold: 250, board: 120, pop: 120,
 };
 // At the per-name limit these steal the oldest voice; all others skip the new one.
 const STEAL = new Set([
   'perfect', 'good', 'skew', 'lost', 'land', 'drop', 'click', 'splash',
-  'thunder', 'banner', 'gameover', 'record', 'heart', 'rainbow', 'shoo', 'caught',
+  'thunder', 'banner', 'gameover', 'record', 'heart', 'rainbow', 'shoo', 'caught', 'room',
 ]);
 // Per-sound output trim, balanced with the offline level test (perfect loudest).
 const LEVEL = {
@@ -36,6 +38,7 @@ const LEVEL = {
   thunder: 1.0, zap: 0.39, hail: 0.44, heat: 0.27, rainbow: 0.7, fog: 0.143,
   warning: 0.22, gameover: 0.75, record: 0.62, banner: 0.4, freeze: 0.6, gull: 0.1,
   monkey: 0.85, shoo: 0.75, clown: 0.55, thief: 0.62, escape: 0.34, caught: 0.5,
+  room: 0.85, chute: 0.55, milestone: 0.6, gold: 0.7, board: 0.75, pop: 0.5,
 };
 
 const PENTA = [0, 2, 4, 7, 9];   // major pentatonic (semitones)
@@ -354,6 +357,61 @@ const SOUNDS = {
         ping(v, t + 0.045 + i * 0.042, fm, 0.11 - i * 0.01, 0.32);
       }
     }
+  },
+
+  // (1.16) Die Lewende Toring: a light comes on and someone moves in: a glassy pling climbing the scale (`n`)
+  room(v, t, o) {
+    const n = Math.max(0, Math.round(num(o.n, 0)));
+    let f = mtof(pentaNote(5 + (n % 10)));
+    while (f > 3600) f /= 2;
+    ping(v, t, 5200, 0.06, 0.012);                    // the light switch
+    bell(v, t + 0.01, f, 0.32, 0.42, 0.7);
+    ping(v, t + 0.06, f * 1.5, 0.09, 0.22);
+  },
+
+  // (1.16) a Skeef floor is boarded up: two quick hammer knocks on wood
+  board(v, t, o, B) {
+    for (const [dt, p] of [[0, 1], [0.12, 0.8]]) {
+      const bp = v.filter('bandpass', 950, 2.2, v.env(v.out, t + dt, 0.55 * p, 0.001, 0.05));
+      v.noise(B.white, t + dt, 0.06, bp);
+      const k = v.osc('triangle', 270, t + dt, 0.09, v.env(v.out, t + dt, 0.36 * p, 0.002, 0.06));
+      k.frequency.exponentialRampToValueAtTime(170, t + dt + 0.05);
+    }
+  },
+
+  // (1.16) a golden resident: a sparkling run up high and a bell
+  gold(v, t) {
+    for (let i = 0; i < 6; i++) ping(v, t + i * 0.045, mtof(pentaNote(10 + i)), 0.12 - i * 0.012, 0.35);
+    bell(v, t + 0.28, mtof(pentaNote(15)), 0.16, 0.6, 0.6);
+  },
+
+  // (1.16) people jump out of a falling floor: a little "whee!" sliding down and the canopy's "fwump"
+  chute(v, t, o, B) {
+    const g = v.envHold(v.out, t, 0.32, 0.01, 0.16, 0.12);
+    const w = v.osc('sine', 1250, t, 0.32, g);
+    w.frequency.exponentialRampToValueAtTime(520, t + 0.28);
+    whoosh(v, B, t + 0.18, 0.22, 300, 900, 0.9, 0.4, 0.03);
+  },
+
+  // (1.16) a firework bursting high up: a soft thump and a crackle
+  pop(v, t, o, B) {
+    const k = num(o.k, 1);
+    const th = v.osc('sine', 160 + 20 * k, t, 0.2, v.env(v.out, t, 0.45, 0.003, 0.16));
+    th.frequency.exponentialRampToValueAtTime(70, t + 0.15);
+    for (let i = 0; i < 5; i++) {
+      const hp = v.filter('highpass', 5000, 0.8, v.env(v.out, t + 0.06 + i * 0.035 + rand(0, 0.02), 0.12, 0.001, 0.02));
+      v.noise(B.white, t + 0.06 + i * 0.035, 0.03, hp);
+    }
+  },
+
+  // (1.16) the town earns a title: a bright "ta-da-daa", a cymbal and a run of bells
+  milestone(v, t, o, B) {
+    [72, 76, 79].forEach((m, i) => brass(v, t + i * 0.09, mtof(m), 0.06, 0.26));
+    const ct = t + 0.3;
+    for (const m of [76, 79, 84]) brass(v, ct, mtof(m), 0.42, 0.15);
+    const hp = v.filter('highpass', 6500, 0.7, v.env(v.out, ct, 0.16, 0.004, 0.6));
+    v.noise(B.white, ct, 0.65, hp);
+    for (let i = 0; i < 4; i++) ping(v, ct + 0.05 + i * 0.06, mtof(pentaNote(12 + i)), 0.1, 0.4);
   },
 
   good(v, t) {

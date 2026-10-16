@@ -332,6 +332,81 @@ function drawWindow(ctx, s, v) {
     ctx.strokeStyle = '#ffd23f';
     ctx.stroke();
   }
+  if (v.look === 'boarded') {
+    // (1.16, a Skeef floor) nailed shut: two weathered planks across the dark window, a nail at each end
+    const plank = (x0, y0, x1, y1, w) => {
+      const a = Math.atan2(y1 - y0, x1 - x0);
+      const len = Math.hypot(x1 - x0, y1 - y0);
+      ctx.save();
+      ctx.translate((x0 + x1) / 2, (y0 + y1) / 2);
+      ctx.rotate(a);
+      ctx.shadowColor = 'rgba(0,0,0,0.45)';
+      ctx.shadowBlur = 2;
+      ctx.shadowOffsetY = 1;
+      const wood = ctx.createLinearGradient(0, -w / 2, 0, w / 2);
+      wood.addColorStop(0, '#c99a62');
+      wood.addColorStop(0.5, '#a8743f');
+      wood.addColorStop(1, '#7a4f26');
+      ctx.fillStyle = wood;
+      ctx.fillRect(-len / 2, -w / 2, len, w);
+      ctx.shadowColor = 'transparent';
+      ctx.fillStyle = 'rgba(60,35,15,0.5)';
+      ctx.fillRect(-len / 2, -0.4, len, 0.8);
+      ctx.fillStyle = '#3b3b44';
+      for (const nx of [-len / 2 + w * 0.55, len / 2 - w * 0.55]) { ctx.beginPath(); ctx.arc(nx, 0, Math.max(0.8, w * 0.13), 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore();
+    };
+    const pw = Math.max(3.2, s.w * 0.26);
+    plank(x - 2, y + s.h * 0.2, x + s.w + 2, y + s.h * 0.62, pw);
+    plank(x - 2, y + s.h * 0.78, x + s.w + 2, y + s.h * 0.4, pw);
+  }
+}
+
+// One window's picture, drawn once per look and size and kept (a canvas; the glow around a lit window and the sill below
+// are inside it): a floor's picture is then a few drawImage calls instead of gradients and blurred shadows every time.
+const spriteCache = new Map();
+const SPRITE_MAX = 120;      // (each ~50-130 KB: a game uses far fewer)
+function windowSprite(s, v, res) {
+  const key = `${v.look}|${v.who || ''}|${v.tribe || ''}|${s.w}x${s.h}|${res}|${readyVersion}`;
+  let c = spriteCache.get(key);
+  if (c) return c;
+  const m = Math.ceil(s.h * 1.15) + 6;          // room for the glow, the frame's shadow and the sill
+  const w = s.w + 2 * m;
+  const h = s.h + 2 * m;
+  c = document.createElement('canvas');
+  c.width = Math.ceil(w * res);
+  c.height = Math.ceil(h * res);
+  const ctx = c.getContext('2d');
+  ctx.setTransform(res, 0, 0, res, 0, 0);
+  drawWindow(ctx, { x: w / 2, y: h / 2, w: s.w, h: s.h }, v);
+  c.ox = w / 2;
+  c.oy = h / 2;
+  if (spriteCache.size >= SPRITE_MAX) spriteCache.delete(spriteCache.keys().next().value);
+  spriteCache.set(key, c);
+  return c;
+}
+
+/**
+ * (1.16, Die Lewende Toring in the game) a block's windows drawn into its own canvas texture `key`, `res` times sharper
+ * than the block (the faces stay crisp): made once, then painted over in place whenever a window changes (one texture
+ * per block, freed with the block). `wins` = [{ look, who, tribe }] in slot order. Each window comes from its sprite.
+ */
+export function paintWindows(scene, key, g, wins, pad, res = 1) {
+  const slots = windowSlots(g);
+  let tex = scene.textures.exists(key) ? scene.textures.get(key) : null;
+  if (!tex) tex = scene.textures.createCanvas(key, Math.ceil(g.texW * res), Math.ceil(g.texH * res));
+  if (!tex) return null;
+  const ctx = tex.getContext();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, tex.width, tex.height);
+  slots.forEach((s, i) => {
+    const v = wins[i];
+    if (!v) return;
+    const sp = windowSprite(s, v, res);
+    ctx.drawImage(sp, Math.round((pad + s.x - sp.ox) * res), Math.round((pad + s.y - sp.oy) * res));
+  });
+  tex.refresh();
+  return key;
 }
 
 // ---------------------------------------------------------------------------------------------- a block's windows

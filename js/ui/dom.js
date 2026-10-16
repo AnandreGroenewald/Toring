@@ -22,6 +22,8 @@ import { getLanguage, localSaying } from '../core/i18n.js';
 import { SPONSOR } from '../sponsorConfig.js';
 import { opaqueBox, headOf, accessoryPlace } from '../core/emojifit.js';
 import { audio, haptics } from '../audio.js';
+import { castOf, portraitDataUrl, portraitsReady, CAST } from '../game/residents.js';
+import { titleFor } from '../core/living.js';
 
 const GRID_COLS = 10;
 const GRID_ROWS = 5;
@@ -141,11 +143,13 @@ export function createUI(bus) {
   }
   root.textContent = '';
 
+  const TRIBE_EMOJI = { vuur: '🔥', water: '💧', gras: '🌿' };
   const st = {
     screen: null,        // 'menu' | 'results' | 'pause' | 'game' | null
     modal: null,         // 'howto' | 'stats' | null
     model: null,
-    settings: { sound: true, vibration: true, reducedMotion: prefersReducedMotion(), highContrast: false },
+    settings: { sound: true, vibration: true, reducedMotion: prefersReducedMotion(), highContrast: false, living: true },
+    lvTribe: 'vuur',     // (1.16) the Living Tower's tribe
     nextDayAt: 0,
     ad: null,            // { house: {title,text,url,label}|null, salesOn }
     rolledFor: 0,
@@ -183,6 +187,8 @@ export function createUI(bus) {
     update: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-update-title', tabindex: '-1' }),   // (1.15) a newer app on Google Play
     pick: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-pick-title', tabindex: '-1' }),   // (1.15.3) the Daily Tower's free power-up
     offer: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-offer-title', tabindex: '-1' }),   // (1.15.3) the lobby's offer
+    tribe: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-tribe-title', tabindex: '-1' }),   // (1.16) the Living Tower's tribe
+    album: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-album-title', tabindex: '-1' }),   // (1.16) its residents album
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -223,7 +229,7 @@ export function createUI(bus) {
   // buttons take taps: a tap anywhere else still drops a block)
   const emoteBar = h('div', { class: 'emote-bar', role: 'group', 'aria-label': S.emoteLabel, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, modals.tribe, modals.album, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // (1.15, the owner: "We need a better way to display the coins please") every 🪙 the UI shows becomes the game's own
@@ -663,7 +669,7 @@ export function createUI(bus) {
     if (el) el.textContent = fmtInt(n || 0);
   }
 
-  const LABELS = { sound: S.sound, vibration: S.vibration, highContrast: S.highContrast };
+  const LABELS = { sound: S.sound, vibration: S.vibration, highContrast: S.highContrast, living: S.lvSetting };
 
   function toggleBtns({ contrast = false } = {}) {
     const list = [toggleBtn('sound')];
@@ -679,6 +685,7 @@ export function createUI(bus) {
     st.settings[key] = val;
     syncToggles();
     bus.emit('ui:settings', { [key]: val });
+    if (key === 'living' && st.modal === 'settings') renderSettings();   // (1.16) the tribe row comes and goes with it
     if (key === 'sound' && val) {
       audio.unlock();
       audio.play('click');
@@ -2481,6 +2488,7 @@ export function createUI(bus) {
           tile(fmtInt(r.maxCombo || 0), S.bestCombo)),
       // (1.15.3) the next match right under the players, in sight without scrolling
       duel ? againBox({ again, againStake, againStakes }) : null,
+      townEl(r.living),
       rewardEl(reward),
       empty ? null : gridEl(r.grid, r.reason, r.visitors),
       empty ? null : weatherEl(r.weather),
@@ -2868,6 +2876,96 @@ export function createUI(bus) {
    * (1.14, the owner: "like 8 Ball Pool") ⚙️ Instellings: the account at the top (only once sign-in is open), then
    * Klank, Vibrasie, Kontras, Taal, Herinneringe (where reminders exist) and Privaatheid. Android Back closes it.
    */
+  // -------------------------------------------------------------------------------------------- (1.16) Die Lewende Toring
+  /** The Living Tower's tribe (main.js says which at start and after a choice). */
+  function setLiving({ tribe } = {}) {
+    if (tribe) st.lvTribe = tribe;
+  }
+
+  /** "Kies jou stam": three tribes, each with its four people; a tap chooses (from Instellings or the results card). */
+  function showTribe() {
+    const card = (t) => h('button', {
+      type: 'button', class: `tribe-card tribe-${t}${st.lvTribe === t ? ' is-on' : ''}`, 'aria-pressed': String(st.lvTribe === t),
+      onclick: () => {
+        audio.play('click');
+        st.lvTribe = t;
+        bus.emit('ui:lv-tribe', t);
+        closeModal();
+        toast(S.lvTribeChosen(S.lvTribeNames[t]), 2400);
+      },
+    },
+    h('span', { class: 'tribe-name' }, emo(TRIBE_EMOJI[t]), h('b', { text: S.lvTribeNames[t] })),
+    h('span', { class: 'tribe-faces' }, castOf(t).map((id) => h('img', { alt: CAST[id]?.name || '', src: portraitDataUrl(id, 96) || '' }))),
+    h('span', { class: 'tribe-sub', text: S.lvTribeSub[t] }));
+    const paint = () => modals.tribe.replaceChildren(h('div', { class: 'card sheet tribe-sheet' },
+      closeX(() => closeModal()),
+      h('div', { class: 'sheet-head' }, emo('🏠'), h('h2', { id: 'stapel-tribe-title', text: S.lvTribeTitle })),
+      h('div', { class: 'sheet-body' },
+        h('p', { class: 'tribe-ask', text: S.lvTribeAsk }),
+        h('div', { class: 'tribe-list' }, ['vuur', 'water', 'gras'].map(card)))));
+    paint();
+    openModal('tribe');
+    // the faces are drawn once (the first time they may still be loading)
+    portraitsReady.then(() => { if (st.modal === 'tribe') paint(); });
+  }
+
+  /**
+   * The residents album: everyone who can live in your towers, by tribe; met ones with how often they moved in, golden
+   * ones ringed in gold, the rest a shadow. `a` = js/core/living.js store get().
+   */
+  function showAlbum(a = {}) {
+    const met = a.met || {};
+    const gold = a.gold || {};
+    const ids = ['vuur', 'water', 'gras'].flatMap((t) => castOf(t));
+    const nMet = ids.filter((id) => met[id]).length;
+    const nGold = ids.filter((id) => gold[id]).length;
+    const slot = (id) => {
+      const known = !!met[id];
+      return h('div', { class: `album-slot${known ? '' : ' is-unknown'}${gold[id] ? ' is-gold' : ''}` },
+        h('span', { class: 'album-face' }, h('img', { alt: known ? CAST[id]?.name || '' : '', src: portraitDataUrl(id, 112) || '' }), known ? null : h('b', { text: '?' })),
+        h('span', { class: 'album-name', text: known ? CAST[id]?.name || '' : S.lvAlbumUnknown }),
+        known ? h('span', { class: 'album-times', text: `${S.lvAlbumTimes(met[id])}${gold[id] ? ' · ✨' : ''}` }) : null);
+    };
+    const paint = () => modals.album.replaceChildren(h('div', { class: 'card sheet album-sheet' },
+      closeX(() => closeModal()),
+      h('div', { class: 'sheet-head' }, emo('📖'), h('h2', { id: 'stapel-album-title', text: S.lvAlbum })),
+      h('div', { class: 'sheet-body' },
+        h('p', { class: 'album-count', text: S.lvAlbumCount(nMet, ids.length) }),
+        h('p', { class: 'album-gold', text: S.lvAlbumGold(nGold, ids.length) }),
+        ['vuur', 'water', 'gras'].map((t) => h('div', { class: `album-tribe tribe-${t}` },
+          h('h3', { class: 'album-tribe-name' }, emo(TRIBE_EMOJI[t]), h('span', { text: S.lvTribeNames[t] })),
+          h('div', { class: 'album-grid' }, castOf(t).map(slot)))),
+        h('p', { class: 'album-hint', text: S.lvAlbumHint }))));
+    paint();
+    openModal('album');
+    portraitsReady.then(() => { if (st.modal === 'album') paint(); });
+  }
+
+  /** The results card's town: how many people live in the tower, its title, the record, and who lived there. */
+  function townEl(t) {
+    if (!t || !(t.movedIn > 0)) return null;
+    const { now, next } = titleFor(t.people);
+    const faces = [...new Set(t.met || [])].slice(0, 12);
+    const gold = new Set(t.gold || []);
+    const fresh = new Set(t.fresh || []);
+    return h('div', { class: 'res-town', role: 'group', 'aria-label': S.lvResHead },
+      h('div', { class: 'town-head' }, emo('🏠'), h('span', { text: S.lvResHead })),
+      h('div', { class: 'town-main' },
+        h('b', { class: 'town-n', text: fmtInt(t.people) }),
+        h('span', { class: 'town-what' },
+          h('span', { class: 'town-people', text: S.lvResPeople(t.people).replace(/^[\d\s\u00a0]+/, '') }),
+          now ? h('span', { class: 'town-title' }, emo(now.emoji), h('span', { text: S.lvTitles[now.id] })) : null)),
+      h('p', { class: 'town-best' + (t.newBest ? ' is-new' : ''), text: t.newBest ? `🏆 ${S.lvResNewBest}` : S.lvResBest(Math.max(t.best || 0, t.people)) }),
+      next ? h('p', { class: 'town-next', text: S.lvResToNext(next.at - t.people, S.lvTitles[next.id]) }) : null,
+      faces.length ? h('div', { class: 'town-faces', 'aria-label': S.lvResWho },
+        faces.map((id) => h('span', { class: `town-face${gold.has(id) ? ' is-gold' : ''}` },
+          h('img', { alt: CAST[id]?.name || '', src: portraitDataUrl(id, 96) || '' }),
+          fresh.has(id) ? h('i', { text: S.lvResFresh }) : null))) : null,
+      t.jumped > 0 ? h('p', { class: 'town-jumped', text: `🪂 ${S.lvResJumped(t.jumped)}` }) : null,
+      t.album ? h('button', { type: 'button', class: 'town-album', onclick: () => { audio.play('click'); bus.emit('ui:lv-album'); } },
+        h('span', { text: S.lvAlbumBtn(t.album.met, t.album.total, t.album.gold) })) : null);
+  }
+
   function showSettings() {
     st.accountAsk = null;
     st.accountMsg = null;
@@ -2906,6 +3004,10 @@ export function createUI(bus) {
           toggleRow('sound', '🔊'),
           buzz ? toggleRow('vibration', '📳') : null,
           toggleRow('highContrast', '◐'),
+          // (1.16) Die Lewende Toring: people in the towers, and whose
+          toggleRow('living', '🏠'),
+          st.settings.living !== false ? row(TRIBE_EMOJI[st.lvTribe] || '🔥', S.lvTribe, S.lvTribeNames[st.lvTribe] || '', () => showTribe()) : null,
+          st.settings.living !== false ? row('📖', S.lvAlbum, '›', () => bus.emit('ui:lv-album')) : null,
           row('🌐', S.language, S.langNames[lang], () => showLanguage({ current: lang })),
           st.remindOn ? row('🔔', S.reminders, st.remindTime || S.off, () => bus.emit('ui:remind')) : null,
           privacy)),
@@ -3300,6 +3402,9 @@ export function createUI(bus) {
     showStats,
     showPause,
     showResults,
+    setLiving,
+    showTribe,
+    showAlbum,
     showDuel,
     setDuelMode,
     setDuelStake,

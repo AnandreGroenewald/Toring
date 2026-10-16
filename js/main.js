@@ -36,6 +36,7 @@ import { GameScene } from './scenes/GameScene.js';
 import { HudScene } from './scenes/HudScene.js';
 import { LewendeScene } from './scenes/LewendeScene.js';
 import { createLewendeUi } from './ui/lewendeUi.js';
+import { createLivingStore, CAST_IDS } from './core/living.js';
 import { setBlockSkin } from './game/blocks.js';
 import { setCraneSkin } from './game/crane.js';
 
@@ -111,6 +112,20 @@ function nextDayFor(dateKey) {
 // ---------------------------------------------------------------------------
 const store = createStore(undefined, DEBUG ? { key: `${STORAGE_KEY}.debug` } : {});
 let settings = store.getSettings();
+// (1.16) Die Lewende Toring in every tower: the player's tribe, record and the people they have met (its own store)
+const livingStore = createLivingStore();
+/** What a game needs for the Living Tower (null when Instellings has it off). */
+function livingFor(mode) {
+  if (settings.living === false) return null;
+  return {
+    tribe: livingStore.tribe(),
+    best: livingStore.best(),
+    known: (id, gold) => livingStore.known(id, gold),
+    firstTown: !Object.keys(livingStore.get().met).length,
+    intro: mode !== 'idle' && !livingStore.introSeen(),
+    onIntro: () => livingStore.markIntro(),
+  };
+}
 // Afrikaans or English (1.9). Someone who played before there was a choice stays in Afrikaans; a new
 // player is asked once (onReady), unless a ?lang= link already said which.
 let askLanguage = false;
@@ -350,6 +365,7 @@ bus.on('ui:account-delete', () => {
   }, (err) => ui.setAccountNote(err.message === 'out' ? S.accountOut : S.accountErr(err.message)));
 });
 ui.setBoardOn(BOARD_ON);
+ui.setLiving({ tribe: livingStore.tribe() });   // (1.16) the Living Tower's tribe for Instellings and the results
 const BOARD_FRESH_MS = 60 * 1000;   // an answer this recent is shown again without asking the server
 let boardLast = null;   // { dateKey, board, at }: the last answer, so the sheet opens on it at once
 let boardDate = null;   // the day the Ranglys sheet shows
@@ -738,6 +754,7 @@ function startGame(data) {
     coach: data.mode !== 'idle' && !store.tutorialSeen(),
     debug: DEBUG,
     visitor: FORCE_VISITOR,
+    living: livingFor(data.mode),
     ...data,
   });
 }
@@ -1666,9 +1683,19 @@ function firstVisit() {
   settings = store.setSettings({ howtoSeen: true });
 }
 bus.on('ui:settings', (partial) => {
+  const wasLiving = settings.living;
   settings = store.setSettings(partial || {});
   audio.setEnabled(settings.sound);
   haptics.setEnabled(settings.vibration);
+  // (1.16) the menu's tower shows the Living Tower switched on or off at once
+  if (settings.living !== wasLiving && run.mode === 'idle' && screen !== 'game') startIdle();
+});
+// (1.16) the residents album (the results card's town, Instellings)
+bus.on('ui:lv-album', () => ui.showAlbum(livingStore.get()));
+// (1.16) a tribe chosen (Instellings, the results card): the next towers' people, and the menu's tower at once
+bus.on('ui:lv-tribe', (t) => {
+  ui.setLiving({ tribe: livingStore.setTribe(t) });
+  if (run.mode === 'idle' && screen !== 'game') startIdle();
 });
 bus.on('ui:day-rollover', () => {
   refundRetries();
@@ -2505,9 +2532,11 @@ function finalize(result) {
   if (run.final) return run.final;
   run.over = true;
   stopHeartbeat();
+  // (1.16) the Living Tower's town: the record and who lived there (kept apart from the tower's own result)
+  const town = result.living ? recordTown(result.living) : null;
   if (result.mode === 'duel') {
     // a match keeps its own wins and losses (recorded by js/duel.js once it is decided)
-    run.final = { result, stats: null, isNewBest: false, aborted: false };
+    run.final = { result: town ? { ...result, living: town } : result, stats: null, isNewBest: false, aborted: false };
     return run.final;
   }
   let shown = result;
@@ -2553,8 +2582,21 @@ function finalize(result) {
   } else if (result.mode === 'practice') {
     coins = awardCoins({ mode: 'practice', heightM: result.heightM, perfects: result.perfects });
   }
-  run.final = { result: shown, stats, isNewBest, aborted, coins, week };
+  run.final = { result: town && !aborted ? { ...shown, living: town } : shown, stats, isNewBest, aborted, coins, week };
   return run.final;
+}
+
+/** (1.16) A game's town into the Living Tower's store: the record (people) and everyone who lived there. */
+function recordTown(t) {
+  try {
+    if (!(t.movedIn > 0)) return { ...t, best: livingStore.best(), newBest: false };
+    const rec = livingStore.record({ people: t.people, met: t.met, gold: t.gold });
+    const a = livingStore.get();
+    const album = { met: Object.keys(a.met).length, gold: Object.keys(a.gold).length, total: CAST_IDS.length };
+    return { ...t, best: rec.best, newBest: rec.newBest && rec.was > 0, fresh: rec.first ? [] : t.fresh, album };
+  } catch {
+    return null;
+  }
 }
 
 bus.on('game:final', (result) => {

@@ -2,6 +2,7 @@
 // clipboard. Every browser API is looked up lazily and guarded, so this module
 // imports cleanly in node and never throws in odd WebViews.
 
+import { titleFor } from './living.js';
 import { RATING_EMOJI, RATING_EMOJI_HC } from '../config.js';
 import { S, WEATHER_INFO } from './strings.js';
 import { fmtM, fmtInt } from './format.js';
@@ -49,6 +50,13 @@ export function buildShareText(result, { url, highContrast = false } = {}) {
   const stats = [`⭐ ${fmtInt(r.score || 0)}`, `🎯 ${fmtInt(r.perfects || 0)}× ${S.perfects}`];
   if ((r.maxCombo || 0) >= 2) stats.push(`🔥 ${fmtInt(r.maxCombo)}`);
   lines.push(stats.join(' · '));
+
+  // (1.16) Die Lewende Toring: how many people lived in the tower, and its title
+  const town = r.living;
+  if (town && town.movedIn > 0) {
+    const t = titleFor(town.people).now;
+    lines.push(`🏠 ${fmtInt(town.people)} ${S.lvPeople}${t ? ` · ${t.emoji} ${S.lvTitles[t.id]}` : ''}`);
+  }
 
   lines.push(...gridLines(r.grid, r.reason, highContrast ? RATING_EMOJI_HC : RATING_EMOJI));
 

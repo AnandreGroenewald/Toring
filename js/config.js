@@ -341,7 +341,10 @@ export const REFILL = Object.freeze({ on: true, to: 4000, times: 3, per: 'day', 
 // the week we can see who voted for what"; "The vote invite" in "Wedloop, BvB + 3 ideas") the Living Tower preview
 // (lewende-toring/, the vote on the server's /idees/stem): its three ideas in the Uitdagersreeks, an invite on a match's
 // results, a "Nuut" tag on the menu's Uitdagersreeks button. Gone by itself from `until` (SAST); `on: false` hides it now.
-export const IDEAS_VOTE = Object.freeze({ on: true, until: '2026-11-01', path: 'lewende-toring/' });
+// (1.16, the owner 16 Oct: "it needs to be part of the Stapel scenario. So the more perfects you have the more rooms you
+// have") the Living Tower now lives in every tower (js/game/living.js): the three separate ideas and their vote are hidden
+// (their scene stays in the code for its tribe attacks; `on: true` brings them back).
+export const IDEAS_VOTE = Object.freeze({ on: false, until: '2026-11-01', path: 'lewende-toring/' });
 export const TESTER_GIFT = Object.freeze({ on: true, coins: 100000, hash: '7b325f2da84141879a5a4b6ab2f0a72a0386a3d7a3519ece2f6a5a075553792d' });
 
 // (1.13) Sign in with Google (js/account.js): the web client ID from Google Cloud (Google Auth Platform >

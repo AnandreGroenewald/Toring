@@ -929,6 +929,22 @@ Later the owner added (decisions are final unless they say otherwise):
   scene method `sound` (Phaser injects `this.sound`). Pictures: Play folder › Previews › "1.16 Lewende Toring (nuwe ontwerp)
   - …" (4). Tests: game 417, `qa/lewende1160.mjs` (rewritten, 31 checks) ALL OK, `qa/lewende_soak1160.mjs` 9/9. Next: his
   look → his word → a private Pages preview for his phone → the Worker deploy (votes) + the Family message (new link).
+- **16 Oct ~11:30 – 13:20 — "Die Lewende Toring" now lives IN Stapel itself, in every mode: the more Perfeks, the more
+  rooms. LOCAL ONLY (not pushed; the Worker untouched).** The owner (typed): "it needs to be part of the Stapel scenario. So
+  the more perfects you have the more rooms you have. It needs to be so joyful that people do not want to put their phone
+  down". Every block that stands is a floor with windows (1-4 by its shape). Goed opens 1 room, a Perfek 2 and every
+  Perfek in a row one more (max 6 a landing); Skeef floors are boarded up; rooms the new floor can't hold light the dark
+  windows lower down (a boarded floor gets fixed up). People move in at once with a light, a rising note and their face
+  flying up to the people counter; a floor that falls (or the thief takes) lets its people jump with parachutes. Titles by
+  people (Huisie 5 … Sterrestad 250) with fireworks; the record within reach; the crane's tag "Perfek +N" says what this
+  block's Perfek would open. Rules: `js/core/living.js`; pictures and moments: `js/game/living.js` (hooked into GameScene);
+  HUD pill (a match: "🏠N" in the players' pills, Blok vir Blok with both towns, theirs behind curtains); the results
+  card's town, the tribe and album sheets, Instellings (Lewende Toring on/off, default on), the share line. The separate
+  three-ideas scene is hidden (`IDEAS_VOTE.on: false`). Window pictures are painted once a frame from cached sprites (painting
+  inside a physics step made hearts1153 flaky). Tests: game 417, `qa/living1160.mjs` 18/18, `qa/living_soak1160.mjs` OK,
+  smoke / hearts1153 / bvb_bot / wedloop_bot / daily / lesson110 clean. Previews: "1.16 Lewende Toring in Stapel - …" (2
+  pictures + a 52 s recording with sound). Next: his look and word → a private Pages preview for his phone; then the tribe
+  battles in matches (his design word first), tribe prices, the living store in the cloud save.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

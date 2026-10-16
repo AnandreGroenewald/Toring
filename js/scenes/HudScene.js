@@ -16,7 +16,9 @@ const PAUSE_BTN = 96;      // DOM pause button: top-right 96×96 logical px, 6 p
 const EDGE = 6;
 // The HUD lives in its own band above the crane jib (two rows), so it never hides the trolley or hook.
 const ROW1 = 37;           // centre of row 1 (height, weather chip, hearts)
-const ROW2 = 107;          // centre of row 2 (points, combo, next block)
+const ROW2 = 107;
+const LV_W = 186;          // (1.16) the Living Tower's people counter
+const LV_H = 54;          // centre of row 2 (points, combo, next block)
 const ROW3 = 160;          // centre of row 3 (Uitdagersreeks: the weather chip, or whose turn it is), above the jib
 const NEXT_BOX_W = 96;
 const NEXT_BOX_H = 66;
@@ -376,6 +378,7 @@ export class HudScene extends Phaser.Scene {
     this.wmHotNow = false;
     this.wmShakeUntil = 0;
     this.buildDuelHud(add);
+    this.buildLiving(add);
     this.wmAlpha = 0.7;
     this.wmParts = [this.wmBg, this.wmFill, this.wmTick, this.wmGlass, this.wmLbl];
     for (const o of this.wmParts) o.setAlpha(this.wmAlpha);
@@ -440,6 +443,8 @@ export class HudScene extends Phaser.Scene {
       bus.on('hud:hide', (o) => this.hideAll(o)),
       bus.on('hud:duel', (d) => { this.duelState = d; }),
       bus.on('hud:emote', (e) => this.showEmote(e)),
+      bus.on('hud:living', (l) => this.setLiving(l)),
+      bus.on('hud:living-fly', (f) => this.flyLiving(f)),
       // the results card takes over from the big height
       bus.on('game:over', () => this.tweens.add({ targets: this.heightTxt, alpha: 0, duration: 250 })),
     );
@@ -537,6 +542,7 @@ export class HudScene extends Phaser.Scene {
     this.setWeather(this.duelHud?.turns ? null : s.weather);   // (Blok vir Blok: whose turn has row 3)
     this.setVisitor(s.visitor || null);
     this.setWater(s.waterDistM, time);
+    if (this.lv) this.catchUpLiving(time);
     if (this.duelHud) this.updateDuelHud(s, time);
     // the balance meter: how near the loose top is to tipping (its lean), or moving (its wobble)
     const lean = s.lean || 0;
@@ -549,6 +555,158 @@ export class HudScene extends Phaser.Scene {
       this.wmAlpha = wa;
       this.tweens.killTweensOf(this.wmParts);
       this.tweens.add({ targets: this.wmParts, alpha: wa, duration: wa > 0.8 ? 150 : 600 });
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // (1.16) Die Lewende Toring: how many people live in your tower, in the middle of the top row (a match: row 2), the
+  // face of whoever moved in last beside the number, the town's title under it with how far to the next one. Each new
+  // resident's face flies up into it from their window (js/game/living.js), and only then the number counts.
+  // -------------------------------------------------------------------------
+  buildLiving(add) {
+    this.lv = null;
+    const game = this.scene.get('Game');
+    if (!game || !game.living || game.idle) return;
+    // a match: the count rides in the players' pills ("🏠 14"; Blok vir Blok both towns), the top rows are full
+    if (this.duelHud) {
+      this.lv = { duel: true, shown: 0, truth: 0, theirs: 0, changedAt: 0, prog: 0, title: '' };
+      return;
+    }
+    const x = this.W / 2;
+    const y = this.st + ROW1;
+    const bg = add(this.add.image(x, y, panelTexture(this, LV_W, LV_H, NAVY, 0.72, { rim: 0.3 })));
+    const face = add(this.add.image(x - LV_W / 2 + 30, y, this.emojiTexture('🏠', 30)));
+    const num = add(text(this, x - LV_W / 2 + 56, y - 2, '0', 34, { strokeMul: 0.16 }).setOrigin(0, 0.5));
+    const lbl = add(text(this, x - LV_W / 2 + 56, y - 2, S.lvPeople, 18, { color: '#cfe0ff', strokeMul: 0.22, shadow: false }).setOrigin(0, 0.5));
+    const barW = LV_W - 36;
+    add(this.add.image(x - barW / 2, y + LV_H / 2 - 7, 'fx_px').setOrigin(0, 0.5).setDisplaySize(barW, 5).setTint(0x0b1428).setAlpha(0.8));
+    const bar = add(this.add.image(x - barW / 2, y + LV_H / 2 - 7, 'fx_px').setOrigin(0, 0.5).setDisplaySize(1, 5).setTint(0xffd23f));
+    const cap = add(text(this, x, y + LV_H / 2 + 14, '', 19, { color: '#ffe38c', strokeMul: 0.24, shadow: false, emoji: true }).setOrigin(0.5));
+    this.lv = { x, y, bg, face, num, lbl, bar, barW, cap, shown: 0, truth: 0, theirs: 0, changedAt: 0, title: '', prog: 0, faceId: null };
+    this.placeLiving();
+  }
+
+  placeLiving() {
+    const lv = this.lv;
+    if (!lv.duel) lv.lbl.setX(lv.num.x + lv.num.width + 6);
+  }
+
+  /** Where a new resident's face flies to: the counter's face, or (a match) your pill's "🏠". */
+  livingTarget() {
+    const lv = this.lv;
+    if (!lv.duel) return { x: lv.face.x, y: lv.y };
+    const e = this.duelHud?.you?.extra;
+    return e && e.visible ? { x: e.x + 14, y: e.y } : { x: 60, y: this.st + ROW1 };
+  }
+
+  setLiving(l) {
+    const lv = this.lv;
+    if (!lv || !l) return;
+    lv.truth = Math.max(0, l.people | 0);
+    lv.theirs = Math.max(0, l.theirs | 0);
+    lv.changedAt = this.time.now;
+    if (lv.shown > lv.truth) {
+      // people jumped: down at once, the counter shakes and goes red for a moment
+      lv.shown = lv.truth;
+      this.drawLiving();
+      if (l.delta < 0 && !lv.duel) {
+        lv.num.setColor('#ff8a8a');
+        this.time.delayedCall(650, () => { if (lv.num.scene) lv.num.setColor('#ffffff'); });
+        this.tweens.add({ targets: [lv.bg, lv.face, lv.num, lv.lbl], x: '+=7', duration: 45, yoyo: true, repeat: 3 });
+      } else if (l.delta < 0 && this.duelHud?.you) {
+        this.pulse(this.duelHud.you.bg, 1.08);
+      }
+    }
+    lv.prog = Math.max(0, Math.min(1, Number(l.progress) || 0));
+    if (lv.duel) return;
+    const cap = l.title ? `${l.title.emoji} ${l.title.name}` : '';
+    if (cap !== lv.title) {
+      lv.title = cap;
+      lv.cap.setText(cap);
+      if (cap) this.pulse(lv.cap, 1.25);
+    }
+    if (lv.shown === lv.truth) lv.bar.setDisplaySize(Math.max(1, lv.barW * lv.prog), 5);
+  }
+
+  drawLiving() {
+    const lv = this.lv;
+    if (lv.duel) return;   // (the pills redraw from updateDuelHud)
+    lv.num.setText(fmtInt(lv.shown));
+    this.placeLiving();
+    lv.bar.setDisplaySize(Math.max(1, lv.barW * lv.prog), 5);
+  }
+
+  /** "🏠 14" for a player's pill in a match ('' without the Living Tower). */
+  livingExtra(mine) {
+    const lv = this.lv;
+    if (!lv) return '';
+    return `🏠${fmtInt(mine ? lv.shown : lv.theirs)}`;
+  }
+
+  /** A new resident's face flies from their window (screen x, y) into the counter, which counts them on arrival. */
+  flyLiving({ x, y, who, gold, scale } = {}) {
+    const lv = this.lv;
+    if (!lv) return;
+    const key = who ? `res_${who}` : null;
+    if (x == null || y == null || !key || !this.textures.exists(key) || this.reduced) {
+      this.arriveLiving(who, gold);
+      return;
+    }
+    const s0 = Math.max(0.3, Math.min(1.2, Number(scale) || 0.85));
+    const img = this.add.image(x, y, key).setScale(s0).setDepth(20);
+    const ring = gold ? this.add.circle(x, y, 34 * s0, 0xffd23f, 0).setStrokeStyle(4, 0xffd23f).setDepth(19) : null;
+    const to = this.livingTarget();
+    const cx = (x + to.x) / 2 + (x < to.x ? -70 : 70);
+    const cy = Math.min(y, to.y) - 30;
+    const t = { p: 0 };
+    this.tweens.add({
+      targets: t, p: 1, duration: 420, ease: 'Sine.easeIn',
+      onUpdate: () => {
+        const p = t.p;
+        const q = 1 - p;
+        img.x = q * q * x + 2 * q * p * cx + p * p * to.x;
+        img.y = q * q * y + 2 * q * p * cy + p * p * to.y;
+        img.setScale(s0 * (1 - (lv.duel ? 0.65 : 0.45) * p));
+        if (ring) ring.setPosition(img.x, img.y).setRadius(34 * img.scale);
+      },
+      onComplete: () => {
+        img.destroy();
+        if (ring) ring.destroy();
+        this.arriveLiving(who, gold);
+      },
+    });
+  }
+
+  arriveLiving(who, gold) {
+    const lv = this.lv;
+    if (!lv) return;
+    if (lv.shown < lv.truth) lv.shown++;
+    lv.changedAt = this.time.now;
+    this.drawLiving();
+    if (lv.duel) {
+      if (this.duelHud?.you) this.pulse(this.duelHud.you.bg, gold ? 1.1 : 1.04);
+      return;
+    }
+    const key = who ? `res_${who}` : null;
+    if (key && this.textures.exists(key) && lv.faceId !== who) {
+      lv.faceId = who;
+      lv.face.setTexture(key);
+    }
+    lv.num.setScale(1.3);
+    this.tweens.add({ targets: lv.num, scale: 1, duration: 260, ease: 'Back.easeOut' });
+    const fs = 40 / (lv.face.width || 40);
+    lv.face.setScale(fs * 1.3);
+    this.tweens.add({ targets: lv.face, scale: fs, duration: 260, ease: 'Back.easeOut' });
+    this.pulse(lv.bg, gold ? 1.12 : 1.05);
+  }
+
+  /** The count never lags the town for long (a face that never flew, reduced motion). */
+  catchUpLiving(time) {
+    const lv = this.lv;
+    if (lv.shown !== lv.truth && time - lv.changedAt > 1300) {
+      lv.shown = lv.truth;
+      lv.changedAt = time;
+      this.drawLiving();
     }
   }
 
@@ -734,14 +892,16 @@ export class HudScene extends Phaser.Scene {
       // a run of Perfeks shows (5 in a row earn a joker)
       const streak = (k) => (t.streaks?.[k] >= 2 ? `🔥${t.streaks[k]}` : '');
       const active = (k) => t.n > 0 && t.seat === k;
-      this.setPill(hud.you, { name: t.names?.[t.you] || youName, rank: youRank, lives: t.hearts[t.you], max: hud.max, active: active(t.you), extra: streak(t.you) });
-      this.setPill(hud.them, { name: oppName, rank: oppRank, lives: t.hearts[them], max: hud.max, active: active(them), extra: streak(them) });
+      // (1.16) each player's town rides along: "🔥3 🏠14"
+      const both = (k, mine) => [streak(k), this.livingExtra(mine)].filter(Boolean).join(' ');
+      this.setPill(hud.you, { name: t.names?.[t.you] || youName, rank: youRank, lives: t.hearts[t.you], max: hud.max, active: active(t.you), extra: both(t.you, true) });
+      this.setPill(hud.them, { name: oppName, rank: oppRank, lives: t.hearts[them], max: hud.max, active: active(them), extra: both(them, false) });
       this.setTurnPill(t, oppName);
       return;
     }
     // Wedloop: your hearts from the game, theirs from the match (a recording or Robot Rikus: full until it fell)
     const d = this.duelState;
-    this.setPill(hud.you, { name: youName, rank: youRank, lives: s.lives, max: hud.max });
+    this.setPill(hud.you, { name: youName, rank: youRank, lives: s.lives, max: hud.max, extra: this.livingExtra(true) });
     this.setPill(hud.them, { name: d?.name || game?.duel?.name || S.duelSomeone, rank: oppRank, lives: d && Number.isInteger(d.lives) ? Math.min(d.lives, hud.max) : null, max: hud.max });
     if (d) this.updateRaceTrack(d, time);
   }
@@ -1157,7 +1317,8 @@ export class HudScene extends Phaser.Scene {
     this.tweens.add({ targets: this.bannerEmoji, scale: 1, angle: 0, duration: 520, ease: 'Back.easeOut', easeParams: [2.6] });
     this.bannerTween = this.tweens.add({ targets: c, alpha: 1, scale: 1, duration: 300, ease: 'Back.easeOut' });
     // a visitor's (or a stage's) banner fades where it is; weather flies into its chip
-    const visitor = b.kind === 'visitor' || b.kind === 'stage';
+    // ((1.16) the Living Tower's titles too: they fade where they are)
+    const visitor = b.kind === 'visitor' || b.kind === 'stage' || b.kind === 'living';
     this.bannerKind = b.kind === 'visitor' ? 'visitor' : b.kind === 'stage' ? 'stage' : 'weather';
     this.bannerTimer = this.time.delayedCall(Math.max(readMs(`${b.title || ''} ${b.subtitle || ''}`, BANNER_HOLD_MS), b.ms || 0) + 300, () => {
       this.bannerTimer = null;

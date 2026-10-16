@@ -15,7 +15,7 @@ import { fmtM, fmtMShort } from '../core/format.js';
 import { createSequence } from '../core/sequence.js';
 import { audio, haptics } from '../audio.js';
 import { Block, ensureTexture, getGeometry, releaseNamedTextures, FROZEN_TINT, withBlockSkin } from '../game/blocks.js';
-import { windowSlots, castOf, parachute, windowWorld, burnBlock } from '../game/residents.js';
+import { Living } from '../game/living.js';
 import { ZONES, zoneAt } from '../core/zones.js';
 import { createBillboard } from '../game/billboard.js';
 import { createBlockNamer } from '../core/sponsors.js';
@@ -376,19 +376,6 @@ function safely(fn) {
   }
 }
 
-const LEWENDE_SKIN = { vuur: 'lawa', water: 'ys', gras: 'mos' };
-/** (1.16 preview) ?lewende=vuur|water|gras: your tribe in Die Lewende Toring (the other tribe is the one after it). */
-function lewendeFromUrl() {
-  try {
-    const q = new URLSearchParams(window.location.search).get('lewende');
-    if (!q) return null;
-    const mine = ['vuur', 'water', 'gras'].includes(q) ? q : 'vuur';
-    return { mine, theirs: { vuur: 'water', water: 'gras', gras: 'vuur' }[mine] };
-  } catch {
-    return null;
-  }
-}
-
 export class GameScene extends Phaser.Scene {
   constructor() {
     super({
@@ -416,8 +403,8 @@ export class GameScene extends Phaser.Scene {
     const d = data || {};
     this.mode = d.mode === 'daily' || d.mode === 'practice' || d.mode === 'duel' ? d.mode : 'idle';
     this.idle = this.mode === 'idle';
-    // (1.16 preview, ?lewende=vuur|water|gras) Die Lewende Toring: people live in the blocks (see lewendeMoveIn)
-    this.lewende = lewendeFromUrl();
+    // (1.16) Die Lewende Toring: people live in the blocks (js/game/living.js); main.js says whether, and whose people
+    this.livingOpts = d.living && typeof d.living === 'object' ? d.living : null;
     this.ambQ = -1;
     this.seed = String(d.seed ?? `idle-${Math.floor(Math.random() * 1e9)}`);
     this.dayNumber = Number.isFinite(d.dayNumber) ? d.dayNumber : null;
@@ -603,6 +590,25 @@ export class GameScene extends Phaser.Scene {
     this.water = new Water(this, { width: GAME_W });
     this.crane = new Crane(this, { top: this.st });
     this.effects = new Effects(this, { reducedMotion: this.reducedMotion });
+    // (1.16) Die Lewende Toring: people in the tower's floors (main.js passes the player's tribe and record; in Blok vir Blok
+    // one tower holds two towns, yours and the other player's behind their curtains)
+    this.living = null;
+    const lo = this.livingOpts;
+    if (lo) {
+      safely(() => {
+        this.living = new Living(this, {
+          tribe: lo.tribe, seed: this.seed, quiet: this.idle, best: lo.best, known: lo.known, firstTown: lo.firstTown, reducedMotion: this.reducedMotion,
+          // Blok vir Blok: one tower, two towns: a floor is yours when it was your turn's block
+          ownerOf: this.turns ? () => !!this.turns.cur?.mine : null,
+        });
+        if (lo.intro && !this.idle) {
+          this.living.intro = () => {
+            bus.emit('hud:toast', { text: S.lvIntro, color: '#ffe38c' });
+            if (typeof lo.onIntro === 'function') lo.onIntro();
+          };
+        }
+      });
+    }
     this.weather = this.idle ? calmWeather() : this.buildWeather();
     this.visitors = this.buildVisitors();
     if (this.forceVisitor) this.visitors.force(this.forceVisitor);
@@ -857,6 +863,8 @@ export class GameScene extends Phaser.Scene {
     safely(() => this.water.destroy());
     safely(() => this.effects.destroy());
     safely(() => this.island.destroy());
+    if (this.living) safely(() => this.living.destroy());
+    this.living = null;
     if (this.billboard) safely(() => this.billboard.destroy());
     for (const b of this.active) safely(() => b.destroy());
     for (const b of this.tower) safely(() => b.destroy());
@@ -1031,8 +1039,6 @@ export class GameScene extends Phaser.Scene {
    * blocks, or the friend's skin from their card ('' from a 1.14 game or server: plain). Outside Blok vir Blok, your own.
    */
   withTurnSkin(fn) {
-    // (1.16 preview) Die Lewende Toring: each tribe builds in its own material (Vuur in lava, Water in ice, Gras in stone)
-    if (this.lewende) return withBlockSkin(LEWENDE_SKIN[this.i % 2 === 0 ? this.lewende.mine : this.lewende.theirs], fn);
     const c = this.turns?.cur;
     // (1.15.3) Gladde blok: this turn's block is ice, whoever's it is
     if (c && this.turns.overrides[c.n - 1]?.ice) return withBlockSkin('ys', fn);
@@ -1326,6 +1332,7 @@ export class GameScene extends Phaser.Scene {
     if (this.progressDue && this.time.now - this.progressAt >= PROGRESS_EVERY_MS) this.emitProgress();
     this.updateGhostAndAutoplay();
     this.updateWobble(dtS);
+    if (this.living) this.living.update(this.now);
     this.emitHud();
     if (this.duel && !this.turns && !this.over) this.emitDuel();
     this.writeRegistry();
@@ -1862,6 +1869,8 @@ export class GameScene extends Phaser.Scene {
       if (rr && !b.rating) {
         b.rating = rr;
         b.pendingRate = false;
+        // (1.16) a floor the report rated: its rooms open as they would have here
+        if (this.living) safely(() => this.living.rated(b, rr, rr === 'P' ? Math.max(1, this.combo) : 0));
       }
       if (b.rating && (this.grid[i] === PENDING || this.grid[i] === undefined)) this.grid[i] = b.rating;
       if (f === 1 && b.state !== 'frozen') this.freezeBlock(b, true);
@@ -1895,6 +1904,7 @@ export class GameScene extends Phaser.Scene {
     b.waitTimer = null;
     b.advanced = true;
     b.lostMarked = true;
+    if (this.living) this.living.lost(b);
     b.state = 'lost';
     if (!b.rating) b.rating = 'X';
     b.destroy();
@@ -1916,6 +1926,7 @@ export class GameScene extends Phaser.Scene {
       this.tower.push(b);
       this.landedCount++;
     }
+    if (this.living) safely(() => this.living.landed(b));
     this.dynDirty = true;
   }
 
@@ -1941,6 +1952,7 @@ export class GameScene extends Phaser.Scene {
     this.tower.push(b);
     this.active.push(b);
     this.gridBlocks[i] = b;
+    if (this.living) safely(() => this.living.landed(b));   // (1.16) its floor again (whoever still lives there)
     this.dynDirty = true;
     return b;
   }
@@ -2161,7 +2173,7 @@ export class GameScene extends Phaser.Scene {
     this.lastLandAt = this.now;
     f.quietSteps = 0;
     this.tower.push(f);
-    if (this.lewende) this.lewendeMoveIn(f);
+    if (this.living) this.living.landed(f);
     this.dynDirty = true;
     this.landedCount++;
     this.advance(f);
@@ -2327,6 +2339,7 @@ export class GameScene extends Phaser.Scene {
     if (this.idle) {
       this.combo = r === 'P' ? this.combo + 1 : 0;
       this.effects.rating(block, r, this.combo);
+      if (this.living) this.living.rated(block, r, this.combo);
       return;
     }
     this.grid[block.index] = r;
@@ -2348,6 +2361,7 @@ export class GameScene extends Phaser.Scene {
       this.combo = 0;
     }
     this.score += pts;
+    if (this.living) this.living.rated(block, r, this.combo);
     this.visitorRated(block, r);
     bus.emit('game:rated', { rating: r, combo: this.combo });   // (the lesson, main.js)
 
@@ -2407,6 +2421,7 @@ export class GameScene extends Phaser.Scene {
   markLost(block) {
     if (block.lostMarked) return;   // never lose the same block twice
     block.lostMarked = true;
+    if (this.living) this.living.lost(block);
     const wasFalling = block.state === 'falling';
     if (this.falling === block) {
       this.falling = null;
@@ -2799,6 +2814,7 @@ export class GameScene extends Phaser.Scene {
       if (k >= 0) this.tower.splice(k, 1);
       const a = this.active.indexOf(b);
       if (a >= 0) this.active.splice(a, 1);
+      if (this.living) this.living.lost(b);
       b.state = 'stolen';
       b.destroy();
     }
@@ -2817,6 +2833,7 @@ export class GameScene extends Phaser.Scene {
   rateQuietly(b, r) {
     b.rating = r;
     b.pendingRate = false;
+    if (this.living) this.living.rated(b, r, 0);
     if (this.idle || this.over || b.gift) return;
     this.grid[b.index] = r;
     this.score += SCORING.base;
@@ -3022,6 +3039,7 @@ export class GameScene extends Phaser.Scene {
       const b = fz[this.hideIdx];
       if (b.top <= viewBottom) break;
       if (b.image && b.image.visible) b.image.setVisible(false);
+      if (b.winImage && b.winImage.visible) b.winImage.setVisible(false);
       this.hideIdx++;
     }
   }
@@ -3828,6 +3846,7 @@ export class GameScene extends Phaser.Scene {
     this.effects.danger(false);
     bus.emit('hud:hint', { text: null });
     const result = this.buildResult(reason);
+    if (this.living) result.living = this.living.summary();
     this.result = result;
     // the tower ended by itself (hearts, flood, quit): the match hears it before the result is built
     if (this.duel && reason !== 'won' && reason !== 'lost') bus.emit('duel:over', { reason, t: this.now });
@@ -3884,7 +3903,11 @@ export class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     this.revealing = true;
     cam.setRotation(0);
-    for (const b of this.frozen) if (b.image && !b.destroyed) b.image.setVisible(true);
+    for (const b of this.frozen) {
+      if (b.image && !b.destroyed) b.image.setVisible(true);
+      if (b.winImage && !b.destroyed) b.winImage.setVisible(true);
+    }
+    if (this.living) safely(() => this.living.twinkle());
     const bestY = LAYOUT.baseTopY - this.maxHeightM * PX_PER_M;
     const top = Math.min(this.towerTopY, bestY) - 160;
     const bottom = LAYOUT.baseTopY + 200;
@@ -3931,8 +3954,10 @@ export class GameScene extends Phaser.Scene {
     if (!this.idle || this.idleResetting) return;
     this.idleResetting = true;
     const imgs = [];
-    for (const b of this.active) if (b.image && b.image.scene) imgs.push(b.image);
-    for (const b of this.frozen) if (b.image && b.image.scene) imgs.push(b.image);
+    for (const b of [...this.active, ...this.frozen]) {
+      if (b.image && b.image.scene) imgs.push(b.image);
+      if (b.winImage && b.winImage.scene) imgs.push(b.winImage);
+    }
     const finish = () => {
       const craneKey = this.crane && this.crane.block && this.crane.block.texture ? this.crane.block.texture.key : null;
       for (const b of this.active) b.destroy();
@@ -3940,6 +3965,7 @@ export class GameScene extends Phaser.Scene {
       this.resetRunState();
       this.seed = `idle-${Math.floor(Math.random() * 1e9)}`;
       this.sequence = createSequence(this.seed);
+      if (this.living) safely(() => this.living.reset(this.seed));
       this.namer = this.makeNamer();
       releaseNamedTextures(this.textures, [craneKey]);   // the crane may still show its block
       this.stepCtx.dynamicBlocks = this.dyn;
@@ -3975,56 +4001,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   // -------------------------------------------------------------------------
-  // (1.16 preview) Die Lewende Toring: residents in the blocks
-  // -------------------------------------------------------------------------
-  /**
-   * People move into a block that landed: one block yours (faces in lit windows), the next the other tribe's (drawn
-   * curtains), in turn, as in Een Toring, Twee Stamme. 1 to all of its windows are lived in.
-   */
-  lewendeMoveIn(f) {
-    const spec = f.spec || {};
-    if (spec.gift || spec.log || spec.foundation || f.special) return;
-    const L = this.lewende;
-    const n = windowSlots(f.geom).length;
-    const mine = (f.index ?? this.tower.length - 1) % 2 === 0;   // the same turn order as the blocks' material
-    const tribe = mine ? L.mine : L.theirs;
-    const cast = castOf(tribe);
-    const h = (((f.index ?? this.tower.length) + 7) * 2654435761) >>> 0;
-    const count = Math.max(Math.min(2, n), Math.min(n, 1 + (h % n)));   // (the owner: "more than one person should be in a block")
-    const order = [...Array(n).keys()].sort((a, b) => ((a * 7919 + h) % 13) - ((b * 7919 + h) % 13));
-    const lived = new Set(order.slice(0, count));
-    f.residents = [];
-    const wins = [];
-    for (let k = 0; k < n; k++) {
-      const who = lived.has(k) ? cast[((f.index ?? 0) + k) % cast.length] : null;
-      if (who) f.residents.push({ who, slot: k });
-      wins.push(mine ? (who ? { look: 'face', who, tribe } : { look: 'room', tribe }) : { look: 'curtain', tribe });
-    }
-    f.lewendeMine = mine;
-    f.lewendeTribe = tribe;
-    f.setWindows(wins);
-  }
-
-  /** Everyone in block `b` jumps out by parachute (a fire mission sets it alight first); returns how many. */
-  lewendeHit(b, { fire = true } = {}) {
-    if (!b || b.destroyed || !b.residents) return 0;
-    const sea = this.water ? this.water.surfaceY : b.bottom + 400;
-    const out = b.residents.splice(0);
-    out.forEach((r, i) => {
-      const p = windowWorld(b, r.slot);
-      parachute(this, p.x, p.y, r.who, { dir: i % 2 ? 1 : -1, seaY: sea, delay: 260 + i * 220 });
-    });
-    const n = windowSlots(b.geom).length;
-    b.setWindows(Array.from({ length: n }, () => (b.lewendeMine ? { look: 'room', tribe: b.lewendeTribe } : { look: 'open', tribe: b.lewendeTribe })));
-    if (fire) {
-      burnBlock(this, b);
-      this.effects.shake(0.006, 260);
-      this.effects.vignette(0xff6a00, 0.3, 700);
-    }
-    return out.length;
-  }
-
-  // -------------------------------------------------------------------------
   // Debug
   // -------------------------------------------------------------------------
   getState() {
@@ -4048,6 +4024,7 @@ export class GameScene extends Phaser.Scene {
       visitor: this.visitorState(),
       visitors: this.visitors ? this.visitors.log() : [],
       gifts: this.gifts.length,
+      living: this.living ? this.living.state() : null,
       turns: this.turns ? {
         n: this.turns.cur?.n ?? 0, seat: this.turns.cur?.seat ?? null, mine: !!this.turns.cur?.mine,
         dropped: !!this.turns.cur?.dropped, ended: !!this.turns.cur?.ended, hearts: [...this.turnsHud().hearts], hold: this.turnHold,

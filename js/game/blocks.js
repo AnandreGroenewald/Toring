@@ -2442,7 +2442,8 @@ export class Block {
     if (this.winImage) {
       this.winImage.setPosition(x, y);
       this.winImage.rotation = a;
-      if (this.winImage.scaleX !== sx || this.winImage.scaleY !== sy) this.winImage.setScale(sx, sy);
+      const r = this.winRes || 1;
+      if (this.winImage.scaleX !== sx / r || this.winImage.scaleY !== sy / r) this.winImage.setScale(sx / r, sy / r);
     }
   }
 
@@ -2452,6 +2453,7 @@ export class Block {
    */
   setWindows(wins) {
     if (this.destroyed) return;
+    this.winRes = 1;
     this.wins = wins && wins.length ? wins : null;
     if (!this.wins) {
       if (this.winImage) this.winImage.destroy();
@@ -2470,6 +2472,31 @@ export class Block {
     this.winImage.setScale(this.image.scaleX, this.image.scaleY);
     const wins2 = this.wins;
     whenPortraits(() => { if (!this.destroyed && this.wins === wins2) this.setWindows(wins2); });
+  }
+
+  /**
+   * (1.16, Die Lewende Toring in the game) the block's own windows picture (js/game/living.js paints it, `res` times
+   * sharper than the block): shown over the block and moving with it; null takes it away.
+   */
+  setWindowTexture(key, res = 1) {
+    if (this.destroyed) return;
+    this.wins = null;
+    this.winRes = res;
+    if (!key) {
+      if (this.winImage) this.winImage.destroy();
+      this.winImage = null;
+      return;
+    }
+    if (!this.winImage) {
+      this.winImage = this.scene.add.image(this.image.x, this.image.y, key)
+        .setOrigin(this.geom.originX, this.geom.originY)
+        .setDepth(DEPTH.tower + 0.5);
+    } else if (this.winImage.texture.key !== key) {
+      this.winImage.setTexture(key);
+    }
+    this.winImage.rotation = this.image.rotation;
+    this.winImage.setScale(this.image.scaleX / res, this.image.scaleY / res);
+    this.winImage.setVisible(this.image.visible);
   }
 
   /** Tight axis-aligned bounds from the hull vertices (Matter's own bounds include a velocity sweep). */

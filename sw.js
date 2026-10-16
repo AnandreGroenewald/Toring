@@ -57,6 +57,8 @@ const PRECACHE = [
   'js/game/blocks.js',
   'js/game/residents.js',
   'js/game/floors.js',
+  'js/game/living.js',
+  'js/core/living.js',
   'js/scenes/LewendeScene.js',
   'js/ui/lewendeUi.js',
   'js/game/weather.js',

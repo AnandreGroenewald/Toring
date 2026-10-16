@@ -77,11 +77,11 @@ test('displayStreak is 0 once a day is missed', () => {
 test('settings defaults and updates persist', () => {
   const be = memoryBackend();
   const store = createStore(be, { now });
-  assert.deepEqual(store.getSettings(), { sound: true, vibration: true, reducedMotion: false, highContrast: false });
-  assert.deepEqual(store.setSettings({ sound: false }), { sound: false, vibration: true, reducedMotion: false, highContrast: false });
+  assert.deepEqual(store.getSettings(), { sound: true, vibration: true, reducedMotion: false, highContrast: false, living: true });
+  assert.deepEqual(store.setSettings({ sound: false }), { sound: false, vibration: true, reducedMotion: false, highContrast: false, living: true });
   store.setSettings({ vibration: 0, bogus: 1 });
   const again = createStore(be, { now });
-  assert.deepEqual(again.getSettings(), { sound: false, vibration: false, reducedMotion: false, highContrast: false });
+  assert.deepEqual(again.getSettings(), { sound: false, vibration: false, reducedMotion: false, highContrast: false, living: true });
   assert.ok(JSON.parse(be.getItem(STORAGE_KEY)).settings);
   // Methods work unbound too (e.g. passed around as callbacks).
   const { setSettings } = again;
@@ -404,7 +404,7 @@ test('corrupt or hostile stored data falls back safely', () => {
     stats: { played: 2, streak: 4, maxStreak: 1, bestScore: 'x', lastDateKey: '2026-10-05' },
   }));
   const s = createStore(be, { now });
-  assert.deepEqual(s.getSettings(), { sound: true, vibration: false, reducedMotion: false, highContrast: false });
+  assert.deepEqual(s.getSettings(), { sound: true, vibration: false, reducedMotion: false, highContrast: false, living: true });
   assert.equal(s.getDaily('not-a-date'), null);
   assert.equal(s.getDaily('2026-10-06'), null);
   const r = s.getDaily('2026-10-05').result;
