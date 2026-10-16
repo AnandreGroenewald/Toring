@@ -167,7 +167,8 @@ function beam(a, b, size, material) {
   return o;
 }
 
-/** A counterweight trebuchet throwing towards -z, cocked (`arm` radians: the long end's angle below the horizontal). */
+/** A counterweight trebuchet throwing towards -z. `arm`: the arm's turn (0.85 cocked: the long end low at the back, the
+ * counterweight up at the front; about -2 thrown: the long end up and forward). userData: { pivot, cw, ropes, stone, axleY }. */
 export function trebuchet(mats, team, { arm = 0.85, fired = false } = {}) {
   const g = new THREE.Group();
   const T = mats.timber;
@@ -193,7 +194,7 @@ export function trebuchet(mats, team, { arm = 0.85, fired = false } = {}) {
   // the arm: long end to the back (+z) when cocked, the counterweight raised at the front
   const pivot = new THREE.Group();
   pivot.position.y = axleY;
-  pivot.rotation.x = -arm;
+  pivot.rotation.x = arm;
   g.add(pivot);
   const long = 8.4;
   const short = 2.4;
@@ -206,7 +207,7 @@ export function trebuchet(mats, team, { arm = 0.85, fired = false } = {}) {
   // the counterweight box hangs straight down from the short end
   const cw = new THREE.Group();
   cw.position.set(0, 0, -short);
-  cw.rotation.x = arm;
+  cw.rotation.x = -arm;
   const box = stoneBox(1.9, 1.7, 1.7, T);
   box.position.set(0, -2.4, 0);
   cw.add(box);
@@ -214,17 +215,17 @@ export function trebuchet(mats, team, { arm = 0.85, fired = false } = {}) {
   for (const s of [-1, 1]) cw.add(beam(new THREE.Vector3(s * 0.8, 0, 0), new THREE.Vector3(s * 0.8, -0.75, 0), 0.12, mats.iron));
   pivot.add(cw);
   // the sling: two ropes from the long end to a pouch with the stone, lying in the trough behind (fired: hanging empty)
-  const tip = new THREE.Vector3(0, 0, long).applyAxisAngle(new THREE.Vector3(1, 0, 0), -arm).add(new THREE.Vector3(0, axleY, 0));
+  const tip = new THREE.Vector3(0, 0, long).applyAxisAngle(new THREE.Vector3(1, 0, 0), arm).add(new THREE.Vector3(0, axleY, 0));
   if (fired) {
     for (const sx of [-0.12, 0.12]) g.add(beam(tip.clone().add(new THREE.Vector3(sx, 0, 0)), tip.clone().add(new THREE.Vector3(sx * 0.4, -2.6, 0.5)), 0.035, mats.rope));
     const trough = stoneBox(0.9, 0.2, 3.2, T);
     trough.position.set(0, 0.45, 5.2);
     g.add(trough);
-    g.userData = { pivot, axleY };
+    g.userData = { pivot, cw, ropes: [], axleY, long, short };
     return g;
   }
   const pouch = new THREE.Vector3(0, 0.9, tip.z + 1.6);
-  for (const s of [-0.12, 0.12]) g.add(beam(tip.clone().add(new THREE.Vector3(s, 0, 0)), pouch.clone().add(new THREE.Vector3(s, 0.2, 0)), 0.035, mats.rope));
+  const ropes = [-0.12, 0.12].map((s) => { const r = beam(tip.clone().add(new THREE.Vector3(s, 0, 0)), pouch.clone().add(new THREE.Vector3(s, 0.2, 0)), 0.035, mats.rope); g.add(r); return r; });
   const stone = shot(0.36);
   stone.position.copy(pouch).add(new THREE.Vector3(0, 0.35, 0));
   g.add(stone);
@@ -235,7 +236,7 @@ export function trebuchet(mats, team, { arm = 0.85, fired = false } = {}) {
   flag.position.set(1.95, 2.3, -3.4);
   const pole = beam(new THREE.Vector3(1.6, 0.5, -3.4), new THREE.Vector3(1.6, 2.8, -3.4), 0.06, T);
   g.add(flag, pole);
-  g.userData = { pivot, stone, axleY };
+  g.userData = { pivot, cw, ropes, stone, axleY, long, short };
   return g;
 }
 

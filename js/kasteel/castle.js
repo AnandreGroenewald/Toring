@@ -245,6 +245,8 @@ export function towerFromDaily(layout, mats, { S = 0.55, team = 'red', rand = Ma
     m.rotation.z = b.rot || 0;
     m.castShadow = m.receiveShadow = true;
     m.userData.block = b;
+    m.userData.D = D;
+    m.userData.S = S;
     group.add(m);
     if (b.y * S + H >= top) { top = b.y * S + H; topB = { x: b.x * S, W, D }; }
   }
@@ -253,6 +255,7 @@ export function towerFromDaily(layout, mats, { S = 0.55, team = 'red', rand = Ma
     const mer = (x, z) => {
       const m = stoneBox(0.48, 0.72, 0.42, mats.granite);
       m.position.set(x, top, z);
+      m.userData.merlon = [0.48, 0.72, 0.42];
       group.add(m);
     };
     const nx = Math.max(2, Math.round(topB.W / 0.95));
@@ -287,6 +290,7 @@ function wallRun(a, b, mats, { H = 7.2, T = 2.6, gap = 0 } = {}) {
     const w = x1 - x0;
     const m = stoneBox(w, H, T, mats.wall);
     m.position.set((x0 + x1) / 2, 0, 0);
+    m.userData.wall = [w, H, T];
     group.add(m);
     // battlements on the outer edge (+z of the run faces outwards when the castle is walked round anticlockwise)
     for (let x = x0 + 0.5; x < x1 - 0.3; x += 1.1) {
@@ -307,6 +311,7 @@ function gatehouse(mats, team) {
   for (const s of [-1, 1]) {
     const jamb = stoneBox(2.2, 10.2, 3.6, mats.granite);
     jamb.position.set(s * 3.6, 0, 0);
+    jamb.userData.wall = [2.2, 10.2, 3.6];
     group.add(jamb);
     for (let k = 0; k < 2; k++) {
       const mer = stoneBox(0.6, 0.9, 0.5, mats.granite);
@@ -319,29 +324,34 @@ function gatehouse(mats, team) {
   }
   const lintel = stoneBox(9.4, 2.4, 3.6, mats.granite);
   lintel.position.set(0, 7.8, 0);
+  lintel.userData.wall = [9.4, 2.4, 3.6];
   group.add(lintel);
   // the doors: timber with iron bands and studs
   for (const s of [-1, 1]) {
     const door = stoneBox(2.5, 7.4, 0.32, mats.timber);
     door.position.set(s * 1.27, 0.05, 0.9);
+    door.userData.door = [2.5, 7.4, 0.32];
     group.add(door);
     for (const y of [1.2, 3.6, 6.0]) {
       const band = stoneBox(2.4, 0.18, 0.06, mats.iron);
-      band.position.set(s * 1.27, y, 1.08);
-      group.add(band);
+      band.position.set(0, y - 0.05, 0.18);
+      door.add(band);
     }
   }
   // the portcullis, half raised
+  const portcullis = new THREE.Group();
   for (let i = 0; i < 6; i++) {
     const bar = stoneBox(0.12, 3.2, 0.12, mats.iron);
     bar.position.set(-2.3 + i * 0.92, 5.6, 1.45);
-    group.add(bar);
+    portcullis.add(bar);
   }
   for (let j = 0; j < 3; j++) {
     const bar = stoneBox(5, 0.12, 0.12, mats.iron);
     bar.position.set(0, 5.9 + j * 1.1, 1.45);
-    group.add(bar);
+    portcullis.add(bar);
   }
+  group.add(portcullis);
+  group.userData.portcullis = portcullis;
   return group;
 }
 
@@ -398,6 +408,6 @@ export function buildCastle({ at = new THREE.Vector3(), days, team = 'red', mats
   }
   // where defenders stand: along the front wall's walk, on the gatehouse, on the tower tops
   const spots = { wall: [], towers: towers.map((t) => new THREE.Vector3(t.pos.x, t.top, t.pos.z + 0.6)) };
-  for (let x = -half + 3; x <= half - 3; x += 2.4) if (Math.abs(x) > 5.4) spots.wall.push(new THREE.Vector3(x, 7.2, half - 0.35));
+  for (let x = -half + 3; x <= half - 3; x += 3.6) if (Math.abs(x) > 5.4) spots.wall.push(new THREE.Vector3(x, 7.2, half - 0.35));
   return { group, towers, keep: towers[0], walls, gate, flags, torches, spots };
 }

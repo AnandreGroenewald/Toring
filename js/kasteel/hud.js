@@ -49,3 +49,101 @@ export function siegeHud(root, s) {
       ${card('swaard', 'Swaard', s.army.swaard)}${card('spies', 'Spies', s.army.spies)}${card('boog', 'Boog', s.army.boog)}${card('ridder', 'Ridder', s.army.ridder)}${card('ram', 'Stormram', s.army.ram)}${card('treb', 'Trebuchet', 'MIK', true)}
     </div>`;
 }
+
+// ------------------------------------------------------------------------------------------- the playable siege
+/** The scout screen with a working "VAL AAN" (attack). */
+export function scoutScreen(root, s, onGo) {
+  scoutHud(root, s);
+  root.querySelector('.kh-go').addEventListener('click', onGo, { once: true });
+}
+
+const CARDS = [['swaard', 'Swaard'], ['spies', 'Spies'], ['boog', 'Boog'], ['ridder', 'Ridder'], ['ram', 'Stormram'], ['treb', 'Trebuchet']];
+
+/**
+ * The siege's screen. `on`: { card(k), goDown(), goUp(), back(), again(), done() }. Returns setters for the clock, stars,
+ * damage, cards, a toast, the deploy hint, the trebuchet's sight (wind, the rangefinder, the power) and the end card.
+ */
+export function createSiegeHud(root, { name, wind }, on) {
+  root.innerHTML = `
+    <div class="kh-top">
+      <div class="kh-clock"><b>3:00</b></div>
+      <div class="kh-stars">${[0, 1, 2].map(() => I.star(false)).join('')}</div>
+      <div class="kh-dmg"><span>${name}</span><i class="kh-bar"><i style="width:0%"></i></i><b>0%</b></div>
+    </div>
+    <div class="kh-toast"></div>
+    <div class="kh-hint"></div>
+    <div class="kh-scope kh-aim" hidden>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+        <defs><mask id="kh-hole2"><rect x="-200" y="-300" width="500" height="700" fill="#fff"/><circle cx="50" cy="50" r="45" fill="#000"/></mask></defs>
+        <rect x="-200" y="-300" width="500" height="700" fill="#07050d" mask="url(#kh-hole2)"/>
+        <circle cx="50" cy="50" r="45" fill="none" stroke="#000" stroke-width="1.4"/>
+        <g stroke="#120d08" stroke-width=".34"><line x1="5" y1="50" x2="46" y2="50"/><line x1="54" y1="50" x2="95" y2="50"/><line x1="50" y1="5" x2="50" y2="46"/><line x1="50" y1="54" x2="50" y2="95"/></g>
+        <g fill="#120d08">${[-5, -4, -3, -2, -1, 1, 2, 3, 4, 5].map((k) => `<circle cx="${50 + k * 4}" cy="50" r=".5"/>`).join('')}</g>
+        <circle cx="50" cy="50" r="1.6" fill="none" stroke="#e63946" stroke-width=".35"/>
+      </svg>
+      <button type="button" class="kh-back" aria-label="Terug">✕</button>
+      <div class="kh-wind"><svg viewBox="0 0 24 24" style="transform:rotate(${wind < 0 ? 0 : 180}deg)"><path d="M21 12H6m5-6-6 6 6 6" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><b>${Math.abs(wind).toFixed(1)}</b><small>m/s · 1 m/s ≈ 1 kol</small></div>
+      <div class="kh-range"><small>AFSTAND</small><b>—</b></div>
+      <div class="kh-power"><span>KRAG</span><div class="kh-meter"><i class="kh-fill"></i><i class="kh-mark"></i><i class="kh-needle"></i></div><div class="kh-scale"><small>90 m</small><b class="kh-now">—</b><small>210 m</small></div></div>
+      <button type="button" class="kh-gooi">GOOI</button>
+      <p class="kh-aimhint">Sleep om te mik · hou GOOI om die arm te trek · los by die regte afstand</p>
+    </div>
+    <div class="kh-army">${CARDS.map(([k, label]) => `<button type="button" class="kh-card" data-k="${k}">${I[k]}<span>${label}</span><i></i></button>`).join('')}</div>
+    <div class="kh-end" hidden></div>`;
+  const $ = (s) => root.querySelector(s);
+  const cards = [...root.querySelectorAll('.kh-card')];
+  for (const c of cards) c.addEventListener('click', () => on.card(c.dataset.k));
+  $('.kh-back').addEventListener('click', () => on.back());
+  const gooi = $('.kh-gooi');
+  gooi.addEventListener('pointerdown', (e) => { e.preventDefault(); gooi.setPointerCapture?.(e.pointerId); on.goDown(); });
+  gooi.addEventListener('pointerup', (e) => { e.preventDefault(); on.goUp(); });
+  gooi.addEventListener('pointercancel', () => on.goUp());
+  let toastT = 0;
+  const lo = 90;
+  const hi = 210;
+  const pct = (m) => `${Math.max(0, Math.min(100, ((m - lo) / (hi - lo)) * 100))}%`;
+  return {
+    clock(sec) { const s = Math.max(0, Math.ceil(sec)); $('.kh-clock b').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; $('.kh-clock').classList.toggle('is-low', s <= 30); },
+    stars(n) { $('.kh-stars').innerHTML = [0, 1, 2].map((i) => I.star(i < n)).join(''); },
+    damage(p) { $('.kh-dmg .kh-bar > i').style.width = `${p}%`; $('.kh-dmg b').textContent = `${Math.round(p)}%`; },
+    cards(counts, sel, ready) {
+      for (const c of cards) {
+        const k = c.dataset.k;
+        const n = counts[k];
+        c.querySelector('i').textContent = k === 'treb' ? (ready ? `MIK · ${n}` : 'LAAI…') : `${n}`;
+        c.classList.toggle('is-on', sel === k);
+        c.classList.toggle('is-out', !n || (k === 'treb' && !ready));
+      }
+    },
+    toast(text) {
+      const t = $('.kh-toast');
+      t.innerHTML = `<span>${text}</span>`;
+      t.classList.remove('on');
+      void t.offsetWidth;
+      t.classList.add('on');
+      clearTimeout(toastT);
+      toastT = setTimeout(() => t.classList.remove('on'), 2300);
+    },
+    hint(text) { const h = $('.kh-hint'); h.textContent = text || ''; h.classList.toggle('on', !!text); },
+    aim(on) { $('.kh-aim').hidden = !on; root.classList.toggle('is-aim', !!on); },
+    range(m) { $('.kh-range b').textContent = m ? `${Math.round(m)} m` : '—'; $('.kh-mark').style.left = m ? pct(m) : '-10%'; },
+    power(m, live) {
+      $('.kh-needle').style.left = m ? pct(m) : '0%';
+      $('.kh-fill').style.width = m ? pct(m) : '0%';
+      $('.kh-now').textContent = m ? `${Math.round(m)} m` : '—';
+      gooi.classList.toggle('is-down', !!live);
+    },
+    end(r) {
+      const e = $('.kh-end');
+      e.innerHTML = `<div class="kh-endcard${r.stars ? ' is-won' : ''}">
+        <small>DIE KASTEELREEKS</small><b>${r.stars ? 'OORWINNING!' : 'TERUGGESLAAN'}</b>
+        <div class="kh-endstars">${[0, 1, 2].map((i) => I.star(i < r.stars)).join('')}</div>
+        <p>${r.destroyed}% van ${r.name} plat · ${r.lost} soldate verloor</p>
+        <div class="kh-loot">${I.coin}<b>+${r.coins}</b>${I.trophy}<b>${r.trophies >= 0 ? '+' : ''}${r.trophies}</b></div>
+        <div class="kh-endbtns"><button type="button" class="kh-again">WEER</button><button type="button" class="kh-done">KLAAR</button></div></div>`;
+      e.hidden = false;
+      e.querySelector('.kh-again').addEventListener('click', () => on.again());
+      e.querySelector('.kh-done').addEventListener('click', () => on.done());
+    },
+  };
+}

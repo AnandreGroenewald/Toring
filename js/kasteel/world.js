@@ -115,37 +115,65 @@ export function makeSky(sunDir) {
 }
 
 // ---------------------------------------------------------------------------------------------- land and life
+/** Fine grain for the grass (a tiling noise, multiplied over the colours): close up the ground has texture. */
+function grainTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const img = g.createImageData(256, 256);
+  const r = rng(77);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = 200 + r() * 55;
+    img.data[i] = v; img.data[i + 1] = v * 0.98; img.data[i + 2] = v * 0.93; img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  for (let k = 0; k < 500; k++) {
+    g.strokeStyle = r() < 0.5 ? 'rgba(90,60,20,0.18)' : 'rgba(255,240,200,0.14)';
+    g.lineWidth = 1;
+    g.beginPath();
+    const x = r() * 256;
+    const y = r() * 256;
+    g.moveTo(x, y);
+    g.lineTo(x + (r() - 0.5) * 6, y - 4 - r() * 8);
+    g.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(140, 140);
+  t.anisotropy = 8;
+  return t;
+}
+
+/** The ground: soft rolling savanna (smooth, not faceted), its colour from noise, a little green by the river. */
 function makeGround() {
   const size = 900;
-  const seg = 180;
+  const seg = 220;
   const g = new THREE.PlaneGeometry(size, size, seg, seg);
   g.rotateX(-Math.PI / 2);
   g.translate(0, 0, -DIST / 2);
   const pos = g.attributes.position;
-  for (let i = 0; i < pos.count; i++) pos.setY(i, groundHeight(pos.getX(i), pos.getZ(i)));
-  const flat = g.toNonIndexed();
-  flat.computeVertexNormals();
-  // colours by face: dry gold grass, darker patches, red earth near the river, a little green on its banks
-  const p = flat.attributes.position;
-  const col = new Float32Array(p.count * 3);
+  const col = new Float32Array(pos.count * 3);
   const c = new THREE.Color();
   const gA = new THREE.Color('#c39542');
   const gB = new THREE.Color('#a27a31');
   const gC = new THREE.Color('#d9b462');
   const earth = new THREE.Color('#9c5a33');
   const bank = new THREE.Color('#6f7a32');
-  for (let i = 0; i < p.count; i += 3) {
-    const x = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3;
-    const z = (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3;
-    const y = (p.getY(i) + p.getY(i + 1) + p.getY(i + 2)) / 3;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const y = groundHeight(x, z);
+    pos.setY(i, y);
     c.copy(gA).lerp(gB, smooth(fbm(x * 0.018 + 5.3, z * 0.018 + 1.1, 3))).lerp(gC, fbm(x * 0.12, z * 0.12, 2) * 0.45);
     const dr = Math.abs(z - riverZ(x));
     if (dr < 24) c.lerp(bank, smooth(Math.max(0, 1 - dr / 24)) * 0.55);
     if (y < -2.2) c.lerp(earth, 0.6);
-    for (let k = 0; k < 3; k++) col.set([c.r, c.g, c.b], (i + k) * 3);
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
-  flat.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const mesh = new THREE.Mesh(flat, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, map: grainTexture(), roughness: 1 }));
   mesh.receiveShadow = true;
   return mesh;
 }

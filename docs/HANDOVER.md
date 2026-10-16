@@ -1017,6 +1017,22 @@ Later the owner added (decisions are final unless they say otherwise):
   "1.17 Kasteelreeks - 1 hul kasteel / 2 die beleg / 3 deur die visier". Next (after his OK on the look): a playable siege
   (aim the trebuchet, blocks really fall, troops march, archers shoot back) + a video; then the defence planner; then real
   castles from saved Daily layouts (only heights are stored today) and friends' castles on the home server.
+- **17 Oct ~00:15 — Die Kasteelreeks is playable (local, nothing live).** The owner (16 Oct ~23:30, typed): "Make it a little
+  better vissually, and you may proceed, more smoother if I can say it that way ... good night, any issues please let
+  Jarvis know". Built: kasteel.html plays a siege (js/kasteel/siege.js; `?shot=` still draws the style pictures,
+  shots.js): the scout screen → VAL AAN → cards (Swaard, Spies, Boog, Ridder, Stormram) + a tap on the field send
+  troops (they march, the melee break at the gate, archers shoot the wall archers, the ram rolls to the gate); the
+  Trebuchet card opens its sight: drag to aim, the rangefinder gives the pull that lands on the cross, hold GOOI and let
+  go at the white mark, allow 1 dot (1°) per m/s of wind; the camera rides the stone, slow-motion at the end, the hit
+  shakes; real physics (cannon-es) in every Daily Tower block (granite heaviest, timber lightest), falling blocks raise
+  dust and thud, archers on falling tops tumble off. Three stars: the gate open (the ram or a stone), half the castle
+  down, their flag down (the keep's top falls, or 3 of yours hold its foot 4 s); 3:00 on the clock; the end card pays
+  coins and trophies (not yet in the wallet). Smoother: a glow pass + grade (lib/three-addons, MIT), smooth hills with a
+  grass grain, soldiers drawn as instanced joints (crowd.js: ~100 men in ~100 draw calls), pooled dust/chips/arrows
+  (fx.js), a lighter shadow map on phones. Tests: qa/kasteel_siege1170.mjs 8/8 (real taps; 48-55 fps headless); a
+  recorded play-through (qa/kasteel_video1170.mjs) in Previews, "1.17 Kasteelreeks - speel-video" (85 s, with sound).
+  Opponent for now: Robot Rikus with sample towers. Open: the defence planner, castles from saved Daily layouts,
+  friends' castles, the rewards into the wallet, sounds of its own, phone speed.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
