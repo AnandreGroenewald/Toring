@@ -33,6 +33,37 @@ export const DORP = Object.freeze({
   goldCoins: 25,
 });
 
+// (the owner's picks after "Very nice, we are getting there...": "2 and 4") Robot Rikus's town is everyone's first
+// neighbour (a player with no friends yet raids him at once, and he raids back now and then), and landmarks for coins:
+// your neighbours see them, and every landmark brings tourists, people for your town, on your first visit each day.
+export const RIKUS_ID = 'RIKUS';
+export const RIKUS = Object.freeze({
+  start: 40,             // his town at first
+  min: 30,               // he never has fewer than this for long...
+  share: 0.8,            // ...and grows towards this share of your town
+  refillPerHour: 0.2,    // of that goal, an hour
+  gold: 1,               // a golden person, back every day
+  backChance: 0.5,       // after your raid, he raids you back (once, a while later) this often
+  backAfterMs: 90 * 1000,
+});
+/** Landmarks: on land (beside the towers) or in the sea (around the island); price in coins, tourists a day. */
+export const MARKS = Object.freeze([
+  Object.freeze({ id: 'fontein', emoji: '⛲', where: 'land', price: 200, tourists: 2 }),
+  Object.freeze({ id: 'seilboot', emoji: '⛵', where: 'sea', price: 250, tourists: 2 }),
+  Object.freeze({ id: 'mallemeule', emoji: '🎠', where: 'land', price: 350, tourists: 3 }),
+  Object.freeze({ id: 'dolfyn', emoji: '🐬', where: 'sea', price: 400, tourists: 3 }),
+  Object.freeze({ id: 'wiel', emoji: '🎡', where: 'land', price: 600, tourists: 5 }),
+  Object.freeze({ id: 'walvis', emoji: '🐋', where: 'sea', price: 800, tourists: 6 }),
+  Object.freeze({ id: 'kasteel', emoji: '🏰', where: 'land', price: 900, tourists: 7 }),
+  Object.freeze({ id: 'vuurpyl', emoji: '🚀', where: 'land', price: 1500, tourists: 12 }),
+]);
+export const markOf = (id) => MARKS.find((m) => m.id === id) || null;
+/** A town's landmarks as stored: known ids, each once, in the order bought. */
+export const cleanMarks = (list) => (Array.isArray(list) ? [...new Set(list.filter((id) => !!markOf(id)))] : []);
+/** The tourists a day the landmarks bring. */
+export const touristsOf = (marks) => cleanMarks(marks).reduce((s, id) => s + markOf(id).tourists, 0);
+export const isDayKey = (k) => typeof k === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(k);
+
 export const DORP_TRIBES = Object.freeze(['vuur', 'water', 'gras']);
 /** Whose tribe beats whose (the same as the battles in Blok vir Blok). */
 export const DORP_BEATS = Object.freeze({ vuur: 'gras', water: 'vuur', gras: 'water' });

@@ -1259,6 +1259,16 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       return { added: r.added, coins: econ.coins };
     },
 
+    /** (1.16) Coins spent on something the wallet doesn't keep itself (Jou dorp's landmarks): { ok, coins }. */
+    spendCoins(n) {
+      sync();
+      const r = spendCoins(econ, n);
+      if (!r.ok) return { ok: false, coins: econ.coins };
+      econ = r.economy;
+      persistEcon();
+      return { ok: true, coins: econ.coins };
+    },
+
     buyPowerup(id) {
       return apply((e) => buyPowerup(e, id));
     },

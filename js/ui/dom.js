@@ -24,7 +24,7 @@ import { opaqueBox, headOf, accessoryPlace } from '../core/emojifit.js';
 import { audio, haptics } from '../audio.js';
 import { castOf, portraitDataUrl, portraitsReady, CAST } from '../game/residents.js';
 import { titleFor } from '../core/living.js';
-import { DORP, dorpTitle, TRIBE_ICON } from '../core/dorp.js';
+import { DORP, MARKS, dorpTitle, TRIBE_ICON } from '../core/dorp.js';
 
 const GRID_COLS = 10;
 const GRID_ROWS = 5;
@@ -3060,8 +3060,9 @@ export function createUI(bus) {
     const { now, next } = dorpTitle(me.people);
     const prog = next ? (me.people - now.at) / Math.max(1, next.at - now.at) : 1;
     const bure = v.bure || [];
-    // the ranking among the neighbours (the town itself counted)
-    const all = [...bure.map((b) => b.people | 0), me.people | 0].sort((a, b) => b - a);
+    // the ranking among the neighbours (the town itself counted; Robot Rikus doesn't count)
+    const real = bure.filter((b) => !b.bot);
+    const all = [...real.map((b) => b.people | 0), me.people | 0].sort((a, b) => b - a);
     const rank = all.indexOf(me.people | 0) + 1;
     const back = h('button', {
       type: 'button', class: 'dorp-back', 'aria-label': S.back || S.close,
@@ -3070,7 +3071,7 @@ export function createUI(bus) {
     const chip = (emoji, n, max, label, cls = '') => h('span', { class: `dorp-chip ${cls}`.trim(), title: label, 'aria-label': `${label}: ${n}` },
       emo(emoji), h('b', { text: max ? `${n}/${max}` : String(n) }));
     let top;
-    if (mode === 'town') {
+    if (mode === 'town' || mode === 'marks') {
       top = h('div', { class: `dorp-top tribe-${me.tribe || 'vuur'}` },
         back,
         h('div', { class: 'dorp-head' },
@@ -3080,7 +3081,7 @@ export function createUI(bus) {
           next ? h('span', { class: 'dorp-prog' }, h('i', { vars: { '--p': `${Math.round(Math.max(0.04, Math.min(1, prog)) * 100)}%` } })) : null,
           next ? h('span', { class: 'dorp-next', text: S.dorpToNext(next.at - (me.people | 0), S.dorpTitles[next.id]) }) : null),
         h('div', { class: 'dorp-chips' },
-          bure.length ? chip('🏆', `#${rank}`, null, S.dorpRank(rank, bure.length + 1), 'is-rank') : null,
+          real.length ? chip('🏆', `#${rank}`, null, S.dorpRank(rank, real.length + 1), 'is-rank') : null,
           chip('🔥', me.raids | 0, DORP.raidsMax, S.dorpRaids, me.raids > 0 ? 'is-hot' : ''),
           chip('🛡️', me.walls | 0, DORP.wallsMax, S.dorpWalls),
           me.gold ? chip('✨', me.gold, null, S.dorpGold, 'is-gold') : null,
@@ -3101,9 +3102,9 @@ export function createUI(bus) {
       const card = (b, k) => {
         const wraak = !!b.wraak;
         const can = wraak || me.raids > 0;
-        const place = [...all].indexOf(b.people | 0);
-        return h('div', { class: `dorp-card tribe-${b.tribe}${wraak ? ' is-wraak' : ''}` },
-          h('span', { class: 'dorp-card-disc' }, emo(TRIBE_ICON[b.tribe] || '🏠'), place < 3 ? h('i', { class: 'dorp-card-medal', text: RANK_MEDAL[place] }) : null),
+        const place = b.bot ? 99 : all.indexOf(b.people | 0);
+        return h('div', { class: `dorp-card tribe-${b.tribe}${wraak ? ' is-wraak' : ''}${b.bot ? ' is-bot' : ''}` },
+          h('span', { class: 'dorp-card-disc' }, emo(b.bot ? '🤖' : TRIBE_ICON[b.tribe] || '🏠'), place < 3 ? h('i', { class: 'dorp-card-medal', text: RANK_MEDAL[place] }) : null),
           h('b', { class: 'dorp-card-name', text: b.name }),
           h('span', { class: 'dorp-card-n' }, emo('🏠'), h('span', { text: fmtInt(b.people) }), b.walls ? h('span', { class: 'dorp-card-walls', text: ` · 🛡️${b.walls}` }) : null, b.gold ? h('span', { class: 'dorp-card-gold', text: ' · ✨' }) : null),
           h('button', {
@@ -3127,8 +3128,38 @@ export function createUI(bus) {
           h('b', { text: S.dorpBure }),
           h('span', { text: bure.length ? (me.raids > 0 || bure.some((b) => b.wraak) ? S.dorpWho : S.dorpNoRaids) : S.dorpNoBureShort })),
         h('div', { class: 'dorp-cards' }, bure.map(card), invite),
-        !(me.raids > 0) ? button('btn-teal dorp-play', [icon('play'), h('span', { text: S.dorpPlayForRaids })], () => bus.emit('ui:dorp-play')) : null,
+        h('div', { class: 'dorp-row-btns' },
+          !(me.raids > 0) ? button('btn-teal dorp-play', [icon('play'), h('span', { text: S.dorpPlayForRaids })], () => bus.emit('ui:dorp-play')) : null,
+          button('dorp-marks-btn', [emo('🏗️'), h('span', { text: S.dorpMarks })], () => bus.emit('ui:dorp-marks'))),
         v.online === false ? h('p', { class: 'dorp-offline', text: S.dorpOffline }) : null);
+    } else if (mode === 'marks') {
+      const owned = new Set(me.marks || []);
+      const coins = v.coins | 0;
+      const mcard = (m) => {
+        const own = owned.has(m.id);
+        const short = Math.max(0, m.price - coins);
+        return h('div', { class: `dorp-card dorp-mark${own ? ' is-own' : ''}` },
+          h('span', { class: `dorp-mark-pic mark-${m.where}` }, emo(m.emoji)),
+          h('b', { class: 'dorp-card-name', text: S.dorpMarkNames[m.id] }),
+          h('span', { class: 'dorp-card-n', text: S.dorpTourists(m.tourists) }),
+          own ? h('span', { class: 'dorp-card-act act-own' }, h('b', { text: S.dorpOwned }))
+            : h('button', {
+              type: 'button', class: `dorp-card-act act-buy${short ? ' is-short' : ''}`, disabled: !!short,
+              'aria-label': `${S.dorpBuy}: ${S.dorpMarkNames[m.id]}, ${m.price}`,
+              onclick: () => {
+                if (!guard()) return;
+                audio.play('click');
+                bus.emit('ui:dorp-buy', m.id);
+              },
+            }, h('span', { class: 'act-price' }, coinIc(), h('b', { text: fmtInt(m.price) })), short ? h('small', { text: S.dorpNeedCoins(short) }) : h('small', { text: S.dorpBuy })));
+      };
+      bottom = h('div', { class: 'dorp-bottom dorp-marks' },
+        h('div', { class: 'dorp-bure-head' },
+          h('b', null, emo('🏗️'), h('span', { text: ` ${S.dorpMarks}` })),
+          h('span', { class: 'dorp-coins' }, coinIc(), h('b', { text: fmtInt(coins) }))),
+        h('p', { class: 'dorp-marks-sub', text: S.dorpMarksSub }),
+        h('div', { class: 'dorp-cards' }, MARKS.map(mcard)),
+        button('btn-white dorp-back-town', h('span', { text: `‹ ${S.dorpBackTown}` }), () => bus.emit('ui:dorp-marks-close')));
     } else if (mode === 'aim') {
       bottom = h('div', { class: 'dorp-bottom dorp-aim' }, h('p', { class: 'dorp-aim-hint' }, emo('🎯'), h('span', { text: S.dorpAimHint })));
     } else if (mode === 'result') {
@@ -3139,7 +3170,8 @@ export function createUI(bus) {
         h('p', { class: 'dorp-result-line', text: line }),
         r.goldTook ? h('p', { class: 'dorp-jackpot', text: S.dorpGoldTook(r.goldTook, r.goldCoins) }) : null,
         h('div', { class: 'dorp-result-btns' },
-          r.took ? button('btn-wa dorp-tell', [icon('chat'), h('span', { text: S.dorpTell(v.them?.name || '') })], () => bus.emit('ui:dorp-tell'), { nav: false }) : null,
+          v.them?.bot ? button('btn-wa dorp-tell', [icon('chat'), h('span', { text: S.dorpBotInvite })], () => bus.emit('ui:dorp-invite'), { nav: false })
+            : r.took ? button('btn-wa dorp-tell', [icon('chat'), h('span', { text: S.dorpTell(v.them?.name || '') })], () => bus.emit('ui:dorp-tell'), { nav: false }) : null,
           r.raidsLeft > 0 ? button('btn-klei dorp-more', [emo('🔥'), h('span', { text: S.dorpMore(r.raidsLeft) })], () => bus.emit('ui:dorp-home')) : null,
           button('btn-white dorp-done', h('span', { text: S.dorpDone }), () => bus.emit('ui:dorp-home'))));
     } else if (mode === 'newsDone') {

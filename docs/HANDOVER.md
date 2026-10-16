@@ -975,6 +975,12 @@ Later the owner added (decisions are final unless they say otherwise):
   parachute into your windows; "+N MENSE!" under light rays with your celebration; golden people pay 25 coins. "Terwyl jy
   weg was" replays in your town and offers "Wraak op …!". The screen over it shows your rank among your neighbours.
   Tests: game 432, qa dorp1160 12/12, dorpfriend1160 2/2, smoke clean.
+- **17 Oct ~00:30 — Robot Rikus's town and landmarks for coins (local).** The owner picked these two ("let me see how it
+  works first, I need to make sure I carry it over": online waits; when it goes, the towns on his Mac move to the server).
+  Rikus is everyone's first neighbour (a new player raids him at once; he raids back now and then, with a free Wraak; the
+  result nudges "Nooi ’n regte vriend!"). Landmarks (fountain to rocket, 200-1500 coins) stand in your town (the boat
+  sails, the dolphin jumps, the whale spouts), your neighbours see them, and each brings tourists on your first visit of
+  the day. Tests: game 434, qa dorpmarks1160 5/5, dorp1160 12/12, dorpfriend1160 2/2, smoke clean.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

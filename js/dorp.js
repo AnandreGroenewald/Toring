@@ -3,7 +3,7 @@
 // the server has them (each once: `seq`), the day's wall, and the server's last word (town, news, neighbours), and asks
 // the server for everything else. Nothing here throws: without the server the town simply waits.
 
-import { isTownId, isTownKey, newTownId, newTownKey, isRaidId, DORP } from './core/dorp.js';
+import { isTownId, isTownKey, newTownId, newTownKey, isRaidId, isDayKey, markOf, DORP, RIKUS_ID } from './core/dorp.js';
 
 const KEY = 'stapel.v1.dorp';
 const TIMEOUT_MS = 8000;
@@ -92,10 +92,13 @@ export function createDorpClient({ api = '', storage = typeof localStorage !== '
       save();
       return g;
     },
-    /** Sends the reports and fetches the town, its news and the neighbours ({ ok, town, news, bure }). */
-    async sync({ name = null, tribe = null, seen = null } = {}) {
+    /**
+     * Sends the reports and fetches the town, its news and the neighbours ({ ok, town, news, bure, tourists }).
+     * `collect`: today's date key, on a visit to the town (the landmarks' tourists come once a day).
+     */
+    async sync({ name = null, tribe = null, seen = null, collect = null } = {}) {
       load();
-      const r = await call('/dorp/sync', { id: d.id, key: d.key, name, tribe, gains: d.gains, ...(Number.isInteger(seen) ? { seen } : {}) });
+      const r = await call('/dorp/sync', { id: d.id, key: d.key, name, tribe, gains: d.gains, ...(Number.isInteger(seen) ? { seen } : {}), ...(isDayKey(collect) ? { collect } : {}) });
       if (r.ok) {
         on = true;
         took(r);
@@ -105,7 +108,16 @@ export function createDorpClient({ api = '', storage = typeof localStorage !== '
     /** A strooptog on `target` (a Wraak with `wraak`: the raid it avenges; `hit`: the tap's aim, 'P' | 'G' | 'S'). */
     async raid(target, wraak = null, hit = 'G') {
       load();
+      if (target !== RIKUS_ID && !isTownId(target)) return { ok: false, status: 400 };
       const r = await call('/dorp/raid', { id: d.id, key: d.key, target, hit, ...(isRaidId(wraak) ? { wraak } : {}) });
+      if (r.town) took({ town: r.town });
+      return r;
+    },
+    /** A landmark bought (the coins are this phone's own; the caller has taken them). */
+    async buyMark(mark) {
+      load();
+      if (!markOf(mark)) return { ok: false, status: 400 };
+      const r = await call('/dorp/mark', { id: d.id, key: d.key, mark });
       if (r.town) took({ town: r.town });
       return r;
     },

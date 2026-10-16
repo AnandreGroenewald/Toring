@@ -19,6 +19,7 @@ import { getGeometry, ensureTexture } from '../game/blocks.js';
 import { windowSlots, ensureWindows, burnRoom, waterWheel, vinesTo, prepareFx, whenPortraits, castOf, CAST, badgeKey, chuteTexture, portraitsReady } from '../game/residents.js';
 import { createRng } from '../core/rng.js';
 import { createCasting } from '../core/living.js';
+import { markOf, cleanMarks } from '../core/dorp.js';
 
 const PAD = 3;               // the block textures' padding (js/game/blocks.js)
 const GAP = 1150;            // the neighbour's island, this far across the sea
@@ -46,6 +47,9 @@ const SPOTS = [
   { dx: 300, y: 30, s: 0.34, depth: DEPTH.island - 2, back: true },
 ];
 const FLAG = { vuur: 0xff6b2c, water: 0x2f9bff, gras: 0x35c84a };
+// landmarks on land, in the order bought: on the base beside the main tower, then in front of the rocks
+const LAND_SLOTS = [{ dx: -122, y: 0, s: 0.8 }, { dx: 122, y: 0, s: 0.8 }, { dx: -268, y: 26, s: 0.82 }, { dx: 268, y: 26, s: 0.82 }, { dx: -352, y: 34, s: 0.76 }];
+const MARK_SIZE = 128;   // the landmarks' pictures (emoji drawn once, shadowed)
 const TRIBE_EMOJI = { vuur: '🔥', water: '💧', gras: '🌿' };
 const FONT = '"Trebuchet MS", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif';
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
@@ -114,6 +118,7 @@ export class DorpScene extends Phaser.Scene {
     this.isles = {};
     this.rays = null;
     this.side = 'me';
+    this.markParts = [];
   }
 
   create() {
@@ -134,6 +139,7 @@ export class DorpScene extends Phaser.Scene {
     portraitsReady.then?.(() => { if (this.alive) this.repaintAll(); });
     if (this.d.view === 'raid') this.time.delayedCall(450, () => this.playRaid().catch((e) => this.failed(e)));
     else if (this.d.view === 'news') this.time.delayedCall(500, () => this.playNews().catch((e) => this.failed(e)));
+    else if (this.d.tourists > 0) this.time.delayedCall(500, () => this.playTourists(this.d.tourists));
     else this.time.delayedCall(400, () => this.greet());
     this.time.delayedCall(1300, () => this.snapshot());
   }
@@ -269,6 +275,8 @@ export class DorpScene extends Phaser.Scene {
     isle.top = Math.min(...isle.towers.map((t) => t.top));
     this.buildWalls(isle, town.walls | 0);
     this.buildFlag(isle);
+    isle.marks = [];
+    for (const id of cleanMarks(town.marks)) this.addMark(isle, id);
     return isle;
   }
 
@@ -334,7 +342,8 @@ export class DorpScene extends Phaser.Scene {
   /** The tribe's flag on the main tower, waving. */
   buildFlag(isle) {
     const tribe = isle.town.tribe;
-    const key = `dorp_flag_${tribe}`;
+    const bot = !!isle.town.bot;
+    const key = `dorp_flag_${tribe}${bot ? '_bot' : ''}`;
     if (!this.textures.exists(key)) {
       const t = this.textures.createCanvas(key, 96, 104);
       const c = t.getContext();
@@ -349,13 +358,184 @@ export class DorpScene extends Phaser.Scene {
       c.font = `30px ${EMOJI_FONT}`;
       c.textAlign = 'center';
       c.textBaseline = 'middle';
-      c.fillText(TRIBE_EMOJI[tribe], 50, 30);
+      c.fillText(bot ? '🤖' : TRIBE_EMOJI[tribe], 50, 30);
       t.refresh();
     }
     const main = isle.towers[0];
     const flag = this.add.image(main.x - 4, main.top + 2, key).setOrigin(0.07, 1).setScale(0.62).setDepth(DEPTH.tower + 0.5);
     if (!this.reduced) this.tweens.add({ targets: flag, scaleX: 0.56, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     isle.flag = flag;
+  }
+
+  // ------------------------------------------------------------------------------------------------------- landmarks
+  /** An emoji as a picture (drawn once, with a soft shadow under it). */
+  emojiTex(ch) {
+    const key = `dorp_e_${[...ch].map((c) => c.codePointAt(0).toString(16)).join('_')}`;
+    if (this.textures.exists(key)) return key;
+    const t = this.textures.createCanvas(key, MARK_SIZE, MARK_SIZE);
+    const c = t.getContext();
+    c.fillStyle = 'rgba(10,20,40,0.28)';
+    c.beginPath();
+    c.ellipse(MARK_SIZE / 2, MARK_SIZE - 10, MARK_SIZE * 0.34, 7, 0, 0, Math.PI * 2);
+    c.fill();
+    c.font = `${Math.round(MARK_SIZE * 0.78)}px ${EMOJI_FONT}`;
+    c.textAlign = 'center';
+    c.textBaseline = 'alphabetic';
+    c.fillText(ch, MARK_SIZE / 2, MARK_SIZE - 18);
+    t.refresh();
+    return key;
+  }
+
+  /**
+   * Landmark `id` in town `isle`: on land at the next free spot, or in the sea, alive (the boat sails past, the dolphin
+   * jumps, the whale spouts). `drop`: just bought, it lands from the sky like a block.
+   */
+  addMark(isle, id, { drop = false } = {}) {
+    const m = markOf(id);
+    if (!m || isle.marks.some((x) => x.id === id)) return null;
+    const cx = isle.ox + GAME_W / 2;
+    const key = this.emojiTex(m.emoji);
+    let img;
+    if (m.where === 'land') {
+      const n = isle.marks.filter((x) => x.where === 'land').length;
+      const sl = LAND_SLOTS[Math.min(n, LAND_SLOTS.length - 1)];
+      img = this.add.image(cx + sl.dx, sl.y + 6, key).setOrigin(0.5, 1).setScale(sl.s).setDepth(DEPTH.tower + 0.3);
+      if (!this.reduced) this.tweens.add({ targets: img, scaleY: sl.s * 1.03, duration: 1300 + n * 170, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      if (id === 'fontein' && !this.reduced) this.fountainDrops(img);
+    } else {
+      img = this.seaMark(isle, id, key);
+    }
+    isle.marks.push({ id, where: m.where, img });
+    if (drop && img) {
+      const y = img.y;
+      img.y = y - 520;
+      this.tweens.add({
+        targets: img, y, duration: this.reduced ? 1 : 650, ease: 'Bounce.easeOut',
+        onComplete: () => {
+          audio.play('land');
+          haptics.heavy();
+          this.cam.shake(220, 0.004);
+          for (let k = 0; k < 10; k++) this.time.delayedCall(k * 30, () => this.sparkle(img.x + (Math.random() - 0.5) * 90, y - Math.random() * 40, 0xfff1a8, 0.8));
+        },
+      });
+    }
+    return img;
+  }
+
+  /** The sea's landmarks: the boat sails along the shore, the dolphin jumps now and then, the whale surfaces and spouts. */
+  seaMark(isle, id, key) {
+    const cx = isle.ox + GAME_W / 2;
+    const sea = this.seaY;
+    if (id === 'seilboot') {
+      const b = this.add.image(cx - 330, sea + 6, key).setOrigin(0.5, 1).setScale(0.62).setDepth(DEPTH.water + 0.25);
+      if (!this.reduced) {
+        this.tweens.add({ targets: b, x: cx + 330, duration: 16000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', onYoyo: () => b.setFlipX(true), onRepeat: () => b.setFlipX(false) });
+        this.tweens.add({ targets: b, angle: 4, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+      return b;
+    }
+    if (id === 'dolfyn') {
+      const d = this.add.image(cx + 220, sea + 40, key).setScale(0.55).setDepth(DEPTH.water + 0.25).setAlpha(0);
+      const jump = () => {
+        if (!this.alive || !d.active) return;
+        const x0 = cx + (Math.random() < 0.5 ? -1 : 1) * (200 + Math.random() * 160);
+        const dir = x0 < cx ? 1 : -1;
+        d.setPosition(x0, sea + 30).setAlpha(1).setFlipX(dir < 0).setAngle(dir * -35);
+        this.water?.splash?.(x0);
+        const t = { p: 0 };
+        this.tweens.add({
+          targets: t, p: 1, duration: 1100, ease: 'Linear',
+          onUpdate: () => {
+            d.x = x0 + dir * 150 * t.p;
+            d.y = sea + 30 - Math.sin(t.p * Math.PI) * 150;
+            d.setAngle(dir * (-35 + 70 * t.p));
+          },
+          onComplete: () => {
+            this.water?.splash?.(d.x);
+            d.setAlpha(0);
+            this.time.delayedCall(3500 + Math.random() * 3000, jump);
+          },
+        });
+      };
+      if (!this.reduced) this.time.delayedCall(1500 + Math.random() * 1500, jump);
+      return d;
+    }
+    if (id === 'walvis') {
+      const w = this.add.image(cx - 250, sea + 40, key).setOrigin(0.5, 0.6).setScale(0.8).setDepth(DEPTH.water + 0.25).setAlpha(0.95);
+      const spout = () => {
+        if (!this.alive || !w.active) return;
+        this.tweens.add({ targets: w, y: sea + 8, duration: 900, ease: 'Sine.easeOut' });
+        this.time.delayedCall(900, () => {
+          for (let k = 0; k < 9; k++) {
+            const p = this.add.circle(w.x + 6, w.y - 30, 3 + Math.random() * 3, 0xdff4ff, 0.95).setDepth(DEPTH.water + 0.26);
+            this.tweens.add({ targets: p, y: p.y - 70 - Math.random() * 50, x: p.x + (Math.random() - 0.5) * 50, alpha: 0, duration: 800 + Math.random() * 400, ease: 'Quad.easeOut', onComplete: () => p.destroy() });
+          }
+          this.tweens.add({ targets: w, y: sea + 40, duration: 1200, delay: 1400, ease: 'Sine.easeIn' });
+        });
+        this.time.delayedCall(6500 + Math.random() * 3000, spout);
+      };
+      if (!this.reduced) this.time.delayedCall(800, spout);
+      else w.y = sea + 8;
+      return w;
+    }
+    return null;
+  }
+
+  /** The fountain's water: a few drops up and back, again and again. */
+  fountainDrops(img) {
+    const drop = () => {
+      if (!this.alive || !img.active) return;
+      for (let k = 0; k < 3; k++) {
+        const p = this.add.circle(img.x + (Math.random() - 0.5) * 18, img.y - 60, 2.5, 0xbfe9ff, 0.95).setDepth(img.depth + 0.01);
+        this.tweens.add({ targets: p, y: p.y - 26 - Math.random() * 14, x: p.x + (Math.random() - 0.5) * 30, duration: 380, yoyo: true, ease: 'Quad.easeOut', onComplete: () => p.destroy() });
+      }
+      this.time.delayedCall(420, drop);
+    };
+    drop();
+  }
+
+  /** A landmark just bought in your town: it lands from the sky, and its name pops. */
+  buyMark(id) {
+    const isle = this.isles.me;
+    if (!isle) return;
+    const img = this.addMark(isle, id, { drop: true });
+    if (img) this.time.delayedCall(700, () => this.pop(img.x, img.y - 120, S.dorpBought(S.dorpMarkNames[id] || id), '#ffe38c', 40));
+  }
+
+  /** The day's tourists arrive by sea and move into windows (up to 8 shown), then "+12 TOERISTE!". */
+  playTourists(n) {
+    const me = this.isles.me;
+    const homes = this.litWindows(me).sort((a, b) => (a.t - b.t) || (b.y - a.y)).slice(0, Math.min(8, n));
+    for (const w of homes) {
+      w.who0 = w.b.who[w.i];
+      w.b.who[w.i] = null;
+      this.paintBlock(w.b, me.town.tribe);
+    }
+    let landed = 0;
+    const cast = castOf(me.town.tribe);
+    homes.forEach((w, k) => {
+      this.time.delayedCall(300 + k * 160, () => {
+        const who = w.who0 || cast[k % cast.length];
+        const from = { x: me.ox + GAME_W + 120 + (k % 3) * 30, y: this.seaY - 20 };
+        this.fly(who, from.x, from.y, w, k, false, () => {
+          w.b.who[w.i] = who;
+          this.paintBlock(w.b, me.town.tribe);
+          this.sparkle(w.x, w.y, 0xffe38c, 0.9);
+          audio.play('room', { combo: Math.min(8, ++landed) });
+          if (landed === homes.length) {
+            const W = this.scale.width;
+            const at = this.onScreen(W / 2, (this.d.topBar || this.H * 0.2) + 110);
+            const t = this.add.text(at.x, at.y, S.dorpTouristsPop(n), { fontFamily: FONT, fontSize: '64px', fontStyle: '900', color: '#ffd23f', stroke: '#5a2d00', strokeThickness: 10 })
+              .setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.fxScreen + 1).setScale(0.2 * at.k);
+            this.tweens.add({ targets: t, scale: at.k, duration: 480, ease: 'Back.easeOut' });
+            this.tweens.add({ targets: t, alpha: 0, delay: 2200, duration: 500, onComplete: () => t.destroy() });
+            audio.play('milestone');
+            this.d.onTourists?.(n);
+          }
+        });
+      });
+    });
+    if (!homes.length) this.d.onTourists?.(n);
   }
 
   // ------------------------------------------------------------------------------------------------------ the camera

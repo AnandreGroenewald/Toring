@@ -3755,3 +3755,18 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .res-dorp { display: flex; flex-direction: column; align-items: center; gap: calc(8 * var(--u)); margin-top: calc(10 * var(--u)); }
 .res-dorp-line { margin: 0; text-align: center; font-weight: 900; color: #ffe38c; font-size: max(13px, calc(23 * var(--u))); }
 .res-dorp-go.is-go { --bg: #ffd23f; --bg-l: #ffe38c; --bg-d: #c99a00; --fg: #3b2400; }
+/* (1.16) Jou dorp: Robot Rikus's card, the landmarks' button and shop */
+.dorp-card.is-bot .dorp-card-disc { background: linear-gradient(160deg, #c9d2e3, #6b7a99); }
+.dorp-row-btns { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: calc(12 * var(--u)); }
+.dorp-row-btns .btn { min-height: calc(86 * var(--u)); font-size: max(14px, calc(30 * var(--u))); }
+.dorp-marks-btn { --bg: #f2a516; --bg-l: #ffd23f; --bg-d: #b86d12; --fg: #3b2400; text-shadow: none; }
+.dorp-marks-sub { margin: 0; padding: 0 calc(6 * var(--u)); font-size: max(11px, calc(19 * var(--u))); font-weight: 800; color: #9fb4dd; }
+.dorp-coins { display: inline-flex; align-items: center; gap: calc(6 * var(--u)); padding: calc(4 * var(--u)) calc(12 * var(--u)); border-radius: 999px; background: rgba(255, 255, 255, 0.1); color: #ffe38c; font-weight: 900; font-size: max(13px, calc(24 * var(--u))); }
+.dorp-mark-pic { display: flex; align-items: center; justify-content: center; width: calc(96 * var(--u)); height: calc(96 * var(--u)); border-radius: calc(24 * var(--u)); font-size: calc(62 * var(--u)); background: radial-gradient(circle at 50% 40%, #ffe9a8 0%, #f2a516 70%, #b86d12 100%); box-shadow: 0 calc(5 * var(--u)) 0 rgba(0, 0, 0, 0.25), inset 0 calc(3 * var(--u)) 0 rgba(255, 255, 255, 0.4); }
+.dorp-mark-pic.mark-sea { background: radial-gradient(circle at 50% 40%, #bde8ff 0%, #2f9bff 70%, #1f5fb0 100%); }
+.dorp-mark.is-own { box-shadow: inset 0 0 0 calc(3 * var(--u)) #ffd23f, 0 0 calc(18 * var(--u)) rgba(255, 210, 63, 0.35); }
+.dorp-card-act.act-buy { background: linear-gradient(160deg, #ffd23f, #f2a516 60%, #b86d12 150%); box-shadow: 0 calc(5 * var(--u)) 0 #7a4300; color: #3b2400; }
+.dorp-card-act.act-buy .act-price { display: inline-flex; align-items: center; gap: calc(6 * var(--u)); }
+.dorp-card-act.act-buy.is-short { filter: grayscale(0.6); opacity: 0.6; }
+.dorp-card-act.act-own { background: rgba(255, 210, 63, 0.18); box-shadow: none; color: #ffe38c; }
+.dorp-back-town { min-height: calc(80 * var(--u)); }

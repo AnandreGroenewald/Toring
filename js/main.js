@@ -39,7 +39,7 @@ import { DorpScene } from './scenes/DorpScene.js';
 import { createLewendeUi } from './ui/lewendeUi.js';
 import { createLivingStore, CAST_IDS } from './core/living.js';
 import { createDorpClient } from './dorp.js';
-import { DORP, isTownId, isRaidId } from './core/dorp.js';
+import { DORP, RIKUS_ID, markOf, isTownId, isRaidId } from './core/dorp.js';
 import { castOf, portraitDataUrl } from './game/residents.js';
 import { setBlockSkin } from './game/blocks.js';
 import { setCraneSkin } from './game/crane.js';
@@ -2912,11 +2912,11 @@ function dorpScreenModel(mode = 'town', extra = {}) {
 }
 
 /** Sends what the games brought and fetches the town (at most every few seconds unless `force`). */
-async function dorpSync({ seen = null, force = false } = {}) {
+async function dorpSync({ seen = null, force = false, collect = null } = {}) {
   if (!dorpOn) return null;
   if (!force && Date.now() - dorpSyncAt < 4000) return null;
   dorpSyncAt = Date.now();
-  return dorp.sync({ name: duelNick(), tribe: tribeNow(), seen });
+  return dorp.sync({ name: duelNick(), tribe: tribeNow(), seen, collect });
 }
 
 /** The menu again, only when what it shows of the town changed. */
@@ -3113,12 +3113,48 @@ bus.on('ui:dorp', async () => {
   }
   const was = dorpView()?.me?.people;
   enterDorp('town');
-  const r = await dorpSync({ force: true });
+  // (the day's first visit brings the landmarks' tourists)
+  const r = await dorpSync({ force: true, collect: todayKey() });
   if (screen === 'dorp' && !dorpBusy && ui.dorpMode?.() === 'town') {
-    // the server's word changed the town (a raid while away, another phone's towers): built again as it stands
-    if (dorpView()?.me?.people !== was) enterDorp('town');
+    // the server's word changed the town (tourists, a raid while away, another phone's towers): built again as it stands
+    if (r?.tourists > 0) enterDorp('town', { scene: { tourists: r.tourists, onTourists: () => ui.setDorpCounts({ me: dorpView()?.me?.people }) } });
+    else if (dorpView()?.me?.people !== was) enterDorp('town');
     else ui.setDorpMode(dorpScreenModel('town', { online: !!r?.ok }));
   }
+  refreshMenuDorp();
+});
+// landmarks: the shop over the town, a purchase lands from the sky
+bus.on('ui:dorp-marks', () => {
+  if (screen !== 'dorp') return;
+  ui.setDorpMode({ mode: 'marks', coins: store.getEconomy().coins });
+  dorpReframe();
+});
+bus.on('ui:dorp-marks-close', () => {
+  if (screen !== 'dorp') return;
+  ui.setDorpMode(dorpScreenModel('town'));
+  dorpReframe();
+});
+bus.on('ui:dorp-buy', async (id) => {
+  const m = markOf(id);
+  if (!m || !dorpOn || dorpBusy || screen !== 'dorp') return;
+  if ((dorpView()?.me?.marks || []).includes(id)) return;
+  const paid = store.spendCoins(m.price);
+  if (!paid.ok) {
+    ui.toast(S.dorpNeedCoins(m.price - paid.coins), 2600);
+    return;
+  }
+  dorpBusy = true;
+  const r = await dorp.buyMark(id);
+  dorpBusy = false;
+  if (!r.ok) {
+    store.earnCoins(m.price, { capped: false });   // (not built: the coins go back)
+    coinsChanged();
+    ui.toast(S.dorpOffline, 2800);
+    return;
+  }
+  coinsChanged();
+  game.scene.getScene('Dorp')?.buyMark?.(id);
+  ui.setDorpMode({ ...dorpScreenModel('marks'), coins: store.getEconomy().coins });
   refreshMenuDorp();
 });
 bus.on('ui:dorp-back', leaveDorp);
@@ -3137,7 +3173,7 @@ bus.on('ui:dorp-tell', () => {
 
 // a strooptog: over the sea to their town; the tap strikes, and the server settles it then (with the aim)
 bus.on('ui:dorp-raid', async ({ target, wraak = null } = {}) => {
-  if (!dorpOn || dorpBusy || !isTownId(target)) return;
+  if (!dorpOn || dorpBusy || !(isTownId(target) || target === RIKUS_ID)) return;
   dorpBusy = true;
   await dorpSync({ force: true });   // (the strooptogte the last tower earned reach the server first)
   const v = dorp.view();

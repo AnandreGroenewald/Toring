@@ -2,7 +2,7 @@
 // phone's side (js/dorp.js: reports sent once each, the day's wall, the server's word kept).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DORP, raidTake, goldTake, cleanHit, dorpTitle, raidsFromRatings, cleanGain, newTownId, newTownKey, isTownId, isTownKey, cleanTownName } from '../js/core/dorp.js';
+import { DORP, RIKUS, raidTake, goldTake, cleanHit, dorpTitle, raidsFromRatings, cleanGain, newTownId, newTownKey, isTownId, isTownKey, cleanTownName, touristsOf } from '../js/core/dorp.js';
 import { createDorp } from '../server/src/dorp.js';
 import { createDorpClient } from '../js/dorp.js';
 
@@ -89,7 +89,8 @@ test('the server: neighbours by link, a raid moves people, a wall stops one, the
   [st, r] = await d.handle('POST', '/dorp/sync', { ...b });
   assert.equal(r.news.length, 1);
   assert.equal(r.news[0].took, 18);
-  assert.equal(r.bure[0].wraak, raidId);
+  assert.equal(r.bure[0].id, 'RIKUS');   // (Robot Rikus: everyone's first neighbour)
+  assert.equal(r.bure.find((x) => x.id === a.id).wraak, raidId);
   // her Wraak costs nothing (she has her starting strooptog still) and hits harder: gras vs vuur, x1.5
   [st, r] = await d.handle('POST', '/dorp/raid', { ...b, target: a.id, wraak: raidId });
   assert.equal(st, 200);
@@ -98,7 +99,7 @@ test('the server: neighbours by link, a raid moves people, a wall stops one, the
   assert.equal(r.town.raids, DORP.startRaids);
   // once only
   [st, r] = await d.handle('POST', '/dorp/sync', { ...b });
-  assert.equal(r.bure[0].wraak, null);
+  assert.equal(r.bure.find((x) => x.id === a.id).wraak, null);
   [st, r] = await d.handle('POST', '/dorp/raid', { ...b, target: a.id, wraak: raidId });
   assert.equal(r.wraak, false);   // (spent: an ordinary raid, her own strooptog)
   assert.equal(r.town.raids, DORP.startRaids - 1);
@@ -117,7 +118,7 @@ test('the server: neighbours by link, a raid moves people, a wall stops one, the
   assert.equal(r.town.walls, 0);
   assert.equal(r.news.at(-1).blocked, true);
   // his Wraak waits for her last raid that took people (a raid a wall stopped is nothing to avenge)
-  const owed = r.bure[0].wraak;
+  const owed = r.bure.find((x) => x.id === b.id).wraak;
   assert.ok(owed && owed !== r.news.at(-1).raidId);
 });
 
@@ -175,4 +176,64 @@ test('the aim: a Perfek on the glowing tower takes half again as many, a wonky t
   assert.equal(r.goldTook, 2);
   assert.equal(r.town.gold, 2);
   assert.equal(r.them.gold, 0);
+});
+
+test('Robot Rikus: everyone’s first neighbour, raided with a strooptog (extra strong), raids back a while later, a free Wraak', async () => {
+  let clock = 1_000_000;
+  const d = createDorp(memStore(), { now: () => clock, rand: () => 0 });   // (rand 0: he always raids back)
+  const a = town();
+  let [st, r] = await d.handle('POST', '/dorp/sync', { ...a, name: 'Nuwe', tribe: 'vuur', gains: [{ seq: 1, people: 50 }] });
+  const rk = r.bure[0];
+  assert.deepEqual([rk.id, rk.name, rk.bot, rk.tribe], ['RIKUS', 'Robot Rikus', true, 'gras']);
+  assert.equal(rk.people, RIKUS.start);
+  // a new town's one strooptog, on Rikus (vuur beats gras: x1.5)
+  [st, r] = await d.handle('POST', '/dorp/raid', { ...a, target: 'RIKUS', hit: 'G' });
+  assert.equal(st, 200);
+  assert.equal(r.bot, true);
+  assert.equal(r.took, Math.round(RIKUS.start * 0.12 * 1.5));
+  assert.equal(r.town.people, 50 + r.took);
+  assert.equal(r.town.raids, 0);
+  // he raids back once his time has come (applied at the next sync), and that's a free Wraak
+  clock += RIKUS.backAfterMs - 1000;
+  [st, r] = await d.handle('POST', '/dorp/sync', { ...a });
+  assert.equal(r.news.length, 0);
+  clock += 2000;
+  [st, r] = await d.handle('POST', '/dorp/sync', { ...a });
+  assert.equal(r.news.length, 1);
+  assert.equal(r.news[0].from, 'RIKUS');
+  assert.ok(r.news[0].took > 0);
+  const owed = r.bure[0].wraak;
+  assert.ok(owed);
+  [st, r] = await d.handle('POST', '/dorp/raid', { ...a, target: 'RIKUS', wraak: owed });
+  assert.equal(st, 200);
+  assert.equal(r.wraak, true);
+  // no strooptog and no Wraak left: 409
+  [st] = await d.handle('POST', '/dorp/raid', { ...a, target: 'RIKUS' });
+  assert.equal(st, 409);
+});
+
+test('landmarks: bought once each, seen by neighbours, and their tourists come once a day', async () => {
+  const d = createDorp(memStore());
+  const a = town();
+  const b = town();
+  await d.handle('POST', '/dorp/sync', { ...a, name: 'A', gains: [{ seq: 1, people: 20 }] });
+  await d.handle('POST', '/dorp/sync', { ...b, name: 'B' });
+  await d.handle('POST', '/dorp/buur', { ...b, buur: a.id });
+  let [st, r] = await d.handle('POST', '/dorp/mark', { ...a, mark: 'wiel' });
+  assert.equal(st, 200);
+  [st, r] = await d.handle('POST', '/dorp/mark', { ...a, mark: 'wiel' });
+  [st, r] = await d.handle('POST', '/dorp/mark', { ...a, mark: 'walvis' });
+  assert.deepEqual(r.town.marks, ['wiel', 'walvis']);
+  [st] = await d.handle('POST', '/dorp/mark', { ...a, mark: 'nee' });
+  assert.equal(st, 400);
+  [st, r] = await d.handle('POST', '/dorp/sync', { ...b });
+  assert.deepEqual(r.bure.find((x) => x.id === a.id).marks, ['wiel', 'walvis']);
+  // the tourists: 5 + 6 on the day's first visit, then not again that day
+  [st, r] = await d.handle('POST', '/dorp/sync', { ...a, collect: '2026-10-16' });
+  assert.equal(r.tourists, touristsOf(['wiel', 'walvis']));
+  assert.equal(r.town.people, 20 + 11);
+  [st, r] = await d.handle('POST', '/dorp/sync', { ...a, collect: '2026-10-16' });
+  assert.equal(r.tourists, undefined);
+  [st, r] = await d.handle('POST', '/dorp/sync', { ...a, collect: '2026-10-17' });
+  assert.equal(r.tourists, 11);
 });
