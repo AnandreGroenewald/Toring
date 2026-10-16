@@ -38,10 +38,11 @@ export function createPhysics({ gravity = -16 } = {}) {
   /** A tower block (its mesh already in world space, bottom-centre origin). `S`: castle scale; `D`: its depth. */
   function addBlock(mesh, b, S, D) {
     const def = SHAPES[b.shape] || SHAPES.plank;
-    const H = (def.h / PX) * S;
-    const W = (def.w / PX) * S;
+    const sx = Number.isFinite(b.scale) ? b.scale : 1;
+    const sy = def.u ? sx : 1;
+    const W = ((def.w * sx) / PX) * S;
     const rects = (PARTS[b.shape] || [[0, 0, def.w, def.h]]).map(([x, y, w, h]) => ({
-      cx: ((x + w / 2) / PX) * S - W / 2, cy: ((def.h - (y + h / 2)) / PX) * S, hw: ((w / PX) * S) / 2, hh: ((h / PX) * S) / 2,
+      cx: (((x + w / 2) * sx) / PX) * S - W / 2, cy: (((def.h - (y + h / 2)) * sy) / PX) * S, hw: (((w * sx) / PX) * S) / 2, hh: (((h * sy) / PX) * S) / 2,
     }));
     let area = 0;
     let ax = 0;

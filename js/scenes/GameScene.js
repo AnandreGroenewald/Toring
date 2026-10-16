@@ -3830,6 +3830,26 @@ export class GameScene extends Phaser.Scene {
     bus.emit('game:progress', this.buildResult('quit'));
   }
 
+  /**
+   * (1.17) The standing tower as the castle keeps it: per block its shape and size, the middle of its bottom edge (game
+   * metres from the base's middle, y up), its turn (anticlockwise) and its rating.
+   */
+  castleLayout() {
+    const out = [];
+    const r2 = (v) => Math.round(v * 100) / 100;
+    for (const b of this.tower) {
+      if (!b?.body || !b.geom || !b.spec) continue;
+      const g = b.geom;
+      const a = b.body.angle;
+      const ox = g.w / 2 - g.cx;
+      const oy = g.h - g.cy;
+      const px = b.body.position.x + ox * Math.cos(a) - oy * Math.sin(a);
+      const py = b.body.position.y + ox * Math.sin(a) + oy * Math.cos(a);
+      out.push({ s: b.spec.shape, k: b.spec.scale ?? 1, x: r2((px - BASE_CX) / PX_PER_M), y: r2((LAYOUT.baseTopY - py) / PX_PER_M), r: Math.round(-a * 1000) / 1000, q: b.rating || 'S' });
+    }
+    return out;
+  }
+
   buildResult(reason) {
     let dropped = this.blocksDropped;
     const cells = new Array(this.grid.length).fill(null);
@@ -3898,6 +3918,10 @@ export class GameScene extends Phaser.Scene {
     const result = this.buildResult(reason);
     if (this.living) result.living = this.living.summary();
     this.result = result;
+    // (1.17) Die Kasteelreeks: a day's tower becomes a tower of the player's castle (main.js keeps it)
+    if (this.mode === 'daily' && this.dateKey) {
+      try { bus.emit('game:castle', { dateKey: this.dateKey, heightM: result.heightM, perfects: result.perfects, layout: this.castleLayout() }); } catch { /* the castle is a bonus */ }
+    }
     // the tower ended by itself (hearts, flood, quit): the match hears it before the result is built
     if (this.duel && reason !== 'won' && reason !== 'lost') bus.emit('duel:over', { reason, t: this.now });
     bus.emit('game:audience', {

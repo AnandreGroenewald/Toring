@@ -1045,6 +1045,17 @@ Later the owner added (decisions are final unless they say otherwise):
   kasteel ›", the planner's "Val Robot Rikus aan ›", the end card's KLAAR → your castle. Tests: qa/kasteel_plan1170.mjs
   8/8, qa/kasteel_siege1170.mjs 8/8. Open: an attacker AI so a friend's offline castle is truly tested by others; the
   real Daily layouts; friends' castles on the home server; the privacy pages to name `stapel.v1.kasteel` before release.
+- **17 Oct ~01:25 — Die Kasteelreeks: your castle is your own Daily Towers (local, nothing live).** His concept: "the CASTLE
+  Series, which is made out of the tower you build with your daily challenge". GameScene.endGame (daily only) emits
+  `game:castle` with `castleLayout()` (per standing block: shape, size variant, the middle of its bottom edge in game
+  metres from the base's middle, its turn, its rating); main.js keeps each day's best try for 7 days under
+  `stapel.v1.kasteeldae` (never in the game's way: wrapped in try). The castle (planner + `?teen=my`) uses the newest 5
+  days: the keep by the plan's choice, the rest of the 5 as low foundations ("speel nog om te bou"); no days yet = a
+  starter castle. Ratings → stone: P and F (foundation) granite, G and B (the clown's gift) sandstone, S and X timber.
+  Very tall Dailies keep their shape but are scaled to stand in a castle (keep ≤ 34 m, the others ≤ 24 m). Both privacy
+  pages name `stapel.v1.kasteel` and `stapel.v1.kasteeldae` (the privacykeys test asked for it). Tests: npm 441/441,
+  qa/kasteel_days1170.mjs 4/4 (an autoplayed Daily becomes the keep block for block), kasteel_plan1170 8/8,
+  kasteel_siege1170 8/8, smoke clean.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

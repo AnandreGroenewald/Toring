@@ -9,7 +9,7 @@ import { buildWorld, DIST, rng, groundHeight } from './world.js';
 import { castleMaterials, buildCastle, sampleDaily } from './castle.js';
 import { soldier, cauldron, ballista, spikes } from './army.js';
 import { idle } from './crew.js';
-import { PIECES, BUDGET, spotIds, defaultPlan, costOf, loadPlan, savePlan, mySeed } from './plan.js';
+import { PIECES, BUDGET, spotIds, defaultPlan, costOf, loadPlan, savePlan, mySeed, myDays } from './plan.js';
 import { audio } from '../audio.js';
 import { ICONS } from './hud.js';
 
@@ -20,7 +20,11 @@ const mats = castleMaterials(renderer);
 const saved = loadPlan();
 const seed = saved?.seed ?? mySeed();
 const r0 = rng(seed);
-const days = [sampleDaily(r0, 16), sampleDaily(r0, 12), sampleDaily(r0, 11), sampleDaily(r0, 13), sampleDaily(r0, 10)];
+// your own Daily Towers when the game has kept some (the rest: low foundations, still to build); else a starter castle
+const real = myDays();
+const days = real.length
+  ? [...real, ...Array.from({ length: Math.max(0, 5 - real.length) }, () => sampleDaily(r0, 2))].slice(0, 5)
+  : [sampleDaily(r0, 16), sampleDaily(r0, 12), sampleDaily(r0, 11), sampleDaily(r0, 13), sampleDaily(r0, 10)];
 const AT = new THREE.Vector3(0, 0, -DIST);
 let castle = null;
 let plan = saved?.plan ? JSON.parse(JSON.stringify(saved.plan)) : null;
@@ -112,7 +116,7 @@ function paint() {
 // ------------------------------------------------------------------------------------------------------- the screen
 const hudEl = document.getElementById('k-hud');
 hudEl.innerHTML = `
-  <div class="kp-title"><small>DIE KASTEELREEKS</small><b>Jou kasteel</b><p>Beplan jou verdediging: dit veg vir jou terwyl jy weg is.</p><a class="kp-attack" href="?">Val Robot Rikus aan ›</a></div>
+  <div class="kp-title"><small>DIE KASTEELREEKS</small><b>Jou kasteel</b><p>${real.length ? `${real.length} van jou Daaglikse Torings staan hier${real.length < 5 ? ' · speel nog om te bou' : ''}` : 'Speel die Daaglikse Toring: elke dag se toring word ’n toring van jou kasteel'}. Beplan jou verdediging: dit veg vir jou terwyl jy weg is.</p><a class="kp-attack" href="?">Val Robot Rikus aan ›</a></div>
   <div class="kp-keep"><button type="button" class="kp-prev" aria-label="Vorige">‹</button><div><small>HOOF-TORING</small><b class="kp-day">Dag 1</b></div><button type="button" class="kp-next" aria-label="Volgende">›</button></div>
   <div class="kp-budget"><small>BEGROTING</small><b class="kp-left">0 / ${BUDGET}</b></div>
   <p class="kp-hint"></p>

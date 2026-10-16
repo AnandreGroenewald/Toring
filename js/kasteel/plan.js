@@ -62,3 +62,18 @@ export function mySeed() {
   if (v && Number.isFinite(v.seed)) return v.seed;
   return 1000 + Math.floor(Math.random() * 90000);
 }
+
+/** The owner's own Daily Towers as the castle keeps them (main.js saves each day's best try): newest first, up to `n`. */
+export const DAYS_KEY = 'stapel.v1.kasteeldae';
+// a block's rating in the game → its stone in the castle (the clown's gift: sandstone; a cemented foundation: granite)
+const STONE = { P: 'P', G: 'G', S: 'S', X: 'S', B: 'G', F: 'P' };
+export function myDays(n = 5) {
+  try {
+    const all = JSON.parse(localStorage.getItem(DAYS_KEY) || '{}') || {};
+    return Object.keys(all).sort().reverse().slice(0, n)
+      .map((k) => (all[k].b || []).map((b) => ({ shape: b.s, scale: b.k, x: b.x, y: b.y, rot: b.r, rating: STONE[b.q] || 'S' })))
+      .filter((l) => l.length);
+  } catch {
+    return [];
+  }
+}

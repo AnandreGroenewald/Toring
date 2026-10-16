@@ -2661,6 +2661,19 @@ bus.on('game:final', (result) => {
   if (tutorialDone(result.blocksDropped)) store.markTutorialSeen();
 });
 
+// (1.17) Die Kasteelreeks: every Daily Tower is kept as a tower of the player's castle (each day's best try, 7 days)
+bus.on('game:castle', (c) => {
+  try {
+    const KEY = 'stapel.v1.kasteeldae';
+    const all = JSON.parse(localStorage.getItem(KEY) || '{}') || {};
+    const old = all[c.dateKey];
+    if (!old || (c.heightM || 0) >= (old.h || 0)) all[c.dateKey] = { h: c.heightM, p: c.perfects, b: c.layout };
+    const keep = {};
+    for (const k of Object.keys(all).sort().slice(-7)) keep[k] = all[k];
+    localStorage.setItem(KEY, JSON.stringify(keep));
+  } catch { /* the castle is a bonus: never in the game's way */ }
+});
+
 bus.on('game:over', (result) => {
   if (lesson) endLesson();
   if (!result || run.mode === 'idle' || screen === 'results' || screen === 'menu') return;

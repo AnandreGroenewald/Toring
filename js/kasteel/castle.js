@@ -9,7 +9,8 @@ import { rng } from './world.js';
 const PX = 25;   // game px per metre (js/config.js PX_PER_M)
 // The Stapel blocks (js/game/blocks.js SHAPES, game px; outlines with a top-left origin, y down)
 export const SHAPES = {
-  plank: { w: 200, h: 40 }, slab: { w: 160, h: 48 }, brick: { w: 128, h: 56 }, crate: { w: 84, h: 84 }, cube: { w: 60, h: 60 },
+  plank: { w: 200, h: 40 }, slab: { w: 160, h: 48 }, brick: { w: 128, h: 56 }, crate: { w: 84, h: 84, u: true }, cube: { w: 60, h: 60, u: true },
+  floor: { w: 300, h: 96, u: true }, log: { w: 260, h: 50 },
   pillar: { w: 52, h: 128 },
   wedge: { w: 150, h: 60, outline: [[30, 0], [120, 0], [150, 60], [0, 60]] },
   arch: { w: 132, h: 88, outline: [[0, 0], [56, 0], [56, 26], [76, 26], [76, 0], [132, 0], [132, 88], [0, 88]] },
@@ -235,11 +236,13 @@ export function towerFromDaily(layout, mats, { S = 0.55, team = 'red', rand = Ma
   let topB = null;
   for (const b of layout) {
     const def = SHAPES[b.shape] || SHAPES.plank;
-    const W = (def.w / PX) * S;
-    const H = (def.h / PX) * S;
-    const pts = (def.outline || [[0, 0], [def.w, 0], [def.w, def.h], [0, def.h]]).map(([x, y]) => new THREE.Vector2((x / PX) * S - W / 2, ((def.h - y) / PX) * S));
+    const sx = Number.isFinite(b.scale) ? b.scale : 1;   // (a block's size variant: width only, both for even shapes)
+    const sy = def.u ? sx : 1;
+    const W = ((def.w * sx) / PX) * S;
+    const H = ((def.h * sy) / PX) * S;
+    const pts = (def.outline || [[0, 0], [def.w, 0], [def.w, def.h], [0, def.h]]).map(([x, y]) => new THREE.Vector2(((x * sx) / PX) * S - W / 2, (((def.h - y) * sy) / PX) * S));
     const D = Math.max(2.6, Math.min(4.6, W * 1.02));
-    const geo = extrude(`blk|${b.shape}|${S}|${D}`, new THREE.Shape(pts), D, 0.045);
+    const geo = extrude(`blk|${b.shape}|${sx}|${S}|${D}`, new THREE.Shape(pts), D, 0.045);
     const m = new THREE.Mesh(geo, b.rating === 'P' ? mats.granite : b.rating === 'G' ? mats.sandstone : mats.timber);
     m.position.set(b.x * S, b.y * S, 0);
     m.rotation.z = b.rot || 0;
@@ -379,13 +382,20 @@ export function buildCastle({ at = new THREE.Vector3(), days, team = 'red', mats
   const corners = [[-half, half], [half, half], [half, -half], [-half, -half]];
   const towers = [];
   const flags = [];
-  const keepT = towerFromDaily(days[0], mats, { S: S * 1.08, team, rand });
+  // (a very tall Daily Tower keeps its shape but is scaled to stand in a castle: the keep at most 34 m, the others 24 m)
+  const fit = (layout, max, s0) => {
+    let h0 = 0;
+    for (const b of layout) { const d = SHAPES[b.shape] || SHAPES.plank; h0 = Math.max(h0, b.y + ((d.h * (d.u && Number.isFinite(b.scale) ? b.scale : 1)) / PX)); }
+    return h0 > 0 ? Math.min(s0, max / h0) : s0;
+  };
+  const keepT = towerFromDaily(days[0], mats, { S: fit(days[0], 34, S * 1.08), team, rand });
   keepT.group.position.set(0, 0, -half * 0.35);
   group.add(keepT.group);
   towers.push({ ...keepT, pos: keepT.group.position.clone(), keep: true });
   if (keepT.flag) flags.push(keepT.flag);
   corners.forEach(([x, z], i) => {
-    const t = towerFromDaily(days[1 + (i % (days.length - 1))], mats, { S, team, rand });
+    const lay = days[1 + (i % (days.length - 1))];
+    const t = towerFromDaily(lay, mats, { S: fit(lay, 24, S), team, rand });
     t.group.position.set(x, 0, z);
     t.group.rotation.y = i % 2 ? 0.04 : -0.04;
     group.add(t.group);

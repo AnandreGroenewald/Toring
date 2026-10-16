@@ -9,7 +9,7 @@ import { createStage } from './stage.js';
 import { buildWorld, DIST, rng, groundHeight } from './world.js';
 import { castleMaterials, buildCastle, sampleDaily } from './castle.js';
 import { trebuchet, ram as makeRam, shot, cauldron, ballista as makeBallista, spikes as makeSpikes } from './army.js';
-import { defaultPlan, loadPlan, spotIds } from './plan.js';
+import { defaultPlan, loadPlan, spotIds, myDays, mySeed } from './plan.js';
 import { createCrowd } from './crowd.js';
 import { createPhysics } from './physics.js';
 import { createFx } from './fx.js';
@@ -18,7 +18,7 @@ import { audio, haptics } from '../audio.js';
 
 const q = new URLSearchParams(location.search);
 // whose castle: Robot Rikus's (a castle by `?seed=`), or a copy of your own with your plan (`?teen=my`)
-const MINE = q.get('teen') === 'my' ? loadPlan() : null;
+const MINE = q.get('teen') === 'my' ? (loadPlan() || { seed: mySeed(), plan: null }) : null;
 const seed = MINE?.seed ?? (Number(q.get('seed')) || (Date.now() % 100000) + 1);
 const rand = rng(seed);
 const OPP = MINE ? 'Jou kasteel' : 'Robot Rikus';
@@ -42,7 +42,11 @@ const world = buildWorld(scene, renderer, { seed: 11 });
   sun.shadow.mapSize.set(big ? 4096 : 2048, big ? 4096 : 2048);
 }
 const mats = castleMaterials(renderer);
-const days0 = [sampleDaily(rand, 16), sampleDaily(rand, 12), sampleDaily(rand, 11), sampleDaily(rand, 13), sampleDaily(rand, 10)];
+const samples = [sampleDaily(rand, 16), sampleDaily(rand, 12), sampleDaily(rand, 11), sampleDaily(rand, 13), sampleDaily(rand, 10)];
+// your own castle: your own Daily Towers (as in the planner), else the starter castle
+const real = MINE ? myDays() : [];
+const r0 = rng(seed);   // (the same foundations as the planner shows)
+const days0 = real.length ? [...real, ...Array.from({ length: Math.max(0, 5 - real.length) }, () => sampleDaily(r0, 2))].slice(0, 5) : samples;
 const keepDay = MINE?.plan?.keep ?? 0;
 const days = [days0[keepDay], ...days0.filter((_, i) => i !== keepDay)];
 const castle = buildCastle({ at: new THREE.Vector3(0, 0, -DIST), days, team: 'red', mats, rand, half: HALF });
