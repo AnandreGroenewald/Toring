@@ -3482,3 +3482,56 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .lt-fld textarea { min-height: calc(120 * var(--u)); resize: none; }
 .lt-msg { min-height: calc(30 * var(--u)); margin-top: calc(12 * var(--u)); font-size: calc(22 * var(--u)); font-weight: 800; color: #ffb3a8; }
 .lt-msg.ok { color: #8dffa8; }
+/* (1.16 redesign) the tray under the world: what to do now, the people's cards (drag one to a room), the attack cards */
+.lt-tray { position: absolute; left: calc(12 * var(--u)); right: calc(12 * var(--u)); bottom: calc(var(--sab) + 12 * var(--u)); padding: calc(16 * var(--u)) calc(18 * var(--u)) calc(18 * var(--u));
+  border-radius: calc(30 * var(--u)); background: linear-gradient(180deg, rgba(22, 32, 70, 0.95), rgba(9, 14, 36, 0.97));
+  box-shadow: inset 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.12), 0 calc(12 * var(--u)) calc(34 * var(--u)) rgba(0, 0, 0, 0.45); }
+.lt-tray[hidden] { display: none; }
+.lt-tray-head { display: flex; align-items: center; gap: calc(14 * var(--u)); }
+.lt-tray-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: calc(5 * var(--u)); }
+.lt-tray-t { font-size: calc(30 * var(--u)); font-weight: 900; line-height: 1.1; text-align: left; }
+.lt-tray-s { font-size: calc(20 * var(--u)); line-height: 1.32; color: #b9c6e6; font-weight: 700; }
+.lt-tray-s b { color: #fff; }
+.lt-tray .lt-btns { flex: none; margin: 0; flex-wrap: nowrap; gap: calc(10 * var(--u)); }
+.lt-tray .lt-btn { padding: calc(16 * var(--u)) calc(22 * var(--u)); }
+.lt-tray.busy { padding: calc(16 * var(--u)) calc(22 * var(--u)); }
+.lt-tray.busy .lt-tray-t { font-size: calc(24 * var(--u)); color: #c9d4ee; }
+.lt-dots { display: inline-flex; gap: calc(5 * var(--u)); margin-left: calc(10 * var(--u)); vertical-align: middle; }
+.lt-dots i { width: calc(8 * var(--u)); height: calc(8 * var(--u)); border-radius: 50%; background: #ffd75a; animation: lt-dot 1s infinite ease-in-out; }
+.lt-dots i:nth-child(2) { animation-delay: 0.15s; }
+.lt-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes lt-dot { 0%, 80%, 100% { opacity: 0.25; transform: scale(0.7); } 40% { opacity: 1; transform: scale(1); } }
+.lt-tray.tap .lt-tray-t::after { content: '👆'; margin-left: calc(12 * var(--u)); display: inline-block; animation: lt-tap 0.9s infinite ease-in-out; }
+@keyframes lt-tap { 50% { transform: translateY(calc(-6 * var(--u))); } }
+.lt-cards { display: flex; gap: calc(10 * var(--u)); margin-top: calc(14 * var(--u)); justify-content: center; flex-wrap: wrap; }
+.lt-pc { position: relative; flex: none; width: calc(94 * var(--u)); padding: calc(8 * var(--u)) 0 calc(7 * var(--u)); border: 0; border-radius: calc(20 * var(--u)); background: rgba(255, 255, 255, 0.08);
+  color: #fff; font: 800 calc(18 * var(--u)) / 1.1 var(--font); display: flex; flex-direction: column; align-items: center; gap: calc(5 * var(--u));
+  box-shadow: inset 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.12); touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; transition: transform 0.12s, opacity 0.12s; }
+.lt-pc img { width: calc(64 * var(--u)); height: calc(64 * var(--u)); border-radius: 50%; pointer-events: none; box-shadow: 0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(0, 0, 0, 0.4); }
+.lt-pc span { max-width: 94%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-pc.sel { background: rgba(255, 215, 90, 0.18); box-shadow: inset 0 0 0 calc(4 * var(--u)) #ffd75a, 0 0 calc(18 * var(--u)) rgba(255, 215, 90, 0.4); transform: translateY(calc(-6 * var(--u))); }
+.lt-pc.placed { opacity: 0.6; }
+.lt-pc.placed.sel { opacity: 1; }
+.lt-pc i { position: absolute; top: calc(4 * var(--u)); right: calc(8 * var(--u)); width: calc(26 * var(--u)); height: calc(26 * var(--u)); border-radius: 50%; background: #3cdc5a; color: #fff;
+  font: 900 calc(16 * var(--u)) / calc(26 * var(--u)) var(--font); font-style: normal; box-shadow: 0 0 0 calc(2 * var(--u)) #0d1530; }
+.lt-pc.lift { opacity: 0.2; }
+.lt-pc.lost { opacity: 0.25; filter: grayscale(1); }
+.lt-cards.nudge .lt-pc:not(.placed) { animation: lt-nudge 0.4s; }
+@keyframes lt-nudge { 25% { transform: translateX(calc(-6 * var(--u))) rotate(-4deg); } 75% { transform: translateX(calc(6 * var(--u))) rotate(4deg); } }
+.lt-root > .lt-ghost { position: fixed; left: 0; top: 0; z-index: 100; width: calc(104 * var(--u)); height: calc(104 * var(--u)); border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 0 calc(4 * var(--u)) #fff, 0 calc(14 * var(--u)) calc(30 * var(--u)) rgba(0, 0, 0, 0.5); transform: translate(-300px, -300px); }
+.lt-root > .lt-ghost.hot { box-shadow: 0 0 0 calc(5 * var(--u)) #ffd75a, 0 0 calc(30 * var(--u)) rgba(255, 215, 90, 0.85); }
+.lt-weapons { display: flex; gap: calc(12 * var(--u)); margin-top: calc(14 * var(--u)); }
+.lt-wc { flex: 1; min-width: 0; display: flex; align-items: center; gap: calc(12 * var(--u)); padding: calc(12 * var(--u)) calc(14 * var(--u)); border: 0; border-radius: calc(22 * var(--u));
+  background: rgba(255, 255, 255, 0.07); color: #fff; font: inherit; text-align: left; box-shadow: inset 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.12); }
+.lt-wc.sel { background: linear-gradient(135deg, rgba(255, 90, 60, 0.28), rgba(255, 255, 255, 0.05)); box-shadow: inset 0 0 0 calc(4 * var(--u)) #ff6a4a, 0 0 calc(20 * var(--u)) rgba(255, 90, 60, 0.35); }
+.lt-wc.off { opacity: 0.62; }
+.lt-wc-ico { font-size: calc(40 * var(--u)); line-height: 1; }
+.lt-wc-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: calc(3 * var(--u)); }
+.lt-wc-txt b { font-size: calc(25 * var(--u)); }
+.lt-wc-txt small { font-size: calc(17 * var(--u)); color: #c3cfeb; line-height: 1.25; font-weight: 700; }
+.lt-wc .lt-pips { margin: calc(4 * var(--u)) 0 0; }
+.lt-wc-shape { flex: none; width: calc(46 * var(--u)); height: auto; }
+.lt-btn.red { color: #fff; background: linear-gradient(#ff7a5a, #e0381f); box-shadow: 0 calc(6 * var(--u)) 0 #9c2110, 0 calc(10 * var(--u)) calc(22 * var(--u)) rgba(255, 80, 40, 0.35); }
+.lt-root > .lt-coach { position: fixed; left: 0; top: 0; z-index: 101; pointer-events: none; font-size: calc(78 * var(--u)); line-height: 1; filter: drop-shadow(0 calc(6 * var(--u)) calc(10 * var(--u)) rgba(0, 0, 0, 0.55)); }
+

@@ -6,14 +6,14 @@
 import { castOf, portraitDataUrl, portraitsReady } from '../game/residents.js';
 
 export const IDEAS = {
-  1: { name: 'Wegkruipertjie', sub: 'Versteek jou mense, raai waar syne is', desc: 'Albei torings staan klaar. Versteek jou 8 mense in jou blokke en gooi na syne. ’n Raak gooi stuur almal in daardie blok uit. Na elke beurt mag jy een van jou mense skuif.' },
-  2: { name: 'Bou en Beskerm', sub: 'Bou, kry mense, val aan', desc: 'Jy bou jou toring met die hyskraan terwyl jy veg. Elke Perfek bring twee nuwe inwoners: jy kies hul blok. Na 10 blokke elk wen wie die meeste mense oor het.' },
-  3: { name: 'Een Toring, Twee Stamme', sub: 'Een toring saam: gevaarlik', desc: 'Julle bou saam een toring, ’n blok elk. Jou mense ry saam in jou blokke. Jou missies tref enige blok, ook joune: pasop!' },
+  1: { name: 'Wegkruipertjie', sub: 'Versteek jou mense, raai waar syne is', desc: 'Albei torings staan klaar: 5 vloere met 3 kamers elk. Sleep jou 5 mense na die kamers wat jy kies. Gooi dan na een kamer op sy toring, of stuur jou stam se missie. ’n Mis vertel jou hoeveel van syne langsaan woon. Ná elke beurt mag jy iemand skuif.' },
+  2: { name: 'Bou en Beskerm', sub: 'Bou, kry mense, val aan', desc: 'Jy bou jou toring met die hyskraan terwyl jy veg. Elke Perfek bring twee nuwe inwoners: jy kies presies in watter kamers hulle intrek. Ná 7 vloere elk wen wie die meeste mense oor het.' },
+  3: { name: 'Een Toring, Twee Stamme', sub: 'Een toring saam: gevaarlik', desc: 'Julle bou saam een toring, ’n vloer elk. Jy kies wie in watter kamer van jou nuwe vloer saam ry. Jou missies tref enige kamer, ook joune: pasop!' },
 };
 export const TRIBE_INFO = {
-  vuur: { name: 'Vuur', emoji: '🔥', special: 'Veldbrand', what: 'brand 3 blokke waar jy mik', strong: 'Warmkop: jou missie laai vinniger', weak: 'Water tref jou harder', hero: 'braai', col: '#e8452c' },
-  water: { name: 'Water', emoji: '🌊', special: 'Waterwiel', what: 'spoel 3 vloere uit', strong: 'Swemmers: jou mense swem net weg', weak: 'Gras tref jou harder', hero: 'haai', col: '#1f8fd6' },
-  gras: { name: 'Gras', emoji: '🌱', special: 'Rankgryp', what: 'gryp altyd mense en wys 2 blokke', strong: 'Wortels: jou onderste blokke is veilig', weak: 'Vuur tref jou harder', hero: 'boer', col: '#3fae3a' },
+  vuur: { name: 'Vuur', emoji: '🔥', special: 'Veldbrand', what: '’n kruis van 5 kamers brand uit, vir altyd', strong: 'Warmkop: jou missie laai vinniger', weak: 'Water tref jou harder', hero: 'braai', col: '#e8452c' },
+  water: { name: 'Water', emoji: '🌊', special: 'Waterwiel', what: 'spoel 2 hele vloere uit', strong: 'Vloei: jy mag ná jou beurt iemand ekstra skuif', weak: 'Gras tref jou harder', hero: 'haai', col: '#1f8fd6' },
+  gras: { name: 'Gras', emoji: '🌱', special: 'Rankgryp', what: 'gryp 4 kamers in ’n kolom, plus 1 lukraak', strong: 'Wortels: jou onderste 2 vloere hou teen water', weak: 'Vuur tref jou harder', hero: 'boer', col: '#3fae3a' },
 };
 // sample players "online now" for the preview (made up: no real people); the robot plays for them
 export const ONLINE = [
@@ -45,6 +45,25 @@ function shield(tier, div, px) {
     <path d="M50 30 L56 44 L71 45 L59 55 L63 70 L50 61 L37 70 L41 55 L29 45 L44 44 Z" fill="#fff" stroke="#1b2550" stroke-width="3"/>
     <text x="50" y="96" text-anchor="middle" font-family="Trebuchet MS" font-weight="900" font-size="24" fill="#1b2550">${div}</text></svg>`;
 }
+// the rooms an attack reaches, as a small 3 x 4 grid of windows (lit: reached)
+const SHAPES = {
+  one: [[1, 1]],
+  cross: [[1, 1], [0, 1], [2, 1], [1, 0], [1, 2]],
+  rows: [[0, 1], [1, 1], [2, 1], [0, 2], [1, 2], [2, 2]],
+  col: [[1, 0], [1, 1], [1, 2], [1, 3], [2, 0]],
+};
+function shapeSvg(shape) {
+  const on = SHAPES[shape];
+  if (!on) return '';
+  const rows = shape === 'col' ? 4 : 3;
+  const cells = [];
+  for (let y = 0; y < rows; y++) for (let x = 0; x < 3; x++) {
+    const lit = on.some(([a, b]) => a === x && b === y);
+    cells.push(`<rect x="${2 + x * 13}" y="${2 + y * 11}" width="10" height="8" rx="1.5" fill="${lit ? (shape === 'col' && x === 2 ? '#ffd23f' : '#ff5a3c') : 'rgba(255,255,255,0.18)'}"/>`);
+  }
+  return `<svg class="lt-wc-shape" viewBox="0 0 41 ${4 + rows * 11}" aria-hidden="true">${cells.join('')}</svg>`;
+}
+const shortName = (n) => (/^Klein /.test(n) ? n : String(n).split(/[ -]/)[0]);
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const PROFILE_KEY = 'stapel.v1.lewende';
 function readJson(key, d) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : d; } catch { return d; } }
@@ -136,7 +155,80 @@ export function createLewendeUi(host) {
 
   // ---------------------------------------------------------------------------------------------- the match's HUD
   let foeNow = null;
-  let barHtml = { hint: '', btns: [] };
+  let trayNow = null;
+  let dragNow = null;
+  let coachEl = null;
+  const stopCoach = () => { coachEl?.remove(); coachEl = null; };
+  // a person's card dragged out of the tray: the card's face follows the finger; the world lights the room under it. The
+  // drag listens on the window, so the tray may redraw its cards meanwhile (the world tells it who is where).
+  const cardOf = (id) => el.querySelector(`.lt-pc[data-id="${CSS.escape(id)}"]`);
+  function endDrag(ev) {
+    const d = dragNow;
+    if (!d) return;
+    dragNow = null;
+    cardOf(d.id)?.classList.remove('lift');
+    const ghost = d.ghost;
+    const res = ev ? d.t.drag?.drop?.(d.id, ev.clientX, ev.clientY) : (d.t.drag?.cancel?.(), { ok: false });
+    if (ghost) {
+      let to = res && res.ok ? { x: res.x, y: res.y, s: 0.45 } : null;
+      if (!to) {
+        const r = cardOf(d.id)?.getBoundingClientRect();
+        to = r && r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2, s: 0.7 } : { x: ev?.clientX || 0, y: ev?.clientY || 0, s: 0.3 };
+      }
+      ghost.style.transition = 'transform 0.18s ease-in, opacity 0.18s ease-in';
+      ghost.style.transform = `translate(${to.x}px, ${to.y}px) translate(-50%, -50%) scale(${to.s})`;
+      ghost.style.opacity = '0';
+      setTimeout(() => ghost.remove(), 220);
+    }
+  }
+  function cardEvents(card, t) {
+    const id = card.dataset.id;
+    card.onpointerdown = (e) => {
+      stopCoach();
+      if (card.disabled || dragNow) return;
+      e.preventDefault();
+      const start = { x: e.clientX, y: e.clientY };
+      let moved = false;
+      const move = (m) => {
+        if (m.pointerId !== e.pointerId) return;
+        if (!moved && Math.hypot(m.clientX - start.x, m.clientY - start.y) > 8) {
+          moved = true;
+          if (!t.drag?.start?.(id)) return;
+          const ghost = document.createElement('img');
+          ghost.className = 'lt-ghost';
+          ghost.src = card.querySelector('img')?.src || '';
+          ghost.alt = '';
+          el.appendChild(ghost);
+          dragNow = { id, ghost, t };
+          cardOf(id)?.classList.add('lift');
+        }
+        if (dragNow && dragNow.id === id) {
+          dragNow.ghost.style.transform = `translate(${m.clientX}px, ${m.clientY - 46}px) translate(-50%, -50%)`;
+          const hot = t.drag?.move?.(id, m.clientX, m.clientY - 46);
+          dragNow.ghost.classList.toggle('hot', !!hot);
+        }
+      };
+      const done = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', cancel);
+      };
+      const up = (u) => {
+        if (u.pointerId !== e.pointerId) return;
+        done();
+        if (dragNow && dragNow.id === id) endDrag({ clientX: u.clientX, clientY: u.clientY - 46 });
+        else if (!moved) t.onTap?.(id);
+      };
+      const cancel = (c) => {
+        if (c.pointerId !== e.pointerId) return;
+        done();
+        if (dragNow && dragNow.id === id) endDrag(null);
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', cancel);
+    };
+  }
   const hudApi = {
     hud(m) {
       const card = (s, p) => {
@@ -152,23 +244,79 @@ export function createLewendeUi(host) {
         <button class="lt-q" data-a="quit" aria-label="Hou op">✕</button></div>${card(m.sides[1], foeNow)}`;
       el.querySelector('[data-a="quit"]').onclick = () => host.quit();
     },
-    bar(hint, btns = []) {
-      barHtml = { hint, btns };
-      const bar = el.querySelector('.lt-bar');
-      if (!bar) return;
-      bar.hidden = !hint && !btns.length;
-      bar.querySelector('.lt-hint').innerHTML = hint || '';
-      const box = bar.querySelector('.lt-btns');
-      box.innerHTML = '';
-      for (const b of btns) {
+    /**
+     * The tray under the world (null hides it): a title and a line, then either the people's cards (drag one to a room, or
+     * tap it and then the room), the attack cards, or nothing; buttons on the right. `busy` shows the title only (the robot
+     * plays, the camera moves); `tap` says the world waits for a tap.
+     */
+    tray(t) {
+      if (trayNow && t && trayNow.people && t.people && trayNow.people.filter((p) => p.placed).length !== t.people.filter((p) => p.placed).length) stopCoach();
+      if (!t) stopCoach();
+      trayNow = t;
+      const box = el.querySelector('.lt-tray');
+      if (!box) return;
+      if (dragNow && (!t || !t.people)) endDrag(null);
+      box.hidden = !t;
+      if (!t) return;
+      box.className = `lt-tray${t.busy ? ' busy' : ''}${t.tap ? ' tap' : ''}`;
+      const people = t.people || [];
+      const weapons = t.weapons || [];
+      box.innerHTML = `<div class="lt-tray-head"><div class="lt-tray-txt"><b class="lt-tray-t lt-hint">${esc(t.title || '')}${t.busy ? '<i class="lt-dots"><i></i><i></i><i></i></i>' : ''}</b>${t.sub ? `<span class="lt-tray-s">${t.sub}</span>` : ''}</div><div class="lt-btns"></div></div>
+        ${people.length ? `<div class="lt-cards">${people.map((p) => `<button type="button" class="lt-pc${p.placed ? ' placed' : ''}${p.sel ? ' sel' : ''}${p.lost ? ' lost' : ''}" data-id="${esc(p.id)}" ${p.lost ? 'disabled' : ''}><img alt="" draggable="false" src="${portraitDataUrl(p.who, 112) || ''}"><span>${esc(shortName(p.name))}</span>${p.placed ? '<i>✓</i>' : ''}</button>`).join('')}</div>` : ''}
+        ${weapons.length ? `<div class="lt-weapons">${weapons.map((w) => `<button type="button" class="lt-wc${w.sel ? ' sel' : ''}${w.ready ? '' : ' off'}" data-w="${w.id}"><span class="lt-wc-ico">${w.icon}</span><span class="lt-wc-txt"><b>${esc(w.name)}</b><small>${esc(w.sub)}</small>${w.cost ? `<span class="lt-pips">${Array.from({ length: w.cost }, (_, i) => `<i class="${i < w.charge ? 'f' : ''}"></i>`).join('')}</span>` : ''}</span>${shapeSvg(w.shape)}</button>`).join('')}</div>` : ''}`;
+      const btnBox = box.querySelector('.lt-btns');
+      for (const b of t.buttons || []) {
         const x = document.createElement('button');
+        x.type = 'button';
         x.className = `lt-btn ${b.cls || ''}`;
         x.innerHTML = b.label;
         if (b.disabled) x.disabled = true;
         x.onclick = (e) => { e.stopPropagation(); b.fn(); };
-        box.appendChild(x);
+        btnBox.appendChild(x);
       }
+      box.querySelectorAll('.lt-wc').forEach((b) => { b.onclick = () => t.onWeapon?.(b.dataset.w); });
+      box.querySelectorAll('.lt-pc').forEach((card) => cardEvents(card, t));
+      if (dragNow) cardOf(dragNow.id)?.classList.add('lift');
     },
+    /** Where the world shows (client px): under the player cards, above the tray. */
+    playRect() {
+      const hud = el.querySelector('.lt-hud');
+      const box = el.querySelector('.lt-tray');
+      const root = el.getBoundingClientRect();
+      const top = hud ? hud.getBoundingClientRect().bottom : root.top;
+      const bottom = box && !box.hidden ? box.getBoundingClientRect().top : root.bottom;
+      return { top, bottom };
+    },
+    /** A hand shows the first drag: from the first card still out to the room at client point `to` (twice, then gone). */
+    coach(to) {
+      const card = el.querySelector('.lt-pc:not(.placed)');
+      if (!card || !to || typeof Element === 'undefined' || !Element.prototype.animate) return;
+      stopCoach();
+      const r = card.getBoundingClientRect();
+      const from = { x: r.left + r.width / 2, y: r.top + r.height * 0.42 };
+      const hand = document.createElement('div');
+      hand.className = 'lt-coach';
+      hand.innerHTML = '<span>👆</span>';
+      el.appendChild(hand);
+      const at = (p, s) => `translate(${p.x}px, ${p.y}px) translate(-30%, -10%) scale(${s})`;
+      const run = hand.animate([
+        { transform: at(from, 1.1), opacity: 0 },
+        { transform: at(from, 0.92), opacity: 1, offset: 0.16 },
+        { transform: at(to, 0.92), opacity: 1, offset: 0.72 },
+        { transform: at(to, 1.1), opacity: 0 },
+      ], { duration: 1700, iterations: 2, easing: 'ease-in-out' });
+      run.onfinish = () => stopCoach();
+      coachEl = hand;
+    },
+    /** The cards wiggle: choose someone first. */
+    nudge() {
+      const c = el.querySelector('.lt-cards');
+      if (!c) return;
+      c.classList.remove('nudge');
+      void c.offsetWidth;
+      c.classList.add('nudge');
+    },
+    bar(hint, btns = []) { hudApi.tray(hint || btns.length ? { title: hint, buttons: btns } : null); },
     toast(text, { big = false, ms = 1300, sub = '' } = {}) {
       const t = el.querySelector('.lt-toast');
       if (!t) return;
@@ -179,13 +327,15 @@ export function createLewendeUi(host) {
   };
   function playing(foe) {
     foeNow = foe;
-    show('<div class="lt-hud"></div><div class="lt-toast"></div><div class="lt-bar" hidden><div class="lt-hint"></div><div class="lt-btns"></div></div>');
+    show('<div class="lt-hud"></div><div class="lt-toast"></div><div class="lt-tray" hidden></div>');
     el.classList.add('lt-play');
-    hudApi.bar(barHtml.hint, barHtml.btns);
+    hudApi.tray(trayNow);
   }
 
   // ---------------------------------------------------------------------------------------------- result
   function result(r, foe) {
+    endDrag(null);
+    trayNow = null;
     el.classList.remove('lt-play');
     const won = r.winner === 'me';
     const draw = r.winner == null;

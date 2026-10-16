@@ -37,6 +37,8 @@ export const SHAPES = {
   brick: { w: 128, h: 56, parts: [R(0, 0, 128, 56)] },
   crate: { w: 84, h: 84, parts: [R(0, 0, 84, 84)], uniform: true },
   cube: { w: 60, h: 60, parts: [R(0, 0, 60, 60)], uniform: true },
+  // (1.16, Die Lewende Toring) a floor of the Living Tower: three rooms wide; never in a daily sequence (SHAPE_IDS)
+  floor: { w: 300, h: 96, parts: [R(0, 0, 300, 96)], uniform: true },
   pillar: { w: 52, h: 128, parts: [R(0, 0, 52, 128)] },
   wedge: { w: 150, h: 60, poly: [P(30, 0), P(120, 0), P(150, 60), P(0, 60)] },
   // the U: it stands on its flat beam, with a shallow cup on top (testers found the old arch on two
@@ -2297,6 +2299,22 @@ export function ensureTexture(scene, spec, name = null) {
   }
   info.lastUse = ++useClock;
   if (texInfo.size > TEX_CACHE_MAX) pruneTextures(textures);
+  return key;
+}
+
+/**
+ * (1.16, Die Lewende Toring) A floor of the Living Tower painted in block skin `skinId` (colour `color`, at `scale`: 2 for
+ * the close-up camera), under its own key `key` and outside the block texture cache: its floors stand the whole match, so
+ * the cache must never drop them. Returns the key.
+ */
+export function floorTexture(scene, key, skinId, color, scale = 1) {
+  if (scene.textures.exists(key)) return key;
+  const spec = { shape: 'floor', color, scale };
+  const g = getGeometry(spec);
+  const tex = scene.textures.createCanvas(key, g.texW, g.texH);
+  if (!tex) return key;
+  withBlockSkin(skinId, () => drawBlock(tex.getContext(), g, skinned(shapeColor(spec)), key));
+  tex.refresh();
   return key;
 }
 

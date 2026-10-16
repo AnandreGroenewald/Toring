@@ -85,7 +85,7 @@ const ART = {
 };
 
 // ---------------------------------------------------------------------------------------------- portraits (loaded once)
-const PORTRAIT = 96;          // px of the cached portrait canvas (drawn smaller into windows; sharp at 2-3x)
+const PORTRAIT = 192;         // px of the cached portrait canvas (drawn smaller everywhere; sharp in the close-up rooms)
 const portraits = new Map();  // id -> canvas
 let readyVersion = 0;
 const waiters = new Set();
@@ -397,6 +397,8 @@ function chuteTexture(scene, tribe) {
   tex.refresh();
   return key;
 }
+/** (1.16) The round portrait badge of person `id` (a texture key; null until the portraits load). */
+export const badgeKey = (scene, id) => portraitTexture(scene, id);
 function portraitTexture(scene, id) {
   const key = `res_${id}`;
   if (scene.textures.exists(key)) return key;
@@ -583,6 +585,48 @@ export function burnBlock(scene, b, { ms = 1700 } = {}) {
     });
   });
   return parts;
+}
+
+/**
+ * (1.16 redesign) A fire in one room at world (x, y), the room's opening `w` × `h`: flames fill the window and lick up the
+ * wall above, a hot glow, smoke and embers; the fire burns for `ms`, then dies down. Nothing follows: the tower stands still.
+ */
+export function burnRoom(scene, x, y, { w = 74, h = 58, ms = 1500, delay = 0 } = {}) {
+  const key = flameTexture(scene);
+  const puff = puffTexture(scene);
+  const add = typeof Phaser !== 'undefined' ? Phaser.BlendModes.ADD : null;
+  const parts = [];
+  const loops = [];
+  scene.time.delayedCall(delay, () => {
+    const glow = scene.add.image(x, y, puff).setDepth(DEPTH.tower + 0.6).setTint(0xff7a1a).setAlpha(0).setScale((w * 2.4) / 64, (h * 2.6) / 64);
+    if (add) glow.setBlendMode(add);
+    parts.push(glow);
+    scene.tweens.add({ targets: glow, alpha: 0.8, duration: 200 });
+    loops.push(scene.tweens.add({ targets: glow, alpha: 0.5, duration: 150, yoyo: true, repeat: -1, delay: 220 }));
+    const n = 3;
+    for (let k = 0; k < n; k++) {
+      const f = scene.add.image(x - w / 2 + (k + 0.5) * (w / n), y + h / 2 - 2, key).setOrigin(0.5, 1).setDepth(DEPTH.tower + 0.85).setScale(0.1);
+      parts.push(f);
+      const big = 0.7 + ((k * 37) % 10) / 30;
+      scene.tweens.add({ targets: f, scaleX: big, scaleY: big * 1.1, duration: 240, delay: k * 50, ease: 'Back.easeOut' });
+      loops.push(scene.tweens.add({ targets: f, scaleY: big * 1.45, scaleX: big * 0.9, duration: 110 + k * 30, yoyo: true, repeat: -1, delay: 280 + k * 30, ease: 'Sine.easeInOut' }));
+    }
+    for (let k = 0; k < 5; k++) {
+      scene.time.delayedCall(160 + k * 190, () => {
+        const sm = scene.add.image(x + (k % 2 ? 1 : -1) * (4 + k * 4), y - h / 2, puff).setDepth(DEPTH.tower + 0.9).setTint(0x3e3c44).setAlpha(0.55).setScale(0.35);
+        scene.tweens.add({ targets: sm, y: sm.y - 80 - k * 10, x: sm.x + (k % 2 ? 16 : -16), scaleX: 1.3, scaleY: 1.3, alpha: 0, duration: 1400, ease: 'Sine.easeOut', onComplete: () => sm.destroy() });
+      });
+    }
+    for (let k = 0; k < 10; k++) {
+      const e = scene.add.circle(x + (Math.random() - 0.5) * w, y - h / 2 + 4, 1.4 + Math.random() * 1.6, k % 3 ? 0xffb02e : 0xfff1a8).setDepth(DEPTH.tower + 0.95);
+      if (add) e.setBlendMode(add);
+      scene.tweens.add({ targets: e, y: e.y - 50 - Math.random() * 70, x: e.x + (Math.random() - 0.5) * 50, alpha: 0, duration: 800 + Math.random() * 800, delay: 100 + Math.random() * 700, ease: 'Quad.easeOut', onComplete: () => e.destroy() });
+    }
+    scene.time.delayedCall(ms, () => {
+      for (const t of loops) t.stop();
+      scene.tweens.add({ targets: parts, alpha: 0, duration: 420, onComplete: () => { for (const f of parts) f.destroy(); } });
+    });
+  });
 }
 
 /** Draw the missions' pictures up front, so the first fire, wave or parachute doesn't stall a slow phone mid-mission. */
