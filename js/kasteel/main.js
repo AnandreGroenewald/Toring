@@ -13,9 +13,11 @@ import { scoutHud, siegeHud } from './hud.js';
 const q = new URLSearchParams(location.search);
 const SHOT = q.get('shot') || 'beleg';
 const canvas = document.getElementById('k-canvas');
+const stage = document.getElementById('k-stage');
+const size = () => [stage.clientWidth || window.innerWidth, stage.clientHeight || window.innerHeight];
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', logarithmicDepthBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-renderer.setSize(window.innerWidth, window.innerHeight, false);
+renderer.setSize(...size(), false);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.06;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -23,7 +25,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 4000);
+const camera = new THREE.PerspectiveCamera(50, size()[0] / size()[1], 0.1, 4000);
 scene.add(camera);
 const world = buildWorld(scene, renderer, { seed: 11 });
 const rand = rng(21);
@@ -160,8 +162,9 @@ function frame() {
 }
 requestAnimationFrame(frame);
 addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+  const [w, h] = size();
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  renderer.setSize(w, h, false);
 });
 window.__kasteel = { THREE, scene, camera, renderer, castle };
