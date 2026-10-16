@@ -1,9 +1,11 @@
 # Third-party notices
 
-Stapel's own code, art, sounds and text are original. The only third-party code is the
-Phaser game framework in `lib/phaser.min.js`, which bundles the libraries below. All of
-them are under the MIT License. The Phaser licence is in `LICENSE-phaser.md`; the other
-notices are reproduced here, as the MIT License requires.
+Stapel's own code, art, sounds and text are original. The third-party code is the Phaser
+game framework in `lib/phaser.min.js` (which bundles the libraries below), and, for the 3D
+fruit battle, three.js in `lib/three.module.min.js` and cannon-es in `lib/cannon-es.js`.
+All of them are under the MIT License. The Phaser, three.js and cannon-es licences are in
+`LICENSE-phaser.md`, `LICENSE-three.md` and `LICENSE-cannon-es.md`; the other notices are
+reproduced here, as the MIT License requires.
 
 | Library | Version | Copyright | Licence |
 | --- | --- | --- | --- |
@@ -11,6 +13,8 @@ notices are reproduced here, as the MIT License requires.
 | [Matter.js](https://brm.io/matter-js/) (bundled in Phaser) | 0.20.0 | © Liam Brummitt and contributors | MIT |
 | [poly-decomp.js](https://github.com/schteppe/poly-decomp.js) (bundled in Phaser) | — | © 2013 Stefan Hedman | MIT |
 | [EventEmitter3](https://github.com/primus/eventemitter3) (bundled in Phaser) | 5.x | © 2014 Arnout Kazemier | MIT |
+| [three.js](https://threejs.org) | r170 (0.170.0) | © 2010-2024 three.js authors | MIT (`LICENSE-three.md`) |
+| [cannon-es](https://github.com/pmndrs/cannon-es) | 0.20.0 | © 2015 cannon.js authors | MIT (`LICENSE-cannon-es.md`) |
 
 Emoji are drawn by the player's own device font; the game ships no emoji images or font files.
 

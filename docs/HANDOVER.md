@@ -981,7 +981,7 @@ Later the owner added (decisions are final unless they say otherwise):
   result nudges "Nooi ’n regte vriend!"). Landmarks (fountain to rocket, 200-1500 coins) stand in your town (the boat
   sails, the dolphin jumps, the whale spouts), your neighbours see them, and each brings tourists on your first visit of
   the day. Tests: game 434, qa dorpmarks1160 5/5, dorp1160 12/12, dorpfriend1160 2/2, smoke clean.
-- **16 Oct ~23:45 — Vrugteslag 1.17: the fruit battle (local, home Wi-Fi only; not pushed; nothing live).** The owner's
+- **16 Oct 22:40 — Vrugteslag 1.17: the fruit battle (local, home Wi-Fi only; not pushed; nothing live).** The owner's
   idea (typed): "The more you play stapel (dayly challenge) the bigger your empire gets, Break your oponents empire before
   he breaks yours, with special abilities. So it needs to be a fruit battle" (grapes from a slingshot splash 4 blocks,
   bananas boomerang one whole block "no matter if its 2 or 5 people in that row", the juice flood takes 2 rows, the
@@ -1001,8 +1001,22 @@ Later the owner added (decisions are final unless they say otherwise):
   ask: "Once done I will like to compete against you ... You on the leftside of the screen and myself on the rightside of
   the screen, two different accounts" → `~/.claude/skills/stapel/scripts/qa/slag_claude.mjs`: Claude's own visible window
   (left half, its own profile = player "Claude"), Claude chooses each shot and the hands play the real controls with a
-  person's wobble; first match 16 Oct ~23:40 (room RRQMCG, his Chrome as "Kippie"). Open: online (his word; carry the
+  person's wobble; first match 16 Oct ~22:35 (room RRQMCG, his Chrome as "Kippie"). Open: online (his word; carry the
   home towns over), friend battles while away, the crane's look, balance after he plays.
+- **16 Oct ~23:55 — Die Kasteelreeks: the look (local, nothing live).** After playing the fruit battle against Claude the
+  owner: "it feels like 2 year old game, I want it to feel like a 22 year old game"; a 3D sniper-slingshot look followed,
+  then his idea: "the innitial game is simple and the challenger series is simple but THEN you get the CASTLE Series,
+  which is made out of the tower you build with your daily challenge, lets forget about the fruit, lets bring in troops
+  and machinary". His picks: Command + aim (troops advance on their own, you aim one machine at a time), any time with a
+  planned defence ("The oponent needs to be able to strategize what is the best way to defend if they are offline"),
+  stone and timber. Built (3D, three.js r170 + cannon-es 0.20 vendored in lib/ with their MIT licences): kasteel.html
+  with js/kasteel/ (world.js the savanna battlefield at sunset; castle.js castles from Daily Tower layouts: every block
+  keeps its shape, Perfek = granite, Goed = sandstone, Skeef = timber, walls, battlements, gatehouse, banners, torches;
+  army.js soldiers with sword/spear/bow/knight kit, trebuchet, battering ram, stone shot; crew.js people; hud.js the
+  scout screen, the siege bar and army cards, the trebuchet's sight). Style pictures: qa/kasteel_style1170.mjs → Previews
+  "1.17 Kasteelreeks - 1 hul kasteel / 2 die beleg / 3 deur die visier". Next (after his OK on the look): a playable siege
+  (aim the trebuchet, blocks really fall, troops march, archers shoot back) + a video; then the defence planner; then real
+  castles from saved Daily layouts (only heights are stored today) and friends' castles on the home server.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
