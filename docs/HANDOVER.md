@@ -1056,6 +1056,12 @@ Later the owner added (decisions are final unless they say otherwise):
   pages name `stapel.v1.kasteel` and `stapel.v1.kasteeldae` (the privacykeys test asked for it). Tests: npm 441/441,
   qa/kasteel_days1170.mjs 4/4 (an autoplayed Daily becomes the keep block for block), kasteel_plan1170 8/8,
   kasteel_siege1170 8/8, smoke clean.
+- **17 Oct ~01:45 — for his morning (nothing live, nothing pushed).** Play on the home Wi-Fi (play-home.sh running): the
+  siege http://192.168.1.225:8500/kasteel.html, your castle http://192.168.1.225:8500/kasteel.html?plan (a Daily played on
+  the same browser becomes a tower of it). Play-throughs in Previews: "1.17 Kasteelreeks - speel-video" (vs Robot
+  Rikus), "- jou kasteel 1" (the planner with a Daily as the keep), "- jou kasteel 2" (a siege on your own castle).
+  Waiting for his word: friends' castles over the internet (Worker + D1), the castle's rewards into the wallet, a
+  Kasteelreeks button in Stapel's menu, a real phone's speed.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
