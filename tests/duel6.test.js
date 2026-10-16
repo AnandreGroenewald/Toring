@@ -100,7 +100,7 @@ test('the lobby hears the stake looked for (protocol 6); the room it pairs us in
   const lobby = sockets.at(-1);
   lobby.open();
   const hi = lobby.of('hello')[0];
-  assert.equal(hi.v, 7, '(1.15.3: protocol 7)');
+  assert.equal(hi.v, 8, '(1.16: protocol 8)');
   assert.equal(hi.stake, 100);
   assert.equal(hi.mode, 'turns');
   lobby.hear({ t: 'match', room: 'EEEE66' });

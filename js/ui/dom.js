@@ -10,7 +10,7 @@ const WEEK_COINS = WEEK.coins;
 const WEEK_SHIELD_MAX = WEEK.shieldMax;
 const WEEK_SHIELD_PRICE = WEEK.shieldPrice;
 import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO, COSMETIC_INFO } from '../core/strings.js';
-import { COIN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic, SKINS, SKIN_KINDS, tierOf, shownPoints, shownDelta } from '../core/economy.js';
+import { COIN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic, SKINS, SKIN_KINDS, tierOf, shownPoints, shownDelta, TRIBE_PRICE } from '../core/economy.js';
 import * as BLOCKS from '../game/blocks.js';
 import { playCelebration, drawCelebrationIcon } from './celebrate.js';
 import { EMOTES, EMOTE_PICKS } from '../config.js';
@@ -2393,17 +2393,19 @@ export function createUI(bus) {
 
   /** Blok vir Blok results: "Jy ❤️❤️🤍 · 4 Perfek" and the same for the other player. */
   function turnsRows(d) {
-    const row = (cls, name, hearts, perfects) => {
+    const row = (cls, name, hearts, perfects, people) => {
       const left = Math.max(0, Math.min(TURNS.hearts, hearts ?? 0));
       const icons = '❤️'.repeat(left) + '🤍'.repeat(TURNS.hearts - left);
       return h('div', { class: `res-vs-row ${cls}` },
         h('b', { text: name }),
         h('span', { class: 'emoji res-vs-hearts', role: 'img', 'aria-label': `${left} ${S.turnsHeartsLeft}`, text: icons }),
+        // (1.16) Die Lewende Toring's battles: the people left in each town
+        d.lv && Number.isInteger(people) ? h('span', { class: 'res-vs-p res-vs-town', text: `🏠 ${fmtInt(people)}` }) : null,
         h('span', { class: 'res-vs-p', text: `${fmtInt(perfects ?? 0)} ${S.perfects}` }));
     };
     return h('div', { class: 'res-vs' },
-      row('you', S.duelYou, d.youHearts, d.youPerfects),
-      row('them', d.oppName || S.duelSomeone, d.oppHearts, d.oppPerfects));
+      row('you', S.duelYou, d.youHearts, d.youPerfects, d.youPeople),
+      row('them', d.oppName || S.duelSomeone, d.oppHearts, d.oppPerfects, d.oppPeople));
   }
 
   /** Uitdagersreeks results: who won and why. */
@@ -2420,7 +2422,8 @@ export function createUI(bus) {
     } else if (d.mode === 'turns') {
       // Blok vir Blok: out of hearts, left, too slow, or the match's last turn
       const r = d.reason;
-      why = r === 'turns' ? S.turnsWhyTurns
+      why = r === 'people' ? (won ? S.turnsWhyTheyEmpty(name) : S.turnsWhyYouEmpty)
+        : r === 'turns' ? (d.lv ? S.turnsWhyTurnsPeople : S.turnsWhyTurns)
         : won ? (r === 'quit' ? S.duelWhyTheyQuit(name) : r === 'timeout' ? S.turnsWhyTimeout(name) : S.turnsWhyTheyOut(name))
           : (r === 'quit' ? S.duelWhyYouQuit : r === 'timeout' ? S.turnsWhyTimeout(S.hudYou) : S.turnsWhyYouOut);
     } else if (d.reason === 'time') {   // (1.13) a coin match at its longest: the higher tower won
@@ -2878,23 +2881,29 @@ export function createUI(bus) {
    */
   // -------------------------------------------------------------------------------------------- (1.16) Die Lewende Toring
   /** The Living Tower's tribe (main.js says which at start and after a choice). */
-  function setLiving({ tribe } = {}) {
+  function setLiving({ tribe, owned, coins } = {}) {
     if (tribe) st.lvTribe = tribe;
+    if (Array.isArray(owned)) st.lvOwned = owned;
+    if (Number.isFinite(coins)) st.lvCoins = coins;
+    if (st.modal === 'tribe') showTribe();
+    if (st.modal === 'settings') renderSettings();
   }
 
   /** "Kies jou stam": three tribes, each with its four people; a tap chooses (from Instellings or the results card). */
   function showTribe() {
+    const owned = st.lvOwned || [];
+    const worn = owned.length ? st.lvTribe : null;
+    // (the owner's rule: the first tribe is free, the others cost coins)
+    const tag = (t) => (t === worn ? S.lvTribeWorn : owned.includes(t) ? S.lvTribeOwned : owned.length ? `🪙 ${fmtInt(TRIBE_PRICE)}` : S.lvTribeFree);
     const card = (t) => h('button', {
-      type: 'button', class: `tribe-card tribe-${t}${st.lvTribe === t ? ' is-on' : ''}`, 'aria-pressed': String(st.lvTribe === t),
+      type: 'button', class: `tribe-card tribe-${t}${t === worn ? ' is-on' : ''}`, 'aria-pressed': String(t === worn),
       onclick: () => {
         audio.play('click');
-        st.lvTribe = t;
         bus.emit('ui:lv-tribe', t);
         closeModal();
-        toast(S.lvTribeChosen(S.lvTribeNames[t]), 2400);
       },
     },
-    h('span', { class: 'tribe-name' }, emo(TRIBE_EMOJI[t]), h('b', { text: S.lvTribeNames[t] })),
+    h('span', { class: 'tribe-name' }, emo(TRIBE_EMOJI[t]), h('b', { text: S.lvTribeNames[t] }), h('i', { class: 'tribe-tag', text: tag(t) })),
     h('span', { class: 'tribe-faces' }, castOf(t).map((id) => h('img', { alt: CAST[id]?.name || '', src: portraitDataUrl(id, 96) || '' }))),
     h('span', { class: 'tribe-sub', text: S.lvTribeSub[t] }));
     const paint = () => modals.tribe.replaceChildren(h('div', { class: 'card sheet tribe-sheet' },
@@ -2902,7 +2911,8 @@ export function createUI(bus) {
       h('div', { class: 'sheet-head' }, emo('🏠'), h('h2', { id: 'stapel-tribe-title', text: S.lvTribeTitle })),
       h('div', { class: 'sheet-body' },
         h('p', { class: 'tribe-ask', text: S.lvTribeAsk }),
-        h('div', { class: 'tribe-list' }, ['vuur', 'water', 'gras'].map(card)))));
+        h('div', { class: 'tribe-list' }, ['vuur', 'water', 'gras'].map(card)),
+        h('p', { class: 'tribe-note', text: S.lvTribeFreeNote }))));
     paint();
     openModal('tribe');
     // the faces are drawn once (the first time they may still be loading)
@@ -3171,6 +3181,8 @@ export function createUI(bus) {
     // Wankelblok, Haastig, Gladde blok, which aren't weather)
     const infoOf = (k) => {
       if (!joker) return PUNISH_INFO[k];
+      // (1.16) Die Lewende Toring's battles: your tribe's mission
+      if (k === 'missie') return { emoji: TRIBE_EMOJI[st.lvTribe] || '🔥', name: S.lvMissions[st.lvTribe] || S.lvMissions.vuur, what: S.lvMissionWhat[st.lvTribe] || '' };
       const w = WEATHER_INFO[k] || S.sabotageInfo?.[k];
       return w && { emoji: w.emoji, name: w.name, what: S.sabotageWhat[k] || '' };
     };

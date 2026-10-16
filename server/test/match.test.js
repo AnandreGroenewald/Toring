@@ -124,7 +124,7 @@ test('room: init once, two players, hello -> both start with the same seed and e
   assert.deepEqual(a.last('start'), { t: 'start', seed: 'seedabc123', you: 0, opp: { name: 'Bouer', card: cleanCard(null), v: 1 } });
   assert.deepEqual(b.last('start'), {
     t: 'start', seed: 'seedabc123', you: 1,
-    opp: { name: 'Anna', card: { frame: 'goud', badge: 'leeu', title: 'bouer', celebration: 'braai', style: 'kroon', rank: 'goud', bs: 'kleur', rl: 'goud-1', rk: { race: 'goud-1', turns: 'goud-1' } }, v: 1 },
+    opp: { name: 'Anna', card: { frame: 'goud', badge: 'leeu', title: 'bouer', celebration: 'braai', style: 'kroon', rank: 'goud', bs: 'kleur', tr: 'vuur', rl: 'goud-1', rk: { race: 'goud-1', turns: 'goud-1' } }, v: 1 },
   });
   // a third player, or anyone after the start, is turned away
   const c = fakeSocket();

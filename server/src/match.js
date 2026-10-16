@@ -24,7 +24,7 @@ import {
 } from '../../js/core/duel.js';
 import { cleanCard } from '../../js/core/economy.js';
 import { lobbyVotes } from './ideas.js';
-import { createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, firstSeat, sabotagesFor, cleanVis } from '../../js/core/turns.js';
+import { createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, firstSeat, sabotagesFor, cleanVis, cleanPeople, cleanMission, cleanRooms } from '../../js/core/turns.js';
 
 const MSG_MAX = 512;                   // characters per message (the lobby)
 const ROOM_MSG_MAX = 2048;             // in a room: a Blok vir Blok turn's report carries the loose top
@@ -49,6 +49,10 @@ const PROTOCOL_STAKES = 6;  // 1.13: coin matches (a room's stake); a staked roo
 // 1.15.3: Blok vir Blok's newer rules (a joker for 3 Perfeks in a row, Wankelblok / Haastig / Gladde blok, a faster
 // crane) when both games know them; the lobby's offers (another stake or mode); "Speel weer" for another stake
 const PROTOCOL_V7 = 7;
+// 1.16: Die Lewende Toring's battles in Blok vir Blok when both games know them: a joker may be a mission (your tribe at the
+// other player's floors: 'mission', passed on as the attacker's game counted it), the games report the people
+// ('settled' and 'mission' carry pp: [seat 0, seat 1]), and nobody left in the tower loses
+const PROTOCOL_LIVING = 8;
 /** (1.13) A stake as asked for: one of DUEL.stakes, else 0 (no stake). */
 const stakeOf = (n) => (DUEL.stakes.includes(Number(n)) ? Number(n) : 0);
 /**
@@ -749,7 +753,8 @@ export class MatchRoom {
       m.rounds = [0, 1].every((k) => version(this.socketFor(k)) >= PROTOCOL_ROUNDS);
       // (1.15.3) the newer rules only when both games know them: a match with an older game plays as before
       m.v7 = [0, 1].every((k) => version(this.socketFor(k)) >= PROTOCOL_V7);
-      const ref = createTurnReferee({ first: firstSeat(randFloat), seed: m.seed, rounds: m.rounds, v7: m.v7 });
+      m.lv = m.v7 && [0, 1].every((k) => version(this.socketFor(k)) >= PROTOCOL_LIVING);   // (1.16) the battles
+      const ref = createTurnReferee({ first: firstSeat(randFloat), seed: m.seed, rounds: m.rounds, v7: m.v7, lv: m.lv });
       const [e] = ref.start();
       m.tref = ref.snapshot();
       m.deadline = m.startAt + TURNS.serverTurnMs;
@@ -760,7 +765,7 @@ export class MatchRoom {
       if (k < 0) continue;
       // (opp.v: the other game's protocol; 1.12 shows the other player's Blok vir Blok turn behind their 'go')
       const msg = { t: 'start', seed: m.seed, you: k, opp: { name: m.names[1 - k], card: cleanCard(att(this.socketFor(1 - k)).card), v: version(this.socketFor(1 - k)) } };
-      if (turn) Object.assign(msg, { mode: 'turns', turn, ...(m.rounds ? { rounds: true } : {}), ...(m.v7 ? { v7: true } : {}) });
+      if (turn) Object.assign(msg, { mode: 'turns', turn, ...(m.rounds ? { rounds: true } : {}), ...(m.v7 ? { v7: true } : {}), ...(m.lv ? { lv: true } : {}) });
       else if (version(s) >= PROTOCOL_V7) msg.mode = 'race';   // (1.15.3: a lobby offer may have changed the mode)
       // (1.12.1) to a game of protocol 5: this room's protocol and kind (a friend room: "Speel weer", pauses)
       if (version(s) >= PROTOCOL_V5) Object.assign(msg, { sv: Math.min(version(s), PROTOCOL_V7), room: m.kind });
@@ -817,7 +822,14 @@ export class MatchRoom {
       if (p) await relay('drop', { t: 'drop', n: ref.n, p, ...(ct !== null ? { ct } : {}) });
       return;
     }
-    if (msg.t === 'settled') {
+    if (msg.t === 'mission') {
+      // (1.16) a joker spent on a mission: the other game shows it exactly as the attacker's game counted it
+      const ms = cleanMission(msg);
+      if (!ms) return;
+      events = ref.mission(seat, ms.pp || null);
+      if (!events.length) return;
+      this.tell(1 - seat, { t: 'mission', kind: ms.kind, at: ms.at, hits: ms.hits, ...this.turnTag(1 - seat, ref.n) });
+    } else if (msg.t === 'settled') {
       const snap = cleanSnap(msg.snap);
       if (!snap || seat !== ref.seat || msg.n !== ref.n) return;
       const lost = msg.lost === true;
@@ -825,8 +837,10 @@ export class MatchRoom {
       if (!snapFits(snap, ref.n, r)) return;   // blocks not dropped yet, or a lost block rated otherwise
       // k (1.12): physics steps from the drop to this report (the other game applies it at that step)
       const k = Number.isInteger(msg.k) && msg.k >= 0 && msg.k <= 100000 ? msg.k : null;
-      this.tell(1 - seat, { t: 'settled', n: ref.n, lost, r, snap, ...(k !== null ? { k } : {}) });
-      events = ref.settled(seat, { n: ref.n, lost, r, vis: cleanVis(msg.vis) });
+      // (1.16) the rooms the landing opened, as that game chose them: the other game moves the same people in
+      const rooms = ref.lv ? cleanRooms(msg.rooms) : null;
+      this.tell(1 - seat, { t: 'settled', n: ref.n, lost, r, snap, ...(k !== null ? { k } : {}), ...(rooms && rooms.length ? { rooms } : {}) });
+      events = ref.settled(seat, { n: ref.n, lost, r, vis: cleanVis(msg.vis), pp: cleanPeople(msg.pp) });
     } else if (msg.t === 'joker') {
       events = ref.joker(seat, msg.kind);
     } else if (msg.t === 'over') {
@@ -846,7 +860,8 @@ export class MatchRoom {
       } else if (e.type === 'joker') {
         // (n, to a 1.12.1 game: back on a new connection it hears these again, and knows them by the turn)
         const opts = sabotagesFor(ref.v7);
-        this.tell(e.seat, { t: 'choose', options: [...opts], def: opts[0], ...this.turnTag(e.seat, ref.n) });
+        // (1.16) with the battles a joker may also be a mission (the player aims it; the default stays a sabotage)
+        this.tell(e.seat, { t: 'choose', options: ref.lv ? ['missie', ...opts] : [...opts], def: opts[0], ...this.turnTag(e.seat, ref.n) });
       } else if (e.type === 'sent') {
         this.tell(e.seat, { t: 'sent', kind: e.kind, ...this.turnTag(e.seat, ref.n) });
         // a heads-up: it comes with their next block
@@ -866,7 +881,7 @@ export class MatchRoom {
     m.result = { winner: e.winner, reason: e.reason };
     m.done = true;
     m.paused = null;
-    for (const k of [0, 1]) this.tell(k, { t: 'result', winner: e.winner, reason: e.reason, hearts: e.hearts });
+    for (const k of [0, 1]) this.tell(k, { t: 'result', winner: e.winner, reason: e.reason, hearts: e.hearts, ...(e.people ? { people: e.people } : {}) });
     m.closeAt = now + this.doneTtl();
     await this.state.storage.setAlarm(m.closeAt);
   }

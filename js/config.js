@@ -304,6 +304,11 @@ export const TURNS = {
   chooseMs: 7000,         // time to choose the sabotage (the game goes on meanwhile), then the first one
   maxTurns: 160,          // then the most hearts win, then the most Perfeks, then whoever went second
   serverTurnMs: 45000,    // the server ends a match whose turn doesn't end in this long (that player is gone)
+  // (1.16, protocol 8: Die Lewende Toring's battles, when both games know them) a joker may send your tribe at the other
+  // player's floors instead of a sabotage; from this turn on a player with nobody left in the tower loses, and after the
+  // last turn the most people win
+  lvSafeTurns: 6,
+  lvAimMs: 12000,         // time to aim a mission (then it goes where it points, or at the likeliest floor)
 };
 
 // Emoji reactions in a match (1.12; the owner: "Emoji reaction while in game but you can't spam it"): a

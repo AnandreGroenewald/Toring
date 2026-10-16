@@ -378,7 +378,28 @@ export function defaultEconomy() {
     stake: null,            // (1.13) a coin match's stake while it is played: { n, room, at, tab, beat }
     // (1.13.4) the tower's skins: what the player bought (each kind's default free) and wears
     skins: { owned: Object.fromEntries(SKIN_KINDS.map((k) => [k, [DEFAULT_SKIN[k]]])), wear: { ...DEFAULT_SKIN } },
+    // (1.16) Die Lewende Toring's tribes: the first one chosen is free, the others cost TRIBE_PRICE (the owner's rule)
+    tribes: { owned: [], wear: null },
   };
+}
+
+/** (1.16) Die Lewende Toring's tribes (whose people live in your floors and whose mission you send). */
+export const TRIBE_IDS = Object.freeze(['vuur', 'water', 'gras']);
+export const TRIBE_PRICE = 1000;
+/** A tribe chosen: one owned is worn; the very first is free; another costs TRIBE_PRICE. { economy, ok, paid, why } */
+export function chooseTribe(eco, id) {
+  const e = cleanEconomy(eco);
+  if (!TRIBE_IDS.includes(id)) return { economy: e, ok: false, why: 'unknown' };
+  if (e.tribes.owned.includes(id)) {
+    e.tribes.wear = id;
+    return { economy: e, ok: true, paid: 0 };
+  }
+  const free = e.tribes.owned.length === 0;
+  if (!free && e.coins < TRIBE_PRICE) return { economy: e, ok: false, why: 'coins' };
+  if (!free) e.coins -= TRIBE_PRICE;
+  e.tribes.owned.push(id);
+  e.tribes.wear = id;
+  return { economy: e, ok: true, paid: free ? 0 : TRIBE_PRICE };
 }
 
 /** Rebuild a trustworthy economy object from whatever was stored. */
@@ -412,6 +433,9 @@ export function cleanEconomy(raw) {
     const pick = r.skins?.wear?.[kind];
     e.skins.wear[kind] = owned.has(pick) ? pick : DEFAULT_SKIN[kind];
   }
+  const tr = r.tribes && typeof r.tribes === 'object' ? r.tribes : {};
+  e.tribes.owned = TRIBE_IDS.filter((id) => Array.isArray(tr.owned) && tr.owned.includes(id));
+  e.tribes.wear = e.tribes.owned.includes(tr.wear) ? tr.wear : (e.tribes.owned[0] || null);
   return e;
 }
 
@@ -580,6 +604,8 @@ export function cleanCard(raw) {
   // (1.15, the owner: "for the friends playing eachother, they should show what the other one has but just for the block for
   // block") the block skin this player wears: in Blok vir Blok their blocks are drawn in it on the other phone too
   out.bs = skin('blocks', r.bs) ? r.bs : DEFAULT_SKIN.blocks;
+  // (1.16) Die Lewende Toring: this player's tribe (whose people live in their floors, whose mission they send)
+  out.tr = ['vuur', 'water', 'gras'].includes(r.tr) ? r.tr : 'vuur';
   // (1.12) the rank in the mode being played, on the ladder of 23 (a 1.11 card has only the tier), and
   // both modes' ranks: a friend's link doesn't say the mode until the match starts
   out.rl = LADDER_IDS.includes(r.rl) ? r.rl : `${out.rank}-1`;

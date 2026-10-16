@@ -945,6 +945,19 @@ Later the owner added (decisions are final unless they say otherwise):
   smoke / hearts1153 / bvb_bot / wedloop_bot / daily / lesson110 clean. Previews: "1.16 Lewende Toring in Stapel - …" (2
   pictures + a 52 s recording with sound). Next: his look and word → a private Pages preview for his phone; then the tribe
   battles in matches (his design word first), tribe prices, the living store in the cloud save.
+- **16 Oct ~13:30 – 15:30 — the battles in Blok vir Blok and tribes for coins: the Living Tower game complete for tonight.
+  LOCAL ONLY (not pushed; the live Worker untouched).** The owner (typed): "please improve from here. also add the features
+  youve recommended" and "Please complete the whole game Ill be back tonight and would love to play it against my wife".
+  Three Perfeks in a row earn a joker; it now offers your tribe's mission first: tap the tower to aim (the windows it
+  reaches light up), tap again to send. Veldbrand burns an oval patch of their rooms for good, Waterwiel washes two of their
+  floors, Rankgryp grabs a column of theirs and one more; each tribe beats one (Ekstra sterk). Missions only hit the other
+  player. Down to nobody from turn 6: one more turn to get people back, else you lose; after the last turn the most people
+  win. Robot Rikus sends missions too; live with a friend through protocol 8 (`server/src/match.js` relays the mission and
+  each turn's exact rooms, so both phones hold the same two towns). Tribes: the first is free, the others 1 000 coins
+  (in the cloud save). Fixed: a tribe change no longer kills a friend's waiting invite. Tests: game 426, server 267,
+  `qa/battle1160.mjs` 7/7, `qa/battle_live1160.mjs` 7/7, living1160 18/18 and the match checks clean. For tonight:
+  `~/.claude/skills/stapel/scripts/play-home.sh` serves the game and a match server on the home Wi-Fi (nothing published);
+  a private online link needs his word (Worker protocol 8 + a Pages branch, not main).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

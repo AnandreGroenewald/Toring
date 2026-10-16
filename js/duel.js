@@ -21,13 +21,14 @@ import {
 import { cleanCard, cardForMode, cosmetic, BOT_CARD } from './core/economy.js';
 import {
   createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, isSabotage, botSabotage, firstSeat, sabotagesFor, jokerStreakFor,
-  cleanRound, cleanVis,
+  cleanRound, cleanVis, cleanPeople, cleanMission, cleanRooms,
 } from './core/turns.js';
+import { createRng } from './core/rng.js';
 
 const YOU = 0;
 const THEM = 1;
 const RESULT_WAIT_MS = 2500;   // live: after our tower fell, wait this long for the server's verdict
-const PROTOCOL = 7;            // 2: the first to a height mark chooses the punishment ('choose' / 'punish'); 3: Blok vir Blok;
+const PROTOCOL = 8;            // 2: the first to a height mark chooses the punishment ('choose' / 'punish'); 3: Blok vir Blok;
                               // 4 (1.12): Blok vir Blok 'go' (a turn began) and the report's step count, for a smooth replay;
                               // the rondtes (weather and visitors in the turn messages) and 'visit' (Skelm Sakkie's outcome);
                               // 5 (1.12.1): back on a new connection ('?rejoin=1'), "Sorry, besig nou" ('decline'),
@@ -36,6 +37,8 @@ const PROTOCOL = 7;            // 2: the first to a height mark chooses the puni
                               // 7 (1.15.3): Blok vir Blok's newer rules when both know them (start `v7`: a joker for 3 Perfeks,
                               // Wankelblok / Haastig / Gladde blok, a faster crane); the lobby's offers ('offer'); "Speel weer"
                               // for another stake ('again' with `stake`)
+                              // 8 (1.16): Die Lewende Toring's battles in Blok vir Blok when both know them (start `lv`): a
+                              // joker may be a mission ('mission': kind, at, hits, pp), 'settled' carries the people (pp)
 const V5 = 5;                  // the protocol that brought rejoin, "Speel weer" and the pause for both (a 1.12.1 game has them too)
 const REJOIN_RETRY_MS = [600, 1200, 2000, 3000];   // a dropped match tries its room again after these (then every 3 s)
 // (1.13) a coin match is settled by the room's result only: after our tower ended (or we quit) the game waits this long
@@ -93,7 +96,7 @@ const SEARCH_PING_MS = 25000;   // a searching phone says something now and then
  *   WebSocketImpl?, fetchImpl?, timers? }} deps
  */
 export function createDuel({
-  bus, apiUrl = '', nickname = () => '', card = () => null, onDecided = () => {},
+  bus, apiUrl = '', nickname = () => '', card = () => null, onDecided = () => {}, living = () => null,
   WebSocketImpl = globalThis.WebSocket, fetchImpl = globalThis.fetch ? globalThis.fetch.bind(globalThis) : null,
   setTimer = (fn, ms) => setTimeout(fn, ms), clearTimer = (id) => clearTimeout(id), now = () => Date.now(),
 } = {}) {
@@ -119,11 +122,15 @@ export function createDuel({
   // ------------------------------------------------------------------------------- a match
   function newMatch({
     kind, seed, oppName, oppCard = null, run = null, ws = null, you = YOU, mode = 'race', turn = null, oppV = null, rounds = false, v7 = false,
-    room = null, sv = 0, roomKind = null, stake = 0,
+    room = null, sv = 0, roomKind = null, stake = 0, lv = false,
   }) {
     reqGen++;
     if (match) dropChoice(match);
     const turns = mode === 'turns';
+    // (1.16) Die Lewende Toring's battles: against Robot Rikus when the Living Tower is on; live when the room says both
+    // games know them. Rikus's tribe comes from the match seed; a person's from their card.
+    const lvOn = turns && (kind !== 'live' ? !!living() : lv === true);
+    const oppTribe = kind === 'live' ? cleanCard(oppCard || {}).tr : createRng(`${seed}/rikus-stam`).pick(['vuur', 'water', 'gras']);
     match = {
       kind, seed, ws, you,
       mode: turns ? 'turns' : 'race',
@@ -131,7 +138,9 @@ export function createDuel({
       // Blok vir Blok: the referee (Robot Rikus: here; live: the server's, whose events come as messages),
       // the turn on now, the hearts, and the game's events held back until the scene is up
       // (rondtes: against Robot Rikus always; live when the room says both games know them)
-      tref: turns && kind !== 'live' ? createTurnReferee({ first: firstSeat(), seed, rounds: true, v7: true }) : null,
+      tref: turns && kind !== 'live' ? createTurnReferee({ first: firstSeat(), seed, rounds: true, v7: true, lv: lvOn }) : null,
+      lv: lvOn,
+      oppTribe,
       rounds: turns && (kind !== 'live' || rounds === true),
       // (1.15.3) Blok vir Blok's newer rules: against Robot Rikus always; live when the room says both games know them
       v7: turns && (kind !== 'live' || v7 === true),
@@ -279,7 +288,9 @@ export function createDuel({
     const ms = joker ? TURNS.chooseMs : DUEL.chooseMs;
     const timer = setTimer(() => choose(mark, def), ms);
     m.choice = { mark, def, timer, joker };
-    bus.emit('duel:choose', { m: mark, opp: m.oppName, def, options: joker ? [...sabs] : [...PUNISHMENTS], ms, ...(joker ? { joker, streak: jokerStreakFor(m.v7) } : {}) });
+    // (1.16) with the battles a joker may also send your tribe on a mission (first in the row)
+    const opts = joker ? (m.lv ? ['missie', ...sabs] : [...sabs]) : [...PUNISHMENTS];
+    bus.emit('duel:choose', { m: mark, opp: m.oppName, def, options: opts, ms, ...(joker ? { joker, streak: jokerStreakFor(m.v7) } : {}) });
   }
 
   /** The player's pick (or the default): to the server, or straight onto the recording. */
@@ -289,6 +300,16 @@ export function createDuel({
     if (!c || c.mark !== mark) return;
     clearTimer(c.timer);
     m.choice = null;
+    if (c.joker && kind === 'missie' && m.lv) {
+      // (1.16) a mission: the game lets the player aim it at the tower; it comes back as 'turns:mission-out'
+      bus.emit('duel:chosen', { m: mark, kind: 'missie' });
+      if (!m.outcome) {
+        m.missionOut = true;
+        bus.emit('turns:aim', { you: m.you });
+      }
+      nextChoice(m);
+      return;
+    }
     if (c.joker) {
       const k = isSabotage(kind, m.v7) ? kind : c.def;
       bus.emit('duel:chosen', { m: mark, kind: k });
@@ -450,16 +471,36 @@ export function createDuel({
         startTurn(m, turnOf(e));
       } else if (e.type === 'joker') {
         if (e.seat === m.you) askChoice(m, 0);
+        // (1.16) with the battles Robot Rikus mostly sends his tribe at your floors (the game aims it for him)
+        else if (m.lv && createRng(`${m.seed}/rikus-missie/${m.tref.n}`).chance(0.7)) bus.emit('turns:bot-aim', { seat: e.seat });
         else turnEvents(m, m.tref.joker(e.seat, botSabotage(m.seed, m.tref.n, m.v7)));   // Robot Rikus doesn't wait
       } else if (e.type === 'sent') {
         if (e.seat === m.you) sabotageOut(m, e.kind);
         else sabotageIn(m, e.kind);
       } else if (e.type === 'result') {
         m.hearts = [...e.hearts];
+        if (e.people) m.people = [...e.people];
         decide(e.winner === m.you ? 'won' : 'lost', e.reason);
       }
     }
   }
+
+  // (1.16) our mission, aimed and sent: to the room (it passes it on as counted here), or to the referee here
+  bus.on('turns:mission-out', (d) => {
+    const m = match;
+    if (!m || m.mode !== 'turns' || !m.lv || m.outcome || !m.missionOut) return;
+    m.missionOut = false;
+    const ms = cleanMission(d);
+    if (!ms) return;
+    if (m.kind === 'live') send(m.ws, { t: 'mission', n: m.turn?.n || 0, ...ms });
+    else turnEvents(m, m.tref.mission(m.you, ms.pp || null));
+  });
+  // (1.16) Robot Rikus's mission has landed (the game aimed and showed it): the referee counts it
+  bus.on('turns:bot-mission-done', (d) => {
+    const m = match;
+    if (!m || m.mode !== 'turns' || !m.lv || m.outcome || m.kind === 'live' || !d) return;
+    turnEvents(m, m.tref.mission(d.seat === 0 ? 0 : 1, cleanPeople(d.pp)));
+  });
 
   /** Our joker's sabotage is on its way to the other player's next block. */
   function sabotageOut(m, kind) {
@@ -518,7 +559,8 @@ export function createDuel({
         const r = cleanRating(msg.r);
         if (!snap || !theirs || !snapFits(snap, msg.n, r) || !once()) break;
         if (r === 'P') m.perfects[m.turn.seat] += 1;
-        bus.emit('turns:settled', { n: msg.n, lost: msg.lost === true, r, snap, ...(stepsOf(msg.k) !== null ? { k: stepsOf(msg.k) } : {}) });
+        const rooms = m.lv ? cleanRooms(msg.rooms) : null;   // (1.16) the rooms their landing opened
+        bus.emit('turns:settled', { n: msg.n, lost: msg.lost === true, r, snap, ...(stepsOf(msg.k) !== null ? { k: stepsOf(msg.k) } : {}), ...(rooms ? { rooms } : {}) });
         break;
       }
       case 'choose':
@@ -537,8 +579,17 @@ export function createDuel({
       case 'sabotage':
         if (isSabotage(msg.kind, m.v7) && once()) sabotageIn(m, msg.kind);
         break;
+      case 'mission': {   // (1.16) the other player's mission, as their game counted it
+        const ms = cleanMission(msg);
+        if (ms && theirs !== undefined && !m.seen.has(`mission:${msg.n}:${ms.at.join(',')}`)) {
+          m.seen.add(`mission:${msg.n}:${ms.at.join(',')}`);
+          bus.emit('turns:mission-in', ms);
+        }
+        break;
+      }
       case 'result':
         if (Array.isArray(msg.hearts) && msg.hearts.length === 2) m.hearts = msg.hearts.map((h) => Math.max(0, Math.floor(Number(h)) || 0));
+        if (cleanPeople(msg.people)) m.people = cleanPeople(msg.people);
         if (msg.winner === 0 || msg.winner === 1) decide(msg.winner === m.you ? 'won' : 'lost', String(msg.reason || ''));
         break;
       default:
@@ -657,12 +708,14 @@ export function createDuel({
     const r = cleanRating(d.r);
     if (r === 'P') m.perfects[m.turn.seat] += 1;
     const vis = cleanVis(d.vis);
+    const pp = m.lv ? cleanPeople(d.pp) : null;   // (1.16) the people as this game counts them
     if (m.kind === 'live') {
       const k = stepsOf(d.k);
-      if (m.turn.seat === m.you) sendTurn(m, { t: 'settled', n: d.n, lost: d.lost === true, r, snap, ...(k !== null ? { k } : {}), ...(vis ? { vis } : {}) });
+      const rooms = m.lv ? cleanRooms(d.rooms) : null;   // (1.16) the rooms our landing opened
+      if (m.turn.seat === m.you) sendTurn(m, { t: 'settled', n: d.n, lost: d.lost === true, r, snap, ...(k !== null ? { k } : {}), ...(vis ? { vis } : {}), ...(pp ? { pp } : {}), ...(rooms && rooms.length ? { rooms } : {}) });
       return;
     }
-    turnEvents(m, m.tref.settled(m.turn.seat, { n: d.n, lost: d.lost === true, r, vis }));
+    turnEvents(m, m.tref.settled(m.turn.seat, { n: d.n, lost: d.lost === true, r, vis, pp }));
   });
 
   // ------------------------------------------------------------------------------- live socket
@@ -779,6 +832,7 @@ export function createDuel({
       // (oppV: null from a Worker older than 1.12, which doesn't say)
       mode: turns ? 'turns' : 'race', turn, oppV: Number.isFinite(msg.opp?.v) ? Math.max(1, Math.min(99, Math.floor(msg.opp.v))) : null, rounds: msg.rounds === true,
       v7: msg.v7 === true,   // (1.15.3) Blok vir Blok's newer rules: the room says both games know them
+      lv: msg.lv === true,   // (1.16) Die Lewende Toring's battles: both games know them
       // (1.12.1: the room's protocol and kind, from a Worker of protocol 5)
       room, sv: Number.isFinite(msg.sv) ? Math.floor(msg.sv) : 0, roomKind: msg.room === 'friend' || msg.room === 'random' ? msg.room : null,
       // (1.13) the room's stake, as the room says it (a Worker older than 1.13 says none: no coins at stake)
@@ -1438,6 +1492,10 @@ export function createDuel({
         oppHearts: turns ? m.hearts[1 - m.you] : null,
         youPerfects: turns ? m.perfects[m.you] : null,
         oppPerfects: turns ? m.perfects[1 - m.you] : null,
+        // (1.16) Die Lewende Toring's battles: each player's people at the end
+        lv: !!m.lv,
+        youPeople: m.people ? m.people[m.you] : null,
+        oppPeople: m.people ? m.people[1 - m.you] : null,
         lostConn: m.lostConn,
         seed: m.seed,
         challenge: turns ? null : encodeChallenge({ seed: m.seed, name: nickname() || '', run }),

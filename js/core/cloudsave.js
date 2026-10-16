@@ -17,7 +17,7 @@
 //     counter, for the later day. A coin match's held stake is never in a save (js/core/storage.js cleanSave).
 import { cleanSave } from './storage.js';
 import { addDays, daysBetween, isDateKey } from './daily.js';
-import { MAX_COINS, MAX_STOCK, POWERUP_IDS, COSMETIC_KINDS, DEFAULT_LOOK, RANK_MODES, RANK_RULES, EARN, LADDER, ladderAt, ladderIndex, cleanModeRank, rolloverSeason, SKIN_KINDS, DEFAULT_SKIN } from './economy.js';
+import { MAX_COINS, MAX_STOCK, POWERUP_IDS, COSMETIC_KINDS, DEFAULT_LOOK, RANK_MODES, RANK_RULES, EARN, LADDER, ladderAt, ladderIndex, cleanModeRank, rolloverSeason, SKIN_KINDS, DEFAULT_SKIN, TRIBE_IDS } from './economy.js';
 import { WEEK } from './week.js';
 
 const KEEP_DAILY_DAYS = 90;   // as js/core/storage.js keeps them
@@ -181,6 +181,10 @@ export function mergeSaves(localRaw, cloudRaw, baseRaw = null, { today = null } 
     skins.owned[kind] = [...new Set([...ce.skins.owned[kind], ...le.skins.owned[kind]])];
     skins.wear[kind] = worn(pick(le.skins.wear[kind], ce.skins.wear[kind], be.skins.wear[kind], DEFAULT_SKIN[kind]), le.skins.wear[kind], le.skins.owned[kind], ce.skins.owned[kind], DEFAULT_SKIN[kind]);
   }
+  // (1.16) the Living Tower's tribes: bought on either side stays bought; the one worn is a choice
+  const trOwned = TRIBE_IDS.filter((id) => ce.tribes.owned.includes(id) || le.tribes.owned.includes(id));
+  const trWear = pick(le.tribes.wear, ce.tribes.wear, be.tribes.wear, null);
+  const tribes = { owned: trOwned, wear: trOwned.includes(trWear) ? trWear : (trOwned[0] || null) };
   const econ = {
     coins: add(le.coins, ce.coins, be.coins, MAX_COINS),
     earned: { day: earnDay, n: earnDay ? clamp(nOn(ce) + Math.max(0, nOn(le) - nOn(be)), 0, EARN.dayCap) : 0 },
@@ -190,6 +194,7 @@ export function mergeSaves(localRaw, cloudRaw, baseRaw = null, { today = null } 
     ranks,
     freeFoundation: later(le.freeFoundation, ce.freeFoundation),
     skins,
+    tribes,
     stake: null,
   };
 

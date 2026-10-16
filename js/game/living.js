@@ -14,7 +14,7 @@ import { bus } from '../core/bus.js';
 import { S } from '../core/strings.js';
 import { audio, haptics } from '../audio.js';
 import { roomsFor, titleFor, titleProgress, createCasting, LIVING, CAST_TRIBE } from '../core/living.js';
-import { windowSlots, windowWorld, parachute, badgeKey, paintWindows, whenPortraits, CAST } from './residents.js';
+import { windowSlots, windowWorld, parachute, badgeKey, paintWindows, whenPortraits, CAST, burnRoom, waterWheel, vinesTo, throwBall } from './residents.js';
 
 const RES = 1.5;           // the windows are painted this much sharper than the blocks (crisp faces on a phone)
 const PAD = 3;             // the block textures' padding (js/game/blocks.js)
@@ -24,6 +24,13 @@ const POP_MS = 230;        // a face pops out of its window
 const HOLD_MS = 170;       // ...waves...
 const FALL_VY = 7;         // px/step: a lived-in floor falling this fast: everyone jumps
 const SWEEP_MS = 1500;     // the pictures of floors that are gone are freed this often
+// (1.16 battles) each tribe beats one: Vuur > Gras, Water > Vuur, Gras > Water ("Ekstra sterk")
+export const BEATS = Object.freeze({ vuur: 'gras', water: 'vuur', gras: 'water' });
+const FIRE_RX = 100;        // Veldbrand: their windows in an oval this wide and high around the aim (Ekstra sterk: bigger)
+const FIRE_RY = 62;
+const FIRE_GROW = 1.35;
+const VINE_HALF_W = 56;     // Rankgryp: the column's half width, and how far up it climbs
+const VINE_UP = 330;
 const FIREWORK_TINTS = [0xffc21a, 0xff3b3b, 0x2f9bff, 0x35c84a, 0xff4fd8, 0x9b5cff];
 
 let uid = 0;
@@ -71,8 +78,9 @@ export class Living {
    * `quiet`: the menu's tower (people, nothing else). `best`: the player's record (people). `known(id, gold)`: has this
    * person lived in one of the player's towers before. `owner(block)`: 'me' (default) or 'them' (Blok vir Blok).
    */
-  constructor(scene, { tribe = 'vuur', theirTribe = null, seed = 'x', quiet = false, best = 0, known = null, firstTown = false, reducedMotion = false, ownerOf = null } = {}) {
+  constructor(scene, { tribe = 'vuur', theirTribe = null, seed = 'x', quiet = false, best = 0, known = null, firstTown = false, reducedMotion = false, ownerOf = null, seat = null } = {}) {
     this.scene = scene;
+    this.seat = seat === 0 || seat === 1 ? seat : null;
     this.firstTown = !!firstTown;   // the player's very first town: everyone is new, so nobody is called new
     this.quiet = !!quiet;
     this.tribe = tribe;
@@ -115,8 +123,12 @@ export class Living {
     if (this.floors) for (const f of this.floors.values()) this.free(f);
     this.seed = String(seed);
     this.dirty = new Set();        // floors whose windows changed: painted once, at the next frame
-    this.casting = createCasting(this.seed, this.tribe);
-    this.theirCasting = createCasting(`${this.seed}/hulle`, this.theirTribe);
+    this.opened = [];              // (Blok vir Blok, live) the windows of yours that got people since the last report
+    // (Blok vir Blok: by seat, so both phones cast each player's people in the same order)
+    const mine = this.seat === null ? this.seed : `${this.seed}/s${this.seat}`;
+    const theirs = this.seat === null ? `${this.seed}/hulle` : `${this.seed}/s${1 - this.seat}`;
+    this.casting = createCasting(mine, this.tribe);
+    this.theirCasting = createCasting(theirs, this.theirTribe);
     this.floors = new Map();       // block index -> { block, mine, wins: [{ s, who, gold }], key, rated, gone }
     this.people = 0;               // living in the tower now (yours)
     this.theirs = 0;               // ...and the other player's (Blok vir Blok)
@@ -163,11 +175,16 @@ export class Living {
     if (!b || b.destroyed) return;
     // the other player's floor: every window that isn't boarded up shows drawn curtains with the lamp on (all alike:
     // nothing tells who is home)
+    // (1.16 battles) a burnt window shows its soot on both sides; a window of theirs a mission found empty shows its curtains
+    // pulled open (known: nobody there now)
     const wins = f.wins.map((w) => (f.mine ? {
-      look: w.s === 'home' ? (w.gold ? 'lit' : 'face') : w.s === 'boarded' ? 'boarded' : 'room',
+      look: w.s === 'home' ? (w.gold ? 'lit' : 'face') : w.s === 'boarded' ? 'boarded' : w.s === 'burnt' ? 'burnt' : 'room',
       who: w.who,
       tribe: w.who ? CAST_TRIBE[w.who] : this.tribe,
-    } : { look: w.s === 'boarded' ? 'boarded' : 'curtain', who: null, tribe: this.theirTribe }));
+    } : {
+      look: w.s === 'burnt' ? 'burnt' : w.s === 'boarded' ? 'boarded' : w.known && w.s !== 'home' ? 'open' : 'curtain',
+      who: null, tribe: this.theirTribe,
+    }));
     const key = paintWindows(this.scene, f.key, b.geom, wins, PAD, RES);
     if (key) b.setWindowTexture(key, RES);
   }
@@ -205,6 +222,7 @@ export class Living {
     const per = (r === 'P' ? Math.max(0, combo - 1) : 0);
     spots.forEach((p, k) => {
       p.f.wins[p.slot].s = 'coming';
+      if (p.f.mine) this.opened.push([p.f.block.index, p.slot]);
       this.later(FIRST_MS + k * STEP_MS, () => this.moveIn(p.f, p.slot, k + per, k, p.f !== f));
     });
     this.later(FIRST_MS + spots.length * STEP_MS + POP_MS + HOLD_MS + 420, () => this.checkTown());
@@ -254,6 +272,7 @@ export class Living {
     w.s = 'home';
     w.who = who;
     w.gold = f.mine && gold;
+    w.known = false;
     // a boarded-up floor that gets someone is fixed up: all its boards come off (its other windows wait, dark)
     if (wasBoarded) for (const x of f.wins) if (x.s === 'boarded') x.s = 'dark';
     if (!f.mine) {
@@ -384,6 +403,242 @@ export class Living {
     if (quiet) return;
     audio.play('chute');
     this.emit(f.mine ? -n : 0);
+  }
+
+  // ------------------------------------------------------------------------------------------- live: one town on two phones
+  /** Is block `b`'s floor this player's (true), the other player's (false), or no floor (null)? */
+  floorMine(b) {
+    const f = b ? this.floors.get(b.index) : null;
+    return f ? f.mine : null;
+  }
+
+  /** The windows of yours that got people since the last call (the turn's report carries them to the other phone). */
+  takeOpened() {
+    const out = this.opened.slice(0, 24);
+    this.opened = [];
+    return out;
+  }
+
+  /** The other player's landing, as their game chose its rooms: the same people move into the same windows here. */
+  openRooms(list) {
+    const touched = new Set();
+    let k = 0;
+    for (const [i, slot] of list || []) {
+      const f = this.floors.get(i);
+      if (!f || f.mine || f.gone || !f.wins[slot]) continue;
+      const w = f.wins[slot];
+      if (w.s !== 'dark' && w.s !== 'boarded') continue;
+      w.s = 'coming';
+      touched.add(f);
+      const n = k++;
+      this.later(FIRST_MS + n * STEP_MS, () => this.moveIn(f, slot, n, n, false));
+    }
+    for (const f of touched) f.rated = true;
+  }
+
+  // ------------------------------------------------------------------------------------------- battles (Blok vir Blok)
+  /** [seat 0, seat 1]: your people at your seat `you`, the other player's at theirs. */
+  peopleBySeat(you, { coming = false } = {}) {
+    // (`coming`: people on their way into a room count already: a turn's report never misses a landing's rooms)
+    let cm = 0;
+    let ct = 0;
+    if (coming) for (const f of this.floors.values()) if (!f.gone) for (const w of f.wins) if (w.s === 'coming') { if (f.mine) cm++; else ct++; }
+    const p = [0, 0];
+    p[you === 1 ? 1 : 0] = this.people + cm;
+    p[you === 1 ? 0 : 1] = this.theirs + ct;
+    return p;
+  }
+
+  /** The standing floors (not gone, not falling off). */
+  standing() {
+    return [...this.floors.values()].filter((f) => !f.gone && f.block && !f.block.destroyed && f.block.state !== 'lost' && f.block.state !== 'falling');
+  }
+
+  /**
+   * The windows a mission of `kind` aimed at world point `at` reaches: [{ f, slot }]. `mine`: the mission is this player's
+   * (it goes at the other side's floors). Veldbrand burns their rooms in an oval round the aim, for good; Waterwiel washes
+   * the 2 floors of theirs nearest the aim (3 Ekstra sterk); Rankgryp climbs a column of theirs from the aim up (its
+   * extra grab elsewhere is added when it is sent: `extras`).
+   */
+  reach(kind, at, { mine = true, strong = false } = {}) {
+    const target = !mine;   // the floors under attack: f.mine === target
+    const out = [];
+    const floors = this.standing();
+    if (kind === 'vuur') {
+      const k = strong ? FIRE_GROW : 1;
+      for (const f of floors) {
+        if (f.mine !== target) continue;
+        f.wins.forEach((w, i) => {
+          if (w.s === 'burnt') return;
+          const p = windowWorld(f.block, i);
+          if (((p.x - at.x) / (FIRE_RX * k)) ** 2 + ((p.y - at.y) / (FIRE_RY * k)) ** 2 <= 1) out.push({ f, slot: i });
+        });
+      }
+    } else if (kind === 'water') {
+      const n = strong ? 3 : 2;
+      const near = floors.filter((f) => f.mine === target)
+        .map((f) => ({ f, d: Math.hypot(f.block.centerX - at.x, (f.block.centerY - at.y) * 1.4) }))
+        .sort((a, c) => a.d - c.d).slice(0, n);
+      for (const { f } of near) f.wins.forEach((w, i) => { if (w.s !== 'burnt') out.push({ f, slot: i }); });
+    } else {
+      for (const f of floors) {
+        if (f.mine !== target) continue;
+        f.wins.forEach((w, i) => {
+          if (w.s === 'burnt') return;
+          const p = windowWorld(f.block, i);
+          if (Math.abs(p.x - at.x) <= VINE_HALF_W && p.y <= at.y + 40 && p.y >= at.y - VINE_UP) out.push({ f, slot: i });
+        });
+      }
+    }
+    return out.slice(0, 40);
+  }
+
+  /** Rankgryp's extra grab: `n` people of theirs anywhere else, at random. */
+  extras(spots, n, { mine = true } = {}) {
+    const target = !mine;
+    const homes = [];
+    for (const f of this.standing()) {
+      if (f.mine !== target) continue;
+      f.wins.forEach((w, i) => { if (w.s === 'home' && !spots.some((o) => o.f === f && o.slot === i)) homes.push({ f, slot: i }); });
+    }
+    const out = [];
+    for (let k = 0; k < n && homes.length; k++) out.push(homes.splice(Math.floor(Math.random() * homes.length), 1)[0]);
+    return out;
+  }
+
+  /** As the other game hears it: [[block index, window], ...]; and back. */
+  hitsOf(spots) {
+    return spots.map((p) => [p.f.block.index, p.slot]);
+  }
+
+  spotsOf(hits) {
+    const out = [];
+    for (const [i, slot] of hits || []) {
+      const f = this.floors.get(i);
+      if (f && !f.gone && f.block && !f.block.destroyed && f.wins[slot]) out.push({ f, slot });
+    }
+    return out;
+  }
+
+  /**
+   * Robot Rikus aims (he can't see who is home either): at the floor of yours that landed best (a Perfek floor holds
+   * the most), on screen, a little at random; Veldbrand a little off its middle when his own floors are close.
+   */
+  botAim(kind, { mine = false } = {}) {
+    // (`mine`: aimed for this player, at the other side's floors; else Robot Rikus's at this player's)
+    const target = !mine;
+    const sc = this.scene;
+    const cam = sc.cameras.main;
+    const top = cam.scrollY + 60;
+    const bottom = cam.scrollY + cam.height - 140;
+    const seen = this.standing().filter((f) => f.mine === target && f.block.centerY > top && f.block.centerY < bottom);
+    const pool = seen.length ? seen : this.standing().filter((f) => f.mine === target);
+    if (!pool.length) {
+      const t = sc.topBlock;
+      return { x: t ? t.centerX : 360, y: t ? t.centerY : sc.towerTopY };
+    }
+    let best = null;
+    for (const f of pool) {
+      const r = sc.grid?.[f.block.index];
+      const guess = r === 'P' ? 3 : r === 'G' ? 1.3 : 0.4;
+      const known = f.wins.filter((w) => w.s === 'burnt' || w.known).length;
+      const score = (guess + f.wins.length * 0.2 - known * 0.5) * (0.65 + Math.random() * 0.7);
+      if (!best || score > best.score) best = { f, score };
+    }
+    const f = best.f;
+    const mid = Math.floor((f.wins.length - 1) / 2);
+    const p = windowWorld(f.block, mid);
+    return { x: p.x + (Math.random() - 0.5) * 20, y: p.y };
+  }
+
+  /**
+   * A mission lands at once in the counts (whoever was home at a reached window jumps; Veldbrand burns the window for
+   * good; theirs show their curtains open where nobody is now) and plays out on screen: the fire, the wheel or the vines,
+   * then the parachutes. `mine`: it is this player's mission. Returns { hit, own, pp? } (their people out, your own out).
+   */
+  strike(kind, at, spots, { mine = true, strong = false, quiet = false } = {}) {
+    const jumps = [];
+    let hit = 0;
+    let own = 0;
+    for (const p of spots) {
+      const w = p.f.wins[p.slot];
+      if (!w) continue;
+      if (w.s === 'coming') w.s = 'dark';
+      if (w.s === 'home') {
+        jumps.push({ f: p.f, slot: p.slot, who: w.who, mineFloor: p.f.mine });
+        if (p.f.mine === !mine) hit++;
+        else own++;
+        if (p.f.mine) this.people = Math.max(0, this.people - 1);
+        else this.theirs = Math.max(0, this.theirs - 1);
+        if (p.f.mine) this.jumped++;
+        w.who = null;
+        w.gold = false;
+      }
+      if (kind === 'vuur') w.s = 'burnt';
+      else if (w.s === 'home' || w.s === 'dark' || w.s === 'boarded') w.s = w.s === 'boarded' ? 'boarded' : 'dark';
+      if (!p.f.mine) w.known = true;
+    }
+    const floors = new Set(spots.map((p) => p.f));
+    const land = () => {
+      if (this.dead) return;
+      for (const f of floors) this.dirty.add(f);
+      const sea = this.scene.water ? this.scene.water.surfaceY : at.y + 500;
+      jumps.forEach((j, k) => {
+        const b = j.f.block;
+        if (!b || b.destroyed) return;
+        const q = windowWorld(b, j.slot);
+        parachute(this.scene, q.x, q.y, j.who, { dir: q.x < at.x ? -1 : 1, seaY: sea, delay: 60 + k * 110 });
+      });
+      if (jumps.length) audio.play('chute');
+      this.emit(jumps.some((j) => j.mineFloor) ? -1 : 0);
+    };
+    if (quiet || this.quiet || this.reduced) {
+      land();
+      return { hit, own };
+    }
+    this.playMission(kind, at, spots, { mine, strong }, land);
+    return { hit, own };
+  }
+
+  /** The mission on screen; `land` when it reaches the tower. */
+  playMission(kind, at, spots, { mine, strong }, land) {
+    const sc = this.scene;
+    const cam = sc.cameras.main;
+    audio.play(kind === 'water' ? 'splash' : kind === 'gras' ? 'shoo' : 'zap');
+    if (kind === 'vuur') {
+      const x0 = mine ? (at.x < 360 ? cam.scrollX + 40 : cam.scrollX + cam.width - 40) : (at.x < 360 ? cam.scrollX + cam.width - 40 : cam.scrollX + 40);
+      const y0 = cam.scrollY + 260;
+      throwBall(sc, x0, y0, at.x, at.y, { kind: 'fire', ms: 560, arc: 70 }).then(() => {
+        if (this.dead) return;
+        sc.effects?.flash?.(0xff8a2a, 0.22, 200);
+        sc.effects?.shake?.(0.006, 240);
+        land();
+        spots.forEach((p, k) => {
+          const b = p.f.block;
+          if (!b || b.destroyed) return;
+          const q = windowWorld(b, p.slot);
+          const s = windowSlots(b.geom)[p.slot] || { w: 24, h: 30 };
+          burnRoom(sc, q.x, q.y, { w: s.w + 8, h: s.h + 6, ms: 1200, delay: k * 40 });
+        });
+      });
+    } else if (kind === 'water') {
+      const ys = spots.map((p) => windowWorld(p.f.block, p.slot).y);
+      const xs = spots.map((p) => p.f.block.centerX);
+      const y0 = (ys.length ? Math.min(...ys) : at.y) - 34;
+      const y1 = (ys.length ? Math.max(...ys) : at.y) + 34;
+      const cx = xs.length ? xs.reduce((a, c) => a + c, 0) / xs.length : at.x;
+      const width = Math.max(140, ...spots.map((p) => (p.f.block.right - p.f.block.left)));
+      waterWheel(sc, cx, y0, y1, { side: mine ? -1 : 1, width, ms: 1300, seaY: sc.water ? sc.water.surfaceY : null, onHit: land });
+    } else {
+      const top = spots.length ? Math.min(...spots.map((p) => windowWorld(p.f.block, p.slot).y)) - 26 : at.y - 120;
+      vinesTo(sc, at.x, at.y + 50, Math.min(top, at.y - 40), { ms: 680, hold: 520 }).then(() => land());
+      // the extra grab elsewhere: a thin vine of its own
+      for (const p of spots) {
+        const q = windowWorld(p.f.block, p.slot);
+        if (Math.abs(q.x - at.x) > VINE_HALF_W + 4 || q.y > at.y + 44 || q.y < at.y - VINE_UP - 4) vinesTo(sc, q.x + 18, q.y + 46, q.y - 6, { ms: 600, hold: 380 });
+      }
+    }
+    if (strong) sc.effects?.floatText(at.x, at.y - 70, S.lvStrong, { color: '#ffd23f', size: 34 });
   }
 
   // ------------------------------------------------------------------------------------------- the town

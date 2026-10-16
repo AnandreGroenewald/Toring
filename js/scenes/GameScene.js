@@ -15,7 +15,8 @@ import { fmtM, fmtMShort } from '../core/format.js';
 import { createSequence } from '../core/sequence.js';
 import { audio, haptics } from '../audio.js';
 import { Block, ensureTexture, getGeometry, releaseNamedTextures, FROZEN_TINT, withBlockSkin } from '../game/blocks.js';
-import { Living } from '../game/living.js';
+import { Living, BEATS } from '../game/living.js';
+import { windowSlots, windowWorld } from '../game/residents.js';
 import { ZONES, zoneAt } from '../core/zones.js';
 import { createBillboard } from '../game/billboard.js';
 import { createBlockNamer } from '../core/sponsors.js';
@@ -430,6 +431,9 @@ export class GameScene extends Phaser.Scene {
       // (1.12) both ranks in this mode ('🥇II'), shown in front of the names at the top
       oppRank: typeof d.duel?.oppRank === 'string' ? d.duel.oppRank : '',
       youRank: typeof d.duel?.youRank === 'string' ? d.duel.youRank : '',
+      // (1.16) Die Lewende Toring's battles (Blok vir Blok) and the other player's tribe
+      lv: d.duel?.lv === true,
+      oppTribe: ['vuur', 'water', 'gras'].includes(d.duel?.oppTribe) ? d.duel.oppTribe : null,
     } : null;
     // Blok vir Blok: whose turn is told by js/duel.js ('turns:turn'); `you` is this player's seat, `bot`
     // that the other seat is Robot Rikus (this game plays his blocks)
@@ -597,7 +601,9 @@ export class GameScene extends Phaser.Scene {
     if (lo) {
       safely(() => {
         this.living = new Living(this, {
-          tribe: lo.tribe, seed: this.seed, quiet: this.idle, best: lo.best, known: lo.known, firstTown: lo.firstTown, reducedMotion: this.reducedMotion,
+          tribe: lo.tribe, theirTribe: this.duel?.oppTribe || null,
+          seat: this.turns ? this.turns.you : null,   // (Blok vir Blok: each seat's people come in the same order on both phones)
+          seed: this.seed, quiet: this.idle, best: lo.best, known: lo.known, firstTown: lo.firstTown, reducedMotion: this.reducedMotion,
           // Blok vir Blok: one tower, two towns: a floor is yours when it was your turn's block
           ownerOf: this.turns ? () => !!this.turns.cur?.mine : null,
         });
@@ -691,6 +697,16 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // (1.16) Die Lewende Toring's battles (Blok vir Blok, both games know them; Robot Rikus always): missions
+    this.battles = !!(this.living && this.turns && this.duel?.lv);
+    this.aim = null;
+    if (this.battles) {
+      this.offs.push(
+        bus.on('turns:aim', () => this.startAim()),
+        bus.on('turns:bot-aim', (d) => this.botMission(d)),
+        bus.on('turns:mission-in', (d) => this.missionIn(d)),
+      );
+    }
     this.offs.push(
       bus.on('game:quit', () => this.endGame('quit')),
       // Uitdagersreeks: the other player sent a visitor / the match was decided
@@ -931,6 +947,10 @@ export class GameScene extends Phaser.Scene {
   // Input
   // -------------------------------------------------------------------------
   onPointerDown(pointer) {
+    if (this.aim && pointer) {   // (1.16) aiming a mission: the tap aims (a second tap there sends it), no drop
+      this.aimTap(pointer);
+      return;
+    }
     if (pointer && this.tapVisitor(pointer)) return;
     this.tryDrop(false, this.tapLag(pointer && pointer.event));
   }
@@ -1333,6 +1353,7 @@ export class GameScene extends Phaser.Scene {
     this.updateGhostAndAutoplay();
     this.updateWobble(dtS);
     if (this.living) this.living.update(this.now);
+    if (this.aim && this.now >= this.aim.until) this.fireAim();
     this.emitHud();
     if (this.duel && !this.turns && !this.over) this.emitDuel();
     this.writeRegistry();
@@ -1499,6 +1520,11 @@ export class GameScene extends Phaser.Scene {
     this.autoplay = botTurn ? (t.sab ? BOT_SABOTAGED_ERROR[t.sab] ?? BOT_AIM_ERROR : BOT_AIM_ERROR) : T.myAuto;
     this.autoOn = botTurn || (mine && T.myAuto > 0);
     if (this.crane.hasBlock()) this.crane.release(0);
+    if (mine && this.aim) this.fireAim();   // (1.16) a mission still being aimed goes where it points: your block comes
+    // (1.16) down to nobody: this turn is the last chance
+    if (mine && this.battles && t.n > TURNS.lvSafeTurns && this.living.people === 0) {
+      this.time.delayedCall(400, () => bus.emit('hud:banner', { emoji: '⚠️', title: S.lvLastChance, subtitle: S.lvLastChanceSub, kind: 'stage' }));
+    }
     this.spawnBlock(t.n - 1);
     this.crane.resetSwing(this.amplitudeFor(t.n - 1));
     // (1.15.3) the newer rules' faster crane: said every 10 turns
@@ -1745,6 +1771,14 @@ export class GameScene extends Phaser.Scene {
     c.pendingReport = null;
     c.ended = true;
     this.applySnapshot(d.snap, c.n - 1, d.r);
+    // (1.16) their landing's rooms, exactly as their game chose them (a Skeef floor boarded up here too)
+    if (this.living) {
+      const b = this.gridBlocks[c.n - 1];
+      safely(() => {
+        if (b && !b.destroyed && (d.r === 'S') && this.living.floorMine(b) === false) this.living.rated(b, 'S', 0);
+        if (d.rooms) this.living.openRooms(d.rooms);
+      });
+    }
     this.turnHold = true;
     this.spawnDue = null;
     if (d.lost && !c.lostHeart) c.lostHeart = true;   // (the next turn brings the referee's count)
@@ -1800,7 +1834,11 @@ export class GameScene extends Phaser.Scene {
     this.applySnapshot(snap, c.n - 1, r);   // exactly what the other game does with it
     this.turnHold = true;
     // k: physics steps since the drop (the other game applies the report at the same step of its replay)
-    bus.emit('turns:mysettled', { n: c.n, lost: !!c.lostHeart, r, snap, k: Math.round((this.now - c.dropAt) / FIXED), vis: c.vis || null });
+    bus.emit('turns:mysettled', {
+      n: c.n, lost: !!c.lostHeart, r, snap, k: Math.round((this.now - c.dropAt) / FIXED), vis: c.vis || null,
+      // (1.16) the people, and the rooms this turn's landing opened (the other phone moves the same people in)
+      ...(this.battles ? { pp: this.living.peopleBySeat(this.turns.you, { coming: true }), rooms: this.living.takeOpened() } : {}),
+    });
   }
 
   /** A turn that ended without its report (it came out of order): drop what's on the crane and hold still. */
@@ -1866,12 +1904,14 @@ export class GameScene extends Phaser.Scene {
         b.sync();
       }
       const rr = rating || (i === turnIndex ? r : null);
+      const ratedHere = !!b.rating;
       if (rr && !b.rating) {
         b.rating = rr;
         b.pendingRate = false;
-        // (1.16) a floor the report rated: its rooms open as they would have here
-        if (this.living) safely(() => this.living.rated(b, rr, rr === 'P' ? Math.max(1, this.combo) : 0));
       }
+      // (1.16) a floor of yours only the report rated: its rooms open as it says (the other player's come with the report's
+      // own list: applyRemoteReport)
+      if (this.living && rr && !ratedHere && !this.remoteTurnBlock(b)) safely(() => this.living.rated(b, rr, rr === 'P' ? Math.max(1, this.combo) : 0));
       if (b.rating && (this.grid[i] === PENDING || this.grid[i] === undefined)) this.grid[i] = b.rating;
       if (f === 1 && b.state !== 'frozen') this.freezeBlock(b, true);
     }
@@ -2339,7 +2379,7 @@ export class GameScene extends Phaser.Scene {
     if (this.idle) {
       this.combo = r === 'P' ? this.combo + 1 : 0;
       this.effects.rating(block, r, this.combo);
-      if (this.living) this.living.rated(block, r, this.combo);
+      if (this.living && !this.remoteTurnBlock(block)) this.living.rated(block, r, this.combo);
       return;
     }
     this.grid[block.index] = r;
@@ -2361,7 +2401,7 @@ export class GameScene extends Phaser.Scene {
       this.combo = 0;
     }
     this.score += pts;
-    if (this.living) this.living.rated(block, r, this.combo);
+    if (this.living && !this.remoteTurnBlock(block)) this.living.rated(block, r, this.combo);
     this.visitorRated(block, r);
     bus.emit('game:rated', { rating: r, combo: this.combo });   // (the lesson, main.js)
 
@@ -2833,7 +2873,7 @@ export class GameScene extends Phaser.Scene {
   rateQuietly(b, r) {
     b.rating = r;
     b.pendingRate = false;
-    if (this.living) this.living.rated(b, r, 0);
+    if (this.living && !this.remoteTurnBlock(b)) this.living.rated(b, r, 0);
     if (this.idle || this.over || b.gift) return;
     this.grid[b.index] = r;
     this.score += SCORING.base;
@@ -3998,6 +4038,121 @@ export class GameScene extends Phaser.Scene {
     if (!this.idle || this.idleResetting || !this.crane) return;
     if (this.crane.hasBlock()) this.crane.release();
     this.idleReset();
+  }
+
+  // -------------------------------------------------------------------------
+  // (1.16) Die Lewende Toring's battles: your tribe's mission, aimed with a tap on the tower (the windows it would reach
+  // light up: theirs red, your own orange); a second tap there sends it. Robot Rikus aims his own; a person's comes in
+  // from the room exactly as their game counted it.
+  // -------------------------------------------------------------------------
+  startAim() {
+    if (!this.battles || this.over || this.aim) return;
+    const L = this.living;
+    const kind = L.tribe;
+    this.aim = {
+      kind, strong: BEATS[kind] === L.theirTribe, until: this.now + TURNS.lvAimMs, at: null,
+      g: this.add.graphics().setDepth(DEPTH.fxWorld + 6),
+    };
+    bus.emit('hud:hint', { text: S.lvAimHint(S.lvMissions[kind]) });
+    audio.play('banner');
+    haptics.tap();
+  }
+
+  aimTap(pointer) {
+    const a = this.aim;
+    const p = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    if (a.at && Math.hypot(p.x - a.at.x, p.y - a.at.y) < 64) {
+      this.fireAim();
+      return;
+    }
+    a.at = { x: p.x, y: p.y };
+    this.drawAim();
+    bus.emit('hud:hint', { text: S.lvAimAgain });
+    audio.play('click');
+  }
+
+  drawAim() {
+    const a = this.aim;
+    const g = a.g;
+    g.clear();
+    if (!a.at) return;
+    if (a.kind === 'vuur') {
+      const k = a.strong ? 1.35 : 1;
+      g.fillStyle(0xff7a2a, 0.13).fillEllipse(a.at.x, a.at.y, 200 * k, 124 * k).lineStyle(2, 0xff7a2a, 0.75).strokeEllipse(a.at.x, a.at.y, 200 * k, 124 * k);
+    }
+    if (a.kind === 'gras') g.fillStyle(0x3fae3a, 0.12).fillRect(a.at.x - 56, a.at.y - 330, 112, 370).lineStyle(2, 0x5ad14a, 0.7).strokeRect(a.at.x - 56, a.at.y - 330, 112, 370);
+    for (const p of this.living.reach(a.kind, a.at, { mine: true, strong: a.strong })) {
+      const b = p.f.block;
+      const q = windowWorld(b, p.slot);
+      const sl = windowSlots(b.geom)[p.slot] || { w: 24, h: 30 };
+      g.lineStyle(4, p.f.mine ? 0xffa53a : 0xff2f2f, 1).strokeRoundedRect(q.x - sl.w / 2 - 5, q.y - sl.h / 2 - 5, sl.w + 10, sl.h + 10, 7);
+    }
+    // the aim mark
+    g.lineStyle(4, 0xffffff, 1).strokeCircle(a.at.x, a.at.y, 18);
+    g.lineStyle(3, 0xff2f2f, 1).lineBetween(a.at.x - 28, a.at.y, a.at.x - 8, a.at.y).lineBetween(a.at.x + 8, a.at.y, a.at.x + 28, a.at.y)
+      .lineBetween(a.at.x, a.at.y - 28, a.at.x, a.at.y - 8).lineBetween(a.at.x, a.at.y + 8, a.at.x, a.at.y + 28);
+  }
+
+  /** The mission goes (where it points; untouched, at the floor of theirs most likely full). */
+  fireAim() {
+    const a = this.aim;
+    if (!a) return;
+    this.aim = null;
+    a.g.destroy();
+    bus.emit('hud:hint', { text: null });
+    if (this.over || !this.living) return;
+    const L = this.living;
+    const at = a.at || L.botAim(a.kind, { mine: true });
+    let spots = L.reach(a.kind, at, { mine: true, strong: a.strong });
+    if (a.kind === 'gras') spots = spots.concat(L.extras(spots, a.strong ? 2 : 1, { mine: true }));
+    const hits = L.hitsOf(spots);
+    const res = L.strike(a.kind, at, spots, { mine: true, strong: a.strong });
+    bus.emit('turns:mission-out', { kind: a.kind, at: [Math.round(at.x), Math.round(at.y)], hits, pp: L.peopleBySeat(this.turns.you, { coming: true }) });
+    const opp = this.duel?.name || S.duelSomeone;
+    this.time.delayedCall(1100, () => bus.emit('hud:toast', { text: res.hit ? S.lvMissionHit(res.hit, opp) : S.lvMissionMiss, color: res.hit ? '#ffe38c' : '#cfe0ff' }));
+    if (res.own) this.time.delayedCall(2600, () => bus.emit('hud:toast', { text: S.lvMissionOwn(res.own), color: '#ffb3a8' }));
+  }
+
+  /** (1.16) A floor of the other player's in a live match: its rooms come with their game's report (exactly as there). */
+  remoteTurnBlock(b) {
+    if (!this.turns || this.turns.bot || !this.living) return false;
+    const mine = this.living.floorMine(b);
+    if (mine !== null) return mine === false;
+    const c = this.turns.cur;
+    return !!(c && !c.mine && !c.botTurn && b && b.index === c.n - 1);
+  }
+
+  /** Robot Rikus's mission: he aims (a moment's warning on the spot), it lands, the referee hears the people. */
+  botMission(d) {
+    if (!this.battles || this.over) return;
+    const L = this.living;
+    const kind = L.theirTribe;
+    const strong = BEATS[kind] === L.tribe;
+    const at = L.botAim(kind, { mine: false });
+    bus.emit('hud:toast', { text: S.lvMissionIn(this.duel?.name || S.duelSomeone, S.lvMissions[kind]), color: '#ffb3a8' });
+    const mark = this.add.graphics().setDepth(DEPTH.fxWorld + 6);
+    mark.lineStyle(4, 0xff2f2f, 1).strokeCircle(at.x, at.y, 20).lineBetween(at.x - 30, at.y, at.x + 30, at.y).lineBetween(at.x, at.y - 30, at.x, at.y + 30);
+    this.tweens.add({ targets: mark, alpha: 0.2, duration: 160, yoyo: true, repeat: 3 });
+    this.time.delayedCall(900, () => {
+      mark.destroy();
+      if (this.over || !this.living) return;
+      let spots = L.reach(kind, at, { mine: false, strong });
+      if (kind === 'gras') spots = spots.concat(L.extras(spots, strong ? 2 : 1, { mine: false }));
+      const res = L.strike(kind, at, spots, { mine: false, strong });
+      this.time.delayedCall(1200, () => bus.emit('hud:toast', { text: res.hit ? S.lvMissionLost(res.hit) : S.lvMissionSafe, color: res.hit ? '#ffb3a8' : '#bff3ff' }));
+      bus.emit('turns:bot-mission-done', { seat: d?.seat, pp: L.peopleBySeat(this.turns.you, { coming: true }) });
+    });
+  }
+
+  /** The other player's mission (a live match), exactly as their game counted it. */
+  missionIn(d) {
+    if (!this.battles || this.over || !d) return;
+    const L = this.living;
+    const at = { x: d.at[0], y: d.at[1] };
+    const spots = L.spotsOf(d.hits);
+    const res = L.strike(d.kind, at, spots, { mine: false, strong: BEATS[d.kind] === L.tribe });
+    bus.emit('hud:toast', { text: S.lvMissionIn(this.duel?.name || S.duelSomeone, S.lvMissions[d.kind]), color: '#ffb3a8' });
+    this.time.delayedCall(1300, () => bus.emit('hud:toast', { text: res.hit ? S.lvMissionLost(res.hit) : S.lvMissionSafe, color: res.hit ? '#ffb3a8' : '#bff3ff' }));
   }
 
   // -------------------------------------------------------------------------

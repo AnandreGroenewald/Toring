@@ -131,7 +131,7 @@ const seatOk = (s) => s === 0 || s === 1;
  *  { type: 'sent', seat, kind }                      seat's sabotage waits for the other player's next block
  *  { type: 'result', winner, reason, hearts }        'hearts' | 'quit' | 'timeout' | 'turns'
  */
-export function createTurnReferee({ first = 0, init = null, seed = null, rounds = false, v7 = false } = {}) {
+export function createTurnReferee({ first = 0, init = null, seed = null, rounds = false, v7 = false, lv = false } = {}) {
   const s = init ? clone(init) : {
     first: seatOk(first) ? first : 0,
     n: 0,
@@ -145,6 +145,11 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
     rounds: !!rounds && typeof seed === 'string' && seed.length > 0,
     seed: typeof seed === 'string' ? seed : null,
     v7: !!v7,
+    // (1.16, protocol 8) Die Lewende Toring's battles: each seat's people as the games count them, and who is down to
+    // nobody (that player's next turn is their last chance to get people back)
+    lv: !!lv && !!v7,
+    people: [0, 0],
+    empty: [false, false],
   };
   let plan = null;
   const planOf = () => plan || (plan = s.rounds ? turnRounds(s.seed) : []);
@@ -173,7 +178,29 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
 
   function decide(winner, reason) {
     s.result = { winner, reason };
-    return { type: 'result', winner, reason, hearts: [...s.hearts] };
+    return { type: 'result', winner, reason, hearts: [...s.hearts], ...(s.lv ? { people: [...s.people] } : {}) };
+  }
+
+  /**
+   * (1.16) The people as a game counts them ([seat 0, seat 1]). From TURNS.lvSafeTurns on, a player down to nobody gets
+   * one more turn: still nobody at the end of it (`ended`: the seat whose turn just ended) loses.
+   */
+  function peopleNow(pp, ended = null) {
+    const p = cleanPeople(pp);
+    if (!s.lv || !p) return null;
+    s.people = p;
+    if (!s.empty) s.empty = [false, false];
+    if (s.n < TURNS.lvSafeTurns) return null;
+    for (const k of [0, 1]) {
+      if (s.people[k] > 0) {
+        s.empty[k] = false;
+      } else if (k === ended && s.empty[k] && s.people[1 - k] > 0) {
+        return decide(1 - k, 'people');
+      } else if (k !== ended || !s.empty[k]) {
+        s.empty[k] = true;
+      }
+    }
+    return null;
   }
 
   return {
@@ -187,7 +214,7 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
      * Seat's turn n ended: `lost` (the turn cost a heart) and `r`, how the dropped block was rated
      * ('P' Perfek, 'G', 'S', 'X' lost). A report out of turn is ignored.
      */
-    settled(seat, { n, lost = false, r = 'S', vis = null } = {}) {
+    settled(seat, { n, lost = false, r = 'S', vis = null, pp = null } = {}) {
       if (s.result || seat !== s.seat || n !== s.n || s.n < 1) return [];
       const events = [];
       // a turn costs at most one heart; beating the round's visitor gives one back (never above the start)
@@ -209,6 +236,11 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
         events.push(decide(1 - seat, 'hearts'));
         return events;
       }
+      const gone = peopleNow(pp, seat);
+      if (gone) {
+        events.push(gone);
+        return events;
+      }
       if (s.n >= TURNS.maxTurns) {
         events.push(decide(tieWinner(s), 'turns'));
         return events;
@@ -223,6 +255,19 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
       s.jokers[seat] -= 1;
       s.sab[1 - seat] = kind;
       return [{ type: 'sent', seat, kind }];
+    },
+
+    /**
+     * (1.16) Seat spends a joker on a mission (their tribe at the other player's floors): `pp` = the people after it.
+     * The mission itself (where, who) passes from game to game; the referee counts the joker and the people.
+     */
+    mission(seat, pp = null) {
+      if (s.result || !s.lv || !seatOk(seat) || s.jokers[seat] < 1) return [];
+      s.jokers[seat] -= 1;
+      const events = [{ type: 'mission', seat }];
+      const gone = peopleNow(pp);
+      if (gone) events.push(gone);
+      return events;
     },
 
     /** A player left (or quit): the other one wins. */
@@ -245,13 +290,18 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
     get beats() { return [...(s.beats || [0, 0])]; },
     get rounds() { return s.rounds; },
     get v7() { return !!s.v7; },
+    get lv() { return !!s.lv; },
+    get people() { return [...(s.people || [0, 0])]; },
+    get empty() { return [...(s.empty || [false, false])]; },
+    get jokers() { return [...s.jokers]; },
     get result() { return s.result ? { ...s.result } : null; },
     snapshot() { return clone(s); },
   };
 }
 
-/** After TURNS.maxTurns: the most hearts, then the most Perfeks, then whoever went second. */
+/** After TURNS.maxTurns: (1.16 battles: the most people first) the most hearts, then the most Perfeks, then whoever went second. */
 function tieWinner(s) {
+  if (s.lv && s.people && s.people[0] !== s.people[1]) return s.people[0] > s.people[1] ? 0 : 1;
   if (s.hearts[0] !== s.hearts[1]) return s.hearts[0] > s.hearts[1] ? 0 : 1;
   if (s.perfects[0] !== s.perfects[1]) return s.perfects[0] > s.perfects[1] ? 0 : 1;
   return 1 - s.first;
@@ -305,6 +355,50 @@ export function cleanSnap(o) {
     lost.push(i);
   }
   return { blocks, lost };
+}
+
+/** (1.16) A game's people count ([seat 0, seat 1], whole numbers 0-9999), or null. */
+export function cleanPeople(pp) {
+  if (!Array.isArray(pp) || pp.length !== 2) return null;
+  const out = pp.map((v) => (Number.isInteger(v) && v >= 0 && v <= 9999 ? v : null));
+  return out.every((v) => v !== null) ? out : null;
+}
+
+/**
+ * (1.16) The rooms a turn's landing opened, as the dropping game chose them: [[block index, window], ...] (the other
+ * game moves the same people into the same windows), or null.
+ */
+export function cleanRooms(rooms) {
+  if (!Array.isArray(rooms) || rooms.length > 24) return null;
+  const out = [];
+  for (const h of rooms) {
+    if (!Array.isArray(h) || h.length !== 2) return null;
+    const [i, w] = h;
+    if (!Number.isInteger(i) || i < 0 || i > BLOCK_MAX || !Number.isInteger(w) || w < 0 || w > 7) return null;
+    out.push([i, w]);
+  }
+  return out;
+}
+
+export const MISSION_KINDS = Object.freeze(['vuur', 'water', 'gras']);
+const HITS_MAX = 48;
+/**
+ * (1.16) A mission as one game tells the other: { kind: 'vuur'|'water'|'gras', at: [x, y] (world px, where it was aimed),
+ * hits: [[block index, window], ...] (the windows it reached, the attacker's count), pp: [seat 0, seat 1] }, or null.
+ */
+export function cleanMission(o) {
+  if (!o || typeof o !== 'object' || !MISSION_KINDS.includes(o.kind)) return null;
+  if (!Array.isArray(o.at) || o.at.length !== 2 || o.at.some((v) => num(v, COORD_MAX) === null)) return null;
+  if (!Array.isArray(o.hits) || o.hits.length > HITS_MAX) return null;
+  const hits = [];
+  for (const h of o.hits) {
+    if (!Array.isArray(h) || h.length !== 2) return null;
+    const [i, w] = h;
+    if (!Number.isInteger(i) || i < 0 || i > BLOCK_MAX || !Number.isInteger(w) || w < 0 || w > 7) return null;
+    hits.push([i, w]);
+  }
+  const pp = cleanPeople(o.pp);
+  return { kind: o.kind, at: [o.at[0], o.at[1]], hits, ...(pp ? { pp } : {}) };
 }
 
 /** How a turn's report is rated (anything else counts as a plain landing). */

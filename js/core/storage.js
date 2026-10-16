@@ -11,7 +11,7 @@ import { WEEK, cleanWeek, openBox, addShield } from './week.js';
 import { DAILY_RETRY, DUEL } from '../config.js';
 import { cleanTries, triesLadder, freeTriesFor, MAX_EXTRA } from './tries.js';
 import {
-  defaultEconomy, cleanEconomy, earnCoins, buyPowerup, usePowerup, buyCosmetic, wearCosmetic, grantRankLooks, spendCoins,
+  defaultEconomy, cleanEconomy, earnCoins, buyPowerup, usePowerup, buyCosmetic, wearCosmetic, grantRankLooks, spendCoins, chooseTribe,
   buySkin, wearSkin,
   rankAfterMatch, rolloverSeason, seasonOf, cardOf, ladderAt, bestTier, RANK_MODES, RANK_RULES, cleanModeRank,
   rankIndex, holdStake, settleStake, touchStake,
@@ -1289,6 +1289,23 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     /** (1.13.4) Wear a skin the player owns: { ok, economy }. */
     wearSkin(kind, id) {
       return apply((e) => wearSkin(e, kind, id));
+    },
+
+    /** (1.16) The Living Tower's tribes: { owned: [...], wear: id|null } (a copy). */
+    getTribes() {
+      sync();
+      return { owned: [...econ.tribes.owned], wear: econ.tribes.wear };
+    },
+
+    /** (1.16) Choose a tribe (the first free, another for its coins): { ok, paid, why, coins, tribes }. */
+    chooseTribe(id) {
+      sync();
+      const r = chooseTribe(econ, id);
+      if (r.ok) {
+        econ = r.economy;
+        persistEcon();
+      }
+      return { ok: r.ok, paid: r.paid || 0, why: r.why || null, coins: econ.coins, tribes: { owned: [...econ.tribes.owned], wear: econ.tribes.wear } };
     },
 
     /** The Daily Tower's free Fondamentblok: true the first time for `dateKey`, then false. */

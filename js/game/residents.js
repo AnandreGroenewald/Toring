@@ -189,6 +189,15 @@ function drawWindow(ctx, s, v) {
     ctx.fillStyle = g;
     ctx.fillRect(s.x - s.h * 1.1, s.y - s.h * 1.1, s.h * 2.2, s.h * 2.2);
   }
+  // (1.16) a Veldbrand's window: soot licks up the wall above it
+  const burnt = v.look === 'burnt';
+  if (burnt) {
+    const so = ctx.createRadialGradient(s.x, y - s.h * 0.1, 1, s.x, y - s.h * 0.2, s.h * 1.15);
+    so.addColorStop(0, 'rgba(20,14,12,0.75)');
+    so.addColorStop(1, 'rgba(20,14,12,0)');
+    ctx.fillStyle = so;
+    ctx.fillRect(s.x - s.h * 1.2, y - s.h * 1.3, s.h * 2.4, s.h * 1.9);
+  }
   // the frame: cream wood with a soft shadow, sunk a little into the block
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.45)';
@@ -196,8 +205,8 @@ function drawWindow(ctx, s, v) {
   ctx.shadowOffsetY = 1.2;
   archPath(ctx, s, 2.6);
   const fr = ctx.createLinearGradient(0, y - 3, 0, y + s.h + 3);
-  fr.addColorStop(0, '#fffaf0');
-  fr.addColorStop(1, '#d9c39a');
+  fr.addColorStop(0, burnt ? '#5a4a42' : '#fffaf0');
+  fr.addColorStop(1, burnt ? '#2a201c' : '#d9c39a');
   ctx.fillStyle = fr;
   ctx.fill();
   ctx.restore();
@@ -331,6 +340,22 @@ function drawWindow(ctx, s, v) {
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#ffd23f';
     ctx.stroke();
+  }
+  if (burnt) {
+    // charred inside, a few embers still glowing
+    ctx.save();
+    archPath(ctx, s, 0);
+    ctx.clip();
+    ctx.fillStyle = '#140d0b';
+    ctx.fillRect(x - 1, y - 1, s.w + 2, s.h + 2);
+    for (const [fx, fy, r] of [[0.3, 0.78, 0.07], [0.62, 0.86, 0.05], [0.5, 0.7, 0.04], [0.76, 0.74, 0.035]]) {
+      const e = ctx.createRadialGradient(x + s.w * fx, y + s.h * fy, 0, x + s.w * fx, y + s.h * fy, s.w * r * 2.2);
+      e.addColorStop(0, 'rgba(255,170,60,0.95)');
+      e.addColorStop(1, 'rgba(255,90,20,0)');
+      ctx.fillStyle = e;
+      ctx.fillRect(x, y, s.w, s.h);
+    }
+    ctx.restore();
   }
   if (v.look === 'boarded') {
     // (1.16, a Skeef floor) nailed shut: two weathered planks across the dark window, a nail at each end

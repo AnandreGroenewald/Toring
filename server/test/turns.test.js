@@ -486,3 +486,53 @@ test('1.12 emoji reactions: passed on in either mode, a known one only, at most 
   assert.deepEqual(me.last('emote'), { t: 'emote', e: 'klap' }, 'either player, whoever\'s turn it is');
   assert.equal(me.of('emote').length, 1);
 });
+
+test('(1.16) two protocol-8 games: the Living Tower battles (lv in the start; a joker may be a mission, passed on as counted; nobody left loses)', async () => {
+  const { room, first, bySeat } = await turnsRoom({ v: [8, 8] });
+  const me = bySeat[first];
+  const them = bySeat[1 - first];
+  const meSeat = first;
+  assert.equal(me.last('start').lv, true);
+  assert.equal(them.last('start').lv, true);
+  const pp = (mine, theirs) => (meSeat === 0 ? [mine, theirs] : [theirs, mine]);
+  const playP = async (ws, n, r, people) => {
+    room.now.tick?.(1000);
+    await say(room, ws, { t: 'drop', n, p: POSE });
+    await say(room, ws, { t: 'settled', n, lost: false, r, snap: snap(n - 1, r), pp: people });
+  };
+  // a mission without a joker goes nowhere
+  await say(room, me, { t: 'mission', kind: 'vuur', at: [300, -200], hits: [[0, 1]], pp: pp(1, 0) });
+  assert.equal(them.of('mission').length, 0, 'no joker, no mission');
+  let n = 1;
+  for (let k = 0; k < TURNS.jokerStreak7 - 1; k++) {
+    await playP(me, n++, 'P', pp(3 + k, 2));
+    await playP(them, n++, 'G', pp(3 + k, 2));
+  }
+  await playP(me, n++, 'P', pp(9, 2));
+  const noN = ({ n: _n, ...o }) => o;
+  assert.deepEqual(noN(me.last('choose')), { t: 'choose', options: ['missie', ...TURNS.sabotages7], def: TURNS.sabotages7[0] }, 'the mission is offered first');
+  await say(room, me, { t: 'mission', kind: 'water', at: [320.5, -410], hits: [[1, 0], [1, 1], [3, 2]], pp: pp(9, 0) });
+  assert.deepEqual(noN(them.last('mission')), { t: 'mission', kind: 'water', at: [320.5, -410], hits: [[1, 0], [1, 1], [3, 2]] }, 'passed on as counted');
+  assert.equal(me.of('result').length, 0, 'their last chance: their next turn');
+  await playP(them, n++, 'S', pp(9, 0));   // a Skeef: still nobody
+  const res = me.last('result');
+  assert.ok(res, 'their people are gone');
+  assert.deepEqual([res.winner, res.reason], [meSeat, 'people']);
+  assert.deepEqual(them.last('result').people, pp(9, 0));
+});
+
+test('(1.16) a protocol-8 game with a protocol-7 one: no battles (no lv, no mission offered)', async () => {
+  const { room, first, bySeat } = await turnsRoom({ v: [8, 7] });
+  const me = bySeat[first];
+  const them = bySeat[1 - first];
+  assert.equal(me.last('start').lv, undefined);
+  let n = 1;
+  for (let k = 0; k < TURNS.jokerStreak7 - 1; k++) {
+    await play(room, me, n++, { r: 'P' });
+    await play(room, them, n++, { r: 'G' });
+  }
+  await play(room, me, n++, { r: 'P' });
+  assert.ok(!me.last('choose').options.includes('missie'));
+  await say(room, me, { t: 'mission', kind: 'vuur', at: [1, 1], hits: [], pp: [1, 0] });
+  assert.equal(them.of('mission').length, 0);
+});

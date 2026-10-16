@@ -11,7 +11,7 @@ import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate, isDat
 import { createSequence } from './core/sequence.js';
 import { buildShareText, buildDuelShareText } from './core/share.js';
 import { parseChallengeQuery, parseRoomQuery, defaultNicknameFor } from './core/duel.js';
-import { coinsForGame, cosmetic, POWERUP_IDS, POWERUPS, rankShortOf, SKINS } from './core/economy.js';
+import { coinsForGame, cosmetic, POWERUP_IDS, POWERUPS, rankShortOf, SKINS, TRIBE_PRICE } from './core/economy.js';
 import { weekView, WEEK } from './core/week.js';
 
 const WEEK_COINS = WEEK.coins;
@@ -114,11 +114,15 @@ const store = createStore(undefined, DEBUG ? { key: `${STORAGE_KEY}.debug` } : {
 let settings = store.getSettings();
 // (1.16) Die Lewende Toring in every tower: the player's tribe, record and the people they have met (its own store)
 const livingStore = createLivingStore();
-/** What a game needs for the Living Tower (null when Instellings has it off). */
-function livingFor(mode) {
-  if (settings.living === false) return null;
+/** (1.16) The tribe the player wears (the wallet keeps it: the first one free, the others for coins); Vuur until chosen. */
+const tribeNow = () => store.getTribes().wear || 'vuur';
+/** What the screens show of the tribes: the one worn, the ones owned, the coins. */
+const tribesView = () => ({ tribe: tribeNow(), owned: store.getTribes().owned, coins: store.getEconomy().coins });
+/** What a game needs for the Living Tower (null when Instellings has it off; a battle match has it always). */
+function livingFor(mode, force = false) {
+  if (settings.living === false && !force) return null;
   return {
-    tribe: livingStore.tribe(),
+    tribe: tribeNow(),
     best: livingStore.best(),
     known: (id, gold) => livingStore.known(id, gold),
     firstTown: !Object.keys(livingStore.get().met).length,
@@ -365,7 +369,7 @@ bus.on('ui:account-delete', () => {
   }, (err) => ui.setAccountNote(err.message === 'out' ? S.accountOut : S.accountErr(err.message)));
 });
 ui.setBoardOn(BOARD_ON);
-ui.setLiving({ tribe: livingStore.tribe() });   // (1.16) the Living Tower's tribe for Instellings and the results
+ui.setLiving(tribesView());   // (1.16) the Living Tower's tribe for Instellings and the results
 const BOARD_FRESH_MS = 60 * 1000;   // an answer this recent is shown again without asking the server
 let boardLast = null;   // { dateKey, board, at }: the last answer, so the sheet opens on it at once
 let boardDate = null;   // the day the Ranglys sheet shows
@@ -1688,14 +1692,23 @@ bus.on('ui:settings', (partial) => {
   audio.setEnabled(settings.sound);
   haptics.setEnabled(settings.vibration);
   // (1.16) the menu's tower shows the Living Tower switched on or off at once
-  if (settings.living !== wasLiving && run.mode === 'idle' && screen !== 'game') startIdle();
+  if (settings.living !== wasLiving && run.mode === 'idle' && screen === 'menu' && !duel.searching) startIdle();
 });
 // (1.16) the residents album (the results card's town, Instellings)
 bus.on('ui:lv-album', () => ui.showAlbum(livingStore.get()));
 // (1.16) a tribe chosen (Instellings, the results card): the next towers' people, and the menu's tower at once
 bus.on('ui:lv-tribe', (t) => {
-  ui.setLiving({ tribe: livingStore.setTribe(t) });
-  if (run.mode === 'idle' && screen !== 'game') startIdle();
+  const r = store.chooseTribe(t);
+  if (!r.ok) {
+    if (r.why === 'coins') ui.toast(S.lvTribeNoCoins(TRIBE_PRICE), 3200);
+    return;
+  }
+  ui.setLiving(tribesView());
+  ui.setMenuCoins(r.coins);
+  ui.toast(`${S.lvTribeChosen(S.lvTribeNames[r.tribes.wear])}${r.paid ? `  ·  −${fmtInt(r.paid)} 🪙` : ''}`, 2600);
+  coinsChanged();   // (signed in: the tribe and the coins go to the account)
+  // (only on the menu: a new idle tower ends any match or friend's invite waiting)
+  if (run.mode === 'idle' && screen === 'menu' && !duel.searching) startIdle();
 });
 bus.on('ui:day-rollover', () => {
   refundRetries();
@@ -1721,7 +1734,9 @@ const duel = createDuel({
   bus,
   apiUrl: matchApiUrl(),
   nickname: duelNick,
-  card: (mode) => store.getCard(mode),
+  // (1.16) the card carries the Living Tower's tribe (the other phone shows your people and sends your mission)
+  card: (mode) => ({ ...store.getCard(mode), tr: tribeNow() }),
+  living: () => (settings.living !== false ? { tribe: tribeNow() } : null),
   onDecided: (outcome) => {
     if (outcome !== 'won' && outcome !== 'lost') return;
     store.recordDuel(outcome);
@@ -2077,9 +2092,12 @@ function startDuelGame(m) {
     mode: 'duel',
     seed: m.seed,
     duel: { name: m.oppName, youName: duelNick(), mode: m.mode, you: m.you, bot: m.kind !== 'live', oppBlocks: m.kind === 'live' ? m.oppCard?.bs || '' : '', oppGo: m.kind === 'live' && (m.oppV || 1) >= 4, rounds: m.rounds === true, v7: m.v7 === true,
+      lv: m.lv === true, oppTribe: m.oppTribe || null,   // (1.16) Die Lewende Toring's battles
       // (1.12) both ranks in this mode, in front of the names at the top ('🥇II'); a recording has none
       oppRank: m.kind === 'live' || m.kind === 'bot' ? rankShortOf(m.oppCard?.rl) : '', youRank: rankShortOf(store.getCard(m.mode).rl) },
     autoplay: AUTO,
+    // (1.16) a Living Tower battle needs the people, whatever Instellings says
+    ...(m.lv ? { living: livingFor('duel', true) } : {}),
   });
   screen = 'game';
   ui.showInGame();
