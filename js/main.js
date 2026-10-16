@@ -37,6 +37,9 @@ import { HudScene } from './scenes/HudScene.js';
 import { LewendeScene } from './scenes/LewendeScene.js';
 import { createLewendeUi } from './ui/lewendeUi.js';
 import { createLivingStore, CAST_IDS } from './core/living.js';
+import { createDorpClient } from './dorp.js';
+import { DORP, isTownId, isRaidId } from './core/dorp.js';
+import { castOf, portraitDataUrl } from './game/residents.js';
 import { setBlockSkin } from './game/blocks.js';
 import { setCraneSkin } from './game/crane.js';
 
@@ -114,6 +117,15 @@ const store = createStore(undefined, DEBUG ? { key: `${STORAGE_KEY}.debug` } : {
 let settings = store.getSettings();
 // (1.16) Die Lewende Toring in every tower: the player's tribe, record and the people they have met (its own store)
 const livingStore = createLivingStore();
+// (1.16) Jou dorp (Steel en Wraak): the town's id, key and the server's last word (js/dorp.js); the rest is below
+const dorp = createDorpClient({ api: matchApiUrl() });
+let dorpOn = false;
+let dorpSyncAt = 0;
+let dorpBusy = false;
+let dorpJokers = 0;          // this match's jokers (Blok vir Blok's run of 3 Perfeks): each a strooptog too
+let dorpMenuKey = '';
+let dorpNameAsked = false;
+const DORP_POLL_MS = 15000;
 /** (1.16) The tribe the player wears (the wallet keeps it: the first one free, the others for coins); Vuur until chosen. */
 const tribeNow = () => store.getTribes().wear || 'vuur';
 /** What the screens show of the tribes: the one worn, the ones owned, the coins. */
@@ -128,6 +140,7 @@ function livingFor(mode, force = false) {
     firstTown: !Object.keys(livingStore.get().met).length,
     intro: mode !== 'idle' && !livingStore.introSeen(),
     onIntro: () => livingStore.markIntro(),
+    dorp: dorpOn,   // (1.16) Jou dorp: 3 Perfeks in a row earn a strooptog
   };
 }
 // Afrikaans or English (1.9). Someone who played before there was a choice stays in Afrikaans; a new
@@ -547,6 +560,7 @@ function menuModel() {
     coins: store.getEconomy().coins,
     refill: refillActive(),   // (1.15) the wallet's + only while "Vul my munte aan" runs (coins are never sold)
     week: weekView(store.getWeek(), dateKey),   // the weekkis strip (js/core/week.js)
+    dorp: (() => { const d = dorpView(); dorpMenuKey = JSON.stringify(d); return d; })(),   // (1.16) Jou dorp
   };
 }
 
@@ -735,6 +749,7 @@ let lesson = null;   // { step, landings, after } while it runs
 
 function startGame(data) {
   wakeLoop();
+  dorpJokers = 0;
   if (data.seed !== LESSON_SEED || data.mode !== 'practice') {
     lesson = null;
     ui.showTutor(null);
@@ -1735,7 +1750,7 @@ const duel = createDuel({
   apiUrl: matchApiUrl(),
   nickname: duelNick,
   // (1.16) the card carries the Living Tower's tribe (the other phone shows your people and sends your mission)
-  card: (mode) => ({ ...store.getCard(mode), tr: tribeNow() }),
+  card: (mode) => ({ ...store.getCard(mode), tr: tribeNow(), ...(dorpOn ? { dt: dorp.id } : {}) }),
   living: () => (settings.living !== false ? { tribe: tribeNow() } : null),
   onDecided: (outcome) => {
     if (outcome !== 'won' && outcome !== 'lost') return;
@@ -2051,6 +2066,10 @@ function versus(m, note = '') {
   lastDuelStake = m.kind === 'live' ? m.stake || 0 : null;
   ui.setConnChip(null);
   screen = 'duelwait';
+  // (1.16) Jou dorp: a match with a friend (their link) makes your towns neighbours, both ways
+  if (dorpOn && m.kind === 'live' && m.roomKind === 'friend' && isTownId(m.oppCard?.dt)) {
+    dorp.buur(m.oppCard.dt).then((r) => { if (r?.ok) dorpSync({ force: true }).then(refreshMenuDorp); });
+  }
   // Blok vir Blok: who drops the first block
   const first = m.mode === 'turns' && m.turn ? (m.turn.seat === m.you ? S.turnsYouStart : S.turnsTheyStart(m.oppName)) : '';
   ui.showDuelWait({
@@ -2293,6 +2312,7 @@ bus.on('ui:duel-name', (text) => {
   const saved = store.setDuelName(text);
   ui.setDuelName(saved);
   if (saved?.ok) {
+    dorpSync({ force: true }).then(refreshMenuDorp);   // (1.16) the town's neighbours see the new name
     clearTimeout(nameBoardTimer);
     nameBoardTimer = setTimeout(boardChanged, NAME_BOARD_MS);   // the latest leaderboard row takes the new name
     account.soon();
@@ -2552,9 +2572,10 @@ function finalize(result) {
   stopHeartbeat();
   // (1.16) the Living Tower's town: the record and who lived there (kept apart from the tower's own result)
   const town = result.living ? recordTown(result.living) : null;
+  const dorpGain = dorpGainFor(result);   // (1.16) Jou dorp: what this tower sent to the town
   if (result.mode === 'duel') {
     // a match keeps its own wins and losses (recorded by js/duel.js once it is decided)
-    run.final = { result: town ? { ...result, living: town } : result, stats: null, isNewBest: false, aborted: false };
+    run.final = { result: { ...(town ? { ...result, living: town } : result), ...(dorpGain ? { dorp: dorpGain } : {}) }, stats: null, isNewBest: false, aborted: false };
     return run.final;
   }
   let shown = result;
@@ -2600,7 +2621,7 @@ function finalize(result) {
   } else if (result.mode === 'practice') {
     coins = awardCoins({ mode: 'practice', heightM: result.heightM, perfects: result.perfects });
   }
-  run.final = { result: town && !aborted ? { ...shown, living: town } : shown, stats, isNewBest, aborted, coins, week };
+  run.final = { result: { ...(town && !aborted ? { ...shown, living: town } : shown), ...(dorpGain && !aborted ? { dorp: dorpGain } : {}) }, stats, isNewBest, aborted, coins, week };
   return run.final;
 }
 
@@ -2858,6 +2879,206 @@ if (typeof MutationObserver === 'function') {
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// (1.16) Jou dorp: Steel en Wraak (js/core/dorp.js; the owner, 16 Oct 2026: "everyone who plays this game wants their
+// friends to play, that is the aim" and "it needs to be so good that no one wants to leave"). Every tower's people move
+// into the player's own town on the match server; 3 Perfeks in a row (a joker in Blok vir Blok) earn a strooptog; the
+// day's first tower builds a wall; a raid takes some of a neighbour's people, even while they're away, and its WhatsApp
+// taunt carries the link to their free Wraak. Only where the server knows the towns (GET /dorp/ping): else no button.
+// ---------------------------------------------------------------------------
+
+/** What the menu shows of the town (null without the server): the server's word plus what waits to be sent. */
+function dorpView() {
+  if (!dorpOn) return null;
+  const v = dorp.view();
+  const t = v.last?.town;
+  const p = v.pending;
+  const me = t
+    ? { ...t, people: t.people + p.people, raids: Math.min(DORP.raidsMax, t.raids + p.raids), walls: Math.min(DORP.wallsMax, t.walls + p.walls) }
+    : { id: v.id, name: duelNick(), tribe: tribeNow(), people: p.people, raids: DORP.startRaids + p.raids, walls: p.walls };
+  const seen = Math.max(v.shownN | 0, t?.seenN | 0);
+  const bure = v.last?.bure || [];
+  return { on: true, me, unseen: (v.last?.news || []).filter((n) => n.n > seen).length, bure: bure.length, wraak: bure.some((b) => b.wraak) };
+}
+
+/** The town sheet's model: the town, the neighbours, the news. */
+function dorpSheet(online = true) {
+  const v = dorp.view();
+  const m = dorpView();
+  return { me: { ...(m?.me || {}), name: duelNick() }, bure: v.last?.bure || [], news: v.last?.news || [], online };
+}
+
+/** Sends what the games brought and fetches the town (at most every few seconds unless `force`). */
+async function dorpSync({ seen = null, force = false } = {}) {
+  if (!dorpOn) return null;
+  if (!force && Date.now() - dorpSyncAt < 4000) return null;
+  dorpSyncAt = Date.now();
+  return dorp.sync({ name: duelNick(), tribe: tribeNow(), seen });
+}
+
+/** The menu again, only when what it shows of the town changed. */
+function refreshMenuDorp() {
+  if (JSON.stringify(dorpView()) === dorpMenuKey) return;
+  if (screen === 'menu') ui.showMenu(menuModel());
+}
+
+/** "Terwyl jy weg was": raids on this town not shown yet (only on the menu, with nothing else open). */
+function dorpNewsCheck() {
+  if (!dorpOn || screen !== 'menu' || ui.modalOpen()) return;
+  const v = dorp.view();
+  const t = v.last?.town;
+  if (!t) return;
+  const seen = Math.max(v.shownN | 0, t.seenN | 0);
+  const items = (v.last.news || []).filter((n) => n.n > seen);
+  if (!items.length) return;
+  ui.showDorpNews({ items, me: dorpView().me });
+  const top = Math.max(...items.map((n) => n.n));
+  dorp.markShown(top);
+  dorpSync({ seen: top, force: true }).then(refreshMenuDorp);
+}
+
+/** A finished tower's gifts to the town: its people, its strooptogte, and the day's first wall (results card line). */
+function dorpGainFor(result) {
+  const jokers = dorpJokers;
+  dorpJokers = 0;
+  if (!dorpOn || !result?.living || !(result.blocksDropped > 0)) return null;
+  const g = dorp.queue({ people: result.living.people | 0, raids: (result.raids | 0) + jokers, dayKey: result.blocksDropped >= 3 ? todayKey() : null });
+  if (!g) return null;
+  dorpSync({ force: true }).then(refreshMenuDorp);
+  const v = dorpView();
+  return { people: g.people, raids: g.raids, walls: g.walls, canRaid: !!v && (v.me.raids > 0 || v.wraak) && v.bure > 0 };
+}
+
+/** A friend's link: ?buur=<town> (their invite) or ?wraak=<raid> (their taunt: yours to avenge, or a new neighbour). */
+async function dorpLinks() {
+  const q = new URLSearchParams(location.search);
+  const buur = q.get('buur');
+  const wraak = q.get('wraak');
+  if (!buur && !wraak) return;
+  try {
+    q.delete('buur');
+    q.delete('wraak');
+    const rest = q.toString();
+    history.replaceState(history.state, '', location.pathname + (rest ? `?${rest}` : '') + location.hash);
+  } catch {
+    // sandboxed frames: the parameters simply stay
+  }
+  let open = false;
+  if (isTownId(buur) && buur !== dorp.id) {
+    const r = await dorp.buur(buur);
+    if (r.ok && r.them) {
+      ui.toast(S.dorpBuurAdded(r.them.name), 3600);
+      open = true;
+    }
+  }
+  if (isRaidId(wraak)) {
+    const info = await dorp.raidInfo(wraak);
+    if (info.ok && info.to !== dorp.id && info.from !== dorp.id) {
+      // someone else's raid (a new phone, a friend's forward): their town comes next to this one, with a raid to spend
+      const r = await dorp.buur(info.from);
+      if (r.ok) {
+        ui.toast(S.dorpWelcome(info.name), 4200);
+        open = true;
+      }
+    }
+  }
+  await dorpSync({ force: true });
+  if (open) {
+    dorpOpenPending = true;   // (a new player's first sheets come first: the town opens once they're closed)
+    dorpWhenFree();
+  }
+}
+
+let dorpOpenPending = false;
+/** Whatever waits for the menu with nothing open: a friend's town (their link), then "Terwyl jy weg was". */
+function dorpWhenFree() {
+  if (!dorpOn || screen !== 'menu' || ui.modalOpen()) return;
+  if (dorpOpenPending) {
+    dorpOpenPending = false;
+    ui.showDorp(dorpSheet());
+    return;
+  }
+  dorpNewsCheck();
+}
+bus.on('ui:view', () => setTimeout(dorpWhenFree, 0));
+
+async function dorpStart() {
+  dorpOn = await dorp.ping();
+  if (!dorpOn) return;
+  await dorpSync({ force: true });
+  refreshMenuDorp();
+  await dorpLinks();
+  refreshMenuDorp();
+  dorpNewsCheck();
+  setInterval(() => {
+    if (!dorpOn || document.visibilityState !== 'visible' || (screen !== 'menu' && screen !== 'results')) return;
+    dorpSync().then((r) => {
+      if (!r?.ok) return;
+      refreshMenuDorp();
+      dorpNewsCheck();
+    });
+  }, DORP_POLL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !dorpOn) return;
+    dorpSync({ force: true }).then(() => {
+      refreshMenuDorp();
+      dorpNewsCheck();
+    });
+  });
+}
+
+bus.on('ui:dorp', async () => {
+  if (!dorpOn) return;
+  // a town needs a name its neighbours can read: asked once (the Uitdagersreeks nickname)
+  if (!store.getDuel().name && !dorpNameAsked) {
+    dorpNameAsked = true;
+    ui.showName({ name: '', placeholder: sessionNick, back: () => bus.emit('ui:dorp') });
+    return;
+  }
+  ui.showDorp(dorpSheet());
+  const r = await dorpSync({ force: true });
+  if (ui.isOpen('dorp')) ui.showDorp(dorpSheet(!!r?.ok));
+  refreshMenuDorp();
+});
+
+bus.on('ui:dorp-raid', async ({ target, wraak } = {}) => {
+  if (!dorpOn || dorpBusy || !isTownId(target)) return;
+  dorpBusy = true;
+  try {
+    await dorpSync({ force: true });   // (the strooptogte the last tower earned reach the server first)
+    const r = await dorp.raid(target, wraak);
+    if (!r.ok) {
+      ui.toast(r.error === 'raids' ? S.dorpNoRaidsLeft : S.dorpOffline, 2800);
+      return;
+    }
+    const took = r.took | 0;
+    const link = `${siteUrl()}?wraak=${r.raidId}`;
+    const them = { ...r.them, people: r.them.people + took, walls: r.them.walls + (r.blocked ? 1 : 0) };
+    const me = { ...r.town, people: r.town.people - took };
+    const faces = castOf(r.them.tribe).map((id) => portraitDataUrl(id, 96)).filter(Boolean);
+    ui.showRaid({
+      me, them, took, blocked: !!r.blocked, wraak: !!r.wraak, raidsLeft: r.town.raids | 0, faces,
+      share: r.wraak ? S.dorpTauntWraak(took, link) : S.dorpTaunt(took, link),
+      celebration: store.getCard().celebration,
+    });
+    dorpSync({ force: true }).then(refreshMenuDorp);
+  } finally {
+    dorpBusy = false;
+  }
+});
+
+bus.on('ui:dorp-invite', () => {
+  const v = dorpView();
+  ui.shareText(S.dorpInviteText(v?.me?.people | 0, `${siteUrl()}?buur=${dorp.id}`), 'whatsapp');
+});
+
+// Blok vir Blok: a joker of ours (3 Perfeks in a row) is a strooptog for the town too
+bus.on('duel:choose', (c) => {
+  if (!c?.joker || !dorpOn || settings.living === false) return;
+  dorpJokers += 1;
+  bus.emit('hud:toast', { text: S.dorpRaidToast, color: '#ffb35c' });
+});
+
 function onReady() {
   game.scale.on('resize', scheduleRelayout);
   relayout();
@@ -2872,6 +3093,7 @@ function onReady() {
   });
   startIdle();
   showMenu();
+  dorpStart();   // (1.16) Jou dorp: only where the server knows the towns
   loadDailyTries();   // (1.13.1) the free tries a day: the Worker's word (the menu follows when it changes)
   account.sync();   // (1.14) signed in: the account's latest at once
   retryBoard();

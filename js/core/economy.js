@@ -606,6 +606,8 @@ export function cleanCard(raw) {
   out.bs = skin('blocks', r.bs) ? r.bs : DEFAULT_SKIN.blocks;
   // (1.16) Die Lewende Toring: this player's tribe (whose people live in their floors, whose mission they send)
   out.tr = ['vuur', 'water', 'gras'].includes(r.tr) ? r.tr : 'vuur';
+  // (1.16) Jou dorp: this player's town (its public id), so a friend's match makes the two towns neighbours
+  if (typeof r.dt === 'string' && /^[A-HJ-NP-Z2-9]{8}$/.test(r.dt)) out.dt = r.dt;
   // (1.12) the rank in the mode being played, on the ladder of 23 (a 1.11 card has only the tier), and
   // both modes' ranks: a friend's link doesn't say the mode until the match starts
   out.rl = LADDER_IDS.includes(r.rl) ? r.rl : `${out.rank}-1`;

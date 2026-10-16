@@ -957,7 +957,17 @@ Later the owner added (decisions are final unless they say otherwise):
   (in the cloud save). Fixed: a tribe change no longer kills a friend's waiting invite. Tests: game 426, server 267,
   `qa/battle1160.mjs` 7/7, `qa/battle_live1160.mjs` 7/7, living1160 18/18 and the match checks clean. For tonight:
   `~/.claude/skills/stapel/scripts/play-home.sh` serves the game and a match server on the home Wi-Fi (nothing published);
-  a private online link needs his word (Worker protocol 8 + a Pages branch, not main).
+  a private online link needs his word (Worker protocol 8 + a Pages branch, not main). 16 Oct 18:00: play-home.sh RUNNING
+  (http://192.168.1.225:8500/?nosw=1, opened in his Desktop Chrome at his ask; the local server hides dot-folders).
+- **16 Oct ~20:00 — Jou dorp: Steel en Wraak (local, on the home Wi-Fi only).** The owner's aim (typed): "everyone who plays
+  this game wants their friends to play, that is the aim" and "it needs to be so good that no one wants to leave"; his pick
+  of three hooks: Steel en Wraak. Every tower's people move into your own town (kept by the match server); 3 Perfeks in a
+  row earn a strooptog; the day's first tower builds a wall; a raid on a neighbour's town takes some of their people even
+  while they're away, plays as its own moment and ends with a WhatsApp taunt whose link (?wraak=) gives them one free,
+  stronger Wraak; "Terwyl jy weg was" greets the robbed. Neighbours: an invite link (?buur=) or one friend match. Rules
+  js/core/dorp.js, server server/src/dorp.js (only the home matchhost runs it; the Worker needs D1 + his word), phone
+  js/dorp.js, picture js/ui/townArt.js. Tests: game 431, server 267, qa dorp1160 9/9, dorpfriend1160 2/2, battle_live1160
+  7/7, living1160 18/18, smoke clean. Open: Worker side, town key in the cloud save, push notifications, balance.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

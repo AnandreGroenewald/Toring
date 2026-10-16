@@ -24,6 +24,8 @@ import { opaqueBox, headOf, accessoryPlace } from '../core/emojifit.js';
 import { audio, haptics } from '../audio.js';
 import { castOf, portraitDataUrl, portraitsReady, CAST } from '../game/residents.js';
 import { titleFor } from '../core/living.js';
+import { DORP, dorpTitle, TRIBE_ICON } from '../core/dorp.js';
+import { townPicture } from './townArt.js';
 
 const GRID_COLS = 10;
 const GRID_ROWS = 5;
@@ -189,6 +191,9 @@ export function createUI(bus) {
     offer: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-offer-title', tabindex: '-1' }),   // (1.15.3) the lobby's offer
     tribe: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-tribe-title', tabindex: '-1' }),   // (1.16) the Living Tower's tribe
     album: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-album-title', tabindex: '-1' }),   // (1.16) its residents album
+    dorp: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-dorp-title', tabindex: '-1' }),   // (1.16) Jou dorp: Steel en Wraak
+    raid: h('div', { class: 'modal modal-raid', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-raid-title', tabindex: '-1' }),   // (1.16) a strooptog
+    dorpnews: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-dorpnews-title', tabindex: '-1' }),   // (1.16) Terwyl jy weg was
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -229,7 +234,7 @@ export function createUI(bus) {
   // buttons take taps: a tap anywhere else still drops a block)
   const emoteBar = h('div', { class: 'emote-bar', role: 'group', 'aria-label': S.emoteLabel, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, modals.tribe, modals.album, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, modals.tribe, modals.album, modals.dorp, modals.raid, modals.dorpnews, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // (1.15, the owner: "We need a better way to display the coins please") every 🪙 the UI shows becomes the game's own
@@ -1030,7 +1035,7 @@ export function createUI(bus) {
       },
     }, coinIc(), h('b', { class: 'wallet-n', text: fmtInt(m.coins || 0) }), m.refill ? h('span', { class: 'wallet-plus', 'aria-hidden': 'true', text: '+' }) : null);
     screens.menu.replaceChildren(brand, gap,
-      h('div', { class: 'menu-stack' }, card, playRow, dock, adSlot), langChip, wallet);
+      h('div', { class: 'menu-stack' }, card, dorpMenuEl(m.dorp), playRow, dock, adSlot), langChip, wallet);
     // the gap shrinks when the sponsor feed adds the ad card later, so re-check whenever it resizes
     if (saying && typeof ResizeObserver === 'function') {
       if (!st.sayingRO) st.sayingRO = new ResizeObserver(() => fitSaying());
@@ -2492,6 +2497,7 @@ export function createUI(bus) {
       // (1.15.3) the next match right under the players, in sight without scrolling
       duel ? againBox({ again, againStake, againStakes }) : null,
       townEl(r.living),
+      dorpResEl(r.dorp),
       rewardEl(reward),
       empty ? null : gridEl(r.grid, r.reason, r.visitors),
       empty ? null : weatherEl(r.weather),
@@ -2976,6 +2982,225 @@ export function createUI(bus) {
         h('span', { text: S.lvAlbumBtn(t.album.met, t.album.total, t.album.gold) })) : null);
   }
 
+  // -------------------------------------------------------------------------------------------- (1.16) Jou dorp
+  // Steel en Wraak (js/core/dorp.js; the owner: "everyone who plays this game wants their friends to play" and "it needs
+  // to be so good that no one wants to leave"). The menu's town button; the town sheet with its neighbours; a raid as a
+  // moment of its own (their town is hit, their people float over into yours, both counts move with them, then your own
+  // celebration and the taunt for WhatsApp); and "Terwyl jy weg was" with its free Wraak.
+  const townPic = (t, size = 'big') => townPicture({
+    id: t?.id || 'TOWN', people: t?.people | 0, tribe: t?.tribe || 'vuur', walls: t?.walls | 0,
+    ...(size === 'big' ? { w: 360, h: 170 } : { w: 150, h: 84 }),
+  });
+  const agoText = (at) => S.dorpAgo(Math.max(0, Math.floor((Date.now() - (Number(at) || 0)) / 60000)));
+  const newsText = (n) => (n.blocked ? S.dorpAwayBlocked(n.name) : n.wraak ? S.dorpAwayWraak(n.name, n.took) : S.dorpAwayRaid(n.name, n.took));
+
+  /** The menu's town button (null without the server): its picture, its numbers, and what waits there. */
+  function dorpMenuEl(v) {
+    if (!v || !v.on || !v.me) return null;
+    const me = v.me;
+    const news = v.unseen | 0;
+    const go = !news && (me.raids > 0 || v.wraak) && v.bure > 0;
+    return h('button', {
+      type: 'button', class: `dorp-btn${news ? ' has-news' : ''}${go ? ' has-go' : ''}`,
+      'aria-label': `${S.dorp}: ${S.dorpPeople(me.people | 0)}`,
+      onclick: () => {
+        if (!guard()) return;
+        audio.play('click');
+        bus.emit('ui:dorp');
+      },
+    },
+    h('img', { class: 'dorp-btn-pic', src: townPic(me, 'small'), alt: '', 'aria-hidden': 'true', draggable: 'false' }),
+    h('span', { class: 'dorp-btn-txt' },
+      h('b', null, h('span', { text: S.dorp })),
+      h('span', { class: 'dorp-btn-sub', text: S.dorpSub(me.people | 0, me.walls | 0, me.raids | 0) })),
+    news ? h('span', { class: 'dorp-btn-badge', text: `😱 ${news}` })
+      : go ? h('span', { class: 'dorp-btn-go', text: v.wraak ? `💥 ${S.dorpWraak}` : `🔥 ${S.dorpSteal}!` })
+        : h('span', { class: 'dorp-btn-arrow', 'aria-hidden': 'true', text: '›' }));
+  }
+
+  /** "Jou dorp": the town, its walls and strooptogte, the neighbours (steal, or a Wraak), the invite and the news. */
+  function showDorp(v = {}) {
+    const me = v.me || { people: 0, walls: 0, raids: 0, tribe: 'vuur' };
+    const { now, next } = dorpTitle(me.people);
+    const prog = next ? (me.people - now.at) / Math.max(1, next.at - now.at) : 1;
+    const pips = (n, max, on) => Array.from({ length: max }, (_, k) => h('i', { class: k < n ? 'on' : '', text: on }));
+    const bure = v.bure || [];
+    const buurEl = (b) => {
+      const wraak = !!b.wraak;
+      const can = wraak || me.raids > 0;
+      return h('div', { class: `dorp-buur tribe-${b.tribe}${wraak ? ' is-wraak' : ''}` },
+        h('img', { class: 'dorp-buur-pic', src: townPic(b, 'small'), alt: '', 'aria-hidden': 'true', draggable: 'false' }),
+        h('span', { class: 'dorp-buur-txt' },
+          h('b', { text: b.name }),
+          h('span', { class: 'dorp-buur-sub', text: `${TRIBE_ICON[b.tribe] || ''} 🏠 ${fmtInt(b.people)}${b.walls ? ` · 🛡️ ${b.walls}` : ''}` })),
+        h('button', {
+          type: 'button', class: `dorp-act${wraak ? ' act-wraak' : ''}`, disabled: !can,
+          'aria-label': wraak ? `${S.dorpWraak} ${b.name}` : `${S.dorpSteal}: ${b.name}`,
+          onclick: () => {
+            if (!guard()) return;
+            audio.play('click');
+            bus.emit('ui:dorp-raid', { target: b.id, wraak: b.wraak || null });
+          },
+        }, wraak ? [h('b', { text: `💥 ${S.dorpWraak}` }), h('small', { text: S.dorpWraakFree })] : h('b', { text: `🔥 ${S.dorpSteal}` })));
+    };
+    const news = [...(v.news || [])].reverse().slice(0, 8);
+    modals.dorp.replaceChildren(h('div', { class: 'card sheet dorp-sheet' },
+      closeX(() => closeModal()),
+      h('div', { class: 'sheet-head' }, emo('🏘️'), h('h2', { id: 'stapel-dorp-title', text: me.name ? S.dorpOf(me.name) : S.dorp })),
+      h('div', { class: 'sheet-body' },
+        h('div', { class: `dorp-hero tribe-${me.tribe || 'vuur'}` },
+          h('img', { class: 'dorp-hero-pic', src: townPic(me), alt: '', 'aria-hidden': 'true', draggable: 'false' }),
+          h('span', { class: 'dorp-title-chip' }, emo(now.emoji), h('span', { text: S.dorpTitles[now.id] })),
+          h('span', { class: 'dorp-hero-n' }, h('b', { text: fmtInt(me.people | 0) }), h('span', { text: S.lvPeople }))),
+        next ? h('div', { class: 'dorp-prog' },
+          h('div', { class: 'dorp-bar' }, h('i', { vars: { '--p': `${Math.round(Math.max(0.03, Math.min(1, prog)) * 100)}%` } })),
+          h('p', { text: S.dorpToNext(next.at - (me.people | 0), S.dorpTitles[next.id]) })) : null,
+        h('div', { class: 'dorp-stocks' },
+          h('div', { class: 'dorp-stock' }, h('span', { class: 'dorp-pips emoji' }, pips(me.walls | 0, DORP.wallsMax, '🛡️')), h('small', { text: S.dorpWalls })),
+          h('div', { class: 'dorp-stock' }, h('span', { class: 'dorp-pips emoji' }, pips(me.raids | 0, DORP.raidsMax, '🔥')), h('small', { text: S.dorpRaids }))),
+        v.online === false ? h('p', { class: 'dorp-offline', text: S.dorpOffline }) : null,
+        h('h3', { class: 'dorp-h3', text: S.dorpBure }),
+        bure.length ? h('div', { class: 'dorp-bure' }, bure.map(buurEl)) : h('p', { class: 'dorp-empty', text: S.dorpNoBure }),
+        bure.length && !(me.raids > 0) && !bure.some((b) => b.wraak) ? h('p', { class: 'dorp-hint', text: S.dorpNoRaids }) : null,
+        // out of strooptogte: straight to a tower that earns them (raid, build, raid again)
+        bure.length && !(me.raids > 0) ? button('btn-teal dorp-play', [icon('play'), h('span', { text: S.dorpPlayForRaids })], () => { closeModal(); bus.emit('ui:play-practice'); }) : null,
+        button('btn-wa dorp-invite', [icon('chat'), h('span', { text: S.dorpInvite })], () => bus.emit('ui:dorp-invite'), { nav: false }),
+        h('ul', { class: 'dorp-how' }, S.dorpHow.map((t) => h('li', { text: t }))),
+        news.length ? h('h3', { class: 'dorp-h3', text: S.dorpNews }) : null,
+        news.length ? h('ul', { class: 'dorp-news' }, news.map((n) => h('li', { class: n.blocked ? 'is-blocked' : '' },
+          emo(n.blocked ? '🛡️' : TRIBE_ICON[n.tribe] || '🔥'), h('span', { text: newsText(n) }), h('small', { text: agoText(n.at) })))) : null)));
+    openModal('dorp');
+  }
+
+  function closeRaid() {
+    st.raidStop?.();
+    st.raidStop = null;
+    if (st.modal === 'raid') closeModal();
+  }
+
+  /**
+   * A strooptog as its own moment: their town shakes under your tribe, their people float over into your town one by
+   * one (both counts move with them), then "+11 mense!", your celebration and the taunt for WhatsApp. A wall holds
+   * instead: it flashes, and breaks. r: { me, them (towns before the raid), took, blocked, wraak, raidsLeft, faces,
+   * share (the taunt), celebration }.
+   */
+  function showRaid(r) {
+    closeRaid();
+    const reduced = reducedMotion();
+    const mineT = r.me?.tribe || 'vuur';
+    const fx = TRIBE_ICON[mineT] || '🔥';
+    const took = Math.max(0, r.took | 0);
+    const themN = h('b', { text: fmtInt(r.them.people) });
+    const meN = h('b', { text: fmtInt(r.me.people) });
+    const themBox = h('div', { class: 'raid-town raid-them' },
+      h('img', { class: 'raid-pic', src: townPic(r.them), alt: '', draggable: 'false' }),
+      h('div', { class: 'raid-fx', 'aria-hidden': 'true' }, Array.from({ length: 10 }, (_, k) => h('i', { class: 'emoji', vars: { '--k': k, '--x': `${8 + ((k * 37) % 84)}%` }, text: fx }))),
+      h('div', { class: 'raid-label' }, h('span', { text: S.dorpOf(r.them.name) }), h('span', { class: 'raid-n' }, emo('🏠'), themN)));
+    const meBox = h('div', { class: 'raid-town raid-me' },
+      h('img', { class: 'raid-pic', src: townPic(r.me), alt: '', draggable: 'false' }),
+      h('div', { class: 'raid-label' }, h('span', { text: S.dorp }), h('span', { class: 'raid-n' }, emo('🏠'), meN)));
+    const flyers = h('div', { class: 'raid-flyers', 'aria-hidden': 'true' });
+    const big = h('div', { class: 'raid-big', role: 'status', 'aria-live': 'polite' });
+    const actions = h('div', { class: 'raid-actions' });
+    const stage = h('div', { class: `raid-stage tribe-${mineT}${r.wraak ? ' is-wraak' : ''}${r.blocked ? ' is-blocked' : ''}` },
+      h('h2', { class: 'raid-title', id: 'stapel-raid-title' }, emo(r.wraak ? '💥' : fx), h('span', { text: r.wraak ? S.dorpWraakTitle : S.dorpRaidTitle })),
+      themBox, flyers, meBox, big, actions);
+    modals.raid.replaceChildren(stage);
+    openModal('raid');
+    const timers = [];
+    const at = (ms, fn) => timers.push(setTimeout(() => {
+      if (st.modal === 'raid' && stage.isConnected) fn();
+    }, reduced ? Math.min(ms, 80) : ms));
+    st.raidStop = () => timers.forEach(clearTimeout);
+    const showActions = () => {
+      actions.replaceChildren(...[
+        took ? button('btn-wa raid-tell', [icon('chat'), h('span', { text: S.dorpTell(r.them.name) })], () => doShare(r.share, 'whatsapp'), { nav: false }) : null,
+        r.raidsLeft > 0 ? button('btn-klei raid-more', [emo('🔥'), h('span', { text: S.dorpMore(r.raidsLeft) })], () => { closeRaid(); bus.emit('ui:dorp'); }) : null,
+        button('btn-white raid-done', h('span', { text: S.dorpDone }), () => { closeRaid(); bus.emit('ui:dorp'); }),
+      ].filter(Boolean));
+      actions.classList.add('on');
+    };
+    // 1. your tribe hits their town
+    at(500, () => {
+      stage.classList.add('is-hit');
+      audio.play(mineT === 'water' ? 'splash' : mineT === 'gras' ? 'creak' : 'heat');
+      audio.play('thunder');
+      haptics.heavy();
+    });
+    if (r.blocked) {
+      at(1300, () => {
+        stage.classList.add('is-held');
+        audio.play('board');
+        big.replaceChildren(h('b', { text: `🛡️ ${S.dorpBlocked(r.them.name)}` }), h('p', { text: S.dorpBlockedSub }));
+        big.classList.add('on');
+        showActions();
+      });
+      return;
+    }
+    // 2. their people float over, one by one (at most 14 drawn; the counts move by the true number)
+    const shown = Math.min(14, took);
+    const faces = r.faces || [];
+    const gap = shown > 8 ? 120 : 170;
+    for (let k = 0; k < shown; k++) {
+      at(1300 + k * gap, () => {
+        flyers.append(h('img', { class: 'raid-flyer', src: faces[k % Math.max(1, faces.length)] || '', alt: '', vars: { '--dx': `${((k * 53) % 100) - 50}`, '--k': k } }));
+        if (k % 3 === 0) audio.play('chute');
+      });
+      at(1300 + k * gap + 950, () => {
+        const upTo = Math.round(((k + 1) / shown) * took);
+        themN.textContent = fmtInt(Math.max(0, r.them.people - upTo));
+        meN.textContent = fmtInt(r.me.people + upTo);
+        meBox.classList.remove('is-bump');
+        void meBox.offsetWidth;   // (restart the bump)
+        meBox.classList.add('is-bump');
+        audio.play('room');
+      });
+    }
+    // 3. the result: "+11 mense!", your celebration, the taunt
+    at(1300 + Math.max(1, shown) * gap + 1150, () => {
+      big.replaceChildren(h('b', { text: took ? S.dorpTook(took) : S.dorpEmpty(r.them.name) }), took ? h('p', { text: S.dorpTookSub(took, r.them.name) }) : null);
+      big.classList.add('on');
+      if (took) {
+        haptics.perfect();
+        celebrate(r.celebration || 'konfetti', { sound: true });
+      }
+      showActions();
+    });
+  }
+
+  /** "Terwyl jy weg was": who robbed this town (and whose raid a wall stopped), with one big free Wraak. */
+  function showDorpNews(v = {}) {
+    const items = [...(v.items || [])].reverse();
+    if (!items.length) return;
+    const me = v.me || {};
+    const owed = items.find((n) => n.took > 0 && !n.blocked && !n.wraaked);
+    const stage = h('div', { class: 'card sheet news-sheet' },
+      closeX(() => closeModal()),
+      h('div', { class: 'sheet-head' }, emo('😱'), h('h2', { id: 'stapel-dorpnews-title', text: S.dorpAway })),
+      h('div', { class: 'sheet-body' },
+        h('div', { class: 'news-hero' }, h('img', { class: 'news-pic', src: townPic(me), alt: '', 'aria-hidden': 'true', draggable: 'false' })),
+        h('ul', { class: 'dorp-news news-list' }, items.slice(0, 6).map((n) => h('li', { class: n.blocked ? 'is-blocked' : '' },
+          emo(n.blocked ? '🛡️' : TRIBE_ICON[n.tribe] || '🔥'), h('span', { text: newsText(n) }), h('small', { text: agoText(n.at) })))),
+        h('p', { class: 'news-now', text: `${S.dorp}: 🏠 ${fmtInt(me.people | 0)}` }),
+        owed ? button('btn-big btn-klei news-wraak', [emo('💥'), h('span', { text: S.dorpWraakOn(owed.name) })], () => {
+          closeModal();
+          bus.emit('ui:dorp-raid', { target: owed.from, wraak: owed.raidId });
+        }) : null,
+        button('btn-white news-later', h('span', { text: owed ? S.dorpLater : S.dorpDone }), () => closeModal())));
+    modals.dorpnews.replaceChildren(stage);
+    openModal('dorpnews');
+    audio.play('warning');
+    haptics.warn();
+  }
+
+  /** The results card's line for the town: what this tower sent there, and a way to go and use it. */
+  function dorpResEl(d) {
+    if (!d || !(d.people || d.raids || d.walls)) return null;
+    return h('div', { class: 'res-dorp' },
+      h('p', { class: 'res-dorp-line', text: S.dorpEarned(d.people | 0, d.raids | 0, d.walls | 0) }),
+      button(`btn-white btn-mini res-dorp-go${d.canRaid ? ' is-go' : ''}`, [emo(d.canRaid ? '🔥' : '🏘️'), h('span', { text: d.canRaid ? S.dorpGoSteal : S.dorp })], () => bus.emit('ui:dorp'), { nav: false }));
+  }
+
   function showSettings() {
     st.accountAsk = null;
     st.accountMsg = null;
@@ -3417,6 +3642,13 @@ export function createUI(bus) {
     setLiving,
     showTribe,
     showAlbum,
+    showDorp,
+    showRaid,
+    showDorpNews,
+    closeRaid,
+    isOpen: (name) => st.modal === name,
+    modalOpen: () => !!st.modal,
+    shareText: (text, channel = 'native') => doShare(text, channel),
     showDuel,
     setDuelMode,
     setDuelStake,

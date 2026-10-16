@@ -35,6 +35,7 @@ import { topMovable, thiefLoot, visitorFree, gridWithGifts } from '../core/visit
 import { duelSeedKey } from '../core/duel.js';
 import { isRoundVisitor, roundStage, botCatch } from '../core/turns.js';
 import { SLOW_BLOCKS, SLOW_MUL } from '../core/economy.js';
+import { DORP } from '../core/dorp.js';
 
 const FIXED = PHYSICS.fixedDtMs;
 const MAX_FRAME_MS = 100;
@@ -489,6 +490,7 @@ export class GameScene extends Phaser.Scene {
     this.shieldOn = false;          // power-up: the next monkey or thief bounces off
     this.combo = 0;
     this.maxCombo = 0;
+    this.raidsEarned = 0;          // (1.16) Jou dorp: strooptogte this tower earned (3 Perfeks in a row)
     this.perfects = 0;
     this.blocksDropped = 0;
     this.landedCount = 0;
@@ -2425,6 +2427,13 @@ export class GameScene extends Phaser.Scene {
       this.effects.floatText(block.centerX, block.top - 170, S.extraLife, { color: '#ff8fb0', size: 42 });
       audio.play('heart');
     }
+    // (1.16) Jou dorp: every 3 Perfeks in a row earn a strooptog for the town (Blok vir Blok's run earns its joker
+    // instead, and the joker counts: main.js)
+    if (r === 'P' && !this.turns && this.livingOpts?.dorp && this.combo % DORP.raidStreak === 0) {
+      this.raidsEarned += 1;
+      this.effects.floatText(block.centerX, block.top - 250, S.dorpRaidEarned, { color: '#ffb35c', size: 44 });
+      bus.emit('game:dorp-raid', { n: this.raidsEarned });
+    }
     // a run of Perfeks brings Hanswors with his log (every SCORING.rewardStreak in a row; Blok vir Blok's
     // run earns a joker instead, js/core/turns.js)
     if (r === 'P' && !this.turns && this.combo % SCORING.rewardStreak === 0) {
@@ -3855,6 +3864,7 @@ export class GameScene extends Phaser.Scene {
       blocksDropped: Math.max(0, dropped),
       perfects,
       maxCombo: this.maxCombo,
+      raids: this.raidsEarned,
       grid,
       weather: [...(this.weather.seen || [])],
       visitors: this.visitors ? this.visitors.log() : [],
