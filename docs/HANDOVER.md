@@ -959,7 +959,7 @@ Later the owner added (decisions are final unless they say otherwise):
   `~/.claude/skills/stapel/scripts/play-home.sh` serves the game and a match server on the home Wi-Fi (nothing published);
   a private online link needs his word (Worker protocol 8 + a Pages branch, not main). 16 Oct 18:00: play-home.sh RUNNING
   (http://192.168.1.225:8500/?nosw=1, opened in his Desktop Chrome at his ask; the local server hides dot-folders).
-- **16 Oct ~20:00 — Jou dorp: Steel en Wraak (local, on the home Wi-Fi only).** The owner's aim (typed): "everyone who plays
+- **16 Oct 19:00 — Jou dorp: Steel en Wraak (local, on the home Wi-Fi only).** The owner's aim (typed): "everyone who plays
   this game wants their friends to play, that is the aim" and "it needs to be so good that no one wants to leave"; his pick
   of three hooks: Steel en Wraak. Every tower's people move into your own town (kept by the match server); 3 Perfeks in a
   row earn a strooptog; the day's first tower builds a wall; a raid on a neighbour's town takes some of their people even
@@ -968,19 +968,41 @@ Later the owner added (decisions are final unless they say otherwise):
   js/core/dorp.js, server server/src/dorp.js (only the home matchhost runs it; the Worker needs D1 + his word), phone
   js/dorp.js, picture js/ui/townArt.js. Tests: game 431, server 267, qa dorp1160 9/9, dorpfriend1160 2/2, battle_live1160
   7/7, living1160 18/18, smoke clean. Open: Worker side, town key in the cloud save, push notifications, balance.
-- **16 Oct ~23:00 — Jou dorp is in the game world (local, home Wi-Fi only).** The owner: "Nope, still not 'premium'" and
+- **16 Oct 19:41 — Jou dorp is in the game world (local, home Wi-Fi only).** The owner: "Nope, still not 'premium'" and
   "Again premium with a few more features. It needs to be really good please." The town now stands on the real island
   (js/scenes/DorpScene.js): real Stapel towers with roofs, faces in the windows, golden people, walls, the flag. A raid
   flies across the sea; a target sweeps over their town and a tap on the glowing tower is a Perfek (x1.5); their people
   parachute into your windows; "+N MENSE!" under light rays with your celebration; golden people pay 25 coins. "Terwyl jy
   weg was" replays in your town and offers "Wraak op …!". The screen over it shows your rank among your neighbours.
   Tests: game 432, qa dorp1160 12/12, dorpfriend1160 2/2, smoke clean.
-- **17 Oct ~00:30 — Robot Rikus's town and landmarks for coins (local).** The owner picked these two ("let me see how it
+- **16 Oct 20:16 — Robot Rikus's town and landmarks for coins (local).** The owner picked these two ("let me see how it
   works first, I need to make sure I carry it over": online waits; when it goes, the towns on his Mac move to the server).
   Rikus is everyone's first neighbour (a new player raids him at once; he raids back now and then, with a free Wraak; the
   result nudges "Nooi ’n regte vriend!"). Landmarks (fountain to rocket, 200-1500 coins) stand in your town (the boat
   sails, the dolphin jumps, the whale spouts), your neighbours see them, and each brings tourists on your first visit of
   the day. Tests: game 434, qa dorpmarks1160 5/5, dorp1160 12/12, dorpfriend1160 2/2, smoke clean.
+- **16 Oct ~23:45 — Vrugteslag 1.17: the fruit battle (local, home Wi-Fi only; not pushed; nothing live).** The owner's
+  idea (typed): "The more you play stapel (dayly challenge) the bigger your empire gets, Break your oponents empire before
+  he breaks yours, with special abilities. So it needs to be a fruit battle" (grapes from a slingshot splash 4 blocks,
+  bananas boomerang one whole block "no matter if its 2 or 5 people in that row", the juice flood takes 2 rows, the
+  watermelon 6-10; swords counter grapes, monkeys catch bananas, Big Joe drinks the juice, "it all depends on where your
+  character is"; a mini-game first for an extra turn). Then: "make it more difficult with the fruit, it musnt be easy just
+  drag and the banas goes where you want it, and the grapes, you can miss". His picks: style B Sononder-slag (the sunset
+  savanna, purple and gold) and all four extras (Herbou with the crane, weather each turn, weak spots and combos, fruit
+  from the Daily Tower). Built: rules js/core/slag.js (castles, defenders and counters, weather, rateImpact, applyShot,
+  rebuild, combos, the 24-turn end, the fruit basket and harvest); the scene js/scenes/SlagScene.js (extends DorpScene:
+  the slingshot pull measured from where the finger lands with a shaking hand after 1.1 s, the banana swipe whose speed
+  must be right and its catch on the way back, the juice box's two taps, the catapult's speeding swing; the flood, cracks,
+  parachutes, counters, Robot Rikus); two players by room code js/slagNet.js + matchhost POST /slag/room and the socket
+  /slag/room/<code> (home matchhost only: the Worker needs protocol 8 + his word); the 🍉 menu button, lobby (vs Rikus,
+  "Daag ’n vriend uit" + WhatsApp link ?slag=CODE, join by code), mini-games (aap, sap, emmer); the basket stapel.v1.slag
+  (both privacy pages name it); the harvest after the day's first Daily. Tests: game 441/441, qa slag1170 6/6 (a whole
+  battle vs Rikus with touch gestures), slagpvp1170 5/5 (two players: the same castles 24/24 turns, one winner). His next
+  ask: "Once done I will like to compete against you ... You on the leftside of the screen and myself on the rightside of
+  the screen, two different accounts" → `~/.claude/skills/stapel/scripts/qa/slag_claude.mjs`: Claude's own visible window
+  (left half, its own profile = player "Claude"), Claude chooses each shot and the hands play the real controls with a
+  person's wobble; first match 16 Oct ~23:40 (room RRQMCG, his Chrome as "Kippie"). Open: online (his word; carry the
+  home towns over), friend battles while away, the crane's look, balance after he plays.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

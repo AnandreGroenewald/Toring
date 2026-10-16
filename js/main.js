@@ -36,6 +36,9 @@ import { GameScene } from './scenes/GameScene.js';
 import { HudScene } from './scenes/HudScene.js';
 import { LewendeScene } from './scenes/LewendeScene.js';
 import { DorpScene } from './scenes/DorpScene.js';
+import { SlagScene } from './scenes/SlagScene.js';
+import { makeCastle, castlePeople, battleFruit, battleReward, harvest, addFruit, cleanBasket, newBasket, SLAG } from './core/slag.js';
+import { createSlagNet } from './slagNet.js';
 import { createLewendeUi } from './ui/lewendeUi.js';
 import { createLivingStore, CAST_IDS } from './core/living.js';
 import { createDorpClient } from './dorp.js';
@@ -199,7 +202,7 @@ const game = new Phaser.Game({
   fps: { smoothStep: false },
   audio: { noAudio: true },   // all sound is js/audio.js; Phaser's own manager would open a 2nd AudioContext
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BgScene, GameScene, LewendeScene, DorpScene, HudScene],
+  scene: [BgScene, GameScene, LewendeScene, DorpScene, SlagScene, HudScene],
 });
 
 window.__stapel = Object.assign(window.__stapel || {}, { game, bus, store, ui, audio });
@@ -564,6 +567,7 @@ function menuModel() {
     refill: refillActive(),   // (1.15) the wallet's + only while "Vul my munte aan" runs (coins are never sold)
     week: weekView(store.getWeek(), dateKey),   // the weekkis strip (js/core/week.js)
     dorp: (() => { const d = dorpView(); dorpMenuKey = JSON.stringify(d); return d; })(),   // (1.16) Jou dorp
+    slag: slagMenuView(),   // (1.17) Vrugteslag
   };
 }
 
@@ -2617,14 +2621,23 @@ function finalize(result) {
   // coins: the daily tower pays in full (once); Oefen counts towards the day's cap
   let coins = null;
   let week = null;
+  let slagGain = null;
   if (result.mode === 'daily' && stats?.applied && !run.retry) {   // (the second try was bought: it pays nothing)
     coins = awardCoins({ mode: 'daily', heightM: shown.heightM, perfects: shown.perfects, streak: stats.currentStreak });
+    // (1.17) the fruit basket fills from the Daily Tower: a banana per 5 Perfeks, a juice box per 10, a watermelon per 3 days
+    const g = harvest({ perfects: shown.perfects, streak: stats.currentStreak });
+    if (g.piesang || g.sap || g.waatlemoen) {
+      const sd = slagLoad();
+      sd.basket = addFruit(sd.basket, g);
+      slagSave(sd);
+      slagGain = g;
+    }
     // (1.15.3, the owner: "the chest should open everyday you login not when you play the daily challenge") the
     // weekkis opens on the day's first visit (openTodaysChest), no longer here
   } else if (result.mode === 'practice') {
     coins = awardCoins({ mode: 'practice', heightM: result.heightM, perfects: result.perfects });
   }
-  run.final = { result: { ...(town && !aborted ? { ...shown, living: town } : shown), ...(dorpGain && !aborted ? { dorp: dorpGain } : {}) }, stats, isNewBest, aborted, coins, week };
+  run.final = { result: { ...(town && !aborted ? { ...shown, living: town } : shown), ...(dorpGain && !aborted ? { dorp: dorpGain } : {}), ...(slagGain ? { slagGain } : {}) }, stats, isNewBest, aborted, coins, week };
   return run.final;
 }
 
@@ -3253,6 +3266,221 @@ bus.on('duel:choose', (c) => {
   bus.emit('hud:toast', { text: S.dorpRaidToast, color: '#ffb35c' });
 });
 
+// ---------------------------------------------------------------------------
+// (1.17) Vrugteslag: Ryk teen Ryk (js/core/slag.js, js/scenes/SlagScene.js; the owner, 16 Oct 2026: "Break your oponents
+// empire before he breaks yours", his style B and his four extras). This first version: you against Robot Rikus, in the
+// sunset world. The fruit basket lives on this phone (stapel.v1.slag) and fills from the Daily Tower; a battle uses at
+// most SLAG.perBattle of each; the end pays coins, trophies and (a win) people for Jou dorp.
+// ---------------------------------------------------------------------------
+const SLAG_KEY = 'stapel.v1.slag';
+function slagLoad() {
+  try {
+    const d = JSON.parse(localStorage.getItem(SLAG_KEY) || 'null');
+    return { v: 1, basket: cleanBasket(d?.basket), trophies: Math.max(0, d?.trophies | 0), wins: Math.max(0, d?.wins | 0), losses: Math.max(0, d?.losses | 0), played: Math.max(0, d?.played | 0) };
+  } catch {
+    return { v: 1, basket: newBasket(), trophies: 0, wins: 0, losses: 0, played: 0 };
+  }
+}
+function slagSave(d) {
+  try { localStorage.setItem(SLAG_KEY, JSON.stringify(d)); } catch { /* private mode: this visit only */ }
+}
+/** Your rank's badge by trophies (the game's own medals). */
+const slagBadge = (tr) => (tr >= 600 ? '💎' : tr >= 300 ? '🥇' : tr >= 100 ? '🥈' : '🥉');
+/** What the menu shows of the battle (always there: Robot Rikus needs no server). */
+function slagMenuView() {
+  const d = slagLoad();
+  return { trophies: d.trophies, basket: d.basket };
+}
+/** A battle castle from your empire: more people in Jou dorp, more rows (8-12). */
+function slagCastleSize() {
+  const p = dorpView()?.me?.people | 0;
+  const rows = Math.max(8, Math.min(12, 8 + Math.floor(Math.log2(1 + p / 50))));
+  return { rows, people: Math.round(rows * 3.6) };
+}
+let slagRun = null;
+let slagBgWas = null;
+function slagBarsGame() {
+  const b = ui.slagBars();
+  const k = b.height ? game.scale.height / b.height : 1;
+  return { top: Math.round(b.top * k), bottom: Math.round(b.bottom * k) };
+}
+function slagReframe() {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const b = slagBarsGame();
+    game.scene.getScene('Slag')?.setBars?.(b.top, b.bottom, 400);
+  }));
+}
+function stopSlagScene() {
+  for (const k of ['Slag', 'Dorp']) if (game.scene.isActive(k) || game.scene.isPaused(k) || game.scene.isSleeping(k)) game.scene.stop(k);
+  if (slagBgWas != null) {
+    game.registry.set('bgSkin', slagBgWas);
+    slagBgWas = null;
+  }
+  if (game.scene.isSleeping('Game')) game.scene.wake('Game');
+}
+/** The screen's side of each of the battle's steps (the scene asks; the screen answers). */
+function slagUi() {
+  let setupCb = {};
+  let cancel = null;
+  return {
+    counts: (c) => ui.slagCounts(c),
+    setup: (o) => {
+      if (o.onPick) setupCb = { onPick: o.onPick, onShuffle: o.onShuffle, onReady: () => { o.onReady(); } };
+      ui.slagMode('setup', { places: o.places, pick: o.pick, ...setupCb });
+    },
+    mode: (m, extra = {}) => {
+      ui.slagMode(m, { ...extra, onCancel: () => cancel?.() });
+      slagReframe();
+    },
+    pick: (o) => new Promise((resolve) => {
+      ui.slagMode('pick', { ...o, onPick: (k) => resolve(k) });
+      slagReframe();
+    }),
+    mini: () => ui.slagMini(['aap', 'sap', 'emmer'][Math.floor(Math.random() * 3)]),
+    aimHook: (fn) => { cancel = () => fn('cancel'); },
+    used: (kind, caught) => {
+      if (slagRun && kind in slagRun.used && !caught) slagRun.used[kind] += 1;
+    },
+    shot: () => {},
+    end: (r) => slagEnd(r),
+  };
+}
+/** Your castle for a battle (from your empire's size) and who you are in it. */
+function slagMine(seed) {
+  const size = slagCastleSize();
+  const myId = dorp.id || `K${Math.random().toString(36).slice(2, 9).toUpperCase()}`;
+  return { id: myId, name: duelNick(), tribe: tribeNow(), castle: makeCastle({ rows: size.rows, people: size.people, seed: `${myId}/${seed}` }), empire: 4 };
+}
+/** A castle that came from the other game (its rows only, checked). */
+function slagTheirs(h) {
+  const rows = (Array.isArray(h?.castle) ? h.castle : []).slice(0, SLAG.rowsMax).map((r) => {
+    const cap = Math.max(SLAG.rowMin, Math.min(SLAG.rowMax, r?.cap | 0));
+    return { people: Math.max(0, Math.min(cap, r?.people | 0)), cap, cracked: false };
+  });
+  while (rows.length < SLAG.rowsMin) rows.push({ people: SLAG.rowMin, cap: SLAG.rowMin, cracked: false });
+  return { rows, defenders: {}, revealed: [], joeBig: false };
+}
+/** Vrugteslag's own screen: who to fight (Robot Rikus, a friend's room, a friend's code). */
+let slagConn = null;
+function slagLobby(note = '') {
+  screen = 'slag';
+  wakeLoop();
+  ui.hideAll();
+  ui.showSlagScreen({ theme: 'b', mode: 'lobby', note, me: { name: duelNick() }, them: {} });
+}
+async function slagHost() {
+  const net = createSlagNet({ api: matchApiUrl() });
+  const code = await net.create();
+  if (!code) {
+    slagLobby(S.slagNoRoom);
+    return;
+  }
+  slagConn?.close();
+  const conn = net.connect(code);
+  slagConn = conn;
+  ui.slagMode('lobby', { hosting: code, link: `${siteUrl()}?slag=${code}` });
+  await conn.ready;
+  if (slagConn === conn) slagLive(conn, 0);
+}
+async function slagJoin(code) {
+  if (!/^[A-Z0-9]{6}$/.test(code || '')) {
+    slagLobby(S.slagBadCode);
+    return;
+  }
+  slagConn?.close();
+  const conn = createSlagNet({ api: matchApiUrl() }).connect(code);
+  slagConn = conn;
+  slagLobby(S.slagWaiting);
+  const seat = await Promise.race([conn.seat, new Promise((r) => setTimeout(() => r(null), 6000))]);
+  if (seat == null) {
+    slagLobby(S.slagBadCode);
+    return;
+  }
+  await conn.ready;
+  if (slagConn === conn) slagLive(conn, seat);
+}
+/** Both games in the room: swap who you are and your castles (the room's maker sends the battle's seed), then fight. */
+async function slagLive(conn, seat) {
+  const seed = seat === 0 ? Date.now().toString(36) : null;
+  const me = slagMine(seed || Date.now().toString(36));
+  conn.send({ t: 'hello', id: me.id, name: me.name, tribe: me.tribe, castle: me.castle.rows.map((r) => ({ people: r.people, cap: r.cap })), seed });
+  const h = await conn.next(['hello']);
+  if (h.t === 'gone') {
+    slagLobby(S.slagLeft(''));
+    return;
+  }
+  const them = { id: /^[A-Z0-9]{4,12}$/i.test(h.id || '') && h.id !== me.id ? h.id : `T${seat}X`, name: typeof h.name === 'string' && h.name.trim() ? h.name.slice(0, 22) : S.duelSomeone, tribe: ['vuur', 'water', 'gras'].includes(h.tribe) ? h.tribe : 'water', castle: slagTheirs(h), empire: 4 };
+  enterSlag({ me, them, net: conn, seat, seed: seat === 0 ? seed : String(h.seed || 'x') });
+}
+/** Into a fruit battle (Robot Rikus, or `net`: a friend): the sunset world, both castles, your basket's fruit. */
+function enterSlag(opts = {}) {
+  const d = slagLoad();
+  const seed = opts.seed || Date.now().toString(36);
+  const me = opts.me || slagMine(seed);
+  const rTribe = { vuur: 'gras', water: 'vuur', gras: 'water' }[tribeNow()] || 'gras';
+  const size = slagCastleSize();
+  const them = opts.them || { id: 'RIKUS', name: 'Robot Rikus', tribe: rTribe, castle: makeCastle({ rows: size.rows, people: size.people, seed: `rikus/${seed}` }), empire: 4, bot: true };
+  slagRun = { used: { piesang: 0, sap: 0, waatlemoen: 0 }, seed, live: !!opts.net };
+  screen = 'slag';
+  wakeLoop();
+  ui.hideAll();
+  if (game.scene.isActive('Game')) game.scene.sleep('Game');
+  if (game.scene.isActive('Hud')) game.scene.sleep('Hud');
+  for (const k of ['Slag', 'Dorp']) if (game.scene.isActive(k) || game.scene.isPaused(k)) game.scene.stop(k);
+  // (the owner's style B: the sunset over the savanna)
+  if (slagBgWas == null) slagBgWas = game.registry.get('bgSkin');
+  game.registry.set('bgSkin', 'sonsondergang');
+  ui.showSlagScreen({
+    theme: 'b',
+    me: { name: me.name, badge: slagBadge(d.trophies), people: castlePeople(me.castle), max: castlePeople(me.castle) },
+    them: { name: them.name, badge: them.bot ? '🤖' : '⚔️', people: castlePeople(them.castle), max: castlePeople(them.castle) },
+  });
+  const bars = slagBarsGame();
+  game.scene.start('Slag', { me, them, seed, fruit: battleFruit(d.basket), reducedMotion: !!settings.reducedMotion, topBar: bars.top, trayBar: bars.bottom, ui: slagUi(), net: opts.net || null, seat: opts.seat ?? 0 });
+}
+/** The end: the fruit used leaves the basket; coins, trophies, and (a win) people for Jou dorp. */
+function slagEnd(r) {
+  const d = slagLoad();
+  for (const k of ['piesang', 'sap', 'waatlemoen']) d.basket[k] = Math.max(0, d.basket[k] - (slagRun?.used[k] | 0));
+  const rew = battleReward({ won: r.won, theirStart: r.startThem });
+  d.trophies = Math.max(0, d.trophies + rew.trophies);
+  d.played += 1;
+  if (r.won) d.wins += 1;
+  else d.losses += 1;
+  slagSave(d);
+  store.earnCoins(rew.coins, { capped: false });
+  coinsChanged();
+  const people = dorpOn && rew.people ? rew.people : 0;
+  if (people) {
+    dorp.queue({ people });
+    dorpSync({ force: true });
+  }
+  ui.slagMode('end', { result: { won: r.won, coins: rew.coins, trophies: rew.trophies, people } });
+  if (r.won) ui.celebrate(store.getCard().celebration);
+}
+bus.on('ui:slag', () => slagLobby());
+bus.on('ui:slag-bot', () => enterSlag());
+bus.on('ui:slag-host', slagHost);
+bus.on('ui:slag-join', (code) => slagJoin(code));
+bus.on('ui:slag-again', () => {
+  // against a friend: back to the lobby (a new room); against Robot Rikus: at once
+  if (slagRun?.live) {
+    stopSlagScene();
+    slagConn?.close();
+    slagConn = null;
+    slagLobby();
+  } else {
+    enterSlag();
+  }
+});
+bus.on('ui:slag-done', () => {
+  stopSlagScene();
+  slagConn?.close();
+  slagConn = null;
+  slagRun = null;
+  bus.emit('ui:home');
+});
+
 function onReady() {
   game.scale.on('resize', scheduleRelayout);
   relayout();
@@ -3268,6 +3496,14 @@ function onReady() {
   startIdle();
   showMenu();
   dorpStart();   // (1.16) Jou dorp: only where the server knows the towns
+  {
+    // (1.17) a friend's Vrugteslag link (?slag=CODE): into their room
+    const code = new URLSearchParams(location.search).get('slag');
+    if (/^[A-Z0-9]{6}$/.test(code || '')) {
+      try { history.replaceState(history.state, '', location.pathname + location.hash); } catch { /* the address stays */ }
+      setTimeout(() => slagJoin(code), 900);
+    }
+  }
   loadDailyTries();   // (1.13.1) the free tries a day: the Worker's word (the menu follows when it changes)
   account.sync();   // (1.14) signed in: the account's latest at once
   retryBoard();

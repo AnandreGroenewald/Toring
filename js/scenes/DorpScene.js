@@ -37,7 +37,7 @@ const CLASSES = {
 };
 const ROOFS = ['wedge', 'arch', 'wedge'];
 // where the towers stand: the main one on the island's base, the others on the rocks behind it (depth below the rock)
-const SPOTS = [
+export const SPOTS = [
   { dx: 0, y: 0, s: 0.5, depth: DEPTH.tower, main: true },
   { dx: -205, y: 18, s: 0.4, depth: DEPTH.island - 1 },
   { dx: 205, y: 18, s: 0.4, depth: DEPTH.island - 1 },
@@ -107,8 +107,8 @@ export function planTown({ id = 'TOWN', people = 0, tribe = 'vuur', gold = 0 } =
 }
 
 export class DorpScene extends Phaser.Scene {
-  constructor() {
-    super({ key: 'Dorp' });
+  constructor(config = { key: 'Dorp' }) {
+    super(config);   // (js/scenes/SlagScene.js, the fruit battle, builds on this one with its own key)
   }
 
   init(data) {
@@ -282,7 +282,7 @@ export class DorpScene extends Phaser.Scene {
 
   /** One tower: its blocks from the ground up, each with its windows over it (and a star on a golden person). */
   buildTower(isle, tw) {
-    const sp = SPOTS[tw.spot];
+    const sp = tw.spotDef || SPOTS[tw.spot];   // (a battle's castle brings its own: js/scenes/SlagScene.js)
     const x0 = isle.ox + GAME_W / 2 + sp.dx;
     let y = sp.y;
     const blocks = [];
@@ -294,7 +294,7 @@ export class DorpScene extends Phaser.Scene {
       const img = this.add.image(x, y + PAD * sp.s, key).setOrigin(0.5, 1).setScale(sp.s).setRotation(f.tilt).setDepth(sp.depth);
       if (sp.back) img.setTint(0xc4cbe0);
       const win = this.add.image(x, y + PAD * sp.s, '__DEFAULT').setOrigin(0.5, 1).setScale(sp.s).setRotation(f.tilt).setDepth(sp.depth + 0.01);
-      const b = { img, win, g, fi, f, x, bottom: y, s: sp.s, depth: sp.depth, who: [], gold: [], stars: [] };
+      const b = { img, win, g, fi, f, x, bottom: y, s: sp.s, depth: sp.depth, who: [], gold: [], stars: [], row: fi };
       for (let i = 0; i < f.n; i++) {
         b.who[i] = tw.who.get(`${fi}.${i}`) || null;
         b.gold[i] = tw.gold.has(`${fi}.${i}`);

@@ -416,8 +416,8 @@ function windowSprite(s, v, res) {
  * than the block (the faces stay crisp): made once, then painted over in place whenever a window changes (one texture
  * per block, freed with the block). `wins` = [{ look, who, tribe }] in slot order. Each window comes from its sprite.
  */
-export function paintWindows(scene, key, g, wins, pad, res = 1) {
-  const slots = windowSlots(g);
+export function paintWindows(scene, key, g, wins, pad, res = 1, own = null) {
+  const slots = own || windowSlots(g);   // (own: a battle castle's rows hold up to five, js/scenes/SlagScene.js)
   let tex = scene.textures.exists(key) ? scene.textures.get(key) : null;
   if (!tex) tex = scene.textures.createCanvas(key, Math.ceil(g.texW * res), Math.ceil(g.texH * res));
   if (!tex) return null;

@@ -176,6 +176,7 @@ export function createUI(bus) {
     duel: h('section', { class: 'screen screen-duel', 'aria-label': S.duel, tabindex: '-1' }),
     duelwait: h('section', { class: 'screen screen-duelwait', 'aria-label': S.duel, tabindex: '-1' }),
     dorp: h('section', { class: 'screen screen-dorp', 'aria-label': S.dorp, tabindex: '-1' }),   // (1.16) Jou dorp, over DorpScene
+    slag: h('section', { class: 'screen screen-slag', 'aria-label': S.slag, tabindex: '-1' }),   // (1.17) Vrugteslag, over SlagScene
   };
   const modals = {
     howto: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-howto-title', tabindex: '-1' }),
@@ -231,7 +232,7 @@ export function createUI(bus) {
   // buttons take taps: a tap anywhere else still drops a block)
   const emoteBar = h('div', { class: 'emote-bar', role: 'group', 'aria-label': S.emoteLabel, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, screens.dorp, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, modals.tribe, modals.album, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, screens.dorp, screens.slag, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, modals.tribe, modals.album, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // (1.15, the owner: "We need a better way to display the coins please") every 🪙 the UI shows becomes the game's own
@@ -455,6 +456,11 @@ export function createUI(bus) {
       if (guard()) bus.emit('ui:pause');
     } else if (st.screen === 'results' || st.screen === 'duel') {
       if (guard()) bus.emit('ui:home');
+    } else if (st.screen === 'slag') {
+      // (1.17) the battle: out from the setup, the tray or the end; mid-shot it cancels the aim; otherwise it waits
+      const m = st.slagV?.mode;
+      if (m === 'aim') st.slagV?.onCancel?.();
+      else if (m === 'setup' || m === 'pick' || m === 'end' || m === 'lobby') bus.emit('ui:slag-done');
     } else if (st.screen === 'dorp') {
       // (1.16) Jou dorp: out of the town, or (a result, the news) back to it; a raid in flight carries on
       const m = st.dorpV?.mode;
@@ -1037,7 +1043,7 @@ export function createUI(bus) {
       },
     }, coinIc(), h('b', { class: 'wallet-n', text: fmtInt(m.coins || 0) }), m.refill ? h('span', { class: 'wallet-plus', 'aria-hidden': 'true', text: '+' }) : null);
     screens.menu.replaceChildren(brand, gap,
-      h('div', { class: 'menu-stack' }, card, dorpMenuEl(m.dorp), playRow, dock, adSlot), langChip, wallet);
+      h('div', { class: 'menu-stack' }, card, dorpMenuEl(m.dorp), slagMenuEl(m.slag), playRow, dock, adSlot), langChip, wallet);
     // the gap shrinks when the sponsor feed adds the ad card later, so re-check whenever it resizes
     if (saying && typeof ResizeObserver === 'function') {
       if (!st.sayingRO) st.sayingRO = new ResizeObserver(() => fitSaying());
@@ -2500,6 +2506,7 @@ export function createUI(bus) {
       duel ? againBox({ again, againStake, againStakes }) : null,
       townEl(r.living),
       dorpResEl(r.dorp),
+      r.slagGain ? h('p', { class: 'res-dorp-line res-slag-line', text: S.slagHarvestLine(S.slagHarvest(r.slagGain)) }) : null,
       rewardEl(reward),
       empty ? null : gridEl(r.grid, r.reason, r.visitors),
       empty ? null : weatherEl(r.weather),
@@ -3194,6 +3201,298 @@ export function createUI(bus) {
       button(`btn-white btn-mini res-dorp-go${d.canRaid ? ' is-go' : ''}`, [emo(d.canRaid ? '🔥' : '🏘️'), h('span', { text: d.canRaid ? S.dorpGoSteal : S.dorp })], () => bus.emit('ui:dorp'), { nav: false }));
   }
 
+  // -------------------------------------------------------------------------------------------- (1.17) Vrugteslag
+  // The fruit battle's screen over js/scenes/SlagScene.js (its rules: js/core/slag.js; the owner's style: B, Sononder-slag):
+  // both castles' people at the top, then by step: the defenders' setup, the mini-game, the fruit tray (with the wind,
+  // the weather, Herbou), the shot's hint, the other side's turn, the end. main.js wires each step to the scene.
+  const FRUIT_ICON = { druiwe: '🍇', piesang: '🍌', sap: '🧃', waatlemoen: '🍉' };
+  const DEF_ICON = { ridder: '⚔️', aap: '🐒', joe: '🥤', sarel: '🏉' };
+  const windText = (w) => (w > 0 ? `💨 ${'→'.repeat(Math.min(3, w))}` : w < 0 ? `💨 ${'←'.repeat(Math.min(3, -w))}` : '💨 0');
+
+  /** The battle's screen: v = { me: { name, badge, people, max }, them: { … }, theme }; then slagMode(...) per step. */
+  function showSlagScreen(v = {}) {
+    st.slagV = { theme: 'b', ...v, mode: v.mode || 'setup' };
+    renderSlag();
+    if (st.screen !== 'slag') showScreen('slag');
+  }
+  function slagMode(mode, extra = {}) {
+    st.slagV = { ...(st.slagV || {}), ...extra, mode };
+    renderSlag();
+  }
+  function slagCounts({ me, them, meMax, themMax } = {}) {
+    const v = st.slagV || {};
+    if (v.me && me != null) { v.me.people = me; if (meMax) v.me.max = meMax; }
+    if (v.them && them != null) { v.them.people = them; if (themMax) v.them.max = themMax; }
+    for (const [side, n] of [['me', me], ['them', them]]) {
+      if (n == null) continue;
+      const el = screens.slag.querySelector(`.slag-n-${side}`);
+      if (el) {
+        el.textContent = fmtInt(n);
+        el.classList.remove('bump');
+        void el.offsetWidth;
+        el.classList.add('bump');
+      }
+      const bar = screens.slag.querySelector(`.slag-side.${side} .slag-bar i`);
+      const p = v[side];
+      if (bar && p) bar.style.setProperty('--p', `${Math.round(Math.max(0, Math.min(1, n / Math.max(1, p.max | 0))) * 100)}%`);
+    }
+  }
+  /** How much of the screen the top bar and the bottom panel take (CSS px), for the scene's framing. */
+  function slagBars() {
+    const r = root.getBoundingClientRect();
+    const head = screens.slag.querySelector('.slag-head')?.getBoundingClientRect();
+    const foot = screens.slag.querySelector('.slag-foot')?.getBoundingClientRect();
+    return { top: head ? head.bottom - r.top : 0, bottom: foot && foot.height ? r.bottom - foot.top : 0, height: r.height };
+  }
+
+  function renderSlag() {
+    const v = st.slagV || {};
+    const me = v.me || {};
+    const them = v.them || {};
+    const side = (p, cls) => h('div', { class: `slag-side ${cls}` },
+      h('span', { class: 'slag-name' }, p.badge ? emo(p.badge) : null, h('b', { text: p.name || '' })),
+      h('span', { class: 'slag-people' }, emo('🏰'), h('b', { class: `slag-n-${cls}`, text: fmtInt(p.people | 0) })),
+      h('span', { class: 'slag-bar' }, h('i', { vars: { '--p': `${Math.round(Math.max(0, Math.min(1, (p.people | 0) / Math.max(1, p.max | 0))) * 100)}%` } })));
+    const top = v.mode === 'lobby' ? null : h('div', { class: 'slag-top' }, side(me, 'me'), h('div', { class: 'slag-vs' }, h('b', { text: 'VS' })), side(them, 'them'));
+    const chips = [];
+    const w = v.weather;
+    if (v.mode === 'pick' || v.mode === 'aim') {
+      if (w) chips.push(h('span', { class: 'slag-chip slag-wind', title: S.slagWind }, h('b', { text: windText(w.wind) })));
+      if (w?.rain) chips.push(h('span', { class: 'slag-chip' }, emo('🌧️'), h('b', { text: S.slagRain })));
+      if (w?.fog) chips.push(h('span', { class: 'slag-chip' }, emo('🌫️'), h('b', { text: S.slagFog })));
+      if (w?.storm) chips.push(h('span', { class: 'slag-chip' }, emo('⛈️'), h('b', { text: S.slagStorm })));
+      if (v.fire) chips.push(h('span', { class: 'slag-chip slag-fire' }, emo('🔥'), h('b', { text: S.slagFire })));
+    }
+    const turnText = v.mode === 'wait' ? S.slagWaitSetup(them.name || '') : v.mode === 'setup' ? S.slagSetupTitle : v.mode === 'watch' ? (v.who === 'them' ? S.slagTheirTurn(them.name || '') : S.slagYourTurnNow)
+      : v.mode === 'pick' ? S.slagYourTurn : v.mode === 'aim' ? S.slagAimTitle[v.fruit] || '' : v.mode === 'herbou' ? S.slagHerbouTitle : v.mode === 'mini' ? S.slagMiniTitle : '';
+    const turn = v.mode === 'end' || v.mode === 'lobby' ? null : h('div', { class: 'slag-turn' },
+      turnText ? h('span', { class: `slag-turn-chip${v.mode === 'watch' && v.who === 'them' ? ' is-them' : ''}` }, emo(v.mode === 'setup' ? '🛡️' : v.mode === 'herbou' ? '🏗️' : v.mode === 'mini' ? '⭐' : '🎯'), h('b', { text: turnText })) : null,
+      v.bonus && v.mode === 'pick' ? h('span', { class: 'slag-bonus' }, emo('⭐'), h('b', { text: S.slagBonus })) : null,
+      chips);
+    let foot = null;
+    let mid = h('div', { class: 'slag-mid', 'aria-hidden': 'true' });
+    if (v.mode === 'lobby') {
+      // how a battle starts: Robot Rikus, a friend (a code and a link to send), or a friend's code
+      const input = h('input', { class: 'slag-code-in', type: 'text', inputmode: 'text', autocapitalize: 'characters', maxlength: '6', placeholder: 'ABC123', 'aria-label': S.slagCodeAsk, value: v.code || '' });
+      mid = h('div', { class: 'slag-mid slag-end-wrap' }, h('div', { class: 'slag-end slag-lobby' },
+        h('p', { class: 'slag-end-icon' }, emo('🍉')),
+        h('h2', { text: S.slag }),
+        h('p', { class: 'slag-end-sub', text: S.slagLobbySub }),
+        v.hosting
+          ? h('div', { class: 'slag-hosting' },
+            h('p', { class: 'slag-code-label', text: S.slagYourCode }),
+            h('p', { class: 'slag-code', text: v.hosting }),
+            button('btn-wa', [icon('chat'), h('span', { text: S.slagSendCode })], () => doShare(S.slagInvite(v.link || ''), 'whatsapp'), { nav: false }),
+            h('p', { class: 'slag-waiting' }, h('span', { class: 'spinner small', 'aria-hidden': 'true' }), h('span', { text: S.slagWaiting })),
+            button('btn-white', h('span', { text: S.slagCancel }), () => bus.emit('ui:slag-done')))
+          : h('div', { class: 'slag-lobby-btns' },
+            button('btn-klei', [emo('🤖'), h('span', { text: S.slagVsRikus })], () => bus.emit('ui:slag-bot')),
+            button('btn-purple', [emo('👥'), h('span', { text: S.slagHost })], () => bus.emit('ui:slag-host')),
+            h('div', { class: 'slag-join-row' }, input,
+              button('btn-teal', h('span', { text: S.slagJoin }), () => bus.emit('ui:slag-join', String(input.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')), { nav: false })),
+            v.note ? h('p', { class: 'slag-waiting', text: v.note }) : null,
+            button('btn-white', h('span', { text: S.back }), () => bus.emit('ui:slag-done')))));
+    } else if (v.mode === 'setup') {
+      const places = v.places || {};
+      foot = h('div', { class: 'slag-foot' },
+        h('p', { class: 'slag-hint', text: S.slagSetupHint }),
+        h('div', { class: 'slag-defpick' }, ['ridder', 'aap', 'joe', 'sarel'].map((id) => h('button', {
+          type: 'button', class: `slag-defbtn${v.pick === id ? ' is-on' : ''}`,
+          onclick: () => { audio.play('click'); v.onPick?.(id); },
+        }, h('span', { class: 'slag-defbtn-ic' }, emo(DEF_ICON[id])), h('b', { text: S.slagDefNames[id] }), h('small', { text: `${S.slagStops[id]} · ${S.slagRow((places[id] ?? 0) + 1)}` })))),
+        h('div', { class: 'slag-row-btns' },
+          button('btn-white', [emo('🔀'), h('span', { text: S.slagShuffle })], () => v.onShuffle?.(), { nav: false }),
+          button('btn-green', [emo('✅'), h('span', { text: S.slagReady })], () => v.onReady?.())));
+    } else if (v.mode === 'pick') {
+      const fruit = v.fruit || {};
+      foot = h('div', { class: 'slag-foot' },
+        h('div', { class: 'slag-tray' },
+          ['druiwe', 'piesang', 'sap', 'waatlemoen'].map((k) => {
+            const n = fruit[k];
+            const out = n !== Infinity && !(n > 0);
+            return h('button', {
+              type: 'button', class: `slag-fruit${out ? ' is-out' : ''}`, disabled: out,
+              onclick: () => { if (!guard()) return; audio.play('click'); v.onPick?.(k); },
+            },
+            h('span', { class: 'slag-fruit-pic' }, emo(FRUIT_ICON[k])),
+            h('b', { class: 'slag-fruit-n', text: n === Infinity || n == null ? '∞' : `×${n}` }),
+            h('span', { class: 'slag-fruit-name', text: S.slagFruit[k] }));
+          })),
+        button('slag-herbou', [emo('🏗️'), h('span', { text: S.slagHerbou })], () => v.onPick?.('herbou')));
+    } else if (v.mode === 'aim') {
+      foot = h('div', { class: 'slag-foot slag-aim' },
+        h('p', { class: 'slag-hint', text: S.slagAimHint[v.fruit] || '' }),
+        h('button', { type: 'button', class: 'slag-cancel', 'aria-label': S.close, onclick: () => { audio.play('click'); v.onCancel?.(); } }, h('span', { text: '✕' })));
+    } else if (v.mode === 'herbou') {
+      foot = h('div', { class: 'slag-foot slag-aim' }, h('p', { class: 'slag-hint', text: S.slagHerbouHint }));
+    } else if (v.mode === 'mini') {
+      mid = h('div', { class: 'slag-mid slag-mini-wrap' }, v.miniEl || null);
+      foot = h('div', { class: 'slag-foot slag-aim' }, h('p', { class: 'slag-hint', text: S.slagMiniHint[v.kind] || '' }));
+    } else if (v.mode === 'end') {
+      const r = v.result || {};
+      mid = h('div', { class: 'slag-mid slag-end-wrap' }, h('div', { class: `slag-end${r.won ? ' is-won' : ''}` },
+        h('p', { class: 'slag-end-icon' }, emo(r.won ? '🏆' : '🏳️')),
+        h('h2', { text: r.won ? S.slagWon : S.slagLost(them.name || '') }),
+        h('p', { class: 'slag-end-sub', text: S.slagEndPeople(me.people | 0, them.people | 0) }),
+        h('div', { class: 'slag-end-rewards' },
+          h('span', null, coinIc(), h('b', { text: `+${fmtInt(r.coins | 0)}` })),
+          h('span', null, emo('🏆'), h('b', { text: `${r.trophies > 0 ? '+' : ''}${r.trophies | 0}` })),
+          r.people ? h('span', null, emo('🏘️'), h('b', { text: `+${fmtInt(r.people)}` })) : null),
+        h('div', { class: 'slag-row-btns' },
+          button('btn-white', h('span', { text: S.slagDone }), () => bus.emit('ui:slag-done')),
+          button('btn-klei', [emo('⚔️'), h('span', { text: S.slagAgain })], () => bus.emit('ui:slag-again')))));
+    }
+    screens.slag.className = `screen screen-slag slag-${v.theme || 'b'}${st.screen === 'slag' ? ' on' : ''}`;
+    screens.slag.replaceChildren(h('div', { class: 'slag-head' }, top, turn), mid, foot || h('div', { class: 'slag-foot is-empty' }));
+  }
+
+  /**
+   * A mini-game before your turn (the owner: "maybe catch the monkey and fill the juice and fill the bucket with seeds"):
+   * six seconds; resolves true when you made it (a bonus shot this turn).
+   */
+  function slagMini(kind) {
+    return new Promise((resolve) => {
+      const box = h('div', { class: `slag-mini mini-${kind}` });
+      const score = h('b', { class: 'slag-mini-score', text: '' });
+      const bar = h('i', { class: 'slag-mini-time' });
+      let done = false;
+      let timers = [];
+      const finish = (ok) => {
+        if (done) return;
+        done = true;
+        timers.forEach(clearTimeout);
+        timers = [];
+        box.classList.add(ok ? 'is-won' : 'is-lost');
+        box.append(h('p', { class: 'slag-mini-end', text: ok ? S.slagMiniWon : S.slagMiniLost }));
+        audio.play(ok ? 'record' : 'lost');
+        setTimeout(() => resolve(ok), 1100);
+      };
+      const T = 6000;
+      timers.push(setTimeout(() => finish(kind === 'aap' ? caught >= 4 : kind === 'emmer' ? caught >= 7 : false), T));
+      let caught = 0;
+      if (kind === 'aap') {
+        // Vang die Aap: he peeks out of a window; tap him
+        const grid = h('div', { class: 'mini-grid' });
+        const cells = Array.from({ length: 9 }, (_, i) => h('button', {
+          type: 'button', class: 'mini-win', 'aria-label': `${i + 1}`,
+          onpointerdown: (e) => {
+            e.preventDefault();
+            if (done || !e.currentTarget.classList.contains('has-aap')) return;
+            e.currentTarget.classList.remove('has-aap');
+            e.currentTarget.classList.add('hit');
+            caught += 1;
+            score.textContent = `🐒 ${caught}/4`;
+            audio.play('caught');
+            haptics.tap();
+            if (caught >= 4) finish(true);
+          },
+        }, h('span', { class: 'emoji', text: '🐒' })));
+        cells.forEach((c) => grid.append(c));
+        const peek = () => {
+          if (done) return;
+          const free = cells.filter((c) => !c.classList.contains('has-aap'));
+          const c = free[Math.floor(Math.random() * free.length)];
+          c.classList.remove('hit');
+          c.classList.add('has-aap');
+          timers.push(setTimeout(() => c.classList.remove('has-aap'), 640));
+          timers.push(setTimeout(peek, 520 + Math.random() * 260));
+        };
+        score.textContent = '🐒 0/4';
+        box.append(grid);
+        timers.push(setTimeout(peek, 300));
+      } else if (kind === 'sap') {
+        // Vul die Sap: hold to fill, let go in the band
+        const fill = h('i', { class: 'mini-juice' });
+        const glass = h('div', { class: 'mini-glass' }, fill, h('span', { class: 'mini-band' }));
+        let level = 0;
+        let holding = false;
+        let last = 0;
+        const loop = (t) => {
+          if (done) return;
+          if (holding) level = Math.min(1, level + (t - last) / 1700);
+          last = t;
+          fill.style.setProperty('--lv', `${Math.round(level * 100)}%`);
+          requestAnimationFrame(loop);
+        };
+        requestAnimationFrame((t) => { last = t; loop(t); });
+        glass.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!done) { holding = true; audio.play('splash'); } });
+        const up = () => {
+          if (!holding || done) return;
+          holding = false;
+          finish(level >= 0.72 && level <= 0.86);
+        };
+        glass.addEventListener('pointerup', up);
+        glass.addEventListener('pointerleave', up);
+        score.textContent = '🧃';
+        box.append(glass);
+      } else {
+        // Vul die Emmer: seeds fall; move the bucket under them
+        const field = h('div', { class: 'mini-field' });
+        const bucket = h('span', { class: 'mini-bucket emoji', text: '🪣' });
+        field.append(bucket);
+        let bx = 0.5;
+        const move = (e) => {
+          const r = field.getBoundingClientRect();
+          bx = Math.max(0.06, Math.min(0.94, (e.clientX - r.left) / r.width));
+          bucket.style.left = `${bx * 100}%`;
+        };
+        field.addEventListener('pointerdown', (e) => { e.preventDefault(); move(e); });
+        field.addEventListener('pointermove', move);
+        bucket.style.left = '50%';
+        const seeds = [];
+        const drop = () => {
+          if (done) return;
+          const sd = h('span', { class: 'mini-seed' });
+          const x = 0.08 + Math.random() * 0.84;
+          sd.style.left = `${x * 100}%`;
+          field.append(sd);
+          seeds.push({ el: sd, x, y: 0, v: 0.45 + Math.random() * 0.3 });
+          timers.push(setTimeout(drop, 280 + Math.random() * 200));
+        };
+        let last = 0;
+        const loop = (t) => {
+          if (done) return;
+          const dt = last ? (t - last) / 1000 : 0;
+          last = t;
+          for (const s of [...seeds]) {
+            s.y += s.v * dt;
+            s.el.style.top = `${s.y * 100}%`;
+            if (s.y > 0.84 && s.y < 0.96 && Math.abs(s.x - bx) < 0.11) {
+              caught += 1;
+              score.textContent = `🌰 ${caught}/7`;
+              audio.play('pop');
+              s.el.remove();
+              seeds.splice(seeds.indexOf(s), 1);
+              if (caught >= 7) finish(true);
+            } else if (s.y > 1.02) {
+              s.el.remove();
+              seeds.splice(seeds.indexOf(s), 1);
+            }
+          }
+          requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
+        score.textContent = '🌰 0/7';
+        box.append(field);
+        timers.push(setTimeout(drop, 200));
+      }
+      box.prepend(h('div', { class: 'slag-mini-head' }, h('b', { text: S.slagMiniNames[kind] }), score), h('span', { class: 'slag-mini-timer' }, bar));
+      slagMode('mini', { kind, miniEl: box });
+    });
+  }
+
+  /** The menu's way into the fruit battle (with your trophies and fruit). */
+  function slagMenuEl(v) {
+    if (!v) return null;
+    return h('button', {
+      type: 'button', class: 'slag-menu-btn',
+      onclick: () => { if (!guard()) return; audio.play('click'); bus.emit('ui:slag'); },
+    },
+    h('span', { class: 'slag-menu-ic' }, emo('🍉')),
+    h('span', { class: 'slag-menu-txt' }, h('b', { text: S.slag }), h('small', { text: S.slagMenuSub(v.trophies | 0, v.basket || {}) })),
+    h('span', { class: 'slag-menu-go', text: '⚔️' }));
+  }
+
   function showSettings() {
     st.accountAsk = null;
     st.accountMsg = null;
@@ -3636,6 +3935,11 @@ export function createUI(bus) {
     showTribe,
     showAlbum,
     showDorpScreen,
+    showSlagScreen,
+    slagMode,
+    slagCounts,
+    slagBars,
+    slagMini,
     setDorpMode,
     setDorpCounts,
     dorpBars,

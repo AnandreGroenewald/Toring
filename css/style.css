@@ -3770,3 +3770,111 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .dorp-card-act.act-buy.is-short { filter: grayscale(0.6); opacity: 0.6; }
 .dorp-card-act.act-own { background: rgba(255, 210, 63, 0.18); box-shadow: none; color: #ffe38c; }
 .dorp-back-town { min-height: calc(80 * var(--u)); }
+
+/* ---------------------------------------------------------------------------------------------- (1.17) Vrugteslag
+   The fruit battle's screen over js/scenes/SlagScene.js: the castles at the top, the fruit tray at the bottom. Three looks
+   for the owner to choose from: slag-a (the island by day), slag-b (sunset), slag-c (candy). */
+.screen-slag { z-index: 1; justify-content: space-between; padding-left: calc(var(--sal) + 16 * var(--u)); padding-right: calc(var(--sar) + 16 * var(--u)); overflow: hidden;
+  --slag-panel: linear-gradient(170deg, rgba(23, 33, 63, 0.92), rgba(13, 19, 40, 0.88)); --slag-me: #3ddc84; --slag-them: #ff5a5f; --slag-accent: #ffd23f; --slag-ink: #fff; }
+.screen-slag.on { pointer-events: none; }
+.screen-slag.on .slag-head, .screen-slag.on .slag-foot { pointer-events: auto; }
+.screen-slag > .slag-mid { flex: 1; }
+.slag-b { --slag-panel: linear-gradient(170deg, rgba(58, 16, 54, 0.92), rgba(28, 8, 30, 0.9)); --slag-me: #ffd23f; --slag-them: #ff4f9a; --slag-accent: #ff9f1c; }
+.slag-c { --slag-panel: linear-gradient(170deg, rgba(255, 240, 250, 0.95), rgba(255, 222, 240, 0.92)); --slag-me: #2ec4b6; --slag-them: #ff6b9d; --slag-accent: #ff6b9d; --slag-ink: #4a2245; }
+.slag-head { display: flex; flex-direction: column; gap: calc(10 * var(--u)); }
+.slag-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: calc(10 * var(--u)); padding: calc(14 * var(--u)) calc(18 * var(--u)); border-radius: calc(30 * var(--u)); color: var(--slag-ink); background: var(--slag-panel); box-shadow: 0 calc(14 * var(--u)) calc(30 * var(--u)) rgba(5, 10, 30, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.slag-side { display: flex; flex-direction: column; gap: calc(4 * var(--u)); min-width: 0; }
+.slag-side.them { align-items: flex-end; text-align: right; }
+.slag-name { display: inline-flex; align-items: center; gap: calc(6 * var(--u)); font-size: max(12px, calc(22 * var(--u))); font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.slag-people { display: inline-flex; align-items: center; gap: calc(6 * var(--u)); }
+.slag-people b { font-size: calc(54 * var(--u)); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; color: var(--slag-accent); text-shadow: 0 calc(3 * var(--u)) 0 rgba(0, 0, 0, 0.35); }
+.slag-bar { display: block; width: 100%; height: calc(12 * var(--u)); border-radius: 999px; background: rgba(127, 127, 127, 0.25); overflow: hidden; }
+.slag-bar i { display: block; height: 100%; width: var(--p, 100%); border-radius: inherit; background: var(--slag-me); box-shadow: 0 0 calc(10 * var(--u)) var(--slag-me); }
+.slag-side.them .slag-bar i { background: var(--slag-them); box-shadow: 0 0 calc(10 * var(--u)) var(--slag-them); margin-left: auto; }
+.slag-vs b { display: flex; align-items: center; justify-content: center; width: calc(70 * var(--u)); height: calc(70 * var(--u)); border-radius: 50%; font-size: calc(30 * var(--u)); font-weight: 900; color: #3b2400; background: radial-gradient(circle at 40% 35%, #fff3b0, var(--slag-accent) 70%); box-shadow: 0 calc(5 * var(--u)) 0 rgba(0, 0, 0, 0.3); }
+.slag-turn { display: flex; justify-content: center; gap: calc(10 * var(--u)); flex-wrap: wrap; }
+.slag-turn-chip, .slag-bonus { display: inline-flex; align-items: center; gap: calc(8 * var(--u)); padding: calc(8 * var(--u)) calc(20 * var(--u)); border-radius: 999px; font-weight: 900; font-size: max(13px, calc(26 * var(--u))); }
+.slag-turn-chip { color: #3b2400; background: linear-gradient(160deg, #ffe38c, var(--slag-accent)); box-shadow: 0 calc(5 * var(--u)) 0 rgba(0, 0, 0, 0.25); }
+.slag-bonus { color: #fff; background: linear-gradient(160deg, #a78bfa, #6d28d9); box-shadow: 0 calc(5 * var(--u)) 0 rgba(0, 0, 0, 0.25), 0 0 calc(16 * var(--u)) rgba(167, 139, 250, 0.7); }
+.slag-foot { display: flex; flex-direction: column; gap: calc(10 * var(--u)); padding: calc(12 * var(--u)) calc(14 * var(--u)) calc(16 * var(--u)); border-radius: calc(30 * var(--u)); color: var(--slag-ink); background: var(--slag-panel); box-shadow: 0 calc(-10 * var(--u)) calc(30 * var(--u)) rgba(5, 10, 30, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.slag-defs { display: flex; align-items: center; gap: calc(8 * var(--u)); flex-wrap: wrap; justify-content: center; }
+.slag-defs-label { font-size: max(11px, calc(18 * var(--u))); font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.8; }
+.slag-def { display: inline-flex; align-items: center; gap: calc(4 * var(--u)); padding: calc(3 * var(--u)) calc(10 * var(--u)); border-radius: 999px; background: rgba(127, 127, 127, 0.18); font-weight: 900; font-size: max(11px, calc(19 * var(--u))); }
+.slag-tray { display: grid; grid-template-columns: repeat(4, 1fr); gap: calc(10 * var(--u)); }
+.slag-fruit { position: relative; display: flex; flex-direction: column; align-items: center; gap: calc(2 * var(--u)); padding: calc(10 * var(--u)) calc(4 * var(--u)) calc(8 * var(--u)); border: 0; border-radius: calc(24 * var(--u)); cursor: pointer; font: inherit; color: var(--slag-ink);
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 calc(5 * var(--u)) 0 rgba(0, 0, 0, 0.25); }
+.slag-c .slag-fruit { background: linear-gradient(170deg, #ffffff, #ffe3f1); }
+.slag-fruit.is-on { background: linear-gradient(170deg, #fff3b0, var(--slag-accent)); color: #3b2400; box-shadow: 0 0 0 calc(4 * var(--u)) #fff, 0 0 calc(24 * var(--u)) var(--slag-accent), 0 calc(5 * var(--u)) 0 rgba(0, 0, 0, 0.25); transform: translateY(calc(-6 * var(--u))); }
+.slag-fruit.is-out { filter: grayscale(1); opacity: 0.45; }
+.slag-fruit-pic { font-size: calc(62 * var(--u)); line-height: 1.05; filter: drop-shadow(0 calc(4 * var(--u)) calc(4 * var(--u)) rgba(0, 0, 0, 0.3)); }
+.slag-fruit-n { position: absolute; top: calc(6 * var(--u)); right: calc(8 * var(--u)); padding: 0 calc(8 * var(--u)); border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: max(11px, calc(19 * var(--u))); font-weight: 900; }
+.slag-fruit-name { font-size: max(11px, calc(18 * var(--u))); font-weight: 900; }
+/* (1.17) Vrugteslag: the steps (setup, chips, hints, Herbou, the mini-games, the end) and the menu's button */
+.slag-turn-chip.is-them { background: linear-gradient(160deg, #ffc2dd, var(--slag-them)); color: #3a0820; }
+.slag-chip { display: inline-flex; align-items: center; gap: calc(6 * var(--u)); padding: calc(6 * var(--u)) calc(14 * var(--u)); border-radius: 999px; background: rgba(20, 8, 30, 0.72); color: #fff; font-weight: 900; font-size: max(12px, calc(22 * var(--u))); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); }
+.slag-wind b { letter-spacing: 0.04em; }
+.slag-fire { background: linear-gradient(160deg, #ffb347, #e8452c); }
+.slag-hint { margin: 0; text-align: center; font-weight: 800; font-size: max(12px, calc(22 * var(--u))); line-height: 1.3; }
+.slag-foot.is-empty { visibility: hidden; }
+.slag-foot.slag-aim { position: relative; padding-right: calc(80 * var(--u)); }
+.screen-slag.on .slag-foot.slag-aim .slag-cancel { pointer-events: auto; }
+.slag-cancel { position: absolute; right: calc(14 * var(--u)); top: 50%; transform: translateY(-50%); width: calc(56 * var(--u)); height: calc(56 * var(--u)); border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.16); color: #fff; font: 900 calc(28 * var(--u)) var(--font); cursor: pointer; }
+.slag-defpick { display: grid; grid-template-columns: repeat(4, 1fr); gap: calc(8 * var(--u)); }
+.slag-defbtn { display: flex; flex-direction: column; align-items: center; gap: calc(2 * var(--u)); padding: calc(10 * var(--u)) calc(4 * var(--u)); border: 0; border-radius: calc(22 * var(--u)); cursor: pointer; font: inherit; color: var(--slag-ink); background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+.slag-defbtn.is-on { background: linear-gradient(170deg, #fff3b0, var(--slag-accent)); color: #3b2400; box-shadow: 0 0 0 calc(3 * var(--u)) #fff, 0 0 calc(18 * var(--u)) var(--slag-accent); }
+.slag-defbtn-ic { font-size: calc(48 * var(--u)); line-height: 1.1; }
+.slag-defbtn b { font-size: max(11px, calc(19 * var(--u))); font-weight: 900; white-space: nowrap; }
+.slag-defbtn small { font-size: max(9px, calc(15 * var(--u))); font-weight: 800; opacity: 0.85; text-align: center; line-height: 1.2; }
+.slag-row-btns { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: calc(12 * var(--u)); }
+.slag-row-btns .btn { min-height: calc(84 * var(--u)); font-size: max(14px, calc(30 * var(--u))); }
+.slag-herbou { --bg: #2f74cf; --bg-l: #86b9f7; --bg-d: #2563b0; min-height: calc(76 * var(--u)); font-size: max(13px, calc(26 * var(--u))); }
+/* the mini-games */
+.screen-slag.on .slag-mini-wrap { pointer-events: auto; display: flex; align-items: center; justify-content: center; }
+.slag-mini { position: relative; width: 100%; max-width: calc(560 * var(--u)); padding: calc(18 * var(--u)); border-radius: calc(30 * var(--u)); color: #fff; background: var(--slag-panel); box-shadow: 0 calc(20 * var(--u)) calc(40 * var(--u)) rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.14); animation: rank-up 0.45s ease-out both; }
+.slag-mini-head { display: flex; justify-content: space-between; align-items: center; font-size: max(15px, calc(32 * var(--u))); font-weight: 900; }
+.slag-mini-score { font-size: max(15px, calc(32 * var(--u))); color: var(--slag-accent); }
+.slag-mini-timer { display: block; height: calc(10 * var(--u)); margin: calc(10 * var(--u)) 0; border-radius: 999px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
+.slag-mini-time { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ffd23f, #ff9f1c); transform-origin: left; animation: slag-time 6s linear forwards; }
+@keyframes slag-time { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.slag-mini.is-won { box-shadow: 0 0 0 calc(4 * var(--u)) #ffd23f, 0 0 calc(40 * var(--u)) rgba(255, 210, 63, 0.7); }
+.slag-mini-end { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; margin: 0; border-radius: inherit; background: rgba(20, 8, 30, 0.82); font-size: calc(54 * var(--u)); font-weight: 900; color: #ffd23f; animation: rank-up 0.5s ease-out both; }
+.mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: calc(12 * var(--u)); }
+.mini-win { aspect-ratio: 1; border: 0; border-radius: calc(20 * var(--u)) calc(20 * var(--u)) calc(10 * var(--u)) calc(10 * var(--u)); background: radial-gradient(circle at 50% 30%, #3a2a55, #1a1030); box-shadow: inset 0 0 0 calc(5 * var(--u)) #a8672e; cursor: pointer; overflow: hidden; }
+.mini-win .emoji { display: block; font-size: calc(70 * var(--u)); transform: translateY(110%); transition: transform 0.12s ease-out; }
+.mini-win.has-aap .emoji { transform: none; }
+.mini-win.hit { background: radial-gradient(circle at 50% 30%, #ffe38c, #f2a516); }
+.mini-glass { position: relative; width: calc(170 * var(--u)); height: calc(320 * var(--u)); margin: 0 auto; border: calc(6 * var(--u)) solid rgba(255, 255, 255, 0.85); border-top: 0; border-radius: 0 0 calc(30 * var(--u)) calc(30 * var(--u)); overflow: hidden; touch-action: none; cursor: pointer; background: rgba(255, 255, 255, 0.08); }
+.mini-juice { position: absolute; left: 0; right: 0; bottom: 0; height: var(--lv, 0%); background: linear-gradient(0deg, #ff7a1a, #ffb347); }
+.mini-band { position: absolute; left: 0; right: 0; bottom: 72%; height: 14%; border-top: 3px dashed #ffd23f; border-bottom: 3px dashed #ffd23f; background: rgba(255, 210, 63, 0.18); }
+.mini-field { position: relative; height: calc(360 * var(--u)); border-radius: calc(20 * var(--u)); background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.14)); overflow: hidden; touch-action: none; cursor: pointer; }
+.mini-bucket { position: absolute; bottom: calc(6 * var(--u)); transform: translateX(-50%); font-size: calc(76 * var(--u)); pointer-events: none; }
+.mini-seed { position: absolute; width: calc(18 * var(--u)); height: calc(24 * var(--u)); margin-left: calc(-9 * var(--u)); border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: radial-gradient(circle at 40% 35%, #6b4a2b, #2b1a0b); pointer-events: none; }
+/* the end */
+.screen-slag.on .slag-end-wrap { pointer-events: auto; display: flex; align-items: center; justify-content: center; }
+.slag-end { width: 100%; max-width: calc(600 * var(--u)); padding: calc(26 * var(--u)) calc(22 * var(--u)); border-radius: calc(34 * var(--u)); text-align: center; color: #fff; background: var(--slag-panel); box-shadow: 0 calc(20 * var(--u)) calc(50 * var(--u)) rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.16); animation: rank-up 0.55s ease-out both; }
+.slag-end.is-won { box-shadow: 0 0 0 calc(4 * var(--u)) #ffd23f, 0 0 calc(50 * var(--u)) rgba(255, 210, 63, 0.6); }
+.slag-end-icon { margin: 0; font-size: calc(110 * var(--u)); line-height: 1; }
+.slag-end h2 { margin: calc(8 * var(--u)) 0 0; font-size: calc(64 * var(--u)); font-weight: 900; color: var(--slag-accent); text-shadow: 0 calc(4 * var(--u)) 0 rgba(0, 0, 0, 0.35); }
+.slag-end-sub { margin: calc(8 * var(--u)) 0 0; font-weight: 800; font-size: max(13px, calc(24 * var(--u))); opacity: 0.9; }
+.slag-end-rewards { display: flex; justify-content: center; gap: calc(14 * var(--u)); margin: calc(18 * var(--u)) 0; flex-wrap: wrap; }
+.slag-end-rewards span { display: inline-flex; align-items: center; gap: calc(8 * var(--u)); padding: calc(8 * var(--u)) calc(18 * var(--u)); border-radius: 999px; background: rgba(255, 255, 255, 0.12); font-size: max(15px, calc(32 * var(--u))); font-weight: 900; }
+/* the menu's button */
+.slag-menu-btn {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: calc(14 * var(--u)); width: 100%;
+  padding: calc(12 * var(--u)) calc(20 * var(--u)) calc(12 * var(--u)) calc(14 * var(--u)); border: 0; border-radius: calc(28 * var(--u)); cursor: pointer; font: inherit; color: #fff; text-align: left;
+  background: linear-gradient(160deg, #ff8a5c 0%, #c8321f 55%, #5b1f45 140%); box-shadow: 0 calc(6 * var(--u)) 0 #3a0e22, inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+.slag-menu-btn:active { transform: translateY(calc(4 * var(--u))); box-shadow: 0 calc(2 * var(--u)) 0 #3a0e22; }
+.slag-menu-ic { display: flex; align-items: center; justify-content: center; width: calc(84 * var(--u)); height: calc(84 * var(--u)); border-radius: calc(22 * var(--u)); background: rgba(255, 255, 255, 0.16); font-size: calc(56 * var(--u)); }
+.slag-menu-txt { display: flex; flex-direction: column; gap: calc(4 * var(--u)); min-width: 0; }
+.slag-menu-txt b { font-size: max(15px, calc(32 * var(--u))); font-weight: 900; }
+.slag-menu-txt small { font-size: max(12px, calc(21 * var(--u))); font-weight: 800; color: #ffe3d0; white-space: nowrap; }
+.slag-menu-go { font-size: calc(44 * var(--u)); }
+/* (1.17) Vrugteslag: the lobby (Rikus, a friend's room, a code) */
+.slag-lobby .slag-lobby-btns, .slag-lobby .slag-hosting { display: grid; gap: calc(12 * var(--u)); margin-top: calc(16 * var(--u)); }
+.slag-lobby .btn { min-height: calc(86 * var(--u)); font-size: max(14px, calc(30 * var(--u))); }
+.slag-join-row { display: grid; grid-template-columns: 1fr auto; gap: calc(10 * var(--u)); }
+.slag-code-in { min-width: 0; padding: 0 calc(18 * var(--u)); border: 0; border-radius: calc(22 * var(--u)); font: 900 max(16px, calc(34 * var(--u))) var(--font); letter-spacing: 0.18em; text-transform: uppercase; text-align: center; color: #3b2400; background: #fff3d6; }
+.slag-code-label { margin: 0; font-weight: 800; opacity: 0.85; }
+.slag-code { margin: 0; font-size: calc(76 * var(--u)); font-weight: 900; letter-spacing: 0.16em; color: var(--slag-accent); text-shadow: 0 calc(4 * var(--u)) 0 rgba(0, 0, 0, 0.35); }
+.slag-waiting { display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u)); margin: 0; font-weight: 800; opacity: 0.9; }
