@@ -3164,9 +3164,21 @@ function dorpWhenFree() {
 }
 bus.on('ui:view', () => setTimeout(dorpWhenFree, 0));
 
+let dorpAsking = false;
+let dorpAskAgain = false;
 async function dorpStart() {
+  if (dorpOn || dorpAsking) return;
+  dorpAsking = true;
   dorpOn = await dorp.ping();
-  if (!dorpOn) return;
+  dorpAsking = false;
+  if (!dorpOn) {
+    // (no answer at the start, e.g. a phone without signal: asked again each time the game comes back on screen)
+    if (!dorpAskAgain) {
+      dorpAskAgain = true;
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !dorpOn) dorpStart(); });
+    }
+    return;
+  }
   await dorpSync({ force: true });
   refreshMenuDorp();
   await dorpLinks();
