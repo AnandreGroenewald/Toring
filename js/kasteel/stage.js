@@ -102,6 +102,8 @@ export function createStage({ fov = 50, quality = pickQuality(), canvas = docume
   let upAt = -Infinity;
   let clock = 0;
   let lastNow = 0;
+  let recent = [];       // (the last few windows' frame rates at this quality: one stalled window is no measure)
+  let capWins = 0;       // (windows in a row at 30 a second after a step down: then that's the screen's pace)
   function apply() {
     renderer.setPixelRatio(prOf());
     renderer.setSize(...size(), false);
@@ -148,27 +150,36 @@ export function createStage({ fov = 50, quality = pickQuality(), canvas = docume
       const was = undo;
       undo = null;
       // (the step down changed nothing: it's the screen's own pace, not the drawing; back to how it was)
-      if (fps < was.fps * 1.1) {
+      if (fps < was.fps * 1.12) {
         hz = Math.max(20, Math.min(60, Math.round(fps)));
         Object.assign(q, was.q);
         apply();
+        recent = [];
         calm = 2.5;
         return;
       }
     }
+    // (a lower step running at a steady 30 a second, after a step that a stalled moment made look worth it: that's the
+    // screen's pace too, so the picture may climb back)
+    capWins = hz > 40 && fps >= 28.5 && fps <= 31.5 && q.name !== best.name ? capWins + 1 : 0;
+    if (capWins >= 2) { hz = 30; capWins = 0; }
     if (fps > hz * 1.1) hz = Math.min(60, Math.round(fps));   // (the screen's pace came back: out of its battery saver)
     if (fps < hz * 0.75) {
       upT = 0;
       const was = { ...q };
       if (stepDown()) {
         calm = 2.5;   // (a moment to settle before it judges again)
-        undo = { q: was, fps };
+        undo = { q: was, fps: Math.max(fps, ...recent) };   // (the best recent window at the step it left)
+        recent = [];
         if (clock - upAt < 15) needUp = Math.min(72, needUp * 2);   // (it climbed too soon: wait longer next time)
+        return;
       }
     } else if (fps >= hz * 0.95) {
       upT += 3;
-      if (upT >= needUp && stepUp()) { upT = 0; upAt = clock; calm = 3; }
+      if (upT >= needUp && stepUp()) { upT = 0; upAt = clock; calm = 3; recent = []; return; }
     } else upT = 0;
+    recent.push(fps);
+    if (recent.length > 3) recent.shift();
   }
   // the loading screen stays until the first frames are drawn (their shaders compiled behind it)
   let drawn = 0;
