@@ -146,9 +146,9 @@ function grainTexture() {
 }
 
 /** The ground: soft rolling savanna (smooth, not faceted), its colour from noise, a little green by the river. */
-function makeGround() {
+function makeGround(detail = 1) {
   const size = 900;
-  const seg = 220;
+  const seg = detail < 1 ? 150 : 220;
   const g = new THREE.PlaneGeometry(size, size, seg, seg);
   g.rotateX(-Math.PI / 2);
   g.translate(0, 0, -DIST / 2);
@@ -225,7 +225,7 @@ function makeRidges() {
 }
 
 /** Acacias, rocks and grass tufts, scattered (never in the line of fire between the towers). */
-function makeLife(rand) {
+function makeLife(rand, detail = 1) {
   const group = new THREE.Group();
   const free = (x, z) => (Math.abs(x) > 52 || z > 30 || z < -DIST - 55) && Math.hypot(x, z) > 30 && Math.hypot(x, z + DIST) > 50 && Math.abs(z - riverZ(x)) > 12;
   // acacias: a bent trunk and a wide flat crown
@@ -284,10 +284,11 @@ function makeLife(rand) {
   group.add(rocks);
   // grass tufts (thin cones), thick near both towers and along the river
   const blades = [];
-  for (let i = 0; i < 5; i++) {
-    const bl = new THREE.ConeGeometry(0.035, 0.55 + (i % 3) * 0.18, 3);
+  const nBlades = detail < 1 ? 3 : 5;
+  for (let i = 0; i < nBlades; i++) {
+    const bl = new THREE.ConeGeometry(0.035, 0.55 + (i % 3) * 0.18, 3, 1, true);
     bl.translate(0, 0.3, 0);
-    bl.rotateZ((i - 2) * 0.22);
+    bl.rotateZ((i - (nBlades - 1) / 2) * 0.22);
     bl.rotateY(i * 1.3);
     blades.push(bl);
   }
@@ -313,6 +314,8 @@ function makeLife(rand) {
   }
   tufts.count = k;
   group.add(tufts);
+  group.userData.tufts = tufts;
+  group.userData.tuftsMax = k;
   return group;
 }
 
@@ -332,7 +335,7 @@ function mergeGeos(list) {
 }
 
 /** The whole world into `scene`: sky, light, haze, land. Returns what the battle needs (the sun's direction). */
-export function buildWorld(scene, renderer, { seed = 7 } = {}) {
+export function buildWorld(scene, renderer, { seed = 7, grass = 1, detail = 1 } = {}) {
   const rand = rng(seed);
   // the sun as you see it: low over the hills, left of their tower
   const sunDir = new THREE.Vector3(-0.26, 0.055, -1).normalize();
@@ -361,6 +364,17 @@ export function buildWorld(scene, renderer, { seed = 7 } = {}) {
   scene.add(fill);
   scene.add(new THREE.HemisphereLight('#9a7ad8', '#6a4a2a', 0.35));
   // the land
-  scene.add(makeGround(), makeRiver(), makeRidges(), makeLife(rand));
-  return { sunDir, sun };
+  const life = makeLife(rand, detail);
+  scene.add(makeGround(detail), makeRiver(), makeRidges(), life);
+  // (a phone gets thinner grass; `setGrass` thins it later if frames come slow)
+  const setGrass = (k) => { life.userData.tufts.count = Math.floor(life.userData.tuftsMax * Math.max(0.1, Math.min(1, k))); };
+  setGrass(grass);
+  /** (a lighter shadow when the quality steps down) */
+  const setShadow = (n) => {
+    if (sun.shadow.mapSize.x === n) return;
+    sun.shadow.mapSize.set(n, n);
+    sun.shadow.map?.dispose();
+    sun.shadow.map = null;
+  };
+  return { sunDir, sun, setGrass, setShadow };
 }

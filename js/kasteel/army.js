@@ -2,7 +2,7 @@
 // machinary"). Soldiers are the crew's people in mail, a tabard in their side's colour, steel helmets, shields, swords,
 // spears and bows; knights in plate. The machines: a counterweight trebuchet, a covered battering ram, a stone shot.
 import * as THREE from '../../lib/three.module.min.js';
-import { person, mat } from './crew.js';
+import { person, mat, seg } from './crew.js';
 import { TEAM, stoneBox } from './castle.js';
 
 const steel = () => mat('#aeb5bf', 0.32, 0.85);
@@ -20,10 +20,10 @@ function m(geo, material, x = 0, y = 0, z = 0) {
 /** A round shield in the side's colour with a steel boss and rim (faces +z). */
 function roundShield(team) {
   const g = new THREE.Group();
-  const face = m(new THREE.CylinderGeometry(0.33, 0.33, 0.05, 20), mat(TEAM[team].main, 0.6));
+  const face = m(new THREE.CylinderGeometry(0.33, 0.33, 0.05, seg(20)), mat(TEAM[team].main, 0.6));
   face.rotation.x = Math.PI / 2;
-  const rim = m(new THREE.TorusGeometry(0.33, 0.025, 6, 24), darkSteel());
-  const boss = m(new THREE.SphereGeometry(0.08, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), steel(), 0, 0, 0.02);
+  const rim = m(new THREE.TorusGeometry(0.33, 0.025, seg(6), seg(24)), darkSteel());
+  const boss = m(new THREE.SphereGeometry(0.08, seg(12), seg(8), 0, Math.PI * 2, 0, Math.PI / 2), steel(), 0, 0, 0.02);
   boss.rotation.x = Math.PI / 2;
   const stripe = m(new THREE.BoxGeometry(0.06, 0.62, 0.055), mat('#f1ece2', 0.6));
   g.add(face, rim, boss, stripe);
@@ -48,28 +48,28 @@ function sword() {
   const g = new THREE.Group();
   g.add(m(new THREE.BoxGeometry(0.045, 0.8, 0.012), mat('#dfe5ec', 0.15, 0.95), 0, -0.48, 0));
   g.add(m(new THREE.BoxGeometry(0.2, 0.03, 0.035), darkSteel(), 0, -0.07, 0));
-  g.add(m(new THREE.CylinderGeometry(0.018, 0.018, 0.12, 8), leather(), 0, 0, 0));
+  g.add(m(new THREE.CylinderGeometry(0.018, 0.018, 0.12, seg(8)), leather(), 0, 0, 0));
   return g;
 }
 function spear() {
   const g = new THREE.Group();
-  g.add(m(new THREE.CylinderGeometry(0.022, 0.022, 2.6, 8), woodM(), 0, 0.7, 0));
-  g.add(m(new THREE.ConeGeometry(0.045, 0.28, 8), steel(), 0, 2.14, 0));
+  g.add(m(new THREE.CylinderGeometry(0.022, 0.022, 2.6, seg(8)), woodM(), 0, 0.7, 0));
+  g.add(m(new THREE.ConeGeometry(0.045, 0.28, seg(8)), steel(), 0, 2.14, 0));
   return g;
 }
 function bow() {
   const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, -0.65, 0), new THREE.Vector3(0, 0, 0.32), new THREE.Vector3(0, 0.65, 0));
   const g = new THREE.Group();
-  g.add(m(new THREE.TubeGeometry(curve, 16, 0.018, 6, false), woodM()));
-  const str = m(new THREE.CylinderGeometry(0.004, 0.004, 1.3, 4), mat('#e8e0cc', 0.8));
+  g.add(m(new THREE.TubeGeometry(curve, seg(16), 0.018, seg(6), false), woodM()));
+  const str = m(new THREE.CylinderGeometry(0.004, 0.004, 1.3, seg(4)), mat('#e8e0cc', 0.8));
   g.add(str);
   return g;
 }
 function quiver() {
   const g = new THREE.Group();
-  g.add(m(new THREE.CylinderGeometry(0.07, 0.06, 0.55, 10), leather()));
+  g.add(m(new THREE.CylinderGeometry(0.07, 0.06, 0.55, seg(10)), leather()));
   for (let i = 0; i < 4; i++) {
-    const a = m(new THREE.CylinderGeometry(0.008, 0.008, 0.3, 4), woodM(), (i - 1.5) * 0.025, 0.38, 0);
+    const a = m(new THREE.CylinderGeometry(0.008, 0.008, 0.3, seg(4)), woodM(), (i - 1.5) * 0.025, 0.38, 0);
     g.add(a);
     g.add(m(new THREE.BoxGeometry(0.03, 0.06, 0.004), mat('#efe9dc', 0.8), (i - 1.5) * 0.025, 0.5, 0));
   }
@@ -86,21 +86,21 @@ export function soldier(kind, team, rand) {
   const tab = m(new THREE.BoxGeometry(0.46, 0.7, 0.33), mat(knight ? t.dark : t.main, 0.85), 0, 1.16, 0);
   u.body.add(tab);
   u.body.add(m(new THREE.BoxGeometry(0.08, 0.7, 0.335), mat('#ece6da', 0.85), 0, 1.16, 0));
-  u.body.add(m(new THREE.CylinderGeometry(0.23, 0.23, 0.07, 14), leather(), 0, 0.92, 0));
+  u.body.add(m(new THREE.CylinderGeometry(0.23, 0.23, 0.07, seg(14)), leather(), 0, 0.92, 0));
   if (knight) {
-    u.body.add(m(new THREE.SphereGeometry(0.1, 10, 8), steel(), -0.29, 1.47, 0), m(new THREE.SphereGeometry(0.1, 10, 8), steel(), 0.29, 1.47, 0));
-    const helm = m(new THREE.CylinderGeometry(0.135, 0.13, 0.27, 16), steel(), 0, 0.12, 0);
+    u.body.add(m(new THREE.SphereGeometry(0.1, seg(10), seg(8)), steel(), -0.29, 1.47, 0), m(new THREE.SphereGeometry(0.1, seg(10), seg(8)), steel(), 0.29, 1.47, 0));
+    const helm = m(new THREE.CylinderGeometry(0.135, 0.13, 0.27, seg(16)), steel(), 0, 0.12, 0);
     helm.add(m(new THREE.BoxGeometry(0.2, 0.022, 0.02), mat('#111', 0.5), 0, 0.02, 0.13));
     helm.add(m(new THREE.BoxGeometry(0.03, 0.14, 0.2), mat(t.main, 0.8), 0, 0.2, -0.02));
     u.neck.add(helm);
   } else {
     // a kettle hat (archers: a hood)
     if (kind === 'boog') {
-      const hood = m(new THREE.SphereGeometry(0.135, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), mat('#4f5a3a', 0.95), 0, 0.12, -0.01);
+      const hood = m(new THREE.SphereGeometry(0.135, seg(14), seg(10), 0, Math.PI * 2, 0, Math.PI * 0.62), mat('#4f5a3a', 0.95), 0, 0.12, -0.01);
       u.neck.add(hood);
     } else {
-      u.neck.add(m(new THREE.SphereGeometry(0.13, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), steel(), 0, 0.14, 0));
-      u.neck.add(m(new THREE.CylinderGeometry(0.22, 0.22, 0.02, 18), steel(), 0, 0.14, 0));
+      u.neck.add(m(new THREE.SphereGeometry(0.13, seg(14), seg(8), 0, Math.PI * 2, 0, Math.PI / 2), steel(), 0, 0.14, 0));
+      u.neck.add(m(new THREE.CylinderGeometry(0.22, 0.22, 0.02, seg(18)), steel(), 0, 0.14, 0));
     }
   }
   if (kind === 'swaard' || kind === 'ridder') {
@@ -179,7 +179,7 @@ export function trebuchet(mats, team, { arm = 0.85, fired = false } = {}) {
     g.add(beam(new THREE.Vector3(x, 0.4, -3.4), new THREE.Vector3(x, axleY, 0), 0.34, T));
     g.add(beam(new THREE.Vector3(x, 2.6, 2.0), new THREE.Vector3(x, 2.6, -2.0), 0.26, T));
     for (const z of [3.4, -3.4]) {
-      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.22, 16), T);
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.22, seg(16)), T);
       wheel.rotation.z = Math.PI / 2;
       wheel.position.set(x * 1.18, 0.62, z);
       wheel.castShadow = true;
@@ -187,7 +187,7 @@ export function trebuchet(mats, team, { arm = 0.85, fired = false } = {}) {
     }
   }
   for (const z of [3.6, -3.6, 0.9, -0.9]) g.add(beam(new THREE.Vector3(-1.5, z === 0.9 || z === -0.9 ? 2.6 : 0.42, z), new THREE.Vector3(1.5, z === 0.9 || z === -0.9 ? 2.6 : 0.42, z), 0.26, T));
-  const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 3.6, 12), mats.iron);
+  const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 3.6, seg(12)), mats.iron);
   axle.rotation.z = Math.PI / 2;
   axle.position.y = axleY;
   g.add(axle);
@@ -248,7 +248,7 @@ export function ram(mats, team) {
     g.add(beam(new THREE.Vector3(x, 0.8, 3), new THREE.Vector3(x, 0.8, -3), 0.3, T));
     for (const z of [2.6, -2.6]) {
       g.add(beam(new THREE.Vector3(x, 0.8, z), new THREE.Vector3(x * 0.25, 3.3, z), 0.22, T));
-      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.24, 16), T);
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.24, seg(16)), T);
       wheel.rotation.z = Math.PI / 2;
       wheel.position.set(x * 1.2, 0.62, z);
       wheel.castShadow = true;
@@ -263,15 +263,16 @@ export function ram(mats, team) {
     roof.castShadow = roof.receiveShadow = true;
     g.add(roof);
   }
-  const log = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 6.6, 12), T);
+  const log = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 6.6, seg(12)), T);
   log.rotation.x = Math.PI / 2;
   log.position.set(0, 1.5, -0.6);
   log.castShadow = true;
   g.add(log);
-  const head = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.7, 10), mats.iron);
-  head.rotation.x = -Math.PI / 2;
-  head.position.set(0, 1.5, -4.2);
-  g.add(head);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.7, seg(10)), mats.iron);
+  head.rotation.x = Math.PI;
+  head.position.set(0, -3.6, 0);   // (on the log's front end: it swings with the log)
+  log.add(head);
+  g.userData.log = log;
   const banner = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.0), new THREE.MeshStandardMaterial({ color: TEAM[team].main, side: THREE.DoubleSide }));
   banner.position.set(0, 3.6, 2.8);
   g.add(banner, beam(new THREE.Vector3(0, 3.0, 2.9), new THREE.Vector3(0, 4.2, 2.9), 0.05, T));
@@ -297,7 +298,7 @@ export function shot(r = 0.36) {
 export function cauldron(mats) {
   const g = new THREE.Group();
   const pot = new THREE.Group();
-  const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.7, 18, 12, 0, Math.PI * 2, Math.PI * 0.42, Math.PI * 0.58), mats.iron);
+  const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.7, seg(18), seg(12), 0, Math.PI * 2, Math.PI * 0.42, Math.PI * 0.58), mats.iron);
   bowl.castShadow = true;
   const oil = new THREE.Mesh(new THREE.CircleGeometry(0.62, 18), new THREE.MeshBasicMaterial({ color: '#ffb547' }));
   oil.rotation.x = -Math.PI / 2;
@@ -327,7 +328,7 @@ export function ballista(mats, team) {
   head.add(beam(new THREE.Vector3(1.5, 0.12, 0.5), new THREE.Vector3(0, 0.05, -0.9), 0.025, mats.rope));
   const bolt = beam(new THREE.Vector3(0, 0.18, -0.9), new THREE.Vector3(0, 0.18, 1.6), 0.06, T);
   head.add(bolt);
-  const tipM = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.3, 8), mats.iron);
+  const tipM = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.3, seg(8)), mats.iron);
   tipM.rotation.x = Math.PI / 2;
   tipM.position.set(0, 0.18, 1.75);
   head.add(tipM);
@@ -343,7 +344,7 @@ export function ballista(mats, team) {
 export function spikes(mats) {
   const g = new THREE.Group();
   for (let i = 0; i < 7; i++) {
-    const st = new THREE.Mesh(new THREE.ConeGeometry(0.16, 2.2, 6), mats.timber);
+    const st = new THREE.Mesh(new THREE.ConeGeometry(0.16, 2.2, seg(6)), mats.timber);
     st.position.set(-2.7 + i * 0.9, 0.75, 0);
     st.rotation.x = 0.75;
     st.castShadow = true;

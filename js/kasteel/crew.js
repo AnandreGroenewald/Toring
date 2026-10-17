@@ -9,21 +9,30 @@ export function mat(color, rough = 0.75, metal = 0) {
   if (!cache.has(key)) cache.set(key, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal }));
   return cache.get(key);
 }
-const G = {
-  leg: new THREE.CapsuleGeometry(0.078, 0.66, 4, 10),
-  arm: new THREE.CapsuleGeometry(0.06, 0.5, 4, 10),
-  torso: new THREE.CapsuleGeometry(0.2, 0.34, 6, 14),
-  hips: new THREE.CapsuleGeometry(0.17, 0.08, 4, 12),
-  head: new THREE.SphereGeometry(0.115, 20, 14),
-  neck: new THREE.CylinderGeometry(0.05, 0.06, 0.1, 10),
-  hand: new THREE.SphereGeometry(0.058, 12, 10),
+/** (phones: simpler shapes — fewer sides on every round part; a soldier from ~5 000 triangles to ~1 300) */
+export const DETAIL = { k: 1 };
+export const seg = (n) => Math.max(3, Math.round(n * DETAIL.k));
+const makeG = () => ({
+  leg: new THREE.CapsuleGeometry(0.078, 0.66, seg(4), seg(10)),
+  arm: new THREE.CapsuleGeometry(0.06, 0.5, seg(4), seg(10)),
+  torso: new THREE.CapsuleGeometry(0.2, 0.34, seg(6), seg(14)),
+  hips: new THREE.CapsuleGeometry(0.17, 0.08, seg(4), seg(12)),
+  head: new THREE.SphereGeometry(0.115, seg(20), seg(14)),
+  neck: new THREE.CylinderGeometry(0.05, 0.06, 0.1, seg(10)),
+  hand: new THREE.SphereGeometry(0.058, seg(12), seg(10)),
   shoe: new THREE.BoxGeometry(0.12, 0.085, 0.27),
   sole: new THREE.BoxGeometry(0.125, 0.03, 0.28),
-  capTop: new THREE.SphereGeometry(0.122, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+  capTop: new THREE.SphereGeometry(0.122, seg(18), seg(10), 0, Math.PI * 2, 0, Math.PI / 2),
   brim: new THREE.BoxGeometry(0.2, 0.018, 0.13),
-  hair: new THREE.SphereGeometry(0.122, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.42),
+  hair: new THREE.SphereGeometry(0.122, seg(18), seg(10), 0, Math.PI * 2, 0, Math.PI * 0.42),
   shades: new THREE.BoxGeometry(0.2, 0.045, 0.03),
-};
+});
+let G = makeG();
+/** Simpler shapes from now on (`k` 0.4–1); call before the soldiers are made. */
+export function setDetail(k) {
+  DETAIL.k = k;
+  G = makeG();
+}
 export const SKIN = ['#f1c9a0', '#e0ac69', '#c68642', '#a0663a', '#7a4a2a', '#5a3620'];
 const TOPS = ['#2f3542', '#3c6382', '#b33939', '#cd6133', '#218c74', '#706fd3', '#d1ccc0', '#40407a', '#ffb142', '#1e272e', '#84817a', '#c44569'];
 const PANTS = ['#2c3e50', '#1e1e24', '#5d5d5d', '#a39274', '#3b4a6b'];
@@ -141,20 +150,20 @@ export function knight(rand) {
   const p = person(rand, { top: '#3d3d46', pants: '#2b2b33', hat: null, shades: false, shoe: '#2a2a2a' });
   const u = p.userData;
   const steel = mat('#c9d1dc', 0.28, 0.85);
-  const plate = part(new THREE.CapsuleGeometry(0.215, 0.3, 6, 14), steel, 0, 1.25, 0.01);
+  const plate = part(new THREE.CapsuleGeometry(0.215, 0.3, seg(6), seg(14)), steel, 0, 1.25, 0.01);
   plate.scale.set(1.15, 1, 0.78);
   u.body.add(plate);
-  const helm = part(new THREE.CylinderGeometry(0.14, 0.13, 0.22, 16), steel, 0, 0.12, 0);
-  helm.add(part(new THREE.SphereGeometry(0.14, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), steel, 0, 0.1, 0));
+  const helm = part(new THREE.CylinderGeometry(0.14, 0.13, 0.22, seg(16)), steel, 0, 0.12, 0);
+  helm.add(part(new THREE.SphereGeometry(0.14, seg(16), seg(8), 0, Math.PI * 2, 0, Math.PI / 2), steel, 0, 0.1, 0));
   helm.add(part(new THREE.BoxGeometry(0.2, 0.025, 0.02), mat('#111', 0.5), 0, 0.01, 0.135));
   const plume = part(new THREE.BoxGeometry(0.03, 0.12, 0.22), mat('#b8202f', 0.8), 0, 0.27, -0.02);
   helm.add(plume);
   u.neck.add(helm);
-  for (const sh of [u.shL, u.shR]) sh.add(part(new THREE.SphereGeometry(0.1, 12, 8), steel, 0, -0.02, 0));
+  for (const sh of [u.shL, u.shR]) sh.add(part(new THREE.SphereGeometry(0.1, seg(12), seg(8)), steel, 0, -0.02, 0));
   const sword = new THREE.Group();
   sword.add(part(new THREE.BoxGeometry(0.05, 0.95, 0.012), mat('#e8edf3', 0.15, 0.95), 0, 0.55, 0));
   sword.add(part(new THREE.BoxGeometry(0.24, 0.035, 0.04), mat('#c9a227', 0.3, 0.9), 0, 0.06, 0));
-  sword.add(part(new THREE.CylinderGeometry(0.02, 0.02, 0.14, 8), mat('#3b2414', 0.8), 0, -0.03, 0));
+  sword.add(part(new THREE.CylinderGeometry(0.02, 0.02, 0.14, seg(8)), mat('#3b2414', 0.8), 0, -0.03, 0));
   sword.position.set(0, -0.6, 0.02);
   u.shR.add(sword);
   u.kind = 'ridder';
@@ -170,10 +179,10 @@ export function bigJoe(rand) {
   const u = p.userData;
   p.scale.set(1.35, 1.12, 1.3);
   const cup = new THREE.Group();
-  cup.add(part(new THREE.CylinderGeometry(0.15, 0.11, 0.36, 16), mat('#f4f1ea', 0.5), 0, 0, 0));
-  cup.add(part(new THREE.CylinderGeometry(0.152, 0.152, 0.07, 16), mat('#d63031', 0.5), 0, 0.06, 0));
-  cup.add(part(new THREE.CylinderGeometry(0.16, 0.16, 0.025, 16), mat('#ffffff', 0.4), 0, 0.19, 0));
-  const straw = part(new THREE.CylinderGeometry(0.013, 0.013, 0.42, 8), mat('#ff4757', 0.4), 0.03, 0.36, -0.02);
+  cup.add(part(new THREE.CylinderGeometry(0.15, 0.11, 0.36, seg(16)), mat('#f4f1ea', 0.5), 0, 0, 0));
+  cup.add(part(new THREE.CylinderGeometry(0.152, 0.152, 0.07, seg(16)), mat('#d63031', 0.5), 0, 0.06, 0));
+  cup.add(part(new THREE.CylinderGeometry(0.16, 0.16, 0.025, seg(16)), mat('#ffffff', 0.4), 0, 0.19, 0));
+  const straw = part(new THREE.CylinderGeometry(0.013, 0.013, 0.42, seg(8)), mat('#ff4757', 0.4), 0.03, 0.36, -0.02);
   straw.rotation.x = -0.35;
   cup.add(straw);
   cup.position.set(0, 1.22, 0.3);
@@ -190,14 +199,14 @@ export function sarel(rand) {
   const p = person(rand, { top: '#1e6b3c', pants: '#f2f2f2', hat: 'hair', shades: false, shoe: '#111' });
   const u = p.userData;
   const gold = mat('#f1c40f', 0.6);
-  const collar = part(new THREE.TorusGeometry(0.12, 0.022, 8, 18), gold, 0, 1.5, 0);
+  const collar = part(new THREE.TorusGeometry(0.12, 0.022, seg(8), seg(18)), gold, 0, 1.5, 0);
   collar.rotation.x = Math.PI / 2;
   u.body.add(collar);
-  const band = part(new THREE.CylinderGeometry(0.235, 0.235, 0.05, 18), gold, 0, 1.05, 0);
+  const band = part(new THREE.CylinderGeometry(0.235, 0.235, 0.05, seg(18)), gold, 0, 1.05, 0);
   band.scale.set(1.1, 1, 0.78);
   u.body.add(band);
-  for (const hp of [u.hipL, u.hipR]) hp.add(part(new THREE.CylinderGeometry(0.085, 0.08, 0.26, 10), mat('#1e6b3c', 0.8), 0, -0.6, 0));
-  const ball = part(new THREE.SphereGeometry(0.13, 18, 12), mat('#8a4b25', 0.55), 0.29, 1.12, 0.12);
+  for (const hp of [u.hipL, u.hipR]) hp.add(part(new THREE.CylinderGeometry(0.085, 0.08, 0.26, seg(10)), mat('#1e6b3c', 0.8), 0, -0.6, 0));
+  const ball = part(new THREE.SphereGeometry(0.13, seg(18), seg(12)), mat('#8a4b25', 0.55), 0.29, 1.12, 0.12);
   ball.scale.set(0.85, 0.85, 1.45);
   ball.rotation.x = 0.4;
   u.body.add(ball);
@@ -216,32 +225,32 @@ export function vervet(rand) {
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
-  const torso = part(new THREE.SphereGeometry(0.26, 18, 14), fur, 0, 0.55, 0);
+  const torso = part(new THREE.SphereGeometry(0.26, seg(18), seg(14)), fur, 0, 0.55, 0);
   torso.scale.set(0.9, 1.15, 0.85);
   torso.rotation.x = 0.35;
   body.add(torso);
-  const belly = part(new THREE.SphereGeometry(0.2, 14, 10), white, 0, 0.5, 0.1);
+  const belly = part(new THREE.SphereGeometry(0.2, seg(14), seg(10)), white, 0, 0.5, 0.1);
   belly.scale.set(0.8, 1.1, 0.6);
   body.add(belly);
   const neck = new THREE.Group();
   neck.position.set(0, 0.86, 0.12);
-  const head = part(new THREE.SphereGeometry(0.15, 18, 14), fur, 0, 0.06, 0);
+  const head = part(new THREE.SphereGeometry(0.15, seg(18), seg(14)), fur, 0, 0.06, 0);
   neck.add(head);
-  const face = part(new THREE.SphereGeometry(0.105, 16, 12), dark, 0, 0.03, 0.08);
+  const face = part(new THREE.SphereGeometry(0.105, seg(16), seg(12)), dark, 0, 0.03, 0.08);
   face.scale.set(1, 1.1, 0.75);
   neck.add(face);
-  const brow = part(new THREE.TorusGeometry(0.1, 0.022, 6, 16, Math.PI), white, 0, 0.06, 0.1);
+  const brow = part(new THREE.TorusGeometry(0.1, 0.022, seg(6), seg(16), Math.PI), white, 0, 0.06, 0.1);
   neck.add(brow);
-  for (const s of [-1, 1]) neck.add(part(new THREE.SphereGeometry(0.045, 10, 8), dark, s * 0.135, 0.09, -0.01));
+  for (const s of [-1, 1]) neck.add(part(new THREE.SphereGeometry(0.045, seg(10), seg(8)), dark, s * 0.135, 0.09, -0.01));
   body.add(neck);
-  const limb = new THREE.CapsuleGeometry(0.05, 0.4, 4, 8);
+  const limb = new THREE.CapsuleGeometry(0.05, 0.4, seg(4), seg(8));
   const shL = new THREE.Group();
   const shR = new THREE.Group();
   shL.position.set(-0.2, 0.7, 0.08);
   shR.position.set(0.2, 0.7, 0.08);
   for (const [sh, s] of [[shL, -1], [shR, 1]]) {
     sh.add(part(limb, fur, 0, -0.22, 0));
-    sh.add(part(new THREE.SphereGeometry(0.05, 10, 8), dark, 0, -0.47, 0));
+    sh.add(part(new THREE.SphereGeometry(0.05, seg(10), seg(8)), dark, 0, -0.47, 0));
     sh.rotation.set(-0.9, 0, s * 0.5);
     body.add(sh);
   }
@@ -252,7 +261,7 @@ export function vervet(rand) {
   }
   const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.12, -0.1, -0.35), new THREE.Vector3(0.45, 0.05, -0.55), new THREE.Vector3(0.6, 0.45, -0.45)]);
   const tail = new THREE.Group();
-  tail.add(part(new THREE.TubeGeometry(curve, 24, 0.035, 8, false), fur));
+  tail.add(part(new THREE.TubeGeometry(curve, seg(24), 0.035, seg(8), false), fur));
   tail.position.set(0, 0.35, -0.18);
   body.add(tail);
   root.userData = { body, neck, shL, shR, tail, kind: 'aap', phase: rand() * 10, pose: 'crouch' };

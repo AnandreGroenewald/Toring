@@ -154,7 +154,7 @@ export function createCrowd(scene, groundY, { kinds = ['swaard', 'spies', 'boog'
           pose(set, m, time);
           for (const p of inst) p.im.setMatrixAt(i, bones[p.bone].matrixWorld);
         }
-        for (const p of inst) { p.im.count = members.length; p.im.instanceMatrix.needsUpdate = true; }
+        for (const p of inst) { p.im.count = members.length; p.im.visible = members.length > 0; if (members.length) p.im.instanceMatrix.needsUpdate = true; }
       }
     },
   };

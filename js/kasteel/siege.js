@@ -11,8 +11,10 @@ import { castleMaterials, buildCastle, sampleDaily } from './castle.js';
 import { trebuchet, ram as makeRam, shot, cauldron, ballista as makeBallista, spikes as makeSpikes } from './army.js';
 import { defaultPlan, loadPlan, spotIds, myDays, mySeed } from './plan.js';
 import { createCrowd } from './crowd.js';
+import { setDetail } from './crew.js';
 import { createPhysics } from './physics.js';
 import { createFx } from './fx.js';
+import { weldStill, towerWelds, weldInto } from './batch.js';
 import { scoutScreen, createSiegeHud } from './hud.js';
 import { audio, haptics } from '../audio.js';
 
@@ -28,8 +30,11 @@ const G_ACC = 16;   // the world's gravity (m/s²): everything falls with weight
 
 // ------------------------------------------------------------------------------------------------------- the world
 const st = createStage({ fov: 48 });
+window.__quality = st.quality;
 const { scene, camera, renderer } = st;
-const world = buildWorld(scene, renderer, { seed: 11 });
+setDetail(st.quality.name === 'high' ? 1 : 0.5);   // (phones: simpler round shapes)
+const world = buildWorld(scene, renderer, { seed: 11, grass: st.quality.grass, detail: st.quality.name === 'high' ? 1 : 0.6 });
+st.onQuality((qq) => { world.setGrass(qq.grass); world.setShadow(qq.shadow); });
 {
   const sun = world.sun;
   sun.target.position.set(0, 0, -80);
@@ -37,9 +42,7 @@ const world = buildWorld(scene, renderer, { seed: 11 });
   const sc = sun.shadow.camera;
   sc.left = -95; sc.right = 95; sc.top = 100; sc.bottom = -100; sc.near = 10; sc.far = 320;
   sc.updateProjectionMatrix();
-  // (a phone gets a lighter shadow map: smoother; the Mac keeps the sharp one)
-  const big = Math.min(window.innerWidth, window.innerHeight) > 600 && !/Android|iPhone|iPad/i.test(navigator.userAgent);
-  sun.shadow.mapSize.set(big ? 4096 : 2048, big ? 4096 : 2048);
+  world.setShadow(st.quality.shadow);   // (a phone a lighter shadow map; the Mac the sharp one)
 }
 const mats = castleMaterials(renderer);
 const samples = [sampleDaily(rand, 16), sampleDaily(rand, 12), sampleDaily(rand, 11), sampleDaily(rand, 13), sampleDaily(rand, 10)];
@@ -59,21 +62,25 @@ const KEEP = castle.group.localToWorld(castle.keep.pos.clone());
 const phys = createPhysics({ gravity: -G_ACC });
 const blocks = [];
 const rayTargets = [];
+const towerParts = [];
 let totalVol = 0;
 castle.towers.forEach((t, ti) => {
   const meshes = t.group.children.filter((o) => o.userData.block);
   const merlons = t.group.children.filter((o) => o.userData.merlon);
+  const part = { meshes: [...meshes, ...merlons], links: [] };
+  towerParts.push(part);
   let top = null;
   for (const m of meshes) {
     scene.attach(m);
     const link = phys.addBlock(m, m.userData.block, m.userData.S, m.userData.D);
     link.tower = ti;
     blocks.push(link);
+    part.links.push(link);
     rayTargets.push(m);
     totalVol += link.vol;
     if (!top || link.home.y > top.home.y) top = link;
   }
-  for (const m of merlons) { scene.attach(m); phys.addPiece(m, ...m.userData.merlon); }
+  for (const m of merlons) { scene.attach(m); part.links.push(phys.addPiece(m, ...m.userData.merlon)); }
   if (t.flag && top) top.mesh.attach(t.flag);
   t.topLink = top;
 });
@@ -106,9 +113,14 @@ for (const d of doors) {
   doorStatics.push(phys.addStatic(p.x, p.y + 3.7, p.z, 1.25, 3.7, 0.16, 0));
   rayTargets.push(d);
 }
+// (phones: what stands still is drawn as a few welded pieces — the walls and gatehouse always, each tower until it's hit)
+const within = (o, test) => { for (let a = o; a; a = a.parent) if (test(a)) return true; return false; };
+const portcullis = castle.gate.userData.portcullis;
+weldStill(castle.group, scene, (m) => !within(m, (a) => a.userData.door || a.userData.wave || a.userData.flame || a === portcullis));
+const welds = towerWelds(scene, towerParts);
 
 // ------------------------------------------------------------------------------------------------- soldiers, fx
-const crowd = createCrowd(scene, groundHeight, { capacity: 36 });
+const crowd = createCrowd(scene, groundHeight, { capacity: 36, looks: st.quality.looks });
 const fx = createFx(scene);
 // their defence, as planned (Robot Rikus's own way, or your saved plan)
 const plan = MINE?.plan || defaultPlan(castle);
@@ -155,6 +167,13 @@ const treb = trebuchet(mats, 'blue', { arm: 0.85 });
 treb.position.copy(TREB);
 scene.add(treb);
 const TU = treb.userData;
+// (its beams welded: the frame as a few pieces; the arm and the counterweight each as a few, still turning)
+{
+  const under = (o, g) => { for (let a = o; a; a = a.parent) if (a === g) return true; return false; };
+  weldInto(TU.cw, () => true);
+  weldInto(TU.pivot, (m) => !under(m, TU.cw));
+  weldInto(treb, (m) => !under(m, TU.pivot) && !TU.ropes.includes(m) && m !== TU.stone);
+}
 const X_AXIS = new THREE.Vector3(1, 0, 0);
 const tipAt = (arm) => treb.localToWorld(new THREE.Vector3(0, 0, TU.long).applyAxisAngle(X_AXIS, arm).add(new THREE.Vector3(0, TU.axleY, 0)));
 function setArm(a) {
@@ -243,7 +262,8 @@ function deploy(kind, x, z) {
       if (m) { m.state = 'walk'; blue.push(m); }
       return m;
     }).filter(Boolean);
-    G.ram = { obj: r, hp: 150, pushers, hitT: 0, log: r.children.find((o) => o.geometry?.type === 'CylinderGeometry' && o.position.y > 1.4) };
+    weldInto(r, (m) => { for (let a = m; a; a = a.parent) if (a === r.userData.log) return false; return true; });
+    G.ram = { obj: r, hp: 150, pushers, hitT: 0, log: r.userData.log };
     G.cards.ram -= 1;
   } else {
     const n = Math.min(SQUAD[kind], G.cards[kind]);
@@ -807,9 +827,15 @@ function frame(now) {
       }
     } else if (G.flightT > 9 || b.position.y < -5) { G.impact = { at: new THREE.Vector3(b.position.x, 0, b.position.z), hitCastle: false, t: 0 }; }
   }
+  let _t = performance.now();
+  const P = window.__prof || (window.__prof = {});
+  const lap = (k) => { const n = performance.now(); P[k] = (P[k] || 0) + n - _t; _t = n; };
   phys.step(dt);
   phys.sync();
+  welds.update();
+  lap('physics');
   if (G.mode !== 'scout') think(dt);
+  lap('think');
   for (const m of crowd.all) {
     if (m.state !== 'fall') continue;
     m.vy -= G_ACC * dt;
@@ -820,9 +846,13 @@ function frame(now) {
     if (m.y <= gy) { m.y = null; m.state = 'dead'; m.diedAt = G.t; fx.dust(new THREE.Vector3(m.x, gy + 0.3, m.z), { n: 3, size: 1.4, up: 0.6, spread: 1, life: 1.2 }); }
   }
   measure(dt);
+  lap('measure');
   crowd.update(G.t);
+  lap('crowd');
   fx.update(dt, G_ACC);
+  lap('fx');
   for (const w of wavers) w.userData.wave(G.t);
+  lap('flags');
   for (const tch of castle.torches) { const f = 0.85 + Math.sin(G.t * 17 + tch.position.x) * 0.08; tch.userData.flame.scale.set(f, f * 1.1, f); }
   cameraTick(rdt);
   // the screen
@@ -837,7 +867,10 @@ function frame(now) {
     const out = G.clock <= 0 || starCount() === 3 || (G.mode === 'battle' && !G.stone && G.cards.treb <= 0 && G.trebState !== 'firing' && ['swaard', 'spies', 'boog', 'ridder'].every((k) => G.cards[k] <= 0) && !G.cards.ram && !blue.some((m) => m.alive));
     if (out) endSiege();
   }
+  lap('rest');
   st.render(rdt);
+  lap('render');
+  P.frames = (P.frames || 0) + 1;
   requestAnimationFrame(frame);
 }
 function endSiege() {
@@ -855,7 +888,7 @@ requestAnimationFrame(frame);
 
 // for the tests: play it without fingers
 window.__siege = {
-  G, KEEP, TREB, YAW0, castle, blue, defenders, phys,
+  G, KEEP, TREB, YAW0, castle, blue, defenders, phys, renderer, crowd,
   start: () => { if (G.mode === 'scout') startSiege(); },
   pick: (k) => pickCard(k),
   deploy: (k, x, z) => deploy(k, x, z),

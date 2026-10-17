@@ -8,14 +8,18 @@ import { createStage } from './stage.js';
 import { buildWorld, DIST, rng, groundHeight } from './world.js';
 import { castleMaterials, buildCastle, sampleDaily } from './castle.js';
 import { soldier, cauldron, ballista, spikes } from './army.js';
-import { idle } from './crew.js';
+import { idle, setDetail } from './crew.js';
 import { PIECES, BUDGET, spotIds, defaultPlan, costOf, loadPlan, savePlan, mySeed, myDays } from './plan.js';
 import { audio } from '../audio.js';
 import { ICONS } from './hud.js';
+import { weldStill } from './batch.js';
 
 const st = createStage({ fov: 46 });
 const { scene, camera, renderer } = st;
-buildWorld(scene, renderer, { seed: 11 });
+setDetail(st.quality.name === 'high' ? 1 : 0.5);   // (phones: simpler round shapes)
+const world = buildWorld(scene, renderer, { seed: 11, grass: st.quality.grass, detail: st.quality.name === 'high' ? 1 : 0.6 });
+world.setShadow(st.quality.shadow);
+st.onQuality((qq) => { world.setGrass(qq.grass); world.setShadow(qq.shadow); });
 const mats = castleMaterials(renderer);
 const saved = loadPlan();
 const seed = saved?.seed ?? mySeed();
@@ -46,7 +50,10 @@ padGeo.rotateX(-Math.PI / 2);
 const padMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
 
 function order(keepDay) { return [days[keepDay], ...days.filter((_, i) => i !== keepDay)]; }
+let welded = [];
 function build() {
+  for (const w of welded) { scene.remove(w); w.geometry.dispose(); }
+  welded = [];
   if (castle) {
     scene.remove(castle.group);
     for (const r of rings.values()) scene.remove(r);
@@ -57,6 +64,9 @@ function build() {
   }
   castle = buildCastle({ at: AT, days: order(plan?.keep ?? 0), team: 'blue', mats, rand: rng(seed + 1) });
   scene.add(castle.group);
+  // (nothing moves here: the whole castle drawn as a few welded pieces; flags and torches keep their own)
+  const within = (o, test) => { for (let a = o; a; a = a.parent) if (test(a)) return true; return false; };
+  welded = weldStill(castle.group, scene, (m) => !within(m, (a) => a.userData.wave || a.userData.flame));
   if (!plan) plan = defaultPlan(castle);
   spots = spotIds(castle);
   for (const s of spots) {

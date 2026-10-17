@@ -19,14 +19,35 @@ function softDot() {
 
 export function createFx(scene) {
   const dot = softDot();
-  // dust: sprites that rise, grow and fade
-  const dust = [];
-  for (let i = 0; i < 90; i++) {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot, color: '#b79c7c', transparent: true, depthWrite: false, opacity: 0 }));
-    s.visible = false;
-    scene.add(s);
-    dust.push({ s, life: 0, max: 1, v: new THREE.Vector3(), grow: 1 });
-  }
+  // dust: one cloud of soft points (one draw for all of it, phones too) that rise, grow and fade
+  const DN = 160;
+  const dPos = new Float32Array(DN * 3);
+  const dSize = new Float32Array(DN);
+  const dAlpha = new Float32Array(DN);
+  const dCol = new Float32Array(DN * 3);
+  const dGeo = new THREE.BufferGeometry();
+  dGeo.setAttribute('position', new THREE.BufferAttribute(dPos, 3));
+  dGeo.setAttribute('size', new THREE.BufferAttribute(dSize, 1));
+  dGeo.setAttribute('alpha', new THREE.BufferAttribute(dAlpha, 1));
+  dGeo.setAttribute('color', new THREE.BufferAttribute(dCol, 3));
+  const dMat = new THREE.ShaderMaterial({
+    uniforms: { map: { value: dot }, uH: { value: 800 } },
+    vertexShader: `attribute float size; attribute float alpha; attribute vec3 color; varying float vA; varying vec3 vC; uniform float uH;
+      void main() { vA = alpha; vC = color; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv;
+        gl_PointSize = alpha > 0.001 ? size * projectionMatrix[1][1] * uH * 0.5 / max(0.5, -mv.z) : 0.0; }`,
+    fragmentShader: `uniform sampler2D map; varying float vA; varying vec3 vC;
+      void main() { vec4 t = texture2D(map, gl_PointCoord); gl_FragColor = vec4(vC * t.rgb, t.a * vA);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+    transparent: true, depthWrite: false,
+  });
+  const dPoints = new THREE.Points(dGeo, dMat);
+  dPoints.frustumCulled = false;
+  dPoints.onBeforeRender = (r) => { dMat.uniforms.uH.value = r.getDrawingBufferSize(tmpSize).y; };
+  scene.add(dPoints);
+  const tmpSize = new THREE.Vector2();
+  const dust = Array.from({ length: DN }, () => ({ p: new THREE.Vector3(), v: new THREE.Vector3(), life: 0, max: 1, size: 1, grow: 1, c: new THREE.Color(), on: false }));
   let di = 0;
   // chips: small stones on ballistic paths
   const chipGeo = new THREE.DodecahedronGeometry(0.22, 0);
@@ -58,6 +79,8 @@ export function createFx(scene) {
   scene.add(arrows);
   const arrow = Array.from({ length: 160 }, () => ({ a: new THREE.Vector3(), b: new THREE.Vector3(), t: 0, dur: 1, h: 2, live: false, done: null }));
   let ai = 0;
+  let chipsClear = false;
+  let arrowsClear = false;
   const m4 = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const one = new THREE.Vector3(1, 1, 1);
@@ -71,9 +94,9 @@ export function createFx(scene) {
     dust(p, { n = 10, size = 3, color = '#b79c7c', up = 2, spread = 3, life = 2.4 } = {}) {
       for (let k = 0; k < n; k++) {
         const d = dust[di++ % dust.length];
-        d.s.visible = true;
-        d.s.material.color.set(color);
-        d.s.position.set(p.x + (Math.random() - 0.5) * spread, p.y + Math.random() * spread * 0.4, p.z + (Math.random() - 0.5) * spread);
+        d.on = true;
+        d.c.set(color);
+        d.p.set(p.x + (Math.random() - 0.5) * spread, p.y + Math.random() * spread * 0.4, p.z + (Math.random() - 0.5) * spread);
         d.v.set((Math.random() - 0.5) * spread, up * (0.4 + Math.random()), (Math.random() - 0.5) * spread);
         d.life = 0;
         d.max = life * (0.7 + Math.random() * 0.6);
@@ -105,17 +128,32 @@ export function createFx(scene) {
       r.done = done;
     },
     update(dt, gravity = 16) {
-      for (const d of dust) {
-        if (!d.s.visible) continue;
+      let live = false;
+      for (let i = 0; i < DN; i++) {
+        const d = dust[i];
+        if (!d.on) { dAlpha[i] = 0; continue; }
         d.life += dt;
         const k = d.life / d.max;
-        if (k >= 1) { d.s.visible = false; continue; }
-        d.s.position.addScaledVector(d.v, dt);
+        if (k >= 1) { d.on = false; dAlpha[i] = 0; continue; }
+        live = true;
+        d.p.addScaledVector(d.v, dt);
         d.v.multiplyScalar(Math.exp(-dt * 1.6));
-        const sz = d.size * (1 + k * d.grow);
-        d.s.scale.set(sz, sz, sz);
-        d.s.material.opacity = 0.55 * Math.sin(Math.min(1, k * 4) * Math.PI / 2) * (1 - k);
+        dPos[i * 3] = d.p.x; dPos[i * 3 + 1] = d.p.y; dPos[i * 3 + 2] = d.p.z;
+        dSize[i] = d.size * (1 + k * d.grow);
+        dAlpha[i] = 0.55 * Math.sin(Math.min(1, k * 4) * Math.PI / 2) * (1 - k);
+        dCol[i * 3] = d.c.r; dCol[i * 3 + 1] = d.c.g; dCol[i * 3 + 2] = d.c.b;
       }
+      dPoints.visible = live;
+      if (live) {
+        dGeo.attributes.position.needsUpdate = true;
+        dGeo.attributes.size.needsUpdate = true;
+        dGeo.attributes.alpha.needsUpdate = true;
+        dGeo.attributes.color.needsUpdate = true;
+      }
+      // (nothing flying: nothing to write)
+      if (!chip.some((c) => c.life > 0) && chipsClear) { chips.visible = false; } else {
+      chips.visible = true;
+      chipsClear = !chip.some((c) => c.life > 0);
       for (let i = 0; i < chip.length; i++) {
         const c = chip[i];
         if (c.life <= 0) { chips.setMatrixAt(i, zero); continue; }
@@ -129,6 +167,10 @@ export function createFx(scene) {
         chips.setMatrixAt(i, m4);
       }
       chips.instanceMatrix.needsUpdate = true;
+      }
+      if (!arrow.some((r) => r.live) && arrowsClear) { arrows.visible = false; return; }
+      arrows.visible = true;
+      arrowsClear = !arrow.some((r) => r.live);
       for (let i = 0; i < arrow.length; i++) {
         const r = arrow[i];
         if (!r.live) { arrows.setMatrixAt(i, zero); continue; }

@@ -25,26 +25,53 @@ const GRADE = {
     }`,
 };
 
-export function createStage({ fov = 50, glow = true } = {}) {
+/**
+ * Quality (the owner: "optomised for phones, it should not lag"). A Mac or PC draws everything; a phone starts at `mid`
+ * and the stage steps down by itself if frames come slow (a two-second average under 48 fps): the glow and its finish
+ * passes go first (the edges stay smooth: the screen's own anti-aliasing), then the pixel density, then the shadow's
+ * detail. `?q=high|mid|low` forces one.
+ */
+export const QUALITY = {
+  high: { name: 'high', dpr: 2, post: true, shadow: 4096, soft: true, grass: 1, looks: 2 },
+  mid: { name: 'mid', dpr: 1.5, post: false, shadow: 2048, soft: false, grass: 0.55, looks: 1 },
+  low: { name: 'low', dpr: 1.15, post: false, shadow: 1024, soft: false, grass: 0.3, looks: 1 },
+};
+const ORDER = ['high', 'mid', 'low'];
+export function pickQuality() {
+  const forced = new URLSearchParams(location.search).get('q');
+  if (QUALITY[forced]) return { ...QUALITY[forced], forced: true };
+  const phone = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || (matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820);
+  return { ...QUALITY[phone ? 'mid' : 'high'] };
+}
+
+export function createStage({ fov = 50, quality = pickQuality() } = {}) {
   const canvas = document.getElementById('k-canvas');
   const stageEl = document.getElementById('k-stage');
   const size = () => [stageEl.clientWidth || window.innerWidth, stageEl.clientHeight || window.innerHeight];
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', logarithmicDepthBuffer: true });
-  const pr = Math.min(window.devicePixelRatio || 1, 2);
-  renderer.setPixelRatio(pr);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+  const q = quality;
+  const prOf = () => Math.min(window.devicePixelRatio || 1, q.dpr);
+  renderer.setPixelRatio(prOf());
   renderer.setSize(...size(), false);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.06;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = q.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+  renderer.info.autoReset = false;   // (one frame's totals over every pass)
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(fov, size()[0] / size()[1], 0.1, 4000);
+  const camera = new THREE.PerspectiveCamera(fov, size()[0] / size()[1], 0.5, 4000);
   scene.add(camera);
   let composer = null;
   let bloom = null;
-  if (glow) {
+  function buildPost() {
+    composer?.dispose?.();
+    composer = null;
+    bloom = null;
+    stageEl.classList.toggle('k-vignette', !q.post);   // (without the finish passes, a vignette drawn by the page)
+    if (!q.post) return;
     const [w, h] = size();
+    const pr = prOf();
     const rt = new THREE.WebGLRenderTarget(w * pr, h * pr, { type: THREE.HalfFloatType, samples: 4 });
     composer = new EffectComposer(renderer, rt);
     composer.setPixelRatio(pr);
@@ -55,19 +82,56 @@ export function createStage({ fov = 50, glow = true } = {}) {
     composer.addPass(new ShaderPass(GRADE));
     composer.addPass(new OutputPass());
   }
+  buildPost();
+  // stepping down when frames come slow (never up again: no flicker between levels)
+  const listeners = [];
+  let winT = 0;
+  let winN = 0;
+  let calm = 0;
+  function stepDown() {
+    const i = ORDER.indexOf(q.name);
+    if (i >= 0 && i < ORDER.length - 1) {
+      Object.assign(q, QUALITY[ORDER[i + 1]], { name: ORDER[i + 1] });
+    } else if (q.dpr > 0.85) {
+      q.dpr = Math.max(0.85, q.dpr - 0.15);
+    } else return false;
+    renderer.setPixelRatio(prOf());
+    renderer.setSize(...size(), false);
+    renderer.shadowMap.type = q.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    buildPost();
+    for (const f of listeners) f(q);
+    return true;
+  }
+  function watch(dt) {
+    if (q.forced) return;
+    if (calm > 0) { calm -= dt; return; }
+    winT += dt;
+    winN += 1;
+    if (winT < 2) return;
+    const fps = winN / winT;
+    winT = 0;
+    winN = 0;
+    if (fps < 48 && stepDown()) calm = 2.5;   // (a moment to settle before it judges again)
+  }
   // a jolt: the camera's view shifts a little and settles
   let shakeK = 0;
   const off = new THREE.Vector3();
   const api = {
-    renderer, scene, camera, composer, bloom, size,
+    renderer, scene, camera, size, quality: q,
+    get composer() { return composer; },
+    get bloom() { return bloom; },
+    /** (fn(q) when the quality steps down: the world can thin its grass, the light its shadow) */
+    onQuality(fn) { listeners.push(fn); },
     shake(k) { shakeK = Math.max(shakeK, k); },
     render(dt = 1 / 60) {
+      watch(dt);
       if (shakeK > 0.002) {
         off.set((Math.random() - 0.5) * shakeK, (Math.random() - 0.5) * shakeK, (Math.random() - 0.5) * shakeK * 0.5);
         camera.position.add(off);
         camera.updateMatrixWorld();
         shakeK *= Math.exp(-dt * 7);
       } else off.set(0, 0, 0);
+      renderer.info.reset();
       if (composer) composer.render(); else renderer.render(scene, camera);
       if (off.lengthSq()) { camera.position.sub(off); camera.updateMatrixWorld(); }
     },
@@ -77,7 +141,7 @@ export function createStage({ fov = 50, glow = true } = {}) {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
-    composer?.setSize(w, h);
+    if (composer) { composer.setPixelRatio(prOf()); composer.setSize(w, h); }
   });
   return api;
 }

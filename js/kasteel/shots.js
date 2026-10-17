@@ -7,11 +7,11 @@ import { castleMaterials, buildCastle, sampleDaily } from './castle.js';
 import { soldier, formation, trebuchet, ram, shot } from './army.js';
 import { idle } from './crew.js';
 import { scoutHud, siegeHud } from './hud.js';
-import { createStage } from './stage.js';
+import { createStage, QUALITY } from './stage.js';
 
 const q = new URLSearchParams(location.search);
 const SHOT = q.get('shot') || 'beleg';
-const st = createStage({ fov: 50 });
+const st = createStage({ fov: 50, quality: { ...QUALITY.high, forced: true } });
 const { scene, camera, renderer } = st;
 const world = buildWorld(scene, renderer, { seed: 11 });
 const rand = rng(21);
