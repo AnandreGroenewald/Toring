@@ -1953,6 +1953,12 @@ export function createUI(bus) {
         m.live ? playCard('random', '🔍', S.duelRandom, S.duelRandomSub, 'ui:duel-random', true) : null,
         playCard('friend', '📲', S.duelFriend, S.duelFriendSub, 'ui:duel-friend', !m.live),
         playCard('bot', '🤖', S.duelBot, S.duelBotSub, 'ui:duel-bot', false)),
+      // (1.18 3D) Blokbotsing in the Uitdagersreeks (the owner: "Blok vir Blok / the Uitdagersreeks?" → "Now")
+      h('div', { class: 'ideas-box botsing-box' },
+        h('div', { class: 'ideas-head' }, emo('⚔️'), h('b', { text: S.botsing }), h('span', { class: 'ideas-tag', text: S.newTag })),
+        h('p', { class: 'ideas-sub', text: S.botsingDuelSub }),
+        playCard('botsing-friend', '📲', S.botsingFriend, S.botsingFriendSub, 'ui:botsing-friend', false),
+        playCard('botsing-bot', '🤖', S.botsingBot, S.botsingBotSub, 'ui:botsing', false)),
       // (1.15.6) the Living Tower preview's three ideas and the testers' vote
       ideasBox(),
       m.live ? null : h('p', { class: 'note duel-note', text: S.duelOffline }),

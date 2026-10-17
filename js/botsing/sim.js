@@ -6,10 +6,12 @@ import { createBody, getGeometry } from '../game/blocks.js';
 import { PHYSICS } from '../config.js';
 import {
   STACK, sideX, towardFoe, POWERS, START, CROWN, LAUNCH, BUILD, PERFECT_BUILD, SETTLE, SEA, G_STEP, PERFECT_NEAR,
-  PERFECT_THROW_DENSITY, PX,
+  PERFECT_THROW_DENSITY, PX, LAYOUT, FLIGHT_G, towerX,
 } from './rules.js';
 
 const Mt = () => Phaser.Physics.Matter.Matter;
+/** Each block's strength (the owner: "it doesnt indecate any damage?"): a hit cracks it, at 0 it shatters. */
+export const HP = { cube: 4, plank: 3, slab: 3, brick: 3, wedge: 3, crate: 2, pillar: 3, crown: 0 };
 const BASE_DENSITY = PHYSICS.block.density;
 const STACK_SLOPE = 0.12;   // px wider per px further down (world.js SLOPE: m per m)
 const DT = 1000 / 60;
@@ -76,9 +78,10 @@ export function createSim() {
   function add(shape, side, role, x, y, extra = {}) {
     const info = shapeInfo(shape);
     const body = makeBody(shape, x, y, extra.angle || 0);
+    const hp = HP[shape] || 3;
     const e = {
       id: nextId++, shape, side, role, body, w: info.w, h: info.h, alive: true, wet: false, landed: role !== 'built',
-      perfect: false, flying: false, born: stepN, power: {}, ...extra,
+      perfect: false, flying: false, born: stepN, power: {}, hp, hpMax: hp, ...extra,
     };
     body.plugin = { bt: e };
     entries.push(e);
@@ -88,19 +91,20 @@ export function createSim() {
   /** Centroid y for a block of `shape` whose bottom rests at `bottomY`. */
   const yOn = (shape, bottomY) => { const s = shapeInfo(shape); return bottomY - (s.h - s.cy); };
 
-  // the two starting forts (rules.js START): row by row, each row on the tallest block of the row below
+  // the two starting towers (rules.js START, row by row) at the front of each stack, the crown behind them (LAYOUT)
   const crowns = [];
   for (const side of [0, 1]) {
+    const dir = towardFoe(side);
     let rowBottom = STACK.topY;
     let row = 0;
     let rowTop = rowBottom;
     for (const [shape, ox, r] of START) {
       if (r !== row) { row = r; rowBottom = rowTop; }
       const s = shapeInfo(shape);
-      const e = add(shape, side, shape === 'crown' ? 'crown' : 'start', sideX(side) + ox + (s.cx - s.w / 2), yOn(shape, rowBottom));
-      if (shape === 'crown') crowns[side] = e;
+      add(shape, side, 'start', sideX(side) + dir * (LAYOUT.tower + ox) + (s.cx - s.w / 2), yOn(shape, rowBottom));
       rowTop = Math.min(rowTop, rowBottom - s.h);
     }
+    crowns[side] = add('crown', side, 'crown', sideX(side) + dir * LAYOUT.crown, yOn('crown', STACK.topY));
   }
 
   // ------------------------------------------------------------------------------------------------ helpers
@@ -142,12 +146,34 @@ export function createSim() {
     events.push({ type: why, entry: e, x: e.body.position.x, y: e.body.position.y });
   }
   const wake = (b) => { if (b.isSleeping) M.Sleeping.set(b, false); };
+  /** `n` damage to a block (never the crown, the rock or a shot in flight): cracks, then it shatters. */
+  function damage(e, n, by) {
+    if (!e || !e.alive || e.kind === 'stack' || e.role === 'crown' || n <= 0 || e.flying) return;
+    e.hp = Math.max(0, e.hp - n);
+    events.push({ type: 'damage', entry: e, n, hp: e.hp, by, x: e.body.position.x, y: e.body.bounds.min.y });
+    if (e.hp <= 0) remove(e, 'break');
+  }
+  /** How much a shot's first touch hurts: its speed (full power ≈ 1), its weight, a Perfek, a slam. 1 to 4. */
+  function hitDamage(me, speed) {
+    const dens = Math.sqrt(me.power.density || 1);
+    const k = (speed / LAUNCH.V0) * dens * 1.6 * (me.perfect ? 1.25 : 1) + (me.slam ? 1 : 0);
+    return Math.max(1, Math.min(4, Math.round(k)));
+  }
+  /** A side's strength: every block of its own still standing on its rock, counted by what's left of it. */
+  function strength(side) {
+    let n = 0;
+    for (const e of entries) if (e.alive && !e.wet && e.side === side && (e.role === 'built' || e.role === 'start') && e.landed && onStack(e, side)) n += e.hp;
+    return n;
+  }
 
   // ------------------------------------------------------------------------------------------ the prediction
   const testPts = (hx, hy) => [[0, 0], [hx, 0], [-hx, 0], [0, hy], [0, -hy], [hx, hy], [-hx, hy], [hx, -hy], [-hx, -hy]];
-  function hitAt(x, y, hx, hy) {
-    const pts = testPts(hx * 0.9, hy * 0.9);
-    const cands = [...stacks.map((b) => b.plugin.bt), ...entries.filter((e) => e.alive && !e.flying && !(e.role === 'built' && !e.landed))];
+  function candidates() {
+    const out = stacks.map((b) => b.plugin.bt);
+    for (const e of entries) if (e.alive && !e.flying && !(e.role === 'built' && !e.landed)) out.push(e);
+    return out;
+  }
+  function hitAt(x, y, hx, hy, cands, pts) {
     for (const c of cands) {
       const b = c.body;
       const bb = b.bounds;
@@ -161,9 +187,10 @@ export function createSim() {
    * Where a throw goes: { path: [{x, y}], hit: { kind: 'sea'|'stack'|'block'|'crown', entry, x, y, side }, perfect }.
    * Steps exactly as Matter does (gravity, air), until it touches something or the sea (a plank skips once).
    */
-  function predict(side, shape, theta) {
+  function predict(side, shape, theta, power = 1) {
     const s = shapeInfo(shape);
     const p = launchParams(side, shape);
+    p.v *= power;
     const hx = s.w / 2;
     const hy = s.h / 2;
     let x = p.x0;
@@ -177,9 +204,13 @@ export function createSim() {
     let near = Infinity;
     const path = [{ x, y }];
     let hit = null;
+    const cands = candidates();
+    const pts = testPts(hx * 0.9, hy * 0.9);
+    let topAll = 0;   // (nothing to touch above the highest thing there is)
+    for (const c of cands) topAll = Math.min(topAll, c.body.bounds.min.y);
     for (let i = 0; i < LAUNCH.maxSteps; i++) {
       vx *= air;
-      vy = vy * air + G_STEP;
+      vy = vy * air + G_STEP * FLIGHT_G;
       x += vx;
       y += vy;
       if (i % 2 === 0) path.push({ x, y });
@@ -189,8 +220,8 @@ export function createSim() {
         hit = { kind: 'sea', x, y: 0 };
         break;
       }
-      if (i < 4) continue;   // (clear of the jib)
-      const c = hitAt(x, y, hx, hy);
+      if (i < 4 || y + hy < topAll) continue;   // (clear of the jib; above everything)
+      const c = hitAt(x, y, hx, hy, cands, pts);
       if (c) {
         hit = { kind: c.kind === 'stack' ? 'stack' : c.role === 'crown' ? 'crown' : 'block', entry: c.kind === 'stack' ? null : c, side: c.side, x, y };
         break;
@@ -204,8 +235,9 @@ export function createSim() {
 
   // -------------------------------------------------------------------------------------------- the actions
   /** A throw: the block leaves the jib tip at angle `theta`. */
-  function launch(side, shape, theta, perfect = false) {
+  function launch(side, shape, theta, perfect = false, power = 1) {
     const p = launchParams(side, shape);
+    p.v *= power;
     const pw = POWERS[shape].throw;
     const e = add(shape, side, 'proj', p.x0, p.y0, { flying: true, perfect, power: { ...pw }, pierce: pw.pierce || 0, skips: pw.skip || 0 });
     const b = e.body;
@@ -227,6 +259,28 @@ export function createSim() {
     return e;
   }
 
+  /**
+   * The mid-air tap (once a throw, while it still flies): the crate blows up right there, the wedge's spear shoots
+   * forward, the cube slams straight down, the plank hops, the pillar drills on (faster, through one block).
+   * Returns the kind, or null when it can't fire.
+   */
+  function burst(e) {
+    if (!e || !e.alive || !e.flying || e.role !== 'proj' || e.burstUsed) return null;
+    e.burstUsed = true;
+    const b = e.body;
+    const v = b.velocity;
+    const at = { x: b.position.x, y: b.position.y };
+    let kind = null;
+    if (e.shape === 'crate') { kind = 'blast'; events.push({ type: 'burst', kind, entry: e, ...at }); blast(e); return kind; }
+    if (e.shape === 'wedge') { kind = 'dash'; M.Body.setVelocity(b, { x: v.x * 1.6, y: v.y * 1.6 }); }
+    else if (e.shape === 'pillar') { kind = 'drill'; M.Body.setVelocity(b, { x: v.x * 1.45, y: v.y * 1.45 }); e.pierce = Math.max(e.pierce, 1); }
+    else if (e.shape === 'cube') { kind = 'slam'; e.slam = true; M.Body.setVelocity(b, { x: v.x * 0.22, y: Math.max(v.y, 0) + 24 }); }
+    else if (e.shape === 'plank') { kind = 'hop'; M.Body.setVelocity(b, { x: v.x * 1.06, y: Math.min(v.y, 0) - 10 }); }
+    events.push({ type: 'burst', kind, entry: e, ...at });
+    quiet = 0;
+    return kind;
+  }
+
   // ---------------------------------------------------------------------------------------- contacts and powers
   function rate(e, other) {
     e.landed = true;
@@ -234,7 +288,7 @@ export function createSim() {
     let support = other;
     let rating = 'S';
     if (other.kind === 'stack') {
-      rating = Math.abs(b.position.x - sideX(e.side)) < 40 ? 'G' : 'S';
+      rating = Math.abs(b.position.x - towerX(e.side)) < 40 ? 'G' : 'S';
     } else {
       const sw = support.w;
       const dx = b.position.x - support.body.position.x;
@@ -244,6 +298,7 @@ export function createSim() {
       if (Math.abs(dx) <= tolP && tilt < 0.06 && support.side === e.side) rating = 'P';
       else if (Math.abs(dx) <= tolG) rating = 'G';
       if (rating === 'P') {
+        e.snapDx = support.body.position.x - b.position.x;
         M.Body.setPosition(b, { x: support.body.position.x, y: b.position.y });
         M.Body.setAngle(b, support.body.angle);
         M.Body.setVelocity(b, { x: 0, y: Math.min(b.velocity.y, 1) });
@@ -252,10 +307,12 @@ export function createSim() {
         b.frictionStatic = PERFECT_BUILD.frictionStatic;
         e.perfect = true;
       } else if (rating === 'G' && support.side === e.side) {
+        e.snapDx = -dx * BUILD.goodEase;
         M.Body.setPosition(b, { x: b.position.x - dx * BUILD.goodEase, y: b.position.y });
       }
     }
-    events.push({ type: 'land', entry: e, rating, x: b.position.x, y: b.bounds.max.y });
+    events.push({ type: 'land', entry: e, rating, x: b.position.x, y: b.bounds.max.y, snapDx: e.snapDx || 0 });
+    e.snapDx = 0;
   }
   function blast(e) {
     const c = e.body.position;
@@ -269,6 +326,7 @@ export function createSim() {
       const d = Math.hypot(dx, dy);
       if (d > r) continue;
       const k = 1 - d / r;
+      if (o.side !== e.side || o.role !== 'proj') queue.push(() => damage(o, d < r * 0.45 ? 3 : d < r * 0.75 ? 2 : 1, 'blast'));
       let ux = d > 1 ? dx / d : 0;
       let uy = (d > 1 ? dy / d : -1) - 0.45;
       const n = Math.hypot(ux, uy) || 1;
@@ -305,6 +363,11 @@ export function createSim() {
           });
           const foe = other.kind !== 'stack' && other.side !== me.side;
           if (me.power.blast) { queue.push(() => me.alive && blast(me)); continue; }
+          if (foe && other.role !== 'crown' && !(me.pierce > 0) && !(other.role === 'built' && (other.power.spikes || other.springReady))) {
+            const dmg = hitDamage(me, hitV);
+            queue.push(() => damage(other, dmg, 'hit'));
+          }
+          if (foe && other.role === 'built' && (other.power.spikes || other.springReady)) queue.push(() => damage(other, 1, 'hit'));
           if (foe && other.role === 'built' && other.power.spikes && other.alive) {
             queue.push(() => { if (me.alive) { remove(me, 'spiked'); events.push({ type: 'spikes', entry: other, x: other.body.position.x, y: other.body.bounds.min.y }); } });
             continue;
@@ -373,7 +436,11 @@ export function createSim() {
     M, engine, entries, crowns, stacks,
     get stepN() { return stepN; },
     step() {
-      for (const e of entries) if (e.alive && e.flying) e.pv = { x: e.body.velocity.x, y: e.body.velocity.y };
+      for (const e of entries) {
+        if (!e.alive || !e.flying) continue;
+        e.pv = { x: e.body.velocity.x, y: e.body.velocity.y };
+        e.body.force.y -= e.body.mass * engine.gravity.y * engine.gravity.scale * (1 - FLIGHT_G);
+      }
       M.Engine.update(engine, DT);
       stepN++;
       while (queue.length) queue.shift()();
@@ -383,7 +450,30 @@ export function createSim() {
     drain() { return events.splice(0, events.length); },
     settled: () => quiet >= SETTLE.steps,
     resetQuiet() { quiet = 0; },
-    live, towerTopY, heightM, lookouts, launchParams, predict, launch, release,
+    live, towerTopY, heightM, lookouts, launchParams, predict, launch, release, burst, strength,
+    /** (friend battles) everything still in play, to make the other phone match at the end of a turn */
+    snap() {
+      return entries.filter((e) => e.alive).map((e) => [e.id, +e.body.position.x.toFixed(2), +e.body.position.y.toFixed(2), +e.body.angle.toFixed(4), e.hp, e.wet ? 1 : 0, e.landed ? 1 : 0, e.perfect ? 1 : 0]);
+    },
+    /** Puts every block where the other phone has it (what it no longer has is removed). */
+    applySnap(list) {
+      const by = new Map(list.map((r) => [r[0], r]));
+      for (const e of entries) {
+        if (!e.alive) continue;
+        const r = by.get(e.id);
+        if (!r) { remove(e, 'sunk'); continue; }
+        M.Body.setPosition(e.body, { x: r[1], y: r[2] });
+        M.Body.setAngle(e.body, r[3]);
+        M.Body.setVelocity(e.body, { x: 0, y: 0 });
+        M.Body.setAngularVelocity(e.body, 0);
+        e.hp = r[4];
+        e.wet = !!r[5];
+        e.landed = !!r[6];
+        e.perfect = !!r[7];
+        e.flying = false;
+      }
+      quiet = SETTLE.steps;
+    },
     crownLost: (side) => !crowns[side].alive || crowns[side].wet,
     crownY: (side) => crowns[side].body.position.y,
     /** How many of a side's blocks are still standing on its stack (for the result card). */

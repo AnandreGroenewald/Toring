@@ -50,10 +50,13 @@ function particles(scene, n, { additive = false, map }) {
   scene.add(pts);
   const P = Array.from({ length: n }, () => ({ p: new THREE.Vector3(), v: new THREE.Vector3(), age: 0, life: 0, s0: 1, s1: 1, a0: 1, g: 0, drag: 0, c: new THREE.Color(), on: false }));
   let next = 0;
+  let live = 0;
+  let wasLive = 0;
   return {
     spawn(p, v, { life = 1, size = 1, size1 = size, color = '#ffffff', alpha: a0 = 1, g = 0, drag = 0 } = {}) {
       const q = P[next++ % n];
       q.on = true;
+      live++;
       q.p.copy(p);
       q.v.copy(v);
       q.age = 0;
@@ -66,9 +69,13 @@ function particles(scene, n, { additive = false, map }) {
       q.c.set(color);
     },
     update(dt) {
+      if (!live && !wasLive) return;
+      wasLive = live;
+      live = 0;
       for (let i = 0; i < n; i++) {
         const q = P[i];
         if (!q.on) { alpha[i] = 0; continue; }
+        live++;
         q.age += dt;
         if (q.age >= q.life) { q.on = false; alpha[i] = 0; continue; }
         q.v.y -= q.g * dt;
@@ -161,7 +168,7 @@ export function createBattleFx(stage) {
   let trailOf = null;
   let trailT = 0;
   // the throw's arc: dots flowing along the path, the landing ring
-  const ARC_N = 70;
+  const ARC_N = 60;
   const arcPos = new Float32Array(ARC_N * 3);
   const arcA = new Float32Array(ARC_N);
   const arcS = new Float32Array(ARC_N);
@@ -170,12 +177,14 @@ export function createBattleFx(stage) {
   arcGeo.setAttribute('alpha', new THREE.BufferAttribute(arcA, 1));
   arcGeo.setAttribute('size', new THREE.BufferAttribute(arcS, 1));
   const arcMat = new THREE.ShaderMaterial({
-    uniforms: { map: { value: dot }, uH: { value: 800 }, uCol: { value: new THREE.Color('#ffffff') } },
+    uniforms: { uH: { value: 800 }, uCol: { value: new THREE.Color('#ffffff') } },
+    // (crisp round dots with a thin glow, never smaller than 7 px: the arc reads at any distance)
     vertexShader: `attribute float alpha; attribute float size; varying float vA; uniform float uH;
       void main() { vA = alpha; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv;
-        gl_PointSize = size * projectionMatrix[1][1] * uH * 0.5 / max(0.5, -mv.z); }`,
-    fragmentShader: `uniform sampler2D map; uniform vec3 uCol; varying float vA;
-      void main() { vec4 t = texture2D(map, gl_PointCoord); gl_FragColor = vec4(uCol * t.rgb * 1.6, t.a * vA);
+        gl_PointSize = clamp(size * projectionMatrix[1][1] * uH * 0.5 / max(0.5, -mv.z), 7.0, 26.0); }`,
+    fragmentShader: `uniform vec3 uCol; varying float vA;
+      void main() { float d = length(gl_PointCoord - 0.5); float core = smoothstep(0.34, 0.24, d); float halo = smoothstep(0.5, 0.3, d) * 0.35;
+        gl_FragColor = vec4(uCol * (1.4 * core + halo), (core + halo) * vA);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
@@ -336,8 +345,8 @@ export function createBattleFx(stage) {
           arcPos[i * 3] = pa.x + (pb.x - pa.x) * t;
           arcPos[i * 3 + 1] = pa.y + (pb.y - pa.y) * t;
           arcPos[i * 3 + 2] = 0;
-          arcA[i] = 0.25 + 0.75 * Math.min(1, f * 6) * (0.65 + 0.35 * Math.sin((f * 30 - arcFlow * 6.28) * 1.0));
-          arcS[i] = arcPerfect ? 0.85 : 0.7;
+          arcA[i] = 0.55 + 0.45 * Math.min(1, f * 5);
+          arcS[i] = arcPerfect ? 0.42 : 0.34;
         }
         arcGeo.attributes.position.needsUpdate = true;
         arcGeo.attributes.alpha.needsUpdate = true;

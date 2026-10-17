@@ -23,16 +23,35 @@
 .bt-me .bt-pow { left: 10px; } .bt-foe .bt-pow { right: 10px; }
 .bt-pow:empty { display: none; }
 .bt-turn { display: grid; justify-items: center; align-content: center; padding: 6px 11px; min-width: 86px; }
-.bt-turn b { font-size: 19px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
+.bt-turn b { font-size: 21px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
+.bt-turn small { font-size: 7.5px; font-weight: 900; letter-spacing: 0.2em; opacity: 0.75; margin-top: 1px; }
+.bt-top[data-sudden="1"] .bt-turn { border-color: rgba(255, 110, 80, 0.8); box-shadow: 0 0 18px rgba(255, 80, 50, 0.45); }
 .bt-turn span { font-size: 8.5px; font-weight: 900; letter-spacing: 0.14em; margin-top: 3px; color: var(--gold); white-space: nowrap; }
-.bt-top[data-active="0"] .bt-me { border-color: rgba(120, 170, 255, 0.7); box-shadow: 0 0 0 1px rgba(90, 150, 255, 0.4), 0 8px 24px rgba(60, 120, 255, 0.3); }
-.bt-top[data-active="1"] .bt-foe { border-color: rgba(255, 130, 110, 0.7); box-shadow: 0 0 0 1px rgba(255, 90, 70, 0.4), 0 8px 24px rgba(255, 70, 50, 0.3); }
-.bt-top[data-active="1"] .bt-turn span { color: #ff9c8f; }
+.bt-top[data-active="me"] .bt-side.is-me { border-color: rgba(120, 170, 255, 0.7); box-shadow: 0 0 0 1px rgba(90, 150, 255, 0.4), 0 8px 24px rgba(60, 120, 255, 0.3); }
+.bt-top[data-active="foe"] .bt-side:not(.is-me) { border-color: rgba(255, 130, 110, 0.7); box-shadow: 0 0 0 1px rgba(255, 90, 70, 0.4), 0 8px 24px rgba(255, 70, 50, 0.3); }
+.bt-top[data-active="foe"] .bt-turn span { color: #ff9c8f; }
 
 .bt-corner { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 68px); left: 10px; right: 10px; display: flex; justify-content: space-between; z-index: 2; pointer-events: none; }
 .bt-corner button { pointer-events: auto; width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--glass-line); background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: 22px; font-weight: 900; line-height: 1; display: grid; place-content: center; }
 .bt-pause { grid-auto-flow: column; gap: 4px; }
 .bt-pause i { display: block; width: 4px; height: 14px; border-radius: 2px; background: #fff; }
+
+/* each tower's strength (its blocks, counted by what's left of them): drops in red when hit */
+.bt-str { grid-column: 1 / -1; display: block; height: 5px; margin-top: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
+.bt-str i { display: block; height: 100%; width: 100%; border-radius: 3px; background: linear-gradient(90deg, #7fe08a, #3fbf6a); transition: width 0.6s cubic-bezier(0.3, 0.9, 0.3, 1); }
+.bt-foe .bt-str i { margin-left: auto; }
+.bt-str[data-low="1"] i { background: linear-gradient(90deg, #ffb35a, #e2483d); }
+.bt-str.is-hit { animation: bt-hitbar 0.7s ease-out; }
+@keyframes bt-hitbar { 0% { box-shadow: 0 0 0 2px rgba(255, 80, 60, 0.9), 0 0 16px rgba(255, 60, 40, 0.9); } 100% { box-shadow: none; } }
+
+/* the scope: their tower while you pull (the game draws into this window) */
+.bt-scope { position: absolute; right: 10px; top: calc(max(10px, env(safe-area-inset-top)) + 116px); width: 46%; aspect-ratio: 1 / 1.08; border-radius: 18px; z-index: 1;
+  border: 2px solid rgba(255, 255, 255, 0.55); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 12px 30px rgba(0, 0, 0, 0.45); opacity: 0; transform: scale(0.92); transition: opacity 0.2s, transform 0.25s, border-color 0.2s; pointer-events: none; }
+.bt-scope.is-on { opacity: 1; transform: none; }
+.bt-scope.is-gold { border-color: #ffd46a; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 0 22px rgba(255, 200, 80, 0.6); }
+.bt-scope small { position: absolute; left: 8px; top: 7px; font-size: 9px; font-weight: 900; letter-spacing: 0.18em; padding: 3px 7px; border-radius: 999px; background: rgba(10, 6, 18, 0.6); }
+.bt-banner.is-dmg b { background-image: linear-gradient(180deg, #fff1ee, #ff8f7a 55%, #e2483d); }
+.bt-banner.is-small b { font-size: 22px; }
 
 /* the banner and the call-outs */
 .bt-banner { position: absolute; left: 0; right: 0; top: 27%; display: grid; justify-items: center; gap: 4px; pointer-events: none; z-index: 3; opacity: 0; transform: scale(0.85); transition: opacity 0.25s, transform 0.35s cubic-bezier(0.2, 1.4, 0.4, 1); }
@@ -49,6 +68,7 @@
 .bt-co.is-gold { color: #ffd46a; font-size: 21px; }
 .bt-co.is-boom { color: #ffb35a; font-size: 30px; letter-spacing: 0.08em; }
 .bt-co.is-dim { font-size: 14px; color: #f3eee8; }
+.bt-co.is-dmg { color: #ff6b5a; font-size: 24px; letter-spacing: 0.02em; text-shadow: 0 2px 0 rgba(60, 0, 0, 0.7), 0 0 12px rgba(0, 0, 0, 0.6); }
 @keyframes bt-rise { 0% { opacity: 0; transform: translate(-50%, -60%) scale(0.6); } 12% { opacity: 1; transform: translate(-50%, -100%) scale(1.12); } 22% { transform: translate(-50%, -100%) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -220%) scale(0.98); } }
 @keyframes bt-pulse { 50% { transform: scale(1.18); } }
 
@@ -66,6 +86,7 @@
 .bt-card b { font-size: 12px; font-weight: 900; letter-spacing: 0.04em; }
 .bt-card.is-on { transform: translateY(-6px); border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 207, 107, 0.4), 0 12px 26px rgba(255, 180, 70, 0.28); background: linear-gradient(180deg, rgba(74, 50, 30, 0.82), rgba(28, 16, 34, 0.82)); }
 .bt-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.bt-acts.is-one { grid-template-columns: 1fr; }
 .bt-act { position: relative; min-height: 104px; border-radius: 18px; border: 0; padding: 10px 10px 9px; display: grid; justify-items: start; align-content: start; gap: 2px; text-align: left; }
 .bt-act svg { position: absolute; right: 10px; top: 10px; width: 24px; height: 24px; opacity: 0.85; }
 .bt-act b { font-size: 19px !important; font-weight: 900 !important; letter-spacing: 0.16em; }
@@ -113,3 +134,13 @@
 @media (max-height: 640px) {
   .bt-act { min-height: 88px; } .bt-act small { display: none; } .bt-card { height: 72px; } .bt-card svg { height: 38px; }
 }
+
+/* the invite (a friend battle) */
+.bt-invite .bt-code { font-size: 30px; font-weight: 900; letter-spacing: 0.3em; color: var(--gold); margin: 2px 0; font-variant-numeric: tabular-nums; }
+.bt-invite .bt-link { font-size: 11px; opacity: 0.7; word-break: break-all; }
+.bt-invite .bt-wa { width: 100%; height: 52px; border: 0; border-radius: 16px; font-size: 15px !important; font-weight: 900 !important; letter-spacing: 0.12em; color: #fff !important;
+  background: linear-gradient(180deg, #3fd47a, #20a659); box-shadow: 0 5px 0 #157a40, 0 12px 26px rgba(40, 180, 90, 0.3); margin-top: 4px; }
+.bt-invite .bt-copy { width: 100%; height: 44px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.06); font-size: 13px !important; font-weight: 800 !important; }
+.bt-invite .bt-waiting { font-size: 12.5px !important; opacity: 0.85 !important; display: flex; align-items: center; gap: 8px; }
+.bt-invite .bt-waiting::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25); border-top-color: var(--gold); animation: bt-spin 0.9s linear infinite; }
+@keyframes bt-spin { to { transform: rotate(360deg); } }

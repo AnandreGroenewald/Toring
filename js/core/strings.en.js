@@ -170,6 +170,11 @@ export const S_EN = {
   // (1.18 3D) Block Clash (botsing.html): its menu button
   botsing: 'Block Clash',
   botsingMenuSub: 'Build or throw: Rikus’s crown into the sea',
+  botsingDuelSub: 'Build or throw every block. Knock their crown into the sea.',
+  botsingFriend: 'Challenge a friend',
+  botsingFriendSub: 'Send a link; you take turns',
+  botsingBot: 'Vs Robot Rikus',
+  botsingBotSub: 'Practise your throw and your tower',
   // (1.17) The Castle Series (kasteel.html): its menu button, and its coins reaching the wallet
   kasteel: 'The Castle Series',
   kasteelMenuSub: (tr, w, n) => (n ? `🏆 ${fmtInt(tr)} · ${fmtInt(w)} ${w === 1 ? 'win' : 'wins'}` : 'Troops, a trebuchet and your own castle'),

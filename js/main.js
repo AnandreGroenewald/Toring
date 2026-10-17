@@ -3330,6 +3330,7 @@ function claimKasteelLoot() {
 }
 bus.on('ui:kasteel', () => { location.href = 'kasteel.html'; });
 bus.on('ui:botsing', () => { location.href = 'botsing.html'; });   // (1.18 3D) Blokbotsing
+bus.on('ui:botsing-friend', () => { location.href = 'botsing.html?vriend=1'; });
 
 // (1.17) Vrugteslag: Ryk teen Ryk (js/core/slag.js, js/scenes/SlagScene.js; the owner, 16 Oct 2026: "Break your oponents
 // empire before he breaks yours", his style B and his four extras). This first version: you against Robot Rikus, in the

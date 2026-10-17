@@ -169,6 +169,11 @@ export const S = {
   // (1.18 3D) Blokbotsing (botsing.html): its menu button
   botsing: 'Blokbotsing',
   botsingMenuSub: 'Bou óf gooi: Rikus se kroon in die see',
+  botsingDuelSub: 'Bou óf gooi elke blok. Gooi hulle kroon in die see.',
+  botsingFriend: 'Daag ’n vriend uit',
+  botsingFriendSub: 'Stuur ’n skakel; julle speel beurt om beurt',
+  botsingBot: 'Teen Robot Rikus',
+  botsingBotSub: 'Oefen jou gooi en jou toring',
   // (1.17) Die Kasteelreeks (kasteel.html): its menu button, and its coins reaching the wallet
   kasteel: 'Die Kasteelreeks',
   kasteelMenuSub: (tr, w, n) => (n ? `🏆 ${fmtInt(tr)} · ${fmtInt(w)} ${w === 1 ? 'oorwinning' : 'oorwinnings'}` : 'Troepe, ’n trebuchet en jou eie kasteel'),

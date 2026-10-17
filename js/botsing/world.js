@@ -363,7 +363,7 @@ function makeStack(side, renderer, mats) {
     tufts.setMatrixAt(t++, mtx);
   }
   tufts.count = t;
-  tufts.castShadow = true;
+  tufts.castShadow = false;
   group.add(tufts);
   // boulders at the foot, in the surf (clear of the plane, where falling blocks slide down)
   const bgeo = new THREE.IcosahedronGeometry(1, 1);
@@ -505,7 +505,7 @@ export function buildWorld(stage) {
     },
     vertexShader: SEA_VERT, fragmentShader: SEA_FRAG,
   });
-  const seaMesh = new THREE.Mesh(seaGeometry(quality.name === 'high' ? 300 : 220), sea);
+  const seaMesh = new THREE.Mesh(seaGeometry(quality.name === 'high' ? 300 : quality.name === 'mid' ? 190 : 150), sea);
   seaMesh.frustumCulled = false;
   scene.add(seaMesh);
 

@@ -100,7 +100,7 @@ export function createPieces(renderer) {
   M.heavy = base.granite.clone();   // (the cube: dark dressed stone, iron-banded: it looks as heavy as it is)
   M.heavy.color = new THREE.Color('#7b838e');
   const team = SIDE_TEAM.map((t) => new THREE.MeshStandardMaterial({ color: TEAM[t].main, roughness: 0.5, metalness: 0.25 }));
-  const velvet = SIDE_TEAM.map((t) => new THREE.MeshPhysicalMaterial({ color: TEAM[t].main, roughness: 0.75, sheen: 1, sheenColor: new THREE.Color(TEAM[t].light), sheenRoughness: 0.45 }));
+  const velvet = SIDE_TEAM.map((t) => new THREE.MeshStandardMaterial({ color: TEAM[t].main, roughness: 0.62, metalness: 0.05, emissive: TEAM[t].dark, emissiveIntensity: 0.18 }));
   // each side's blocks carry a hint of its colour
   const tinted = new Map();
   const tint = (key, side) => {
@@ -225,78 +225,112 @@ export function createPieces(renderer) {
     const cushion = new THREE.Mesh(geo, velvet[side]);
     cushion.castShadow = cushion.receiveShadow = true;
     group.add(cushion);
-    const pipe = new THREE.Mesh(new THREE.TorusGeometry(1, 0.045, 6, 48), M.gold);
-    pipe.scale.set((W - 0.12) / 2, 1.28, 1);
-    pipe.rotation.x = Math.PI / 2;
-    pipe.position.y = -H / 2 + cushH * 0.52;
-    group.add(pipe);
-    for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-      const t = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.42, 10), M.gold);
-      t.position.set(x * (W / 2 - 0.12), -H / 2 + 0.12, z * 1.18);
-      group.add(t);
+    {
+      const g = [];
+      const pipe = new THREE.TorusGeometry(1, 0.045, 6, 40);
+      pipe.rotateX(Math.PI / 2);
+      pipe.scale((W - 0.12) / 2, 1, 1.28);
+      pipe.translate(0, -H / 2 + cushH * 0.52, 0);
+      g.push(pipe);
+      for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        const t = new THREE.ConeGeometry(0.13, 0.42, 8);
+        t.translate(x * (W / 2 - 0.12), -H / 2 + 0.12, z * 1.18);
+        g.push(t);
+      }
+      group.add(new THREE.Mesh(merge(g), M.gold));
     }
-    // the crown
-    const c = new THREE.Group();
+    // the crown: every part placed, then merged by material (a phone draws 4 pieces instead of ~45)
+    const parts = { gold: [], ruby: [], sapphire: [], velvet: [] };
+    const o = new THREE.Object3D();
+    const put = (key, geo, { p = [0, 0, 0], r = [0, 0, 0], sc = [1, 1, 1], look = null } = {}) => {
+      o.position.set(...p);
+      o.rotation.set(...r);
+      o.scale.set(...sc);
+      if (look) o.lookAt(look);
+      o.updateMatrix();
+      parts[key].push(geo.clone().applyMatrix4(o.matrix));
+    };
     const R = 1.12;
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(R, R * 1.05, 0.62, 48, 1, true), M.gold);
-    band.material = M.gold.clone();
-    band.material.side = THREE.DoubleSide;
-    band.position.y = 0.31;
-    band.castShadow = true;
-    c.add(band);
-    for (const [y, sc] of [[0.02, 1.05], [0.6, 1.0]]) {
-      const rim = new THREE.Mesh(new THREE.TorusGeometry(R * sc, 0.075, 8, 48), M.gold);
-      rim.rotation.x = Math.PI / 2;
-      rim.position.y = y;
-      c.add(rim);
-    }
-    // the points: tall fleur shapes at the front, back and sides, small ones between
-    const tall = new THREE.ConeGeometry(0.21, 0.78, 10);
-    const small = new THREE.ConeGeometry(0.15, 0.46, 8);
-    const ball = new THREE.SphereGeometry(0.115, 14, 10);
+    put('gold', new THREE.CylinderGeometry(R, R * 1.05, 0.62, 40, 1, true), { p: [0, 0.31, 0] });
+    for (const [y, sc] of [[0.02, 1.05], [0.6, 1.0]]) put('gold', new THREE.TorusGeometry(R * sc, 0.075, 6, 40), { p: [0, y, 0], r: [Math.PI / 2, 0, 0] });
+    const tall = new THREE.ConeGeometry(0.21, 0.78, 8);
+    const small = new THREE.ConeGeometry(0.15, 0.46, 6);
+    const ball = new THREE.SphereGeometry(0.115, 10, 8);
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2;
       const big = i % 2 === 0;
-      const pt = new THREE.Mesh(big ? tall : small, M.gold);
       const h = big ? 0.39 : 0.23;
-      pt.position.set(Math.sin(a) * R, 0.62 + h, Math.cos(a) * R);
-      pt.castShadow = true;
-      c.add(pt);
-      const b = new THREE.Mesh(ball, big ? M.gold : M.gold);
-      b.position.set(Math.sin(a) * R, 0.62 + h * 2 + 0.06, Math.cos(a) * R);
-      c.add(b);
-      const gem = new THREE.Mesh(new THREE.SphereGeometry(big ? 0.17 : 0.12, 16, 10), big ? M.ruby : M.sapphire);
-      gem.position.set(Math.sin(a) * (R * 1.03), 0.31, Math.cos(a) * (R * 1.03));
-      gem.scale.set(1, 1.25, 0.6);
-      gem.lookAt(gem.position.clone().multiplyScalar(2));
-      c.add(gem);
+      put('gold', big ? tall : small, { p: [Math.sin(a) * R, 0.62 + h, Math.cos(a) * R] });
+      put('gold', ball, { p: [Math.sin(a) * R, 0.62 + h * 2 + 0.06, Math.cos(a) * R] });
+      const gp = new THREE.Vector3(Math.sin(a + Math.PI / 10) * R * 1.03, 0.31, Math.cos(a + Math.PI / 10) * R * 1.03);
+      put(big ? 'ruby' : 'sapphire', new THREE.SphereGeometry(big ? 0.17 : 0.12, 12, 8), { p: gp.toArray(), sc: [1, 1.25, 0.6], look: gp.clone().multiplyScalar(2) });
     }
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(R * 0.97, 32, 14, 0, Math.PI * 2, 0, Math.PI / 2), velvet[side]);
-    cap.scale.y = 0.52;
-    cap.position.y = 0.36;
-    c.add(cap);
-    // two gold arches over the cap, the orb and cross on top
-    for (const r of [0, Math.PI / 2]) {
-      const arch = new THREE.Mesh(new THREE.TorusGeometry(R * 0.82, 0.06, 8, 32, Math.PI), M.gold);
-      arch.rotation.y = r;
-      arch.scale.y = 0.62;
-      arch.position.y = 0.36;
-      c.add(arch);
+    put('velvet', new THREE.SphereGeometry(R * 0.97, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2), { p: [0, 0.36, 0], sc: [1, 0.52, 1] });
+    for (const r of [0, Math.PI / 2]) put('gold', new THREE.TorusGeometry(R * 0.82, 0.06, 6, 28, Math.PI), { p: [0, 0.36, 0], r: [0, r, 0], sc: [1, 0.62, 1] });
+    const orbY = 0.36 + R * 0.82 * 0.62 + 0.1;
+    put('gold', new THREE.SphereGeometry(0.17, 14, 10), { p: [0, orbY, 0] });
+    put('gold', new THREE.BoxGeometry(0.08, 0.32, 0.08), { p: [0, orbY + 0.27, 0] });
+    put('gold', new THREE.BoxGeometry(0.24, 0.08, 0.08), { p: [0, orbY + 0.3, 0] });
+    const c = new THREE.Group();
+    for (const [key, mat] of [['gold', M.gold], ['ruby', M.ruby], ['sapphire', M.sapphire], ['velvet', velvet[side]]]) {
+      const mesh = new THREE.Mesh(merge(parts[key]), mat);
+      mesh.castShadow = key === 'gold';
+      c.add(mesh);
     }
-    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.17, 18, 12), M.gold);
-    orb.position.y = 0.36 + R * 0.82 * 0.62 + 0.1;
-    c.add(orb);
-    const cross = box(0.08, 0.32, 0.08, M.gold);
-    cross.position.y = orb.position.y + 0.27;
-    c.add(cross);
-    const crossB = box(0.24, 0.08, 0.08, M.gold);
-    crossB.position.y = orb.position.y + 0.3;
-    c.add(crossB);
     c.position.y = -H / 2 + cushH + 0.06;
     c.scale.setScalar(0.85);
     group.add(c);
     group.userData = { shape: 'crown', side, top: H / 2, bottom: H / 2, w: W, h: H, jewel: c };
     return group;
+  }
+
+  /** Cracks, worse with every hit (levels 1-3): dark jagged lines with pale chipped edges, tiling over the block. */
+  const crackMats = [1, 2, 3].map((level) => {
+    const c = canvas(256, 256);
+    const g = c.getContext('2d');
+    const r = rng(40 + level);
+    const crackLine = (x, y, a, len, w) => {
+      for (let pass = 0; pass < 2; pass++) {
+        g.strokeStyle = pass ? `rgba(18,12,10,${0.85})` : 'rgba(255,240,220,0.35)';
+        g.lineWidth = pass ? w : w + 2;
+        g.beginPath();
+        let px = x;
+        let py = y;
+        let aa = a;
+        g.moveTo(px, py);
+        const rr = rng(Math.floor(x * 7 + y * 13 + level));
+        for (let k = 0; k < len; k++) { aa += (rr() - 0.5) * 0.9; px += Math.cos(aa) * 9; py += Math.sin(aa) * 9; g.lineTo(px, py); }
+        g.stroke();
+      }
+    };
+    const n = level * 3 + 1;
+    for (let i = 0; i < n; i++) {
+      const x = r() * 256;
+      const y = r() * 256;
+      const a = r() * Math.PI * 2;
+      crackLine(x, y, a, 6 + level * 4, 1.4 + level * 0.5);
+      if (level > 1) crackLine(x, y, a + 2.4, 3 + level * 2, 1 + level * 0.3);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(0.34, 0.34);
+    return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  });
+  /** Shows a block's damage: cracks for what it has lost (0 = none). */
+  function crack(group, lost) {
+    const main = group.children[0];
+    if (!main) return;
+    let ov = group.userData.crackMesh;
+    if (!lost) { if (ov) ov.visible = false; return; }
+    if (!ov) {
+      ov = new THREE.Mesh(main.geometry, crackMats[0]);
+      ov.renderOrder = 2;
+      group.add(ov);
+      group.userData.crackMesh = ov;
+    }
+    ov.visible = true;
+    ov.material = crackMats[Math.min(3, lost) - 1];
   }
 
   /** A Perfek block's mark: a glowing gold seam where it sits cemented. */
@@ -518,5 +552,5 @@ export function createPieces(renderer) {
     return m;
   }
 
-  return { M, block, crown, seam, crane, blockGeometry, tint, team, velvet, ghost };
+  return { M, block, crown, seam, crack, crane, blockGeometry, tint, team, velvet, ghost };
 }

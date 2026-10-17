@@ -50,9 +50,9 @@ export function createHud({ onPause } = {}) {
   root.classList.add('bt');
   root.innerHTML = '';
   const top = el(`<div class="bt-top">
-    <div class="bt-side bt-me"><b class="bt-name">${T.you}</b><span class="bt-crown">${CROWN}</span><span class="bt-h">0 m</span><i class="bt-pow"></i></div>
-    <div class="bt-turn"><b>1/12</b><span>${T.yourTurn}</span></div>
-    <div class="bt-side bt-foe"><b class="bt-name">${T.rikus}</b><span class="bt-crown">${CROWN}</span><span class="bt-h">0 m</span><i class="bt-pow"></i></div>
+    <div class="bt-side bt-me"><b class="bt-name">${T.you}</b><span class="bt-crown">${CROWN}</span><span class="bt-h">0 m</span><span class="bt-str" title="${T.strength}"><i></i></span><i class="bt-pow"></i></div>
+    <div class="bt-turn"><b>12</b><small>${T.blocks}</small><span>${T.yourTurn}</span></div>
+    <div class="bt-side bt-foe"><b class="bt-name">${T.rikus}</b><span class="bt-crown">${CROWN}</span><span class="bt-h">0 m</span><span class="bt-str" title="${T.strength}"><i></i></span><i class="bt-pow"></i></div>
   </div>`);
   const corner = el(`<div class="bt-corner"><button class="bt-back" type="button" aria-label="Stapel">‹</button><button class="bt-pause" type="button" aria-label="${T.paused}"><i></i><i></i></button></div>`);
   const banner = el('<div class="bt-banner" aria-live="polite"><b></b><span></span></div>');
@@ -60,7 +60,8 @@ export function createHud({ onPause } = {}) {
   const tray = el('<div class="bt-tray"><div class="bt-pickt"></div><div class="bt-cards"></div><div class="bt-acts"></div></div>');
   const tap = el(`<div class="bt-tap"><button class="bt-cancel" type="button" aria-label="${T.back}">‹</button><div class="bt-tapt"><b></b><span></span></div></div>`);
   const modal = el('<div class="bt-modal" hidden></div>');
-  root.append(top, corner, banner, callouts, tray, tap, modal);
+  const scope = el(`<div class="bt-scope" aria-hidden="true"><small>${T.scope}</small></div>`);
+  root.append(top, corner, scope, banner, callouts, tray, tap, modal);
   corner.querySelector('.bt-pause').addEventListener('click', () => onPause?.());
   corner.querySelector('.bt-back').addEventListener('click', () => onPause?.(true));
 
@@ -72,17 +73,31 @@ export function createHud({ onPause } = {}) {
   return {
     root,
     /** Both sides' bars: { turn, of, active, sides: [{ h, crown: 'ok'|'danger'|'lost', power }] } */
-    setTop({ turn, of, active, sides }) {
-      top.querySelector('.bt-turn b').textContent = `${turn}/${of}`;
-      top.querySelector('.bt-turn span').textContent = active === 0 ? T.yourTurn : T.rikusTurn;
-      top.dataset.active = active;
+    setTop({ blocks, label, active, me = 0, sudden = false, sides }) {
+      top.querySelector('.bt-turn b').textContent = String(blocks);
+      top.querySelector('.bt-turn small').textContent = sudden ? T.sudden : T.blocks;
+      top.querySelector('.bt-turn span').textContent = label;
+      top.dataset.active = active === me ? 'me' : 'foe';
+      top.dataset.sudden = sudden ? '1' : '';
       sides.forEach((s, i) => {
         const e = sideEl[i];
         e.querySelector('.bt-h').textContent = `${s.h.toFixed(1).replace('.', LANG === 'en' ? '.' : ',')} m`;
         e.dataset.crown = s.crown;
+        if (s.str != null) {
+          const bar = e.querySelector('.bt-str');
+          const prev = Number(bar.dataset.v ?? 100);
+          bar.firstElementChild.style.width = `${s.str}%`;
+          bar.dataset.v = s.str;
+          bar.dataset.low = s.str < 35 ? '1' : '';
+          if (s.str < prev - 0.5) { bar.classList.remove('is-hit'); void bar.offsetWidth; bar.classList.add('is-hit'); }
+        }
         e.querySelector('.bt-pow').textContent = s.power > 0 ? T.power(s.power) : '';
       });
     },
+    /** The two sides' names (left and right). */
+    setNames(names) { sideEl.forEach((e, i) => { e.querySelector('.bt-name').textContent = names[i]; }); },
+    /** Which pill is you (its colour). */
+    setMe(me) { sideEl.forEach((e, i) => e.classList.toggle('is-me', i === me)); },
     /** The big banner in the middle (`sub` under it), gone after `ms`. */
     banner(text, { sub = '', kind = '', ms = 1500 } = {}) {
       banner.querySelector('b').textContent = text;
@@ -101,7 +116,7 @@ export function createHud({ onPause } = {}) {
       setTimeout(() => c.remove(), 1500);
     },
     /** The three cards; a tap picks one (it lifts and its powers show), then BUILD or THROW: onChoose(shape, action). */
-    showCards(cards, onChoose, { hint = '', selected = null } = {}) {
+    showCards(cards, onChoose, { hint = '', selected = null, throwOnly = false } = {}) {
       tray.querySelector('.bt-pickt').textContent = hint || T.pick;
       const wrap = tray.querySelector('.bt-cards');
       const acts = tray.querySelector('.bt-acts');
@@ -113,9 +128,10 @@ export function createHud({ onPause } = {}) {
         for (const c of wrap.children) c.classList.toggle('is-on', c.dataset.shape === shape);
         const p = T.powers[shape];
         const w = T.why[shape];
-        acts.innerHTML = `
-          <button class="bt-act bt-build" type="button" data-act="build">${ICON.build}<b>${T.build}</b><span>${p.build}</span><small>${w.build}</small></button>
+        acts.innerHTML = `${throwOnly ? '' : `
+          <button class="bt-act bt-build" type="button" data-act="build">${ICON.build}<b>${T.build}</b><span>${p.build}</span><small>${w.build}</small></button>`}
           <button class="bt-act bt-throw" type="button" data-act="throw">${ICON.throw}<b>${T.throw}</b><span>${p.throw}</span><small>${w.throw}</small></button>`;
+        acts.classList.toggle('is-one', throwOnly);
         for (const b of acts.querySelectorAll('button')) b.addEventListener('click', () => { if (picked) onChoose(picked, b.dataset.act); });
         onChoose(shape, null);
       };
@@ -138,6 +154,10 @@ export function createHud({ onPause } = {}) {
     },
     tapSub(sub) { tap.querySelector('span').textContent = sub || ''; },
     hideTap() { tap.classList.remove('is-on'); onCancel = null; },
+    /** The scope window over their tower (while pulling); gold when the arc is on their crown. */
+    scope(on, gold = false) { scope.classList.toggle('is-on', !!on); scope.classList.toggle('is-gold', !!gold); },
+    get scopeEl() { return scope; },
+    get scopeOn() { return scope.classList.contains('is-on'); },
     /** A card over everything: the tip, the pause, the result. */
     modal(html, handlers = {}) {
       modal.innerHTML = html;

@@ -10,12 +10,18 @@ export const PX = 25;   // px per metre (js/config.js PX_PER_M)
 export const G_STEP = 1.1 * 0.001 * (1000 / 60) ** 2;   // Stapel's gravity, px per step² (Matter at 60 Hz)
 
 /** The two sea stacks: side 0 (you) at -x, side 1 (Robot Rikus) at +x. Their flat tops are where the towers stand. */
-export const STACK = { x: 1000, topY: -300, w: 330, depth: 900 };
+export const STACK = { x: 1000, topY: -300, w: 380, depth: 900 };
 export const sideX = (side) => (side === 0 ? -STACK.x : STACK.x);
 export const towardFoe = (side) => (side === 0 ? 1 : -1);
 
-/** One battle: 12 turns each, you first. Both crowns still up after the last turn: the higher crown wins. */
-export const TURNS_EACH = 12;
+/**
+ * Blocks, not turns (the owner, 17 Oct 2026: "rather than making it 12 rounds lets make it just a certain amount of
+ * blocks"; "Lets make it about the crown, you need to throw it off"): each side has `base` blocks, every build or throw
+ * spends one, a Perfek build earns one back, each Perfek of today's Daily Tower adds one (at most `dailyMax` a game).
+ * When both are out: sudden death, a free throw each in turn (at most `sudden` each); no crown in the sea: a draw.
+ */
+export const BUDGET = { base: 12, dailyMax: 4, rikusBonus: 2, perfectBack: 1, sudden: 3 };
+export const TURNS_EACH = 12;   // (kept for older tests)
 
 /** The blocks the crane offers (three different ones a turn), Stapel's own shapes. */
 export const POOL = ['cube', 'plank', 'wedge', 'crate', 'pillar'];
@@ -40,7 +46,13 @@ export const POWERS = {
  * and a plank roof over them. A crown in the open falls to one good throw; this one has to be broken into first.
  * [shape, x offset from the stack's middle, which row]
  */
-export const START = [['plank', 0, 0], ['cube', -70, 1], ['crown', 0, 1], ['cube', 70, 1], ['plank', 0, 2]];
+export const START = [['plank', 0, 0], ['slab', 0, 1], ['cube', 0, 2]];
+/**
+ * Where things stand on a stack, px towards the foe from its middle (the owner, 17 Oct 2026: "the crown needs to be
+ * behind your tower not part of it"): the crown at the back, the tower in front of it as its shield.
+ */
+export const LAYOUT = { crown: -100, tower: 55 };
+export const towerX = (side) => sideX(side) + towardFoe(side) * LAYOUT.tower;
 export const CROWN = { w: 76, h: 58, density: 2.6 };
 
 /** The throw: the arc sweeps between these angles (above the horizontal), there and back in `period` seconds. */
@@ -50,7 +62,16 @@ export const AIM = { min: (11 * Math.PI) / 180, max: (84 * Math.PI) / 180, perio
  * Speed (px a step) = V0 x (1 + perM x tower metres above the stack) x (1 + lookouts) x the shape's own factor:
  * the taller the tower, the harder and further it throws.
  */
-export const LAUNCH = { out: 46, up: 120, V0: 25.6, perM: 0.008, air: 0.0006, maxSteps: 420 };
+export const LAUNCH = { out: 46, up: 120, V0: 18.4, perM: 0.008, air: 0.0006, maxSteps: 620 };
+/** A throw flies under this share of Stapel's gravity until it touches something: a slower, heavier arc (the owner:
+ * "you should not be able to throw that quick"); what it knocks over falls as fast as ever. */
+export const FLIGHT_G = 0.5;
+/**
+ * The pull (the owner, 17 Oct 2026: "The gooi is not interactive it feels so boring" → pull back and let go): drag
+ * back from anywhere; the pull (metres in the battle's plane) sets the angle (opposite the pull) and the power
+ * (its length / max). Shorter than `min`: no throw (let go to put it back).
+ */
+export const PULL = { max: 5.5, min: 0.7, powerMin: 0.22, angleMin: (3 * Math.PI) / 180, angleMax: (86 * Math.PI) / 180, show: 0.6 };
 /** A throw is Perfek when its arc (as drawn at the tap) runs into the foe's crown, or passes this close to it. */
 export const PERFECT_NEAR = 46;
 export const PERFECT_THROW_DENSITY = 1.4;
