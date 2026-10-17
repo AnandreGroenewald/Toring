@@ -173,7 +173,13 @@ function syncMeshes(alpha, dt) {
   }
 }
 const scr = new THREE.Vector3();
-const toScreen = (x, y, z = 0, r = stageEl.getBoundingClientRect()) => {
+// (the stage's size, measured when it changes, not every frame: reading it there forces the page's layout)
+let stageRect = stageEl.getBoundingClientRect();
+const stageBox = () => stageRect;
+const remeasure = () => { stageRect = stageEl.getBoundingClientRect(); };
+if (typeof ResizeObserver === 'function') new ResizeObserver(remeasure).observe(stageEl);
+addEventListener('resize', remeasure);
+const toScreen = (x, y, z = 0, r = stageBox()) => {
   scr.set(x, y, z).project(camera);
   return { x: ((scr.x + 1) / 2) * r.width, y: ((1 - scr.y) / 2) * r.height };
 };
@@ -205,7 +211,7 @@ function freeSpot(x, y, placed, b, under) {
 function callout(text, px, py, kind) {
   const p = new THREE.Vector3(px / PX, -py / PX + 2.2, 0);
   const now = performance.now();
-  const r = stageEl.getBoundingClientRect();
+  const r = stageBox();
   const clampX = (x) => Math.max(70, Math.min(r.width - 70, x));
   const s = toScreen(p.x, p.y, 0, r);
   const b = hud.bannerBox();
@@ -216,7 +222,7 @@ function callout(text, px, py, kind) {
 }
 function trackCallouts() {
   if (!calls.length) return;
-  const r = stageEl.getBoundingClientRect();
+  const r = stageBox();
   const clampX = (x) => Math.max(70, Math.min(r.width - 70, x));
   const now = performance.now();
   const b = hud.bannerBox();
@@ -1184,7 +1190,7 @@ function updateTarget() {
   let right = true;
   let text = '';
   if (on) {
-    const r = stageEl.getBoundingClientRect();
+    const r = stageBox();
     const sp = toScreen(towerX(FOE) / PX, topM(FOE) + 1, 0, r);
     on = sp.x > r.width - 12 || sp.x < 12;
     right = sp.x > r.width / 2;
@@ -1673,7 +1679,8 @@ function frame(now) {
   stage.render(dt);
   if (PROF) { avg('tick', t1 - t0); avg('fx', t2 - t1); avg('render', performance.now() - t2); PROF.draws = renderer.info.render.calls; window.__btProf = PROF; }
 }
-stage.warm(extras).then(() => {
+// (the cards' pictures too, behind the loading screen: the first turn's cards never freeze the battle)
+Promise.all([stage.warm(extras), pieces.prepareCards(skins[ME]).catch(() => {})]).then(() => {
   updateTop();
   requestAnimationFrame((t) => { last = t; frame(t); });
   setTimeout(() => { window.__btReady = true; }, 300);

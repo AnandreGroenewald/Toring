@@ -4,7 +4,9 @@
 // skin its own (gold, stone, marble, lava, ice, carbon, moss ...). Each shape keeps its character from Stapel: the
 // plank a long board with nails, the crate its frame and brace, the cube a recessed panel, the pillar its flutes and
 // capitals, the slab a stone with a groove, the wedge its strata. Painted per pixel once per shape and skin (a colour
-// picture and a height picture laid out like pieces.js's atlas), from small noise fields made once.
+// picture and a height picture laid out like pieces.js's atlas), from small noise fields made once. A skin whose look
+// takes the block's colour (painted timber, carbon's trim) keeps how much of the colour each pixel takes: another
+// colour of the same shape is then a quick sum per pixel, not a new painting (a town has three colours of a shape).
 import * as THREE from '../../lib/three.module.min.js';
 import { rng } from '../kasteel/world.js';
 import { PALETTE } from '../config.js';
@@ -13,35 +15,48 @@ const PAD = 3;   // (Stapel's texture edge, in its px)
 
 // -------------------------------------------------------------------------------------------- noise, made once
 // (value noise from lattices of random numbers, octave by octave: a few times quicker than a hash per point, which
-// matters on a phone at load; the same soft look as kasteel/world.js's fbm)
-const NF = 512;
+// matters on a phone at load; the same soft look as kasteel/world.js's fbm). Each lattice has a whole number of cells
+// across the field and wraps, so the field tiles: a painter reaching past its edge reads on, never a smeared edge.
+const NF = 512;   // (a power of two: the reads wrap with a mask)
+const NM = NF - 1;
 function makeField(seed, scale, oct) {
   const f = new Float32Array(NF * NF);
   const r = rng(seed * 7919 + 13);
   let amp = 1;
   let tot = 0;
   let freq = scale;
+  // (a column's lattice cells and blend are the same on every row: worked out once an octave)
+  const X0 = new Int32Array(NF);
+  const X1 = new Int32Array(NF);
+  const TX = new Float64Array(NF);
   for (let o = 0; o < oct; o++) {
-    const n = Math.ceil(NF * freq) + 2;   // (lattice cells across the field at this octave)
+    const n = Math.max(2, Math.round(NF * freq));   // (lattice cells across the field at this octave)
+    const step = n / NF;
     const lat = new Float32Array(n * n);
     for (let i = 0; i < lat.length; i++) lat[i] = r();
+    for (let x = 0; x < NF; x++) {
+      const fx = x * step;
+      const xi = Math.floor(fx);
+      const tx = fx - xi;
+      X0[x] = xi;
+      X1[x] = (xi + 1) % n;
+      TX[x] = tx * tx * (3 - 2 * tx);
+    }
     for (let y = 0; y < NF; y++) {
-      const fy = y * freq;
+      const fy = y * step;
       const yi = Math.floor(fy);
       let ty = fy - yi;
       ty = ty * ty * (3 - 2 * ty);
       const row0 = yi * n;
-      const row1 = row0 + n;
+      const row1 = ((yi + 1) % n) * n;
+      const at0 = y * NF;
       for (let x = 0; x < NF; x++) {
-        const fx = x * freq;
-        const xi = Math.floor(fx);
-        let tx = fx - xi;
-        tx = tx * tx * (3 - 2 * tx);
-        const a = lat[row0 + xi];
-        const b = lat[row0 + xi + 1];
-        const c = lat[row1 + xi];
-        const d = lat[row1 + xi + 1];
-        f[y * NF + x] += amp * (a + (b - a) * tx + (c - a) * ty + (a - b - c + d) * tx * ty);
+        const tx = TX[x];
+        const a = lat[row0 + X0[x]];
+        const b = lat[row0 + X1[x]];
+        const c = lat[row1 + X0[x]];
+        const d = lat[row1 + X1[x]];
+        f[at0 + x] += amp * (a + (b - a) * tx + (c - a) * ty + (a - b - c + d) * tx * ty);
       }
     }
     tot += amp;
@@ -56,17 +71,20 @@ function fields() {
   if (!FIELDS) FIELDS = { fine: makeField(1, 0.09, 3), mid: makeField(2, 0.035, 4), big: makeField(3, 0.012, 4) };
   return FIELDS;
 }
-/** A field at (x, y) (its px; no wrap needed: callers stay inside), bilinear. */
+/** A field at (x, y) (its px, wrapping round: the field tiles), bilinear. */
 function at(f, x, y) {
-  const xi = Math.max(0, Math.min(NF - 2, Math.floor(x)));
-  const yi = Math.max(0, Math.min(NF - 2, Math.floor(y)));
-  const tx = Math.min(1, Math.max(0, x - xi));
-  const ty = Math.min(1, Math.max(0, y - yi));
-  const i = yi * NF + xi;
-  const a = f[i];
-  const b = f[i + 1];
-  const c = f[i + NF];
-  const d = f[i + NF + 1];
+  const fx = Math.floor(x);
+  const fy = Math.floor(y);
+  const tx = x - fx;
+  const ty = y - fy;
+  const x0 = fx & NM;
+  const x1 = (fx + 1) & NM;
+  const r0 = (fy & NM) * NF;
+  const r1 = ((fy + 1) & NM) * NF;
+  const a = f[r0 + x0];
+  const b = f[r0 + x1];
+  const c = f[r1 + x0];
+  const d = f[r1 + x1];
   return a + (b - a) * tx + (c - a) * ty + (a - b - c + d) * tx * ty;
 }
 const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t);
@@ -83,7 +101,8 @@ function paintOf(hex) {
 
 // --------------------------------------------------------------------------------------------- the materials
 // A painter: (u, v) in Stapel px inside a w x h side, `e` the distance to its nearest edge, `o` an offset into the noise
-// (each block and side its own patch); writes colour (0-255) and height (0-1) into `out`.
+// (each block and side its own patch); writes colour (0-255) and height (0-1) into `out`. A skin that takes the block's
+// colour writes, in `out[4]`, how much of that colour the pixel takes (the colour is then out[0..2] + out[4] x it).
 const WOOD = [168, 132, 94];
 const WOOD_DARK = [118, 88, 60];
 function woodAt(u, v, o, along, out) {
@@ -99,8 +118,11 @@ function woodAt(u, v, o, along, out) {
   out[2] = mix(WOOD[2], WOOD_DARK[2], t);
   out[3] = 0.55 - t * 0.25;
 }
-/** Painted timber: the paint chipped off at the edges and in scratches, grime low down, the grain under the paint. */
-function paintedWood(paint) {
+/**
+ * Painted timber: the paint chipped off at the edges and in scratches, grime low down, the grain under the paint. The
+ * paint is the block's colour (out[4]: how much of it shows, shaded), the bare wood where it has worn.
+ */
+function paintedWood() {
   const w = [0, 0, 0, 0];
   return (u, v, W, H, e, o, side, out) => {
     const F = fields();
@@ -116,10 +138,11 @@ function paintedWood(paint) {
     const fade = side === 'cap' ? 1.08 : 1;
     const grime = sstep(H * 0.55, H, v) * 0.22 * (side === 'cap' ? 0 : 1) + (at(F.big, o + u * 2, o + v * 2) - 0.5) * 0.14;
     const k = (1 + brush) * fade * (1 - grime);
-    out[0] = mix(paint[0] * k, w[0], wear);
-    out[1] = mix(paint[1] * k, w[1], wear);
-    out[2] = mix(paint[2] * k, w[2], wear);
+    out[0] = w[0] * wear;
+    out[1] = w[1] * wear;
+    out[2] = w[2] * wear;
     out[3] = mix(0.75 + brush * 0.5, w[3] * 0.6, wear);   // (paint stands a little proud of the bare wood)
+    out[4] = k * (1 - wear);
   };
 }
 /** Cut stone: grains of several sizes, a soft bloom of lighter mineral, darker low down. */
@@ -199,8 +222,8 @@ function ice() {
     out[3] = 0.5 + frost * 0.3 - crack * 0.3;
   };
 }
-/** Carbon fibre: a 2x2 twill under a clear coat. */
-function carbon(accent) {
+/** Carbon fibre: a 2x2 twill under a clear coat, trimmed at the edges in the block's colour (out[4]). */
+function carbon() {
   return (u, v, W, H, e, o, side, out) => {
     const s = 3.2;
     const cx = Math.floor((u + v) / s);
@@ -209,10 +232,11 @@ function carbon(accent) {
     const fu = ((u + v) / s) % 1;
     const sheen = weave ? 0.6 + 0.4 * Math.sin(fu * Math.PI) : 0.35 + 0.25 * Math.sin(fu * Math.PI);
     const trim = sstep(1.6, 0.4, e);
-    out[0] = mix(26 * sheen + 10, accent[0], trim);
-    out[1] = mix(28 * sheen + 10, accent[1], trim);
-    out[2] = mix(32 * sheen + 12, accent[2], trim);
+    out[0] = (26 * sheen + 10) * (1 - trim);
+    out[1] = (28 * sheen + 10) * (1 - trim);
+    out[2] = (32 * sheen + 12) * (1 - trim);
     out[3] = 0.5 + (weave ? 0.08 : -0.08);
+    out[4] = trim;
   };
 }
 /** Moss on stone: green where rain and shade keep it (low and on top), the stone between. */
@@ -232,18 +256,19 @@ function mossy(stoneBase, moss) {
 }
 
 /**
- * The skins: which material and its settings (roughness, metalness; `glow` for an emissive picture). A skin left out
- * keeps Stapel's own picture (piksel, lekkergoed, neon, holo, heelal: drawn as they're meant to be).
+ * The skins: which material and its settings (roughness, metalness; `glow` for an emissive picture; `tint` the colour a
+ * skin takes from the block's own: painted timber its paint, carbon its trim). A skin left out keeps Stapel's own
+ * picture (piksel, lekkergoed, neon, holo, heelal: drawn as they're meant to be).
  */
 const SKINS = {
-  kleur: { paint: true, roughness: 0.62, metalness: 0 },
-  klip: { make: (c) => stone(c.base), roughness: 0.86, metalness: 0, base: (p) => [150, 145, 136] },
+  kleur: { make: () => paintedWood(), tint: (pal) => paintOf(pal.fill), roughness: 0.62, metalness: 0 },
+  klip: { make: () => stone([150, 145, 136]), roughness: 0.86, metalness: 0 },
   goud: { make: () => metal([236, 186, 74], 0.05), roughness: 0.2, metalness: 1 },
   chroom: { make: () => metal([214, 218, 226], 0.04), roughness: 0.1, metalness: 1 },
   marmer: { make: () => marble([236, 230, 220], [120, 118, 122]), roughness: 0.18, metalness: 0 },
   lawa: { make: () => lava(), roughness: 0.8, metalness: 0, glow: true },
   ys: { make: () => ice(), roughness: 0.08, metalness: 0.1 },
-  koolstof: { make: (c) => carbon(c.accent), roughness: 0.26, metalness: 0.2 },
+  koolstof: { make: () => carbon(), tint: (pal) => rgb(pal.fill), roughness: 0.26, metalness: 0.2 },
   mos: { make: () => mossy([128, 124, 112], [92, 128, 52]), roughness: 0.9, metalness: 0 },
 };
 export const hasMaterial = (skin) => Object.prototype.hasOwnProperty.call(SKINS, skin);
@@ -261,14 +286,16 @@ function detailOf(shape) {
     default: return {};
   }
 }
-/** How a shape's carving lifts or sinks the surface at (u, v) on its face (0 = flat): returns [height add, shade]. */
-function carve(d, u, v, W, H, side) {
+/** How a shape's carving lifts or sinks the surface at (u, v) on its face (0 = flat): [height add, shade] into `res`. */
+function carve(d, u, v, W, H, side, res) {
+  res[0] = 0;
+  res[1] = 0;
   if (side !== 'face') {
     if (d.caps && side === 'end') {   // (the pillar's capitals run round it)
       const t = v / H;
-      return [(sstep(0.07, 0.09, t) - sstep(0.91, 0.93, t)) * -0.15, 0];
+      res[0] = (sstep(0.07, 0.09, t) - sstep(0.91, 0.93, t)) * -0.15;
     }
-    return [0, 0];
+    return;
   }
   let h = 0;
   let shade = 0;
@@ -301,80 +328,156 @@ function carve(d, u, v, W, H, side) {
   }
   if (d.groove) { const g = sstep(1.6, 0.3, Math.abs(v - H * d.groove)); h -= g * 0.3; shade += g * 0.15; }
   if (d.strata) for (const s of d.strata) { const g = sstep(1.2, 0.2, Math.abs(v - H * s)); h -= g * 0.18; shade += g * 0.1; }
-  return [h, shade];
+  res[0] = h;
+  res[1] = shade;
+}
+/** The nail heads on a face (flat x, y pairs): the plank's at its ends, the crate's in its corners. */
+function nailPoints(d, w, h) {
+  return Array.isArray(d.nails) ? d.nails.flatMap(([x, fy]) => [x, h * fy, w - x, h * fy]) : [5, 5, w - 5, 5, 5, h - 5, w - 5, h - 5];
 }
 
 // -------------------------------------------------------------------------------------------------- painting
 /**
- * Paints one side (w x h Stapel px, its 3 px edge round it) at `k` canvas px per Stapel px into `col` / `hgt` (and
- * `glw` for an emissive picture) at (x0, y0). `side`: 'face' (front and back), 'end' (left and right) or 'cap'.
+ * Paints one side (w x h Stapel px, its 3 px edge round it) at `k` canvas px per Stapel px: its height into `hgt` (and
+ * its glow into `glw` for an emissive picture) at (x0, y0), and returns its colour as a recipe: per pixel a colour `B`
+ * and, for a skin that takes the block's colour, how much of that colour it takes (`A`; the pixel is B + A x colour).
+ * `side`: 'face' (front and back), 'end' (left and right) or 'cap'.
  */
-function paintSide(painter, d, shape, w, h, k, side, o, col, hgt, glw, x0, y0) {
+function paintSide(painter, d, w, h, k, side, o, tinted, hgt, glw, x0, y0) {
   const cw = Math.ceil((w + 2 * PAD) * k);
   const ch = Math.ceil((h + 2 * PAD) * k);
-  const cd = col.getImageData(x0, y0, cw, ch);
-  const hd = hgt.getImageData(x0, y0, cw, ch);
-  const gd = glw ? glw.getImageData(x0, y0, cw, ch) : null;
-  const out = [0, 0, 0, 0];
+  const B = new Float32Array(cw * ch * 3);
+  const A = tinted ? new Float32Array(cw * ch) : null;
+  const hd = hgt.createImageData(cw, ch);
+  const gd = glw ? glw.createImageData(cw, ch) : null;
+  const out = [0, 0, 0, 0, 0];
   const glow = [0, 0, 0];
-  const nails = d.nails && side === 'face';
+  const cut = [0, 0];
+  const nails = d.nails && side === 'face' ? nailPoints(d, w, h) : null;
   for (let py = 0; py < ch; py++) {
     const v = Math.min(h, Math.max(0, py / k - PAD));
     for (let px = 0; px < cw; px++) {
       const u = Math.min(w, Math.max(0, px / k - PAD));
       const e = Math.min(u, w - u, v, h - v);
       glow[0] = glow[1] = glow[2] = 0;
+      out[4] = 0;
       painter(u, v, w, h, e, o, side, out, glow);
-      const [ch2, sh] = carve(d, u, v, w, h, side);
-      let r = out[0] * (1 - sh);
-      let g = out[1] * (1 - sh);
-      let b = out[2] * (1 - sh);
-      let hh = out[3] + ch2;
+      carve(d, u, v, w, h, side, cut);
+      const s = 1 - cut[1];
+      let r = out[0] * s;
+      let g = out[1] * s;
+      let b = out[2] * s;
+      let a = out[4] * s;
+      let hh = out[3] + cut[0];
       if (nails) {   // (nail heads: the plank's at its ends, the crate's in its corners)
-        const pts = Array.isArray(d.nails) ? d.nails.flatMap(([x, fy]) => [[x, h * fy], [w - x, h * fy]]) : [[5, 5], [w - 5, 5], [5, h - 5], [w - 5, h - 5]];
-        for (const [nx, ny] of pts) {
-          const dd = Math.hypot(u - nx, v - ny);
-          if (dd < 2.1) { const t = 1 - dd / 2.1; r = mix(r, 58, 0.85); g = mix(g, 54, 0.85); b = mix(b, 52, 0.85); hh += t * 0.3; }
+        for (let j = 0; j < nails.length; j += 2) {
+          const dd = Math.hypot(u - nails[j], v - nails[j + 1]);
+          if (dd < 2.1) { const t = 1 - dd / 2.1; r = mix(r, 58, 0.85); g = mix(g, 54, 0.85); b = mix(b, 52, 0.85); a *= 0.15; hh += t * 0.3; }
         }
       }
-      const i = (py * cw + px) * 4;
-      cd.data[i] = r;
-      cd.data[i + 1] = g;
-      cd.data[i + 2] = b;
-      cd.data[i + 3] = 255;
+      const i = py * cw + px;
+      B[i * 3] = r;
+      B[i * 3 + 1] = g;
+      B[i * 3 + 2] = b;
+      if (A) A[i] = a;
+      const q = i * 4;
       const hv = clamp01(hh) * 255;
-      hd.data[i] = hd.data[i + 1] = hd.data[i + 2] = hv;
-      hd.data[i + 3] = 255;
-      if (gd) { gd.data[i] = glow[0]; gd.data[i + 1] = glow[1]; gd.data[i + 2] = glow[2]; gd.data[i + 3] = 255; }
+      hd.data[q] = hd.data[q + 1] = hd.data[q + 2] = hv;
+      hd.data[q + 3] = 255;
+      if (gd) { gd.data[q] = glow[0]; gd.data[q + 1] = glow[1]; gd.data[q + 2] = glow[2]; gd.data[q + 3] = 255; }
     }
   }
-  col.putImageData(cd, x0, y0);
   hgt.putImageData(hd, x0, y0);
   if (gd) glw.putImageData(gd, x0, y0);
+  return { x0, y0, cw, ch, B, A };
+}
+/** A side's colour from its recipe in colour `tint` ([r, g, b], or null for a skin that takes none) into `col`. */
+function colourSide(col, side, tint) {
+  const img = col.createImageData(side.cw, side.ch);
+  const px = img.data;
+  const { B, A } = side;
+  const [tr, tg, tb] = tint || [0, 0, 0];
+  for (let i = 0, n = side.cw * side.ch; i < n; i++) {
+    const a = A ? A[i] : 0;
+    const q = i * 4;
+    px[q] = B[i * 3] + a * tr;
+    px[q + 1] = B[i * 3 + 1] + a * tg;
+    px[q + 2] = B[i * 3 + 2] + a * tb;
+    px[q + 3] = 255;
+  }
+  col.putImageData(img, side.x0, side.y0);
 }
 
 const cv = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; };
+const ctx2d = (w, h) => cv(w, h).getContext('2d', { willReadFrequently: true });
+
+/** (tests) how many surfaces were painted in full, and how many only coloured from a painting already made */
+export const paintStats = { full: 0, coloured: 0 };
+/**
+ * Paintings already made (a shape in a skin at a size): their height and glow pictures, and how to colour them. A skin
+ * that takes no colour keeps its one colour picture; one that does keeps its recipes a few seconds (the colours a town
+ * asks for come together), then lets them go (they're big: four numbers a pixel).
+ */
+const paintings = new Map();
+const KEEP_MS = 4000;
+let sweepT = 0;
+function sweep() {
+  sweepT = 0;
+  const now = performance.now();
+  for (const [key, p] of paintings) if (p.tinted && now - p.at > KEEP_MS) paintings.delete(key);
+  if ([...paintings.values()].some((p) => p.tinted)) sweepT = setTimeout(sweep, KEEP_MS);
+}
+/**
+ * A painting: `sheets` [{ W, H, sides: [[w, h, side, offset, detail, x0, y0]] }] painted in `skin` (once per key), and
+ * each sheet's colour in `pal`'s colour. Returns [{ color, height, glow }] per sheet.
+ */
+function painting(key, skin, pal, sheets, k) {
+  const sk = SKINS[skin];
+  let p = paintings.get(key);
+  if (!p) {
+    const painter = sk.make();
+    p = {
+      tinted: !!sk.tint,
+      sheets: sheets.map(({ W, H, sides }) => {
+        const hgt = ctx2d(W, H);
+        const glw = sk.glow ? ctx2d(W, H) : null;
+        const done = sides.map(([w, h, side, o, d, x0, y0]) => paintSide(painter, d, w, h, k, side, o, !!sk.tint, hgt, glw, x0, y0));
+        return { W, H, sides: done, height: hgt.canvas, glow: glw?.canvas || null, color: null };
+      }),
+    };
+    paintings.set(key, p);
+    paintStats.full++;
+  } else paintStats.coloured++;
+  p.at = performance.now();
+  const tint = sk.tint ? sk.tint(pal) : null;
+  const res = p.sheets.map((sh) => {
+    if (sh.color) return { color: sh.color, height: sh.height, glow: sh.glow };
+    const col = ctx2d(sh.W, sh.H);
+    for (const side of sh.sides) colourSide(col, side, tint);
+    if (!tint) { sh.color = col.canvas; sh.sides = null; }   // (one colour picture for every colour: the recipe goes)
+    return { color: col.canvas, height: sh.height, glow: sh.glow };
+  });
+  if (p.tinted && !sweepT) sweepT = setTimeout(sweep, KEEP_MS);
+  return res;
+}
 
 /**
  * A box shape's surface in skin `skin`, laid out as pieces.js's atlas (`layout`: { W, H, face, end, cap } with each
- * region's `at` corner), `k` canvas px per Stapel px. Returns { color, height, glow, roughness, metalness } (canvases)
- * or null when the skin keeps Stapel's own picture.
+ * region's `at` corner), `k` canvas px per Stapel px, in colour `colorIndex`. Its wear and grain come from `seedColor`'s
+ * patch of the noise (the shape's own colour: a shape looks the same in every colour but its paint). Returns
+ * { color, height, glow, roughness, metalness } (canvases) or null when the skin keeps Stapel's own picture.
  */
-export function boxSurface(shape, skin, colorIndex, w, h, D, layout, k) {
+export function boxSurface(shape, skin, colorIndex, w, h, D, layout, k, seedColor = colorIndex) {
   const sk = SKINS[skin];
   if (!sk) return null;
   const pal = PALETTE[colorIndex] || PALETTE[0];
-  const col = cv(Math.ceil(layout.W), Math.ceil(layout.H)).getContext('2d', { willReadFrequently: true });
-  const hgt = cv(Math.ceil(layout.W), Math.ceil(layout.H)).getContext('2d', { willReadFrequently: true });
-  const glw = sk.glow ? cv(Math.ceil(layout.W), Math.ceil(layout.H)).getContext('2d', { willReadFrequently: true }) : null;
-  const painter = sk.paint ? paintedWood(paintOf(pal.fill)) : sk.make({ base: sk.base ? sk.base(pal) : null, accent: rgb(pal.fill) });
   const d = detailOf(shape);
-  const r = rng(colorIndex * 31 + shape.length * 7);
-  const off = () => 20 + r() * 260;   // (each side its own patch of the noise, inside the field)
-  paintSide(painter, d, shape, w, h, k, 'face', off(), col, hgt, glw, ...layout.face.at);
-  paintSide(painter, d, shape, D, h, k, 'end', off(), col, hgt, glw, ...layout.end.at);
-  paintSide(painter, d, shape, w, D, k, 'cap', off(), col, hgt, glw, ...layout.cap.at);
-  return { color: col.canvas, height: hgt.canvas, glow: glw?.canvas || null, roughness: sk.roughness, metalness: sk.metalness };
+  const r = rng(seedColor * 31 + shape.length * 7);
+  const off = () => 20 + r() * 260;   // (each side its own patch of the noise)
+  const sides = [[w, h, 'face', off(), d, ...layout.face.at], [D, h, 'end', off(), d, ...layout.end.at], [w, D, 'cap', off(), d, ...layout.cap.at]];
+  const key = `box|${shape}|${skin}|${k}|${seedColor}|${w}x${h}x${D}`;
+  const [s] = painting(key, skin, pal, [{ W: Math.ceil(layout.W), H: Math.ceil(layout.H), sides }], k);
+  return { ...s, roughness: sk.roughness, metalness: sk.metalness };
 }
 /** The wedge: its face (texW x texH like Stapel's own) and one wall panel (D x D), in skin `skin`; or null. */
 export function wedgeSurface(skin, colorIndex, geo, D, k) {
@@ -384,23 +487,29 @@ export function wedgeSurface(skin, colorIndex, geo, D, k) {
   const fw = Math.ceil(geo.texW * k);
   const fh = Math.ceil(geo.texH * k);
   const ww = Math.ceil((D + 2 * PAD) * k);
-  const face = { col: cv(fw, fh).getContext('2d', { willReadFrequently: true }), hgt: cv(fw, fh).getContext('2d', { willReadFrequently: true }) };
-  const wall = { col: cv(ww, ww).getContext('2d', { willReadFrequently: true }), hgt: cv(ww, ww).getContext('2d', { willReadFrequently: true }) };
-  const glow = sk.glow ? { face: cv(fw, fh).getContext('2d', { willReadFrequently: true }), wall: cv(ww, ww).getContext('2d', { willReadFrequently: true }) } : null;
-  const d = detailOf('wedge');
-  const painter = sk.paint ? paintedWood(paintOf(pal.fill)) : sk.make({ base: sk.base ? sk.base(pal) : null, accent: rgb(pal.fill) });
-  paintSide(painter, d, 'wedge', geo.w, geo.h, k, 'face', 90, face.col, face.hgt, glow?.face || null, 0, 0);
-  paintSide(painter, {}, 'wedge', D, D, k, 'cap', 170, wall.col, wall.hgt, glow?.wall || null, 0, 0);
-  return {
-    face: { color: face.col.canvas, height: face.hgt.canvas, glow: glow?.face.canvas || null },
-    wall: { color: wall.col.canvas, height: wall.hgt.canvas, glow: glow?.wall.canvas || null },
-    roughness: sk.roughness, metalness: sk.metalness,
-  };
+  const key = `wedge|${skin}|${k}|${geo.w}x${geo.h}x${D}`;
+  const [face, wall] = painting(key, skin, pal, [
+    { W: fw, H: fh, sides: [[geo.w, geo.h, 'face', 90, detailOf('wedge'), 0, 0]] },
+    { W: ww, H: ww, sides: [[D, D, 'cap', 170, {}, 0, 0]] },
+  ], k);
+  return { face, wall, roughness: sk.roughness, metalness: sk.metalness };
 }
 
 /** A material from a painted surface (a colour, a height for the light to catch, a glow where it has one). */
+const textures = new WeakMap();   // (a picture shared by several colours' materials is one texture: drawn up once)
 export function surfaceMaterial(s, aniso = 4) {
-  const tex = (c, srgb) => { const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = aniso; return t; };
+  const tex = (c, srgb) => {
+    const k = `${srgb ? 's' : 'l'}${aniso}`;
+    let byKind = textures.get(c);
+    if (!byKind) textures.set(c, (byKind = {}));
+    if (byKind[k]) return byKind[k];
+    const t = new THREE.CanvasTexture(c);
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = aniso;
+    t.userData.shared = true;
+    byKind[k] = t;
+    return t;
+  };
   const m = new THREE.MeshStandardMaterial({
     map: tex(s.color, true), bumpMap: tex(s.height, false), bumpScale: 2.2,
     roughness: s.roughness, metalness: s.metalness, envMapIntensity: s.metalness > 0.5 ? 1.6 : 0.9,

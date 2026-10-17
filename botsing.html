@@ -12,8 +12,9 @@
   <link rel="stylesheet" href="css/kasteel.css">
   <link rel="stylesheet" href="css/botsing.css">
   <script type="importmap">{ "imports": { "three": "./lib/three.module.min.js" } }</script>
-  <!-- (Stapel's own physics: Matter, inside Phaser's build) -->
-  <script src="lib/phaser.min.js"></script>
+  <!-- (Stapel's own physics: Matter, inside Phaser's build; deferred: the loading screen shows while it downloads, and it
+       still runs before the battle's module, which comes after it in the page) -->
+  <script defer src="lib/phaser.min.js"></script>
 </head>
 <body>
   <div id="k-stage">

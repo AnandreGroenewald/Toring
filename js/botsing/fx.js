@@ -147,7 +147,7 @@ export function createBattleFx(stage) {
     m.castShadow = true;
     m.visible = false;
     scene.add(m);
-    return { m, v: new THREE.Vector3(), w: new THREE.Vector3(), life: 0, wet: false };
+    return { m, v: new THREE.Vector3(), w: new THREE.Vector3(), life: 0, wet: false, rest: null };
   });
   let ki = 0;
   function chunks(p, material, { n = 10, size = 1, speed = 9, dir = null } = {}) {
@@ -163,6 +163,47 @@ export function createBattleFx(stage) {
       c.w.set(R() * 8, R() * 8, R() * 8);
       c.life = 4;
       c.wet = false;
+      c.rest = null;
+    }
+  }
+  /**
+   * A piece meeting the rock (the world's `scene.userData.solids`: a sea stack or an island, { x, z, top,
+   * radiusAt(y, angle) }): from above it lands on the top, bounces a little and lies there; against a cliff it glances
+   * off and drops on into the sea. (It never falls through the rock to splash unseen inside it.)
+   */
+  function meetRock(c, wasY, solids) {
+    const p = c.m.position;
+    for (const s of solids) {
+      if (p.y > s.top + 0.6) continue;
+      const dx = p.x - s.x;
+      const dz = p.z - s.z;
+      const r = s.radiusAt(Math.min(p.y, s.top), Math.atan2(dx, dz));
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= r * r) continue;
+      const half = 0.25 * c.m.scale.y;
+      if (wasY >= s.top - 0.1) {   // (from above: on to the top)
+        if (p.y > s.top + half) return;
+        p.y = s.top + half;
+        if (c.v.y < -3) {
+          c.v.set(c.v.x * 0.5, -c.v.y * 0.3, c.v.z * 0.5);
+          c.w.multiplyScalar(0.5);
+        } else {
+          c.v.set(0, 0, 0);
+          c.m.rotation.x = 0;
+          c.m.rotation.z = 0;
+          c.rest = c.m.scale.clone();
+        }
+      } else {   // (against the cliff: out to its face, its push turned away from it)
+        const d = Math.sqrt(d2) || 0.001;
+        p.x = s.x + (dx / d) * r;
+        p.z = s.z + (dz / d) * r;
+        const into = (c.v.x * dx + c.v.z * dz) / d;
+        if (into < 0) {
+          c.v.x -= 1.5 * into * (dx / d);
+          c.v.z -= 1.5 * into * (dz / d);
+        }
+      }
+      return;
     }
   }
   // the shot's trail
@@ -207,9 +248,92 @@ export function createBattleFx(stage) {
   let arcFlow = 0;
   let arcPerfect = false;
 
-  // 🌿 vines: they climb over the rock's edge (where they drag to), loop round the block and pull; tubes rebuilt as
-  // their ends move (every other frame), growing in, fading out; a lasso round each block they hold
+  // 🌿 vines: they climb over the rock's edge (where they drag to), loop round the block and pull; each a tube made once
+  // and bent in place as its end moves (every other frame), growing in, fading out; a lasso round each block they hold
   const VINE_N = 8;
+  const TUBE_SEG = 48;   // (rings along a vine)
+  const TUBE_RAD = 6;    // (sides round it)
+  const TWIST_N = 22;    // (points on its twisting path)
+  /** A tube's geometry, made once: its points and normals rewritten as the vine moves (TubeGeometry's layout). */
+  function tubeGeometry() {
+    const g = new THREE.BufferGeometry();
+    const n = (TUBE_SEG + 1) * (TUBE_RAD + 1);
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage));
+    const uv = [];
+    for (let i = 0; i <= TUBE_SEG; i++) for (let j = 0; j <= TUBE_RAD; j++) uv.push(i / TUBE_SEG, j / TUBE_RAD);
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    const idx = [];
+    for (let j = 1; j <= TUBE_SEG; j++) {
+      for (let i = 1; i <= TUBE_RAD; i++) {
+        const a = (TUBE_RAD + 1) * (j - 1) + (i - 1);
+        const b = (TUBE_RAD + 1) * j + (i - 1);
+        const c = (TUBE_RAD + 1) * j + i;
+        const d = (TUBE_RAD + 1) * (j - 1) + i;
+        idx.push(a, b, d, b, c, d);
+      }
+    }
+    g.setIndex(idx);
+    g.setDrawRange(0, 0);
+    return g;
+  }
+  // (the frames along a tube: tangent, normal, binormal at each ring, carried along without twisting)
+  const tR = Array.from({ length: TUBE_SEG + 1 }, () => new THREE.Vector3());
+  const tT = Array.from({ length: TUBE_SEG + 1 }, () => new THREE.Vector3());
+  const tN = Array.from({ length: TUBE_SEG + 1 }, () => new THREE.Vector3());
+  const tB = Array.from({ length: TUBE_SEG + 1 }, () => new THREE.Vector3());
+  const tP = new THREE.Vector3();
+  const tV = new THREE.Vector3();
+  const RING_SIN = Array.from({ length: TUBE_RAD + 1 }, (_, j) => Math.sin((j / TUBE_RAD) * Math.PI * 2));
+  const RING_COS = Array.from({ length: TUBE_RAD + 1 }, (_, j) => -Math.cos((j / TUBE_RAD) * Math.PI * 2));
+  /**
+   * Bends a tube geometry along `curve`, `radius` thick: its rings evenly along the curve's own parameter (the points
+   * it runs through are evenly spaced already: no arc-length tables to remake every time it moves), each ring's
+   * direction from its neighbours.
+   */
+  function bendTube(geo, curve, radius) {
+    for (let i = 0; i <= TUBE_SEG; i++) curve.getPoint(i / TUBE_SEG, tR[i]);
+    for (let i = 0; i <= TUBE_SEG; i++) tT[i].subVectors(tR[Math.min(TUBE_SEG, i + 1)], tR[Math.max(0, i - 1)]).normalize();
+    // (the first normal: across the tangent's smallest direction, as three.js picks it; then each ring's, turned with it)
+    const t0 = tT[0];
+    let min = Infinity;
+    if (Math.abs(t0.x) <= min) { min = Math.abs(t0.x); tV.set(1, 0, 0); }
+    if (Math.abs(t0.y) <= min) { min = Math.abs(t0.y); tV.set(0, 1, 0); }
+    if (Math.abs(t0.z) <= min) tV.set(0, 0, 1);
+    tP.crossVectors(t0, tV).normalize();
+    tN[0].crossVectors(t0, tP);
+    tB[0].crossVectors(t0, tN[0]);
+    for (let i = 1; i <= TUBE_SEG; i++) {
+      tN[i].copy(tN[i - 1]).addScaledVector(tT[i], -tN[i - 1].dot(tT[i]));
+      if (tN[i].lengthSq() < 1e-10) tN[i].copy(tN[i - 1]);
+      tN[i].normalize();
+      tB[i].crossVectors(tT[i], tN[i]);
+    }
+    const pos = geo.attributes.position.array;
+    const nor = geo.attributes.normal.array;
+    let q = 0;
+    for (let i = 0; i <= TUBE_SEG; i++) {
+      const P = tR[i];
+      const N = tN[i];
+      const B = tB[i];
+      for (let j = 0; j <= TUBE_RAD; j++) {
+        const sin = RING_SIN[j];
+        const cos = RING_COS[j];
+        const nx = cos * N.x + sin * B.x;
+        const ny = cos * N.y + sin * B.y;
+        const nz = cos * N.z + sin * B.z;
+        nor[q] = nx;
+        nor[q + 1] = ny;
+        nor[q + 2] = nz;
+        pos[q] = P.x + radius * nx;
+        pos[q + 1] = P.y + radius * ny;
+        pos[q + 2] = P.z + radius * nz;
+        q += 3;
+      }
+    }
+    geo.attributes.position.needsUpdate = true;
+    geo.attributes.normal.needsUpdate = true;
+  }
   const vineMat = new THREE.MeshStandardMaterial({ color: '#4cbb36', emissive: '#16420f', emissiveIntensity: 0.35, roughness: 0.6, transparent: true, opacity: 1 });
   // (their leaves: one instanced mesh, eight leaves along each vine, opening as it grows)
   const LEAVES = 12;
@@ -248,15 +372,20 @@ export function createBattleFx(stage) {
   const ls = new THREE.Vector3();
   const lp = new THREE.Vector3();
   const vinePool = Array.from({ length: VINE_N }, () => {
-    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), vineMat.clone());
+    const mesh = new THREE.Mesh(tubeGeometry(), vineMat.clone());
     mesh.visible = false;
     mesh.castShadow = true;
     mesh.frustumCulled = false;
     scene.add(mesh);
-    return { mesh, from: new THREE.Vector3(), rim: new THREE.Vector3(), target: null, t: 0, hold: null, fade: 0, seed: 0, tick: 0, side: 1, lasso: null };
+    // (its two curves, made once and moved: the way it climbs, and that way twisted)
+    const base = new THREE.CatmullRomCurve3(Array.from({ length: 5 }, () => new THREE.Vector3()));
+    base.arcLengthDivisions = 60;   // (five points: plenty to space the twist evenly along it)
+    const path = new THREE.CatmullRomCurve3(Array.from({ length: TWIST_N + 1 }, () => new THREE.Vector3()));
+    return { mesh, base, path, from: new THREE.Vector3(), rim: new THREE.Vector3(), target: null, t: 0, hold: null, fade: 0, seed: 0, tick: 0, side: 1, lasso: null };
   });
   let vi = 0;
   const vEnd = new THREE.Vector3();
+  const vTmp = new THREE.Vector3();
   const lassoGeo = new THREE.TorusGeometry(1, 0.11, 6, 28);
   lassoGeo.rotateX(Math.PI / 2);   // (round the block, level)
   const lassoPool = Array.from({ length: 4 }, () => {
@@ -288,16 +417,20 @@ export function createBattleFx(stage) {
       vEnd.z += vn.zo * 0.6;
       const grow = Math.min(1, vn.t / 0.4);
       // from the cliff, over the rim, a loop up and across, down onto the block
-      const over = vn.rim.clone().add(new THREE.Vector3(-vn.side * 0.6, 0.9, 0));
-      const mid = over.clone().lerp(vEnd, 0.5).add(new THREE.Vector3(0, 1.2 + Math.sin(vn.seed) * 0.5, 0.3 * vn.zo));
+      const [b0, b1, over, mid, b4] = vn.base.points;
+      b0.copy(vn.from);
+      b1.copy(vn.rim);
+      over.copy(vn.rim).add(vTmp.set(-vn.side * 0.6, 0.9, 0));
+      mid.copy(over).lerp(vEnd, 0.5).add(vTmp.set(0, 1.2 + Math.sin(vn.seed) * 0.5, 0.3 * vn.zo));
+      b4.copy(vEnd);
+      vn.base.updateArcLengths();
       // (a vine, not a pipe: it twists round its path as it climbs, more at the tip, and sways while it pulls)
-      const base = new THREE.CatmullRomCurve3([vn.from.clone(), vn.rim.clone(), over, mid, vEnd.clone()]);
-      const pts = [];
-      const N = 22;
+      const pts = vn.path.points;
+      const N = TWIST_N;
       const sway = Math.sin(vn.t * 5 + vn.seed) * 0.12;
       for (let i = 0; i <= N; i++) {
         const t = i / N;
-        const p = base.getPointAt(t);
+        const p = vn.base.getPointAt(t, pts[i]);
         if (i > 0 && i < N) {
           const a = t * Math.PI * 2 * 3.2 + vn.seed;
           const amp = 0.18 + 0.22 * t;
@@ -305,17 +438,15 @@ export function createBattleFx(stage) {
           p.y += Math.sin(a * 0.5) * amp * 0.35;
           p.z += Math.sin(a) * amp;
         }
-        pts.push(p);
       }
-      const curve = new THREE.CatmullRomCurve3(pts);
-      vn.mesh.geometry.dispose();
-      vn.mesh.geometry = new THREE.TubeGeometry(curve, 48, 0.15 * (1 - vn.fade), 6);
+      const curve = vn.path;
+      bendTube(vn.mesh.geometry, curve, 0.15 * (1 - vn.fade));
       vn.mesh.geometry.setDrawRange(0, Math.floor(vn.mesh.geometry.index.count * grow));
       vn.mesh.material.opacity = 1 - vn.fade / 0.6;
       for (let L = 0; L < LEAVES; L++) {
         const tt = 0.1 + (L / (LEAVES - 1)) * 0.82;
         if (tt > grow) { leafMesh.setMatrixAt(idx * LEAVES + L, noLeaf); continue; }
-        curve.getPointAt(tt, lp);
+        curve.getPoint(tt, lp);
         le.set(vn.seed * 3 + L * 1.9, vn.seed + L * 2.3, L * 0.7 + vn.seed);
         lq.setFromEuler(le);
         const sc = (1 - vn.fade / 0.6) * (0.95 + ((L * 37 + Math.floor(vn.seed * 10)) % 5) * 0.14);
@@ -507,8 +638,8 @@ export function createBattleFx(stage) {
   let fireAt = null;
 
   const api = {
-    /** Where a block meets the sea: spray (bigger for a heavier, faster block), a foam ring. */
-    splash(x, { size = 1, z = 0 } = {}) {
+    /** Where a block meets the sea: spray (bigger for a heavier, faster block), foam rings (`rings`: 1 for a small piece). */
+    splash(x, { size = 1, z = 0, rings: nRings = 2 } = {}) {
       const s = Math.min(2.2, size);
       const n = Math.round(26 + s * 30);
       for (let i = 0; i < n; i++) {
@@ -521,7 +652,7 @@ export function createBattleFx(stage) {
         spray.spawn(tmp.set(x + (R() - 0.5) * 2 * s, 0.5, z + (R() - 0.5) * 2 * s), v.set((R() - 0.5) * 2, 1 + R() * 2, (R() - 0.5) * 2), { life: 2.2, size: 2.5 * s, size1: 5 * s, color: '#e9eef2', alpha: 0.45, g: 0, drag: 1 });
       }
       ring({ x, z }, { s0: 1.5 * s, s1: 9 * s, life: 2.2 });
-      ring({ x, z }, { s0: 0.8 * s, s1: 5 * s, life: 1.4 });
+      if (nRings > 1) ring({ x, z }, { s0: 0.8 * s, s1: 5 * s, life: 1.4 });
     },
     /** The crate's explosion at p (metres). */
     /**
@@ -743,18 +874,27 @@ export function createBattleFx(stage) {
         if (!r.flat && camera) r.m.quaternion.copy(camera.quaternion);   // (a standing shockwave faces you)
         r.m.material.opacity = (1 - k) ** 1.4 * 0.9;
       }
+      const solids = scene.userData.solids;
       for (const c of chunkPool) {
         if (!c.m.visible) continue;
         c.life -= dt;
+        const p = c.m.position;
+        if (c.rest) {   // (lying on the rock: at its end it shrinks away)
+          if (c.life < 0.4) c.m.scale.copy(c.rest).multiplyScalar(Math.max(0.001, c.life / 0.4));
+          if (c.life <= 0) c.m.visible = false;
+          continue;
+        }
         c.v.y -= 22 * dt;
-        if (c.m.position.y < 0) {
-          if (!c.wet) { c.wet = true; c.v.multiplyScalar(0.2); this.splash(c.m.position.x, { size: 0.25, z: c.m.position.z }); }
+        const wasY = p.y;
+        if (p.y < 0) {
+          if (!c.wet) { c.wet = true; c.v.multiplyScalar(0.2); this.splash(p.x, { size: 0.25, z: p.z, rings: 1 }); }
           c.v.y = Math.max(c.v.y, -2.5);
         }
-        c.m.position.addScaledVector(c.v, dt);
+        p.addScaledVector(c.v, dt);
         c.m.rotation.x += c.w.x * dt;
         c.m.rotation.y += c.w.y * dt;
-        if (c.life <= 0 || c.m.position.y < -6) c.m.visible = false;
+        if (solids && p.y > 0) meetRock(c, wasY, solids);
+        if (c.life <= 0 || p.y < -6) c.m.visible = false;
       }
       if (trailOf) {
         trailT += dt;

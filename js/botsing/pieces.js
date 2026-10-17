@@ -9,7 +9,7 @@ import { rng } from '../kasteel/world.js';
 import { blockFaceCanvas, blockPanelCanvas, getGeometry } from '../game/blocks.js';
 import { boxSurface, wedgeSurface, surfaceMaterial, hasMaterial } from './materials.js';
 import { shapeInfo } from './sim.js';
-import { PX, sideX, towardFoe, SHAPE_COLOR, ELEMENT } from './rules.js';
+import { PX, sideX, towardFoe, SHAPE_COLOR, ELEMENT, POOL, ELEMENTS } from './rules.js';
 import { merge, STACK_TOP } from './world.js';
 
 export const DEPTH = 3.2;   // every block is this deep (m)
@@ -327,7 +327,9 @@ export function createPieces(renderer) {
     const texW = s.w + 2 * PAD;
     const texH = s.h + 2 * PAD;
     // (its walls: each one panel wide along the block's depth and its own length, no tiling seam; u across the
-    // depth, v along the wall, upwards where it climbs; the corner's bevel goes with the nearer wall)
+    // depth, v along the wall, upwards where it climbs; the corner's bevel goes with the nearer wall. A triangle at a
+    // time (the geometry has no shared points): a corner lies on two walls, so all three of a triangle's points take
+    // the wall its middle is on, else one would run the next wall's picture across this one)
     const walls = pts.map((a, i) => {
       const b = pts[(i + 1) % pts.length];
       const d = b.clone().sub(a);
@@ -337,28 +339,30 @@ export function createPieces(renderer) {
       return { a: up ? b : a, d: up ? d.clone().negate() : d, len, n: new THREE.Vector2(d.y, -d.x) };
     });
     const zHalf = depth / 2;
-    for (let i = 0; i < uv.count; i++) {
-      const nz = nor.getZ(i);
-      const x = pos.getX(i);
-      const y = pos.getY(i);
-      if (Math.abs(nz) >= 0.7) {
-        const px = x * PX + s.cx;
-        const py = s.cy - y * PX;
-        uv.setXY(i, (PAD + px) / texW, 1 - (PAD + py) / texH);
+    const alongOf = (w, x, y) => Math.max(0, Math.min(w.len, (x - w.a.x) * w.d.x + (y - w.a.y) * w.d.y));
+    for (let t = 0; t + 2 < uv.count; t += 3) {
+      if (Math.abs(nor.getZ(t)) >= 0.7) {   // (the front and back: Stapel's own picture)
+        for (let i = t; i < t + 3; i++) {
+          const px = pos.getX(i) * PX + s.cx;
+          const py = s.cy - pos.getY(i) * PX;
+          uv.setXY(i, (PAD + px) / texW, 1 - (PAD + py) / texH);
+        }
         continue;
       }
-      let best = null;
+      const mx = (pos.getX(t) + pos.getX(t + 1) + pos.getX(t + 2)) / 3;
+      const my = (pos.getY(t) + pos.getY(t + 1) + pos.getY(t + 2)) / 3;
+      let best = walls[0];
       let bestD = Infinity;
-      for (const w of walls) {   // (the wall this point lies on: the nearest line)
-        const rx = x - w.a.x;
-        const ry = y - w.a.y;
-        const along = Math.max(0, Math.min(w.len, rx * w.d.x + ry * w.d.y));
-        const dd = Math.hypot(rx - w.d.x * along, ry - w.d.y * along);
-        if (dd < bestD) { bestD = dd; best = { w, along }; }
+      for (const w of walls) {   // (the wall this triangle lies on: the nearest line to its middle)
+        const along = alongOf(w, mx, my);
+        const dd = Math.hypot(mx - w.a.x - w.d.x * along, my - w.a.y - w.d.y * along);
+        if (dd < bestD) { bestD = dd; best = w; }
       }
-      const u = (pos.getZ(i) + zHalf) / depth;
-      const v = best.along / best.w.len;
-      uv.setXY(i, ((PAD - 1) + u * (D_PX + 2)) / (D_PX + 2 * PAD), ((PAD - 1) + v * (D_PX + 2)) / (D_PX + 2 * PAD));
+      for (let i = t; i < t + 3; i++) {
+        const u = (pos.getZ(i) + zHalf) / depth;
+        const v = alongOf(best, pos.getX(i), pos.getY(i)) / best.len;
+        uv.setXY(i, ((PAD - 1) + u * (D_PX + 2)) / (D_PX + 2 * PAD), ((PAD - 1) + v * (D_PX + 2)) / (D_PX + 2 * PAD));
+      }
     }
     g.computeVertexNormals();
     g.userData.shared = true;
@@ -384,7 +388,8 @@ export function createPieces(renderer) {
     const chipFrom = (c) => { const g = c.getContext('2d'); const d = g.getImageData(Math.floor(c.width * 0.3), Math.floor(c.height * 0.2), 4, 4).data; return new THREE.Color(`rgb(${d[0]},${d[1]},${d[2]})`); };
     if (hasMaterial(skin) && BOX.has(shape)) {
       const L = atlasLayout(s, paintK);
-      const sf = boxSurface(shape, skin, color, s.w, s.h, D, L, paintK);
+      // (its wear and grain from the shape's own colour: every colour of a shape is painted from the one painting)
+      const sf = boxSurface(shape, skin, color, s.w, s.h, D, L, paintK, SHAPE_COLOR[shape] ?? color);
       mats = surfaceMaterial(sf, aniso);
       mats.chipColor = chipFrom(sf.color);
     } else if (hasMaterial(skin)) {
@@ -606,7 +611,9 @@ export function createPieces(renderer) {
   }
   /**
    * (cards) the block itself, rendered in 3D as it is in the battle (its real material, its emblem), a three-quarter
-   * view against nothing: a data URL. A small renderer of its own, made the first time (the cards keep up with the look).
+   * view against nothing: a picture's URL. A small renderer of its own, made the first time (the cards keep up with the
+   * look). `prepareCards(skin)` makes them all ahead, behind the loading screen (their pictures encoded off the page's
+   * own thread): the first cards of a battle show at once instead of stopping it while their renderer starts.
    */
   let thumb = null;
   function thumbKit() {
@@ -636,29 +643,69 @@ export function createPieces(renderer) {
     return thumb;
   }
   const cardCache = new Map();
+  /** Draws one card's block into the card renderer's canvas (and returns the canvas). */
+  function drawCard(shape, element, skin) {
+    const { r, sc, cam, c } = thumbKit();
+    const g = block(shape, 0, element, skin);
+    g.rotation.set(0.22, -0.5, 0);
+    sc.add(g);
+    const box = new THREE.Box3().setFromObject(g);
+    const size = box.getSize(new THREE.Vector3());
+    const mid = box.getCenter(new THREE.Vector3());
+    const fit = Math.max(size.x / 1.5, size.y) * 0.5 / Math.tan((cam.fov * Math.PI) / 360);
+    cam.position.set(mid.x, mid.y + size.y * 0.08, mid.z + fit * 1.06 + size.z * 0.5);
+    cam.lookAt(mid);
+    r.render(sc, cam);
+    sc.remove(g);
+    g.traverse((o) => { if (o.geometry && !o.geometry.userData?.shared) o.geometry.dispose(); });   // (its own straps, fuse)
+    return c;
+  }
   function cardImage(shape, element, skin) {
     const k = `${shape}|${element}|${skin}`;
     if (cardCache.has(k)) return cardCache.get(k);
     let url = '';
     try {
-      const { r, sc, cam, c } = thumbKit();
-      const g = block(shape, 0, element, skin);
-      g.rotation.set(0.22, -0.5, 0);
-      sc.add(g);
-      const box = new THREE.Box3().setFromObject(g);
-      const size = box.getSize(new THREE.Vector3());
-      const mid = box.getCenter(new THREE.Vector3());
-      const fit = Math.max(size.x / 1.5, size.y) * 0.5 / Math.tan((cam.fov * Math.PI) / 360);
-      cam.position.set(mid.x, mid.y + size.y * 0.08, mid.z + fit * 1.06 + size.z * 0.5);
-      cam.lookAt(mid);
-      r.render(sc, cam);
-      sc.remove(g);
-      url = c.toDataURL('image/png');
+      url = drawCard(shape, element, skin).toDataURL('image/png');
     } catch {
       url = '';   // (no 3D for the cards: the picture stays empty, the name still shows)
     }
     cardCache.set(k, url);
     return url;
+  }
+  /** Every card in `skin` made ahead (the shaders compiled first, a few cards a turn of the page's loop); resolves when done. */
+  async function prepareCards(skin) {
+    const later = () => new Promise((res) => setTimeout(res, 0));
+    try {
+      const { r, sc, cam } = thumbKit();
+      const all = new THREE.Group();   // (one block of every element: each kind of material compiled, in parallel where it can)
+      ELEMENTS.forEach((el, i) => { const g = block(POOL[i % POOL.length], 0, el, skin); g.position.x = i * 6; all.add(g); });
+      sc.add(all);
+      await r.compileAsync(sc, cam);
+      sc.remove(all);
+    } catch {
+      return;   // (no 3D for the cards: each is tried when it's first shown)
+    }
+    const waits = [];
+    let n = 0;
+    for (const shape of POOL) {
+      for (const el of ELEMENTS) {
+        const k = `${shape}|${el}|${skin}`;
+        if (cardCache.has(k)) continue;
+        try {
+          const c = drawCard(shape, el, skin);
+          // (the picture is taken now; its encoding happens off the page's thread; kept as a data URL, as before)
+          waits.push(new Promise((res) => c.toBlob((b) => {
+            if (!b) { res(); return; }
+            const fr = new FileReader();
+            fr.onload = () => { if (!cardCache.has(k) && typeof fr.result === 'string') cardCache.set(k, fr.result); res(); };
+            fr.onerror = () => res();
+            fr.readAsDataURL(b);
+          }, 'image/png')));
+        } catch { /* made when it's first shown */ }
+        if (++n % 4 === 0) await later();
+      }
+    }
+    await Promise.all(waits);
   }
 
   /**
@@ -935,7 +982,7 @@ export function createPieces(renderer) {
     if (glassy) { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.repeat.set(1, 1); }
     return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   }
-  /** Shows a block's damage: cracks for what it has lost (0 = none). */
+  /** Shows a block's damage: cracks for what it has lost (0 = none). (On its main mesh: they sit where it sits.) */
   function crack(group, lost) {
     const main = group.children[0];
     if (!main) return;
@@ -944,7 +991,7 @@ export function createPieces(renderer) {
     if (!ov) {
       ov = new THREE.Mesh(main.geometry, crackMats[0]);
       ov.renderOrder = 2;
-      group.add(ov);
+      main.add(ov);
       group.userData.crackMesh = ov;
     }
     ov.visible = true;
@@ -961,7 +1008,10 @@ export function createPieces(renderer) {
     return s;
   }
 
-  /** A burning block's soot: a dark film over it, deeper the longer it burns (0-1). */
+  /**
+   * A burning block's soot: a dark film over it, deeper the longer it burns (0-1). On its main mesh, so it lies where
+   * that mesh lies (the crown's is its plinth, low in the cabinet: the film never floats through the glass).
+   */
   function soot(group, k) {
     const main = group.children[0];
     if (!main) return;
@@ -969,7 +1019,7 @@ export function createPieces(renderer) {
     if (!ov) {
       ov = new THREE.Mesh(main.geometry, new THREE.MeshBasicMaterial({ color: '#120804', transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
       ov.renderOrder = 2;
-      group.add(ov);
+      main.add(ov);
       group.userData.soot = ov;
     }
     ov.material.opacity = Math.min(0.55, k * 0.55);
@@ -1341,5 +1391,5 @@ export function createPieces(renderer) {
   for (const g of [medalMetalGeo, medalFaceGeo]) g.userData.shared = true;
   /** (behind the loading screen) a shape's material in a skin made now, not on its first use (no stall mid-game). */
   const prepare = (shape, skin, colorIndex = null, paintK = PAINT_K) => { faceMaterials(shape, skin, colorIndex, paintK); };
-  return { M, block, crown, seam, crack, glassCrack, glassBreak, soot, vineWrap, springCoil, dropCoil, waterSkin, drySkin, tick, crane, pin, blockGeometry, cardImage, team, velvet, ghost, crownMark, prepare };
+  return { M, block, crown, seam, crack, glassCrack, glassBreak, soot, vineWrap, springCoil, dropCoil, waterSkin, drySkin, tick, crane, pin, blockGeometry, cardImage, prepareCards, team, velvet, ghost, crownMark, prepare };
 }

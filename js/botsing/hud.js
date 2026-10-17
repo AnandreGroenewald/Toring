@@ -75,6 +75,17 @@ export function createHud({ onPause } = {}) {
   let bannerT = null;
   let onCancel = null;
   tap.querySelector('.bt-cancel').addEventListener('click', () => onCancel?.());
+  // (sizes read once and again only when the screen changes, never in the middle of a frame's writes: the page isn't
+  // made to lay itself out again for every call-out and every frame of the aim)
+  let width = 0;
+  let bannerAt = null;
+  const measure = () => { width = root.clientWidth || 390; bannerAt = null; };
+  if (typeof ResizeObserver === 'function') new ResizeObserver(measure).observe(root);
+  addEventListener('resize', measure);
+  const powerFill = power.querySelector('.bt-pfill');
+  const powerNum = power.querySelector('b');
+  let powerPct = -1;
+  const tapSubEl = tap.querySelector('span');
 
   return {
     root,
@@ -109,19 +120,23 @@ export function createHud({ onPause } = {}) {
       banner.querySelector('b').textContent = text;
       banner.querySelector('span').textContent = sub;
       banner.className = `bt-banner is-on ${kind}`;
+      bannerAt = null;
       clearTimeout(bannerT);
       bannerT = setTimeout(() => banner.classList.remove('is-on'), ms);
     },
-    /** Where the big banner is on the stage while it shows (px), else null. */
+    /** Where the big banner is on the stage while it shows (px), else null (measured once per banner). */
     bannerBox() {
       if (!banner.classList.contains('is-on')) return null;
-      const r = banner.getBoundingClientRect();
-      const o = root.getBoundingClientRect();
-      return { top: r.top - o.top, bottom: r.bottom - o.top };
+      // (its box in the screen over the stage, without the pop-in's scale: where it settles)
+      if (!bannerAt) bannerAt = { top: banner.offsetTop, bottom: banner.offsetTop + banner.offsetHeight };
+      return { top: bannerAt.top, bottom: bannerAt.bottom };
     },
-    /** A short call-out over a point on the screen (x, y in px of the stage). */
+    /**
+     * A short call-out over a point on the screen (x, y in px of the stage). Placed by a transform on a holder (the
+     * words rise and fade in their own animation inside it): moving it never makes the page lay itself out again.
+     */
     callout(text, x, y, kind = '') {
-      const c = el(`<div class="bt-co ${kind}">${text}</div>`);
+      const c = el(`<div class="bt-cow"><div class="bt-co ${kind}">${text}</div></div>`);
       this.place(c, x, y);
       callouts.append(c);
       setTimeout(() => c.remove(), 1500);
@@ -129,10 +144,10 @@ export function createHud({ onPause } = {}) {
     },
     /** Moves a call-out (it follows its point while the camera moves). */
     place(c, x, y) {
-      const w = root.clientWidth || 390;
-      c.style.visibility = x < 24 || x > w - 24 ? 'hidden' : '';   // (its point left the screen: it goes with it)
-      c.style.left = `${Math.round(Math.max(70, Math.min(w - 70, x)))}px`;
-      c.style.top = `${Math.round(Math.max(150, y))}px`;
+      if (!width) measure();
+      const hide = x < 24 || x > width - 24;   // (its point left the screen: it goes with it)
+      if (hide !== (c.dataset.hide === '1')) { c.dataset.hide = hide ? '1' : ''; c.style.visibility = hide ? 'hidden' : ''; }
+      c.style.transform = `translate(${Math.round(Math.max(70, Math.min(width - 70, x)))}px, ${Math.round(Math.max(150, y))}px)`;
     },
     /**
      * The three cards (a block with an element: { shape, element }); a tap picks one (it lifts, its element's powers
@@ -167,13 +182,19 @@ export function createHud({ onPause } = {}) {
       tray.classList.add('is-on');
       choose(Math.max(0, Math.min(cards.length - 1, selected | 0)));
     },
-    /** The power bar: shown or not, its level (0-1), held (a tap) or still running. */
+    /**
+     * The power bar: shown or not, its level (0-1), held (a tap) or still running. (Its fill and mark move by clip and
+     * transform from one number: nothing in the page has to be laid out again for it.)
+     */
     power(on, v = 0, held = false) {
       power.classList.toggle('is-on', !!on);
       if (!on) return;
-      power.querySelector('.bt-pfill').style.height = `${Math.round(v * 100)}%`;
-      power.querySelector('.bt-pmark').style.bottom = `${Math.round(v * 100)}%`;
-      power.querySelector('b').textContent = `${Math.round(v * 100)}%`;
+      const pct = Math.round(v * 100);
+      if (pct !== powerPct) {
+        powerPct = pct;
+        powerFill.parentElement.style.setProperty('--p', String(pct / 100));
+        powerNum.textContent = `${pct}%`;
+      }
       power.classList.toggle('is-held', !!held);
     },
     hideCards() { tray.classList.remove('is-on'); },
@@ -206,12 +227,12 @@ export function createHud({ onPause } = {}) {
     /** The tap hint while aiming or dropping (`cancel` goes back to the cards). */
     showTap(title, sub, cancel) {
       tap.querySelector('b').textContent = title;
-      tap.querySelector('span').textContent = sub || '';
+      tapSubEl.textContent = sub || '';
       onCancel = cancel;
       tap.querySelector('.bt-cancel').hidden = !cancel;
       tap.classList.add('is-on');
     },
-    tapSub(sub) { tap.querySelector('span').textContent = sub || ''; },
+    tapSub(sub) { if (tapSubEl.textContent !== (sub || '')) tapSubEl.textContent = sub || ''; },
     hideTap() { tap.classList.remove('is-on'); onCancel = null; },
     /** A card over everything: the tip, the pause, the result. */
     modal(html, handlers = {}) {

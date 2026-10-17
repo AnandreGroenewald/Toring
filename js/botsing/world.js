@@ -527,7 +527,11 @@ export function buildWorld(stage, { stacks: withStacks = true, isles = null } = 
     far: new THREE.MeshStandardMaterial({ color: '#5a4060', roughness: 1, flatShading: true }),
   };
   const stacks = withStacks ? [makeStack(0, renderer, mats), makeStack(1, renderer, mats)] : [];
-  if (stacks.length) scene.add(...stacks);
+  if (stacks.length) {
+    scene.add(...stacks);
+    // (the rock, for what falls on it: fx.js's broken pieces land on a stack's top and glance off its cliffs)
+    scene.userData.solids = [...(scene.userData.solids || []), ...[-STACK_X, STACK_X].map((x) => ({ x, z: 0, top: STACK_TOP, radiusAt: (y) => stackR(y) }))];
+  }
   const far = farIslands(mats);
   scene.add(far);
   const flyGulls = gulls(scene);

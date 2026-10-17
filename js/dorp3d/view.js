@@ -876,6 +876,9 @@ function createView(K, d) {
       updaters.push((t, dt) => theirTown.update(t, dt));
     }
     world.sea.uniforms.uIsle1.value.z = theirTown ? THEM_ISLE.radius * 0.93 : -100;   // (no foam where no island stands)
+    // (the islands, for what falls on them: a strike's broken pieces land on the ground and glance off the cliffs;
+    // set fresh each visit, the stage is the same one)
+    scene.userData.solids = [myIsle, theirIsle].filter(Boolean).map((i) => ({ x: i.cx, z: i.cz, top: i.top, radiusAt: (y, a) => i.radiusAt(a) + Math.max(0, i.top - y) * 0.12 }));
     if (!alive) return;
     // what this visit is for
     if (d.view === 'raid') wait(450).then(() => alive && playRaid().catch(failed));

@@ -58,6 +58,7 @@
 .bt-banner.is-foe b { background-image: linear-gradient(180deg, #fff1ee, #ffb3a6 55%, #ff6a55); }
 .bt-banner span { font-size: 13px; font-weight: 800; letter-spacing: 0.12em; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7); max-width: calc(100% - 40px); text-align: center; line-height: 1.35; }
 .bt-callouts { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: hidden; }
+.bt-cow { position: absolute; left: 0; top: 0; will-change: transform; }   /* (a call-out's holder: placed by a transform) */
 .bt-co { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font-size: 18px; font-weight: 900; letter-spacing: 0.04em; color: #fff;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55), 0 0 14px rgba(0, 0, 0, 0.55); animation: bt-rise 1.45s ease-out forwards; }
 .bt-co.is-gold { color: #ffd46a; font-size: 21px; }
@@ -187,6 +188,10 @@
 .bt-power small { font-size: 10px; font-weight: 900; letter-spacing: 0.22em; color: var(--gold); text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
 .bt-power b { font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
 .bt-pbar { position: relative; width: 30px; height: min(42vh, 330px); border-radius: 16px; background: rgba(16, 10, 28, 0.6); border: 2px solid rgba(255, 255, 255, 0.35); overflow: hidden; box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4); }
-.bt-pfill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(0deg, #4ad66d 0%, #ffd24a 55%, #ff5a3a 100%); background-size: 100% min(42vh, 330px); background-position: bottom; }
-.bt-pmark { position: absolute; left: -2px; right: -2px; height: 3px; margin-bottom: -1.5px; background: #fff; box-shadow: 0 0 8px #fff; }
+/* (the fill: the whole bar's gradient, uncovered from below to --p; the mark: a bar-high holder moved up by --p with
+   its line at the bottom. Clip and transform: the level moves every frame without laying the page out again) */
+.bt-pfill { position: absolute; inset: 0; background: linear-gradient(0deg, #4ad66d 0%, #ffd24a 55%, #ff5a3a 100%); background-size: 100% min(42vh, 330px); background-position: bottom;
+  clip-path: inset(calc(100% - var(--p, 0) * 100%) 0 0 0); }
+.bt-pmark { position: absolute; left: -2px; right: -2px; top: 0; bottom: 0; transform: translateY(calc(var(--p, 0) * -100%)); }
+.bt-pmark::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; margin-bottom: -1.5px; background: #fff; box-shadow: 0 0 8px #fff; }
 .bt-power.is-held .bt-pbar { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 207, 107, 0.4), 0 0 22px rgba(255, 200, 80, 0.5); }
