@@ -1124,6 +1124,12 @@ Later the owner added (decisions are final unless they say otherwise):
   (fire spreads, vines drag, a wave shoves, an explosion) and as defences (fire wall, vine anchor, water barrel,
   surprise spring); the thrown block breaks apart; both towers then a push-in zoom; crown badges with glass pips;
   cranes park half a turn away. Tests: qa/botsing1180 + botsing_friends1180 ALL OK, perf 60 fps at 4x CPU, npm 444/444.
+- **17 Oct 2026 (~22:00): Blokbotsing round 4b (local 391b5e5).** He asked: "Wait before I play, please check if I
+  would be satisfied". A real-time playthrough (qa/botsing_feel1180.mjs) and battles played for the crown
+  (qa/botsing_balance1180.mjs) found: static 3 s flights, open crowns that didn't move (draws), the crown's fall hidden
+  behind its rock, washed-out fire, a faint water barrel, a weak Rikus. Fixed: a follow camera into the hit, knockable
+  open crowns (OPEN_CROWN; glass 4 hits; sudden death bursts both glasses), a crown-fall shot then the winner's crown,
+  orange fire + firelight, water skin + drips, coloured chips, a sharper Rikus. Balance: 2 wins / 1 loss, no draws.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
