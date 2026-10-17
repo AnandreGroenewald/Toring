@@ -38,6 +38,20 @@ class_name = "MatchRoom"
 tag = "v1-uitdagersreeks"
 new_sqlite_classes = ["MatchLobby", "MatchRoom"]
 
+# (1.16-1.18) Jou dorp's towns and the Kasteelreeks's castles (one object keeps them all: src/towns.js), and the
+# friends' Blokbotsing rooms (src/slagroom.js). SQLite-backed, so on the Workers Free plan too.
+[[durable_objects.bindings]]
+name = "TOWNS"
+class_name = "TownHall"
+
+[[durable_objects.bindings]]
+name = "SLAG_ROOM"
+class_name = "SlagRoom"
+
+[[migrations]]
+tag = "v2-dorp-kasteel-kamers"
+new_sqlite_classes = ["TownHall", "SlagRoom"]
+
 [observability]
 enabled = true
 

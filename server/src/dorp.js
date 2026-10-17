@@ -5,9 +5,13 @@
 //   GET  /dorp/ping                  {ok, v}: this server knows the towns (the game asks the front door, GET /, for
 //                                    `dorp`: an older Worker's says nothing, and the game shows no town button)
 //   POST /dorp/sync   {id, key, name, tribe, gains: [{seq, people, raids, walls}], seen}
-//                                    -> {town, news, bure}: what the phone's games brought, once each (seq)
+//                                    -> {town, news, bure, kasteel?}: what the phone's games brought, once each (seq);
+//                                    `kasteel` {newsN, seenN}: the town's castle's news count (1.18: the menu's badge
+//                                    needs no second call every poll)
 //   POST /dorp/raid   {id, key, target, wraak?, hit?}  -> {raidId, took, goldTook, blocked, wraak, town, them}
 //                                    (hit: the tap's aim, 'P' | 'G' | 'S', js/core/dorp.js DORP.hitMul)
+//                                    429 {error: 'soon'}: that town was raided RAIDED_PER_HOUR times this hour (the
+//                                    raider's strooptog is kept; a Wraak always goes through)
 //   POST /dorp/buur   {id, key, buur}            -> {them}: neighbours both ways (a friend's link)
 //   POST /dorp/mark   {id, key, mark}            -> {town}: a landmark bought (the coins are the phone's own wallet)
 // Robot Rikus (target 'RIKUS') is every town's first neighbour, kept inside the town's own record: he refills over
@@ -15,7 +19,10 @@
 // sync brings the landmarks' tourists once a day.
 //   GET  /dorp/raid/<raidId>                     -> the raid as its link shows it (who robbed whom, how many)
 //   GET  /dorp/town/<id>                         -> a town as its neighbours see it
-// `store`: { get(key), put(key, value) } (async; the host keeps it: matchhost.mjs a file, the Worker later its own).
+// `store`: { get(key), put(key, value) } (async; the host keeps it: matchhost.mjs a file, the Worker the TownHall
+// Durable Object, server/src/towns.js). Requests run one after the other (a raid reads both towns, then awaits the
+// key's hash: two at once could spend one Wraak twice or lose the other's update). A sync writes only when something
+// changed (the game asks every 15 s on the menu; the Workers Free plan allows 100 000 writes a day).
 
 import {
   DORP, DORP_TRIBES, DORP_BEATS, RIKUS, RIKUS_ID, raidTake, goldTake, cleanHit, isTownId, isTownKey, isRaidId, newRaidId,
@@ -27,7 +34,19 @@ async function sha256(text) {
   return hex(await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
 }
 
-export function createDorp(store, { now = () => Date.now(), rand = Math.random } = {}) {
+const HOUR_MS = 60 * 60 * 1000;
+const SEEN_EVERY_MS = 10 * 60 * 1000;   // a town's "last seen" (`at`) is written at most this often
+// What keeps a modified phone (or a script) from wrecking a friend's town, far above what honest play does:
+export const RAIDED_PER_HOUR = 6;         // strooptogte on one town an hour, from everyone together (a Wraak doesn't count)
+export const GAIN_PEOPLE_PER_HOUR = 3000; // people a town's reports may bring an hour; the rest waits on the phone (seq)
+/** A town's record without its times: a sync that changes only those writes nothing. */
+const sig = (t) => JSON.stringify(t, (k, v) => (k === 'at' ? undefined : v));
+
+/**
+ * `newTown(who)`: may the caller `who` (the host's word for its address, '' when it has none) make one more town?
+ * (the Worker allows a few an hour per address: every new town starts with a strooptog)
+ */
+export function createDorp(store, { now = () => Date.now(), rand = Math.random, newTown = () => true } = {}) {
   const townKey = (id) => `dorp:${id}`;
   const raidKey = (id) => `raid:${id}`;
 
@@ -50,17 +69,28 @@ export function createDorp(store, { now = () => Date.now(), rand = Math.random }
 
   // ------------------------------------------------------------------------------------------------- Robot Rikus
   const rikusTribe = (t) => DORP_BEATS[t.tribe] || 'gras';   // (the one yours beats: your raids on him are extra strong)
-  /** Rikus's town inside `t` (made on first use), refilled towards his goal and his golden person back each day. */
+  /**
+   * Rikus's town inside `t` (made on first use), refilled towards his goal and his golden person back each day. The
+   * refill counts whole people from `rk.at` on and moves `rk.at` on only by the time they took, so the 15-second polls
+   * add up to RIKUS.refillPerHour exactly (rounding each poll up made him refill up to 40 times too fast). While he is
+   * full `rk.at` says "full since now" (written with the town's next change).
+   */
   function rikusOf(t, dayKey = null) {
     const at = now();
     if (!t.rikus || typeof t.rikus !== 'object') t.rikus = { people: RIKUS.start, at, gold: RIKUS.gold, goldDay: dayKey, back: null };
     const rk = t.rikus;
     const goal = Math.max(RIKUS.min, Math.round((t.people | 0) * RIKUS.share));
     if (rk.people < goal) {
-      const hours = Math.max(0, (at - (rk.at || at)) / 3600000);
-      rk.people = Math.min(goal, rk.people + Math.ceil(goal * RIKUS.refillPerHour * hours));
+      const perHour = goal * RIKUS.refillPerHour;
+      const since = Number.isFinite(rk.at) ? Math.min(rk.at, at) : at;
+      const add = Math.floor((perHour * (at - since)) / HOUR_MS);
+      if (add > 0) {
+        rk.people = Math.min(goal, rk.people + add);
+        rk.at = rk.people >= goal ? at : since + Math.round((add / perHour) * HOUR_MS);
+      } else if (!Number.isFinite(rk.at)) rk.at = at;
+    } else {
+      rk.at = at;
     }
-    rk.at = at;
     if (isDayKey(dayKey) && rk.goldDay !== dayKey) {
       rk.goldDay = dayKey;
       rk.gold = Math.max(rk.gold | 0, RIKUS.gold);
@@ -92,7 +122,7 @@ export function createDorp(store, { now = () => Date.now(), rand = Math.random }
     if (t.news.length > DORP.newsMax) t.news.splice(0, t.news.length - DORP.newsMax);
   }
   async function raidRikus(t, b) {
-    const rk = rikusOf(t);
+    const rk = rikusOf(t);   // (refilled up to now: from here on his refill counts from this raid)
     const owed = isRaidId(b.wraak) ? t.news.find((n) => n.raidId === b.wraak && n.from === RIKUS_ID && n.took > 0 && !n.wraaked) : null;
     if (!owed) {
       if (t.raids < 1) return [409, { error: 'raids', town: mine(t) }];
@@ -112,10 +142,12 @@ export function createDorp(store, { now = () => Date.now(), rand = Math.random }
     return [200, { raidId: null, took, goldTook, blocked: false, wraak: !!owed, hit, bot: true, town: mine(t), them: rikusPub(t) }];
   }
 
+  /** `id` among `t`'s neighbours (the newest last; the oldest go past DORP.bureMax). True when it wasn't there yet. */
   function addBuur(t, id) {
-    if (t.id === id || t.bure.includes(id)) return;
+    if (t.id === id || t.bure.includes(id)) return false;
     t.bure.push(id);
     if (t.bure.length > DORP.bureMax) t.bure.splice(0, t.bure.length - DORP.bureMax);
+    return true;
   }
 
   async function bureOf(t) {
@@ -128,27 +160,40 @@ export function createDorp(store, { now = () => Date.now(), rand = Math.random }
     return out.sort((a, b) => b.people - a.people);
   }
 
-  async function sync(b) {
+  async function sync(b, who) {
     let t = await opened(b.id, b.key);
     if (t === false) return [403, { error: 'key' }];
+    const at = now();
+    let made = false;
     if (!t) {
+      if (!newTown(who || '')) return [429, { error: 'soon' }];
+      made = true;
       t = {
         id: b.id, keyHash: await sha256(b.key), name: 'Bouer', tribe: 'vuur',
-        people: 0, raids: DORP.startRaids, walls: 0, gold: 0, marks: [], tourDay: null, seq: 0, bure: [], news: [], newsN: 0, seenN: 0, made: now(), at: now(),
+        people: 0, raids: DORP.startRaids, walls: 0, gold: 0, marks: [], tourDay: null, seq: 0, bure: [], news: [], newsN: 0, seenN: 0, made: at, at,
       };
     }
+    const before = made ? '' : sig(t);
+    rikusOf(t);   // (Rikus up to now with the town as it was: what this sync brings raises his goal from now on)
     const name = cleanTownName(b.name);
     if (name) t.name = name;
     if (DORP_TRIBES.includes(b.tribe)) t.tribe = b.tribe;
     const gains = (Array.isArray(b.gains) ? b.gains : []).slice(0, DORP.gainsMax).map(cleanGain).filter(Boolean).sort((x, y) => x.seq - y.seq);
+    // (an hour's people from reports: more waits on the phone, which sends it again until it's counted)
+    const hour = t.gainHr && at - t.gainHr.at < HOUR_MS ? { ...t.gainHr } : { at, people: 0 };
+    let counted = false;
     for (const g of gains) {
       if (g.seq <= t.seq) continue;   // (already counted: a report sent again after a lost answer)
+      if (hour.people + g.people > GAIN_PEOPLE_PER_HOUR) break;
+      hour.people += g.people;
       t.people += g.people;
       t.raids = Math.min(DORP.raidsMax, t.raids + g.raids);
       t.walls = Math.min(DORP.wallsMax, t.walls + g.walls);
       t.gold = Math.min(t.people, (t.gold | 0) + g.gold);
       t.seq = g.seq;
+      counted = true;
     }
+    if (counted) t.gainHr = hour;
     // the landmarks' tourists: once a day, on the first visit
     let tourists = 0;
     if (isDayKey(b.collect) && t.tourDay !== b.collect && touristsOf(t.marks) > 0) {
@@ -160,9 +205,16 @@ export function createDorp(store, { now = () => Date.now(), rand = Math.random }
     rikusOf(t, isDayKey(b.collect) ? b.collect : null);
     rikusBack(t);
     if (Number.isInteger(b.seen)) t.seenN = Math.max(t.seenN, Math.min(b.seen, t.newsN));
-    t.at = now();
-    await store.put(townKey(t.id), t);
-    return [200, { town: mine(t), news: t.news, bure: [rikusPub(t), ...(await bureOf(t))], ...(tourists ? { tourists } : {}) }];
+    const seenDue = !Number.isFinite(t.at) || at - t.at >= SEEN_EVERY_MS;
+    if (made || seenDue || sig(t) !== before) {
+      t.at = at;
+      await store.put(townKey(t.id), t);
+    }
+    const k = await store.get(`kasteel:${t.id}`);   // (server/src/kasteel.js keeps it in the same store)
+    return [200, {
+      town: mine(t), news: t.news, bure: [rikusPub(t), ...(await bureOf(t))], ...(tourists ? { tourists } : {}),
+      ...(k && typeof k === 'object' ? { kasteel: { newsN: k.newsN | 0, seenN: k.seenN | 0 } } : {}),
+    }];
   }
 
   async function raid(b) {
@@ -172,15 +224,20 @@ export function createDorp(store, { now = () => Date.now(), rand = Math.random }
     if (!isTownId(b.target) || b.target === t.id) return [400, { error: 'target' }];
     const them = await store.get(townKey(b.target));
     if (!them) return [404, { error: 'target' }];
+    const at = now();
     // a Wraak: their raid on this town, not yet avenged, costs nothing and hits harder
     const owed = isRaidId(b.wraak) ? t.news.find((n) => n.raidId === b.wraak && n.from === them.id && n.took > 0 && !n.wraaked) : null;
+    const raidedAt = (Array.isArray(them.raidedAt) ? them.raidedAt : []).filter((x) => Number.isFinite(x) && at - x < HOUR_MS);
     if (!owed) {
       if (!t.bure.includes(them.id)) return [403, { error: 'buur' }];
       if (t.raids < 1) return [409, { error: 'raids', town: mine(t) }];
+      if (raidedAt.length >= RAIDED_PER_HOUR) return [429, { error: 'soon', town: mine(t) }];
       t.raids -= 1;
+      raidedAt.push(at);
     } else {
       owed.wraaked = true;
     }
+    them.raidedAt = raidedAt;
     const raidId = newRaidId();
     let took = 0;
     let goldTook = 0;
@@ -192,6 +249,7 @@ export function createDorp(store, { now = () => Date.now(), rand = Math.random }
     } else {
       took = raidTake({ people: them.people, mine: t.tribe, theirs: them.tribe, wraak: !!owed, hit });
       goldTook = goldTake({ gold: them.gold | 0, people: them.people, took, rand });
+      rikusOf(t);   // (Rikus up to now before the raider's town grows: his goal rises from now on)
       them.people -= took;
       t.people += took;
       them.gold = Math.max(0, (them.gold | 0) - goldTook);
@@ -199,7 +257,6 @@ export function createDorp(store, { now = () => Date.now(), rand = Math.random }
     }
     addBuur(t, them.id);
     addBuur(them, t.id);
-    const at = now();
     them.newsN += 1;
     them.news.push({ n: them.newsN, raidId, from: t.id, name: t.name, tribe: t.tribe, took, goldTook, blocked, wraak: !!owed, hit, at });
     if (them.news.length > DORP.newsMax) them.news.splice(0, them.news.length - DORP.newsMax);
@@ -213,8 +270,11 @@ export function createDorp(store, { now = () => Date.now(), rand = Math.random }
     const t = await opened(b.id, b.key);
     if (!t) return [403, { error: 'key' }];
     if (!markOf(b.mark)) return [400, { error: 'mark' }];
-    t.marks = cleanMarks([...(t.marks || []), b.mark]);
-    await store.put(townKey(t.id), t);
+    const marks = cleanMarks([...(t.marks || []), b.mark]);
+    if (marks.length !== cleanMarks(t.marks).length || !Array.isArray(t.marks)) {
+      t.marks = marks;
+      await store.put(townKey(t.id), t);
+    }
     return [200, { town: mine(t) }];
   }
 
@@ -224,37 +284,42 @@ export function createDorp(store, { now = () => Date.now(), rand = Math.random }
     if (!isTownId(b.buur) || b.buur === t.id) return [400, { error: 'buur' }];
     const them = await store.get(townKey(b.buur));
     if (!them) return [404, { error: 'buur' }];
-    addBuur(t, them.id);
-    addBuur(them, t.id);
-    await store.put(townKey(t.id), t);
-    await store.put(townKey(them.id), them);
+    if (addBuur(t, them.id)) await store.put(townKey(t.id), t);
+    if (addBuur(them, t.id)) await store.put(townKey(them.id), them);
     return [200, { them: pub(them, t) }];
   }
 
-  return {
-    /** One request: [status, json]. */
-    async handle(method, path, body) {
-      try {
-        if (method === 'GET' && path === '/dorp/ping') return [200, { ok: true, v: 1 }];
-        const b = body && typeof body === 'object' ? body : {};
-        if (method === 'POST' && path === '/dorp/sync') return await sync(b);
-        if (method === 'POST' && path === '/dorp/raid') return await raid(b);
-        if (method === 'POST' && path === '/dorp/buur') return await buur(b);
-        if (method === 'POST' && path === '/dorp/mark') return await mark(b);
-        let m = /^\/dorp\/raid\/([A-Z0-9]{10})$/.exec(path);
-        if (method === 'GET' && m) {
-          const r = isRaidId(m[1]) ? await store.get(raidKey(m[1])) : null;
-          return r ? [200, r] : [404, { error: 'raid' }];
-        }
-        m = /^\/dorp\/town\/([A-Z0-9]{8})$/.exec(path);
-        if (method === 'GET' && m) {
-          const t = isTownId(m[1]) ? await store.get(townKey(m[1])) : null;
-          return t ? [200, pub(t)] : [404, { error: 'town' }];
-        }
-        return [404, { error: 'not found' }];
-      } catch {
-        return [500, { error: 'server' }];
+  async function one(method, path, body, who) {
+    try {
+      if (method === 'GET' && path === '/dorp/ping') return [200, { ok: true, v: 1 }];
+      const b = body && typeof body === 'object' ? body : {};
+      if (method === 'POST' && path === '/dorp/sync') return await sync(b, who);
+      if (method === 'POST' && path === '/dorp/raid') return await raid(b);
+      if (method === 'POST' && path === '/dorp/buur') return await buur(b);
+      if (method === 'POST' && path === '/dorp/mark') return await mark(b);
+      let m = /^\/dorp\/raid\/([A-Z0-9]{10})$/.exec(path);
+      if (method === 'GET' && m) {
+        const r = isRaidId(m[1]) ? await store.get(raidKey(m[1])) : null;
+        return r ? [200, r] : [404, { error: 'raid' }];
       }
+      m = /^\/dorp\/town\/([A-Z0-9]{8})$/.exec(path);
+      if (method === 'GET' && m) {
+        const t = isTownId(m[1]) ? await store.get(townKey(m[1])) : null;
+        return t ? [200, pub(t)] : [404, { error: 'town' }];
+      }
+      return [404, { error: 'not found' }];
+    } catch {
+      return [500, { error: 'server' }];
+    }
+  }
+
+  let queue = Promise.resolve();
+  return {
+    /** One request: [status, json], after the ones before it. `who`: the caller's address as the host knows it. */
+    handle(method, path, body, who = '') {
+      const run = queue.then(() => one(method, path, body, who));
+      queue = run.catch(() => {});
+      return run;
     },
   };
 }

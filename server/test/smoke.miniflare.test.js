@@ -4,10 +4,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { fakePaystack, baseEnv, signupBody, chargeSuccess, SECRET, ADMIN, ORIGIN } from './support/harness.js';
+import { workerModules, repoRoot } from './support/modules.js';
 
 let Miniflare = null;
 let toOptions = (o) => o;
@@ -27,15 +28,11 @@ test('smoke: real worker in workerd + local D1', { skip: Miniflare ? false : 'mi
   const { DB: _unused, ...vars } = baseEnv(null);
   let mf;
   try {
-    // List the modules explicitly (entry first); not every Miniflare version follows imports itself.
-    // The moderation rules are shared with the site (js/core/nameRules.js), so the module root is the
-    // repository root and that file is listed too (wrangler's bundler follows the import by itself).
-    const files = readdirSync(`${root}src`).filter((f) => f.endsWith('.js')).sort((a, b) => (a === 'worker.js' ? -1 : b === 'worker.js' ? 1 : 0));
-    const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
+    // List the modules explicitly (entry first); not every Miniflare version follows imports itself. The server
+    // shares the game's rules (js/core/*.js and more), so the module root is the repository root, and the list
+    // follows the worker's imports (support/modules.js: a list kept by hand went stale and the test skipped itself).
     mf = new Miniflare(toOptions({
-      // (the live matches share the game's referee: js/core/duel.js with rng.js and config.js)
-      modules: [...files.map((f) => `${root}src/${f}`), ...['js/core/nameRules.js', 'js/core/duel.js', 'js/core/rng.js', 'js/config.js'].map((f) => `${repoRoot}${f}`)]
-        .map((path) => ({ type: 'ESModule', path })),
+      modules: workerModules().map((path) => ({ type: 'ESModule', path })),
       modulesRoot: repoRoot,
       compatibilityDate: '2026-09-01',
       d1Databases: { DB: 'stapel-smoke' },
@@ -60,8 +57,9 @@ test('smoke: real worker in workerd + local D1', { skip: Miniflare ? false : 'mi
 
   try {
     const db = await mf.getD1Database('DB');
+    // (comments go first, the ones after a column too: one holds a ';')
     const schema = readFileSync(`${root}schema.sql`, 'utf8')
-      .split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
+      .split('\n').map((l) => l.replace(/--.*$/, '')).join('\n')
       .split(';').map((s) => s.trim()).filter(Boolean);
     for (const stmt of schema) await db.prepare(stmt).run();
 

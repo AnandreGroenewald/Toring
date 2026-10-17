@@ -11,7 +11,7 @@ import * as db from './db.js';
 import * as stats from './stats.js';
 import * as board from './board.js';
 import * as ideas from './ideas.js';
-import { readJsonObject } from './http.js';
+import { readJsonObject, readBody } from './http.js';
 import { handleWebhook } from './webhook.js';
 import { routeAccount, pruneAccounts } from './account.js';
 import { createGoogleKeys } from './google.js';
@@ -20,8 +20,17 @@ import { isRoomCode, newRoomCode } from '../../js/core/duel.js';
 
 // Uitdagersreeks: the live-match Durable Objects must be exported by the Worker's main module.
 export { MatchLobby, MatchRoom } from './match.js';
+// (1.16-1.18) Jou dorp's towns with the castles (one object), and the friends' Blokbotsing rooms
+export { TownHall } from './towns.js';
+export { SlagRoom } from './slagroom.js';
 
 const ROOMS_PER_HOUR = 30;   // friend rooms one address may open
+const SLAG_ROOMS_PER_HOUR = 30;   // (1.18) Blokbotsing rooms one address may open
+// (1.16) town and castle calls from one address an hour (a phone on the menu asks 4 times a minute; a few phones can
+// share one address on a mobile network)
+const TOWN_CALLS_PER_HOUR = 3000;
+const TOWN_BODY_MAX = { dorp: 16 * 1024, kasteel: 128 * 1024 };
+const IMPORT_BODY_MAX = 512 * 1024;
 const FEED_TTL_MS = { '/sponsors': 30_000, '/availability': 15_000 };
 const BROWSER_CACHE = { '/sponsors': 'public, max-age=300', '/availability': 'public, max-age=60' };
 
@@ -34,7 +43,7 @@ function defaultLog(level, event, fields = {}) {
 
 /** CORS class of a path: feeds are public, the webhook is server-to-server, the rest is site-only. */
 function corsMode(path) {
-  if (path.startsWith('/match/')) return 'site';
+  if (path.startsWith('/match/') || path.startsWith('/slag/') || path.startsWith('/dorp/') || path.startsWith('/kasteel/')) return 'site';
   if (path === '/sponsors' || path === '/availability' || path === '/') return 'public';
   if (path === '/paystack/webhook') return 'none';
   return 'site';
@@ -92,7 +101,9 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
     const { method } = request;
     const path = url.pathname.replace(/\/+$/, '') || '/';
 
-    if (path === '/') return method === 'GET' ? json(200, { ok: true, service: 'stapel-borge' }) : methodNotAllowed('GET');
+    // (1.16) the front door says which of the friends' parts are here: the game shows the town (`dorp`) and friends'
+    // castles (`kasteel`) only then
+    if (path === '/') return method === 'GET' ? json(200, { ok: true, service: 'stapel-borge', ...ctx.front }) : methodNotAllowed('GET');
     if (path === '/sponsors' || path === '/availability') {
       if (method !== 'GET') return methodNotAllowed('GET');
       const body = await cachedFeed(path, ctx, path === '/sponsors' ? getSponsorsFeed : getAvailability);
@@ -182,6 +193,60 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
     throw new HttpError(404, 'not_found');
   }
 
+  /**
+   * (1.18) Blokbotsing between two friends: POST /slag/room opens a room (a code), /slag/room/<CODE> is a seat in it
+   * (WebSocket, server/src/slagroom.js). Only the game's own pages; an address opens SLAG_ROOMS_PER_HOUR rooms an hour.
+   */
+  async function routeSlag(request, env, path, cfg) {
+    if (!env?.SLAG_ROOM) throw new HttpError(503, 'not_configured');
+    stats.checkOrigin(request, cfg);
+    if (path === '/slag/room') {
+      if (request.method !== 'POST') return methodNotAllowed('POST');
+      const t = now();
+      const key = `slag:${await stats.addressKey({ cfg, now: t }, request)}`;
+      if (!rate.allow(key, SLAG_ROOMS_PER_HOUR, t)) throw new HttpError(429, 'rate_limited');
+      for (let tries = 0; tries < 4; tries++) {
+        const code = newRoomCode(rand32);
+        const res = await env.SLAG_ROOM.get(env.SLAG_ROOM.idFromName(code)).fetch('https://room/init', { method: 'POST' });
+        if (res.status === 200) return json(200, { code });
+      }
+      throw new HttpError(503, 'busy');
+    }
+    const m = /^\/slag\/room\/([A-Za-z0-9]+)$/.exec(path);
+    if (m && isRoomCode(m[1])) {
+      if (request.method !== 'GET' || (request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') throw new HttpError(426, 'websocket_expected');
+      return env.SLAG_ROOM.get(env.SLAG_ROOM.idFromName(m[1])).fetch(request);
+    }
+    throw new HttpError(404, 'not_found');
+  }
+
+  /**
+   * (1.16) Jou dorp and (1.17) friends' castles: /dorp/* and /kasteel/* (server/src/dorp.js, kasteel.js), all kept by
+   * one Durable Object (server/src/towns.js). Only the game's own pages; TOWN_CALLS_PER_HOUR calls an address an hour.
+   */
+  async function routeTowns(request, env, path, cfg) {
+    if (!env?.TOWNS) throw new HttpError(503, 'not_configured');
+    stats.checkOrigin(request, cfg);
+    const t = now();
+    const addr = await stats.addressKey({ cfg, now: t }, request);
+    if (!rate.allow(`towns:${addr}`, TOWN_CALLS_PER_HOUR, t)) throw new HttpError(429, 'rate_limited');
+    if (request.method !== 'GET' && request.method !== 'POST') return methodNotAllowed('GET, POST');
+    let body = null;
+    if (request.method === 'POST') {
+      const bytes = await readBody(request, TOWN_BODY_MAX[path.startsWith('/kasteel/') ? 'kasteel' : 'dorp']);
+      try {
+        body = JSON.parse(new TextDecoder().decode(bytes));
+      } catch {
+        body = null;   // (a broken body: the route answers 400/403, as on the home server)
+      }
+    }
+    return env.TOWNS.get(env.TOWNS.idFromName('towns')).fetch('https://towns/handle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Stapel-Addr': addr },
+      body: JSON.stringify({ method: request.method, path, body }),
+    });
+  }
+
   async function routeAdmin(request, url, path, ctx) {
     // Brute force: after too many wrong tokens from one address, refuse even the right one for a while.
     const failKey = `admin-fail:${await stats.addressKey(ctx, request)}`;
@@ -211,6 +276,17 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
       return methodNotAllowed('GET, POST');
     }
     if (path === '/admin/stemme') return method === 'GET' || method === 'POST' ? ideas.adminVotes(request, ctx) : methodNotAllowed('GET, POST');
+    // (1.18) the towns and castles: how many there are, and the carry-over of the home server's (server/import-towns.mjs)
+    if (path === '/admin/dorp' || path === '/admin/dorp/import') {
+      if (!ctx.towns) throw new HttpError(503, 'not_configured');
+      if (path === '/admin/dorp') {
+        if (method !== 'GET') return methodNotAllowed('GET');
+        return ctx.towns().fetch('https://towns/count', { method: 'POST', body: '{}' });
+      }
+      if (method !== 'POST') return methodNotAllowed('POST');
+      const bytes = await readBody(request, IMPORT_BODY_MAX);
+      return ctx.towns().fetch('https://towns/import', { method: 'POST', body: bytes });
+    }
     if (path === '/admin/runs') {
       if (method === 'GET') return admin.listRuns(ctx);
       if (method === 'POST') return admin.forgetRuns(request, ctx);
@@ -243,12 +319,14 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
     if (request.method === 'OPTIONS') return mode === 'none' ? methodNotAllowed('POST') : preflight(request, mode, cfg);
 
     let response;
-    if (path.startsWith('/match/')) {
+    const live = path.startsWith('/match/') ? routeMatch : path.startsWith('/slag/') ? routeSlag
+      : path.startsWith('/dorp/') || path.startsWith('/kasteel/') ? routeTowns : null;
+    if (live) {
       try {
-        response = await routeMatch(request, env, path, cfg);
+        response = await live(request, env, path, cfg);
       } catch (err) {
         response = err instanceof HttpError ? errorResponse(err) : json(500, { error: 'server_error' });
-        if (!(err instanceof HttpError)) log('error', 'match_unhandled', { path, message: String(err?.message || err).slice(0, 300) });
+        if (!(err instanceof HttpError)) log('error', `${path.split('/')[1]}_unhandled`, { path, message: String(err?.message || err).slice(0, 300) });
       }
       // a WebSocket upgrade (101) goes back exactly as the Durable Object made it
       if (response.status === 101 || response.webSocket) return response;
@@ -261,6 +339,8 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
         cfg,
         now: now(),
         lobby: env.MATCH_LOBBY ? () => env.MATCH_LOBBY.get(env.MATCH_LOBBY.idFromName('lobby')) : null,
+        towns: env.TOWNS ? () => env.TOWNS.get(env.TOWNS.idFromName('towns')) : null,
+        front: { ...(env.TOWNS ? { dorp: 1, kasteel: 1 } : {}), ...(env.SLAG_ROOM ? { slag: 1 } : {}) },
         log,
         invalidate,
         planCache,

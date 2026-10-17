@@ -21,7 +21,7 @@ import { checkOrigin, limit } from './stats.js';
 import { hmacHex, sha256Hex, randomHex } from './crypto.js';
 import { verifyGoogleIdToken } from './google.js';
 import { metre } from './board.js';
-import { COSMETIC_KINDS, SKIN_KINDS, DEFAULT_LOOK, DEFAULT_SKIN, cosmetic, skin } from '../../js/core/economy.js';
+import { COSMETIC_KINDS, SKIN_KINDS, DEFAULT_LOOK, DEFAULT_SKIN, TRIBE_IDS, cosmetic, skin } from '../../js/core/economy.js';
 
 export const SAVE_MAX_BYTES = 256 * 1024;
 export const SESSIONS_MAX = 10;              // devices signed in at once; the longest unused goes first
@@ -87,6 +87,9 @@ function cleanSave(save) {
  *   - every shop id the kept save owned stays owned in the new one (known ids only; nothing is removed);
  *   - when the new copy wears the standard one and doesn't own what the kept save wore (an older game dropped it),
  *     the kept save's choice stays on. A game that owns the item and wears the standard one chose it: that stays.
+ * (1.16) The same for the Living Tower's tribes (the first is free, each other one 1000 coins): a 1.15 game leaves
+ * `tribes` out of its copy altogether. Every tribe the kept save owned stays owned; the new copy's worn tribe stays
+ * when it owns it, else the kept save's.
  */
 export function keepOwned(save, kept) {
   const e = save?.econ;
@@ -124,6 +127,15 @@ export function keepOwned(save, kept) {
       keep((e.skins.owned ??= {}), ks.owned, SKIN_KINDS, skin);
       if (e.skins.wear === undefined || obj(e.skins.wear)) keepWorn((e.skins.wear ??= {}), ks.wear, ks.owned, sentOwned.skins, SKIN_KINDS, DEFAULT_SKIN, skin);
     }
+  }
+  const kt = k.tribes;
+  const keptTribes = obj(kt) && Array.isArray(kt.owned) ? TRIBE_IDS.filter((id) => kt.owned.includes(id)) : [];
+  if (keptTribes.length && (e.tribes === undefined || obj(e.tribes))) {
+    e.tribes ??= {};
+    const sent = Array.isArray(e.tribes.owned) ? e.tribes.owned.filter((id) => TRIBE_IDS.includes(id)) : [];
+    const owned = Array.isArray(e.tribes.owned) ? e.tribes.owned : (e.tribes.owned = []);
+    for (const id of keptTribes) if (!owned.includes(id)) owned.push(id);
+    if (!sent.includes(e.tribes.wear)) e.tribes.wear = keptTribes.includes(kt.wear) ? kt.wear : keptTribes[0];
   }
   return save;
 }
