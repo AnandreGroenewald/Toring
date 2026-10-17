@@ -1115,6 +1115,15 @@ Later the owner added (decisions are final unless they say otherwise):
   fixed his notes: blocks no longer float (sim.js wakeAll on every removal), one static wide shot for Rikus's throws,
   the crown in a glass cabinet (3 hits crack then shatter the glass, then the crown is light), spikes only on built
   wedges. Tests: npm 444/444, botsing1180, botsing_friends1180, botsing_float1180.
+- **17 Oct 2026 (~19:30): Blokbotsing round 4 (local aa030fc; nothing pushed).** His notes: the camera must "show both
+  the towers and then zoom in on the tower that is getting damaged", "a power bar then a direction pin", no spikes on
+  throws, the crate "looks weird" → "the type of block they have purched", "going through the crane", "no special
+  abilities?", the same options every round, a "Cooler" impact ("grass fire etc"), "the block that is thrown
+  disapears", "specials on ... a defence block"; his picks: all four elements, aim help = your last throw's trail.
+  Built: cards = a Stapel block + an element in his worn skin; the two-tap throw; Vuur/Gras/Water/Plofstof as throws
+  (fire spreads, vines drag, a wave shoves, an explosion) and as defences (fire wall, vine anchor, water barrel,
+  surprise spring); the thrown block breaks apart; both towers then a push-in zoom; crown badges with glass pips;
+  cranes park half a turn away. Tests: qa/botsing1180 + botsing_friends1180 ALL OK, perf 60 fps at 4x CPU, npm 444/444.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
