@@ -1111,6 +1111,10 @@ Later the owner added (decisions are final unless they say otherwise):
   the crown behind the tower, a block budget + sudden death, friend battles on the home server (the Vrugteslag's
   /slag/room), a Blokbotsing box in the Uitdagersreeks. The home server's address was stale (10.254.77.9 from the
   morning): play-home.sh restarted on 192.168.1.225. Tests: npm 444/444, qa/botsing1180 + botsing_friends1180 ALL OK.
+- **17 Oct 2026 (~16:30-17:30): Blokbotsing round 3 (local e052b62).** He: "I really like it, for this I will return";
+  fixed his notes: blocks no longer float (sim.js wakeAll on every removal), one static wide shot for Rikus's throws,
+  the crown in a glass cabinet (3 hits crack then shatter the glass, then the crown is light), spikes only on built
+  wedges. Tests: npm 444/444, botsing1180, botsing_friends1180, botsing_float1180.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
