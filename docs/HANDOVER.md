@@ -1103,6 +1103,14 @@ Later the owner added (decisions are final unless they say otherwise):
   the higher crown after 12 turns each. Tests: npm 444/444; qa/botsing1180.mjs (full battles ALL OK),
   qa/botsing_perf1180.mjs (4x slowed CPU, mid: 60 fps). Not in the Android app yet (app/build-www.mjs), no rewards yet.
   Next (his word): his own play on the home Wi-Fi, then (Bob's next move) the round to the 24 testers.
+- **17 Oct 2026 (evening): Blokbotsing round 2 after his first play (local 7e9f5a8; nothing pushed).** His words: "The
+  gooi is not interactive", "it lagging", "doesnt indecate any damage?", "the motion once the blocks falls is bad", "not
+  be able to throw that quick", "the crown needs to be behind your tower"; then his picks: pull back + a mid-air tap;
+  "make it about the crown"; Daily Perfeks (max +4 a game); a Perfek build +1 block; the Uitdagersreeks "Now". Built:
+  pull-back throws with a scope window, damage (HP, cracks, strength bars, "SKADE -N%"), smooth motion (interpolation),
+  the crown behind the tower, a block budget + sudden death, friend battles on the home server (the Vrugteslag's
+  /slag/room), a Blokbotsing box in the Uitdagersreeks. The home server's address was stale (10.254.77.9 from the
+  morning): play-home.sh restarted on 192.168.1.225. Tests: npm 444/444, qa/botsing1180 + botsing_friends1180 ALL OK.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
