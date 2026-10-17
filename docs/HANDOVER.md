@@ -1130,6 +1130,10 @@ Later the owner added (decisions are final unless they say otherwise):
   behind its rock, washed-out fire, a faint water barrel, a weak Rikus. Fixed: a follow camera into the hit, knockable
   open crowns (OPEN_CROWN; glass 4 hits; sudden death bursts both glasses), a crown-fall shot then the winner's crown,
   orange fire + firelight, water skin + drips, coloured chips, a sharper Rikus. Balance: 2 wins / 1 loss, no draws.
+- **18 Oct 2026 (night): Blokbotsing round 4c, the graphics (local 56b6db6).** He asked whether I'd be happy with the
+  graphics. Changed: blocks are rounded boxes painted on all six faces with Stapel's art in the worn skin (blocks.js
+  blockPanelCanvas), medallions for the elements, a real explosion, a curling flood wave, leafy vines, coloured
+  splinters, a level zoom with the sunset behind, non-overlapping words, no dead ‹ on Rikus's turn. Tests ALL OK.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
