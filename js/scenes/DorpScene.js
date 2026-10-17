@@ -169,6 +169,7 @@ export class DorpScene extends Phaser.Scene {
 
   /** The screen's bars changed (CSS measured): the town is framed between them again. */
   setBars(top, bottom, ms = 0) {
+    if (!this.d) return;   // (never started: the 3D town is the one on screen)
     this.d.topBar = top;
     this.d.bottomBar = bottom;
     if (!this.busy) this.frame(this.side, ms);

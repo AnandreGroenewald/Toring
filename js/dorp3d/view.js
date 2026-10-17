@@ -632,19 +632,28 @@ function createView(K, d) {
       const timer = setTimeout(() => finish(), d.autoAim != null ? d.autoAim : AIM.autoMs);
     });
   }
-  /** (tests) an aim whose throw lands on `want` ('P', 'G', 'S'), given the power already held (or any). */
+  /**
+   * (tests) an aim whose throw lands on `want` ('P', 'G', 'S'), given the power already held (or any): the middle of the
+   * widest run of angles that land there (a tap a frame late still lands).
+   */
   function solve(bargeAt, u, goal, windK, want, st) {
     const from = bargeAt.clone().add(new THREE.Vector3(0, 7.2, 0));
     const D = bargeAt.distanceTo(theirC.clone().setY(0));
     const powers = st.step === 'dir' ? [st.power] : Array.from({ length: 36 }, (_, i) => 0.3 + i * 0.02);
+    let best = null;
     for (const pw of powers) {
-      for (let a = -AIM.maxAz; a <= AIM.maxAz; a += 0.01) {
+      let run = null;
+      for (let a = -AIM.maxAz; a <= AIM.maxAz + 1e-9; a += 0.005) {
         const dir = new THREE.Vector3(-u.x, 0, -u.z).applyAxisAngle(new THREE.Vector3(0, 1, 0), a);
-        const r = flight(from, dir, D * (0.42 + 1.06 * pw), windK);
-        if (rateOf(r, goal) === want) return { power: pw, az: a };
+        const hit = rateOf(flight(from, dir, D * (0.42 + 1.06 * pw), windK), goal) === want;
+        if (hit) run = run ? { ...run, to: a } : { from: a, to: a };
+        if ((!hit || a + 0.005 > AIM.maxAz + 1e-9) && run) {
+          if (!best || run.to - run.from > best.w) best = { power: pw, az: (run.from + run.to) / 2, w: run.to - run.from };
+          run = null;
+        }
       }
     }
-    return null;
+    return best && { power: best.power, az: best.az };
   }
   /** The block along its path in real time (it tumbles), the camera behind it; a trail in your element's colour. */
   function throwAlong(res, tribe) {

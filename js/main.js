@@ -3055,6 +3055,7 @@ async function enterDorp3D(view, sm, scene) {
 function dorpReframe() {
   requestAnimationFrame(() => requestAnimationFrame(() => {
     if (dorp3d) { const b = ui.dorpBars(); dorp3d.setBars(b.top, b.bottom, 600); return; }
+    if (!game.scene.isActive('Dorp')) return;   // (a 3D town still being built frames itself once it's there)
     const b = dorpBarsGame();
     game.scene.getScene('Dorp')?.setBars?.(b.top, b.bottom, 600);
   }));
