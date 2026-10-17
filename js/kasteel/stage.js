@@ -47,9 +47,7 @@ export function pickQuality() {
   return { ...QUALITY[phone ? 'mid' : 'high'] };
 }
 
-export function createStage({ fov = 50, quality = pickQuality() } = {}) {
-  const canvas = document.getElementById('k-canvas');
-  const stageEl = document.getElementById('k-stage');
+export function createStage({ fov = 50, quality = pickQuality(), canvas = document.getElementById('k-canvas'), stageEl = document.getElementById('k-stage') } = {}) {
   const size = () => [stageEl.clientWidth || window.innerWidth, stageEl.clientHeight || window.innerHeight];
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   const q = quality;
@@ -181,12 +179,14 @@ export function createStage({ fov = 50, quality = pickQuality() } = {}) {
       if (++drawn === 2) loaded();
     },
   };
-  addEventListener('resize', () => {
+  /** The stage's box changed size (a window's resize, or a stage shown again inside a page): fit the drawing to it. */
+  api.resize = () => {
     const [w, h] = size();
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
     if (composer) { composer.setPixelRatio(prOf()); composer.setSize(w, h); }
-  });
+  };
+  addEventListener('resize', api.resize);
   return api;
 }

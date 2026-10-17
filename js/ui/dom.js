@@ -3174,7 +3174,7 @@ export function createUI(bus) {
         h('div', { class: 'dorp-cards' }, MARKS.map(mcard)),
         button('btn-white dorp-back-town', h('span', { text: `‹ ${S.dorpBackTown}` }), () => bus.emit('ui:dorp-marks-close')));
     } else if (mode === 'aim') {
-      bottom = h('div', { class: 'dorp-bottom dorp-aim' }, h('p', { class: 'dorp-aim-hint' }, emo('🎯'), h('span', { text: S.dorpAimHint })));
+      bottom = h('div', { class: 'dorp-bottom dorp-aim' }, h('p', { class: 'dorp-aim-hint' }, emo('🎯'), h('span', { text: v.step === 'dir' ? S.dorp3dAimDir : S.dorpAimHint })));
     } else if (mode === 'result') {
       const r = v.result || {};
       const line = r.blocked ? S.dorpBlocked(v.them?.name || '') : r.took ? S.dorpTookSub(r.took, v.them?.name || '') : S.dorpEmpty(v.them?.name || '');

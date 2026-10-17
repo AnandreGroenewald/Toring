@@ -2962,9 +2962,18 @@ function dorpBarsGame() {
   return { top: Math.round(b.top * k), bottom: Math.round(b.bottom * k) };
 }
 
+// (1.18, the owner 18 Oct 2026: "Yes, build it fully") the town in 3D (js/dorp3d/view.js), over Stapel's own canvas,
+// with DorpScene's contract; DorpScene (2D) stays for a phone that can't draw 3D.
+let dorp3d = null;          // the 3D town's controller while it's open
+let dorp3dFailed = false;   // (no 3D here: the 2D town from now on)
+let dorp3dSeq = 0;
+Object.defineProperty(window.__stapel, 'dorp3d', { get: () => dorp3d, configurable: true });   // (tests)
 function stopDorpScene() {
+  dorp3dSeq += 1;
+  if (dorp3d) { dorp3d.close(); dorp3d = null; }
   if (game.scene.isActive('Dorp') || game.scene.isPaused('Dorp') || game.scene.isSleeping('Dorp')) game.scene.stop('Dorp');
   if (game.scene.isSleeping('Game')) game.scene.wake('Game');
+  wakeLoop();
 }
 
 /**
@@ -2980,6 +2989,10 @@ function enterDorp(view = 'town', { mode = view, screenExtra = {}, scene = {} } 
   if (game.scene.isActive('Dorp') || game.scene.isPaused('Dorp')) game.scene.stop('Dorp');
   const sm = dorpScreenModel(mode, screenExtra);
   ui.showDorpScreen(sm);
+  if (!dorp3dFailed) {
+    enterDorp3D(view, sm, scene);
+    return;
+  }
   const bars = dorpBarsGame();
   game.scene.start('Dorp', {
     view, me: sm.me, reducedMotion: !!settings.reducedMotion, topBar: bars.top, bottomBar: bars.bottom,
@@ -2995,9 +3008,38 @@ function enterDorp(view = 'town', { mode = view, screenExtra = {}, scene = {} } 
   }));
 }
 
+/** The 3D town (js/dorp3d/view.js), loaded the first time; if this phone can't draw it, the 2D town instead. */
+async function enterDorp3D(view, sm, scene) {
+  const seq = ++dorp3dSeq;
+  const b = ui.dorpBars();
+  try {
+    const { openTown3D } = await import('./dorp3d/view.js');
+    if (seq !== dorp3dSeq || screen !== 'dorp') return;
+    dorp3d?.close();
+    dorp3d = null;
+    const v = await openTown3D({
+      view, me: sm.me, reducedMotion: !!settings.reducedMotion, topBar: b.top, bottomBar: b.bottom,
+      onPicture: (url) => { dorpPic = url; },
+      onAimStep: (step) => ui.setDorpMode({ mode: 'aim', step }),
+      ...scene,
+    });
+    if (seq !== dorp3dSeq || screen !== 'dorp') { v.close(); return; }
+    dorp3d = v;
+    // (Stapel's own drawing rests while the town is open: one picture on the screen at a time)
+    if (!loopAsleep && game.loop?.running) { loopAsleep = true; game.loop.sleep(); }
+    requestAnimationFrame(() => requestAnimationFrame(() => { const bb = ui.dorpBars(); dorp3d?.setBars(bb.top, bb.bottom); }));
+  } catch (e) {
+    console.error(e);
+    if (seq !== dorp3dSeq) return;
+    dorp3dFailed = true;   // (the 2D town from now on)
+    if (screen === 'dorp') enterDorp(view, { mode: sm.mode, screenExtra: sm, scene });
+  }
+}
+
 /** The screen's panels changed (a result, the news): the town framed between them again. */
 function dorpReframe() {
   requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (dorp3d) { const b = ui.dorpBars(); dorp3d.setBars(b.top, b.bottom, 600); return; }
     const b = dorpBarsGame();
     game.scene.getScene('Dorp')?.setBars?.(b.top, b.bottom, 600);
   }));
@@ -3185,6 +3227,7 @@ bus.on('ui:dorp-buy', async (id) => {
     return;
   }
   coinsChanged();
+  dorp3d?.buyMark(id);
   game.scene.getScene('Dorp')?.buyMark?.(id);
   ui.setDorpMode({ ...dorpScreenModel('marks'), coins: store.getEconomy().coins });
   refreshMenuDorp();

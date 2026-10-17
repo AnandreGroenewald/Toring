@@ -40,14 +40,17 @@ export function planTown3D({ id = 'TOWN', people = 0, tribe = 'vuur', gold = 0 }
   const casting = createCasting(`dorp/${id}`, tribe);
   const bldgs = [];
   let left = lit;
+  // (the town's own three colours: a look of its own, and few block materials to paint, so it opens quickly)
+  const hues = [];
+  while (hues.length < 3) { const h = R.int(0, PALETTE.length - 1); if (!hues.includes(h)) hues.push(h); }
   for (let k = 0; k < n; k++) {
     const want = k === n - 1 ? left : Math.round((lit * weights[k]) / sum);
     left -= want;
     const need = Math.max(4, Math.ceil(want * 1.25) + 2);
     const maxFloors = k === 0 ? 9 : 6;
     const cls = CLASSES[k === 0 ? 'wide' : R.pick(['wide', 'wide', 'mid', 'slim'])];
-    const hue = R.int(0, PALETTE.length - 1);
-    const hue2 = R.chance(0.5) ? hue : R.int(0, PALETTE.length - 1);
+    const hue = hues[R.int(0, hues.length - 1)];
+    const hue2 = R.chance(0.5) ? hue : hues[R.int(0, hues.length - 1)];
     const floors = [];
     let wins = 0;
     while (wins < need || floors.length < 2) {
@@ -71,7 +74,14 @@ export function planTown3D({ id = 'TOWN', people = 0, tribe = 'vuur', gold = 0 }
     const pick = litKeys.splice(R.int(0, litKeys.length - 1), 1)[0];
     bldgs[pick[0]].gold.add(pick[1]);
   }
-  return { bldgs, lit, tribe };
+  return { bldgs, lit, tribe, hues };
+}
+/** The block materials a town plan needs ([shape, colour] once each): painted ahead, a few a frame. */
+export function planMaterials(plan) {
+  const seen = new Set();
+  const out = [];
+  for (const b of plan.bldgs) for (const f of b.floors) { const k = `${f.shape}|${f.color}`; if (!seen.has(k)) { seen.add(k); out.push([f.shape, f.color]); } }
+  return out;
 }
 
 // ------------------------------------------------------------------------------------------------- materials
@@ -162,11 +172,10 @@ function windowTex(kind = 0) {
  * Clash's pieces (the blocks), `marks` its landmark ids, `walls` how many walls. Returns { group, update(t, dt),
  * tallest (world position of the main building's top), buildings: [{ group, top }] }.
  */
-export function buildTown({ plan, isle, pieces, renderer, skin = 'kleur', marks = [], walls = 0, seed = 1 }) {
+export function buildTown({ plan, isle, pieces, renderer, cm = castleMaterials(renderer), skin = 'kleur', marks = [], walls = 0, seed = 1, paintK = 1 }) {
   const group = new THREE.Group();
   group.position.set(isle.cx, isle.top, isle.cz);
   const r = rng(seed * 77 + 5);
-  const cm = castleMaterials(renderer);
   const updaters = [];
   const buildings = [];
   // windows (all of the town's in three instanced meshes: frames, lit glass, dark glass)
@@ -200,7 +209,7 @@ export function buildTown({ plan, isle, pieces, renderer, skin = 'kleur', marks 
     let topW = 4;
     b.floors.forEach((f, fi) => {
       const s = shapeInfo(f.shape);
-      const blk = pieces.block(f.shape, 0, null, skin, f.color);
+      const blk = pieces.block(f.shape, 0, null, skin, f.color, paintK);
       const bottom = blk.userData.bottom;
       blk.position.set(0, y + bottom, 0);
       blk.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
@@ -215,7 +224,7 @@ export function buildTown({ plan, isle, pieces, renderer, skin = 'kleur', marks 
         const wy = -(w.y - s.cy) / PX;
         const ww = (w.w / PX) * 1.05;
         const wh = (w.h / PX) * 1.05;
-        for (const zs of [1, -1]) winList.push({ bg, x: wx, y: y + bottom + wy, z: zs * (DEPTH / 2 + 0.03), zs, w: ww, h: wh, lit: !!who && zs > 0, gold });
+        for (const zs of [1, -1]) winList.push({ bg, bi, x: wx, y: y + bottom + wy, z: zs * (DEPTH / 2 + 0.03), zs, w: ww, h: wh, lit: !!who && zs > 0, gold: gold && zs > 0 });
       });
       y += s.h / PX;
       topW = s.w / PX;
@@ -273,17 +282,49 @@ export function buildTown({ plan, isle, pieces, renderer, skin = 'kleur', marks 
       sc.set(w.w * k, (w.h / 1.5) * k, 1);
       mtx.compose(p, q, sc);
       m.setMatrixAt(i, mtx);
-      if (!frames && w.gold) m.setColorAt(i, new THREE.Color('#ffd84a'));
+      if (!frames) m.setColorAt(i, new THREE.Color(w.gold && w.lit ? '#ffd84a' : '#ffffff'));
     });
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
     group.add(m);
     return m;
   };
   place(winList, frameMat, true);
-  const lit = winList.filter((w) => w.lit);
+  place(winList, darkMat, false);   // (every window's dark glass; a lit pane goes over it while someone is home)
+  const front = winList.filter((w) => w.zs > 0);
   const kindOf = (i) => [0, 1, 0, 2, 1][(i * 7 + 3) % 5];   // (someone, curtains, a plant: mixed, the same every time)
-  litMats.forEach((m, k) => place(lit.filter((_, i) => kindOf(i) === k), m, false));
-  place(winList.filter((w) => !w.lit), darkMat, false);
+  front.forEach((w, i) => { w.kind = kindOf(i); });
+  const litMeshes = litMats.map((m, k) => {
+    const list = front.filter((w) => w.kind === k);
+    list.forEach((w, i) => { w.mi = i; });
+    const mesh = place(list, m, false);
+    if (mesh) { mesh.position.z += 0.004; mesh.userData.list = list; }
+    return mesh;
+  });
+  const lit = front.filter((w) => w.lit);
+  const hidden = new THREE.Matrix4().makeScale(0, 0, 0);
+  // (each lit pane's own place, kept to show it again)
+  for (const mesh of litMeshes) {
+    if (!mesh) continue;
+    mesh.userData.full = mesh.userData.list.map((_, i) => { const m4 = new THREE.Matrix4(); mesh.getMatrixAt(i, m4); return m4; });
+    mesh.userData.list.forEach((w, i) => { if (!w.lit) mesh.setMatrixAt(i, hidden); });
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+  /** A front window lit (someone home) or dark; gold: their pane glows golden. */
+  function setLit(w, on, gold = w.gold) {
+    const mesh = litMeshes[w.kind];
+    if (!mesh) return;
+    w.lit = !!on;
+    w.gold = !!gold && !!on;
+    mesh.setMatrixAt(w.mi, on ? mesh.userData.full[w.mi] : hidden);
+    mesh.setColorAt(w.mi, new THREE.Color(w.gold ? '#ffd84a' : '#ffffff'));
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }
+  /** A window's place in the world (where a person leans out or lands). */
+  function windowAt(w, out = new THREE.Vector3()) {
+    w.bg.updateMatrixWorld(true);
+    return out.set(w.x, w.y, w.z + 0.2).applyMatrix4(w.bg.matrixWorld);
+  }
   // flower boxes under some lit windows (red, white, yellow flowers in a little trough)
   const boxes = lit.filter((_, i) => i % 3 === 1);
   if (boxes.length) {
@@ -318,6 +359,7 @@ export function buildTown({ plan, isle, pieces, renderer, skin = 'kleur', marks 
   main.group.add(flag);
   updaters.push((t) => flag.userData.wave?.(t));
   // walls along the shore in front: one length for each wall the town holds
+  const wallList = [];
   for (let k = 0; k < Math.min(3, walls); k++) {
     const a = (k - 1) * 0.55;
     const rad = isle.radiusAt(a) - 2.2;
@@ -336,6 +378,7 @@ export function buildTown({ plan, isle, pieces, renderer, skin = 'kleur', marks 
     wall.position.set(Math.sin(a) * rad, 0, Math.cos(a) * rad);
     wall.rotation.y = a;
     group.add(wall);
+    wallList.push(wall);
   }
   // trees and street lamps between the buildings
   const trunkMat = new THREE.MeshStandardMaterial({ color: '#5a3d26', roughness: 0.9 });
@@ -426,30 +469,58 @@ export function buildTown({ plan, isle, pieces, renderer, skin = 'kleur', marks 
     bodies.instanceMatrix.needsUpdate = true;
     heads.instanceMatrix.needsUpdate = true;
   });
-  // the landmarks
-  const spots = [[-9, 9], [9, 9.5], [-15, 5], [15.5, 6], [0, 11]];
+  // the landmarks (land ones on their spots in the order bought; sea ones round the island)
+  const spots = [[-9, 9], [9, 9.5], [-15, 5], [15.5, 6], [0, 11], [-20, -10], [20, -11]];
   let li = 0;
-  for (const id of marks) {
+  const owned = new Set();
+  const drops = [];
+  /** A landmark into the town; `drop`: it lands from the sky with a thud and dust (a purchase). */
+  function addMark(id, { drop = false } = {}) {
     const mk = LANDMARKS[id];
-    if (!mk) continue;
+    if (!mk || owned.has(id)) return null;
+    owned.add(id);
+    const m = mk.make(cm);
     if (mk.sea) {
-      const m = mk.make(cm);
       group.add(m.group);
-      updaters.push((t, dt) => m.update(t, dt, isle));
-      continue;
+      updaters.push((tt, dt) => m.update(tt, dt, isle));
+      return m.group;
     }
     const [x, z] = spots[li++ % spots.length];
-    const m = mk.make(cm);
     m.group.position.set(x, 0, z);
     m.group.rotation.y = -Math.atan2(x, 26) * 0.6;
     group.add(m.group);
-    if (m.update) updaters.push((t, dt) => m.update(t, dt));
+    if (m.update) updaters.push((tt, dt) => m.update(tt, dt));
+    if (drop) { m.group.position.y = 40; drops.push({ g: m.group, v: 0 }); }
+    return m.group;
   }
+  for (const id of marks) addMark(id);
+  updaters.push((tt, dt) => {   // (a purchase falls, bounces once, settles)
+    for (let i = drops.length - 1; i >= 0; i--) {
+      const d = drops[i];
+      d.v -= 60 * dt;
+      d.g.position.y += d.v * dt;
+      if (d.g.position.y <= 0) {
+        d.g.position.y = 0;
+        if (d.v < -8) { d.v = -d.v * 0.22; d.landed = (d.landed || 0) + 1; group.userData.onThud?.(d.g, d.landed); } else { drops.splice(i, 1); }
+      }
+    }
+  });
+  // (each building's box in the world, for the raids' throws; the fullest one: the target)
+  group.updateMatrixWorld(true);
+  buildings.forEach((b, bi) => {
+    b.box = new THREE.Box3().setFromObject(b.group);
+    b.lit = () => front.filter((w) => w.bi === bi && w.lit).length;
+  });
   return {
-    group, buildings,
+    group, buildings, isle,
+    walls: wallList,
+    windows: front,
+    setLit, windowAt, addMark,
     /** The main building's top in the world (the flag's foot). */
     tallestAt: () => main.group.localToWorld(new THREE.Vector3(0, main.top, 0)),
-    update(t, dt) { for (const f of updaters) f(t, dt); },
+    /** The building with the most people at home. */
+    fullest: () => buildings.reduce((a, b) => (b.lit() > a.lit() ? b : a), buildings[0]),
+    update(tt, dt) { for (const f of updaters) f(tt, dt); },
   };
 }
 

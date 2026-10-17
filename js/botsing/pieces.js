@@ -313,6 +313,7 @@ export function createPieces(renderer) {
         uv.setXY(i, (r.x + u * r.w) / L.W, 1 - (r.y + (1 - v) * r.h) / L.H);
       }
       g.clearGroups();
+      g.userData.shared = true;
       geoCache.set(k, g);
       return g;
     }
@@ -360,6 +361,7 @@ export function createPieces(renderer) {
       uv.setXY(i, ((PAD - 1) + u * (D_PX + 2)) / (D_PX + 2 * PAD), ((PAD - 1) + v * (D_PX + 2)) / (D_PX + 2 * PAD));
     }
     g.computeVertexNormals();
+    g.userData.shared = true;
     geoCache.set(k, g);
     return g;
   }
@@ -371,9 +373,9 @@ export function createPieces(renderer) {
    */
   const matCache = new Map();
   const lacquer = (t) => new THREE.MeshStandardMaterial({ map: t, roughness: 0.4, metalness: 0.03, envMapIntensity: 1.15 });
-  function faceMaterials(shape, skin, colorIndex = null) {
+  function faceMaterials(shape, skin, colorIndex = null, paintK = PAINT_K) {
     const color = colorIndex ?? SHAPE_COLOR[shape] ?? 0;
-    const k = `${shape}|${skin}|${color}`;
+    const k = `${shape}|${skin}|${color}|${paintK}`;
     if (matCache.has(k)) return matCache.get(k);
     const s = shapeInfo(shape);
     const D = DEPTH * PX;   // (the depth in Stapel's px)
@@ -381,12 +383,12 @@ export function createPieces(renderer) {
     // (a real material for the skin: painted timber, gold, stone ... (materials.js); the playful skins keep Stapel's art)
     const chipFrom = (c) => { const g = c.getContext('2d'); const d = g.getImageData(Math.floor(c.width * 0.3), Math.floor(c.height * 0.2), 4, 4).data; return new THREE.Color(`rgb(${d[0]},${d[1]},${d[2]})`); };
     if (hasMaterial(skin) && BOX.has(shape)) {
-      const L = atlasLayout(s, PAINT_K);
-      const sf = boxSurface(shape, skin, color, s.w, s.h, D, L, PAINT_K);
+      const L = atlasLayout(s, paintK);
+      const sf = boxSurface(shape, skin, color, s.w, s.h, D, L, paintK);
       mats = surfaceMaterial(sf, aniso);
       mats.chipColor = chipFrom(sf.color);
     } else if (hasMaterial(skin)) {
-      const sf = wedgeSurface(skin, color, getGeometry({ shape, color }), D, PAINT_K);
+      const sf = wedgeSurface(skin, color, getGeometry({ shape, color }), D, paintK);
       mats = [surfaceMaterial({ ...sf.face, roughness: sf.roughness, metalness: sf.metalness }, aniso), surfaceMaterial({ ...sf.wall, roughness: sf.roughness, metalness: sf.metalness }, aniso)];
       mats.chipColor = chipFrom(sf.face.color);
     } else if (BOX.has(shape)) {
@@ -422,6 +424,7 @@ export function createPieces(renderer) {
     }
     // (its pieces when it breaks: plain splinters in its own colour)
     mats.chip = new THREE.MeshStandardMaterial({ color: mats.chipColor || (mats.pal ? new THREE.Color(mats.pal.fill) : '#b8996c'), roughness: 0.7, metalness: 0.03 });
+    for (const m of [...(Array.isArray(mats) ? mats : [mats]), mats.chip]) if (m) m.userData.shared = true;   // (a town's teardown leaves them)
     matCache.set(k, mats);
     return mats;
   }
@@ -452,7 +455,9 @@ export function createPieces(renderer) {
       const t = new THREE.CanvasTexture(emblemCanvas(element));
       t.colorSpace = THREE.SRGBColorSpace;
       t.anisotropy = aniso;
-      emblemMats.set(element, new THREE.MeshStandardMaterial({ map: t, emissive: '#ffffff', emissiveMap: t, emissiveIntensity: 0.32, roughness: 0.28, metalness: 0.05, envMapIntensity: 1.2 }));
+      const em = new THREE.MeshStandardMaterial({ map: t, emissive: '#ffffff', emissiveMap: t, emissiveIntensity: 0.32, roughness: 0.28, metalness: 0.05, envMapIntensity: 1.2 });
+      em.userData.shared = true;
+      emblemMats.set(element, em);
     }
     return emblemMats.get(element);
   }
@@ -478,7 +483,7 @@ export function createPieces(renderer) {
    * A block's look: `shape` on `side`, its `element`'s emblem on the front and back, painted in Stapel `skin`.
    * userData: { top, bottom, w, h } (m above/below its centroid).
    */
-  function block(shape, side, element = null, skin = 'kleur', colorIndex = null) {
+  function block(shape, side, element = null, skin = 'kleur', colorIndex = null, paintK = PAINT_K) {
     if (shape === 'crown') return crown(side);
     const s = shapeInfo(shape);
     const group = new THREE.Group();
@@ -486,7 +491,7 @@ export function createPieces(renderer) {
     const H = s.h / PX;
     const top = s.cy / PX;
     const bottom = (s.h - s.cy) / PX;
-    const m = new THREE.Mesh(blockGeometry(shape), faceMaterials(shape, skin, colorIndex));
+    const m = new THREE.Mesh(blockGeometry(shape), faceMaterials(shape, skin, colorIndex, paintK));
     m.castShadow = m.receiveShadow = true;
     group.add(m);
     if (element) {
@@ -1331,7 +1336,10 @@ export function createPieces(renderer) {
     return s;
   }
 
+  // (made once for every battle and town: a town's teardown must leave these alone)
+  for (const m of [...Object.values(M), ...team, ...velvet, ...Object.values(OVER), steel, fuseMat, medalMetal, waterSkinMat]) if (m?.userData) m.userData.shared = true;
+  for (const g of [medalMetalGeo, medalFaceGeo]) g.userData.shared = true;
   /** (behind the loading screen) a shape's material in a skin made now, not on its first use (no stall mid-game). */
-  const prepare = (shape, skin) => { faceMaterials(shape, skin); };
+  const prepare = (shape, skin, colorIndex = null, paintK = PAINT_K) => { faceMaterials(shape, skin, colorIndex, paintK); };
   return { M, block, crown, seam, crack, glassCrack, glassBreak, soot, vineWrap, springCoil, dropCoil, waterSkin, drySkin, tick, crane, pin, blockGeometry, cardImage, team, velvet, ghost, crownMark, prepare };
 }

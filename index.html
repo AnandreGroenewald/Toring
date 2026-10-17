@@ -150,6 +150,8 @@
   </script>
 
   <script src="lib/phaser.min.js" defer></script>
+  <!-- (1.18: the 3D town's finish passes import "three" by name) -->
+  <script type="importmap">{ "imports": { "three": "./lib/three.module.min.js" } }</script>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>
