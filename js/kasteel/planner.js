@@ -1,6 +1,7 @@
 // (1.17 3D) Die Kasteelreeks: your castle and its defence plan (the owner, 16 Oct 2026: "The oponent needs to be able to
-// strategize what is the best way to defend if they are offline"). Your castle (your towers; the real Daily layouts
-// come later) turns on its hill; choose which tower stands in the middle as the keep (your flag flies there), then
+// strategize what is the best way to defend if they are offline"). Your castle (your own Daily Towers, newest first;
+// a starter castle until you've played one) turns on its hill; choose which tower stands in the middle as the keep
+// (your flag flies there), then
 // place your defence on its spots: archers, spearmen and knights on the walls, the tower tops and behind the gate;
 // boiling oil over the gate; a ballista on a tower top; spikes in front. Bêre keeps it; "Toets dit" attacks a copy.
 import * as THREE from '../../lib/three.module.min.js';
@@ -9,7 +10,8 @@ import { buildWorld, DIST, rng, groundHeight } from './world.js';
 import { castleMaterials, buildCastle, sampleDaily } from './castle.js';
 import { soldier, cauldron, ballista, spikes } from './army.js';
 import { idle, setDetail } from './crew.js';
-import { PIECES, BUDGET, spotIds, defaultPlan, costOf, loadPlan, savePlan, mySeed, myDays } from './plan.js';
+import { PIECES, spotIds, defaultPlan, costOf, loadPlan, savePlan, mySeed, myDayInfo, budgetFor } from './plan.js';
+import { T, fmtM, dayName } from './text.js';
 import { audio } from '../audio.js';
 import { ICONS } from './hud.js';
 import { weldStill } from './batch.js';
@@ -25,7 +27,15 @@ const saved = loadPlan();
 const seed = saved?.seed ?? mySeed();
 const r0 = rng(seed);
 // your own Daily Towers when the game has kept some (the rest: low foundations, still to build); else a starter castle
-const real = myDays();
+const info = myDayInfo();
+const real = info.map((d) => d.layout);
+const BUDGET = budgetFor(real.length);
+const dayLabel = (i) => {
+  const d = info[i];
+  if (!d) return real.length ? T.toBuild : T.starterTower(i + 1);
+  const [y, m, dd] = d.dateKey.split('-').map(Number);
+  return `${dayName(new Date(Date.UTC(y, m - 1, dd)).getUTCDay())} · ${fmtM(d.h || 0)}`;
+};
 const days = real.length
   ? [...real, ...Array.from({ length: Math.max(0, 5 - real.length) }, () => sampleDaily(r0, 2))].slice(0, 5)
   : [sampleDaily(r0, 16), sampleDaily(r0, 12), sampleDaily(r0, 11), sampleDaily(r0, 13), sampleDaily(r0, 10)];
@@ -126,21 +136,21 @@ function paint() {
 // ------------------------------------------------------------------------------------------------------- the screen
 const hudEl = document.getElementById('k-hud');
 hudEl.innerHTML = `
-  <div class="kp-title"><small>DIE KASTEELREEKS</small><b>Jou kasteel</b><p>${real.length ? `${real.length} van jou Daaglikse Torings staan hier${real.length < 5 ? ' · speel nog om te bou' : ''}` : 'Speel die Daaglikse Toring: elke dag se toring word ’n toring van jou kasteel'}. Beplan jou verdediging: dit veg vir jou terwyl jy weg is.</p><a class="kp-attack" href="?">Val Robot Rikus aan ›</a></div>
-  <div class="kp-keep"><button type="button" class="kp-prev" aria-label="Vorige">‹</button><div><small>HOOF-TORING</small><b class="kp-day">Dag 1</b></div><button type="button" class="kp-next" aria-label="Volgende">›</button></div>
-  <div class="kp-budget"><small>BEGROTING</small><b class="kp-left">0 / ${BUDGET}</b></div>
+  <div class="kp-title"><small><a class="k-back" href="index.html">${T.back}</a>${T.series}</small><b>${T.yourCastle}</b><p>${real.length ? T.standHere(real.length) : T.playToBuild}. ${T.planLine}</p><a class="kp-attack" href="?">${T.attackRikus}</a></div>
+  <div class="kp-keep"><button type="button" class="kp-prev" aria-label="${T.prev}">‹</button><div><small>${T.keep}</small><b class="kp-day"></b></div><button type="button" class="kp-next" aria-label="${T.next}">›</button></div>
+  <div class="kp-budget"><small>${T.budget}</small><b class="kp-left">0 / ${BUDGET}</b>${real.length ? `<em>${T.budgetUp(BUDGET - budgetFor(0))}</em>` : ''}</div>
   <p class="kp-hint"></p>
-  <div class="kp-cards">${Object.entries(PIECES).map(([k, p]) => `<button type="button" class="kp-card" data-k="${k}"><span class="kp-ic">${ICONS[k]}</span><b>${p.name}</b><i>${p.cost}</i></button>`).join('')}</div>
-  <div class="kp-btns"><button type="button" class="kp-save">BÊRE</button><button type="button" class="kp-test">TOETS DIT</button></div>`;
+  <div class="kp-cards">${Object.entries(PIECES).map(([k, p]) => `<button type="button" class="kp-card" data-k="${k}"><span class="kp-ic">${ICONS[k]}</span><b>${T.pieces[k]}</b><i>${p.cost}</i></button>`).join('')}</div>
+  <div class="kp-btns"><button type="button" class="kp-save">${T.save}</button><button type="button" class="kp-test">${T.test}</button></div>`;
 const $ = (q) => hudEl.querySelector(q);
 const hud = {
   update() {
     const used = costOf(plan);
     $('.kp-left').textContent = `${used} / ${BUDGET}`;
     $('.kp-budget').classList.toggle('is-over', used > BUDGET);
-    $('.kp-day').textContent = `Dag ${(plan.keep ?? 0) + 1} se toring`;
+    $('.kp-day').textContent = dayLabel(plan.keep ?? 0);
     for (const c of hudEl.querySelectorAll('.kp-card')) c.classList.toggle('is-on', c.dataset.k === sel);
-    $('.kp-hint').textContent = sel ? `Tik ’n goue kring om ’n ${PIECES[sel].name.toLowerCase()} te plaas` : 'Kies wat jy wil plaas · tik iets wat staan om dit weg te vat';
+    $('.kp-hint').textContent = sel ? T.placeHint(T.pieces[sel]) : T.idleHint;
     $('.kp-save').classList.toggle('is-dirty', dirty);
   },
 };
@@ -150,15 +160,15 @@ for (const c of hudEl.querySelectorAll('.kp-card')) {
 $('.kp-prev').addEventListener('click', () => { plan.keep = ((plan.keep ?? 0) + days.length - 1) % days.length; dirty = true; sfx('click'); build(); });
 $('.kp-next').addEventListener('click', () => { plan.keep = ((plan.keep ?? 0) + 1) % days.length; dirty = true; sfx('click'); build(); });
 $('.kp-save').addEventListener('click', () => {
-  if (costOf(plan) > BUDGET) { flash('Te duur: haal iets weg'); return; }
+  if (costOf(plan) > BUDGET) { flash(T.tooDear); return; }
   savePlan({ seed, plan });
   dirty = false;
   sfx('banner');
-  flash('Bêre! Jou kasteel veg nou so vir jou.');
+  flash(T.saved);
   hud.update();
 });
 $('.kp-test').addEventListener('click', () => {
-  if (costOf(plan) > BUDGET) { flash('Te duur: haal iets weg'); return; }
+  if (costOf(plan) > BUDGET) { flash(T.tooDear); return; }
   savePlan({ seed, plan });
   location.href = `${location.pathname}?teen=my`;
 });
@@ -205,7 +215,7 @@ cv.addEventListener('pointerup', (e) => {
     const id = [...pieces.entries()].find(([, p]) => p === o)?.[0];
     if (id) { take(id); paint(); return; }
   }
-  if (hitRing?.object && !sel) flash('Kies eers onder wat jy wil plaas');
+  if (hitRing?.object && !sel) flash(T.pickFirst);
 });
 
 build();
@@ -222,6 +232,7 @@ function frame() {
   st.render(1 / 60);
   requestAnimationFrame(frame);
 }
+await st.warm();
 requestAnimationFrame(frame);
 window.__planner = { plan: () => plan, spots: () => spots, put: (id, k) => { const ok = put(id, k); paint(); return ok; }, take: (id) => { take(id); paint(); }, select: (k) => { sel = k; paint(); }, ringAt: (id) => { const r = rings.get(id); const v = r.position.clone().project(camera); return { x: v.x, y: v.y }; } };
 window.__kasteelReady = true;

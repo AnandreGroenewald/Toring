@@ -9,13 +9,14 @@ import { createStage } from './stage.js';
 import { buildWorld, DIST, rng, groundHeight } from './world.js';
 import { castleMaterials, buildCastle, sampleDaily } from './castle.js';
 import { trebuchet, ram as makeRam, shot, cauldron, ballista as makeBallista, spikes as makeSpikes } from './army.js';
-import { defaultPlan, loadPlan, spotIds, myDays, mySeed } from './plan.js';
+import { defaultPlan, loadPlan, spotIds, myDays, mySeed, helpSeen, markHelp } from './plan.js';
 import { createCrowd } from './crowd.js';
 import { setDetail } from './crew.js';
 import { createPhysics } from './physics.js';
 import { createFx } from './fx.js';
 import { weldStill, towerWelds, weldInto } from './batch.js';
 import { scoutScreen, createSiegeHud } from './hud.js';
+import { T } from './text.js';
 import { audio, haptics } from '../audio.js';
 
 const q = new URLSearchParams(location.search);
@@ -23,8 +24,9 @@ const q = new URLSearchParams(location.search);
 const MINE = q.get('teen') === 'my' ? (loadPlan() || { seed: mySeed(), plan: null }) : null;
 const seed = MINE?.seed ?? (Number(q.get('seed')) || (Date.now() % 100000) + 1);
 const rand = rng(seed);
-const OPP = MINE ? 'Jou kasteel' : 'Robot Rikus';
-const TITLE = MINE ? 'Jou kasteel (toets)' : 'Robot Rikus se kasteel';
+const OPP = MINE ? T.myIn : T.rikus;
+const TITLE = MINE ? T.myTest : T.rikusCastle;
+const NAME_IN = MINE ? T.myIn : T.rikusIn;
 const HALF = 15;
 const G_ACC = 16;   // the world's gravity (m/s²): everything falls with weight
 
@@ -211,7 +213,7 @@ const starCount = () => Object.values(G.stars).filter(Boolean).length;
 // ------------------------------------------------------------------------------------------------------ the screen
 const hudEl = document.getElementById('k-hud');
 let hud = null;
-scoutScreen(hudEl, { name: OPP, title: TITLE, mineLink: true, towers: castle.towers.length, perfects: days.flat().filter((b) => b.rating === 'P').length, defenders: Object.keys(plan.place).length, goals: ['Breek die hek', 'Helfte plat', 'Hul vlag val'], coins: 130, trophies: 30 }, () => startSiege());
+scoutScreen(hudEl, { name: OPP, title: TITLE, mineLink: true, towers: castle.towers.length, perfects: days.flat().filter((b) => b.rating === 'P').length, defenders: Object.keys(plan.place).length, goals: T.goals, coins: 130, trophies: 30 }, () => startSiege());
 
 function startSiege() {
   try { audio.unlock(); } catch { /* */ }
@@ -225,11 +227,43 @@ function startSiege() {
     back: () => leaveAim(),
     again: () => location.reload(),
     done: () => { location.href = `${location.pathname}?plan`; },
+    pause: () => pause(),
+    resume: () => { G.pauseCard = false; hud.paused(false); G.paused = G.helpOpen; },
+    quit: () => { G.pauseCard = false; hud.paused(false); G.paused = false; if (!G.ended) endSiege(); },
+    share: (r) => brag(r),
   });
   hud.cards(G.cards, G.sel, true);
-  hud.hint('Kies ’n kaart, en tik op die veld');
+  hud.hint(T.pickHint);
 }
 
+function pause() {
+  if (G.ended || G.pauseCard || !['battle', 'aim', 'flight'].includes(G.mode)) return;
+  G.pauseCard = true;
+  G.paused = true;
+  G.winding = false;
+  hud.paused(true);
+}
+// (the phone locked, a call, another app: the battle waits on the pause card)
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+/** A first-time tip (once per player, when `when()` still holds after `ms`): the battle waits while it is read. */
+function tip(k, text, ms = 0, when = () => true) {
+  if (helpSeen(k)) return;
+  setTimeout(() => {
+    if (G.ended || G.helpOpen || helpSeen(k) || !when()) return;
+    markHelp(k);
+    G.helpOpen = true;
+    G.paused = true;
+    G.winding = false;
+    hud.help(text).then(() => { G.helpOpen = false; G.paused = G.pauseCard; });
+  }, ms);
+}
+/** "SPOG": a win to WhatsApp (the phone's own share sheet when it has one). */
+function brag(r) {
+  const site = `${location.origin}${location.pathname.replace(/kasteel\.html$/, '')}`;
+  const text = `${T.brag(r.destroyed, r.stars, NAME_IN)} ${site}`;
+  if (navigator.share) navigator.share({ text }).catch(() => {});
+  else window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+}
 function pickCard(k) {
   if (G.mode !== 'battle' || G.ended) return;
   sfx('click');
@@ -242,7 +276,7 @@ function pickCard(k) {
   }
   zone.visible = edge.visible = !!G.sel;
   hud.cards(G.cards, G.sel, G.trebState === 'ready');
-  hud.hint(G.sel ? 'Tik op die veld (die blou deel) om te stuur' : '');
+  hud.hint(G.sel ? T.fieldHint : '');
 }
 
 // ------------------------------------------------------------------------------------------------------ deploying
@@ -277,6 +311,7 @@ function deploy(kind, x, z) {
   sfx('drop');
   buzz('tap');
   if (G.cards[kind] <= 0) { G.sel = null; zone.visible = edge.visible = false; hud.hint(''); }
+  tip('treb', T.help2, 2500, () => G.mode === 'battle' && G.trebState === 'ready' && G.cards.treb > 0);
   hud.cards(G.cards, G.sel, G.trebState === 'ready');
   return true;
 }
@@ -291,6 +326,7 @@ function enterAim() {
   hud.aim(true);
   hud.power(0, false);
   hud.hint('');
+  tip('aim', T.help3, 700, () => G.mode === 'aim');
   zone.visible = edge.visible = false;
 }
 function leaveAim() {
@@ -400,7 +436,7 @@ function damageGate(n) {
   castle.gate.userData.portcullis.visible = false;
   fx.dust(new THREE.Vector3(0, 3, GATE_Z + 1), { n: 16, size: 3.2, up: 2.5, spread: 5, life: 2.6 });
   st.shake(0.6);
-  star('gate', 'DIE HEK IS OOP!');
+  star('gate', T.gate);
 }
 function star(k, text) {
   if (G.stars[k]) return;
@@ -612,10 +648,10 @@ function think(dt) {
   // the flag: down when the keep's top falls, or when your men hold the keep's foot
   if (!G.stars.flag && keepTop) {
     const off = phys.displaced(keepTop);
-    if (off.d > 2 || off.ang > 35) star('flag', 'HUL VLAG VAL!');
+    if (off.d > 2 || off.ang > 35) star('flag', T.flag);
     const atKeep = blue.filter((m) => m.alive && !m.pusher && m.kind !== 'boog' && Math.hypot(m.x - KEEP.x, m.z - KEEP.z - 4.5) < 4).length;
     G.flagT = atKeep >= 3 ? G.flagT + dt : Math.max(0, G.flagT - dt);
-    if (G.flagT > 4) star('flag', 'HUL VLAG VAL!');
+    if (G.flagT > 4) star('flag', T.flag);
   }
 }
 
@@ -632,7 +668,7 @@ function measure(dt) {
   }
   G.destroyed = Math.min(100, Math.round((100 * down) / totalVol));
   hud?.damage(G.destroyed);
-  if (G.destroyed >= 50) star('half', 'HELFTE PLAT!');
+  if (G.destroyed >= 50) star('half', T.half);
 }
 
 // ----------------------------------------------------------------------------------------------------- the camera
@@ -718,7 +754,7 @@ function canvasEvents(cv) {
     ray.setFromCamera(ndc, camera);
     const p = new THREE.Vector3();
     if (!ray.ray.intersectPlane(plane, p)) return;
-    if (p.z < ZONE.z0 - 6 || p.z > ZONE.z1 + 6 || Math.abs(p.x) > ZONE.x + 6) { hud.toast('Te naby aan die mure'); return; }
+    if (p.z < ZONE.z0 - 6 || p.z > ZONE.z1 + 6 || Math.abs(p.x) > ZONE.x + 6) { hud.toast(T.fromField); return; }
     deploy(G.sel, p.x, p.z);
   });
   cv.addEventListener('pointermove', (e) => {
@@ -771,18 +807,18 @@ function frame(now) {
   last = now;
   if (G.hitStop > 0) G.hitStop -= rdt;
   G.timeScale += ((G.hitStop > 0 ? 0 : G.slowTo) - G.timeScale) * (G.hitStop > 0 ? 1 : 1 - Math.exp(-rdt * 10));
-  const dt = rdt * G.timeScale;
+  const dt = G.paused ? 0 : rdt * G.timeScale;
   G.t += dt;
   if (G.mode === 'intro') {
     G.introT += rdt;
-    if (G.introT > 2.2) G.mode = 'battle';
+    if (G.introT > 2.2) { G.mode = 'battle'; tip('deploy', T.help1); }
   }
   if (['battle', 'aim', 'flight'].includes(G.mode)) {
     G.clock -= dt;
-    if (G.clock <= 30 && !G.warned) { G.warned = true; sfx('warning'); hud.toast('30 sekondes oor!'); }
+    if (G.clock <= 30 && !G.warned) { G.warned = true; sfx('warning'); hud.toast(T.thirty); }
   }
   // the trebuchet: winding, the throw, the reload
-  if (G.winding) {
+  if (G.winding && !G.paused) {
     G.windPh += rdt * (Math.PI / 1.25);
     G.power = 90 + 120 * (0.5 - 0.5 * Math.cos(G.windPh));
     G.arm = 0.85 + 0.25 * (0.5 - 0.5 * Math.cos(G.windPh));
@@ -881,9 +917,10 @@ function endSiege() {
   setTimeout(() => {
     G.mode = 'end';
     sfx(stars ? 'record' : 'lost');
-    hud.end({ stars, destroyed: G.destroyed, name: OPP, lost: G.lost, coins: 10 + stars * 40, trophies: stars ? stars * 10 : -5 });
+    hud.end({ stars, destroyed: G.destroyed, nameIn: NAME_IN, lost: G.lost, coins: 10 + stars * 40, trophies: stars ? stars * 10 : -5 });
   }, 1600);
 }
+await st.warm([shot(0.62), makeRam(mats, 'blue')]);   // (the stone and the ram come later: their shaders now)
 requestAnimationFrame(frame);
 
 // for the tests: play it without fingers

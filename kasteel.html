@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#140c24">
   <title>Stapel · Die Kasteelreeks</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="css/kasteel.css">
   <script type="importmap">{ "imports": { "three": "./lib/three.module.min.js" } }</script>
 </head>
@@ -12,7 +16,15 @@
   <div id="k-stage">
     <canvas id="k-canvas"></canvas>
     <div id="k-hud" class="kh"></div>
+    <div id="k-load" role="status"><small>DIE KASTEELREEKS</small><div class="kl-tower" aria-hidden="true"><i></i><i></i><i></i><i></i></div><p>Die kasteel word gebou…</p></div>
   </div>
+  <script>
+    // (the loading screen in the player's own language, before anything else loads)
+    try {
+      var l = new URLSearchParams(location.search).get('lang') || localStorage.getItem('stapel.v1.lang');
+      if (l === 'en') { document.documentElement.lang = 'en'; var el = document.getElementById('k-load'); el.querySelector('small').textContent = 'THE CASTLE SERIES'; el.querySelector('p').textContent = 'Building the castle…'; }
+    } catch (e) { /* Afrikaans */ }
+  </script>
   <script type="module" src="js/kasteel/main.js"></script>
 </body>
 </html>

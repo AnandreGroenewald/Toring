@@ -113,6 +113,14 @@ export function createStage({ fov = 50, quality = pickQuality() } = {}) {
     winN = 0;
     if (fps < 48 && stepDown()) calm = 2.5;   // (a moment to settle before it judges again)
   }
+  // the loading screen stays until the first frames are drawn (their shaders compiled behind it)
+  let drawn = 0;
+  function loaded() {
+    const el = document.getElementById('k-load');
+    if (!el) return;
+    el.classList.add('is-gone');
+    setTimeout(() => el.remove(), 500);
+  }
   // a jolt: the camera's view shifts a little and settles
   let shakeK = 0;
   const off = new THREE.Vector3();
@@ -123,6 +131,17 @@ export function createStage({ fov = 50, quality = pickQuality() } = {}) {
     /** (fn(q) when the quality steps down: the world can thin its grass, the light its shadow) */
     onQuality(fn) { listeners.push(fn); },
     shake(k) { shakeK = Math.max(shakeK, k); },
+    /**
+     * Compiles every shader of the scene (and of `extra`, things that only come later: a stone, a ram) while the loading
+     * screen still shows, in parallel where the phone can: no stall on the first frame or the first throw.
+     */
+    async warm(extra = []) {
+      const g = new THREE.Group();
+      for (const o of extra) g.add(o);
+      scene.add(g);
+      try { await renderer.compileAsync(scene, camera); } catch { /* compiled on the first frame instead */ }
+      scene.remove(g);
+    },
     render(dt = 1 / 60) {
       watch(dt);
       if (shakeK > 0.002) {
@@ -134,6 +153,7 @@ export function createStage({ fov = 50, quality = pickQuality() } = {}) {
       renderer.info.reset();
       if (composer) composer.render(); else renderer.render(scene, camera);
       if (off.lengthSq()) { camera.position.sub(off); camera.updateMatrixWorld(); }
+      if (++drawn === 2) loaded();
     },
   };
   addEventListener('resize', () => {

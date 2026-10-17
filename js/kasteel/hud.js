@@ -1,3 +1,5 @@
+import { T } from './text.js';
+
 // (1.17 3D) Die Kasteelreeks: the screen over the world (dark glass, gold and the sides' colours, drawn icons): the
 // scout screen before a siege, the siege itself (time, stars, their castle's damage, your army's cards), and the
 // trebuchet's sight (range marks for the drop, dots for the wind, the winch's power).
@@ -18,12 +20,12 @@ export const ICONS = {
 
 export function scoutHud(root, s) {
   root.innerHTML = `
-    <div class="kh-title"><small>DIE KASTEELREEKS</small><b>${s.title || `${s.name} se kasteel`}</b>
-      <div class="kh-facts"><span><b>${s.towers}</b> torings</span><span><b>${s.perfects}</b> Perfeks</span><span><b>${s.defenders}</b> verdedigers</span></div></div>
-    <div class="kh-legend"><span class="kh-l kh-gran">Perfek = graniet</span><span class="kh-l kh-sand">Goed = sandsteen</span><span class="kh-l kh-wood">Skeef = hout</span></div>
-    ${s.mineLink ? '<a class="kh-mine" href="?plan">Jou kasteel ›</a>' : ''}
-    <div class="kh-goals">${s.goals.map((g) => `<div>${ICONS.star(false)}<span>${g}</span></div>`).join('')}</div>
-    <div class="kh-cta"><div class="kh-loot">${ICONS.coin}<b>+${s.coins}</b>${ICONS.trophy}<b>+${s.trophies}</b></div><button type="button" class="kh-go">VAL AAN</button></div>`;
+    <div class="kh-title"><small><a class="k-back" href="index.html">${T.back}</a>${T.series}</small><b>${s.title || T.castleOf(s.name)}</b>
+      <div class="kh-facts"><span><b>${s.towers}</b> ${T.towers}</span><span><b>${s.perfects}</b> ${T.perfects}</span><span><b>${s.defenders}</b> ${T.defenders}</span></div></div>
+    <div class="kh-legend"><span class="kh-l kh-gran">${T.legend[0]}</span><span class="kh-l kh-sand">${T.legend[1]}</span><span class="kh-l kh-wood">${T.legend[2]}</span></div>
+    ${s.mineLink ? `<a class="kh-mine" href="?plan">${T.yourCastleLink}</a>` : ''}
+    <div class="kh-goals">${(s.goals || T.goals).map((g) => `<div>${ICONS.star(false)}<span>${g}</span></div>`).join('')}</div>
+    <div class="kh-cta"><div class="kh-loot">${ICONS.coin}<b>+${s.coins}</b>${ICONS.trophy}<b>+${s.trophies}</b></div><button type="button" class="kh-go">${T.attack}</button></div>`;
 }
 
 export function siegeHud(root, s) {
@@ -61,7 +63,7 @@ export function scoutScreen(root, s, onGo) {
   root.querySelector('.kh-go').addEventListener('click', onGo, { once: true });
 }
 
-const CARDS = [['swaard', 'Swaard'], ['spies', 'Spies'], ['boog', 'Boog'], ['ridder', 'Ridder'], ['ram', 'Stormram'], ['treb', 'Trebuchet']];
+const CARDS = ['swaard', 'spies', 'boog', 'ridder', 'ram', 'treb'].map((k) => [k, T.cards[k]]);
 
 /**
  * The siege's screen. `on`: { card(k), goDown(), goUp(), back(), again(), done() }. Returns setters for the clock, stars,
@@ -70,6 +72,7 @@ const CARDS = [['swaard', 'Swaard'], ['spies', 'Spies'], ['boog', 'Boog'], ['rid
 export function createSiegeHud(root, { name, wind }, on) {
   root.innerHTML = `
     <div class="kh-top">
+      <button type="button" class="kh-pause" aria-label="Pause"><i></i><i></i></button>
       <div class="kh-clock"><b>3:00</b></div>
       <div class="kh-stars">${[0, 1, 2].map(() => ICONS.star(false)).join('')}</div>
       <div class="kh-dmg"><span>${name}</span><i class="kh-bar"><i style="width:0%"></i></i><b>0%</b></div>
@@ -86,18 +89,23 @@ export function createSiegeHud(root, { name, wind }, on) {
         <circle cx="50" cy="50" r="1.6" fill="none" stroke="#e63946" stroke-width=".35"/>
       </svg>
       <button type="button" class="kh-back" aria-label="Terug">✕</button>
-      <div class="kh-wind"><svg viewBox="0 0 24 24" style="transform:rotate(${wind < 0 ? 0 : 180}deg)"><path d="M21 12H6m5-6-6 6 6 6" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><b>${Math.abs(wind).toFixed(1)}</b><small>m/s · 1 m/s ≈ 1 kol</small></div>
-      <div class="kh-range"><small>AFSTAND</small><b>—</b></div>
-      <div class="kh-power"><span>KRAG</span><div class="kh-meter"><i class="kh-fill"></i><i class="kh-mark"></i><i class="kh-needle"></i></div><div class="kh-scale"><small>90 m</small><b class="kh-now">—</b><small>210 m</small></div></div>
-      <button type="button" class="kh-gooi">GOOI</button>
-      <p class="kh-aimhint">Sleep om te mik · hou GOOI om die arm te trek · los by die regte afstand</p>
+      <div class="kh-wind"><svg viewBox="0 0 24 24" style="transform:rotate(${wind < 0 ? 0 : 180}deg)"><path d="M21 12H6m5-6-6 6 6 6" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><b>${Math.abs(wind).toFixed(1)}</b><small>m/s · ${T.wind}</small></div>
+      <div class="kh-range"><small>${T.range}</small><b>—</b></div>
+      <div class="kh-power"><span>${T.power}</span><div class="kh-meter"><i class="kh-fill"></i><i class="kh-mark"></i><i class="kh-needle"></i></div><div class="kh-scale"><small>90 m</small><b class="kh-now">—</b><small>210 m</small></div></div>
+      <button type="button" class="kh-gooi">${T.throw}</button>
+      <p class="kh-aimhint">${T.aimHint}</p>
     </div>
     <div class="kh-army">${CARDS.map(([k, label]) => `<button type="button" class="kh-card" data-k="${k}">${ICONS[k]}<span>${label}</span><i></i></button>`).join('')}</div>
-    <div class="kh-end" hidden></div>`;
+    <div class="kh-end" hidden></div>
+    <div class="kh-pausecard" hidden><div><b>II</b><button type="button" class="kh-resume">${T.resume}</button><button type="button" class="kh-quit">${T.quit}</button></div></div>
+    <div class="kh-help" hidden></div>`;
   const $ = (s) => root.querySelector(s);
   const cards = [...root.querySelectorAll('.kh-card')];
   for (const c of cards) c.addEventListener('click', () => on.card(c.dataset.k));
   $('.kh-back').addEventListener('click', () => on.back());
+  $('.kh-pause').addEventListener('click', () => on.pause?.());
+  $('.kh-resume').addEventListener('click', () => on.resume?.());
+  $('.kh-quit').addEventListener('click', () => on.quit?.());
   const gooi = $('.kh-gooi');
   gooi.addEventListener('pointerdown', (e) => { e.preventDefault(); gooi.setPointerCapture?.(e.pointerId); on.goDown(); });
   gooi.addEventListener('pointerup', (e) => { e.preventDefault(); on.goUp(); });
@@ -114,7 +122,7 @@ export function createSiegeHud(root, { name, wind }, on) {
       for (const c of cards) {
         const k = c.dataset.k;
         const n = counts[k];
-        c.querySelector('i').textContent = k === 'treb' ? (ready ? `MIK · ${n}` : 'LAAI…') : `${n}`;
+        c.querySelector('i').textContent = k === 'treb' ? (ready ? T.aimN(n) : T.reload) : `${n}`;
         c.classList.toggle('is-on', sel === k);
         c.classList.toggle('is-out', !n || (k === 'treb' && !ready));
       }
@@ -137,17 +145,27 @@ export function createSiegeHud(root, { name, wind }, on) {
       $('.kh-now').textContent = m ? `${Math.round(m)} m` : '—';
       gooi.classList.toggle('is-down', !!live);
     },
+    paused(on) { $('.kh-pausecard').hidden = !on; },
+    /** A short first-time tip with a "Got it" (resolves when tapped). */
+    help(text) {
+      const h = $('.kh-help');
+      h.innerHTML = `<div><p>${text}</p><button type="button">${T.gotIt}</button></div>`;
+      h.hidden = false;
+      return new Promise((res) => h.querySelector('button').addEventListener('click', () => { h.hidden = true; res(); }, { once: true }));
+    },
     end(r) {
       const e = $('.kh-end');
       e.innerHTML = `<div class="kh-endcard${r.stars ? ' is-won' : ''}">
-        <small>DIE KASTEELREEKS</small><b>${r.stars ? 'OORWINNING!' : 'TERUGGESLAAN'}</b>
+        <small>${T.series}</small><b>${r.stars ? T.won : T.lost}</b>
         <div class="kh-endstars">${[0, 1, 2].map((i) => ICONS.star(i < r.stars)).join('')}</div>
-        <p>${r.destroyed}% van ${r.name} plat · ${r.lost} soldate verloor</p>
+        <p>${T.endLine(r.destroyed, r.nameIn, r.lost)}</p>
         <div class="kh-loot">${ICONS.coin}<b>+${r.coins}</b>${ICONS.trophy}<b>${r.trophies >= 0 ? '+' : ''}${r.trophies}</b></div>
-        <div class="kh-endbtns"><button type="button" class="kh-again">WEER</button><button type="button" class="kh-done">KLAAR</button></div></div>`;
+        ${r.stars && on.share ? `<button type="button" class="kh-share">${T.share}</button>` : ''}
+        <div class="kh-endbtns"><button type="button" class="kh-again">${T.again}</button><button type="button" class="kh-done">${T.done}</button></div></div>`;
       e.hidden = false;
       e.querySelector('.kh-again').addEventListener('click', () => on.again());
       e.querySelector('.kh-done').addEventListener('click', () => on.done());
+      e.querySelector('.kh-share')?.addEventListener('click', () => on.share(r));
     },
   };
 }

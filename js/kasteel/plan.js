@@ -5,16 +5,18 @@
 // the owner is away the plan fights for them. Kept on the phone under `stapel.v1.kasteel` (with the castle's seed).
 export const STORE_KEY = 'stapel.v1.kasteel';
 
-/** What may stand where, and what each costs from the budget. */
+/** What may stand where, and what each costs from the budget (the names: text.js `pieces`). */
 export const PIECES = Object.freeze({
-  boog: { name: 'Boogskutter', cost: 1, on: ['wall', 'top'] },
-  spies: { name: 'Spiesman', cost: 1, on: ['wall', 'top', 'gate'] },
-  ridder: { name: 'Ridder', cost: 2, on: ['gate'] },
-  olie: { name: 'Kookolie', cost: 2, on: ['oil'] },
-  ballista: { name: 'Ballista', cost: 3, on: ['top'] },
-  pieke: { name: 'Pieke', cost: 1, on: ['field'] },
+  boog: { cost: 1, on: ['wall', 'top'] },
+  spies: { cost: 1, on: ['wall', 'top', 'gate'] },
+  ridder: { cost: 2, on: ['gate'] },
+  olie: { cost: 2, on: ['oil'] },
+  ballista: { cost: 3, on: ['top'] },
+  pieke: { cost: 1, on: ['field'] },
 });
 export const BUDGET = 16;
+/** The budget grows with the Daily Towers you've played (2 more for each, up to 5): playing the Daily makes your castle stronger. */
+export const budgetFor = (realTowers) => BUDGET + 2 * Math.max(0, Math.min(5, realTowers | 0));
 
 /** The spots of a castle (ids and kinds): front-wall spots, tower tops (0 = the keep), behind the gate, the oil over the gate, the field. */
 export function spotIds(castle) {
@@ -50,11 +52,23 @@ export function loadPlan() {
 }
 export function savePlan(data) {
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ ...data, saved: new Date().toISOString() }));
+    localStorage.setItem(STORE_KEY, JSON.stringify({ ...readStore(), ...data, saved: new Date().toISOString() }));
     return true;
   } catch {
     return false;
   }
+}
+/** The whole record as kept (the plan may not be there yet). */
+export function readStore() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}') || {}; } catch { return {}; }
+}
+/** First-time help: has tip `k` been seen; mark it seen. */
+export const helpSeen = (k) => !!readStore().help?.[k];
+export function markHelp(k) {
+  try {
+    const v = readStore();
+    localStorage.setItem(STORE_KEY, JSON.stringify({ ...v, help: { ...(v.help || {}), [k]: 1 } }));
+  } catch { /* the tip shows again: no harm */ }
 }
 /** The owner's castle seed (their towers stay the same between visits, until the real Daily layouts are kept). */
 export function mySeed() {
@@ -68,11 +82,15 @@ export const DAYS_KEY = 'stapel.v1.kasteeldae';
 // a block's rating in the game → its stone in the castle (the clown's gift: sandstone; a cemented foundation: granite)
 const STONE = { P: 'P', G: 'G', S: 'S', X: 'S', B: 'G', F: 'P' };
 export function myDays(n = 5) {
+  return myDayInfo(n).map((d) => d.layout);
+}
+/** The same, with each day's date and height: [{ dateKey, h, layout }]. */
+export function myDayInfo(n = 5) {
   try {
     const all = JSON.parse(localStorage.getItem(DAYS_KEY) || '{}') || {};
     return Object.keys(all).sort().reverse().slice(0, n)
-      .map((k) => (all[k].b || []).map((b) => ({ shape: b.s, scale: b.k, x: b.x, y: b.y, rot: b.r, rating: STONE[b.q] || 'S' })))
-      .filter((l) => l.length);
+      .map((k) => ({ dateKey: k, h: all[k].h, layout: (all[k].b || []).map((b) => ({ shape: b.s, scale: b.k, x: b.x, y: b.y, rot: b.r, rating: STONE[b.q] || 'S' })) }))
+      .filter((d) => d.layout.length);
   } catch {
     return [];
   }
