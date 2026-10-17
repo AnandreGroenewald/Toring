@@ -608,6 +608,17 @@ export function createBattleFx(stage) {
     },
     /** The firelight over what burns (null when nothing does): the explosion's light, flickering, when it's free. */
     fireGlow(p) { fireAt = p ? fireAtV.copy(p) : null; },
+    /**
+     * The wind made visible: a few motes of spray and dust drifting through the picture round `around` (metres),
+     * `k` from -1 (blowing left) to 1 (right). Called every frame while the wind blows.
+     */
+    breeze(around, k) {
+      if (R() > Math.abs(k) * 0.9 + 0.15) return;
+      const dir = Math.sign(k);
+      spray.spawn(tmp.set(around.x - dir * (14 + R() * 10), around.y + (R() - 0.3) * 18, (R() - 0.5) * 14),
+        v.set(dir * (5 + Math.abs(k) * 14) * (0.7 + R() * 0.6), (R() - 0.5) * 0.8, 0),
+        { life: 2.4 + R(), size: 0.1 + R() * 0.12, size1: 0.06, color: R() < 0.5 ? '#ffffff' : '#ffe8d2', alpha: 0.5, drag: 0 });
+    },
     /** 💧 A Watervat brimming: a drop or two running off its edge. */
     drip(p, w = 2) {
       const side = R() < 0.5 ? -1 : 1;

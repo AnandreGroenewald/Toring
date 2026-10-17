@@ -64,7 +64,10 @@ export function createHud({ onPause } = {}) {
   const power = el(`<div class="bt-power" aria-hidden="true"><small>${T.powerWord}</small><div class="bt-pbar"><i class="bt-pfill"></i><i class="bt-pmark"></i></div><b>0%</b></div>`);
   // (aiming on a phone: where their tower is, at the screen's edge, when it's off the screen)
   const tgt = el('<div class="bt-target" aria-hidden="true"><b></b><i></i></div>');
-  root.append(top, corner, power, tgt, banner, callouts, tray, tap, modal);
+  // (the turn's wind: which way, how strong)
+  const wind = el(`<div class="bt-wind" aria-hidden="true"><small>${T.wind}</small><b></b><span class="bt-wbars"><i></i><i></i><i></i><i></i><i></i></span><em></em></div>`);
+  const flashEl = el('<div class="bt-flash" aria-hidden="true"></div>');
+  root.append(flashEl, top, corner, power, tgt, wind, banner, callouts, tray, tap, modal);
   corner.querySelector('.bt-pause').addEventListener('click', () => onPause?.());
   corner.querySelector('.bt-back').addEventListener('click', () => onPause?.(true));
 
@@ -175,6 +178,25 @@ export function createHud({ onPause } = {}) {
     },
     hideCards() { tray.classList.remove('is-on'); },
     /** The marker towards their tower (`right`: at the right edge), with its words; off with `on` false. */
+    /** A flash over the whole picture (an explosion, the glass breaking): `color`, gone in `ms`. */
+    flash(color = '#ffffff', ms = 160) {
+      flashEl.style.background = color;
+      flashEl.classList.remove('is-on');
+      void flashEl.offsetWidth;   // (restart its fade)
+      flashEl.style.animationDuration = `${ms}ms`;
+      flashEl.classList.add('is-on');
+    },
+    /** The wind gauge: `w` from -1 (to the left) to 1 (to the right), 0 calm; `kmh` its words. */
+    wind(on, w = 0, kmh = 0) {
+      wind.classList.toggle('is-on', !!on);
+      if (!on) return;
+      const n = Math.round(Math.abs(w) * 5);
+      wind.querySelector('b').textContent = w < 0 ? '◀' : w > 0 ? '▶' : '';
+      wind.classList.toggle('is-calm', n === 0);
+      wind.classList.toggle('is-left', w < 0);
+      [...wind.querySelectorAll('.bt-wbars i')].forEach((b, i) => b.classList.toggle('is-on', i < n));
+      wind.querySelector('em').textContent = n === 0 ? T.calm : `${kmh} km/h`;
+    },
     target(on, right = true, text = '') {
       tgt.classList.toggle('is-on', !!on);
       if (!on) return;

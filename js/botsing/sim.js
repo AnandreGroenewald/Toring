@@ -51,6 +51,7 @@ export function createSim({ seed = 1 } = {}) {
   let nextId = 1;
   let stepN = 0;
   let quiet = 0;
+  let wind = 0;   // (px a step², + to the right)
 
   const mat = PHYSICS.block;
   // the stacks: flat on top, widening as the rock does (world.js SLOPE), so what falls off slides down the rock
@@ -242,6 +243,7 @@ export function createSim({ seed = 1 } = {}) {
     for (const c of cands) topAll = Math.min(topAll, c.body.bounds.min.y);
     for (let i = 0; i < LAUNCH.maxSteps; i++) {
       vx *= air;
+      vx += wind;
       vy = vy * air + G_STEP * FLIGHT_G;
       x += vx;
       y += vy;
@@ -595,11 +597,15 @@ export function createSim({ seed = 1 } = {}) {
   return {
     M, engine, entries, crowns, stacks,
     get stepN() { return stepN; },
+    get wind() { return wind; },
+    /** The wind for this turn (px a step²): flying blocks and the prediction both feel it. */
+    setWind(w) { wind = Number(w) || 0; },
     step() {
       for (const e of entries) {
         if (!e.alive || !e.flying) continue;
         e.pv = { x: e.body.velocity.x, y: e.body.velocity.y };
         e.body.force.y -= e.body.mass * engine.gravity.y * engine.gravity.scale * (1 - FLIGHT_G);
+        if (wind) e.body.force.x += (e.body.mass * wind) / ((1000 / 60) ** 2);   // (the turn's wind, while it flies)
       }
       M.Engine.update(engine, DT);
       stepN++;

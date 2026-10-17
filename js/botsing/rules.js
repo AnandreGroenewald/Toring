@@ -86,6 +86,18 @@ export const PIN = { min: 0, max: Math.PI, period: 4.4 };
 export const LAUNCH = { out: 46, up: 120, V0: 16.1, perM: 0.008, air: 0.0006, maxSteps: 620 };
 /** A throw flies under this share of Stapel's gravity until it touches something: a slower, heavier arc. */
 export const FLIGHT_G = 0.5;
+/**
+ * Wind (the owner, 17 Oct 2026, of Block Clash: "too simple"): each turn its own, pushing a throw sideways while it
+ * flies (px a step², at most `max`; a turn in `calm` is still). Read it on the flags and the gauge, or miss. The
+ * prediction (Rikus, the tests) flies through the same wind. `steps` gauge levels.
+ */
+export const WIND = { max: 0.024, calm: 0.22, steps: 5 };
+/** The wind for a turn from the battle's random: 0 (calm) or ±(a third to all of max), as a px/step² push. */
+export function windFor(rand) {
+  if (rand() < WIND.calm) return 0;
+  const k = 0.33 + 0.67 * rand();
+  return (rand() < 0.5 ? -1 : 1) * Math.round(k * WIND.max * 10000) / 10000;
+}
 /** A thrown block breaks apart this many steps after its first touch (it pushes first). */
 export const DISSOLVE_STEPS = 9;
 /** A throw is Perfek when it runs into the foe's crown, or passes this close to it. */

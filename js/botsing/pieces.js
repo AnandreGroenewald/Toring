@@ -1196,7 +1196,7 @@ export function createPieces(renderer) {
     const hold = new THREE.Group();   // (the hanging block goes in here)
     hook.add(hold);
     hold.position.y = -0.85;
-    const st = { jibY: STACK_TOP + 16, tx: sx, hookY: STACK_TOP + 10, flex: 0, flexV: 0, swing: 0, park: 1, parkTo: 1, parkSpeed: 1.4 };
+    const st = { jibY: STACK_TOP + 16, tx: sx, hookY: STACK_TOP + 10, flex: 0, flexV: 0, swing: 0, park: 1, parkTo: 1, parkSpeed: 1.4, wind: 0 };
     function place() {
       // (the mast hangs from the head down: it always meets it; the lowest segment ends inside the rock)
       const H = Math.max(4, st.jibY - 1.1 - STACK_TOP);
@@ -1222,6 +1222,9 @@ export function createPieces(renderer) {
       }
       hook.position.set(lx + Math.sin(st.swing) * len, st.hookY - head.position.y, JZ);
       hook.rotation.z = st.swing;
+      // (the flag streams with the wind, whichever way the jib points)
+      if (st.wind) flag.scale.x = Math.sign(st.wind) * (Math.cos(head.rotation.y) >= 0 ? 1 : -1);
+      else flag.scale.x = -dir;
     }
     place();
     return {
@@ -1241,6 +1244,8 @@ export function createPieces(renderer) {
       park(on, fast = false) { st.parkTo = on ? 1 : 0; st.parkSpeed = fast ? 2.4 : 1.0; },
       /** The jib's whip after a throw. */
       whip(k = 1) { st.flexV += 9 * k; },
+      /** The turn's wind (its flag streams that way; 0: as built). */
+      setWind(w) { st.wind = w || 0; },
       update(dt, time) {
         st.flexV += (-st.flex * 60 - st.flexV * 6) * dt;
         st.flex += st.flexV * dt;

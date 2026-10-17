@@ -16,7 +16,7 @@ import { createSim, shapeInfo } from './sim.js';
 import { createBattleFx } from './fx.js';
 import { createHud } from './hud.js';
 import { createRikusPlanner } from './rikus.js';
-import { PX, sideX, towardFoe, towerX, BUILD, RIKUS, SETTLE, LAUNCH, STACK, G_STEP, BUDGET, ELEMENT, PIN, offer, rng, pinAngle, powerAt } from './rules.js';
+import { PX, sideX, towardFoe, towerX, BUILD, RIKUS, SETTLE, LAUNCH, STACK, G_STEP, BUDGET, ELEMENT, PIN, WIND, offer, rng, pinAngle, powerAt, windFor } from './rules.js';
 import { dateKeyFor } from '../core/daily.js';
 import { matchApiUrl } from '../sponsorConfig.js';
 import { createSlagNet } from '../slagNet.js';
@@ -222,6 +222,9 @@ function startTurn(side) {
   G.crownFall = null;
   G.said = {};
   G.strStart = [sim.strength(0), sim.strength(1)];
+  G.wind = windFor(rand);   // (after the cards: the same order on both phones of a friend battle)
+  sim.setWind(G.wind);
+  for (const c of cranes) c.setWind(G.wind);
   G.sunkStart = G.stats.sunk[side];
   G.remoteDone = null;
   G.remoteThrow = null;
@@ -395,7 +398,11 @@ function endTurn() {
     const drop = Math.max(0, G.strStart[foe] - sim.strength(foe));
     const pct = Math.round((drop / Math.max(1, G.strMax[foe])) * 100);
     const sunk = G.stats.sunk[G.side] - G.sunkStart;
-    if (pct > 0) hud.banner(T.damage(pct), { sub: sunk ? T.lostBlocks(sunk) : '', kind: G.side === ME ? 'is-me is-dmg' : 'is-foe is-dmg', ms: 1500 });
+    if (sunk >= 2) {   // (a tower coming down: the big moment of a turn)
+      hud.banner(T.towerDown, { sub: `${T.damage(pct)} · ${T.lostBlocks(sunk)}`, kind: G.side === ME ? 'is-me is-dmg' : 'is-foe is-dmg', ms: 1900 });
+      sfx('thunder');
+      stage.shake(0.8);
+    } else if (pct > 0) hud.banner(T.damage(pct), { sub: sunk ? T.lostBlocks(sunk) : '', kind: G.side === ME ? 'is-me is-dmg' : 'is-foe is-dmg', ms: 1500 });
     else hud.banner(T.noDamage, { kind: 'is-small', ms: 1100 });
   }
   if (G.sudden && G.suddenLeft[0] <= 0 && G.suddenLeft[1] <= 0) { gameOver('draw', 'sudden'); return; }
@@ -470,9 +477,12 @@ function handle(events) {
         stage.shake(0.3 + 0.45 * k);
         const foeHit = ev.other && ev.other.kind !== 'stack' && ev.other.side !== e.side;
         zoomAt(nearestSide(ev.x));
-        if (foeHit && ev.onto === 'crown') { G.freeze = calm ? 0 : 0.06; slow(0.7, 0.32); } else slow(0.6, 0.38);
+        // (weight: a heavy hit holds the moment, the camera punches in, a deep drum under the crash)
+        if (foeHit && ev.onto === 'crown') { G.freeze = calm ? 0 : 0.07; slow(0.7, 0.32); } else if (foeHit && k > 0.75) { G.freeze = calm ? 0 : 0.05; slow(0.65, 0.34); } else slow(0.6, 0.38);
+        cam.punch = calm ? 0 : Math.min(1, 0.35 + k * 0.5);
         sfx('clash');
         sfx('land');
+        sfx('drum', { v: Math.min(1, 0.4 + k * 0.5) });
         if (e.side === ME) buzz('heavy');
         if (foeHit) G.stats.hits[e.side]++;
         if (foeHit && ev.onto === 'crown' && ev.other.hp > 0) { hud.banner(T.crownHit, { kind: e.side === ME ? 'is-me' : 'is-foe', ms: 1100 }); sfx('warning'); }
@@ -496,6 +506,7 @@ function handle(events) {
         fx.shatter(at, pieces.M.glassShard, { n: 20, size: 0.55 });
         fx.sparkle(at, 50, '#e8f4ff', 10);
         if (ev.why === 'sudden') { sfx('zap'); break; }
+        if (!calm) { hud.flash('#eaf6ff', 150); cam.punch = 0.8; }
         hud.banner(e.side === ME ? T.glassMine : T.glassTheirs, { sub: T.glassSub, kind: e.side === ME ? 'is-foe' : 'is-me', ms: 1600 });
         sfx('clash');
         sfx('zap');
@@ -534,6 +545,8 @@ function handle(events) {
         fx.boom(at, 9);
         fx.stopTrail();
         stage.shake(1.5);
+        if (!calm) { hud.flash('#ffd2a0', 200); cam.punch = 1; }
+        sfx('drum', { v: 1 });
         if (!calm) G.freeze = 0.05;
         slow(0.5, 0.35);
         zoomAt(nearestSide(ev.x));
@@ -1044,6 +1057,18 @@ function watchCrowns() {
     }
   }
 }
+/** The wind: its gauge while a battle runs, and a breeze you can see drifting through the picture. */
+let windShown = null;
+function updateWind() {
+  const on = !G.over && !G.paused && ['pick', 'build', 'aim', 'flight', 'other', 'settle', 'between'].includes(G.phase);
+  const w = G.wind || 0;
+  const key = on ? w : null;
+  if (key !== windShown) {
+    hud.wind(on, w / WIND.max, Math.round((Math.abs(w) / WIND.max) * 40));
+    windShown = key;
+  }
+  if (on && w && !calm) fx.breeze(cam.look, w / WIND.max);
+}
 /** (aiming, mine) their tower off the screen (a phone): the marker at that edge, with the distance. */
 let tgtOn = false;
 function updateTarget() {
@@ -1072,7 +1097,9 @@ function updateCamera(dt) {
   cam.pos.lerp(cam.tPos, a);
   cam.look.lerp(cam.tLook, 1 - Math.exp(-cam.k * 1.7 * dt));   // (the eye finds its target before the camera arrives)
   cam.fov += (cam.tFov - cam.fov) * a;
-  if (Math.abs(camera.fov - cam.fov) > 0.01) { camera.fov = cam.fov; camera.updateProjectionMatrix(); }
+  cam.punch = (cam.punch || 0) * Math.exp(-dt * 6);   // (a hit's punch-in: the lens narrows a moment, then eases back)
+  const fov = cam.fov - cam.punch * 4;
+  if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   camera.position.copy(cam.pos);
   camera.lookAt(cam.look);
 }
@@ -1414,6 +1441,7 @@ function frame(now) {
   updateCamera(dt);
   updateMarks();
   updateTarget();
+  updateWind();
   trackCallouts();
   const t2 = performance.now();
   stage.render(dt);

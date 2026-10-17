@@ -150,6 +150,24 @@
 .bt-card.el-water { box-shadow: inset 0 0 0 1px rgba(63, 182, 255, 0.6), 0 8px 18px rgba(0, 0, 0, 0.32); } .bt-card.el-water small { color: #8fd2ff; }
 .bt-card.el-plof { box-shadow: inset 0 0 0 1px rgba(255, 74, 58, 0.6), 0 8px 18px rgba(0, 0, 0, 0.32); } .bt-card.el-plof small { color: #ff8f80; }
 /* the power bar: a tall gauge at the right, running up and down until a tap holds it */
+/* a flash over the picture (an explosion, the glass breaking) */
+.bt-flash { position: absolute; inset: 0; pointer-events: none; z-index: 1; opacity: 0; mix-blend-mode: screen; }
+.bt-flash.is-on { animation: bt-flash 160ms ease-out forwards; }
+@keyframes bt-flash { 0% { opacity: 0.55; } 100% { opacity: 0; } }
+/* the turn's wind: a pill under the middle of the top bar */
+.bt-wind { position: absolute; left: 50%; top: calc(max(10px, env(safe-area-inset-top)) + 74px); transform: translate(-50%, -6px); display: flex; align-items: center; gap: 6px;
+  padding: 5px 11px; border-radius: 999px; background: rgba(18, 10, 28, 0.74); border: 1px solid rgba(160, 210, 255, 0.45); color: #dff0ff; font-size: 10px; font-weight: 900;
+  letter-spacing: 0.1em; pointer-events: none; z-index: 2; opacity: 0; transition: opacity 0.25s, transform 0.25s; white-space: nowrap; }
+.bt-wind.is-on { opacity: 1; transform: translate(-50%, 0); }
+.bt-wind small { font-size: 9px; opacity: 0.8; }
+.bt-wind b { font-size: 11px; color: #9fd4ff; }
+.bt-wind em { font-style: normal; font-size: 10px; color: #fff; }
+.bt-wbars { display: flex; gap: 2px; align-items: flex-end; }
+.bt-wbars i { width: 4px; height: 5px; border-radius: 1px; background: rgba(255, 255, 255, 0.18); }
+.bt-wbars i:nth-child(2) { height: 7px; } .bt-wbars i:nth-child(3) { height: 9px; } .bt-wbars i:nth-child(4) { height: 11px; } .bt-wbars i:nth-child(5) { height: 13px; }
+.bt-wbars i.is-on { background: linear-gradient(180deg, #e6f4ff, #6fbcff); }
+.bt-wind.is-left .bt-wbars { flex-direction: row-reverse; }
+.bt-wind.is-calm b { display: none; }
 /* aiming on a phone: their tower off the screen, a marker at that edge */
 .bt-target { position: absolute; right: 10px; top: calc(max(10px, env(safe-area-inset-top)) + 128px); display: flex; align-items: center; gap: 7px; padding: 6px 9px 6px 11px; border-radius: 999px;
   background: rgba(18, 10, 28, 0.74); border: 1px solid rgba(255, 210, 120, 0.5); color: #ffe7a8; font-size: 11px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;
