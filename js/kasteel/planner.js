@@ -11,7 +11,7 @@ import { castleMaterials, buildCastle, sampleDaily } from './castle.js';
 import { soldier, cauldron, ballista, spikes } from './army.js';
 import { idle, setDetail } from './crew.js';
 import { PIECES, spotIds, defaultPlan, costOf, loadPlan, savePlan, mySeed, myDayInfo, budgetFor } from './plan.js';
-import { T, fmtM, dayName } from './text.js';
+import { T, fmtM, dayName, goBack } from './text.js';
 import { audio } from '../audio.js';
 import { ICONS } from './hud.js';
 import { weldStill } from './batch.js';
@@ -176,6 +176,14 @@ $('.kp-test').addEventListener('click', () => {
   savePlan({ seed, plan });
   location.href = `${location.pathname}?teen=my`;
 });
+// back (the app's back button, or ‹ Stapel): unsaved changes get one warning first
+let warned = false;
+function leave(e) {
+  if (dirty && !warned) { e?.preventDefault(); warned = true; flash(T.unsaved); return; }
+  if (e?.type === 'stapel:back') { e.preventDefault(); goBack(); }
+}
+addEventListener('stapel:back', leave);
+$('.k-back').addEventListener('click', leave);
 function flash(text) {
   const h = $('.kp-hint');
   h.textContent = text;

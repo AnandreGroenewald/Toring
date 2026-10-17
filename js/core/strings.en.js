@@ -167,6 +167,11 @@ export const S_EN = {
   dorpPlayForRaids: 'Build for raids',
   dorpRank: (r, n) => `Number ${r} of ${n} towns`,
   dorpWallHeld: 'The wall holds!',
+  // (1.17) The Castle Series (kasteel.html): its menu button, and its coins reaching the wallet
+  kasteel: 'The Castle Series',
+  kasteelMenuSub: (tr, w, n) => (n ? `🏆 ${fmtInt(tr)} · ${fmtInt(w)} ${w === 1 ? 'win' : 'wins'}` : 'Troops, a trebuchet and your own castle'),
+  kasteelLoot: (n) => `🏰 +${n} coins from the Castle Series`,
+  kasteelLootFull: '🏰 Today’s coins are used up: the Castle Series trophies still count',
   // (1.17) Fruit Battle: Empire vs Empire (js/scenes/SlagScene.js)
   slag: 'Fruit Battle',
   slagFruit: { druiwe: 'Grapes', piesang: 'Banana', sap: 'Juice box', waatlemoen: 'Watermelon' },

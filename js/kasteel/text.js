@@ -42,6 +42,7 @@ const AF = {
   won: 'OORWINNING!', lost: 'TERUGGESLAAN',
   endLine: (d, n, l) => `${d}% van ${n} plat · ${l} ${l === 1 ? 'soldaat' : 'soldate'} verloor`,
   again: 'WEER', done: 'KLAAR', share: 'SPOG',
+  capped: 'Vandag se munte is op (die dag se perk, soos by Oefen). Die trofeë tel steeds.',
   brag: (d, s, n) => `Ek het ${n} ${d}% platgeslaan in Stapel se Kasteelreeks (${'★'.repeat(s)}${'☆'.repeat(3 - s)}). Kan jy beter?`,
   // the planner
   yourCastle: 'Jou kasteel',
@@ -58,6 +59,7 @@ const AF = {
   budgetUp: (n) => `+${n} vir jou Daaglikse Torings`,
   saved: 'Bêre! Jou kasteel veg nou so vir jou.',
   pickFirst: 'Kies eers onder wat jy wil plaas',
+  unsaved: 'Nog nie gebêre nie: tik BÊRE om dit te hou (of terug weer om te los)',
   save: 'BÊRE', test: 'TOETS DIT', prev: 'Vorige', next: 'Volgende',
   pieces: { boog: 'Boogskutter', spies: 'Spiesman', ridder: 'Ridder', olie: 'Kookolie', ballista: 'Ballista', pieke: 'Pieke' },
   toBuild: 'Nog te bou',
@@ -101,6 +103,7 @@ const EN = {
   won: 'VICTORY!', lost: 'DRIVEN BACK',
   endLine: (d, n, l) => `${d}% of ${n} down · ${l} ${l === 1 ? 'soldier' : 'soldiers'} lost`,
   again: 'AGAIN', done: 'DONE', share: 'BRAG',
+  capped: 'Today’s coins are used up (the day’s limit, as in Practice). The trophies still count.',
   brag: (d, s, n) => `I knocked down ${d}% of ${n} in Stapel’s Castle Series (${'★'.repeat(s)}${'☆'.repeat(3 - s)}). Can you do better?`,
   yourCastle: 'Your castle',
   standHere: (n) => `${n} of your Daily Towers stand here${n < 5 ? ' · play more to build' : ''}`,
@@ -116,6 +119,7 @@ const EN = {
   budgetUp: (n) => `+${n} for your Daily Towers`,
   saved: 'Saved! Your castle now fights like this for you.',
   pickFirst: 'First pick what to place, below',
+  unsaved: 'Not saved yet: tap SAVE to keep it (or back again to leave it)',
   save: 'SAVE', test: 'TEST IT', prev: 'Previous', next: 'Next',
   pieces: { boog: 'Archer', spies: 'Spearman', ridder: 'Knight', olie: 'Boiling oil', ballista: 'Ballista', pieke: 'Spikes' },
   toBuild: 'Still to build',
@@ -129,3 +133,9 @@ const EN = {
   resume: 'CONTINUE', quit: 'QUIT',
 };
 export const T = lang === 'en' ? EN : AF;
+
+/** One step back: where the player came from (the castle's other screen, or Stapel), else Stapel itself. */
+export function goBack() {
+  if (history.length > 1 && document.referrer && new URL(document.referrer).origin === location.origin) history.back();
+  else location.href = 'index.html';
+}

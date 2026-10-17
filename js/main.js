@@ -76,6 +76,9 @@ const MENU_SLEEP_MS = 45000;   // menu left alone: let the attract tower rest
 
 const randomSeed = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
 const todayKey = () => DEBUG_DATE || dateKeyFor();
+// (1.17) Vrugteslag is set aside (the owner, 17 Oct 2026: "lets forget about the fruit, lets bring in troops and
+// machinary"): Die Kasteelreeks (kasteel.html) takes its place in the menu. Its code stays, switched off.
+const SLAG_ON = false;
 
 // Friend challenge from a shared link (?klop=<dm>&d=<date>): only valid for today's date; kept for this tab in sessionStorage.
 let challengeRaw = loadChallenge(location.search, todayKey());
@@ -567,7 +570,8 @@ function menuModel() {
     refill: refillActive(),   // (1.15) the wallet's + only while "Vul my munte aan" runs (coins are never sold)
     week: weekView(store.getWeek(), dateKey),   // the weekkis strip (js/core/week.js)
     dorp: (() => { const d = dorpView(); dorpMenuKey = JSON.stringify(d); return d; })(),   // (1.16) Jou dorp
-    slag: slagMenuView(),   // (1.17) Vrugteslag
+    slag: SLAG_ON ? slagMenuView() : null,   // (1.17) Vrugteslag (set aside)
+    kasteel: kasteelMenuView(),   // (1.17) Die Kasteelreeks
   };
 }
 
@@ -2625,7 +2629,7 @@ function finalize(result) {
   if (result.mode === 'daily' && stats?.applied && !run.retry) {   // (the second try was bought: it pays nothing)
     coins = awardCoins({ mode: 'daily', heightM: shown.heightM, perfects: shown.perfects, streak: stats.currentStreak });
     // (1.17) the fruit basket fills from the Daily Tower: a banana per 5 Perfeks, a juice box per 10, a watermelon per 3 days
-    const g = harvest({ perfects: shown.perfects, streak: stats.currentStreak });
+    const g = SLAG_ON ? harvest({ perfects: shown.perfects, streak: stats.currentStreak }) : {};
     if (g.piesang || g.sap || g.waatlemoen) {
       const sd = slagLoad();
       sd.basket = addFruit(sd.basket, g);
@@ -3280,6 +3284,31 @@ bus.on('duel:choose', (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// (1.17) Die Kasteelreeks (the owner, 16-17 Oct 2026): a page of its own (kasteel.html, js/kasteel/), built from your
+// Daily Towers. What a siege of Robot Rikus's castle wins waits in its record (stapel.v1.kasteel: `pending` coins,
+// worked out there under the day's cap) until Stapel adds it to the wallet here: one place keeps the wallet.
+// ---------------------------------------------------------------------------
+const KASTEEL_KEY = 'stapel.v1.kasteel';
+function kasteelRead() {
+  try { return JSON.parse(localStorage.getItem(KASTEEL_KEY) || '{}') || {}; } catch { return {}; }
+}
+function kasteelMenuView() {
+  const v = kasteelRead();
+  return { trophies: Math.max(0, v.trophies | 0), wins: Math.max(0, v.wins | 0), played: Math.max(0, v.played | 0) };
+}
+/** The castle's coins into the wallet (counted towards the day's cap like Oefen): { added } or null when none waited. */
+function claimKasteelLoot() {
+  const v = kasteelRead();
+  const n = Math.max(0, Math.min(5000, v.pending | 0));
+  if (!n) return null;
+  try { localStorage.setItem(KASTEEL_KEY, JSON.stringify({ ...v, pending: 0 })); } catch { return null; }   // (cleared first: never paid twice)
+  const r = store.earnCoins(n, { capped: true });
+  coinsChanged();
+  return { added: r.added };
+}
+bus.on('ui:kasteel', () => { location.href = 'kasteel.html'; });
+
 // (1.17) Vrugteslag: Ryk teen Ryk (js/core/slag.js, js/scenes/SlagScene.js; the owner, 16 Oct 2026: "Break your oponents
 // empire before he breaks yours", his style B and his four extras). This first version: you against Robot Rikus, in the
 // sunset world. The fruit basket lives on this phone (stapel.v1.slag) and fills from the Daily Tower; a battle uses at
@@ -3507,9 +3536,11 @@ function onReady() {
     if (n) setTimeout(() => ui.toast(S.stakeEarlier(fmtInt(n)), 4200), 1200);
   });
   startIdle();
+  const castleCoins = claimKasteelLoot();   // (before the menu: its wallet shows them)
   showMenu();
+  if (castleCoins) setTimeout(() => ui.toast(castleCoins.added ? S.kasteelLoot(fmtInt(castleCoins.added)) : S.kasteelLootFull, 4200), 1200);
   dorpStart();   // (1.16) Jou dorp: only where the server knows the towns
-  {
+  if (SLAG_ON) {
     // (1.17) a friend's Vrugteslag link (?slag=CODE): into their room
     const code = new URLSearchParams(location.search).get('slag');
     if (/^[A-Z0-9]{6}$/.test(code || '')) {

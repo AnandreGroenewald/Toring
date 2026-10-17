@@ -9,14 +9,14 @@ import { createStage } from './stage.js';
 import { buildWorld, DIST, rng, groundHeight } from './world.js';
 import { castleMaterials, buildCastle, sampleDaily } from './castle.js';
 import { trebuchet, ram as makeRam, shot, cauldron, ballista as makeBallista, spikes as makeSpikes } from './army.js';
-import { defaultPlan, loadPlan, spotIds, myDays, mySeed, helpSeen, markHelp } from './plan.js';
+import { defaultPlan, loadPlan, spotIds, myDays, mySeed, helpSeen, markHelp, lootFor, recordSiege } from './plan.js';
 import { createCrowd } from './crowd.js';
 import { setDetail } from './crew.js';
 import { createPhysics } from './physics.js';
 import { createFx } from './fx.js';
 import { weldStill, towerWelds, weldInto } from './batch.js';
 import { scoutScreen, createSiegeHud } from './hud.js';
-import { T } from './text.js';
+import { T, goBack } from './text.js';
 import { audio, haptics } from '../audio.js';
 
 const q = new URLSearchParams(location.search);
@@ -213,7 +213,7 @@ const starCount = () => Object.values(G.stars).filter(Boolean).length;
 // ------------------------------------------------------------------------------------------------------ the screen
 const hudEl = document.getElementById('k-hud');
 let hud = null;
-scoutScreen(hudEl, { name: OPP, title: TITLE, mineLink: true, towers: castle.towers.length, perfects: days.flat().filter((b) => b.rating === 'P').length, defenders: Object.keys(plan.place).length, goals: T.goals, coins: MINE ? null : 130, trophies: 30 }, () => startSiege());
+scoutScreen(hudEl, { name: OPP, title: TITLE, mineLink: true, towers: castle.towers.length, perfects: days.flat().filter((b) => b.rating === 'P').length, defenders: Object.keys(plan.place).length, goals: T.goals, coins: MINE ? null : lootFor(3).coins, trophies: lootFor(3).trophies }, () => startSiege());
 
 function startSiege() {
   try { audio.unlock(); } catch { /* */ }
@@ -226,7 +226,7 @@ function startSiege() {
     goUp: () => { if (G.winding) { G.winding = false; fire(G.power); } },
     back: () => leaveAim(),
     again: () => location.reload(),
-    done: () => { location.href = `${location.pathname}?plan`; },
+    done: () => goBack(),   // (home: Stapel's menu, where the coins land; or your castle, after testing it)
     pause: () => pause(),
     resume: () => { G.pauseCard = false; hud.paused(false); G.paused = G.helpOpen; },
     quit: () => { G.pauseCard = false; hud.paused(false); G.paused = false; if (!G.ended) endSiege(); },
@@ -245,6 +245,16 @@ function pause() {
 }
 // (the phone locked, a call, another app: the battle waits on the pause card)
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+// (the Android app's back button, through the app's shim: one step back, never out of a battle by accident)
+addEventListener('stapel:back', (e) => {
+  e.preventDefault();
+  if (G.helpOpen) { hudEl.querySelector('.kh-help button')?.click(); return; }
+  if (G.pauseCard) { G.pauseCard = false; hud.paused(false); G.paused = G.helpOpen; return; }
+  if (G.mode === 'aim' && !G.ended) { leaveAim(); return; }
+  if (!G.ended && ['battle', 'flight'].includes(G.mode)) { pause(); return; }
+  if (G.mode === 'intro') return;
+  goBack();
+});
 /** A first-time tip (once per player, when `when()` still holds after `ms`): the battle waits while it is read. */
 function tip(k, text, ms = 0, when = () => true) {
   if (helpSeen(k)) return;
@@ -918,7 +928,8 @@ function endSiege() {
     G.mode = 'end';
     sfx(stars ? 'record' : 'lost');
     hudEl.classList.add('is-end');
-    hud.end({ stars, destroyed: G.destroyed, nameIn: NAME_IN, lost: G.lost, test: !!MINE, coins: MINE ? null : 10 + stars * 40, trophies: stars ? stars * 10 : -5 });
+    const loot = MINE ? null : recordSiege(stars);
+    hud.end({ stars, destroyed: G.destroyed, nameIn: NAME_IN, lost: G.lost, test: !!MINE, coins: loot ? loot.coins : null, trophies: loot ? loot.trophies : 0, capped: !!loot?.capped });
   }, 1600);
 }
 await st.warm([shot(0.62), makeRam(mats, 'blue')]);   // (the stone and the ram come later: their shaders now)

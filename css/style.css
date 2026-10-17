@@ -3870,6 +3870,19 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .slag-menu-txt b { font-size: max(15px, calc(32 * var(--u))); font-weight: 900; }
 .slag-menu-txt small { font-size: max(12px, calc(21 * var(--u))); font-weight: 800; color: #ffe3d0; white-space: nowrap; }
 .slag-menu-go { font-size: calc(44 * var(--u)); }
+/* (1.17) Die Kasteelreeks: the menu's button (its own page, kasteel.html): stone, night and gold like the castle */
+.kasteel-menu-btn {
+  position: relative; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: calc(14 * var(--u)); width: 100%;
+  padding: calc(12 * var(--u)) calc(20 * var(--u)) calc(12 * var(--u)) calc(14 * var(--u)); border: 0; border-radius: calc(28 * var(--u)); cursor: pointer; font: inherit; color: #fff; text-align: left;
+  background: linear-gradient(160deg, #8a6bc0 0%, #432a74 50%, #1c1036 120%); box-shadow: 0 calc(6 * var(--u)) 0 #140a28, inset 0 0 0 1px rgba(255, 207, 107, 0.45);
+}
+.kasteel-menu-btn:active { transform: translateY(calc(4 * var(--u))); box-shadow: 0 calc(2 * var(--u)) 0 #140a28, inset 0 0 0 1px rgba(255, 207, 107, 0.45); }
+.kasteel-menu-ic { display: flex; align-items: center; justify-content: center; width: calc(84 * var(--u)); height: calc(84 * var(--u)); border-radius: calc(22 * var(--u)); background: rgba(255, 207, 107, 0.18); font-size: calc(56 * var(--u)); }
+.kasteel-menu-txt { display: flex; flex-direction: column; gap: calc(4 * var(--u)); min-width: 0; }
+.kasteel-menu-txt b { font-size: max(15px, calc(32 * var(--u))); font-weight: 900; }
+.kasteel-menu-txt small { font-size: max(12px, calc(21 * var(--u))); font-weight: 800; color: #ffe39a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kasteel-menu-go { font-size: calc(44 * var(--u)); color: #ffcf6b; }
+.kasteel-new { position: static; align-self: center; }
 /* (1.17) Vrugteslag: the lobby (Rikus, a friend's room, a code) */
 .slag-lobby .slag-lobby-btns, .slag-lobby .slag-hosting { display: grid; gap: calc(12 * var(--u)); margin-top: calc(16 * var(--u)); }
 .slag-lobby .btn { min-height: calc(86 * var(--u)); font-size: max(14px, calc(30 * var(--u))); }

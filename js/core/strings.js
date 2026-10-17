@@ -166,6 +166,11 @@ export const S = {
   dorpPlayForRaids: 'Bou vir strooptogte',
   dorpRank: (r, n) => `Nommer ${r} van ${n} dorpe`,
   dorpWallHeld: 'Die muur hou!',
+  // (1.17) Die Kasteelreeks (kasteel.html): its menu button, and its coins reaching the wallet
+  kasteel: 'Die Kasteelreeks',
+  kasteelMenuSub: (tr, w, n) => (n ? `🏆 ${fmtInt(tr)} · ${fmtInt(w)} ${w === 1 ? 'oorwinning' : 'oorwinnings'}` : 'Troepe, ’n trebuchet en jou eie kasteel'),
+  kasteelLoot: (n) => `🏰 +${n} munte uit die Kasteelreeks`,
+  kasteelLootFull: '🏰 Vandag se munte is op: die Kasteelreeks se trofeë tel steeds',
   // (1.17) Vrugteslag: Ryk teen Ryk (js/scenes/SlagScene.js; the owner's fruit battle)
   slag: 'Vrugteslag',
   slagFruit: { druiwe: 'Druiwe', piesang: 'Piesang', sap: 'Sapdoos', waatlemoen: 'Waatlemoen' },

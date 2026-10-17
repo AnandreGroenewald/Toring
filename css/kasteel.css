@@ -192,3 +192,4 @@ html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50%
 @media (prefers-reduced-motion: reduce) { .kl-tower i { animation: none; opacity: 1; } .kh-help > div { animation: none; } }
 .kh-testtag { display: flex; align-items: center; padding: 0 14px; height: 58px; border-radius: 18px; background: rgba(74, 163, 255, 0.22); border: 1px solid rgba(143, 197, 255, 0.5);
   font-size: 12px; font-weight: 900; letter-spacing: 0.08em; }
+.kh-capnote { font-size: 11px !important; margin: -6px 0 12px !important; color: var(--gold); opacity: 0.9; }

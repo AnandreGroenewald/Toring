@@ -160,6 +160,7 @@ export function createSiegeHud(root, { name, wind }, on) {
         <div class="kh-endstars">${[0, 1, 2].map((i) => ICONS.star(i < r.stars)).join('')}</div>
         <p>${T.endLine(r.destroyed, r.nameIn, r.lost)}</p>
         ${r.coins == null ? '' : `<div class="kh-loot">${ICONS.coin}<b>+${r.coins}</b>${ICONS.trophy}<b>${r.trophies >= 0 ? '+' : ''}${r.trophies}</b></div>`}
+        ${r.capped ? `<p class="kh-capnote">${T.capped}</p>` : ''}
         ${r.stars && on.share && !r.test ? `<button type="button" class="kh-share">${T.share}</button>` : ''}
         <div class="kh-endbtns"><button type="button" class="kh-again">${T.again}</button><button type="button" class="kh-done">${T.done}</button></div></div>`;
       e.hidden = false;

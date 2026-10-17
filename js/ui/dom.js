@@ -1043,7 +1043,7 @@ export function createUI(bus) {
       },
     }, coinIc(), h('b', { class: 'wallet-n', text: fmtInt(m.coins || 0) }), m.refill ? h('span', { class: 'wallet-plus', 'aria-hidden': 'true', text: '+' }) : null);
     screens.menu.replaceChildren(brand, gap,
-      h('div', { class: 'menu-stack' }, card, dorpMenuEl(m.dorp), slagMenuEl(m.slag), playRow, dock, adSlot), langChip, wallet);
+      h('div', { class: 'menu-stack' }, card, dorpMenuEl(m.dorp), kasteelMenuEl(m.kasteel), slagMenuEl(m.slag), playRow, dock, adSlot), langChip, wallet);
     // the gap shrinks when the sponsor feed adds the ad card later, so re-check whenever it resizes
     if (saying && typeof ResizeObserver === 'function') {
       if (!st.sayingRO) st.sayingRO = new ResizeObserver(() => fitSaying());
@@ -3482,6 +3482,18 @@ export function createUI(bus) {
   }
 
   /** The menu's way into the fruit battle (with your trophies and fruit). */
+  /** (1.17) Die Kasteelreeks: its own page (kasteel.html); the button shows its trophies once there are any. */
+  function kasteelMenuEl(v) {
+    if (!v) return null;
+    return h('button', {
+      type: 'button', class: 'kasteel-menu-btn', 'aria-label': `${S.kasteel}: ${S.kasteelMenuSub(v.trophies, v.wins, v.played)}`,
+      onclick: () => { if (!guard()) return; audio.play('click'); bus.emit('ui:kasteel'); },
+    },
+    h('span', { class: 'kasteel-menu-ic' }, emo('🏰')),
+    h('span', { class: 'kasteel-menu-txt' }, h('b', { text: S.kasteel }), h('small', { text: S.kasteelMenuSub(v.trophies, v.wins, v.played) })),
+    v.played ? h('span', { class: 'kasteel-menu-go', 'aria-hidden': 'true', text: '›' }) : h('span', { class: 'btn-new-tag kasteel-new', text: S.newTag }));
+  }
+
   function slagMenuEl(v) {
     if (!v) return null;
     return h('button', {

@@ -3,6 +3,9 @@
 // middle as the keep (the flag flies there), and what stands on which spot: archers, spearmen and knights on the walls,
 // the tower tops and behind the gate; boiling oil over the gate; a ballista on a tower top; spikes before the gate. While
 // the owner is away the plan fights for them. Kept on the phone under `stapel.v1.kasteel` (with the castle's seed).
+import { EARN } from '../core/economy.js';
+import { dateKeyFor } from '../core/daily.js';
+
 export const STORE_KEY = 'stapel.v1.kasteel';
 
 /** What may stand where, and what each costs from the budget (the names: text.js `pieces`). */
@@ -93,5 +96,47 @@ export function myDayInfo(n = 5) {
       .filter((d) => d.layout.length);
   } catch {
     return [];
+  }
+}
+
+/**
+ * (1.17) What a siege of Robot Rikus's castle wins: coins for Stapel's wallet like Oefen and the Uitdagersreeks (they
+ * count towards the same day's cap, EARN.dayCap) and the castle's own trophies. Testing your own castle wins nothing.
+ */
+export const LOOT = Object.freeze({ base: 5, perStar: 10, trophiesPerStar: 10, lossTrophies: -5 });
+export const lootFor = (stars) => ({ coins: LOOT.base + LOOT.perStar * stars, trophies: stars ? LOOT.trophiesPerStar * stars : LOOT.lossTrophies });
+/** The castle's tally: { trophies, wins, played, pending (coins still to reach the wallet) }. */
+export function castleStats() {
+  const v = readStore();
+  return { trophies: Math.max(0, v.trophies | 0), wins: Math.max(0, v.wins | 0), played: Math.max(0, v.played | 0), pending: Math.max(0, v.pending | 0) };
+}
+/** Coins still allowed today under the day's cap (the wallet as Stapel keeps it, less what already waits to reach it). */
+function capLeft(pending) {
+  let n = 0;
+  try {
+    const e = JSON.parse(localStorage.getItem('stapel.v1.econ') || 'null');
+    if (e?.earned?.day === dateKeyFor()) n = Math.max(0, e.earned.n | 0);
+  } catch { /* a new wallet */ }
+  return Math.max(0, EARN.dayCap - n - pending);
+}
+/**
+ * A finished siege of Robot Rikus's castle: the trophies count here at once; the coins wait in `pending` until Stapel
+ * itself adds them to the wallet (js/main.js, the next time Stapel opens: one place keeps the wallet). Returns
+ * { coins (what will land), trophies, capped (the day's cap took some) }.
+ */
+export function recordSiege(stars) {
+  const r = lootFor(stars);
+  try {
+    const v = readStore();
+    const pending = Math.max(0, v.pending | 0);
+    const coins = Math.min(r.coins, capLeft(pending));
+    v.trophies = Math.max(0, (v.trophies | 0) + r.trophies);
+    v.played = (v.played | 0) + 1;
+    if (stars) v.wins = (v.wins | 0) + 1;
+    v.pending = Math.min(5000, pending + coins);
+    localStorage.setItem(STORE_KEY, JSON.stringify(v));
+    return { coins, trophies: r.trophies, capped: coins < r.coins };
+  } catch {
+    return { coins: 0, trophies: 0, capped: false };   // (this phone keeps nothing: nothing to win)
   }
 }
