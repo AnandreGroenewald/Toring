@@ -539,9 +539,14 @@ The Worker now has them too, **built and tested, not deployed**:
    node import-towns.mjs        # a dry run: what would go over
    STAPEL_ADMIN_TOKEN=$(security find-generic-password -s 'Stapel admin token' -w) node import-towns.mjs --send
    ```
-   A second run changes nothing (towns already there stay; `--overwrite` only on purpose). The phones keep their own
-   ids and keys in `stapel.v1.dorp`, so a phone that played at home opens its own town online, as long as the game it
-   runs points at the Worker (`MATCH_API_URL`, js/sponsorConfig.js).
+   A second run changes nothing (towns already there stay; `--overwrite` only on purpose). The dry run lists every
+   played town by name: the home server also kept the test towns of the checks ("Bouer 123", "Anna", "Jan", "Claude",
+   a test "Anandre"), so carry over only the real ones with `--only ID,ID`.
+   **Mind:** a town's secret key lives on the phone (`stapel.v1.dorp`), per web address. The home Wi-Fi game
+   (`http://<the Mac's address>:8500`) and the website (`https://stapelspel.pages.dev`) are different addresses, so a
+   phone that played at home starts a NEW town on the website; the carried-over one only opens with its key (which
+   would need a one-time "take my town along" link from the home game). On 18 Oct 2026 the home file's real towns
+   were "Kippie" (0 people) and "Klippie" (11): starting fresh online loses next to nothing.
 4. Then the website and the app (they ask the front door, so an older Worker before step 2 meant no town button, not
    errors).
 
