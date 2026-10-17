@@ -41,7 +41,7 @@ const myName = String(readJson('stapel.v1')?.duel?.name || '').slice(0, 16);
 /** Today's Daily Tower Perfeks, at most BUDGET.dailyMax: extra blocks for every battle today. */
 const myBonus = Math.max(0, Math.min(BUDGET.dailyMax, Math.floor(Number(readJson('stapel.v1.kasteeldae')?.[dateKeyFor()]?.p) || 0)));
 /** (the owner: "the type of block they have purched") the block skin you wear in Stapel; Rikus wears the standard one. */
-const mySkin = String(readJson('stapel.v1.econ')?.skins?.wear?.blocks || q.get('skin') || 'kleur');
+const mySkin = String(q.get('skin') || readJson('stapel.v1.econ')?.skins?.wear?.blocks || 'kleur');   // (?skin= to show one: a test link)
 const skins = [];
 skins[ME] = mySkin;
 skins[FOE] = 'kleur';
