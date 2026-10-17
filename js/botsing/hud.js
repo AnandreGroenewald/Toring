@@ -107,6 +107,13 @@ export function createHud({ onPause } = {}) {
       clearTimeout(bannerT);
       bannerT = setTimeout(() => banner.classList.remove('is-on'), ms);
     },
+    /** Where the big banner is on the stage while it shows (px), else null. */
+    bannerBox() {
+      if (!banner.classList.contains('is-on')) return null;
+      const r = banner.getBoundingClientRect();
+      const o = root.getBoundingClientRect();
+      return { top: r.top - o.top, bottom: r.bottom - o.top };
+    },
     /** A short call-out over a point on the screen (x, y in px of the stage). */
     callout(text, x, y, kind = '') {
       const c = el(`<div class="bt-co ${kind}">${text}</div>`);

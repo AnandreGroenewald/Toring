@@ -140,32 +140,62 @@ const toScreen = (x, y, z = 0, r = stageEl.getBoundingClientRect()) => {
   return { x: ((scr.x + 1) / 2) * r.width, y: ((1 - scr.y) / 2) * r.height };
 };
 /**
- * A word over a point of the world: it stays on that point while the camera moves (the zoom), and words at the same
- * spot at the same moment stack upwards instead of covering each other.
+ * A word over a point of the world: it stays on that point while the camera moves (the zoom). Words never print over
+ * each other or over the big banner. A word floats up as it fades (bt-rise), so a new word never goes above an older
+ * one (into its path): it lines up below it; by the banner, the words line up below the banner, far enough down that
+ * their float never reaches it.
  */
 const calls = [];
 const chipOf = (g) => g?.children[0]?.material?.chip || pieces.M.sandstone;
+const LINE = 32;          // px between words in a column
+const RISE = 44;          // how far a word floats up over its life (px, at most)
+const UNDER_BANNER = 70;  // a word's foot this far below the banner (its height + its float)
+const inBand = (y, b) => !!b && y > b.top - 30 && y < b.bottom + UNDER_BANNER;
+/** On an earlier word `q` now, or in its path up: a word at (x, y) would print over it. */
+const onWord = (q, x, y) => Math.abs(q.x - x) < 150 && y > q.y - RISE - LINE + 2 && y < q.y + LINE - 2;
+/** Where a word that wants (x, y) goes: below the banner if it's there, below any word it would print over. */
+function freeSpot(x, y, placed, b, under) {
+  let yy = y;
+  if (b && (under || inBand(yy, b))) yy = Math.max(yy, b.bottom + UNDER_BANNER);
+  for (let k = 0; k < 10; k++) {
+    const hit = placed.filter((q) => onWord(q, x, yy));
+    if (!hit.length) break;
+    yy = Math.max(...hit.map((q) => q.y)) + LINE;
+  }
+  return yy;
+}
 function callout(text, px, py, kind) {
   const p = new THREE.Vector3(px / PX, -py / PX + 2.2, 0);
   const now = performance.now();
   const r = stageEl.getBoundingClientRect();
   const clampX = (x) => Math.max(70, Math.min(r.width - 70, x));
   const s = toScreen(p.x, p.y, 0, r);
-  // (move up past any word still showing where this one would land: they never print over each other)
-  let dy = 0;
-  const near = calls.filter((c) => now - c.t0 < 1400).map((c) => { const q = toScreen(c.p.x, c.p.y, 0, r); return { x: clampX(q.x), y: q.y + c.dy }; });
-  for (let i = 0; i < 6 && near.some((q) => Math.abs(q.x - clampX(s.x)) < 150 && Math.abs(q.y - (s.y + dy)) < 30); i++) dy -= 32;
-  calls.push({ el: hud.callout(text, s.x, s.y + dy, kind), p, dy, t0: now });
+  const b = hud.bannerBox();
+  const placed = calls.filter((c) => c.el.isConnected).map((c) => ({ x: clampX(c.x), y: c.y }));
+  const under = inBand(s.y, b);
+  const y = freeSpot(clampX(s.x), s.y, placed, b, under);
+  calls.push({ el: hud.callout(text, s.x, y, kind), p, dy: y - s.y, t0: now, x: s.x, y, under });
 }
 function trackCallouts() {
   if (!calls.length) return;
   const r = stageEl.getBoundingClientRect();
+  const clampX = (x) => Math.max(70, Math.min(r.width - 70, x));
   const now = performance.now();
-  for (let i = calls.length - 1; i >= 0; i--) {
+  const b = hud.bannerBox();
+  // every frame, oldest first, the same rules; a word that had to move keeps its new place (nothing jumps back)
+  const placed = [];
+  for (let i = 0; i < calls.length; i++) {
     const c = calls[i];
-    if (now - c.t0 > 1600 || !c.el.isConnected) { calls.splice(i, 1); continue; }
+    if (now - c.t0 > 1600 || !c.el.isConnected) { calls.splice(i, 1); i--; continue; }
     const s = toScreen(c.p.x, c.p.y, 0, r);
-    hud.place(c.el, s.x, s.y + c.dy);
+    if (b && !c.under && inBand(s.y + c.dy, b)) c.under = true;
+    const x = clampX(s.x);
+    const y = freeSpot(x, s.y + c.dy, placed, b, c.under);
+    c.dy = y - s.y;
+    c.x = s.x;
+    c.y = y;
+    placed.push({ x, y });
+    hud.place(c.el, s.x, y);
   }
 }
 /** Once per turn, a word for what an element did (it can fire on several blocks at once). */
@@ -189,6 +219,7 @@ function startTurn(side) {
   G.flight = null;
   G.prevRel = null;
   G.zoom = null;
+  G.crownFall = null;
   G.said = {};
   G.strStart = [sim.strength(0), sim.strength(1)];
   G.sunkStart = G.stats.sunk[side];
@@ -197,8 +228,14 @@ function startTurn(side) {
   cranes[side].park(false);
   cranes[1 - side].park(true);
   const left = G.sudden ? T.suddenLeft(G.suddenLeft[side]) : T.blocksLeft(G.blocks[side]);
-  hud.banner(turnLabel(side), { sub: left, kind: side === ME ? 'is-me' : 'is-foe', ms: 1250 });
-  sfx('banner');
+  const lastChance = G.sudden && sim.crownLost(side) && !sim.crownLost(1 - side);   // (the answer throw)
+  if (lastChance) {
+    hud.banner(side === ME ? T.lastChanceMe : T.lastChanceFoe(foeName), { sub: side === ME ? T.lastChanceSub : T.lastChanceFoeSub, kind: side === ME ? 'is-me' : 'is-foe', ms: 2200 });
+    sfx('horn');
+  } else {
+    hud.banner(turnLabel(side), { sub: left, kind: side === ME ? 'is-me' : 'is-foe', ms: 1250 });
+    sfx('banner');
+  }
   updateTop();
   if (side === ME) {
     setPhase('pick');
@@ -345,7 +382,13 @@ function endTurn() {
   G.turns[G.side]++;
   const lostMe = sim.crownLost(ME);
   const lostFoe = sim.crownLost(FOE);
-  if (lostMe || lostFoe) { gameOver(lostMe && lostFoe ? 'draw' : lostFoe ? 'win' : 'lose', 'sea'); return; }
+  if (G.sudden) G.suddenLeft[G.side] = Math.max(0, G.suddenLeft[G.side] - 1);
+  // (sudden death goes in rounds, like penalties: when the first throw of a round puts the other side's crown in the
+  // sea, that side still answers; knock theirs off too and it's a draw. The owner must never lose without a throw.)
+  const answerer = 1 - G.side;
+  const answers = G.sudden && G.suddenLeft[answerer] > G.suddenLeft[G.side] && sim.crownLost(answerer) && !sim.crownLost(G.side);
+  if ((lostMe || lostFoe) && !answers) { gameOver(lostMe && lostFoe ? 'draw' : lostFoe ? 'win' : 'lose', 'sea'); return; }
+  if (answers) { setPhase('between'); return; }   // (startTurn says it: LAASTE KANS)
   // what this turn did to the other side (the owner: "it doesnt indecate any damage?")
   if (G.action === 'throw') {
     const foe = 1 - G.side;
@@ -355,10 +398,7 @@ function endTurn() {
     if (pct > 0) hud.banner(T.damage(pct), { sub: sunk ? T.lostBlocks(sunk) : '', kind: G.side === ME ? 'is-me is-dmg' : 'is-foe is-dmg', ms: 1500 });
     else hud.banner(T.noDamage, { kind: 'is-small', ms: 1100 });
   }
-  if (G.sudden) {
-    G.suddenLeft[G.side] = Math.max(0, G.suddenLeft[G.side] - 1);
-    if (G.suddenLeft[0] <= 0 && G.suddenLeft[1] <= 0) { gameOver('draw', 'sudden'); return; }
-  }
+  if (G.sudden && G.suddenLeft[0] <= 0 && G.suddenLeft[1] <= 0) { gameOver('draw', 'sudden'); return; }
   setPhase('between');
 }
 /** Who plays next: the other side while it has blocks, else this one; both out: null (sudden death). */
@@ -827,7 +867,7 @@ function zoomPose(z, from, pos, look, { up = 0, wide = 0 } = {}) {
     fly.n.set(x, y, 0).project(frameCam);
     need = Math.max(need, Math.abs(fly.n.x), Math.abs(fly.n.y));
   }
-  const f = 2 * Math.atan((Math.tan((15 * Math.PI) / 180) * need) / 0.8);
+  const f = 2 * Math.atan((Math.tan((15 * Math.PI) / 180) * need) / 0.68);
   return Math.min(FOV, Math.max(12, (f * 180) / Math.PI));
 }
 function zoomView(z, opts) { cam.tFov = zoomPose(z, cam.tPos, cam.tPos, cam.tLook, opts); }
@@ -903,6 +943,15 @@ function camTargets(dt) {
       if (G.phaseT < 0.4) set([0, 80, 240], [0, 12, 0]);
       else set([xMe + dMe * 4, you + 9, 52], [xMe + dMe * 2, you + 3, 0]);
       k = 0.9;
+      break;
+    case 'wait':
+      if (!G.turns[0] && !G.turns[1] && !G.sudden) {   // (the first-time tip: the intro's view holds, then the cards)
+        set([xMe + dMe * 4, you + 9, 52], [xMe + dMe * 2, you + 3, 0]);
+        k = 0.9;
+        break;
+      }
+      battleView(set);
+      k = 1.7;
       break;
     case 'pick':
       // (the cards cover the lower 40%: the tower and the hanging block sit in the band above them)
@@ -1067,7 +1116,7 @@ function gameOver(result, why) {
     burst();
   }
   const title = result === 'win' ? T.win : result === 'lose' ? (FRIEND ? `${foeName.toUpperCase()} ${T.lose.split(' ').slice(1).join(' ')}` : T.lose) : T.draw;
-  const sub = why === 'gone' ? T.gone(foeName) : why === 'sea' ? (result === 'win' ? T.winSeaOf(foeName) : result === 'lose' ? T.loseSea : T.drawSudden) : T.drawSudden;
+  const sub = why === 'gone' ? T.gone(foeName) : why === 'sea' ? (result === 'win' ? T.winSeaOf(foeName) : result === 'lose' ? T.loseSea : T.drawSea) : T.drawSudden;
   const st = G.stats;
   setTimeout(() => {
     hud.modal(`<div class="bt-res is-${result}"><small>${T.title}</small><h2>${title}</h2><p>${sub}</p>
@@ -1378,7 +1427,7 @@ window.__bt = {
   /** Throws at once with this aim (tests: no frame between the aim and the throw). */
   throwAim(aim) { if (G.phase === 'aim' && G.side === ME) throwBlock(aim.theta, aim.power); },
   trolley: () => trolley(ME),
-  ghost, pin: pinMesh, cranes, skins, seen,
+  ghost, pin: pinMesh, cranes, skins, seen, calls,
   /** The aim right now: which step, the running power, the pin's angle, and where a throw now would land. */
   aimNow() {
     const power = G.aimStep === 'power' ? powerAt(G.aimT) : G.power;

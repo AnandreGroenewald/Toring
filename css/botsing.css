@@ -56,7 +56,7 @@
   filter: drop-shadow(0 3px 0 rgba(90, 40, 10, 0.55)) drop-shadow(0 8px 24px rgba(0, 0, 0, 0.5)); }
 .bt-banner.is-me b { background-image: linear-gradient(180deg, #ffffff, #bcd6ff 55%, #6ea4ff); }
 .bt-banner.is-foe b { background-image: linear-gradient(180deg, #fff1ee, #ffb3a6 55%, #ff6a55); }
-.bt-banner span { font-size: 13px; font-weight: 800; letter-spacing: 0.12em; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7); }
+.bt-banner span { font-size: 13px; font-weight: 800; letter-spacing: 0.12em; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7); max-width: calc(100% - 40px); text-align: center; line-height: 1.35; }
 .bt-callouts { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: hidden; }
 .bt-co { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font-size: 18px; font-weight: 900; letter-spacing: 0.04em; color: #fff;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55), 0 0 14px rgba(0, 0, 0, 0.55); animation: bt-rise 1.45s ease-out forwards; }
