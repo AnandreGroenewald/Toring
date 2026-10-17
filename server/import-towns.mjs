@@ -4,8 +4,11 @@
 // when Jou dorp goes online (the owner, 16 Oct 2026: "I need to make sure I carry it over"). Towns the Worker already
 // has stay as they are (a second run changes nothing) unless --overwrite.
 //
-//   node import-towns.mjs                       a dry run: reads the file, checks it, says what would go over
-//   STAPEL_ADMIN_TOKEN=... node import-towns.mjs --send [--api <url>] [--file <path>] [--overwrite]
+//   node import-towns.mjs                       a dry run: reads the file, checks it, says what would go over (and
+//                                               lists the towns that were played, by name)
+//   STAPEL_ADMIN_TOKEN=... node import-towns.mjs --send [--api <url>] [--file <path>] [--overwrite] [--only ID,ID]
+// --only: just these towns (their ids, as the dry run lists them) with their castles. The home server also kept the
+// test towns of the night's checks ("Bouer 123", "Anna", "Jan", "Claude"...): carry over only the real ones.
 //
 // The token is the Worker's ADMIN_TOKEN (the owner's Keychain: "Stapel admin token"); pass it straight in, e.g.
 //   STAPEL_ADMIN_TOKEN=$(security find-generic-password -s 'Stapel admin token' -w) node import-towns.mjs --send
@@ -34,10 +37,15 @@ try {
   console.error(`Can't read ${file}: ${err.message}`);
   process.exit(1);
 }
-const entries = Object.entries(data && typeof data === 'object' ? data : {}).filter(([k]) => KEY_RE.test(k));
+const only = opt('--only', '') ? new Set(opt('--only', '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean)) : null;
+const entries = Object.entries(data && typeof data === 'object' ? data : {}).filter(([k]) => KEY_RE.test(k))
+  .filter(([k]) => !only || (!k.startsWith('raid:') && only.has(k.split(':')[1])));
 const kinds = entries.reduce((n, [k]) => ({ ...n, [k.split(':')[0]]: (n[k.split(':')[0]] || 0) + 1 }), {});
 const played = entries.filter(([k, v]) => k.startsWith('dorp:') && (v.seq > 0 || v.people > 0)).length;
-console.log(`${file}: ${kinds.dorp || 0} towns (${played} played), ${kinds.kasteel || 0} castles, ${kinds.raid || 0} raids.`);
+console.log(`${file}: ${kinds.dorp || 0} towns (${played} played), ${kinds.kasteel || 0} castles, ${kinds.raid || 0} raids${only ? ` (only ${[...only].join(', ')})` : ''}.`);
+for (const [k, v] of entries) {
+  if (k.startsWith('dorp:') && (v.seq > 0 || v.people > 0)) console.log(`  ${k.slice(5)}  ${String(v.name || '').padEnd(14)} ${v.people | 0} people, made ${new Date(v.made || 0).toISOString().slice(0, 16).replace('T', ' ')}`);
+}
 if (!send) {
   console.log(`Dry run: nothing sent. Add --send to put them on ${api}.`);
   process.exit(0);
