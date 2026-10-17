@@ -207,11 +207,12 @@ export function createBattleFx(stage) {
   let arcFlow = 0;
   let arcPerfect = false;
 
-  // 🌿 vines: tubes rebuilt as their ends move (a few at a time), growing in, fading out
-  const VINE_N = 6;
+  // 🌿 vines: they climb over the rock's edge (where they drag to), loop round the block and pull; tubes rebuilt as
+  // their ends move (every other frame), growing in, fading out; a lasso round each block they hold
+  const VINE_N = 8;
   const vineMat = new THREE.MeshStandardMaterial({ color: '#4cbb36', emissive: '#16420f', emissiveIntensity: 0.35, roughness: 0.6, transparent: true, opacity: 1 });
   // (their leaves: one instanced mesh, eight leaves along each vine, opening as it grows)
-  const LEAVES = 8;
+  const LEAVES = 12;
   const leafTex = (() => {
     const c = document.createElement('canvas');
     c.width = 64;
@@ -252,10 +253,19 @@ export function createBattleFx(stage) {
     mesh.castShadow = true;
     mesh.frustumCulled = false;
     scene.add(mesh);
-    return { mesh, from: new THREE.Vector3(), target: null, t: 0, hold: null, fade: 0, seed: 0, tick: 0 };
+    return { mesh, from: new THREE.Vector3(), rim: new THREE.Vector3(), target: null, t: 0, hold: null, fade: 0, seed: 0, tick: 0, side: 1, lasso: null };
   });
   let vi = 0;
   const vEnd = new THREE.Vector3();
+  const lassoGeo = new THREE.TorusGeometry(1, 0.11, 6, 28);
+  lassoGeo.rotateX(Math.PI / 2);   // (round the block, level)
+  const lassoPool = Array.from({ length: 4 }, () => {
+    const m = new THREE.Mesh(lassoGeo, vineMat);
+    m.castShadow = true;
+    m.visible = false;
+    return m;
+  });
+  let lsi = 0;
   function updateVines(dt) {
     let leavesMoved = false;
     vinePool.forEach((vn, idx) => {
@@ -265,18 +275,41 @@ export function createBattleFx(stage) {
       if (!holding || !vn.target?.visible) vn.fade += dt;
       if (vn.fade > 0.6) {
         vn.mesh.visible = false;
+        if (vn.lasso) { vn.lasso.parent?.remove(vn.lasso); vn.lasso.visible = false; vn.lasso = null; }
         for (let L = 0; L < LEAVES; L++) leafMesh.setMatrixAt(idx * LEAVES + L, noLeaf);
         leavesMoved = true;
         return;
       }
+      if (vn.lasso) vn.lasso.scale.set(vn.lasso.userData.rx * (1 - vn.fade * 0.4), 1, vn.lasso.userData.rz * (1 - vn.fade * 0.4));
       if ((vn.tick = (vn.tick + 1) % 2) !== 0 && vn.t > 0.05) return;
       vn.target.getWorldPosition(vEnd);
-      const grow = Math.min(1, vn.t / 0.35);
-      const mid = vn.from.clone().lerp(vEnd, 0.5).add(new THREE.Vector3(0, 1.6 + Math.sin(vn.seed) * 0.6, 1.4));
-      const a = vn.from.clone().lerp(mid, 0.5).add(new THREE.Vector3(Math.sin(vn.seed * 3) * 0.6, 0, 0.6));
-      const curve = new THREE.CatmullRomCurve3([vn.from.clone(), a, mid, vEnd.clone()]);
+      const tw = (vn.target.userData.w || 2) / 2;
+      vEnd.x -= vn.side * tw * 0.7;   // (it takes hold on the block's side towards the edge)
+      vEnd.z += vn.zo * 0.6;
+      const grow = Math.min(1, vn.t / 0.4);
+      // from the cliff, over the rim, a loop up and across, down onto the block
+      const over = vn.rim.clone().add(new THREE.Vector3(-vn.side * 0.6, 0.9, 0));
+      const mid = over.clone().lerp(vEnd, 0.5).add(new THREE.Vector3(0, 1.2 + Math.sin(vn.seed) * 0.5, 0.3 * vn.zo));
+      // (a vine, not a pipe: it twists round its path as it climbs, more at the tip, and sways while it pulls)
+      const base = new THREE.CatmullRomCurve3([vn.from.clone(), vn.rim.clone(), over, mid, vEnd.clone()]);
+      const pts = [];
+      const N = 22;
+      const sway = Math.sin(vn.t * 5 + vn.seed) * 0.12;
+      for (let i = 0; i <= N; i++) {
+        const t = i / N;
+        const p = base.getPointAt(t);
+        if (i > 0 && i < N) {
+          const a = t * Math.PI * 2 * 3.2 + vn.seed;
+          const amp = 0.18 + 0.22 * t;
+          p.x += Math.cos(a) * amp * 0.6 + sway * t;
+          p.y += Math.sin(a * 0.5) * amp * 0.35;
+          p.z += Math.sin(a) * amp;
+        }
+        pts.push(p);
+      }
+      const curve = new THREE.CatmullRomCurve3(pts);
       vn.mesh.geometry.dispose();
-      vn.mesh.geometry = new THREE.TubeGeometry(curve, 22, 0.24 * (1 - vn.fade), 6);
+      vn.mesh.geometry = new THREE.TubeGeometry(curve, 48, 0.15 * (1 - vn.fade), 6);
       vn.mesh.geometry.setDrawRange(0, Math.floor(vn.mesh.geometry.index.count * grow));
       vn.mesh.material.opacity = 1 - vn.fade / 0.6;
       for (let L = 0; L < LEAVES; L++) {
@@ -285,7 +318,7 @@ export function createBattleFx(stage) {
         curve.getPointAt(tt, lp);
         le.set(vn.seed * 3 + L * 1.9, vn.seed + L * 2.3, L * 0.7 + vn.seed);
         lq.setFromEuler(le);
-        const sc = (1 - vn.fade / 0.6) * (0.8 + ((L * 37 + Math.floor(vn.seed * 10)) % 5) * 0.12);
+        const sc = (1 - vn.fade / 0.6) * (0.95 + ((L * 37 + Math.floor(vn.seed * 10)) % 5) * 0.14);
         ls.set(sc, sc, sc);
         lm.compose(lp, lq, ls);
         leafMesh.setMatrixAt(idx * LEAVES + L, lm);
@@ -357,27 +390,84 @@ export function createBattleFx(stage) {
     m.visible = false;
     m.renderOrder = 2;
     scene.add(m);
-    return { m, t: 0, life: 0.95, dir: 1, size: 1, p: new THREE.Vector3() };
+    return { m, t: 0, life: 1.7, dir: 1, size: 1, p: new THREE.Vector3(), x0: 0, x1: 0, poured: 0, splashed: false };
   });
   let wvi = 0;
+  // the foam it leaves on the rock: white lace on a soft round mask, flat on the rock top, sliding and draining away
+  const foamTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const g = c.getContext('2d');
+    for (let k = 0; k < 420; k++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random()) * 118;
+      const x = 128 + Math.cos(a) * r;
+      const y = 128 + Math.sin(a) * r;
+      g.fillStyle = `rgba(255,255,255,${0.25 + Math.random() * 0.5})`;
+      g.beginPath();
+      g.arc(x, y, 3 + Math.random() * 9, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.globalCompositeOperation = 'destination-in';
+    const m = g.createRadialGradient(128, 128, 30, 128, 128, 128);
+    m.addColorStop(0, 'rgba(0,0,0,1)');
+    m.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = m;
+    g.fillRect(0, 0, 256, 256);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
+  const foamPool = [0, 1].map(() => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: foamTex, transparent: true, depthWrite: false, color: '#eef8ff', opacity: 0 }));
+    m.rotation.x = -Math.PI / 2;
+    m.visible = false;
+    m.renderOrder = 1;
+    scene.add(m);
+    return { m, t: 0, life: 2.6, x: 0, dir: 1, size: 1, y: 0 };
+  });
+  let fmi = 0;
   function updateWaves(dt) {
     for (const w of wavePool) {
       if (!w.m.visible) continue;
       w.t += dt;
       const k = w.t / w.life;
       if (k >= 1) { w.m.visible = false; continue; }
-      const rise = Math.sin(Math.min(1, k * 2.2) * (Math.PI / 2));
-      const fall = k > 0.55 ? Math.max(0.05, 1 - (k - 0.55) / 0.45) : 1;
-      const sx = w.size * (0.9 + 0.7 * k);
-      w.m.position.set(w.p.x + w.dir * (-3.2 + 6.5 * k) * w.size, w.p.y, 0);
-      w.m.scale.set(w.dir * sx, w.size * 1.25 * rise * fall + 0.01, w.size * 1.1);
-      w.m.material.opacity = 0.92 * Math.min(1, (1 - k) * 2.5);
-      const lx = w.m.position.x + w.dir * 2.6 * sx;
+      // it rears up in a moment, rushes across the rock to its edge, and pours over it
+      const reach = Math.min(1, k / 0.62);
+      const front = w.x0 + (w.x1 - w.x0) * (1 - (1 - reach) ** 1.6);
+      const rise = Math.sin(Math.min(1, k * 4) * (Math.PI / 2));
+      const over = k > 0.62 ? Math.max(0.02, 1 - (k - 0.62) / 0.38) : 1;
+      const sx = w.size * 1.15;
+      w.m.position.set(front - w.dir * 2.6 * sx, w.p.y - (k > 0.62 ? (k - 0.62) * 6 : 0), 0);
+      w.m.scale.set(w.dir * sx, w.size * 1.35 * rise * over + 0.01, w.size * 1.25);
+      w.m.material.opacity = 0.94 * Math.min(1, over * 1.6);
+      const lx = front;
       const ly = w.p.y + 2.45 * w.m.scale.y;
       for (let i = 0; i < 3; i++) {
         spray.spawn(tmp.set(lx + (R() - 0.5), ly, (R() - 0.5) * 5 * w.size), v.set(w.dir * (3 + R() * 5), 1 + R() * 4, (R() - 0.5) * 2),
           { life: 0.6 + R() * 0.4, size: 0.4 + R() * 0.5, size1: 1, color: R() < 0.6 ? '#ffffff' : '#bfe6ff', alpha: 0.9, g: 14, drag: 0.6 });
       }
+      // over the edge: a waterfall down the cliff, then a splash at its foot
+      if (k > 0.55 && w.poured < 1) {
+        w.poured += dt / 0.9;
+        for (let i = 0; i < 6; i++) {
+          spray.spawn(tmp.set(w.x1 + w.dir * (0.2 + R() * 0.5), w.p.y + R() * 0.6, (R() - 0.5) * 5.5 * w.size), v.set(w.dir * (1.5 + R() * 2.2), (R() - 0.3) * 1.5, (R() - 0.5) * 0.8),
+            { life: 1.1 + R() * 0.5, size: 0.55 + R() * 0.8, size1: 1.4, color: R() < 0.5 ? '#f2fbff' : '#8fd2f6', alpha: 0.88, g: 20, drag: 0.15 });
+        }
+      }
+      if (k > 0.85 && !w.splashed) { w.splashed = true; api.splash(w.x1 + w.dir * 2.4, { size: 1.6 * w.size }); }
+    }
+    for (const f of foamPool) {
+      if (!f.m.visible) continue;
+      f.t += dt;
+      const k = f.t / f.life;
+      if (k >= 1) { f.m.visible = false; continue; }
+      f.m.position.set(f.x + f.dir * 3 * Math.min(1, k * 1.5), f.y, 0);
+      const s = f.size * (5.5 + 3 * k);
+      f.m.scale.set(s, s * 0.75, 1);
+      f.m.material.opacity = 0.9 * Math.min(1, k * 6) * (1 - k) ** 1.2;
+      f.m.rotation.z = k * 0.4 * f.dir;
     }
   }
   // your last throw's path: faint white dots
@@ -416,7 +506,7 @@ export function createBattleFx(stage) {
   const fireAtV = new THREE.Vector3();
   let fireAt = null;
 
-  return {
+  const api = {
     /** Where a block meets the sea: spray (bigger for a heavier, faster block), a foam ring. */
     splash(x, { size = 1, z = 0 } = {}) {
       const s = Math.min(2.2, size);
@@ -450,9 +540,9 @@ export function createBattleFx(stage) {
         spray.spawn(tmp.set(p.x + (R() - 0.5) * 1.5, p.y + (R() - 0.5) * 1.2, (p.z || 0) + (R() - 0.5) * 1.2), v,
           { life: 0.5 + R() * 0.5, size: 1.8 + R() * 1.5, size1: 3.2 + R() * 2.2, color: c < 0.3 ? '#ffb347' : c < 0.72 ? '#ff6a1f' : '#c4301a', alpha: 1, g: -3, drag: 2.4 });
       }
-      // (smoke rising off it, not a fog over the tower)
-      base.dust({ x: p.x, y: p.y + 1.5, z: p.z || 0 }, { n: 10, size: 2.6, color: '#2e2826', up: 6, spread: 2.2, life: 2.2 });
-      base.dust(p, { n: 5, size: 2, color: '#5a4a44', up: 3, spread: 2, life: 1.6 });
+      // (smoke rising off it, behind the tower and up: the tower stays in sight)
+      base.dust({ x: p.x, y: p.y + 1.8, z: (p.z || 0) - 1.6 }, { n: 8, size: 2.4, color: '#2e2826', up: 6.5, spread: 1.8, life: 1.6 });
+      base.dust({ x: p.x, y: p.y + 0.6, z: (p.z || 0) - 1.2 }, { n: 4, size: 1.8, color: '#5a4a44', up: 3.5, spread: 1.6, life: 1.2 });
       for (let i = 0; i < 46; i++) {
         v.set(R() - 0.5, R() * 0.7 - 0.05, R() - 0.5).normalize().multiplyScalar(12 + R() * 16);
         glow.spawn(p, v, { life: 0.5 + R() * 0.7, size: 0.22 + R() * 0.12, size1: 0.05, color: R() < 0.6 ? '#ffd27a' : '#ff8a3a', alpha: 1, g: 16, drag: 0.4 });
@@ -532,14 +622,25 @@ export function createBattleFx(stage) {
       }
     },
     /** 💧 The flood wave: a wall of water bursting along `dir` from p, spray falling back. */
-    wave(p, dir, size = 1, base = null) {
-      if (base != null) {   // (the wall of water itself, along the rock's top)
+    wave(p, dir, size = 1, base = null, edgeX = null) {
+      if (base != null) {   // (the wall of water itself, across the rock's top to its edge, and its foam)
         const w = wavePool[wvi++ % wavePool.length];
         w.p.set(p.x, base, 0);
         w.dir = dir;
         w.size = size;
         w.t = 0;
+        w.x0 = p.x - dir * 1.5;
+        w.x1 = edgeX ?? p.x + dir * 6;
+        w.poured = 0;
+        w.splashed = false;
         w.m.visible = true;
+        const f = foamPool[fmi++ % foamPool.length];
+        f.x = p.x;
+        f.y = base + 0.07;
+        f.dir = dir;
+        f.size = size;
+        f.t = 0;
+        f.m.visible = true;
       }
       for (let i = 0; i < 70 * Math.min(size, 1.4); i++) {
         const sp = 6 + R() * 12;
@@ -550,17 +651,40 @@ export function createBattleFx(stage) {
         spray.spawn(tmp.set(p.x + dir * R() * 4, p.y + 0.5, (R() - 0.5) * 3), v.set(dir * (2 + R() * 3), 1 + R(), 0), { life: 1.8, size: 2.2, size1: 4.2, color: '#eef7ff', alpha: 0.4, drag: 1 });
       }
     },
-    /** 🌿 Vines from `from` to each object in `targets` (meshes that move): they grow, hold while `hold()` says so, fade. */
-    vines(from, targets, hold) {
-      for (const t of targets.slice(0, VINE_N)) {
-        const vn = vinePool[vi++ % VINE_N];
-        vn.from.copy(from);
-        vn.target = t;
-        vn.t = 0;
-        vn.hold = hold;
-        vn.fade = 0;
-        vn.mesh.visible = true;
-        vn.seed = R() * 10;
+    /**
+     * 🌿 Vines for each block in `items` ({ target: its mesh, side: +1/-1 the way it's dragged, edgeX, rimY }): two climb
+     * over the rock's edge at `edgeX`, loop round the block and pull while `hold(target)` says so, then fade.
+     */
+    vines(items, hold) {
+      for (const it of items.slice(0, VINE_N / 2)) {
+        let first = true;
+        for (const zo of [-1, 1]) {
+          const vn = vinePool[vi++ % VINE_N];
+          if (vn.lasso) { vn.lasso.parent?.remove(vn.lasso); vn.lasso.visible = false; vn.lasso = null; }
+          vn.side = it.side;
+          vn.zo = zo + (R() - 0.5) * 0.4;
+          vn.rim.set(it.edgeX, it.rimY + 0.15, vn.zo * 0.9);
+          vn.from.set(it.edgeX + it.side * 0.5, it.rimY - 2.2 - R(), vn.zo * 1.1);
+          vn.target = it.target;
+          vn.t = 0;
+          vn.hold = hold;
+          vn.fade = 0;
+          vn.mesh.visible = true;
+          vn.seed = R() * 10;
+          if (first) {   // (the lasso: one round the block, on the block itself so it moves and tumbles with it)
+            first = false;
+            const L = lassoPool[lsi++ % lassoPool.length];
+            L.parent?.remove(L);
+            const u = it.target.userData;
+            L.userData.rx = (u.w || 2) / 2 + 0.12;
+            L.userData.rz = 1.72;
+            L.scale.set(L.userData.rx, 1, L.userData.rz);
+            L.position.set(0, (u.h || 2) * 0.12, 0);
+            L.visible = true;
+            it.target.add(L);
+            vn.lasso = L;
+          }
+        }
       }
     },
     /** Your last throw's path (metres: [{x, y}]), faint, while you aim again (null hides it). */
@@ -669,4 +793,5 @@ export function createBattleFx(stage) {
       } else flash.intensity = 0;
     },
   };
+  return api;
 }

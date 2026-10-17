@@ -526,9 +526,10 @@ function handle(events) {
         break;
       }
       case 'grab': {
-        const targets = ev.list.map((o) => meshes.get(o.id)).filter(Boolean);
+        // (the vines climb over the rock's edge each block is dragged to, and loop round it)
+        const items = ev.list.map((o) => ({ target: meshes.get(o.id), side: o.vineDir || 1, edgeX: (sideX(ev.side) + (o.vineDir || 1) * (STACK.w / 2 - 4)) / PX, rimY: STACK_TOP })).filter((it) => it.target);
         const from = new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0);
-        fx.vines(from, targets, (m) => ev.list.some((o) => meshes.get(o.id) === m && o.alive && o.vineT > 0));
+        fx.vines(items, (m) => ev.list.some((o) => meshes.get(o.id) === m && o.alive && o.vineT > 0));
         fx.sparkle(from, 30, '#8bea5c', 6);
         sayOnce('vines', T.vinesGrab, ev.x, ev.y - 50);
         sfx('creak');
@@ -537,7 +538,7 @@ function handle(events) {
         break;
       }
       case 'wave': {
-        fx.wave(new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0), ev.dir, Math.min(2.2, Math.max(1, (-mOf(ev.y) - STACK_TOP) / 2.6)), STACK_TOP + 0.05);
+        fx.wave(new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0), ev.dir, Math.min(2.2, Math.max(1, (-mOf(ev.y) - STACK_TOP) / 2.6)), STACK_TOP + 0.05, (sideX(ev.side) + ev.dir * STACK.w / 2) / PX);
         sayOnce('wave', T.waveHit, ev.x, ev.y - 50);
         stage.shake(0.7);
         sfx('splash');
