@@ -1,12 +1,13 @@
-// (1.18 3D) Blokbotsing: the battle vs Robot Rikus. Turn by turn: the crane offers three blocks; pick one, then BUILD
-// (it swings over your tower, a tap drops it: Stapel's own stacking, a gold guide shows a Perfek) or THROW: pull back
-// and let go (the owner, 17 Oct 2026: "The gooi is not interactive"): the pull sets the angle and the power, the arc
-// and a scope on their tower show where it lands; one tap in mid-air fires the block's power. Hits crack blocks (their
-// strength shows). Your crown stands behind your tower ("the crown needs to be behind your tower"); throws fly a
-// heavier, slower arc. Blocks, not turns: each side has a budget (BUDGET: + Perfeks of today's Daily Tower, at most 4;
-// a Perfek build earns one back); the only win is their crown in the sea; both out of blocks: sudden death.
-// `?vriend=1` makes a room and invites a friend, `?kamer=CODE` joins one (the match server's two-seat rooms, like the
-// Vrugteslag's): the one whose turn it is plays, the other phone replays it and takes its snapshot at the end.
+// (1.18 3D) Blokbotsing: the battle. Turn by turn the crane offers three cards, each a Stapel block with an element
+// (🔥 Vuur, 🌿 Gras, 💧 Water, 💣 Plofstof). BUILD: it swings over your tower and a tap drops it (Stapel's own stacking,
+// a gold guide shows a Perfek); its element defends. THROW (the owner, 17 Oct 2026: "a power bar then a direction pin
+// instead ... It makes it more challenging"): tap to hold the running power bar, tap to stop the swinging pin; your last
+// throw's path stays faint to learn from. The camera shows both towers, then zooms in on the one that's hit ("show both
+// the towers and then zoom in on the tower that is getting damaged"); the element strikes there (fire spreads, vines
+// drag, a wave shoves, an explosion), and the thrown block breaks apart. Your crown stands in a glass cabinet behind your
+// tower: break their glass, throw their crown into the sea. Blocks, not turns (BUDGET); both out: sudden death.
+// `?vriend=1` makes a room and invites a friend, `?kamer=CODE` joins one: the one whose turn it is plays, the other
+// phone replays it and takes its snapshot at the end of the turn.
 import * as THREE from '../../lib/three.module.min.js';
 import { createStage, pickQuality } from '../kasteel/stage.js';
 import { buildWorld, STACK_TOP } from './world.js';
@@ -14,8 +15,8 @@ import { createPieces } from './pieces.js';
 import { createSim, shapeInfo } from './sim.js';
 import { createBattleFx } from './fx.js';
 import { createHud } from './hud.js';
-import { rikusPlan } from './rikus.js';
-import { PX, sideX, towardFoe, towerX, BUILD, RIKUS, SETTLE, LAUNCH, STACK, G_STEP, PULL, BUDGET, offer, rng } from './rules.js';
+import { createRikusPlanner } from './rikus.js';
+import { PX, sideX, towardFoe, towerX, BUILD, RIKUS, SETTLE, LAUNCH, STACK, G_STEP, BUDGET, ELEMENT, PIN, offer, rng, pinAngle, powerAt } from './rules.js';
 import { dateKeyFor } from '../core/daily.js';
 import { matchApiUrl } from '../sponsorConfig.js';
 import { createSlagNet } from '../slagNet.js';
@@ -34,19 +35,16 @@ const FRIEND = FRIEND_HOST || /^[A-Z0-9]{6}$/.test(FRIEND_CODE);
 const ME = FRIEND && !FRIEND_HOST ? 1 : 0;
 const FOE = 1 - ME;
 let conn = null;
-let foeName = FRIEND ? '' : '';
-function readName() {
-  try { return String(JSON.parse(localStorage.getItem('stapel.v1') || '{}')?.duel?.name || '').slice(0, 16); } catch { return ''; }
-}
+let foeName = '';
+const readJson = (k) => { try { return JSON.parse(localStorage.getItem(k) || '{}') || {}; } catch { return {}; } };
+const myName = String(readJson('stapel.v1')?.duel?.name || '').slice(0, 16);
 /** Today's Daily Tower Perfeks, at most BUDGET.dailyMax: extra blocks for every battle today. */
-function dailyBonus() {
-  try {
-    const d = JSON.parse(localStorage.getItem('stapel.v1.kasteeldae') || '{}')?.[dateKeyFor()];
-    return Math.max(0, Math.min(BUDGET.dailyMax, Math.floor(Number(d?.p) || 0)));
-  } catch { return 0; }
-}
-const myName = readName();
-const myBonus = dailyBonus();
+const myBonus = Math.max(0, Math.min(BUDGET.dailyMax, Math.floor(Number(readJson('stapel.v1.kasteeldae')?.[dateKeyFor()]?.p) || 0)));
+/** (the owner: "the type of block they have purched") the block skin you wear in Stapel; Rikus wears the standard one. */
+const mySkin = String(readJson('stapel.v1.econ')?.skins?.wear?.blocks || q.get('skin') || 'kleur');
+const skins = [];
+skins[ME] = mySkin;
+skins[FOE] = 'kleur';
 audio.setEnabled(PREFS.sound);
 haptics.setEnabled(PREFS.vibration);
 const sfx = (n, o) => { try { audio.play(n, o); } catch { /* sound off */ } };
@@ -59,22 +57,25 @@ if (quality.name === 'mid' && !quality.forced) Object.assign(quality, { dpr: 1.3
 const stage = createStage({ fov: 46, quality });
 const { scene, camera, renderer } = stage;
 const stageEl = document.getElementById('k-stage');
-const canvasEl = document.getElementById('k-canvas');
 const world = buildWorld(stage);
 const pieces = createPieces(renderer);
-const sim = createSim();
+const sim = createSim({ seed: 7 });
 const fx = createBattleFx(stage);
 const cranes = [pieces.crane(0), pieces.crane(1)];
 scene.add(cranes[0].group, cranes[1].group);
+const pinMesh = pieces.pin();
+scene.add(pinMesh);
+const marks = [pieces.crownMark(0), pieces.crownMark(1)];
+scene.add(...marks);
 const hud = createHud({ onPause: () => openPause() });
 
 const G = {
-  phase: 'intro', phaseT: 0, side: 0, turns: [0, 0], cards: [], shape: null, action: null, plan: null,
-  buildT: 0, aimT: 0, theta: 0.7, power: 0, pred: null, hang: null, hangSide: 0, shot: null, shotHit: false,
+  phase: 'intro', phaseT: 0, side: 0, turns: [0, 0], cards: [], card: null, cardIdx: 0, action: null, plan: null, planner: null,
+  buildT: 0, aimT: 0, aimStep: 'power', theta: 0.7, power: 0, hang: null, hangSide: 0, hangKey: '', shot: null, shotHit: false,
   slowT: 0, slowRate: 1, freeze: 0, paused: false, over: false, crownT: 0, builds: [0, 0], danger: [false, false],
-  prevRel: null, topT: 0, sparkT: 0, strMax: [1, 1], strStart: [0, 0], sunkStart: 0, pullOff: { x: 0, y: 0 },
-  blocks: [BUDGET.base, BUDGET.base], sudden: false, suddenLeft: [0, 0], launchStep: 0, pendingBurst: null,
-  remoteDone: null, remoteThrow: null,
+  prevRel: null, topT: 0, sparkT: 0, strMax: [1, 1], strStart: [0, 0], sunkStart: 0,
+  blocks: [BUDGET.base, BUDGET.base], sudden: false, suddenLeft: [0, 0], remoteDone: null, remoteThrow: null,
+  zoom: null, trailRec: null, lastTrail: null, said: {},
   stats: { pb: [0, 0], pt: [0, 0], hits: [0, 0], sunk: [0, 0] },
 };
 const mOf = (px) => px / PX;
@@ -91,7 +92,6 @@ function nameBars() {
 }
 nameBars();
 const turnLabel = (side) => (side === ME ? T.yourTurn : FRIEND ? T.theirTurn(foeName) : T.rikusTurn);
-
 function slow(t, rate) {
   if (calm) return;
   if (t > G.slowT) G.slowT = t;
@@ -103,7 +103,7 @@ const meshes = new Map();
 function meshFor(e) {
   let g = meshes.get(e.id);
   if (!g) {
-    g = pieces.block(e.shape, e.side);
+    g = pieces.block(e.shape, e.side, e.element, skins[e.side]);
     scene.add(g);
     meshes.set(e.id, g);
   }
@@ -127,11 +127,6 @@ function syncMeshes(alpha, dt) {
     g.position.set(x / PX + gl, -y / PX, 0);
     g.rotation.z = -a;
     if (gl) g.userData.glide = Math.abs(gl) < 0.002 ? 0 : gl * Math.exp(-dt * 14);
-    if (g.userData.spikeT != null && g.userData.spikeT < 1) {
-      g.userData.spikeT = Math.min(1, g.userData.spikeT + dt / 0.28);
-      const k = g.userData.spikeT;
-      g.userData.spikes.scale.set(1, Math.max(0.01, 1 - (1 - k) * (1 - k) * (1 + 1.7 * k)), 1);
-    }
     if (g.userData.boing > 0) {
       g.userData.boing -= dt;
       const k = Math.max(0, g.userData.boing / 0.45);
@@ -139,14 +134,39 @@ function syncMeshes(alpha, dt) {
     }
   }
 }
-const toScreen = (x, y, z = 0) => {
-  const v = new THREE.Vector3(x, y, z).project(camera);
-  const r = stageEl.getBoundingClientRect();
-  return { x: ((v.x + 1) / 2) * r.width, y: ((1 - v.y) / 2) * r.height };
+const scr = new THREE.Vector3();
+const toScreen = (x, y, z = 0, r = stageEl.getBoundingClientRect()) => {
+  scr.set(x, y, z).project(camera);
+  return { x: ((scr.x + 1) / 2) * r.width, y: ((1 - scr.y) / 2) * r.height };
 };
+/**
+ * A word over a point of the world: it stays on that point while the camera moves (the zoom), and words at the same
+ * spot at the same moment stack upwards instead of covering each other.
+ */
+const calls = [];
 function callout(text, px, py, kind) {
-  const s = toScreen(px / PX, -py / PX + 2.2);
-  hud.callout(text, s.x, s.y, kind);
+  const p = new THREE.Vector3(px / PX, -py / PX + 2.2, 0);
+  const now = performance.now();
+  const dy = -30 * calls.filter((c) => now - c.t0 < 1400 && c.p.distanceTo(p) < 5).length;
+  const s = toScreen(p.x, p.y);
+  calls.push({ el: hud.callout(text, s.x, s.y + dy, kind), p, dy, t0: now });
+}
+function trackCallouts() {
+  if (!calls.length) return;
+  const r = stageEl.getBoundingClientRect();
+  const now = performance.now();
+  for (let i = calls.length - 1; i >= 0; i--) {
+    const c = calls[i];
+    if (now - c.t0 > 1600 || !c.el.isConnected) { calls.splice(i, 1); continue; }
+    const s = toScreen(c.p.x, c.p.y, 0, r);
+    hud.place(c.el, s.x, s.y + c.dy);
+  }
+}
+/** Once per turn, a word for what an element did (it can fire on several blocks at once). */
+function sayOnce(key, text, px, py, kind = 'is-gold') {
+  if (G.said[key]) return;
+  G.said[key] = true;
+  callout(text, px, py, kind);
 }
 
 // --------------------------------------------------------------------------------------------- the turns
@@ -154,18 +174,21 @@ function setPhase(p) { G.phase = p; G.phaseT = 0; }
 function startTurn(side) {
   G.side = side;
   G.cards = offer(rand);
-  G.shape = null;
+  G.card = null;
   G.action = null;
   G.plan = null;
+  G.planner = null;
   G.shot = null;
   G.shotHit = false;
   G.prevRel = null;
+  G.zoom = null;
+  G.said = {};
   G.strStart = [sim.strength(0), sim.strength(1)];
   G.sunkStart = G.stats.sunk[side];
   G.remoteDone = null;
   G.remoteThrow = null;
-  G.pendingBurst = null;
-  G.pendingBurstN = null;
+  cranes[side].park(false);
+  cranes[1 - side].park(true);
   const left = G.sudden ? T.suddenSub : T.blocksLeft(G.blocks[side]);
   hud.banner(turnLabel(side), { sub: left, kind: side === ME ? 'is-me' : 'is-foe', ms: 1250 });
   sfx('banner');
@@ -173,61 +196,68 @@ function startTurn(side) {
   if (side === ME) {
     setPhase('pick');
     hud.hideTap();
-    hud.showCards(G.cards, onChoose, { throwOnly: G.sudden });
+    showMyCards(0);
   } else {
     setPhase('other');
     hud.hideCards();
     hud.showTap(FRIEND ? T.friendThinks(foeName) : T.rikusThinks, '', null);
   }
 }
-function onChoose(shape, action) {
+function showMyCards(selected) {
+  hud.showCards(G.cards, onChoose, { selected, throwOnly: G.sudden, img: (c) => pieces.cardImage(c.shape, c.element, skins[ME]) });
+}
+function onChoose(i, action) {
   if (G.phase !== 'pick') return;
   if (G.sudden && action === 'build') return;
-  G.shape = shape;
-  showHanging(ME, shape);
+  G.cardIdx = i;
+  G.card = G.cards[i];
+  showHanging(ME, G.card);
   sfx('click');
-  if (FRIEND && conn) conn.send({ t: 'pick', shape });
+  if (FRIEND && conn) conn.send({ t: 'pick', i });
   if (action) { buzz('tap'); beginAction(action); }
 }
-function showHanging(side, shape) {
-  if (G.hang && G.hang.userData.shape === shape && G.hangSide === side) return;
+function showHanging(side, card) {
+  const key = `${side}|${card.shape}|${card.element}`;
+  if (G.hang && G.hangKey === key) return;
   clearHanging();
-  const g = pieces.block(shape, side);
+  const g = pieces.block(card.shape, side, card.element, skins[side]);
   g.position.y = -g.userData.top;
   cranes[side].hold.add(g);
   G.hang = g;
   G.hangSide = side;
+  G.hangKey = key;
 }
 function clearHanging() {
   if (G.hang) G.hang.parent?.remove(G.hang);
   G.hang = null;
-  bands.visible = false;
+  G.hangKey = '';
 }
 function beginAction(action) {
   G.action = action;
   hud.hideCards();
   const mine = G.side === ME;
+  const el = T.el[G.card.element];
   if (action === 'build') {
     setPhase('build');
     G.buildT = 0;
-    hud.showTap(mine ? T.tapDrop : turnLabel(G.side), `${T.names[G.shape]} · ${T.powers[G.shape].build}`, mine ? backToCards : null);
+    hud.showTap(mine ? T.tapDrop : turnLabel(G.side), `${T.names[G.card.shape]} · ${el.build}`, mine ? backToCards : null);
   } else {
     setPhase('aim');
     G.aimT = 0;
+    G.aimStep = 'power';
     G.power = 0;
-    G.pullOff = { x: 0, y: 0 };
-    hud.showTap(mine ? T.pullHint : turnLabel(G.side), mine ? T.goldArc : `${T.names[G.shape]} · ${T.powers[G.shape].throw}`, mine ? backToCards : null);
+    fx.lastTrail(mine ? G.lastTrail : null);   // (the owner's pick: "Your last throw's trail" as the only help)
+    hud.showTap(mine ? T.tapPower : turnLabel(G.side), mine ? (G.lastTrail ? T.lastTrail : `${T.names[G.card.shape]} · ${el.throw}`) : `${T.names[G.card.shape]} · ${el.throw}`, mine ? backToCards : null);
   }
 }
 function backToCards() {
   if (G.side !== ME || (G.phase !== 'build' && G.phase !== 'aim')) return;
-  pull.on = false;
-  fx.hideArc();
-  hud.scope(false);
-  G.pullOff = { x: 0, y: 0 };
+  hud.power(false);
+  pinMesh.visible = false;
+  fx.lastTrail(null);
   setPhase('pick');
   hud.hideTap();
-  hud.showCards(G.cards, onChoose, { selected: G.shape, throwOnly: G.sudden });
+  showMyCards(G.cardIdx);
 }
 /** The trolley over `side`'s tower (px, px/s): wider and quicker with every block that side has built. */
 function trolley(side) {
@@ -245,13 +275,14 @@ function dropBlock(remote = null) {
   g.getWorldPosition(wp);
   const tr = trolley(side);
   const at = remote || { x: wp.x * PX, y: -wp.y * PX, vx: tr.vx / 60 };
-  const e = sim.release(side, G.shape, at.x, at.y, at.vx);
-  if (FRIEND && conn && side === ME) conn.send({ t: 'build', shape: G.shape, x: at.x, y: at.y, vx: at.vx });
+  const e = sim.release(side, G.card.shape, G.card.element, at.x, at.y, at.vx);
+  if (FRIEND && conn && side === ME) conn.send({ t: 'build', i: G.cardIdx, x: at.x, y: at.y, vx: at.vx });
   if (!G.sudden) G.blocks[side] = Math.max(0, G.blocks[side] - 1);
   scene.attach(g);
   g.rotation.set(0, 0, 0);
   meshes.set(e.id, g);
   G.hang = null;
+  G.hangKey = '';
   G.builds[side]++;
   G.shot = e;
   sfx('drop');
@@ -264,26 +295,26 @@ function throwBlock(theta, power) {
   const g = G.hang;
   if (!g) return;
   const side = G.side;
-  const p = sim.predict(side, G.shape, theta, power);
-  const e = sim.launch(side, G.shape, theta, p.perfect, power);
-  G.launchStep = sim.stepN;
-  if (G.pendingBurstN != null) { G.pendingBurst = G.launchStep + G.pendingBurstN; G.pendingBurstN = null; }
-  if (FRIEND && conn && side === ME) conn.send({ t: 'throw', shape: G.shape, theta, power });
+  const p = sim.predict(side, G.card.shape, theta, power);
+  const e = sim.launch(side, G.card.shape, G.card.element, theta, p.perfect, power);
+  if (FRIEND && conn && side === ME) conn.send({ t: 'throw', i: G.cardIdx, theta, power });
   if (!G.sudden) G.blocks[side] = Math.max(0, G.blocks[side] - 1);
   updateTop();
   scene.attach(g);
   g.rotation.set(0, 0, 0);
   meshes.set(e.id, g);
   G.hang = null;
+  G.hangKey = '';
   G.shot = e;
   G.shotHit = false;
-  G.pullOff = { x: 0, y: 0 };
-  bands.visible = false;
+  G.trailRec = side === ME ? [] : null;
   cranes[side].whip(power);
+  cranes[side].park(true, true);   // (the jib swings away as the block flies: nothing to fly through)
+  pinMesh.visible = false;
+  hud.power(false);
+  fx.lastTrail(null);
   fx.sparkle(new THREE.Vector3(mOf(p.x0), -mOf(p.y0) + 0.6, 0), 14, '#ffffff', 5);
-  fx.hideArc();
-  hud.scope(false);
-  fx.trail(g, p.perfect);
+  fx.trail(g, p.perfect, G.card.element);
   sfx('fling');
   if (side === ME) buzz('tap');
   if (p.perfect) {
@@ -293,34 +324,15 @@ function throwBlock(theta, power) {
     sfx('perfect');
     if (side === ME) buzz('perfect');
   }
-  if (side === ME) hud.showTap(T.tapNow, T.burstHint[G.shape], null);
-  else hud.hideTap();
+  hud.hideTap();
   setPhase('flight');
-}
-/** The mid-air tap: the block's power, right now. */
-function fireBurst() {
-  const e = G.shot;
-  if (!e || !e.flying || e.burstUsed) return false;
-  if (FRIEND && conn && e.side === ME) conn.send({ t: 'burst', n: sim.stepN - G.launchStep });
-  return !!sim.burst(e);
-}
-/** Robot Rikus fires his blocks' powers too, when it's worth it. */
-function rikusBurst() {
-  const e = G.shot;
-  if (!e || !e.flying || e.burstUsed) return;
-  const b = e.body;
-  const c = sim.crowns[ME].body.position;
-  const nearX = Math.abs(b.position.x - towerX(ME));
-  if (e.shape === 'cube' && nearX < 70 && b.velocity.y > 0) fireBurst();
-  else if (e.shape === 'crate' && Math.hypot(b.position.x - c.x, b.position.y - c.y) < 130) fireBurst();
-  else if ((e.shape === 'wedge' || e.shape === 'pillar') && Math.abs(b.position.x - sideX(ME)) < 650 && b.velocity.y > 0) fireBurst();
-  else if (e.shape === 'plank' && b.position.y > STACK.topY - 40 && b.velocity.y > 0 && Math.abs(b.position.x - sideX(ME)) > STACK.w / 2 + 60) fireBurst();
 }
 function endTurn() {
   if (G.over) return;
-  fx.hideArc();
   fx.stopTrail();
-  hud.scope(false);
+  hud.power(false);
+  pinMesh.visible = false;
+  cranes[G.side].park(true);
   G.turns[G.side]++;
   const lostMe = sim.crownLost(ME);
   const lostFoe = sim.crownLost(FOE);
@@ -358,12 +370,21 @@ function nextTurn() {
   setTimeout(() => { if (!G.over) startTurn(1 - G.side); }, 1600);
   setPhase('wait');
 }
+/** The camera's close look at the tower where something just happened (the owner: "zoom in on the tower"). */
+function zoomAt(side, secs = 2.8) {
+  if (G.zoom && (calm || G.zoom.side === side)) { G.zoom.t = Math.max(G.zoom.t, secs); return; }
+  G.zoom = { side, t: secs };
+}
+const nearestSide = (x) => (Math.abs(x - sideX(0)) < Math.abs(x - sideX(1)) ? 0 : 1);
 
 // ----------------------------------------------------------------------------------------- what happens
+const seen = {};   // (tests: how often each event came)
 function handle(events) {
   for (const ev of events) {
+    seen[ev.type] = (seen[ev.type] || 0) + 1;
     const e = ev.entry;
     const mine = e && e.side === ME;
+    const at = ev.x != null ? new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0) : null;
     switch (ev.type) {
       case 'land': {
         const g = meshes.get(e.id);
@@ -371,9 +392,8 @@ function handle(events) {
           if (e.ix !== undefined) e.ix += ev.snapDx;
           if (g) g.userData.glide = (g.userData.glide || 0) - ev.snapDx / PX;
         }
-        const p = { x: mOf(ev.x), y: -mOf(ev.y) };
-        fx.land(p, ev.rating, e.w / PX);
-        if (g?.userData.spikes && e.role === 'built') { g.userData.spikes.visible = true; g.userData.spikeT = 0; sfx('zap'); }
+        fx.land({ x: mOf(ev.x), y: -mOf(ev.y) }, ev.rating, e.w / PX);
+        if (g && e.role === 'built' && e.element === 'plof') pieces.springCoil(g);
         if (ev.rating === 'P') {
           if (g) pieces.seam(g);
           G.stats.pb[e.side]++;
@@ -390,19 +410,21 @@ function handle(events) {
       case 'hit': {
         if (e !== G.shot || G.shotHit) break;
         G.shotHit = true;
+        if (G.trailRec) { G.lastTrail = G.trailRec; G.trailRec = null; }
         const k = Math.min(1.6, (ev.speed / LAUNCH.V0) * Math.sqrt(e.body.mass / 2.4));
         const dir = new THREE.Vector3(Math.sign(e.body.velocity.x) || towardFoe(e.side), 0.2, 0);
-        fx.hit(new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0), dir, k);
+        fx.hit(at, dir, k);
         fx.stopTrail();
         stage.shake(0.3 + 0.45 * k);
         const foeHit = ev.other && ev.other.kind !== 'stack' && ev.other.side !== e.side;
-        if (foeHit && ev.onto === 'crown') { G.freeze = calm ? 0 : 0.05; slow(0.5, 0.35); } else if (foeHit) slow(0.3, 0.55);
+        zoomAt(nearestSide(ev.x));
+        if (foeHit && ev.onto === 'crown') { G.freeze = calm ? 0 : 0.05; slow(0.5, 0.35); } else slow(0.45, 0.45);
         sfx('clash');
         sfx('land');
         if (e.side === ME) buzz('heavy');
         if (foeHit) G.stats.hits[e.side]++;
         if (foeHit && ev.onto === 'crown') { hud.banner(T.crownHit, { kind: e.side === ME ? 'is-me' : 'is-foe', ms: 1100 }); sfx('warning'); }
-        if (G.phase === 'flight') { setPhase('settle'); hud.hideTap(); }
+        if (G.phase === 'flight') setPhase('settle');
         break;
       }
       case 'damage': {
@@ -413,20 +435,20 @@ function handle(events) {
         }
         if (g && e.hp > 0) pieces.crack(g, e.hpMax - e.hp);
         callout(`−${ev.n}`, ev.x, ev.y, 'is-dmg');
-        if (e.hp > 0) fx.hit(new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0), new THREE.Vector3(0, 1, 0), 0.4);
+        if (e.hp > 0 && ev.by !== 'fire') fx.hit(at, new THREE.Vector3(0, 1, 0), 0.4);
         break;
       }
       case 'glass': {
         const g = meshes.get(e.id);
         if (g) pieces.glassBreak(g);
-        const p = new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0);
-        fx.shatter(p, pieces.M.glassShard, { n: 20, size: 0.55 });
-        fx.sparkle(p, 50, '#e8f4ff', 10);
+        fx.shatter(at, pieces.M.glassShard, { n: 20, size: 0.55 });
+        fx.sparkle(at, 50, '#e8f4ff', 10);
         hud.banner(e.side === ME ? T.glassMine : T.glassTheirs, { sub: T.glassSub, kind: e.side === ME ? 'is-foe' : 'is-me', ms: 1600 });
         sfx('clash');
         sfx('zap');
         stage.shake(0.6);
         slow(0.4, 0.4);
+        zoomAt(e.side, 2.2);
         if (e.side === ME) buzz('heavy');
         break;
       }
@@ -436,9 +458,10 @@ function handle(events) {
         sfx('splash');
         if (e && e === G.shot) {
           fx.stopTrail();
+          if (G.trailRec) { G.lastTrail = G.trailRec; G.trailRec = null; }
           if (e.role === 'built' && !e.landed) callout(T.missBuild, ev.x, -40, 'is-dim');
           else if (e.role === 'proj' && G.phase === 'flight') callout(T.splash, ev.x, -40, 'is-dim');
-          if (G.phase === 'flight') { setPhase('settle'); hud.hideTap(); }
+          if (G.phase === 'flight') setPhase('settle');
         } else if (e && e.role !== 'proj' && e.role !== 'crown' && e.side !== G.side) G.stats.sunk[G.side]++;
         break;
       }
@@ -449,69 +472,114 @@ function handle(events) {
         hud.banner(T.crownSea, { kind: minelost ? 'is-foe' : 'is-me', ms: 2200 });
         slow(1.0, 0.4);
         stage.shake(1.1);
+        zoomAt(ev.side, 3);
         sfx(minelost ? 'lost' : 'milestone');
         buzz(minelost ? 'lost' : 'heavy');
         break;
       }
       case 'blast': {
-        const p = new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0);
-        fx.boom(p, 9);
+        fx.boom(at, 9);
         fx.stopTrail();
         stage.shake(1.5);
         if (!calm) G.freeze = 0.05;
         slow(0.5, 0.35);
+        zoomAt(nearestSide(ev.x));
         callout(T.boom, ev.x, ev.y - 60, 'is-boom');
         sfx('thunder');
         sfx('clash');
         buzz('heavy');
-        if (G.phase === 'flight') { setPhase('settle'); hud.hideTap(); }
+        if (G.trailRec) { G.lastTrail = G.trailRec; G.trailRec = null; }
+        if (G.phase === 'flight') setPhase('settle');
         break;
       }
       case 'break': {
         const g = meshes.get(e.id);
-        fx.shatter(new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0), g?.children[0]?.material || pieces.M.sandstone, { n: 14, size: Math.max(0.8, e.w / PX / 3.5) });
+        fx.shatter(at, g?.children[0]?.material?.[1] || g?.children[0]?.material || pieces.M.sandstone, { n: 14, size: Math.max(0.8, e.w / PX / 3.5) });
         callout(T.smashed, ev.x, ev.y - 50, 'is-gold');
         sfx('clash');
         stage.shake(0.5);
         break;
       }
-      case 'spiked': {
+      case 'dissolve': {   // (the thrown block breaks apart: "the block that is thrown disapears")
         const g = meshes.get(e.id);
-        fx.shatter(new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0), g?.children[0]?.material || pieces.M.sandstone, { n: 12, size: 0.8 });
+        fx.shatter(at, g?.children[0]?.material?.[1] || pieces.M.sandstone, { n: 10, size: Math.max(0.6, e.w / PX / 4) });
+        if (e.element) fx.sparkle(at, 24, ELEMENT[e.element].color, 7);
+        break;
+      }
+      case 'ignite': {
+        sayOnce('fire', T.fireStart, ev.x, ev.y - 50);
+        fx.sparkle(at, 16, '#ffb24a', 5);
+        if (!G.said.fireSnd) { G.said.fireSnd = true; sfx('heat'); sfx('thunder', { v: 0.4 }); }
+        break;
+      }
+      case 'grab': {
+        const targets = ev.list.map((o) => meshes.get(o.id)).filter(Boolean);
+        const from = new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0);
+        fx.vines(from, targets, (m) => ev.list.some((o) => meshes.get(o.id) === m && o.alive && o.vineT > 0));
+        fx.sparkle(from, 30, '#8bea5c', 6);
+        sayOnce('vines', T.vinesGrab, ev.x, ev.y - 50);
+        sfx('creak');
+        sfx('wind', { v: 0.5 });
+        zoomAt(ev.side);
+        break;
+      }
+      case 'wave': {
+        fx.wave(new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0), ev.dir, 1);
+        sayOnce('wave', T.waveHit, ev.x, ev.y - 50);
+        stage.shake(0.7);
+        sfx('splash');
+        sfx('rain', { v: 0.6 });
+        zoomAt(ev.side);
+        break;
+      }
+      case 'wallburn': {
+        fx.boom(at, 5);
+        for (let i = 0; i < 6; i++) fx.flame(at, e.w / PX, 2);
+        callout(T.wallBurn, ev.x, ev.y - 60, 'is-gold');
+        sfx('heat');
+        zoomAt(e.side, 2);
+        break;
+      }
+      case 'douse': {   // (a Watervat nearby: the fire doesn't take)
+        fx.steam(at, e.w / PX);
+        callout(T.doused, ev.x, ev.y - 50, 'is-gold');
+        sfx('splash', { v: 0.5 });
+        break;
+      }
+      case 'burnout':
+        if (ev.why === 'water') fx.steam(new THREE.Vector3(mOf(ev.x), -mOf(e.body.bounds.min.y), 0), e.w / PX);
+        break;
+      case 'burnup': {
+        fx.shatter(at, pieces.M.timber, { n: 12, size: 0.7 });
         fx.stopTrail();
-        callout(T.spiked, ev.x, ev.y - 60, 'is-gold');
-        sfx('zap');
-        sfx('clash');
-        stage.shake(0.5);
-        if (G.phase === 'flight') { setPhase('settle'); hud.hideTap(); }
+        if (G.phase === 'flight') setPhase('settle');
+        break;
+      }
+      case 'soak': {
+        fx.wave(at, towardFoe(e.side), 0.6);
+        fx.splash(mOf(ev.x), { size: 0.8 });
+        callout(T.soaked, ev.x, ev.y - 60, 'is-gold');
+        sfx('splash');
+        zoomAt(e.side, 2);
+        if (G.phase === 'flight') setPhase('settle');
+        break;
+      }
+      case 'root': {
+        for (const o of ev.list) { const g = meshes.get(o.id); if (g) pieces.vineWrap(g); }
+        callout(T.rooted, e.body.position.x, e.body.bounds.min.y - 40, 'is-gold');
+        sfx('creak');
         break;
       }
       case 'spring': {
         const g = meshes.get(e.id);
-        if (g) g.userData.boing = 0.45;
+        if (g) { g.userData.boing = 0.45; pieces.dropCoil(g); }
         callout(T.sprung, ev.x, ev.y - 60, 'is-gold');
         sfx('pop');
         sfx('clown');
-        break;
-      }
-      case 'skip': {
-        fx.splash(mOf(ev.x), { size: 0.6 });
-        callout(T.skip, ev.x, -60, '');
-        sfx('splash');
-        break;
-      }
-      case 'burst': {
-        const p = new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0);
-        if (ev.kind !== 'blast') {
-          fx.sparkle(p, 40, ev.kind === 'slam' ? '#ffffff' : '#ffd46a', 9);
-          sfx(ev.kind === 'hop' ? 'pop' : 'zap');
-          sfx('fling');
-          stage.shake(0.25);
-          slow(0.18, 0.5);
-        }
-        callout(T.bursts[ev.kind], ev.x, ev.y - 50, 'is-gold');
-        if (e.side === ME) buzz('heavy');
-        hud.hideTap();
+        // the shot flies back home: both towers again, and its next touch counts as a hit of its own
+        G.shotHit = false;
+        G.zoom = null;
+        if (G.shot) fx.trail(meshes.get(G.shot.id), false, G.shot.element);
         break;
       }
       default:
@@ -537,11 +605,37 @@ function physics(dt) {
     }
     sim.step();
     handle(sim.drain());
-    if (G.pendingBurst != null && sim.stepN >= G.pendingBurst) { G.pendingBurst = null; if (G.shot?.flying) sim.burst(G.shot); handle(sim.drain()); }
+    // your throw's path, kept to show while you aim again ("your last throw's trail")
+    if (G.trailRec && G.shot?.alive && G.shot.flying && sim.stepN % 2 === 0) G.trailRec.push({ x: mOf(G.shot.body.position.x), y: -mOf(G.shot.body.position.y) });
     acc -= 1;
     n++;
   }
   if (n === 4) acc = 0;
+}
+/** Fire on the blocks (and a Vuurmuur's small flame), soot as they burn, the firelight over them. */
+const flameAt = new THREE.Vector3();
+const fireSum = new THREE.Vector3();
+const FIRE_LIGHT = new THREE.Vector3(0, 1.6, 2.4);   // (a little above and in front: it lights the faces you see)
+function burning(dt) {
+  let n = 0;
+  fireSum.set(0, 0, 0);
+  for (const e of sim.entries) {
+    if (!e.alive) continue;
+    const g = meshes.get(e.id);
+    if (!g) continue;
+    if (e.burnT > 0) {
+      flameAt.set(mOf(e.body.position.x), -mOf(e.body.bounds.min.y) - 0.1, 0);
+      fx.flame(flameAt, e.w / PX, 1);
+      fireSum.add(flameAt);
+      n++;
+      g.userData.sootK = Math.min(1, (g.userData.sootK || 0) + dt / ELEMENT.vuur.secs);
+      pieces.soot(g, g.userData.sootK);
+    } else if (e.fireWall && e.landed && Math.random() < 0.35) {
+      flameAt.set(mOf(e.body.position.x), -mOf(e.body.bounds.min.y) - 0.05, 0);
+      fx.flame(flameAt, e.w / PX * 0.6, 0.35);
+    }
+  }
+  fx.fireGlow(n ? fireSum.multiplyScalar(1 / n).add(FIRE_LIGHT) : null);
 }
 
 // ------------------------------------------------------------------------------------------- the landing guide
@@ -565,14 +659,14 @@ function updateGhost() {
   const on = G.phase === 'build' && G.side === ME && G.hang;
   ghost.gold = false;
   if (!on) { if (ghost.mesh) ghost.mesh.visible = false; return; }
-  if (ghost.shape !== G.shape) {
+  if (ghost.shape !== G.card.shape) {
     if (ghost.mesh) scene.remove(ghost.mesh);
-    ghost.mesh = pieces.ghost(G.shape);
-    ghost.shape = G.shape;
+    ghost.mesh = pieces.ghost(G.card.shape);
+    ghost.shape = G.card.shape;
     scene.add(ghost.mesh);
   }
-  const s = shapeInfo(G.shape);
-  const list = sim.entries.filter((e) => e.alive && !e.flying && !(e.role === 'built' && !e.landed));
+  const s = shapeInfo(G.card.shape);
+  const list = sim.entries.filter((e) => e.alive && !e.flying && e.role !== 'proj' && !(e.role === 'built' && !e.landed));
   G.hang.getWorldPosition(gpos);
   let x = gpos.x * PX;
   let y = -gpos.y * PX;
@@ -599,64 +693,32 @@ function updateGhost() {
   ghost.mesh.userData.gold(ghost.gold);
 }
 
-// ------------------------------------------------------------------------------------------- the pull (throw)
-// Drag back from anywhere (the side view: screen right/up = the battle's x/y): the throw goes the other way, the
-// pull's length is its power. Let go to fling; let go short of `PULL.min` to put it back.
-const pull = { on: false, id: null, sx: 0, sy: 0, k: 0, step: 0 };
-const pullPx = () => Math.min(210, stageEl.clientWidth * 0.48);
-function updatePull(x, y) {
-  const dx = x - pull.sx;
-  const dy = y - pull.sy;
-  pull.k = Math.min(1, Math.hypot(dx, dy) / pullPx());
-  const dir = towardFoe(ME);
-  let theta = Math.atan2(dy, -dx * dir);
-  if (theta > PULL.angleMax || theta < -Math.PI / 2) theta = PULL.angleMax;
-  else if (theta < PULL.angleMin) theta = PULL.angleMin;
-  G.theta = theta;
-  G.power = PULL.powerMin + (1 - PULL.powerMin) * pull.k;
-  const reach = pull.k * 2.6;
-  G.pullOff = { x: -Math.cos(theta) * dir * reach, y: -Math.sin(theta) * reach };
-  const step = Math.floor(pull.k * 5);
-  if (step > pull.step) { sfx('creak'); buzz('tap'); }
-  pull.step = step;
-}
-function releasePull() {
-  if (!pull.on) return;
-  pull.on = false;
-  if (G.phase !== 'aim' || G.side !== ME) return;
-  if (pull.k * PULL.max < PULL.min) {   // (too short: put it back)
-    G.pullOff = { x: 0, y: 0 };
-    fx.hideArc();
-    hud.scope(false);
-    hud.tapSub(T.goldArc);
+// ------------------------------------------------------------------------------------------- the throw's aim
+/** The power bar (tap: hold it), then the direction pin (tap: let go). */
+function aimTap() {
+  if (G.aimStep === 'power') {
+    G.power = powerAt(G.aimT);
+    G.aimStep = 'angle';
+    G.aimT = 0;
+    hud.power(true, G.power, true);
+    hud.showTap(T.tapAim, G.lastTrail ? T.lastTrail : '', backToCards);
+    sfx('click');
+    buzz('tap');
     return;
   }
-  throwBlock(G.theta, G.power);
+  throwBlock(pinAngle(G.aimT), G.power);
 }
-// the sling: two cables from the hook to the pulled block's top corners
-const bandMat = new THREE.MeshStandardMaterial({ color: '#2b2622', roughness: 0.7 });
-const bandGeo = new THREE.CylinderGeometry(0.07, 0.07, 1, 6);
-bandGeo.translate(0, 0.5, 0);
-const bands = new THREE.Group();
-const bandA = new THREE.Mesh(bandGeo, bandMat);
-const bandB = new THREE.Mesh(bandGeo, bandMat);
-bands.add(bandA, bandB);
-bands.visible = false;
-scene.add(bands);
-const up = new THREE.Vector3(0, 1, 0);
-function placeBand(m, a, b) {
-  const d = b.clone().sub(a);
-  m.position.copy(a);
-  m.scale.set(1, d.length(), 1);
-  m.quaternion.setFromUnitVectors(up, d.normalize());
+function placePin(side, theta) {
+  const p = sim.launchParams(side, G.card.shape);
+  pinMesh.position.set(mOf(p.x0), -mOf(p.y0), 0);
+  pinMesh.scale.setScalar(side === ME ? 1.5 : 2.3);
+  pinMesh.userData.aim(theta, towardFoe(side));
+  pinMesh.visible = true;
 }
 
 // ------------------------------------------------------------------------------------------------ the cranes
 const craneTx = [towerX(0) / PX, towerX(1) / PX];
 const craneJib = [STACK_TOP + 18, STACK_TOP + 18];
-const hookW = new THREE.Vector3();
-const cornerA = new THREE.Vector3();
-const cornerB = new THREE.Vector3();
 function updateCranes(dt, time) {
   for (const side of [0, 1]) {
     const c = cranes[side];
@@ -671,7 +733,7 @@ function updateCranes(dt, time) {
     let swing = 0;
     let exact = false;
     if (holding && G.phase === 'aim') {
-      const p = sim.launchParams(side, G.shape);
+      const p = sim.launchParams(side, G.card.shape);
       tx = mOf(p.x0);
       hookY = -mOf(p.y0) + blockTop + 0.85;
       exact = true;
@@ -687,46 +749,69 @@ function updateCranes(dt, time) {
     craneTx[side] = exact ? tx : craneTx[side] + (tx - craneTx[side]) * (1 - Math.exp(-dt * 5));
     c.set({ jibY: craneJib[side], tx: craneTx[side], hookY, swing });
     c.update(dt, time);
-    // the pulled-back block on its sling (aiming)
-    if (holding) {
-      const pulled = G.phase === 'aim' ? G.pullOff : { x: 0, y: 0 };
-      G.hang.position.set(pulled.x, -G.hang.userData.top + pulled.y, 0);
-      if (G.phase === 'aim' && (Math.abs(pulled.x) + Math.abs(pulled.y)) > 0.05) {
-        c.hold.getWorldPosition(hookW);
-        const u = G.hang.userData;
-        G.hang.localToWorld(cornerA.set(-u.w / 2 + 0.2, u.top, 0));
-        G.hang.localToWorld(cornerB.set(u.w / 2 - 0.2, u.top, 0));
-        placeBand(bandA, hookW, cornerA);
-        placeBand(bandB, hookW, cornerB);
-        bands.visible = true;
-      } else if (G.hangSide === side) bands.visible = false;
-    }
   }
 }
 
 // ------------------------------------------------------------------------------------------------ the camera
-const cam = { pos: new THREE.Vector3(0, 80, 240), look: new THREE.Vector3(0, 12, 0), tPos: new THREE.Vector3(0, 80, 240), tLook: new THREE.Vector3(0, 12, 0), k: 1.4 };
+const FOV = 46;
+const cam = { pos: new THREE.Vector3(0, 80, 240), look: new THREE.Vector3(0, 12, 0), tPos: new THREE.Vector3(0, 80, 240), tLook: new THREE.Vector3(0, 12, 0), k: 1.4, fov: FOV, tFov: FOV };
 camera.position.copy(cam.pos);
 camera.lookAt(cam.look);
-function camTargets() {
-  const s = G.side;
-  const xs = towerX(s) / PX;
-  const xf = sideX(1 - s) / PX;
-  const dir = towardFoe(s);
-  const ts = topM(s);
-  const tf = topM(1 - s);
+const PHI = (24 * Math.PI) / 180;   // (the battle view: from behind your tower, this far round towards the front)
+/**
+ * Both towers at once (the owner: "the camera angle needs to show both the towers"): from behind your own tower and
+ * a little to the front, high enough to see an arc's top; yours near, theirs across the sea.
+ */
+function battleView(set) {
+  const xMe = towerX(ME) / PX;
+  const xFoe = towerX(FOE) / PX;
+  const dMe = towardFoe(ME);
   const you = topM(ME);
   const rik = topM(FOE);
+  const R = 74;
+  // (looking a little short of the middle: your tower and crown and theirs sit evenly left and right)
+  set([xMe - dMe * Math.cos(PHI) * R, Math.max(you, rik) + 21, Math.sin(PHI) * R], [(xMe + xFoe) / 2 - dMe * 6, (you + rik) / 2 + 5, 0]);
+}
+const zoomAim = new THREE.Vector3();
+/**
+ * The zoom on a tower (the owner: "then zoom in on the tower that is getting damaged"): from where the battle view
+ * stands a third of the way in, the lens narrowed until that tower and its crown fill the screen (no flight across).
+ */
+function zoomView(z) {
+  const c = sim.crowns[z];
+  const xt = towerX(z) / PX;
+  const cx = c.alive && !c.wet ? mOf(c.body.position.x) : sideX(z) / PX - towardFoe(z) * 4;
+  const tz = Math.max(topM(z), STACK_TOP + 3);
+  zoomAim.set((xt + cx) / 2, (tz + STACK_TOP) / 2 + 1, 0);
+  cam.tLook.copy(zoomAim);
+  cam.tPos.lerp(zoomAim, 0.3);
+  const d = cam.tPos.distanceTo(zoomAim);
+  const h = Math.max(6.5, (tz - STACK_TOP) / 2 + 4.5);
+  const w = Math.abs(xt - cx) / 2 + 6;
+  const f = Math.max(2 * Math.atan(h / d), 2 * Math.atan(w / d / camera.aspect));
+  cam.tFov = Math.min(FOV, Math.max(12, (f * 180) / Math.PI));
+}
+function camTargets(dt) {
+  const s = G.side;
+  const xs = towerX(s) / PX;
+  const dir = towardFoe(s);
+  const ts = topM(s);
+  const you = topM(ME);
   const xMe = sideX(ME) / PX;
-  const xFoe = sideX(FOE) / PX;
   const dMe = towardFoe(ME);
   let k = 2.2;
   const set = (p, l) => { cam.tPos.set(...p); cam.tLook.set(...l); };
-  // (the owner: "the video once Rikus throws is very bad, maybe zoom out and make it a static view everytime")
-  if (s === FOE && !G.over && (G.phase === 'other' || G.phase === 'wait' || (G.action === 'throw' && ['aim', 'flight', 'settle'].includes(G.phase)))) {
-    set([xMe - dMe * 36, Math.max(you, rik) + 15, 9], [xFoe - dMe * 12, (you + rik) / 2 + 7, 0]);
-    cam.k = calm ? 4 : 1.8;
-    return;
+  cam.tFov = FOV;
+  // the zoom on the tower where something happened, for a moment, then back to both towers
+  if (G.zoom && !G.over) {
+    G.zoom.t -= dt;
+    if (G.zoom.t <= 0) G.zoom = null;
+    else {
+      battleView(set);
+      zoomView(G.zoom.side);
+      cam.k = calm ? 4 : 3;
+      return;
+    }
   }
   switch (G.phase) {
     case 'intro':
@@ -747,54 +832,10 @@ function camTargets() {
       k = 2.2;
       break;
     }
-    case 'aim': {
-      if (s === ME) {
-        // side on, at the jib's tip: room behind the block to pull, the arc rising towards them (the scope shows them)
-        const p = sim.launchParams(ME, G.shape || 'cube');
-        const bx = mOf(p.x0);
-        const by = -mOf(p.y0);
-        set([bx + dir * 1.4, by + 2.4, 38], [bx + dir * 1.4, by - 0.6, 0]);
-        k = 2.6;
-      } else {
-        set([xMe - dMe * 24, you + 12, 4.5], [xFoe - dMe * 8, rik + 4, 0]);
-        k = 1.6;
-      }
-      break;
-    }
-    case 'other':
-    case 'wait':
-      set([xMe - dMe * 24, you + 12, 4.5], [xFoe - dMe * 8, rik + 4, 0]);
-      k = 1.5;
-      break;
-    case 'flight': {
-      const b = G.shot?.alive ? G.shot.body.position : null;
-      if (b) {
-        const px = mOf(b.x);
-        const py = -mOf(b.y);
-        const d = Math.sign(G.shot.body.velocity.x) || dir;
-        const near = Math.abs(px - xf) < 26 && d === dir;
-        // (the chase leads the block by its speed: the camera's lag no longer leaves it behind)
-        const lx = px + mOf(G.shot.body.velocity.x) * 60 * 0.3;
-        const ly = py - mOf(G.shot.body.velocity.y) * 60 * 0.3;
-        if (near) { set([xf - d * 13, tf + 3, 31], [xf, tf - 1.5, 0]); k = 2.2; }
-        else { set([lx - d * 14, ly + 5.5, 13], [lx + d * 12, ly - 1, 0]); k = 3.4; }
-      }
-      break;
-    }
     case 'settle':
-      if (G.action === 'throw') {
-        const tgt = G.shot?.alive && Math.abs(G.shot.body.position.x - sideX(s)) < STACK.w ? s : 1 - s;
-        const xt = sideX(tgt) / PX;
-        set([xt - dir * 13, topM(tgt) + 3, 32], [xt, topM(tgt) - 1.5, 0]);
-        k = 1.8;
-      } else {
-        set([xs, ts + 6, 44], [xs, ts + 3.2, 0]);
-        k = 1.8;
-      }
-      break;
-    case 'between':
-      set([xMe - dMe * 30, Math.max(you, rik) + 15, 12], [xFoe - dMe * 14, (you + rik) / 2 + 3, 0]);
-      k = 1.5;
+      if (G.action === 'build') { set([xs, ts + 6, 44], [xs, ts + 3.2, 0]); k = 1.8; break; }
+      battleView(set);
+      k = 1.6;
       break;
     case 'over': {
       const w = G.result === 'lose' ? FOE : ME;
@@ -805,48 +846,42 @@ function camTargets() {
       k = 2;
       break;
     }
-    default:
+    default:   // aim, other, flight, between, wait: both towers
+      battleView(set);
+      k = G.phase === 'aim' ? 2.4 : 1.7;
       break;
   }
   cam.k = calm ? Math.max(k, 4) : k;
 }
+/**
+ * The crown badges: while the camera looks at both towers (or zooms on one), each crown's place, seen through the
+ * tower in front of it, the same size on the screen wherever it is; its pips are the hits its glass can still take.
+ */
+const wideView = () => !!G.zoom || ['aim', 'flight', 'other', 'between', 'wait'].includes(G.phase) || (G.phase === 'settle' && G.action === 'throw');
+function updateMarks() {
+  const on = !G.over && wideView();
+  const h = stageEl.clientHeight || 800;
+  for (const s of [0, 1]) {
+    const m = marks[s];
+    const c = sim.crowns[s];
+    m.visible = on && c.alive && !c.wet;
+    if (!m.visible) continue;
+    m.userData.set(c.hp, c.hpMax);
+    m.position.set(mOf(c.body.position.x), -mOf(c.body.bounds.min.y) + 1.2, 0);
+    const k = (2 * camera.position.distanceTo(m.position) * Math.tan((camera.fov * Math.PI) / 360)) / h;   // (m a pixel there)
+    const pulse = c.hp <= 0 && !calm ? 1 + 0.12 * Math.sin(performance.now() / 140) : 1;
+    const px = (32 + Math.max(0, FOV - camera.fov) * 0.7) * pulse;   // (bigger in the zoom)
+    m.scale.set(px * k, px * 1.3125 * k, 1);
+  }
+}
 function updateCamera(dt) {
   const a = 1 - Math.exp(-cam.k * dt);
   cam.pos.lerp(cam.tPos, a);
-  cam.look.lerp(cam.tLook, a);
+  cam.look.lerp(cam.tLook, 1 - Math.exp(-cam.k * 1.7 * dt));   // (the eye finds its target before the camera arrives)
+  cam.fov += (cam.tFov - cam.fov) * a;
+  if (Math.abs(camera.fov - cam.fov) > 0.01) { camera.fov = cam.fov; camera.updateProjectionMatrix(); }
   camera.position.copy(cam.pos);
   camera.lookAt(cam.look);
-}
-// the scope: their tower in a little window while you pull, with the ring where your block will land
-const scopeCam = new THREE.PerspectiveCamera(30, 1, 0.5, 4000);
-function renderScope() {
-  const el = hud.scopeEl;
-  if (!el || !hud.scopeOn) return;
-  const cr = canvasEl.getBoundingClientRect();
-  const r = el.getBoundingClientRect();
-  if (!r.width || !r.height) return;
-  const x = r.left - cr.left;
-  const y = cr.bottom - r.bottom;
-  const xf = sideX(FOE) / PX;
-  const tf = topM(FOE);
-  const hit = G.pred?.hit;
-  const hx = hit ? hit.x / PX : xf;
-  const hy = hit ? Math.max(-hit.y / PX, 1) : tf;
-  const lookX = Math.max(xf - 9, Math.min(xf + 9, hx));
-  const lookY = Math.max(STACK_TOP - 2, Math.min(tf + 6, hy));
-  scopeCam.position.set(lookX - towardFoe(ME) * 10, lookY + 4, 30);
-  scopeCam.lookAt(lookX, lookY, 0);
-  scopeCam.aspect = r.width / r.height;
-  scopeCam.updateProjectionMatrix();
-  const auto = renderer.shadowMap.autoUpdate;
-  renderer.shadowMap.autoUpdate = false;
-  renderer.setScissorTest(true);
-  renderer.setScissor(x, y, r.width, r.height);
-  renderer.setViewport(x, y, r.width, r.height);
-  renderer.render(scene, scopeCam);
-  renderer.setScissorTest(false);
-  renderer.setViewport(0, 0, cr.width, cr.height);
-  renderer.shadowMap.autoUpdate = auto;
 }
 
 // ------------------------------------------------------------------------------------------------ the bars
@@ -889,7 +924,8 @@ function gameOver(result, why) {
   setPhase('over');
   hud.hideTap();
   hud.hideCards();
-  hud.scope(false);
+  hud.power(false);
+  pinMesh.visible = false;
   clearHanging();
   if (result === 'win') { sfx('record'); buzz('perfect'); } else if (result === 'lose') sfx('gameover');
   const winner = result === 'lose' ? FOE : ME;
@@ -901,7 +937,7 @@ function gameOver(result, why) {
     const burst = () => { fx.sparkle(p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 4, Math.random() * 3, 0)), 50, n % 2 ? '#ffd46a' : '#ffffff', 11); if (++n < 6) setTimeout(burst, 260); };
     burst();
   }
-  const title = result === 'win' ? T.win : result === 'lose' ? T.lose : T.draw;
+  const title = result === 'win' ? T.win : result === 'lose' ? (FRIEND ? `${foeName.toUpperCase()} ${T.lose.split(' ').slice(1).join(' ')}` : T.lose) : T.draw;
   const sub = why === 'gone' ? T.gone(foeName) : why === 'sea' ? (result === 'win' ? T.winSeaOf(foeName) : result === 'lose' ? T.loseSea : T.drawSudden) : T.drawSudden;
   const st = G.stats;
   setTimeout(() => {
@@ -923,7 +959,6 @@ function again() {
 function openPause() {
   if (G.over || hud.modalOpen) return;
   G.paused = !FRIEND;   // (a friend battle keeps going: the other phone is playing too)
-  pull.on = false;
   try { audio.suspend(); } catch { /* */ }
   hud.modal(`<div class="bt-pausecard"><small>${T.title}</small><h2>${T.paused}</h2>
     <button class="bt-resume" type="button">${T.resume}</button><button class="bt-restart" type="button">${T.restart}</button><button class="bt-quit" type="button">${T.quit}</button></div>`, {
@@ -938,27 +973,14 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && !G.
 function onTap() {
   if (G.side !== ME || G.paused) return;
   if (G.phase === 'build' && G.phaseT > 0.25) dropBlock();
-  else if (G.phase === 'flight') fireBurst();
+  else if (G.phase === 'aim' && G.phaseT > 0.25) aimTap();
 }
 let ambOn = false;
 stageEl.addEventListener('pointerdown', (e) => {
   try { audio.unlock(); if (!ambOn) { ambOn = true; audio.setAmbience(0.55); } } catch { /* */ }
   if (e.target.closest('button') || hud.modalOpen) return;
-  if (G.phase === 'aim' && G.side === ME && G.phaseT > 0.2 && !G.paused) {
-    pull.on = true;
-    pull.id = e.pointerId;
-    pull.sx = e.clientX;
-    pull.sy = e.clientY;
-    pull.k = 0;
-    pull.step = 0;
-    try { stageEl.setPointerCapture(e.pointerId); } catch { /* */ }
-    return;
-  }
   onTap();
 });
-stageEl.addEventListener('pointermove', (e) => { if (pull.on && e.pointerId === pull.id) updatePull(e.clientX, e.clientY); });
-stageEl.addEventListener('pointerup', (e) => { if (pull.on && e.pointerId === pull.id) releasePull(); });
-stageEl.addEventListener('pointercancel', (e) => { if (pull.on && e.pointerId === pull.id) { pull.on = false; G.pullOff = { x: 0, y: 0 }; } });
 addEventListener('keydown', (e) => {
   if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); onTap(); }
   if (e.code === 'Escape') openPause();
@@ -969,14 +991,15 @@ function tick(dt, time) {
   G.phaseT += dt;
   physics(dt);
   syncMeshes(Math.min(1, acc), dt);
+  burning(dt);
   if (G.crownT > 0 && !FRIEND) { G.crownT -= dt; if (G.crownT <= 0 && !G.over) endTurn(); }
   switch (G.phase) {
     case 'intro':
-      if (!G.titled && G.phaseT > 0.35) { G.titled = true; hud.banner(T.title, { sub: `${T.you} · ${T.rikus}`, kind: '', ms: 1900 }); sfx('horn'); }
+      if (!G.titled && G.phaseT > 0.35) { G.titled = true; hud.banner(T.title, { sub: `${T.you} · ${FRIEND ? T.friend : T.rikus}`, kind: '', ms: 1900 }); sfx('horn'); }
       if (G.phaseT > 2.4) {
         setPhase('wait');
         let seen = false;
-        try { seen = !!JSON.parse(localStorage.getItem(KEY) || '{}').tip3; } catch { /* */ }
+        try { seen = !!JSON.parse(localStorage.getItem(KEY) || '{}').tip4; } catch { /* */ }
         const go = () => {
           if (myBonus) hud.banner(T.dailyBonus(myBonus), { kind: 'is-me is-small', ms: 1600 });
           if (FRIEND) friendSetup();
@@ -985,19 +1008,23 @@ function tick(dt, time) {
         if (seen || q.has('notip')) go();
         else {
           hud.modal(`<div class="bt-tip"><small>${T.title}</small><p>${T.tip}</p><p>${T.tip3}</p><p class="bt-tip2">${T.higher}</p><button class="bt-ok" type="button">${T.tipOk}</button></div>`, {
-            '.bt-ok': () => { hud.closeModal(); try { localStorage.setItem(KEY, JSON.stringify({ tip3: 1 })); } catch { /* */ } go(); },
+            '.bt-ok': () => { hud.closeModal(); try { localStorage.setItem(KEY, JSON.stringify({ tip4: 1 })); } catch { /* */ } go(); },
           });
         }
       }
       break;
     case 'other':
-      // Robot Rikus thinks; a friend's moves come over the room (onRemote)
-      if (!FRIEND && !G.plan && G.phaseT > RIKUS.thinkMs / 1000) {
-        G.plan = rikusPlan(sim, G.cards, G.turns[FOE], rand);
-        if (G.sudden && G.plan.action === 'build') G.plan = { shape: G.cards.find((c) => c === 'cube' || c === 'crate') || G.cards[0], action: 'throw', theta: 0.75 };
-        G.shape = G.plan.shape;
-        showHanging(FOE, G.shape);
-        beginAction(G.plan.action);
+      // Robot Rikus thinks (a few throws ahead each frame); a friend's moves come over the room (onRemote)
+      if (!FRIEND && !G.plan) {
+        if (!G.planner) G.planner = createRikusPlanner(sim, FOE, G.cards, G.turns[FOE], rand, { sudden: G.sudden });
+        const done = G.planner.step(26);
+        if (done && G.phaseT > RIKUS.thinkMs / 1000) {
+          G.plan = G.planner.plan();
+          G.card = G.cards.find((c) => c.shape === G.plan.shape && c.element === G.plan.element) || G.cards[0];
+          G.cardIdx = G.cards.indexOf(G.card);
+          showHanging(FOE, G.card);
+          beginAction(G.plan.action);
+        }
       }
       break;
     case 'build': {
@@ -1013,33 +1040,31 @@ function tick(dt, time) {
     case 'aim': {
       G.aimT += dt;
       if (G.side === ME) {
-        if (pull.on && pull.k > 0.04) {
-          G.pred = sim.predict(ME, G.shape, G.theta, G.power);
-          const path = G.pred.path.map((p) => ({ x: p.x / PX, y: -p.y / PX }));
-          fx.showArc(path, { x: G.pred.hit.x / PX, y: -G.pred.hit.y / PX, sea: G.pred.hit.kind === 'sea' }, G.pred.perfect);
-          hud.scope(true, G.pred.perfect);
-          hud.tapSub(`${T.powerPct(Math.round(G.power * 100))} · ${Math.round((G.theta * 180) / Math.PI)}°`);
+        if (G.aimStep === 'power') {
+          hud.power(true, powerAt(G.aimT), false);
+          pinMesh.visible = false;
+        } else {
+          const th = pinAngle(G.aimT);
+          placePin(ME, th);
+          hud.tapSub(`${T.powerWord} ${Math.round(G.power * 100)}% · ${Math.round((th * 180) / Math.PI)}°`);
         }
       } else if (G.plan || G.remoteThrow) {
-        // Rikus (or the friend's throw, replayed) winds up on the sling, then lets go
-        const aim = G.remoteThrow || { theta: G.plan.theta, power: 1 };
-        const span = G.remoteThrow ? 0.55 : 1.1;
+        // Rikus (or the friend's throw, replayed): his pin swings to his angle, then he lets go
+        const aim = G.remoteThrow || { theta: G.plan.theta, power: G.plan.power };
+        const span = G.remoteThrow ? 0.6 : 1.1;
         const k = Math.min(1, G.aimT / span);
-        const e = k * k * (3 - 2 * k) * 2.4 * aim.power;
-        const dir = towardFoe(FOE);
-        G.pullOff = { x: -Math.cos(aim.theta) * dir * e, y: -Math.sin(aim.theta) * e };
-        if (G.aimT > span + 0.2) throwBlock(aim.theta, aim.power);
+        placePin(FOE, PIN.min + (aim.theta - PIN.min) * (k * k * (3 - 2 * k)));
+        if (G.aimT > span + 0.25) throwBlock(aim.theta, aim.power);
       }
       break;
     }
     case 'flight':
-      if (!FRIEND && G.side === FOE) rikusBurst();
-      if (G.phaseT > 8) { setPhase('settle'); hud.hideTap(); }
+      if (G.phaseT > 8) setPhase('settle');
       break;
     case 'settle': {
       if (G.crownT > 0 && !FRIEND) break;
       const quiet = (sim.settled() && G.phaseT > SETTLE.minMs / 1000) || G.phaseT > SETTLE.maxMs / 1000;
-      if (!FRIEND) { if (quiet) endTurn(); break; }
+      if (!FRIEND) { if (quiet && !G.zoom) endTurn(); break; }
       // a friend battle: the one whose turn it is sends where everything ended up; the other phone takes it
       if (G.side === ME) {
         if (quiet && !G.sentDone) {
@@ -1058,7 +1083,7 @@ function tick(dt, time) {
           if (!g || !e.alive) continue;
           if (e.role === 'crown') { if (e.hp <= 0) pieces.glassBreak(g); else if (e.hp < e.hpMax) pieces.glassCrack(g, e.hpMax - e.hp); }
           else if (e.hp < e.hpMax) pieces.crack(g, e.hpMax - e.hp);
-          if (g.userData.spikes && e.role === 'built' && e.landed) { g.userData.spikes.visible = true; g.userData.spikes.scale.set(1, 1, 1); }
+          if (e.rooted) pieces.vineWrap(g);
           e.ix = undefined;
         }
         G.crownT = 0;
@@ -1074,7 +1099,7 @@ function tick(dt, time) {
   }
   updateCranes(dt, time);
   updateGhost();
-  camTargets();
+  camTargets(dt);
   G.topT -= dt;
   if (G.topT <= 0) { G.topT = 0.2; updateTop(); }
   G.sparkT -= dt;
@@ -1120,56 +1145,57 @@ async function friendSetup() {
   conn = net.connect(code);
   const ready = await Promise.race([conn.ready, conn.next(['gone'])]);
   if (ready && ready.t === 'gone') { hud.closeModal(); friendGone(); return; }
-  conn.send({ t: 'hello', name: myName || '', bonus: myBonus, seed: SEED });
+  conn.send({ t: 'hello', name: myName || '', bonus: myBonus, seed: SEED, skin: mySkin });
   const hi = await conn.next(['hello']);
   if (hi.t === 'gone') { hud.closeModal(); friendGone(); return; }
   hud.closeModal();
   foeName = String(hi.name || '').slice(0, 16) || T.friend;
+  skins[FOE] = typeof hi.skin === 'string' && /^[a-z]{2,16}$/.test(hi.skin) ? hi.skin : 'kleur';
   G.blocks[FOE] = BUDGET.base + Math.max(0, Math.min(BUDGET.dailyMax, hi.bonus | 0));
-  if (ME === 1) { SEED = Number(hi.seed) || SEED; rand = rng(SEED); }   // (the host's seed: the same blocks offered on both phones)
+  if (ME === 1) { SEED = Number(hi.seed) || SEED; rand = rng(SEED); }   // (the host's seed: the same cards offered on both phones)
+  // the blocks already standing (the starting towers) in each side's own skin
+  for (const e of sim.entries) { const g = meshes.get(e.id); if (g && e.side === FOE && e.role !== 'crown') { scene.remove(g); meshes.delete(e.id); } }
   nameBars();
   listen();
   startTurn(0);
 }
 async function listen() {
   for (;;) {
-    const m = await conn.next(['pick', 'build', 'throw', 'burst', 'done', 'bye']);
+    const m = await conn.next(['pick', 'build', 'throw', 'done', 'bye']);
     if (m.t === 'gone' || m.t === 'bye') { friendGone(); return; }
     onRemote(m);
   }
 }
 function onRemote(m) {
   const theirs = G.side === FOE;
-  if (m.t === 'pick' && theirs && G.phase === 'other') { G.shape = m.shape; showHanging(FOE, m.shape); return; }
-  if (m.t === 'build' && theirs && (G.phase === 'other' || G.phase === 'build')) {
-    G.shape = m.shape;
+  const card = G.cards[m.i | 0];
+  if (m.t === 'pick' && theirs && G.phase === 'other' && card) { G.card = card; G.cardIdx = m.i | 0; showHanging(FOE, card); return; }
+  if (m.t === 'build' && theirs && (G.phase === 'other' || G.phase === 'build') && card) {
+    G.card = card;
+    G.cardIdx = m.i | 0;
     G.action = 'build';
-    showHanging(FOE, m.shape);
+    showHanging(FOE, card);
     hud.hideTap();
     dropBlock({ x: m.x, y: m.y, vx: m.vx });
     return;
   }
-  if (m.t === 'throw' && theirs && (G.phase === 'other' || G.phase === 'aim')) {
-    G.shape = m.shape;
-    showHanging(FOE, m.shape);
+  if (m.t === 'throw' && theirs && (G.phase === 'other' || G.phase === 'aim') && card) {
+    G.card = card;
+    G.cardIdx = m.i | 0;
+    showHanging(FOE, card);
     G.remoteThrow = { theta: m.theta, power: m.power };
     beginAction('throw');
-    return;
-  }
-  if (m.t === 'burst') {   // (their mid-air tap, at the same step of the flight; it may come before the replay's launch)
-    if (G.shot && G.shot.side === FOE && G.shot.role === 'proj') G.pendingBurst = G.launchStep + (m.n | 0);
-    else G.pendingBurstN = m.n | 0;
     return;
   }
   if (m.t === 'done') G.remoteDone = m;
 }
 
-// warm the shaders behind the loading screen (every block, the arc, a splash), then go
-const extras = ['cube', 'plank', 'wedge', 'crate', 'pillar'].map((s, i) => { const g = pieces.block(s, i % 2); g.position.set(0, -50, 0); return g; });
+// warm the shaders behind the loading screen (every block, every emblem), then go
+const extras = ['cube', 'plank', 'wedge', 'crate', 'pillar'].map((s, i) => { const g = pieces.block(s, i % 2, ['vuur', 'gras', 'water', 'plof', 'vuur'][i], skins[i % 2] || 'kleur'); g.position.set(0, -50, 0); return g; });
 let last = performance.now();
 let time = 0;
 // (?prof: ms per part of a frame, averaged, in window.__btProf)
-const PROF = q.has('prof') ? { tick: 0, fx: 0, render: 0, scope: 0, draws: 0, n: 0 } : null;
+const PROF = q.has('prof') ? { tick: 0, fx: 0, render: 0, draws: 0 } : null;
 const avg = (k, v) => { PROF[k] += (v - PROF[k]) * 0.05; };
 function frame(now) {
   requestAnimationFrame(frame);
@@ -1184,11 +1210,11 @@ function frame(now) {
   world.update(time);
   fx.update(G.paused ? 0 : dt * (G.slowT > 0 ? Math.max(0.4, G.slowRate) : 1), camera);
   updateCamera(dt);
+  updateMarks();
+  trackCallouts();
   const t2 = performance.now();
   stage.render(dt);
-  const t3 = performance.now();
-  if (G.phase === 'aim' && G.side === ME) renderScope();
-  if (PROF) { avg('tick', t1 - t0); avg('fx', t2 - t1); avg('render', t3 - t2); avg('scope', performance.now() - t3); PROF.draws = renderer.info.render.calls; window.__btProf = PROF; }
+  if (PROF) { avg('tick', t1 - t0); avg('fx', t2 - t1); avg('render', performance.now() - t2); PROF.draws = renderer.info.render.calls; window.__btProf = PROF; }
 }
 stage.warm(extras).then(() => {
   updateTop();
@@ -1198,15 +1224,19 @@ stage.warm(extras).then(() => {
 
 // test hooks (qa/botsing1180.mjs)
 window.__bt = {
-  G, sim, T, SEED, pull,
-  pick: (shape, action) => { onChoose(shape, null); if (action) onChoose(shape, action); },
+  G, sim, T, SEED, ME, FOE,
+  /** Picks a card (its index, or the first of that shape) and, with `action`, builds or throws with it. */
+  pick: (which, action) => {
+    const i = typeof which === 'number' ? which : Math.max(0, G.cards.findIndex((c) => c.shape === which));
+    onChoose(i, null);
+    if (action) onChoose(i, action);
+  },
   tap: onTap,
-  /** An aim (angle, power) whose arc reaches their `kind` ('crown', 'block'), or null. */
-  ME, FOE,
+  /** An aim (angle, power) whose throw reaches their `kind` ('crown', 'block'), or null. */
   findAim(kind = 'crown') {
     for (let p = 1; p >= 0.5; p -= 0.05) {
-      for (let a = PULL.angleMin; a <= PULL.angleMax; a += Math.PI / 180) {
-        const r = sim.predict(ME, G.shape, a, p);
+      for (let a = PIN.min; a <= PIN.max; a += Math.PI / 180) {
+        const r = sim.predict(ME, G.card.shape, a, p);
         if (r.hit.kind === kind && r.hit.side === FOE) return { theta: a, power: p };
       }
     }
@@ -1214,7 +1244,22 @@ window.__bt = {
   },
   /** Throws at once with this aim (tests: no frame between the aim and the throw). */
   throwAim(aim) { if (G.phase === 'aim' && G.side === ME) throwBlock(aim.theta, aim.power); },
-  burst: fireBurst,
   trolley: () => trolley(ME),
-  ghost,
+  ghost, pin: pinMesh, cranes, skins, seen,
+  /** The aim right now: which step, the running power, the pin's angle, and where a throw now would land. */
+  aimNow() {
+    const power = G.aimStep === 'power' ? powerAt(G.aimT) : G.power;
+    const theta = pinAngle(G.aimT);
+    const hit = G.card && G.aimStep === 'angle' ? sim.predict(ME, G.card.shape, theta, power).hit : null;
+    return { step: G.aimStep, power, theta, hit: hit && { kind: hit.kind, side: hit.side } };
+  },
+  /** Where each tower's top and crown are on the screen (0-1 across and down). */
+  view() {
+    const r = stageEl.getBoundingClientRect();
+    const f = (p) => ({ x: +(p.x / r.width).toFixed(3), y: +(p.y / r.height).toFixed(3) });
+    return [0, 1].map((s) => {
+      const c = sim.crowns[s].body.position;
+      return { top: f(toScreen(towerX(s) / PX, topM(s))), crown: f(toScreen(c.x / PX, -c.y / PX)) };
+    });
+  },
 };

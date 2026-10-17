@@ -2259,6 +2259,27 @@ export function drawSkinRect(ctx, skinId, color, w, h) {
   }
 }
 
+/**
+ * (1.18 Blokbotsing, the owner: "can we implement the type of block they have purched") one block of `spec` drawn by the
+ * game's own block art in skin `skinId` on a fresh canvas `scale` times its size (with the 3-unit transparent edge, like
+ * its texture), for the 3D battle's block faces and cards. The worn skin is left as it was. Null without a canvas.
+ */
+export function blockFaceCanvas(spec, skinId, scale = 2) {
+  const g = getGeometry(spec);
+  const c = scratchCanvas(Math.ceil(g.texW * scale), Math.ceil(g.texH * scale));
+  if (!c) return null;
+  const ctx = c.getContext('2d');
+  ctx.scale(scale, scale);
+  const worn = blockSkin;
+  blockSkin = Object.prototype.hasOwnProperty.call(BLOCK_SKINS, skinId) ? skinId : 'kleur';
+  try {
+    drawBlock(ctx, g, skinned(shapeColor(spec)), textureKeyFor(spec));
+  } finally {
+    blockSkin = worn;
+  }
+  return { canvas: c, pad: PAD, texW: g.texW, texH: g.texH, w: g.w, h: g.h, pal: (() => { const w0 = blockSkin; blockSkin = Object.prototype.hasOwnProperty.call(BLOCK_SKINS, skinId) ? skinId : 'kleur'; try { return skinned(shapeColor(spec)); } finally { blockSkin = w0; } })() };
+}
+
 export function textureKeyFor(spec, name = null) {
   const g = getGeometry(spec);
   if (spec.log) return `log_${Math.round(g.w)}x${Math.round(g.h)}`;

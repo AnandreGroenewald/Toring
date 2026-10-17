@@ -45,12 +45,6 @@
 .bt-str.is-hit { animation: bt-hitbar 0.7s ease-out; }
 @keyframes bt-hitbar { 0% { box-shadow: 0 0 0 2px rgba(255, 80, 60, 0.9), 0 0 16px rgba(255, 60, 40, 0.9); } 100% { box-shadow: none; } }
 
-/* the scope: their tower while you pull (the game draws into this window) */
-.bt-scope { position: absolute; right: 10px; top: calc(max(10px, env(safe-area-inset-top)) + 116px); width: 46%; aspect-ratio: 1 / 1.08; border-radius: 18px; z-index: 1;
-  border: 2px solid rgba(255, 255, 255, 0.55); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 12px 30px rgba(0, 0, 0, 0.45); opacity: 0; transform: scale(0.92); transition: opacity 0.2s, transform 0.25s, border-color 0.2s; pointer-events: none; }
-.bt-scope.is-on { opacity: 1; transform: none; }
-.bt-scope.is-gold { border-color: #ffd46a; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 0 22px rgba(255, 200, 80, 0.6); }
-.bt-scope small { position: absolute; left: 8px; top: 7px; font-size: 9px; font-weight: 900; letter-spacing: 0.18em; padding: 3px 7px; border-radius: 999px; background: rgba(10, 6, 18, 0.6); }
 .bt-banner.is-dmg b { background-image: linear-gradient(180deg, #fff1ee, #ff8f7a 55%, #e2483d); }
 .bt-banner.is-small b { font-size: 22px; }
 
@@ -145,3 +139,21 @@
 .bt-invite .bt-waiting { font-size: 12.5px !important; opacity: 0.85 !important; display: flex; align-items: center; gap: 8px; }
 .bt-invite .bt-waiting::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25); border-top-color: var(--gold); animation: bt-spin 0.9s linear infinite; }
 @keyframes bt-spin { to { transform: rotate(360deg); } }
+
+/* (round 4) the cards show the real block in the player's skin, the element's colour round it */
+.bt-card { height: 96px; gap: 0; }
+.bt-cimg { width: 74px; height: 50px; object-fit: contain; display: block; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.4)); }
+.bt-card small { font-size: 9.5px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.9; }
+.bt-card.el-vuur { box-shadow: inset 0 0 0 1px rgba(255, 122, 42, 0.55), 0 8px 18px rgba(0, 0, 0, 0.32); } .bt-card.el-vuur small { color: #ffa25a; }
+.bt-card.el-gras { box-shadow: inset 0 0 0 1px rgba(98, 210, 74, 0.55), 0 8px 18px rgba(0, 0, 0, 0.32); } .bt-card.el-gras small { color: #8ee86f; }
+.bt-card.el-water { box-shadow: inset 0 0 0 1px rgba(63, 182, 255, 0.6), 0 8px 18px rgba(0, 0, 0, 0.32); } .bt-card.el-water small { color: #8fd2ff; }
+.bt-card.el-plof { box-shadow: inset 0 0 0 1px rgba(255, 74, 58, 0.6), 0 8px 18px rgba(0, 0, 0, 0.32); } .bt-card.el-plof small { color: #ff8f80; }
+/* the power bar: a tall gauge at the right, running up and down until a tap holds it */
+.bt-power { position: absolute; right: 14px; top: 50%; transform: translate(30px, -50%); opacity: 0; transition: opacity 0.2s, transform 0.3s; z-index: 2; display: grid; justify-items: center; gap: 6px; pointer-events: none; }
+.bt-power.is-on { opacity: 1; transform: translate(0, -50%); }
+.bt-power small { font-size: 10px; font-weight: 900; letter-spacing: 0.22em; color: var(--gold); text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
+.bt-power b { font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
+.bt-pbar { position: relative; width: 30px; height: min(42vh, 330px); border-radius: 16px; background: rgba(16, 10, 28, 0.6); border: 2px solid rgba(255, 255, 255, 0.35); overflow: hidden; box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4); }
+.bt-pfill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(0deg, #4ad66d 0%, #ffd24a 55%, #ff5a3a 100%); background-size: 100% min(42vh, 330px); background-position: bottom; }
+.bt-pmark { position: absolute; left: -2px; right: -2px; height: 3px; margin-bottom: -1.5px; background: #fff; box-shadow: 0 0 8px #fff; }
+.bt-power.is-held .bt-pbar { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 207, 107, 0.4), 0 0 22px rgba(255, 200, 80, 0.5); }

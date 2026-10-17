@@ -1,16 +1,19 @@
-// (1.18 3D) Blokbotsing: the things on the stacks — Stapel's blocks as dressed stone and timber (each shape its own
-// material and its power's mark: iron bands on the heavy cube, spikes on the wedge, the hazard crate, the pillar's
-// capital), the crown on its velvet cushion, and a yellow tower crane per side with its team's cab and flag.
+// (1.18 3D) Blokbotsing: the things on the stacks — Stapel's own blocks in 3D, their faces painted by the game's own block
+// art in the skin each player bought in the Winkel (the owner: "can we implement the type of block they have purched"),
+// each with its element's emblem (🔥 🌿 💧 💣); the crown in its glass cabinet; a yellow tower crane per side with its
+// team's cab and flag, whose jib swings aside when it isn't working (the owner: "it looks like its going through the
+// crane"); the throw's direction pin; and the marks of what happened to a block: cracks, soot, vines, a spring.
 import * as THREE from '../../lib/three.module.min.js';
 import { castleMaterials, banner, TEAM } from '../kasteel/castle.js';
 import { rng } from '../kasteel/world.js';
+import { blockFaceCanvas } from '../game/blocks.js';
 import { shapeInfo } from './sim.js';
-import { PX, sideX, towardFoe } from './rules.js';
+import { PX, sideX, towardFoe, SHAPE_COLOR, ELEMENT } from './rules.js';
 import { merge, STACK_TOP } from './world.js';
 
 export const DEPTH = 3.2;   // every block is this deep (m)
 const SIDE_TEAM = ['blue', 'red'];
-const TINT = ['#e4edff', '#ffe6dd'];
+export const EMOJI = { vuur: '🔥', gras: '🌿', water: '💧', plof: '💣' };
 
 function canvas(w, h) {
   const c = document.createElement('canvas');
@@ -18,66 +21,28 @@ function canvas(w, h) {
   c.height = h;
   return c;
 }
-/** The crate's face: a timber frame, an X brace, a hazard band and a bold "!" (it explodes when thrown). */
-function crateCanvas() {
-  const c = canvas(512, 512);
+/** An element's emblem: a glossy disc in its colour, a white rim, its emoji. */
+function emblemCanvas(element) {
+  const c = canvas(256, 256);
   const g = c.getContext('2d');
-  const r = rng(21);
-  g.fillStyle = '#8a5a32';
-  g.fillRect(0, 0, 512, 512);
-  for (let b = 0; b < 8; b++) {
-    g.fillStyle = `rgba(${90 + r() * 40 | 0},${55 + r() * 25 | 0},${25 + r() * 15 | 0},0.55)`;
-    g.fillRect(0, b * 64, 512, 62);
-    for (let k = 0; k < 12; k++) {
-      g.strokeStyle = `rgba(40,20,8,${0.1 + r() * 0.15})`;
-      g.beginPath();
-      const y = b * 64 + r() * 60;
-      g.moveTo(0, y);
-      for (let x = 0; x <= 512; x += 32) g.lineTo(x, y + Math.sin(x * 0.03 + k) * 2.5);
-      g.stroke();
-    }
-    g.fillStyle = 'rgba(0,0,0,0.4)';
-    g.fillRect(0, b * 64 + 62, 512, 2);
-  }
-  // frame and X brace
-  g.fillStyle = '#5e3b1e';
-  for (const [x, y, w, h] of [[0, 0, 512, 54], [0, 458, 512, 54], [0, 0, 54, 512], [458, 0, 54, 512]]) g.fillRect(x, y, w, h);
-  g.save();
-  g.translate(256, 256);
-  for (const a of [Math.PI / 4, -Math.PI / 4]) {
-    g.save();
-    g.rotate(a);
-    g.fillRect(-330, -26, 660, 52);
-    g.restore();
-  }
-  g.restore();
-  // the hazard label
-  g.save();
+  const col = ELEMENT[element]?.color || '#888888';
+  const grd = g.createRadialGradient(108, 96, 10, 128, 128, 124);
+  grd.addColorStop(0, '#ffffff');
+  grd.addColorStop(0.18, col);
+  grd.addColorStop(1, '#1a1020');
+  g.fillStyle = grd;
   g.beginPath();
-  g.roundRect(136, 176, 240, 160, 18);
-  g.clip();
-  g.fillStyle = '#f2c230';
-  g.fillRect(136, 176, 240, 160);
-  g.fillStyle = '#1d1a16';
-  for (let x = 100; x < 420; x += 44) { g.beginPath(); g.moveTo(x, 176); g.lineTo(x + 22, 176); g.lineTo(x - 18, 216); g.lineTo(x - 40, 216); g.fill(); }
-  for (let x = 100; x < 420; x += 44) { g.beginPath(); g.moveTo(x, 296); g.lineTo(x + 22, 296); g.lineTo(x - 18, 336); g.lineTo(x - 40, 336); g.fill(); }
-  g.fillStyle = '#c62828';
-  g.font = '900 104px Arial Black, Arial, sans-serif';
+  g.arc(128, 128, 118, 0, Math.PI * 2);
+  g.fill();
+  g.lineWidth = 12;
+  g.strokeStyle = 'rgba(255,255,255,0.92)';
+  g.stroke();
+  g.font = '150px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText('!', 256, 258);
-  g.restore();
-  g.strokeStyle = '#1d1a16';
-  g.lineWidth = 6;
-  g.beginPath();
-  g.roundRect(136, 176, 240, 160, 18);
-  g.stroke();
-  // nail heads
-  g.fillStyle = '#2b2b2b';
-  for (const [x, y] of [[27, 27], [485, 27], [27, 485], [485, 485], [256, 27], [256, 485], [27, 256], [485, 256]]) { g.beginPath(); g.arc(x, y, 7, 0, Math.PI * 2); g.fill(); }
+  g.fillText(EMOJI[element] || '', 128, 140);
   return c;
 }
-
 /** Glass: a faint blue body with two bright diagonal glare streaks and a lighter rim, so it reads as glass. */
 function glareTexture() {
   const c = canvas(256, 256);
@@ -109,13 +74,9 @@ function glareTexture() {
 
 export function createPieces(renderer) {
   const base = castleMaterials(renderer);
-  const cTex = new THREE.CanvasTexture(crateCanvas());
-  cTex.colorSpace = THREE.SRGBColorSpace;
-  cTex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const M = {
     ...base,
-    basalt: base.granite.clone(),
-    crateFace: new THREE.MeshStandardMaterial({ map: cTex, roughness: 0.82 }),
     gold: new THREE.MeshStandardMaterial({ color: '#ffc74a', metalness: 1, roughness: 0.24, envMapIntensity: 1.6 }),
     goldGlow: new THREE.MeshStandardMaterial({ color: '#ffd76a', emissive: '#ffb020', emissiveIntensity: 1.4, metalness: 0.6, roughness: 0.3 }),
     ruby: new THREE.MeshStandardMaterial({ color: '#c0102a', roughness: 0.08, metalness: 0.2, emissive: '#400008', envMapIntensity: 2 }),
@@ -127,27 +88,20 @@ export function createPieces(renderer) {
     walnut: new THREE.MeshStandardMaterial({ color: '#3b2416', roughness: 0.45, metalness: 0.1 }),
     glassPane: new THREE.MeshStandardMaterial({ map: glareTexture(), color: '#d6ebff', roughness: 0.04, metalness: 0.7, transparent: true, opacity: 0.44, envMapIntensity: 2.8, depthWrite: false }),
     glassShard: new THREE.MeshStandardMaterial({ color: '#cfe6ff', roughness: 0.05, metalness: 0.8, transparent: true, opacity: 0.55, envMapIntensity: 2 }),
+    vine: new THREE.MeshStandardMaterial({ color: '#3f9a32', roughness: 0.7 }),
+    leaf: new THREE.MeshStandardMaterial({ color: '#68c447', roughness: 0.6, side: THREE.DoubleSide }),
+    spring: new THREE.MeshStandardMaterial({ color: '#c9ccd2', roughness: 0.25, metalness: 0.9 }),
+    pin: new THREE.MeshBasicMaterial({ color: '#ffc02a', transparent: true, opacity: 0.95, depthTest: false, toneMapped: false }),
+    pinRim: new THREE.MeshBasicMaterial({ color: '#2a1406', transparent: true, opacity: 0.6, depthTest: false, toneMapped: false }),
   };
-  M.basalt.color = new THREE.Color('#7b808b');
-  M.heavy = base.granite.clone();   // (the cube: dark dressed stone, iron-banded: it looks as heavy as it is)
-  M.heavy.color = new THREE.Color('#7b838e');
   const team = SIDE_TEAM.map((t) => new THREE.MeshStandardMaterial({ color: TEAM[t].main, roughness: 0.5, metalness: 0.25 }));
   const velvet = SIDE_TEAM.map((t) => new THREE.MeshStandardMaterial({ color: TEAM[t].main, roughness: 0.62, metalness: 0.05, emissive: TEAM[t].dark, emissiveIntensity: 0.18 }));
-  // each side's blocks carry a hint of its colour
-  const tinted = new Map();
-  const tint = (key, side) => {
-    const k = `${key}|${side}`;
-    if (!tinted.has(k)) {
-      const m = M[key].clone();
-      m.color = new THREE.Color(M[key].color).multiply(new THREE.Color(TINT[side]));
-      tinted.set(k, m);
-    }
-    return tinted.get(k);
-  };
-  const MAT_OF = { cube: 'heavy', plank: 'timber', slab: 'sandstone', brick: 'sandstone', wedge: 'basalt', pillar: 'sandstone', crate: 'timber' };
 
   const geoCache = new Map();
-  /** The shape's outline (metres, round its centroid, y up) pushed DEPTH deep. Caps get face UVs (0-1) for the crate. */
+  /**
+   * The shape's outline (metres, round its centroid, y up) pushed DEPTH deep. The front and back carry UVs that lay the
+   * game's own block texture (blockFaceCanvas: the outline plus a 3-unit edge) exactly on the face.
+   */
   function blockGeometry(shape, depth = DEPTH, bev = 0.07) {
     const k = `${shape}|${depth}`;
     if (geoCache.has(k)) return geoCache.get(k);
@@ -155,85 +109,106 @@ export function createPieces(renderer) {
     const pts = s.outline.map((p) => new THREE.Vector2((p.x - s.cx) / PX, -(p.y - s.cy) / PX)).reverse();
     const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: depth - 2 * bev, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 1 });
     g.translate(0, 0, -(depth - 2 * bev) / 2);
-    if (shape === 'crate') {
-      const uv = g.attributes.uv;
-      const pos = g.attributes.position;
-      const nor = g.attributes.normal;
-      const W = s.w / PX;
-      const Hh = s.h / PX;
-      for (let i = 0; i < uv.count; i++) {
-        if (Math.abs(nor.getZ(i)) > 0.7) uv.setXY(i, (pos.getX(i) + W / 2) / W, (pos.getY(i) + (s.h - s.cy) / PX) / Hh);
-      }
+    const uv = g.attributes.uv;
+    const pos = g.attributes.position;
+    const nor = g.attributes.normal;
+    const PAD = 3;
+    const texW = s.w + 2 * PAD;
+    const texH = s.h + 2 * PAD;
+    for (let i = 0; i < uv.count; i++) {
+      if (Math.abs(nor.getZ(i)) < 0.7) continue;
+      const px = pos.getX(i) * PX + s.cx;
+      const py = s.cy - pos.getY(i) * PX;
+      uv.setXY(i, (PAD + px) / texW, 1 - (PAD + py) / texH);
     }
     g.computeVertexNormals();
     geoCache.set(k, g);
     return g;
   }
-  const spikeGeo = new THREE.ConeGeometry(0.16, 0.72, 10);
-  spikeGeo.translate(0, 0.36, 0);
+  /** The face (Stapel's block art in that skin) and the sides (its colour, a little deeper) for a shape. */
+  const matCache = new Map();
+  function faceMaterials(shape, skin) {
+    const k = `${shape}|${skin}`;
+    if (matCache.has(k)) return matCache.get(k);
+    const art = blockFaceCanvas({ shape, color: SHAPE_COLOR[shape] ?? 0 }, skin, 3);
+    let mats;
+    if (art) {
+      const t = new THREE.CanvasTexture(art.canvas);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = aniso;
+      const side = new THREE.Color(art.pal.fill).multiplyScalar(0.82);
+      mats = [new THREE.MeshStandardMaterial({ map: t, roughness: 0.5, metalness: 0.02 }), new THREE.MeshStandardMaterial({ color: side, roughness: 0.55, metalness: 0.02 })];
+    } else {
+      mats = [base.sandstone, base.sandstone];
+    }
+    matCache.set(k, mats);
+    return mats;
+  }
+  const emblemMats = new Map();
+  function emblemMaterial(element) {
+    if (!emblemMats.has(element)) {
+      const t = new THREE.CanvasTexture(emblemCanvas(element));
+      t.colorSpace = THREE.SRGBColorSpace;
+      emblemMats.set(element, new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
+    }
+    return emblemMats.get(element);
+  }
   const box = (w, h, d, m) => {
     const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
     o.castShadow = o.receiveShadow = true;
     return o;
   };
 
-  /** A block's look for `shape` on `side`: { group, top, bottom, w, h } (top/bottom: m above/below its centroid). */
-  function block(shape, side) {
+  /**
+   * A block's look: `shape` on `side`, its `element`'s emblem on the front and back, painted in Stapel `skin`.
+   * userData: { top, bottom, w, h } (m above/below its centroid).
+   */
+  function block(shape, side, element = null, skin = 'kleur') {
+    if (shape === 'crown') return crown(side);
     const s = shapeInfo(shape);
     const group = new THREE.Group();
     const W = s.w / PX;
     const H = s.h / PX;
     const top = s.cy / PX;
     const bottom = (s.h - s.cy) / PX;
-    if (shape === 'crown') return crown(side);
-    const matKey = MAT_OF[shape] || 'sandstone';
-    const mat = shape === 'crate' ? [M.crateFace, tint('timber', side)] : tint(matKey, side);
-    const m = new THREE.Mesh(blockGeometry(shape), mat);
+    const m = new THREE.Mesh(blockGeometry(shape), faceMaterials(shape, skin));
     m.castShadow = m.receiveShadow = true;
     group.add(m);
-    if (shape === 'cube') {
-      for (const x of [-W * 0.27, W * 0.27]) {
-        const band = box(0.24, H + 0.06, DEPTH + 0.06, M.iron);
-        band.position.x = x;
-        group.add(band);
-      }
-    } else if (shape === 'wedge') {
-      // (the owner: "the spikes on the blocks does not work for throwing") the spikes grow out once it's built
-      const tw = (90 / PX) * 0.92;
-      const spikes = new THREE.Group();
-      for (const z of [-0.85, 0.85]) {
-        for (let i = 0; i < 4; i++) {
-          const sp = new THREE.Mesh(spikeGeo, M.iron);
-          sp.position.set(-tw / 2 + (i + 0.5) * (tw / 4), top, z);
-          sp.castShadow = true;
-          spikes.add(sp);
-        }
-      }
-      spikes.visible = false;
-      spikes.scale.set(1, 0.01, 1);
-      group.add(spikes);
-      group.userData.spikes = spikes;
-    } else if (shape === 'crate') {
-      for (const [x, y] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-        const c = box(0.36, 0.36, DEPTH + 0.05, M.iron);
-        c.position.set((x * (W - 0.3)) / 2, (y * (H - 0.3)) / 2 + (top - bottom) / 2, 0);
-        group.add(c);
-      }
-    } else if (shape === 'pillar') {
-      for (const y of [top - 0.16, -bottom + 0.16]) {
-        const cap = box(W + 0.34, 0.32, DEPTH + 0.3, tint('granite', side));
-        cap.position.y = y;
-        group.add(cap);
-      }
-    } else if (shape === 'plank') {
-      for (const x of [-W / 2 + 0.35, W / 2 - 0.35]) {
-        const capb = box(0.2, H + 0.05, DEPTH + 0.05, M.iron);
-        capb.position.x = x;
-        group.add(capb);
+    if (element) {
+      const size = Math.max(0.8, Math.min(1.5, Math.min(W, H) * 0.66));
+      for (const z of [1, -1]) {
+        const e = new THREE.Mesh(new THREE.PlaneGeometry(size, size), emblemMaterial(element));
+        e.position.set(0, 0, z * (DEPTH / 2 + 0.015));
+        if (z < 0) e.rotation.y = Math.PI;
+        e.renderOrder = 3;
+        group.add(e);
       }
     }
-    group.userData = { ...group.userData, shape, side, top, bottom, w: W, h: H };
+    group.userData = { shape, side, element, top, bottom, w: W, h: H };
     return group;
+  }
+  /** (cards) the block as Stapel draws it in that skin, its emblem in the corner: a data URL. */
+  const cardCache = new Map();
+  function cardImage(shape, element, skin) {
+    const k = `${shape}|${element}|${skin}`;
+    if (cardCache.has(k)) return cardCache.get(k);
+    const art = blockFaceCanvas({ shape, color: SHAPE_COLOR[shape] ?? 0 }, skin, 2);
+    const c = canvas(240, 160);
+    const g = c.getContext('2d');
+    if (art) {
+      const k2 = Math.min(200 / art.canvas.width, 120 / art.canvas.height);
+      const w = art.canvas.width * k2;
+      const h = art.canvas.height * k2;
+      g.shadowColor = 'rgba(0,0,0,0.45)';
+      g.shadowBlur = 10;
+      g.shadowOffsetY = 5;
+      g.drawImage(art.canvas, (240 - w) / 2, (160 - h) / 2 + 6, w, h);
+      g.shadowColor = 'transparent';
+    }
+    if (element) g.drawImage(emblemCanvas(element), 168, 2, 70, 70);
+    const url = c.toDataURL('image/png');
+    cardCache.set(k, url);
+    return url;
   }
 
   /**
@@ -418,6 +393,68 @@ export function createPieces(renderer) {
     return s;
   }
 
+  /** A burning block's soot: a dark film over it, deeper the longer it burns (0-1). */
+  function soot(group, k) {
+    const main = group.children[0];
+    if (!main) return;
+    let ov = group.userData.soot;
+    if (!ov) {
+      ov = new THREE.Mesh(main.geometry, new THREE.MeshBasicMaterial({ color: '#120804', transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+      ov.renderOrder = 2;
+      group.add(ov);
+      group.userData.soot = ov;
+    }
+    ov.material.opacity = Math.min(0.55, k * 0.55);
+  }
+  /** 🌿 Rankanker: vines over the block's faces, with leaves. */
+  function vineWrap(group) {
+    if (group.userData.vines) return;
+    const u = group.userData;
+    const r = rng(Math.floor((u.w * 13 + u.h * 7) * 100));
+    const g = new THREE.Group();
+    for (const z of [1, -1]) {
+      for (let i = 0; i < 2; i++) {
+        const x0 = (r() - 0.5) * u.w * 0.7;
+        const pts = [];
+        for (let k = 0; k <= 6; k++) {
+          const t = k / 6;
+          pts.push(new THREE.Vector3(x0 + Math.sin(t * 5 + i) * 0.35 + (r() - 0.5) * 0.15, u.top + 0.05 - t * (u.top + u.bottom + 0.1), z * (DEPTH / 2 + 0.06)));
+        }
+        const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.075, 5), M.vine);
+        tube.castShadow = true;
+        g.add(tube);
+        for (let k = 1; k < 6; k++) {
+          const leaf = new THREE.Mesh(new THREE.CircleGeometry(0.2, 6), M.leaf);
+          leaf.position.copy(pts[k]).add(new THREE.Vector3(0.18 * (k % 2 ? 1 : -1), 0, z * 0.03));
+          leaf.scale.set(1, 0.55, 1);
+          leaf.rotation.set(0, z < 0 ? Math.PI : 0, (k % 2 ? 0.6 : -0.6));
+          g.add(leaf);
+        }
+      }
+    }
+    group.add(g);
+    u.vines = g;
+  }
+  /** 💣 Verrassing: a steel spring on top, ready. */
+  function springCoil(group) {
+    if (group.userData.coil) return;
+    const u = group.userData;
+    const pts = [];
+    for (let k = 0; k <= 64; k++) {
+      const a = (k / 64) * Math.PI * 2 * 4.5;
+      pts.push(new THREE.Vector3(Math.cos(a) * 0.32, (k / 64) * 0.7, Math.sin(a) * 0.32));
+    }
+    const coil = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 96, 0.05, 6), M.spring);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.12, 16), team[u.side] || M.spring);
+    cap.position.y = 0.74;
+    const g = new THREE.Group();
+    g.add(coil, cap);
+    g.position.y = u.top;
+    group.add(g);
+    u.coil = g;
+  }
+  function dropCoil(group) { if (group.userData.coil) { group.userData.coil.visible = false; } }
+
   // ---------------------------------------------------------------------------------------------- the crane
   const lattice = (() => {
     const W = 1.3;
@@ -442,10 +479,8 @@ export function createPieces(renderer) {
   /** A jib-like lattice along +x, `len` long: two bottom chords and a top chord, braced every 1.4 m. */
   function truss(len, w = 1.0, h = 1.1) {
     const parts = [];
-    const bar = (L, x, y, z, rz = 0, ry = 0) => {
+    const bar = (L, x, y, z) => {
       const g = new THREE.BoxGeometry(L, 0.09, 0.09);
-      g.rotateZ(rz);
-      g.rotateY(ry);
       g.translate(x, y, z);
       parts.push(g);
     };
@@ -458,13 +493,11 @@ export function createPieces(renderer) {
         const dz = -z;
         const L = Math.hypot(step / 2, h, dz);
         const g = new THREE.BoxGeometry(0.06, L, 0.06);
-        const dir = new THREE.Vector3(step / 2, h, dz).normalize();
-        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir));
+        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(step / 2, h, dz).normalize()));
         g.translate(x0 + step / 4, h / 2, z + dz / 2);
         parts.push(g);
         const g2 = new THREE.BoxGeometry(0.06, L, 0.06);
-        const dir2 = new THREE.Vector3(step / 2, -h, -dz).normalize();
-        g2.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir2));
+        g2.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(step / 2, -h, -dz).normalize()));
         g2.translate(x0 + (3 * step) / 4, h / 2, z + dz / 2);
         parts.push(g2);
       }
@@ -475,10 +508,15 @@ export function createPieces(renderer) {
     return merge(parts);
   }
   const JIB_OUT = 11.5;   // m the jib reaches towards the foe from the stack's middle
-  const JIB_IN = 10.5;    // ...and away from it (the swing reaches both sides of the tower)
+  const JIB_IN = 7.0;     // ...and away from it (the swing reaches both sides of the tower)
   const jibGeo = truss(JIB_OUT + JIB_IN);
-  const MAST_Z = -4.6;
-  /** The crane over `side`'s stack. `set({ jibY, trolleyX, hookY, flex })` moves it (metres, world). */
+  const MAST_Z = -6.2;    // the mast stands at the back of the rock; parked, the whole jib lies behind the battle
+  const ease = (k) => k * k * (3 - 2 * k);
+  /**
+   * The crane over `side`'s stack. `set({ jibY, tx, hookY, swing })` moves it (metres, world); `park(on, fast)` swings
+   * the jib half a turn round the mast (behind the battle on the way), pointing away from the foe: from the battle view
+   * a parked jib never hangs over a throw's path (the owner: "it looks like its going through the crane").
+   */
   function crane(side) {
     const dir = towardFoe(side);
     const sx = sideX(side) / PX;
@@ -492,83 +530,82 @@ export function createPieces(renderer) {
     const foot = box(2.6, 0.9, 2.6, M.concrete);
     foot.position.set(mastX, STACK_TOP + 0.45, MAST_Z);
     g.add(foot);
+    // the head turns round the mast: everything above it lives in the head's frame (the jib's line at z = -MAST_Z)
     const head = new THREE.Group();
     g.add(head);
+    const JZ = -MAST_Z;
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.45, 24), M.iron);
-    ring.position.set(0, 0.22, MAST_Z);
+    ring.position.set(0, 0.22, 0);
     head.add(ring);
-    const neck = box(1.1, 0.7, Math.abs(MAST_Z) + 0.6, M.paint);
-    neck.position.set(0, 0.75, MAST_Z / 2);
+    const neck = box(1.1, 0.7, JZ + 0.6, M.paint);
+    neck.position.set(0, 0.75, JZ / 2);
     head.add(neck);
     const cab = box(1.7, 1.55, 1.7, team[side]);
-    cab.position.set(dir * 1.25, 1.35, MAST_Z + 0.2);
+    cab.position.set(dir * 1.25, 1.35, 0.2);
     head.add(cab);
     const win = box(1.2, 0.7, 0.05, M.glass);
-    win.position.set(dir * 1.25, 1.6, MAST_Z + 1.06);
+    win.position.set(dir * 1.25, 1.6, 1.06);
     head.add(win);
+    const jibPivot = new THREE.Group();
+    jibPivot.position.set(0, 1.1, JZ);
+    head.add(jibPivot);
     const jib = new THREE.Mesh(jibGeo, M.paint);
     jib.castShadow = true;
     jib.scale.x = dir;
-    jib.position.y = 1.1;
-    const jibPivot = new THREE.Group();
-    jibPivot.add(jib);
-    head.add(jibPivot);
-    // the jib starts JIB_IN behind the stack's middle: place it in the head's frame (the head sits at the mast's x)
     jib.position.x = (sx - dir * JIB_IN) - mastX;
-    // the A-frame over the mast and its tie bars, the counterweights at the outer end, the team flag
-    const apexY = 6.2;
+    jibPivot.add(jib);
+    const apexY = 5.1;
     for (const [x, z] of [[-0.6, -0.5], [0.6, -0.5], [-0.6, 0.5], [0.6, 0.5]]) {
-      const L = Math.hypot(x, apexY - 1.1, z);
+      const L = Math.hypot(x, apexY, z);
       const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, L, 6), M.paint);
-      leg.position.set(x / 2, 1.1 + (apexY - 1.1) / 2, z / 2);
-      leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-x, apexY - 1.1, -z).normalize());
-      head.add(leg);
+      leg.position.set(x / 2, apexY / 2, z / 2);
+      leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-x, apexY, -z).normalize());
+      jibPivot.add(leg);
     }
     const tieTo = (x) => {
       const a = new THREE.Vector3(0, apexY, 0);
-      const b = new THREE.Vector3(x, 2.2, 0);
+      const b = new THREE.Vector3(x, 1.1, 0);
       const L = a.distanceTo(b);
       const t = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, L, 5), M.cable);
       t.position.copy(a).add(b).multiplyScalar(0.5);
       t.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
-      head.add(t);
+      jibPivot.add(t);
     };
     tieTo(dir * 9.5);
     tieTo(dir * 5.0);
-    tieTo((sx - dir * (JIB_IN - 0.8)) - mastX);
     const cwX = (sx - dir * (JIB_IN - 0.9)) - mastX;
+    tieTo(cwX);
     for (let i = 0; i < 3; i++) {
       const cw = box(0.7, 1.7, 1.5, M.concrete);
-      cw.position.set(cwX + dir * i * 0.75, 0.25, 0);
-      head.add(cw);
+      cw.position.set(cwX + dir * i * 0.75, -0.85, 0);
+      jibPivot.add(cw);
     }
     const flag = banner(SIDE_TEAM[side], { pole: 2.4, w: 2.2, h: 1.3 });
     flag.position.set(0, apexY - 0.3, 0);
     flag.scale.x = -dir;
-    head.add(flag);
-    // trolley, cables, hook
+    jibPivot.add(flag);
+    // trolley, cables, hook: on the jib (they turn with it)
     const trolley = box(1.0, 0.36, 1.25, M.iron);
-    g.add(trolley);
+    head.add(trolley);
     const cableGeo = new THREE.CylinderGeometry(0.03, 0.03, 1, 5);
     cableGeo.translate(0, -0.5, 0);
     const cables = [-0.22, 0.22].map((z) => {
       const c = new THREE.Mesh(cableGeo, M.cable);
-      c.position.z = z;
-      g.add(c);
+      c.userData.z = z;
+      head.add(c);
       return c;
     });
     const hook = new THREE.Group();
-    const hb = box(0.62, 0.66, 0.6, M.paint);
-    hook.add(hb);
+    hook.add(box(0.62, 0.66, 0.6, M.paint));
     const hk = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.07, 8, 16, Math.PI * 1.5), M.iron);
     hk.position.y = -0.55;
     hk.rotation.z = Math.PI * 0.75;
     hook.add(hk);
-    g.add(hook);
+    head.add(hook);
     const hold = new THREE.Group();   // (the hanging block goes in here)
     hook.add(hold);
     hold.position.y = -0.85;
-    const st = { jibY: STACK_TOP + 16, tx: sx, hookY: STACK_TOP + 10, flex: 0, flexV: 0, swing: 0 };
+    const st = { jibY: STACK_TOP + 16, tx: sx, hookY: STACK_TOP + 10, flex: 0, flexV: 0, swing: 0, park: 1, parkTo: 1, parkSpeed: 1.4 };
     function place() {
       // (the mast hangs from the head down: it always meets it; the lowest segment ends inside the rock)
       const H = Math.max(4, st.jibY - 1.1 - STACK_TOP);
@@ -580,25 +617,28 @@ export function createPieces(renderer) {
         mast.instanceMatrix.needsUpdate = true;
         st.H = H;
       }
-      head.position.set(mastX, STACK_TOP + H, 0);
-      const jy = head.position.y + 1.1;
+      head.position.set(mastX, STACK_TOP + H, MAST_Z);
+      head.rotation.y = dir * Math.PI * ease(st.park);
       jibPivot.rotation.z = st.flex * dir * 0.02;
-      trolley.position.set(st.tx, jy - 0.22, 0);
-      const hookTop = st.hookY + 0.33;
-      const len = Math.max(0.3, jy - 0.4 - hookTop);
+      const lx = st.tx - mastX;
+      trolley.position.set(lx, 1.1 - 0.22, JZ);
+      const hookTop = st.hookY - head.position.y + 0.33;
+      const len = Math.max(0.3, 1.1 - 0.4 - hookTop);
       for (const c of cables) {
-        c.position.set(st.tx, jy - 0.4, c.position.z);
+        c.position.set(lx, 1.1 - 0.4, JZ + c.userData.z);
         c.scale.y = len;
         c.rotation.z = st.swing;
       }
-      hook.position.set(st.tx + Math.sin(st.swing) * len, st.hookY, 0);
+      hook.position.set(lx + Math.sin(st.swing) * len, st.hookY - head.position.y, JZ);
       hook.rotation.z = st.swing;
     }
     place();
     return {
       group: g, hold, dir, side,
       get jibY() { return head.position.y + 1.1; },
-      /** Moves the crane: the jib eases to `jibY`, the trolley sits at `tx`, the hook at `hookY` (m). */
+      get parked() { return st.park > 0.5; },
+      get working() { return st.park < 0.02; },
+      /** Moves the crane: the jib to `jibY`, the trolley to `tx`, the hook to `hookY` (m). */
       set({ jibY, tx, hookY, swing }) {
         if (jibY != null) st.jibY = jibY;
         if (tx != null) st.tx = tx;
@@ -606,15 +646,36 @@ export function createPieces(renderer) {
         if (swing != null) st.swing = swing;
         place();
       },
+      /** Swings the jib out of the battle (true) or back over the tower (false); `fast` right after a throw. */
+      park(on, fast = false) { st.parkTo = on ? 1 : 0; st.parkSpeed = fast ? 2.4 : 1.0; },
       /** The jib's whip after a throw. */
       whip(k = 1) { st.flexV += 9 * k; },
       update(dt, time) {
         st.flexV += (-st.flex * 60 - st.flexV * 6) * dt;
         st.flex += st.flexV * dt;
+        if (st.park !== st.parkTo) st.park = st.parkTo > st.park ? Math.min(st.parkTo, st.park + dt * st.parkSpeed) : Math.max(st.parkTo, st.park - dt * st.parkSpeed);
         flag.userData.wave?.(time);
         place();
       },
     };
+  }
+
+  /** The throw's direction pin: a gold arrow at the launch point, aimed with `aim(theta, dir)`. */
+  function pin() {
+    const g = new THREE.Group();
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 5.4, 10), M.pin);
+    shaft.rotation.z = -Math.PI / 2;
+    shaft.position.x = 2.7;
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.4, 14), M.pin);
+    head.rotation.z = -Math.PI / 2;
+    head.position.x = 6.0;
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 10), M.pin);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.07, 6, 28), M.pinRim);
+    rim.rotation.y = Math.PI / 2;
+    for (const o of [shaft, head, knob, rim]) { o.renderOrder = 9; g.add(o); }
+    g.visible = false;
+    g.userData.aim = (theta, dir) => { g.rotation.set(0, 0, dir > 0 ? theta : Math.PI - theta); };
+    return g;
   }
 
   const ghostMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.26, depthWrite: false });
@@ -627,5 +688,52 @@ export function createPieces(renderer) {
     return m;
   }
 
-  return { M, block, crown, seam, crack, glassCrack, glassBreak, crane, blockGeometry, tint, team, velvet, ghost };
+  /**
+   * A badge over a crown, seen through everything (a tower stands in front of their crown): where it is, how many hits
+   * its glass has left (pips), red once the glass is gone. `set(hp, hpMax)`; it stands on its point.
+   */
+  function crownMark(side) {
+    const c = canvas(128, 168);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, depthWrite: false, transparent: true, toneMapped: false }));
+    s.renderOrder = 12;
+    s.center.set(0.5, 0);
+    let key = '';
+    s.userData.set = (hp, hpMax) => {
+      const k = `${hp}|${hpMax}`;
+      if (k === key) return;
+      key = k;
+      const open = hp <= 0;
+      const g = c.getContext('2d');
+      g.clearRect(0, 0, 128, 168);
+      // the point
+      g.fillStyle = open ? '#ff5a4a' : TEAM[SIDE_TEAM[side]].main;
+      g.beginPath(); g.moveTo(50, 118); g.lineTo(78, 118); g.lineTo(64, 140); g.closePath(); g.fill();
+      // the badge
+      g.beginPath(); g.arc(64, 62, 52, 0, Math.PI * 2);
+      g.fillStyle = 'rgba(18, 10, 28, 0.88)'; g.fill();
+      g.lineWidth = 8; g.strokeStyle = open ? '#ff5a4a' : TEAM[SIDE_TEAM[side]].light; g.stroke();
+      // the crown
+      g.fillStyle = open ? '#ffb4a8' : '#ffd04a';
+      g.beginPath();
+      g.moveTo(32, 80); g.lineTo(28, 42); g.lineTo(46, 58); g.lineTo(64, 32); g.lineTo(82, 58); g.lineTo(100, 42); g.lineTo(96, 80);
+      g.closePath(); g.fill();
+      g.fillRect(32, 84, 64, 9);
+      g.fillStyle = '#c0102a';
+      for (const [x, y] of [[28, 42], [64, 32], [100, 42]]) { g.beginPath(); g.arc(x, y, 5, 0, Math.PI * 2); g.fill(); }
+      // the glass: a pip for every hit it can still take
+      for (let i = 0; i < hpMax; i++) {
+        const x = 64 + (i - (hpMax - 1) / 2) * 30;
+        g.beginPath(); g.arc(x, 155, 11, 0, Math.PI * 2);
+        g.fillStyle = i < hp ? '#e8f6ff' : 'rgba(255, 255, 255, 0.18)';
+        g.fill();
+        g.lineWidth = 3; g.strokeStyle = 'rgba(10, 6, 18, 0.8)'; g.stroke();
+      }
+      t.needsUpdate = true;
+    };
+    return s;
+  }
+
+  return { M, block, crown, seam, crack, glassCrack, glassBreak, soot, vineWrap, springCoil, dropCoil, crane, pin, blockGeometry, cardImage, team, velvet, ghost, crownMark };
 }

@@ -60,8 +60,9 @@ export function createHud({ onPause } = {}) {
   const tray = el('<div class="bt-tray"><div class="bt-pickt"></div><div class="bt-cards"></div><div class="bt-acts"></div></div>');
   const tap = el(`<div class="bt-tap"><button class="bt-cancel" type="button" aria-label="${T.back}">‹</button><div class="bt-tapt"><b></b><span></span></div></div>`);
   const modal = el('<div class="bt-modal" hidden></div>');
-  const scope = el(`<div class="bt-scope" aria-hidden="true"><small>${T.scope}</small></div>`);
-  root.append(top, corner, scope, banner, callouts, tray, tap, modal);
+  // the throw's power bar (the owner: "a power bar then a direction pin"): it runs up and down until a tap holds it
+  const power = el(`<div class="bt-power" aria-hidden="true"><small>${T.powerWord}</small><div class="bt-pbar"><i class="bt-pfill"></i><i class="bt-pmark"></i></div><b>0%</b></div>`);
+  root.append(top, corner, power, banner, callouts, tray, tap, modal);
   corner.querySelector('.bt-pause').addEventListener('click', () => onPause?.());
   corner.querySelector('.bt-back').addEventListener('click', () => onPause?.(true));
 
@@ -109,39 +110,58 @@ export function createHud({ onPause } = {}) {
     /** A short call-out over a point on the screen (x, y in px of the stage). */
     callout(text, x, y, kind = '') {
       const c = el(`<div class="bt-co ${kind}">${text}</div>`);
-      const w = root.clientWidth || 390;
-      c.style.left = `${Math.max(70, Math.min(w - 70, x))}px`;
-      c.style.top = `${Math.max(150, y)}px`;
+      this.place(c, x, y);
       callouts.append(c);
       setTimeout(() => c.remove(), 1500);
+      return c;
     },
-    /** The three cards; a tap picks one (it lifts and its powers show), then BUILD or THROW: onChoose(shape, action). */
-    showCards(cards, onChoose, { hint = '', selected = null, throwOnly = false } = {}) {
+    /** Moves a call-out (it follows its point while the camera moves). */
+    place(c, x, y) {
+      const w = root.clientWidth || 390;
+      c.style.left = `${Math.round(Math.max(70, Math.min(w - 70, x)))}px`;
+      c.style.top = `${Math.round(Math.max(150, y))}px`;
+    },
+    /**
+     * The three cards (a block with an element: { shape, element }); a tap picks one (it lifts, its element's powers
+     * show), then BUILD or THROW: onChoose(index, action). `img(card)` is the card's picture (the player's own skin).
+     */
+    showCards(cards, onChoose, { hint = '', selected = 0, throwOnly = false, img = null } = {}) {
       tray.querySelector('.bt-pickt').textContent = hint || T.pick;
       const wrap = tray.querySelector('.bt-cards');
       const acts = tray.querySelector('.bt-acts');
       wrap.innerHTML = '';
       acts.innerHTML = '';
-      let picked = null;
-      const choose = (shape) => {
-        picked = shape;
-        for (const c of wrap.children) c.classList.toggle('is-on', c.dataset.shape === shape);
-        const p = T.powers[shape];
-        const w = T.why[shape];
+      let picked = -1;
+      const choose = (i) => {
+        picked = i;
+        [...wrap.children].forEach((c, j) => c.classList.toggle('is-on', j === i));
+        const card = cards[i];
+        const e = T.el[card.element];
+        const heavy = card.shape === 'cube' ? ` · ${T.heavy}` : '';
         acts.innerHTML = `${throwOnly ? '' : `
-          <button class="bt-act bt-build" type="button" data-act="build">${ICON.build}<b>${T.build}</b><span>${p.build}</span><small>${w.build}</small></button>`}
-          <button class="bt-act bt-throw" type="button" data-act="throw">${ICON.throw}<b>${T.throw}</b><span>${p.throw}</span><small>${w.throw}</small></button>`;
+          <button class="bt-act bt-build" type="button" data-act="build">${ICON.build}<b>${T.build}</b><span>${e.build}${heavy}</span><small>${e.buildWhy}</small></button>`}
+          <button class="bt-act bt-throw" type="button" data-act="throw">${ICON.throw}<b>${T.throw}</b><span>${e.throw}</span><small>${e.throwWhy}</small></button>`;
         acts.classList.toggle('is-one', throwOnly);
-        for (const b of acts.querySelectorAll('button')) b.addEventListener('click', () => { if (picked) onChoose(picked, b.dataset.act); });
-        onChoose(shape, null);
+        for (const b of acts.querySelectorAll('button')) b.addEventListener('click', () => { if (picked >= 0) onChoose(picked, b.dataset.act); });
+        onChoose(i, null);
       };
-      for (const shape of cards) {
-        const c = el(`<button class="bt-card" type="button" data-shape="${shape}">${shapeSvg(shape)}<b>${T.names[shape]}</b></button>`);
-        c.addEventListener('click', () => choose(shape));
+      cards.forEach((card, i) => {
+        const pic = img ? `<img class="bt-cimg" alt="" src="${img(card)}">` : shapeSvg(card.shape);
+        const c = el(`<button class="bt-card el-${card.element}" type="button" data-shape="${card.shape}" data-el="${card.element}">${pic}<b>${T.names[card.shape]}</b><small>${T.el[card.element].name}</small></button>`);
+        c.addEventListener('click', () => choose(i));
         wrap.append(c);
-      }
+      });
       tray.classList.add('is-on');
-      choose(selected && cards.includes(selected) ? selected : cards[0]);
+      choose(Math.max(0, Math.min(cards.length - 1, selected | 0)));
+    },
+    /** The power bar: shown or not, its level (0-1), held (a tap) or still running. */
+    power(on, v = 0, held = false) {
+      power.classList.toggle('is-on', !!on);
+      if (!on) return;
+      power.querySelector('.bt-pfill').style.height = `${Math.round(v * 100)}%`;
+      power.querySelector('.bt-pmark').style.bottom = `${Math.round(v * 100)}%`;
+      power.querySelector('b').textContent = `${Math.round(v * 100)}%`;
+      power.classList.toggle('is-held', !!held);
     },
     hideCards() { tray.classList.remove('is-on'); },
     /** The tap hint while aiming or dropping (`cancel` goes back to the cards). */
@@ -154,10 +174,6 @@ export function createHud({ onPause } = {}) {
     },
     tapSub(sub) { tap.querySelector('span').textContent = sub || ''; },
     hideTap() { tap.classList.remove('is-on'); onCancel = null; },
-    /** The scope window over their tower (while pulling); gold when the arc is on their crown. */
-    scope(on, gold = false) { scope.classList.toggle('is-on', !!on); scope.classList.toggle('is-gold', !!gold); },
-    get scopeEl() { return scope; },
-    get scopeOn() { return scope.classList.contains('is-on'); },
     /** A card over everything: the tip, the pause, the result. */
     modal(html, handlers = {}) {
       modal.innerHTML = html;

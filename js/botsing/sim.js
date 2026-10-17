@@ -1,12 +1,13 @@
 // (1.18 3D) Blokbotsing: the battle's physics. Stapel's own blocks and Matter tuning (js/game/blocks.js createBody, with
 // its stacking patches), so a tower stands, wobbles and tips exactly as in Stapel. Two static sea stacks; everything that
-// falls off them drops into the sea. The powers (rules.js POWERS) act on first contact. `predict()` runs a throw ahead
-// with the same steps Matter takes, so the dotted arc shows where the block really goes.
+// falls off them drops into the sea. Every block carries an element (rules.js ELEMENT): built, it defends; thrown, it
+// strikes where it lands, then breaks apart. Blocks have strength (HP): hits and fire crack them, at 0 they shatter; the
+// crown's glass cabinet cracks and breaks. `predict()` runs a throw ahead with the same steps Matter takes.
 import { createBody, getGeometry } from '../game/blocks.js';
 import { PHYSICS } from '../config.js';
 import {
-  STACK, sideX, towardFoe, POWERS, START, CROWN, LAUNCH, BUILD, PERFECT_BUILD, SETTLE, SEA, G_STEP, PERFECT_NEAR,
-  PERFECT_THROW_DENSITY, PX, LAYOUT, FLIGHT_G, towerX,
+  STACK, sideX, towardFoe, START, CROWN, LAUNCH, BUILD, PERFECT_BUILD, SETTLE, SEA, G_STEP, PERFECT_NEAR,
+  PERFECT_THROW_DENSITY, PX, LAYOUT, FLIGHT_G, towerX, SHAPE_THROW, BUILD_HEAVY, ELEMENT, DISSOLVE_STEPS, rng,
 } from './rules.js';
 
 const Mt = () => Phaser.Physics.Matter.Matter;
@@ -18,6 +19,7 @@ export const GLASS = { brokenDensity: 1.1 };
 const BASE_DENSITY = PHYSICS.block.density;
 const STACK_SLOPE = 0.12;   // px wider per px further down (world.js SLOPE: m per m)
 const DT = 1000 / 60;
+const STEP_S = 1 / 60;
 
 /** Size and centroid of a shape (px, Stapel's own outline with a top-left origin). */
 export function shapeInfo(shape) {
@@ -30,7 +32,7 @@ export function shapeInfo(shape) {
   return { shape, w: g.w, h: g.h, cx: g.cx, cy: g.cy, outline: g.outline };
 }
 
-export function createSim() {
+export function createSim({ seed = 1 } = {}) {
   const M = Mt();
   const engine = M.Engine.create({
     enableSleeping: PHYSICS.enableSleeping,
@@ -45,6 +47,7 @@ export function createSim() {
   const entries = [];
   const events = [];
   const queue = [];
+  const srand = rng((seed | 0) ^ 0x5bd1e995);   // (fire's spread: the same on both phones of a friend battle)
   let nextId = 1;
   let stepN = 0;
   let quiet = 0;
@@ -84,7 +87,8 @@ export function createSim() {
     const hp = HP[shape] || 3;
     const e = {
       id: nextId++, shape, side, role, body, w: info.w, h: info.h, alive: true, wet: false, landed: role !== 'built',
-      perfect: false, flying: false, born: stepN, power: {}, hp, hpMax: hp, ...extra,
+      perfect: false, flying: false, born: stepN, element: null, hp, hpMax: hp, burnT: 0, burnTick: 0, vineT: 0, vineDir: 0,
+      ...extra,
     };
     body.plugin = { bt: e };
     entries.push(e);
@@ -113,38 +117,31 @@ export function createSim() {
   // ------------------------------------------------------------------------------------------------ helpers
   const live = () => entries.filter((e) => e.alive);
   const onStack = (e, side) => Math.abs(e.body.position.x - sideX(side)) < STACK.w / 2 + 80 && e.body.bounds.max.y <= STACK.topY + 6;
-  /** The tower's top (smallest y) over everything resting on that stack (shots that stayed there count too). */
+  /** Which stack a point belongs to (the nearer one). */
+  const stackAt = (x) => (Math.abs(x - sideX(0)) < Math.abs(x - sideX(1)) ? 0 : 1);
+  /** The tower's top (smallest y) over everything resting on that stack. */
   function towerTopY(side) {
     let top = STACK.topY;
     for (const e of entries) {
-      if (!e.alive || e.flying || (e.role === 'built' && !e.landed)) continue;
+      if (!e.alive || e.flying || e.role === 'proj' || (e.role === 'built' && !e.landed)) continue;
       if (onStack(e, side)) top = Math.min(top, e.body.bounds.min.y);
     }
     return top;
   }
   const heightM = (side) => (STACK.topY - towerTopY(side)) / PX;
-  function lookouts(side) {
-    let n = 0;
-    for (const e of entries) {
-      if (e.alive && e.side === side && e.role === 'built' && e.shape === 'pillar' && e.landed && onStack(e, side)) {
-        const a = Math.abs(((e.body.angle % Math.PI) + Math.PI) % Math.PI);
-        if (Math.min(a, Math.PI - a) < 0.35) n++;
-      }
-    }
-    return n;
-  }
   function launchParams(side, shape) {
     const dir = towardFoe(side);
     const x0 = sideX(side) + dir * (STACK.w / 2 + LAUNCH.out);
     const y0 = towerTopY(side) - LAUNCH.up;
-    const lk = lookouts(side);
-    const v = LAUNCH.V0 * (1 + LAUNCH.perM * heightM(side)) * (1 + POWERS.pillar.build.lookout * lk) * (POWERS[shape]?.throw.speed || 1);
-    return { x0, y0, v, dir, lookouts: lk };
+    const v = LAUNCH.V0 * (1 + LAUNCH.perM * heightM(side)) * (SHAPE_THROW[shape]?.speed || 1);
+    return { x0, y0, v, dir };
   }
   function remove(e, why) {
     if (!e.alive) return;
     e.alive = false;
     e.flying = false;
+    e.burnT = 0;
+    e.vineT = 0;
     M.Composite.remove(world, e.body);
     events.push({ type: why, entry: e, x: e.body.position.x, y: e.body.position.y });
     wakeAll();
@@ -157,12 +154,11 @@ export function createSim() {
   const wake = (b) => { if (b.isSleeping) M.Sleeping.set(b, false); };
   /** `n` damage to a block (never the rock or a shot in flight): cracks, then it shatters; the crown's glass breaks. */
   function damage(e, n, by) {
-    if (!e || !e.alive || e.kind === 'stack' || n <= 0 || e.flying) return;
+    if (!e || !e.alive || e.kind === 'stack' || n <= 0 || e.flying || e.role === 'proj') return;
     if (e.role === 'crown') {
       if (e.hp <= 0) return;
-      n = 1;   // (one crack a hit, however hard: the third hit shatters it)
-      e.hp = Math.max(0, e.hp - n);
-      events.push({ type: 'damage', entry: e, n, hp: e.hp, by, x: e.body.position.x, y: e.body.bounds.min.y });
+      e.hp = Math.max(0, e.hp - 1);   // (one crack a hit, however hard: the third shatters it)
+      events.push({ type: 'damage', entry: e, n: 1, hp: e.hp, by, x: e.body.position.x, y: e.body.bounds.min.y });
       if (e.hp <= 0) {
         M.Body.setDensity(e.body, BASE_DENSITY * GLASS.brokenDensity);
         events.push({ type: 'glass', entry: e, x: e.body.position.x, y: e.body.position.y });
@@ -174,10 +170,9 @@ export function createSim() {
     events.push({ type: 'damage', entry: e, n, hp: e.hp, by, x: e.body.position.x, y: e.body.bounds.min.y });
     if (e.hp <= 0) remove(e, 'break');
   }
-  /** How much a shot's first touch hurts: its speed (full power ≈ 1), its weight, a Perfek, a slam. 1 to 4. */
+  /** How much a shot's first touch hurts: its speed (full power ≈ 1), its weight, a Perfek. 1 to 4. */
   function hitDamage(me, speed) {
-    const dens = Math.sqrt(me.power.density || 1);
-    const k = (speed / LAUNCH.V0) * dens * 1.6 * (me.perfect ? 1.25 : 1) + (me.slam ? 1 : 0);
+    const k = (speed / LAUNCH.V0) * Math.sqrt(me.dens || 1) * 1.6 * (me.perfect ? 1.25 : 1);
     return Math.max(1, Math.min(4, Math.round(k)));
   }
   /** A side's strength: every block of its own still standing on its rock, counted by what's left of it. */
@@ -186,6 +181,23 @@ export function createSim() {
     for (const e of entries) if (e.alive && !e.wet && e.side === side && (e.role === 'built' || e.role === 'start') && e.landed && onStack(e, side)) n += e.hp;
     return n;
   }
+  /** Blocks that could be hit by an element on `side`'s stack (not shots), nearest first, within `r` of (x, y). */
+  function near(side, x, y, r) {
+    const out = [];
+    for (const e of entries) {
+      if (!e.alive || e.role === 'proj' || e.wet || !onStack(e, side)) continue;
+      const d = Math.hypot(e.body.position.x - x, e.body.position.y - y);
+      if (d <= r + Math.max(e.w, e.h) * 0.35) out.push([d, e]);
+    }
+    return out.sort((p, q) => p[0] - q[0]).map((p) => p[1]);
+  }
+  const touching = (p, q, pad = 8) => {
+    const A = p.body.bounds;
+    const B = q.body.bounds;
+    return A.min.x - pad < B.max.x && A.max.x + pad > B.min.x && A.min.y - pad < B.max.y && A.max.y + pad > B.min.y;
+  };
+  /** Within reach of a side's ready water barrel: no fire takes. */
+  const doused = (e) => entries.some((w) => w.alive && w.barrel && w.side === e.side && w.landed && Math.hypot(w.body.position.x - e.body.position.x, w.body.position.y - e.body.position.y) < ELEMENT.water.barrel.r);
 
   // ------------------------------------------------------------------------------------------ the prediction
   const testPts = (hx, hy) => [[0, 0], [hx, 0], [-hx, 0], [0, hy], [0, -hy], [hx, hy], [-hx, hy], [hx, -hy], [-hx, -hy]];
@@ -206,7 +218,7 @@ export function createSim() {
   }
   /**
    * Where a throw goes: { path: [{x, y}], hit: { kind: 'sea'|'stack'|'block'|'crown', entry, x, y, side }, perfect }.
-   * Steps exactly as Matter does (gravity, air), until it touches something or the sea (a plank skips once).
+   * Steps exactly as Matter does (gravity in flight, air), until it touches something or the sea.
    */
   function predict(side, shape, theta, power = 1) {
     const s = shapeInfo(shape);
@@ -219,10 +231,9 @@ export function createSim() {
     let vx = p.dir * p.v * Math.cos(theta);
     let vy = -p.v * Math.sin(theta);
     const air = 1 - LAUNCH.air;
-    let skips = POWERS[shape]?.throw.skip || 0;
     const foeCrown = crowns[1 - side];
     const fc = foeCrown.alive ? foeCrown.body.position : null;
-    let near = Infinity;
+    let nearC = Infinity;
     const path = [{ x, y }];
     let hit = null;
     const cands = candidates();
@@ -235,12 +246,8 @@ export function createSim() {
       x += vx;
       y += vy;
       if (i % 2 === 0) path.push({ x, y });
-      if (fc) near = Math.min(near, Math.hypot(x - fc.x, y - fc.y));
-      if (y + hy > 0) {
-        if (skips > 0 && vy > 0 && Math.abs(vx) > 4) { skips--; vy = -vy * 0.55; vx *= 0.85; path.push({ x, y, skip: true }); continue; }
-        hit = { kind: 'sea', x, y: 0 };
-        break;
-      }
+      if (fc) nearC = Math.min(nearC, Math.hypot(x - fc.x, y - fc.y));
+      if (y + hy > 0) { hit = { kind: 'sea', x, y: 0 }; break; }
       if (i < 4 || y + hy < topAll) continue;   // (clear of the jib; above everything)
       const c = hitAt(x, y, hx, hy, cands, pts);
       if (c) {
@@ -250,19 +257,19 @@ export function createSim() {
     }
     path.push({ x, y });
     if (!hit) hit = { kind: 'none', x, y };
-    const perfect = !!fc && ((hit.kind === 'crown' && hit.side !== side) || near < Math.max(CROWN.w, CROWN.h) / 2 + Math.min(hx, hy) + PERFECT_NEAR * 0.5);
+    const perfect = !!fc && ((hit.kind === 'crown' && hit.side !== side) || nearC < Math.max(CROWN.w, CROWN.h) / 2 + Math.min(hx, hy) + PERFECT_NEAR * 0.5);
     return { path, hit, perfect, v: p.v, x0: p.x0, y0: p.y0 };
   }
 
   // -------------------------------------------------------------------------------------------- the actions
-  /** A throw: the block leaves the jib tip at angle `theta`. */
-  function launch(side, shape, theta, perfect = false, power = 1) {
+  /** A throw: the block leaves the launch point at angle `theta` with `power` (0-1) of its full speed. */
+  function launch(side, shape, element, theta, perfect = false, power = 1) {
     const p = launchParams(side, shape);
     p.v *= power;
-    const pw = POWERS[shape].throw;
-    const e = add(shape, side, 'proj', p.x0, p.y0, { flying: true, perfect, power: { ...pw }, pierce: pw.pierce || 0, skips: pw.skip || 0 });
+    const st = SHAPE_THROW[shape] || { density: 1 };
+    const e = add(shape, side, 'proj', p.x0, p.y0, { flying: true, perfect, element, dens: st.density });
     const b = e.body;
-    M.Body.setDensity(b, b.density * (pw.density || 1) * (perfect ? PERFECT_THROW_DENSITY : 1));
+    M.Body.setDensity(b, b.density * st.density * (perfect ? PERFECT_THROW_DENSITY : 1));
     b.frictionAir = LAUNCH.air;
     M.Body.setVelocity(b, { x: p.dir * p.v * Math.cos(theta), y: -p.v * Math.sin(theta) });
     quiet = 0;
@@ -270,84 +277,81 @@ export function createSim() {
     return e;
   }
   /** A build: the block is let go from the hook at (x, y), keeping a little of the trolley's speed. */
-  function release(side, shape, x, y, vx = 0) {
-    const pw = POWERS[shape].build;
-    const e = add(shape, side, 'built', x, y, { landed: false, power: { ...pw }, springReady: !!pw.spring });
-    if (pw.density) M.Body.setDensity(e.body, e.body.density * pw.density);
+  function release(side, shape, element, x, y, vx = 0) {
+    const e = add(shape, side, 'built', x, y, {
+      landed: false, element, fireWall: element === 'vuur', barrel: element === 'water', springReady: element === 'plof',
+    });
+    if (BUILD_HEAVY[shape]) M.Body.setDensity(e.body, e.body.density * BUILD_HEAVY[shape]);
     M.Body.setVelocity(e.body, { x: vx * BUILD.carry, y: 0 });
     quiet = 0;
     events.push({ type: 'drop', entry: e, x, y });
     return e;
   }
 
-  /**
-   * The mid-air tap (once a throw, while it still flies): the crate blows up right there, the wedge's spear shoots
-   * forward, the cube slams straight down, the plank hops, the pillar drills on (faster, through one block).
-   * Returns the kind, or null when it can't fire.
-   */
-  function burst(e) {
-    if (!e || !e.alive || !e.flying || e.role !== 'proj' || e.burstUsed) return null;
-    e.burstUsed = true;
-    const b = e.body;
-    const v = b.velocity;
-    const at = { x: b.position.x, y: b.position.y };
-    let kind = null;
-    if (e.shape === 'crate') { kind = 'blast'; events.push({ type: 'burst', kind, entry: e, ...at }); blast(e); return kind; }
-    if (e.shape === 'wedge') { kind = 'dash'; M.Body.setVelocity(b, { x: v.x * 1.6, y: v.y * 1.6 }); }
-    else if (e.shape === 'pillar') { kind = 'drill'; M.Body.setVelocity(b, { x: v.x * 1.45, y: v.y * 1.45 }); e.pierce = Math.max(e.pierce, 1); }
-    else if (e.shape === 'cube') { kind = 'slam'; e.slam = true; M.Body.setVelocity(b, { x: v.x * 0.22, y: Math.max(v.y, 0) + 24 }); }
-    else if (e.shape === 'plank') { kind = 'hop'; M.Body.setVelocity(b, { x: v.x * 1.06, y: Math.min(v.y, 0) - 10 }); }
-    events.push({ type: 'burst', kind, entry: e, ...at });
-    quiet = 0;
-    return kind;
-  }
-
-  // ---------------------------------------------------------------------------------------- contacts and powers
-  function rate(e, other) {
-    e.landed = true;
-    const b = e.body;
-    let support = other;
-    let rating = 'S';
-    if (other.kind === 'stack') {
-      rating = Math.abs(b.position.x - towerX(e.side)) < 40 ? 'G' : 'S';
-    } else {
-      const sw = support.w;
-      const dx = b.position.x - support.body.position.x;
-      const tilt = Math.abs(Math.atan2(Math.sin(support.body.angle), Math.cos(support.body.angle)));
-      const tolP = Math.min(BUILD.perfectTol, BUILD.perfectFrac * sw);
-      const tolG = Math.max(BUILD.goodTol, sw * 0.25);
-      if (Math.abs(dx) <= tolP && tilt < 0.06 && support.side === e.side) rating = 'P';
-      else if (Math.abs(dx) <= tolG) rating = 'G';
-      if (rating === 'P') {
-        e.snapDx = support.body.position.x - b.position.x;
-        M.Body.setPosition(b, { x: support.body.position.x, y: b.position.y });
-        M.Body.setAngle(b, support.body.angle);
-        M.Body.setVelocity(b, { x: 0, y: Math.min(b.velocity.y, 1) });
-        M.Body.setAngularVelocity(b, 0);
-        M.Body.setDensity(b, b.density * PERFECT_BUILD.density);
-        b.frictionStatic = PERFECT_BUILD.frictionStatic;
-        e.perfect = true;
-      } else if (rating === 'G' && support.side === e.side) {
-        e.snapDx = -dx * BUILD.goodEase;
-        M.Body.setPosition(b, { x: b.position.x - dx * BUILD.goodEase, y: b.position.y });
-      }
+  // -------------------------------------------------------------------------------------------- the elements
+  /** 🔥 Veldbrand: what's within reach on that stack catches fire (a water barrel's reach stays wet). */
+  function ignite(side, x, y) {
+    const v = ELEMENT.vuur;
+    let saved = null;
+    for (const e of near(side, x, y, v.ignite)) {
+      if (!e.wet && e.burnT <= 0 && doused(e)) { saved = saved || e; continue; }
+      setAlight(e);
     }
-    events.push({ type: 'land', entry: e, rating, x: b.position.x, y: b.bounds.max.y, snapDx: e.snapDx || 0 });
-    e.snapDx = 0;
+    if (saved) events.push({ type: 'douse', entry: saved, x: saved.body.position.x, y: saved.body.bounds.min.y });
   }
+  function setAlight(e) {
+    if (!e.alive || e.wet || e.burnT > 0 || doused(e)) return;
+    e.burnT = ELEMENT.vuur.secs;
+    e.burnTick = ELEMENT.vuur.first;
+    e.crownBurnt = false;
+    events.push({ type: 'ignite', entry: e, x: e.body.position.x, y: e.body.position.y });
+  }
+  function putOut(e, why = 'out') {
+    if (e.burnT <= 0) return;
+    e.burnT = 0;
+    events.push({ type: 'burnout', entry: e, why, x: e.body.position.x, y: e.body.position.y });
+  }
+  /** 🌿 Rankgryp: vines grab the nearest blocks (the crown too) and drag them to the sea, outwards from the rock. */
+  function grab(side, x, y) {
+    const v = ELEMENT.gras;
+    const got = near(side, x, y, v.r).slice(0, v.max);
+    for (const e of got) {
+      e.vineT = v.steps;
+      e.vineDir = Math.sign(e.body.position.x - sideX(side)) || -towardFoe(side);
+      wake(e.body);
+    }
+    events.push({ type: 'grab', list: got, x, y, side });
+    quiet = 0;
+  }
+  /** 💧 Vloedgolf: everything within reach is shoved along the throw; fire there goes out. */
+  function wave(side, x, y, dir) {
+    const v = ELEMENT.water;
+    for (const e of near(side, x, y, v.r)) {
+      const d = Math.hypot(e.body.position.x - x, e.body.position.y - y);
+      const k = Math.max(0.2, 1 - d / v.r);
+      const heavy = Math.sqrt(e.body.density / BASE_DENSITY);
+      const dv = (v.dv * k) / Math.max(1, heavy * 0.75);
+      wake(e.body);
+      M.Body.setVelocity(e.body, { x: e.body.velocity.x + dir * dv, y: e.body.velocity.y - dv * 0.22 });
+      putOut(e, 'water');
+    }
+    events.push({ type: 'wave', x, y, dir, side });
+    quiet = 0;
+  }
+  /** 💣 Plofstof: an explosion where the shot is (damage by distance, a push outwards). */
   function blast(e) {
-    const c = e.body.position;
-    const { r, dv } = e.power.blast;
+    const c = { x: e.body.position.x, y: e.body.position.y };
+    const { r, dv } = ELEMENT.plof;
     remove(e, 'blast');
     for (const o of entries) {
-      if (!o.alive) continue;
+      if (!o.alive || o.role === 'proj') continue;
       const b = o.body;
       const dx = b.position.x - c.x;
       const dy = b.position.y - c.y;
       const d = Math.hypot(dx, dy);
       if (d > r) continue;
       const k = 1 - d / r;
-      if (o.side !== e.side || o.role !== 'proj') queue.push(() => damage(o, d < r * 0.45 ? 3 : d < r * 0.75 ? 2 : 1, 'blast'));
+      queue.push(() => damage(o, d < r * 0.45 ? 3 : d < r * 0.75 ? 2 : 1, 'blast'));
       let ux = d > 1 ? dx / d : 0;
       let uy = (d > 1 ? dy / d : -1) - 0.45;
       const n = Math.hypot(ux, uy) || 1;
@@ -357,9 +361,66 @@ export function createSim() {
       const kick = (dv * k) / Math.max(1, heavy * 0.8);
       wake(b);
       M.Body.setVelocity(b, { x: b.velocity.x + ux * kick, y: b.velocity.y + uy * kick });
-      M.Body.setAngularVelocity(b, b.angularVelocity + (Math.random() - 0.5) * 0.12 * k);
+      M.Body.setAngularVelocity(b, b.angularVelocity + (srand() - 0.5) * 0.12 * k);
     }
     quiet = 0;
+  }
+  /** 🌿 Rankanker (built): it and what it touches root together, heavier and grippier. */
+  function root(e) {
+    const v = ELEMENT.gras.root;
+    const list = [e, ...entries.filter((o) => o !== e && o.alive && o.role !== 'proj' && o.side === e.side && touching(o, e, v.reach))];
+    for (const o of list) {
+      if (o.rooted) continue;
+      o.rooted = true;
+      M.Body.setDensity(o.body, o.body.density * v.density);
+      o.body.frictionStatic = Math.max(o.body.frictionStatic, v.friction);
+      o.body.friction = Math.max(o.body.friction, 1.2);
+    }
+    events.push({ type: 'root', entry: e, list });
+  }
+  /** Where a thrown block strikes: its element on the stack it landed on. */
+  function strike(me, at, dirX) {
+    const side = stackAt(at.x);
+    switch (me.element) {
+      case 'vuur': ignite(side, at.x, at.y); break;
+      case 'gras': grab(side, at.x, at.y); break;
+      case 'water': wave(side, at.x, at.y, dirX); break;
+      default: break;
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------- contacts and powers
+  function rate(e, other) {
+    e.landed = true;
+    const b = e.body;
+    let rating = 'S';
+    if (other.kind === 'stack') {
+      rating = Math.abs(b.position.x - towerX(e.side)) < 40 ? 'G' : 'S';
+    } else {
+      const sw = other.w;
+      const dx = b.position.x - other.body.position.x;
+      const tilt = Math.abs(Math.atan2(Math.sin(other.body.angle), Math.cos(other.body.angle)));
+      const tolP = Math.min(BUILD.perfectTol, BUILD.perfectFrac * sw);
+      const tolG = Math.max(BUILD.goodTol, sw * 0.25);
+      if (Math.abs(dx) <= tolP && tilt < 0.06 && other.side === e.side && other.role !== 'proj') rating = 'P';
+      else if (Math.abs(dx) <= tolG) rating = 'G';
+      if (rating === 'P') {
+        e.snapDx = other.body.position.x - b.position.x;
+        M.Body.setPosition(b, { x: other.body.position.x, y: b.position.y });
+        M.Body.setAngle(b, other.body.angle);
+        M.Body.setVelocity(b, { x: 0, y: Math.min(b.velocity.y, 1) });
+        M.Body.setAngularVelocity(b, 0);
+        M.Body.setDensity(b, b.density * PERFECT_BUILD.density);
+        b.frictionStatic = PERFECT_BUILD.frictionStatic;
+        e.perfect = true;
+      } else if (rating === 'G' && other.side === e.side) {
+        e.snapDx = -dx * BUILD.goodEase;
+        M.Body.setPosition(b, { x: b.position.x - dx * BUILD.goodEase, y: b.position.y });
+      }
+    }
+    events.push({ type: 'land', entry: e, rating, x: b.position.x, y: b.bounds.max.y, snapDx: e.snapDx || 0 });
+    e.snapDx = 0;
+    if (e.element === 'gras') root(e);
   }
   function onCollide(ev) {
     for (const pair of ev.pairs) {
@@ -370,52 +431,73 @@ export function createSim() {
       if (!a || !b) continue;
       for (const [me, other] of [[a, b], [b, a]]) {
         if (me.kind === 'stack' || !me.alive) continue;
-        // a built block's first touch: its rating
+        // a built block's first touch: its rating (a Rankanker roots then)
         if (me.role === 'built' && !me.landed) queue.push(() => me.alive && !me.landed && rate(me, other));
-        // a shot's first touch: its power, then it's just a block
+        // a burning block sets what it touches alight (a chance each touch)
+        if (me.burnT > 0 && other.kind !== 'stack' && other.alive && other.role !== 'proj' && other.burnT <= 0 && srand() < ELEMENT.vuur.spread) {
+          queue.push(() => setAlight(other));
+        }
+        // a shot's first touch: the defences, its damage and its element; it breaks apart a moment later
         if (me.role === 'proj' && me.flying) {
           const own = other.kind !== 'stack' && other.side === me.side;
-          if (own && stepN - me.born < 12) continue;   // (leaving its own crane)
+          if (own && stepN - me.born < 12) continue;   // (leaving its own launch)
           me.flying = false;
-          const hitV = Math.hypot(me.pv?.x || 0, me.pv?.y || 0);
+          const pv = me.pv || { x: me.body.velocity.x, y: me.body.velocity.y };
+          const hitV = Math.hypot(pv.x, pv.y);
+          const dirX = Math.sign(pv.x) || towardFoe(me.side);
           queue.push(() => {
             me.body.frictionAir = PHYSICS.block.frictionAir;
             events.push({ type: 'hit', entry: me, other, x: me.body.position.x, y: me.body.position.y, speed: hitV, onto: other.kind === 'stack' ? 'stack' : other.role });
           });
           const foe = other.kind !== 'stack' && other.side !== me.side;
-          if (me.power.blast) { queue.push(() => me.alive && blast(me)); continue; }
-          if (foe && (other.role === 'crown' || !(me.pierce > 0)) && !(other.role === 'built' && (other.power.spikes || other.springReady))) {
-            const dmg = hitDamage(me, hitV);
-            queue.push(() => damage(other, dmg, 'hit'));
-          }
-          if (foe && other.role === 'built' && (other.power.spikes || other.springReady)) queue.push(() => damage(other, 1, 'hit'));
-          if (foe && other.role === 'built' && other.power.spikes && other.alive) {
-            queue.push(() => { if (me.alive) { remove(me, 'spiked'); events.push({ type: 'spikes', entry: other, x: other.body.position.x, y: other.body.bounds.min.y }); } });
+          // 🔥 a Vuurmuur burns the shot to ash
+          if (foe && other.role === 'built' && other.fireWall && other.alive) {
+            queue.push(() => {
+              if (!me.alive || !other.fireWall) return;
+              other.fireWall = false;
+              remove(me, 'burnup');
+              events.push({ type: 'wallburn', entry: other, x: other.body.position.x, y: other.body.bounds.min.y });
+            });
             continue;
           }
-          if (foe && other.role === 'built' && other.springReady) {
-            const pv = me.pv || { x: 0, y: 0 };
+          // 💧 a Watervat soaks it: dead in the water
+          if (foe && other.role === 'built' && other.barrel && other.alive) {
+            queue.push(() => {
+              if (!me.alive || !other.barrel) return;
+              other.barrel = false;
+              M.Body.setVelocity(me.body, { x: pv.x * 0.1, y: Math.max(1, pv.y * 0.1) });
+              events.push({ type: 'soak', entry: other, x: other.body.position.x, y: other.body.bounds.min.y });
+              damage(other, 1, 'hit');
+              for (const o of near(other.side, other.body.position.x, other.body.position.y, ELEMENT.water.barrel.r)) putOut(o, 'water');
+              me.dissolveAt = stepN + DISSOLVE_STEPS;
+            });
+            continue;
+          }
+          // 💣 a Verrassing flings it back at them
+          if (foe && other.role === 'built' && other.springReady && other.alive) {
             queue.push(() => {
               if (!me.alive || !other.springReady) return;
               other.springReady = false;
               me.flying = true;
+              me.born = stepN;
+              me.side = other.side;   // (now it's theirs, flying home)
               me.body.frictionAir = LAUNCH.air;
               M.Body.setVelocity(me.body, { x: -pv.x * 0.85, y: -Math.abs(pv.y) * 0.4 - 7 });
-              M.Body.setAngularVelocity(me.body, (Math.random() - 0.5) * 0.2);
+              M.Body.setAngularVelocity(me.body, (srand() - 0.5) * 0.2);
               events.push({ type: 'spring', entry: other, x: other.body.position.x, y: other.body.bounds.min.y });
             });
             continue;
           }
-          if (foe && me.pierce > 0 && other.role !== 'crown' && other.alive) {
-            me.pierce--;
-            const pv = me.pv || { x: 0, y: 0 };
-            me.flying = true;
-            queue.push(() => {
-              if (!other.alive || !me.alive) return;
-              remove(other, 'break');
-              M.Body.setVelocity(me.body, { x: pv.x * 0.72, y: pv.y * 0.72 });
-            });
+          if (me.element === 'plof') { queue.push(() => me.alive && blast(me)); continue; }
+          if (other.kind !== 'stack' && other.side !== me.side) {
+            const dmg = hitDamage(me, hitV);
+            queue.push(() => damage(other, dmg, 'hit'));
           }
+          queue.push(() => {
+            if (!me.alive) return;
+            strike(me, { x: me.body.position.x, y: me.body.position.y }, dirX);
+            me.dissolveAt = stepN + DISSOLVE_STEPS;
+          });
         }
       }
     }
@@ -427,25 +509,57 @@ export function createSim() {
       if (!e.alive) continue;
       const b = e.body;
       if (!e.wet && b.bounds.max.y > 0) {
-        if (e.role === 'proj' && e.flying && e.skips > 0 && b.velocity.y > 0 && Math.abs(b.velocity.x) > 4) {
-          e.skips--;
-          M.Body.setVelocity(b, { x: b.velocity.x * 0.85, y: -b.velocity.y * 0.55 });
-          events.push({ type: 'skip', entry: e, x: b.position.x, y: 0 });
-          continue;
-        }
-        if (e.role === 'proj' && e.flying && e.power.blast) { events.push({ type: 'splash', entry: e, x: b.position.x, mass: b.mass, vy: b.velocity.y }); blast(e); continue; }
+        if (e.role === 'proj' && e.flying && e.element === 'plof') { events.push({ type: 'splash', entry: e, x: b.position.x, mass: b.mass, vy: b.velocity.y }); blast(e); continue; }
         e.wet = true;
         e.flying = false;
+        if (e.burnT > 0) putOut(e, 'sea');
         events.push({ type: 'splash', entry: e, x: b.position.x, mass: b.mass, vy: b.velocity.y });
         if (e.role === 'crown') events.push({ type: 'crown', side: e.side, x: b.position.x });
       }
       if (b.position.y > SEA.gone) remove(e, 'sunk');
     }
   }
+  /** Fire burns (damage now and then), vines drag, thrown blocks break apart after their strike. */
+  function elementsStep() {
+    const v = ELEMENT.vuur;
+    const g = ELEMENT.gras;
+    for (const e of entries) {
+      if (!e.alive) continue;
+      if (e.burnT > 0) {
+        if (doused(e)) { putOut(e, 'water'); continue; }
+        e.burnT -= STEP_S;
+        e.burnTick -= STEP_S;
+        if (e.burnTick <= 0) {
+          e.burnTick = v.every;
+          if (e.role === 'crown') { if (!e.crownBurnt) { e.crownBurnt = true; damage(e, 1, 'fire'); } } else damage(e, v.dmg, 'fire');
+        }
+        if (e.alive && e.burnT <= 0) { e.burnT = 0; events.push({ type: 'burnout', entry: e, why: 'out', x: e.body.position.x, y: e.body.position.y }); }
+        // (a veld fire: every half second it may catch what it rests against)
+        e.spreadT = (e.spreadT || 0) + STEP_S;
+        if (e.alive && e.burnT > 0 && e.spreadT >= 0.5) {
+          e.spreadT = 0;
+          for (const o of entries) {
+            if (o === e || !o.alive || o.role === 'proj' || o.burnT > 0 || o.wet || !touching(o, e)) continue;
+            if (srand() < v.spread * 0.5) setAlight(o);
+          }
+        }
+      }
+      if (e.vineT > 0 && e.alive) {
+        e.vineT--;
+        const heavy = Math.sqrt(e.body.density / BASE_DENSITY);
+        const pull = (g.pull * (e.role === 'crown' ? (e.hp > 0 ? 0.55 : 1) : 1)) / Math.max(1, heavy * 0.7);
+        wake(e.body);
+        M.Body.setVelocity(e.body, { x: e.body.velocity.x + e.vineDir * pull, y: e.body.velocity.y + g.down });
+        if (e.vineT === 0) events.push({ type: 'unvine', entry: e });
+      }
+      if (e.dissolveAt && stepN >= e.dissolveAt && e.role === 'proj') { e.dissolveAt = 0; remove(e, 'dissolve'); }
+    }
+  }
   function settleCheck() {
     let moving = false;
     for (const e of entries) {
       if (!e.alive) continue;
+      if (e.burnT > 0 || e.vineT > 0 || e.dissolveAt) { moving = true; break; }
       const b = e.body;
       if (b.isSleeping) continue;
       if (e.flying || (e.role === 'built' && !e.landed) || b.speed > SETTLE.speed || Math.abs(b.angularVelocity) > SETTLE.ang) { moving = true; break; }
@@ -453,6 +567,7 @@ export function createSim() {
     quiet = moving ? 0 : quiet + 1;
   }
 
+  const FLAGS = ['fireWall', 'barrel', 'springReady', 'rooted'];
   return {
     M, engine, entries, crowns, stacks,
     get stepN() { return stepN; },
@@ -465,16 +580,18 @@ export function createSim() {
       M.Engine.update(engine, DT);
       stepN++;
       while (queue.length) queue.shift()();
+      elementsStep();
       seaCheck();
       settleCheck();
     },
     drain() { return events.splice(0, events.length); },
     settled: () => quiet >= SETTLE.steps,
     resetQuiet() { quiet = 0; },
-    live, towerTopY, heightM, lookouts, launchParams, predict, launch, release, burst, strength,
+    live, towerTopY, heightM, launchParams, predict, launch, release, strength,
     /** (friend battles) everything still in play, to make the other phone match at the end of a turn */
     snap() {
-      return entries.filter((e) => e.alive).map((e) => [e.id, +e.body.position.x.toFixed(2), +e.body.position.y.toFixed(2), +e.body.angle.toFixed(4), e.hp, e.wet ? 1 : 0, e.landed ? 1 : 0, e.perfect ? 1 : 0]);
+      return entries.filter((e) => e.alive).map((e) => [e.id, +e.body.position.x.toFixed(2), +e.body.position.y.toFixed(2), +e.body.angle.toFixed(4), e.hp,
+        e.wet ? 1 : 0, e.landed ? 1 : 0, e.perfect ? 1 : 0, FLAGS.reduce((m, f, i) => m | (e[f] ? 1 << i : 0), 0)]);
     },
     /** Puts every block where the other phone has it (what it no longer has is removed). */
     applySnap(list) {
@@ -491,7 +608,11 @@ export function createSim() {
         e.wet = !!r[5];
         e.landed = !!r[6];
         e.perfect = !!r[7];
+        FLAGS.forEach((f, i) => { e[f] = !!((r[8] | 0) & (1 << i)); });
         e.flying = false;
+        e.burnT = 0;
+        e.vineT = 0;
+        e.dissolveAt = 0;
       }
       for (const e of entries) {   // (the glass as the other phone has it)
         if (e.alive && e.role === 'crown' && e.hp <= 0 && e.body.density > BASE_DENSITY * (GLASS.brokenDensity + 0.1)) M.Body.setDensity(e.body, BASE_DENSITY * GLASS.brokenDensity);
