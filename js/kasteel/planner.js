@@ -243,6 +243,7 @@ function frame() {
   camera.position.set(Math.sin(ang) * R, 46, -DIST + 7 + Math.cos(ang) * R);
   camera.lookAt(look);
   for (const p of crew) idle(p, t);
+  castle.flags?.[0]?.userData.wave?.(t);   // (every flag waves on one shared clock, on the graphics chip)
   for (const r of rings.values()) if (r.material === RING.ok) r.scale.setScalar((r.userData.spot.kind === 'field' ? 2.6 : 1) * (1 + Math.sin(t * 6) * 0.08));
   st.render(1 / 60);
   requestAnimationFrame(frame);

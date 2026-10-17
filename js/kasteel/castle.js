@@ -184,7 +184,7 @@ export function banner(team, { w = 2.6, h = 1.6, pole = 5, hanging = false } = {
   const group = new THREE.Group();
   const geo = new THREE.PlaneGeometry(w, h, 14, 8);
   if (hanging) { geo.rotateZ(-Math.PI / 2); geo.translate(0, -w / 2, 0); } else geo.translate(w / 2, 0, 0);
-  const cloth = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.9 }));
+  const cloth = new THREE.Mesh(geo, flagMaterial(tex, w, hanging));
   cloth.castShadow = true;
   if (!hanging) {
     const p = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, pole, 8), new THREE.MeshStandardMaterial({ color: '#3a2a1c', roughness: 0.8 }));
@@ -194,19 +194,31 @@ export function banner(team, { w = 2.6, h = 1.6, pole = 5, hanging = false } = {
     cloth.position.y = pole - h / 2 - 0.1;
   }
   group.add(cloth);
-  const base = Float32Array.from(geo.attributes.position.array);
-  group.userData.wave = (time) => {
-    const pa = geo.attributes.position;
-    for (let i = 0; i < pa.count; i++) {
-      const x = base[i * 3];
-      const y = base[i * 3 + 1];
-      const k = hanging ? Math.min(1, -y / w) : x / w;
-      pa.setZ(i, Math.sin((hanging ? -y : x) * 2.1 - time * (hanging ? 2 : 6)) * (hanging ? 0.08 : 0.17) * k);
-    }
-    pa.needsUpdate = true;
-    geo.computeVertexNormals();
-  };
+  group.userData.wave = (time) => { FLAG_TIME.value = time; };
   return group;
+}
+// (phones: the cloth waves on the graphics chip, not the CPU — every flag's ripple and its light from one shared clock)
+const FLAG_TIME = { value: 0 };
+function flagMaterial(map, w, hanging) {
+  const m = new THREE.MeshStandardMaterial({ map, side: THREE.DoubleSide, roughness: 0.9 });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uT = FLAG_TIME;
+    sh.uniforms.uW = { value: w };
+    sh.uniforms.uHang = { value: hanging ? 1 : 0 };
+    sh.vertexShader = `uniform float uT;\nuniform float uW;\nuniform float uHang;\n${sh.vertexShader}`
+      .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
+        bool fHang = uHang > 0.5;
+        float fA = fHang ? -position.y : position.x;
+        float fK = fHang ? min(1.0, -position.y / uW) : position.x / uW;
+        float fAmp = fHang ? 0.08 : 0.17;
+        float fPh = fA * 2.1 - uT * (fHang ? 2.0 : 6.0);
+        float fZ = sin(fPh) * fAmp * fK;
+        float fD = cos(fPh) * 2.1 * fAmp * fK + sin(fPh) * fAmp / uW;
+        objectNormal = normalize(fHang ? vec3(0.0, fD, 1.0) : vec3(-fD, 0.0, 1.0));`)
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n        transformed.z += fZ;');
+  };
+  m.customProgramCacheKey = () => 'kasteel-flag';
+  return m;
 }
 
 // ------------------------------------------------------------------------------------------------ the towers
