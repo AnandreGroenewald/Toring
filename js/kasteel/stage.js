@@ -28,10 +28,12 @@ const GRADE = {
 
 /**
  * Quality (the owner: "optomised for phones, it should not lag"). A Mac or PC draws everything; a phone starts at `mid`
- * and the stage steps down by itself if frames come slow (a three-second average under 45 fps): the glow and its finish
- * passes go first (the edges stay smooth: the screen's own anti-aliasing), then the pixel density, then the shadow's
- * detail. It climbs back (never above where it started) once frames have run smooth for nine seconds: one heavy
- * moment no longer leaves the picture soft for good (the owner, 17 Oct 2026: "once the water goes over it pixelates").
+ * and the stage steps down by itself if frames come slow (a three-second average under three quarters of the screen's
+ * pace: 45 fps on a 60 Hz screen): the glow and its finish passes go first (the edges stay smooth: the screen's own
+ * anti-aliasing), then the pixel density, then the shadow's detail. It climbs back (never above where it started) once
+ * frames have run smooth for nine seconds: one heavy moment no longer leaves the picture soft for good (the owner, 17
+ * Oct 2026: "once the water goes over it pixelates"). A screen that runs at 30 a second (a phone or a Mac saving its
+ * battery) isn't "too slow": a step down that brings nothing is taken back, and that pace becomes the measure.
  * `?q=high|mid|low` forces one.
  */
 export const QUALITY = {
@@ -66,6 +68,9 @@ export function createStage({ fov = 50, quality = pickQuality(), canvas = docume
   let composer = null;
   let bloom = null;
   function buildPost() {
+    // (every pass's own targets and shaders go too: the glow keeps eleven of its own; 17 Oct review: each quality step
+    // left the old ones on the graphics chip)
+    if (composer) for (const p of composer.passes) p.dispose?.();
     composer?.dispose?.();
     composer = null;
     bloom = null;
@@ -91,7 +96,12 @@ export function createStage({ fov = 50, quality = pickQuality(), canvas = docume
   let winN = 0;
   let calm = 0;
   let upT = 0;
-  let ups = 0;
+  let hz = 60;           // (the screen's own pace: 30 on a phone saving its battery)
+  let undo = null;       // (the step just taken down and the pace it was taken at: taken back if it brought nothing)
+  let needUp = 9;        // (smooth seconds before a step back up: longer each time a climb had to come down again)
+  let upAt = -Infinity;
+  let clock = 0;
+  let lastNow = 0;
   function apply() {
     renderer.setPixelRatio(prOf());
     renderer.setSize(...size(), false);
@@ -119,8 +129,14 @@ export function createStage({ fov = 50, quality = pickQuality(), canvas = docume
     apply();
     return true;
   }
-  function watch(dt) {
+  function watch() {
     if (q.forced) return;
+    // (the real time between frames, whatever the page passes: a pause or a hidden tab is no slow frame)
+    const now = performance.now();
+    const dt = lastNow ? (now - lastNow) / 1000 : 0;
+    lastNow = now;
+    if (!(dt > 0) || dt > 1) return;
+    clock += dt;
     if (calm > 0) { calm -= dt; return; }
     winT += dt;
     winN += 1;
@@ -128,12 +144,30 @@ export function createStage({ fov = 50, quality = pickQuality(), canvas = docume
     const fps = winN / winT;
     winT = 0;
     winN = 0;
-    if (fps < 45) {
+    if (undo) {
+      const was = undo;
+      undo = null;
+      // (the step down changed nothing: it's the screen's own pace, not the drawing; back to how it was)
+      if (fps < was.fps * 1.1) {
+        hz = Math.max(20, Math.min(60, Math.round(fps)));
+        Object.assign(q, was.q);
+        apply();
+        calm = 2.5;
+        return;
+      }
+    }
+    if (fps > hz * 1.1) hz = Math.min(60, Math.round(fps));   // (the screen's pace came back: out of its battery saver)
+    if (fps < hz * 0.75) {
       upT = 0;
-      if (stepDown()) calm = 2.5;   // (a moment to settle before it judges again)
-    } else if (fps >= 57) {
+      const was = { ...q };
+      if (stepDown()) {
+        calm = 2.5;   // (a moment to settle before it judges again)
+        undo = { q: was, fps };
+        if (clock - upAt < 15) needUp = Math.min(72, needUp * 2);   // (it climbed too soon: wait longer next time)
+      }
+    } else if (fps >= hz * 0.95) {
       upT += 3;
-      if (upT >= 9 && ups < 8 && stepUp()) { upT = 0; ups += 1; calm = 3; }
+      if (upT >= needUp && stepUp()) { upT = 0; upAt = clock; calm = 3; }
     } else upT = 0;
   }
   // the loading screen stays until the first frames are drawn (their shaders compiled behind it)
@@ -166,7 +200,7 @@ export function createStage({ fov = 50, quality = pickQuality(), canvas = docume
       scene.remove(g);
     },
     render(dt = 1 / 60) {
-      watch(dt);
+      watch();
       if (shakeK > 0.002) {
         off.set((Math.random() - 0.5) * shakeK, (Math.random() - 0.5) * shakeK, (Math.random() - 0.5) * shakeK * 0.5);
         camera.position.add(off);

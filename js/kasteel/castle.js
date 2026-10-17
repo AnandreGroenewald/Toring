@@ -30,6 +30,17 @@ function canvas(w = 512, h = 512) {
   c.height = h;
   return c;
 }
+/** A rounded box path: the canvas's own roundRect, or drawn by hand where a phone doesn't have it (Safari before 16). */
+function roundRect(g, x, y, w, h, r) {
+  if (typeof g.roundRect === 'function') { g.roundRect(x, y, w, h, r); return; }
+  const k = Math.max(0, Math.min(r, w / 2, h / 2));
+  g.moveTo(x + k, y);
+  g.arcTo(x + w, y, x + w, y + h, k);
+  g.arcTo(x + w, y + h, x, y + h, k);
+  g.arcTo(x, y + h, x, y, k);
+  g.arcTo(x, y, x + w, y, k);
+  g.closePath();
+}
 const shade = (hex, k) => {
   const c = new THREE.Color(hex);
   c.offsetHSL(0, 0, k);
@@ -57,7 +68,7 @@ function masonry({ base, vary = 0.07, mortar, courses = 5, minLen = 150, maxLen 
         grd.addColorStop(1, shade(col, -0.05));
         g.fillStyle = grd;
         g.beginPath();
-        g.roundRect(sx + 3, y + 3, w - 6, rowH - 6, 7);
+        roundRect(g, sx + 3, y + 3, w - 6, rowH - 6, 7);
         g.fill();
       }
       x += w;
@@ -241,7 +252,24 @@ export function sampleDaily(rand, n) {
   return out;
 }
 
-/** One tower from a day's blocks at castle scale `S` (metres per game metre). Returns { group, top, width, depth }. */
+/** A block's flat tops (game px along its outline's top edge, y = 0): [[x0, x1], ...] — an arch has two, an L one. */
+function topRuns(def) {
+  const o = def.outline;
+  const out = [];
+  if (o) {
+    for (let i = 0; i < o.length; i++) {
+      const a = o[i];
+      const b = o[(i + 1) % o.length];
+      if (a[1] === 0 && b[1] === 0) out.push([Math.min(a[0], b[0]), Math.max(a[0], b[0])]);
+    }
+  }
+  return out.length ? out : [[0, def.w]];
+}
+
+/**
+ * One tower from a day's blocks at castle scale `S` (metres per game metre). Returns { group, top, width, depth, flag,
+ * stand }: `stand` (tower-local) is where a defender stands on the top block's flat top.
+ */
 export function towerFromDaily(layout, mats, { S = 0.55, team = 'red', rand = Math.random, flag = true } = {}) {
   const group = new THREE.Group();
   let top = 0;
@@ -263,34 +291,56 @@ export function towerFromDaily(layout, mats, { S = 0.55, team = 'red', rand = Ma
     m.userData.D = D;
     m.userData.S = S;
     group.add(m);
-    if (b.y * S + H >= top) { top = b.y * S + H; topB = { x: b.x * S, W, D }; }
+    if (b.y * S + H >= top) {
+      top = b.y * S + H;
+      // (the top block's widest flat top, turned as the block lies: an L's high end, an arch's shoulder, a wedge's narrow
+      // top. 17 Oct review: the battlements, the flag and the archers went over the whole width and floated over the
+      // low parts.) A block that came to rest on its side has no flat top: its highest corner.
+      const r = b.rot || 0;
+      const turn = (xl, yl) => ({ x: b.x * S + xl * Math.cos(r) - yl * Math.sin(r), y: b.y * S + xl * Math.sin(r) + yl * Math.cos(r) });
+      if (Math.abs(Math.sin(r)) < 0.34) {
+        const run = topRuns(def).reduce((a, x) => (x[1] - x[0] > a[1] - a[0] ? x : a));
+        const xa = ((run[0] * sx) / PX) * S - W / 2;
+        const xb = ((run[1] * sx) / PX) * S - W / 2;
+        topB = { a: turn(xa, H), b: turn(xb, H), w: xb - xa, D };
+      } else {
+        const hi = pts.map((p) => turn(p.x, p.y)).reduce((a, p) => (p.y > a.y ? p : a));
+        topB = { a: hi, b: hi, w: 0, D };
+      }
+    }
   }
-  // battlements round the top block, and the flag
-  if (topB && topB.W >= 1.5) {
-    const mer = (x, z) => {
+  /** A point along the top's flat run (0: its left end, 1: its right end). */
+  const along = (u) => ({ x: topB.a.x + (topB.b.x - topB.a.x) * u, y: topB.a.y + (topB.b.y - topB.a.y) * u });
+  // battlements round the top's flat run, and the flag
+  if (topB && topB.w >= 1.5) {
+    const { w, D } = topB;
+    const mer = (u, z) => {
       const m = stoneBox(0.48, 0.72, 0.42, mats.granite);
-      m.position.set(x, top, z);
+      const p = along(u);
+      m.position.set(p.x, p.y, z);
       m.userData.merlon = [0.48, 0.72, 0.42];
       group.add(m);
     };
-    const nx = Math.max(2, Math.round(topB.W / 0.95));
+    const nx = Math.max(2, Math.round(w / 0.95));
     for (let i = 0; i < nx; i++) {
-      const x = topB.x - topB.W / 2 + 0.24 + (i * (topB.W - 0.48)) / (nx - 1);
-      if (i % 2 === 0) { mer(x, topB.D / 2 - 0.21); mer(x, -topB.D / 2 + 0.21); }
+      const u = (0.24 + (i * (w - 0.48)) / (nx - 1)) / w;
+      if (i % 2 === 0) { mer(u, D / 2 - 0.21); mer(u, -D / 2 + 0.21); }
     }
-    const nz = Math.max(2, Math.round(topB.D / 0.95));
+    const nz = Math.max(2, Math.round(D / 0.95));
     for (let i = 1; i < nz - 1; i++) {
-      const z = -topB.D / 2 + 0.21 + (i * (topB.D - 0.42)) / (nz - 1);
-      if (i % 2 === 0) { mer(topB.x - topB.W / 2 + 0.24, z); mer(topB.x + topB.W / 2 - 0.24, z); }
+      const z = -D / 2 + 0.21 + (i * (D - 0.42)) / (nz - 1);
+      if (i % 2 === 0) { mer(0.24 / w, z); mer(1 - 0.24 / w, z); }
     }
   }
   let fl = null;
   if (flag && topB) {
     fl = banner(team, { pole: 4.5 });
-    fl.position.set(topB.x - Math.min(1, topB.W / 2 - 0.4), top, -0.4);
+    const p = along(topB.w > 0 ? 0.5 - Math.min(1, Math.max(0, topB.w / 2 - 0.4)) / topB.w : 0.5);
+    fl.position.set(p.x, p.y, -0.4);
     group.add(fl);
   }
-  return { group, top, width: topB?.W || 3, depth: topB?.D || 3, flag: fl };
+  const mid = topB ? along(0.5) : { x: 0, y: top };
+  return { group, top, width: topB?.w || 3, depth: topB?.D || 3, flag: fl, stand: new THREE.Vector3(mid.x, mid.y, 0.6) };
 }
 
 // --------------------------------------------------------------------------------------- walls, gate, castle
@@ -434,7 +484,8 @@ export function buildCastle({ at = new THREE.Vector3(), days, team = 'red', mats
   // where defenders stand: along the front wall's walk, on the gatehouse, on the tower tops
   const spots = {
     wall: [],
-    towers: towers.map((t) => new THREE.Vector3(t.pos.x, t.top, t.pos.z + 0.6)),
+    // (on the top block's flat top as it stands, turned with its tower)
+    towers: towers.map((t) => { t.group.updateMatrix(); return t.stand.clone().applyMatrix4(t.group.matrix); }),
     gate: [new THREE.Vector3(-1.6, 0, half - 3.5), new THREE.Vector3(1.6, 0, half - 3.5)],
     oil: new THREE.Vector3(0, 10.2, half + 0.7),
     field: [new THREE.Vector3(-6.5, 0, half + 9), new THREE.Vector3(0, 0, half + 12), new THREE.Vector3(6.5, 0, half + 9)],

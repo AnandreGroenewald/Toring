@@ -5,9 +5,9 @@
 // the owner is away the plan fights for them. Kept on the phone under `stapel.v1.kasteel` (with the castle's seed).
 import { EARN } from '../core/economy.js';
 import { dateKeyFor } from '../core/daily.js';
-import { PIECES, BUDGET, budgetFor, costOf, LOOT, lootFor, cleanCastle, CASTLE, STARTER_PLAN } from './rules.js';
+import { PIECES, BUDGET, budgetFor, costOf, LOOT, lootFor, cleanCastle, CASTLE, STARTER_PLAN, fitsSpot } from './rules.js';
 
-export { PIECES, BUDGET, budgetFor, costOf, LOOT, lootFor };
+export { PIECES, BUDGET, budgetFor, costOf, LOOT, lootFor, fitsSpot };
 
 export const STORE_KEY = 'stapel.v1.kasteel';
 
@@ -39,7 +39,15 @@ export function defaultPlan(castle) {
 export function loadPlan() {
   try {
     const v = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
-    if (v && typeof v === 'object' && v.plan && typeof v.plan.place === 'object') return v;
+    if (v && typeof v === 'object' && v.plan && v.plan.place && typeof v.plan.place === 'object') {
+      // (a plan saved before 1.18 named its keep by its place in the list: from now on by its day, kept at once, so
+      // the next Daily can't move it)
+      if (v.plan.keepDay === undefined) {
+        v.plan.keepDay = keepDayOf(keepIndex(v.plan, myDayInfo()), myDayInfo());
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(v)); } catch { /* read the same way next time */ }
+      }
+      return v;
+    }
   } catch { /* none yet */ }
   return null;
 }
@@ -76,20 +84,51 @@ export function mySeed() {
 export const DAYS_KEY = 'stapel.v1.kasteeldae';
 // a block's rating in the game → its stone in the castle (the clown's gift: sandstone; a cemented foundation: granite)
 const STONE = { P: 'P', G: 'G', S: 'S', X: 'S', B: 'G', F: 'P' };
-export function myDays(n = 5) {
-  return myDayInfo(n).map((d) => d.layout);
+export function myDays(n = 5, keepDay = null) {
+  return myDayInfo(n, keepDay).map((d) => d.layout);
 }
-/** The same, with each day's date and height: [{ dateKey, h, layout }]. */
-export function myDayInfo(n = 5) {
+/** The kept days (js/main.js keeps a week), raw: { dateKey: { h, b } }. */
+function keptDays() {
   try {
-    const all = JSON.parse(localStorage.getItem(DAYS_KEY) || '{}') || {};
-    return Object.keys(all).sort().reverse().slice(0, n)
-      .map((k) => ({ dateKey: k, h: all[k].h, layout: (all[k].b || []).map((b) => ({ shape: b.s, scale: b.k, x: b.x, y: b.y, rot: b.r, rating: STONE[b.q] || 'S' })) }))
-      .filter((d) => d.layout.length);
+    const all = JSON.parse(localStorage.getItem(DAYS_KEY) || '{}');
+    return all && typeof all === 'object' ? all : {};
   } catch {
-    return [];
+    return {};
   }
 }
+/**
+ * Which kept days make the castle: the newest `n` with blocks, newest first; the keep's day (`keepDay`) stays in while
+ * the game still keeps it, in the place of the oldest (a castle doesn't lose its keep to the next Daily).
+ */
+function castleKeys(all, n, keepDay) {
+  const keys = Object.keys(all).filter((k) => Array.isArray(all[k]?.b) && all[k].b.length).sort().reverse();
+  const pick = keys.slice(0, n);
+  if (typeof keepDay === 'string' && !pick.includes(keepDay) && keys.includes(keepDay) && n > 0) pick.splice(n - 1, 1, keepDay);
+  return pick;
+}
+/** The same, with each day's date and height: [{ dateKey, h, layout }]. */
+export function myDayInfo(n = 5, keepDay = null) {
+  const all = keptDays();
+  return castleKeys(all, n, keepDay)
+    .map((k) => ({ dateKey: k, h: all[k].h, layout: all[k].b.map((b) => ({ shape: b.s, scale: b.k, x: b.x, y: b.y, rot: b.r, rating: STONE[b.q] || 'S' })) }));
+}
+/**
+ * The keep: which of the castle's five towers (the days `info`, then the foundations still to build) stands in the middle.
+ * A plan names it by its day (`keepDay`: a dateKey, or 'f<n>' for the n-th foundation), so a new Daily never moves it;
+ * a plan from before 1.18 (or a friend's castle from the server) by its place, `keep`.
+ */
+export function keepIndex(plan, info) {
+  const k = plan?.keepDay;
+  if (typeof k === 'string') {
+    const i = /^f\d$/.test(k) ? info.length + Number(k.slice(1)) : info.findIndex((d) => d.dateKey === k);
+    if (i >= 0 && i < CASTLE.days) return i;
+    return 0;
+  }
+  const i = plan?.keep;
+  return Number.isInteger(i) && i >= 0 && i < CASTLE.days ? i : 0;
+}
+/** The name a plan keeps for tower `i` of the castle (see keepIndex). */
+export const keepDayOf = (i, info) => (i < info.length ? info[i].dateKey : `f${i - info.length}`);
 
 /** The castle's tally: { trophies, wins, played, pending (coins still to reach the wallet) }. */
 export function castleStats() {
@@ -110,8 +149,8 @@ function capLeft(pending) {
  * itself adds them to the wallet (js/main.js, the next time Stapel opens: one place keeps the wallet). Returns
  * { coins (what will land), trophies, capped (the day's cap took some) }.
  */
-export function recordSiege(stars) {
-  const r = lootFor(stars);
+export function recordSiege(stars, full = true) {
+  const r = lootFor(stars, full);
   try {
     const v = readStore();
     const pending = Math.max(0, v.pending | 0);
@@ -135,10 +174,12 @@ export function recordSiege(stars) {
 export function castleSnapshot() {
   const v = loadPlan();
   const plan = v?.plan || STARTER_PLAN;
-  let all = {};
-  try { all = JSON.parse(localStorage.getItem(DAYS_KEY) || '{}') || {}; } catch { /* no towers kept */ }
-  const days = Object.keys(all).sort().reverse().slice(0, CASTLE.days).map((k) => ({ dateKey: k, h: all[k].h, b: all[k].b }));
-  return cleanCastle({ seed: v?.seed ?? mySeed(), keep: plan.keep ?? 0, place: plan.place, days });
+  const all = keptDays();
+  const days = castleKeys(all, CASTLE.days, plan.keepDay).map((k) => ({ dateKey: k, h: all[k].h, b: all[k].b }));
+  const c = cleanCastle({ seed: v?.seed ?? mySeed(), keep: 0, place: plan.place, days });
+  // (the keep travels as its place among the days that travel: the friend's phone builds the castle from exactly these)
+  if (c) c.keep = keepIndex(plan, c.days);
+  return c;
 }
 /** A castle that came from the server, in the shape the castle builder takes: { seed, plan, days: [{ dateKey, h, layout }] }. */
 export function castleFromSnapshot(c) {

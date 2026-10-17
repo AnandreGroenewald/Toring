@@ -18,9 +18,12 @@ export const ICONS = {
   trophy: '<svg viewBox="0 0 24 24"><path d="M7 4h10v4a5 5 0 0 1-10 0z" fill="#ffcf6b" stroke="#b8862f"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4" stroke="#b8862f" fill="none"/><path d="M10 13h4l1 5H9z" fill="#ffcf6b"/><rect x="7" y="18" width="10" height="2.4" rx="1" fill="#b8862f"/></svg>',
 };
 
+/** Words from elsewhere (a friend's name from the server) made safe to put in the screen's HTML. */
+export const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
 export function scoutHud(root, s) {
   root.innerHTML = `
-    <div class="kh-title"><small><a class="k-back" href="index.html">${T.back}</a>${T.series}</small><b>${s.title || T.castleOf(s.name)}</b>
+    <div class="kh-title"><small><a class="k-back" href="index.html">${T.back}</a>${T.series}</small><b>${esc(s.title || T.castleOf(s.name))}</b>
       <div class="kh-facts"><span><b>${s.towers}</b> ${T.towers}</span><span><b>${s.perfects}</b> ${T.perfects}</span><span><b>${s.defenders}</b> ${T.defenders}</span></div></div>
     <div class="kh-legend"><span class="kh-l kh-gran">${T.legend[0]}</span><span class="kh-l kh-sand">${T.legend[1]}</span><span class="kh-l kh-wood">${T.legend[2]}</span></div>
     ${s.mineLink ? `<a class="kh-mine" href="?plan">${T.yourCastleLink}</a>` : ''}
@@ -34,7 +37,7 @@ export function siegeHud(root, s) {
     <div class="kh-top">
       <div class="kh-clock"><b>${s.clock}</b></div>
       <div class="kh-stars">${[0, 1, 2].map((i) => ICONS.star(i < s.stars)).join('')}</div>
-      <div class="kh-dmg"><span>${s.name}</span><i class="kh-bar"><i style="width:${s.damage}%"></i></i><b>${s.damage}%</b></div>
+      <div class="kh-dmg"><span>${esc(s.name)}</span><i class="kh-bar"><i style="width:${s.damage}%"></i></i><b>${s.damage}%</b></div>
     </div>
     ${s.scope ? `<div class="kh-scope" aria-hidden="true">
       <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
@@ -56,7 +59,6 @@ export function siegeHud(root, s) {
     </div>`;
 }
 
-export const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 /**
  * (1.17) Whose castle: Robot Rikus and your friends with castles (Jou dorp's neighbours), and ＋ Nooi (a friend's link).
  * `current`: the town id being scouted (null: Robot Rikus).
@@ -65,7 +67,7 @@ export function scoutFoes(root, { list, current, onInvite }) {
   const row = document.createElement('div');
   row.className = 'kh-foes';
   const all = [{ id: null, name: T.rikus, bot: true }, ...list];
-  row.innerHTML = all.map((f) => `<a class="kh-foe${(f.id || null) === (current || null) ? ' is-on' : ''}" href="${f.id ? `?teen=${f.id}` : '?'}">${f.bot ? '🤖 ' : '🏰 '}${esc(f.name)}</a>`).join('')
+  row.innerHTML = all.map((f) => `<a class="kh-foe${(f.id || null) === (current || null) ? ' is-on' : ''}" href="${f.id ? `?teen=${encodeURIComponent(f.id)}` : '?'}">${f.bot ? '🤖 ' : '🏰 '}${esc(f.name)}</a>`).join('')
     + `<button type="button" class="kh-foe kh-invite">＋ ${T.invite}</button>`;
   root.querySelector('.kh-foes')?.remove();
   root.appendChild(row);
@@ -92,7 +94,7 @@ export function createSiegeHud(root, { name, wind }, on) {
       <button type="button" class="kh-pause" aria-label="Pause"><i></i><i></i></button>
       <div class="kh-clock"><b>3:00</b></div>
       <div class="kh-stars">${[0, 1, 2].map(() => ICONS.star(false)).join('')}</div>
-      <div class="kh-dmg"><span>${name}</span><i class="kh-bar"><i style="width:0%"></i></i><b>0%</b></div>
+      <div class="kh-dmg"><span>${esc(name)}</span><i class="kh-bar"><i style="width:0%"></i></i><b>0%</b></div>
     </div>
     <div class="kh-toast"></div>
     <div class="kh-hint"></div>
@@ -200,7 +202,7 @@ export function createSiegeHud(root, { name, wind }, on) {
       e.innerHTML = `<div class="kh-endcard${r.stars ? ' is-won' : ''}">
         <small>${T.series}</small><b>${r.stars ? T.won : T.lost}</b>
         <div class="kh-endstars">${[0, 1, 2].map((i) => ICONS.star(i < r.stars)).join('')}</div>
-        <p>${T.endLine(r.destroyed, r.nameIn, r.lost)}</p>
+        <p>${T.endLine(r.destroyed, esc(r.nameIn), r.lost)}</p>
         ${r.coins == null ? '' : `<div class="kh-loot">${ICONS.coin}<b>+${r.coins}</b>${ICONS.trophy}<b>${r.trophies >= 0 ? '+' : ''}${r.trophies}</b></div>`}
         ${r.capped ? `<p class="kh-capnote">${T.capped}</p>` : ''}
         ${r.stars && on.share && !r.test ? `<button type="button" class="kh-share">${T.share}</button>` : ''}

@@ -121,7 +121,9 @@ export function createCrowd(scene, groundY, { kinds = ['swaard', 'spies', 'boog'
       B.shR.rotation.x = base.shR.r.x + k * 0.6;
       B.neck.rotation.y = -0.15;
     } else if (m.state === 'fall') {
-      rig.rotation.set(m.spin * time, m.heading, m.spin * 0.6 * time);
+      // (he tumbles from the moment he fell, from upright: no jump to a turn the clock already ran up)
+      const f = time - (m.fallAt ?? time);
+      rig.rotation.set(m.spin * f, m.heading, m.spin * 0.6 * f);
     } else if (m.state === 'cheer') {
       // (the keep is theirs: arms up, a little hop)
       const k = Math.abs(Math.sin(time * 5.5 + m.t));

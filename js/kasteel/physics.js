@@ -62,6 +62,30 @@ export function createPhysics({ gravity = -16 } = {}) {
     return { p, q };
   }
   const posOf = (l, out = new THREE.Vector3()) => poseOf(l, out, tmpQ).p;
+  /**
+   * Where a block is drawn: its body's pose between its last two steps (the steps are a fixed 1/60 s; frames and slow
+   * motion are not: without this a stone in slow motion moved in jumps every third frame). A body at rest: as it lies.
+   */
+  function drawPoseOf(l, p, q) {
+    const b = l.body;
+    const still = b.type === CANNON.Body.STATIC || b.sleepState === CANNON.Body.SLEEPING;
+    const bp = still ? b.position : b.interpolatedPosition;
+    const bq = still ? b.quaternion : b.interpolatedQuaternion;
+    q.set(bq.x, bq.y, bq.z, bq.w);
+    p.copy(l.local.p).applyQuaternion(q);
+    p.x += bp.x;
+    p.y += bp.y;
+    p.z += bp.z;
+    q.multiply(l.local.q);
+    return { p, q };
+  }
+  /** (a body made between steps starts its drawn pose where it is, not at the world's middle) */
+  function settleDrawn(body) {
+    body.previousPosition.copy(body.position);
+    body.interpolatedPosition.copy(body.position);
+    body.previousQuaternion.copy(body.quaternion);
+    body.interpolatedQuaternion.copy(body.quaternion);
+  }
 
   /** A block's boxes (its own frame, about its centre of mass), weight and volume. */
   function blockShape(b, S, D) {
@@ -103,6 +127,7 @@ export function createPhysics({ gravity = -16 } = {}) {
     return new THREE.Vector3(body.velocity.x, body.velocity.y, body.velocity.z).add(w.cross(r));
   }
   function born(body) {
+    settleDrawn(body);
     world.addBody(body);
     onBody?.(body);
     return body;
@@ -300,6 +325,7 @@ export function createPhysics({ gravity = -16 } = {}) {
     body.position.set(pos.x, pos.y, pos.z);
     body.velocity.set(vel.x, vel.y, vel.z);
     body.angularVelocity.set(Math.random() * 6 - 3, Math.random() * 6 - 3, Math.random() * 6 - 3);
+    settleDrawn(body);
     world.addBody(body);
     const link = { body, mesh, com: new THREE.Vector3(), local: { p: new THREE.Vector3(), q: new THREE.Quaternion() }, stone: true, bites: 0, before: new THREE.Vector3(vel.x, vel.y, vel.z) };
     body.link = link;
@@ -329,7 +355,7 @@ export function createPhysics({ gravity = -16 } = {}) {
       const b = l.body;
       if (!l.stone && !l.dirty && (b.type === CANNON.Body.STATIC || b.sleepState === CANNON.Body.SLEEPING)) continue;
       l.dirty = b.type !== CANNON.Body.STATIC && b.sleepState !== CANNON.Body.SLEEPING;
-      const { p, q } = poseOf(l, tmpV, tmpQ);
+      const { p, q } = drawPoseOf(l, tmpV, tmpQ);
       l.mesh.quaternion.copy(q);
       const c = l.com.clone().applyQuaternion(q);
       l.mesh.position.set(p.x - c.x, p.y - c.y, p.z - c.z);

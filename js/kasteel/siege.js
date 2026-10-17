@@ -9,7 +9,7 @@ import { createStage } from './stage.js';
 import { buildWorld, DIST, rng, groundHeight } from './world.js';
 import { castleMaterials, buildCastle, sampleDaily } from './castle.js';
 import { trebuchet, ram as makeRam, shot, cauldron, ballista as makeBallista, spikes as makeSpikes } from './army.js';
-import { defaultPlan, loadPlan, spotIds, myDays, mySeed, helpSeen, markHelp, lootFor, recordSiege, castleFromSnapshot } from './plan.js';
+import { defaultPlan, loadPlan, spotIds, myDayInfo, keepIndex, mySeed, helpSeen, markHelp, lootFor, recordSiege, castleFromSnapshot, fitsSpot, LOOT } from './plan.js';
 import { createCastleNet } from './net.js';
 import { isTownId } from '../core/dorp.js';
 import { SITE_URL_FALLBACK } from '../config.js';
@@ -25,9 +25,12 @@ import { audio, haptics } from '../audio.js';
 const q = new URLSearchParams(location.search);
 const net = createCastleNet();
 // whose castle: Robot Rikus's (a castle by `?seed=`), a copy of your own with your plan (`?teen=my`), or a friend's as
-// the server keeps it, with their plan (`?teen=<their town id>`: a neighbour from Jou dorp)
-const MINE = q.get('teen') === 'my' ? (loadPlan() || { seed: mySeed(), plan: null }) : null;
-const FRIEND_ID = isTownId(q.get('teen')) ? q.get('teen') : null;
+// the server keeps it, with their plan (`?teen=<their town id>`: a neighbour from Jou dorp). Your own town's id is
+// your own castle (a test: no loot, no news), never a friend's.
+const TEEN = q.get('teen');
+const SELF = isTownId(TEEN) && TEEN === net.id;
+const MINE = TEEN === 'my' || SELF ? (loadPlan() || { seed: mySeed(), plan: null }) : null;
+const FRIEND_ID = isTownId(TEEN) && !SELF ? TEEN : null;
 let FRIEND = null;
 if (FRIEND_ID) {
   const r = await net.castle(FRIEND_ID);
@@ -63,10 +66,12 @@ st.onQuality((qq) => { world.setGrass(qq.grass); world.setShadow(qq.shadow); });
 const mats = castleMaterials(renderer);
 const samples = [sampleDaily(rand, 16), sampleDaily(rand, 12), sampleDaily(rand, 11), sampleDaily(rand, 13), sampleDaily(rand, 10)];
 // your own castle: your own Daily Towers (as in the planner), else the starter castle
-const real = MINE ? myDays() : FRIEND ? FRIEND.days.map((d) => d.layout) : [];
+const myInfo = MINE ? myDayInfo(5, MINE.plan?.keepDay) : null;
+const real = MINE ? myInfo.map((d) => d.layout) : FRIEND ? FRIEND.days.map((d) => d.layout) : [];
 const r0 = rng(seed);   // (the same foundations as the planner shows)
 const days0 = real.length ? [...real, ...Array.from({ length: Math.max(0, 5 - real.length) }, () => sampleDaily(r0, 2))].slice(0, 5) : samples;
-const keepDay = OWN?.plan?.keep ?? 0;
+// (the keep: your plan names it by its day; a friend's castle travels with its place among its days)
+const keepDay = MINE ? keepIndex(MINE.plan, myInfo) : FRIEND ? keepIndex(FRIEND.plan, FRIEND.days) : 0;
 const days = [days0[keepDay], ...days0.filter((_, i) => i !== keepDay)];
 const castle = buildCastle({ at: new THREE.Vector3(0, 0, -DIST), days, team: 'red', mats, rand, half: HALF });
 scene.add(castle.group);
@@ -217,7 +222,7 @@ const relTo = (link, w) => w.clone().sub(phys.posOf(link));
 const tmpP = new THREE.Vector3();
 for (const s of spotIds(castle)) {
   const kind = plan.place[s.id];
-  if (!kind) continue;
+  if (!kind || !fitsSpot(s.id, kind)) continue;   // (only what may stand on that spot: an archer on a wall, a ballista on a top)
   const w = castle.group.localToWorld(s.p.clone());
   if (kind === 'boog' || kind === 'spies' || kind === 'ridder') {
     if (s.kind === 'gate') { guards.push(crowd.add(kind, 'red', w.x, w.z, { heading: 0, role: 'guard' })); continue; }
@@ -319,7 +324,7 @@ function invite() {
 function siteRoot() {
   const inApp = !!window.Capacitor?.isNativePlatform?.();
   if (location.protocol === 'file:' || inApp || location.hostname === 'anandregroenewald.github.io') return SITE_URL_FALLBACK;
-  return `${location.origin}${location.pathname.replace(/kasteel\.html$/, '')}`;
+  return `${location.origin}${location.pathname.replace(/kasteel(\.html)?$/, '')}`;   // (Pages serves the page as /kasteel too)
 }
 
 function startSiege() {
@@ -336,7 +341,7 @@ function startSiege() {
     done: () => goBack(),   // (home: Stapel's menu, where the coins land; or your castle, after testing it)
     pause: () => pause(),
     resume: () => { G.pauseCard = false; hud.paused(false); G.paused = G.helpOpen; },
-    quit: () => { G.pauseCard = false; hud.paused(false); G.paused = false; if (!G.ended) endSiege(); },
+    quit: () => { G.pauseCard = false; hud.paused(false); G.paused = false; if (!G.ended) endSiege(true); },
     share: (r) => brag(r),
   });
   hud.cards(G.cards, G.sel, true);
@@ -354,6 +359,7 @@ function pause() {
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 matchMedia('(orientation: landscape) and (max-height: 540px) and (pointer: coarse)').addEventListener?.('change', (e) => { if (e.matches) pause(); });
 // (the Android app's back button, through the app's shim: one step back, never out of a battle by accident)
+window.__kasteelBack = true;   // (main.js's stand-in steps aside)
 addEventListener('stapel:back', (e) => {
   e.preventDefault();
   if (G.helpOpen) { hudEl.querySelector('.kh-help button')?.click(); return; }
@@ -405,7 +411,7 @@ function deploy(kind, x, z) {
   x = Math.max(-ZONE.x, Math.min(ZONE.x, x));
   z = Math.max(ZONE.z0, Math.min(ZONE.z1, z));
   if (kind === 'ram') {
-    if (G.ram) return false;
+    if (G.ram || G.gateBroken) return false;   // (the gate is down: nothing left for a ram to break)
     const r = makeRam(mats, 'blue');
     r.position.set(Math.max(-6, Math.min(6, x)), groundHeight(x, z), z);
     scene.add(r);
@@ -498,7 +504,8 @@ function release() {
   G.mode = 'flight';
 }
 function onStoneHit(e) {
-  if (G.impact) return;
+  // (only the stone in the air: an earlier stone still lying in the field reports its own touches, 17 Oct review)
+  if (G.impact || !G.stone || e.target !== G.stone.body) return;
   const b = G.stone.body;
   const at = new THREE.Vector3(b.position.x, b.position.y, b.position.z);
   const hitCastle = !!(e.body.link || e.body.chunk) || (e.body.mass === 0 && at.y > 0.8);
@@ -532,6 +539,7 @@ function kill(m, fall = false) {
   if (m.team === 'blue') G.lost += 1;
   if (fall && m.y != null && m.y > 1) {
     m.state = 'fall';
+    m.fallAt = G.t;   // (the tumble starts now: crowd.js turns him from here)
     m.vy = 3 + rand() * 2;
     m.vx = (rand() - 0.5) * 4;
     m.vz = 2 + rand() * 3;
@@ -558,14 +566,20 @@ function damageGate(n) {
     link.body.applyImpulse(new phys.CANNON.Vec3((i ? 1 : -1) * m * 1.2, m * 1.5, -m * 6), new phys.CANNON.Vec3(0, 2, 0));
   });
   castle.gate.userData.portcullis.visible = false;
-  // the ram's men draw their swords and go in with the rest (they stood idle by the ram before)
+  // the ram's men draw their swords and go in with the rest (they stood idle by the ram before); a ram not yet sent
+  // has nothing left to break (17 Oct review: one sent after the gate fell stood there for good with its four men)
   if (G.ram) for (const m of G.ram.pushers) if (m.alive) { m.pusher = false; m.slot = (rand() - 0.5) * 5; m.hp = HP.swaard; m.state = 'walk'; }
+  if (G.cards.ram > 0) {
+    G.cards.ram = 0;
+    if (G.sel === 'ram') { G.sel = null; zone.visible = edge.visible = false; hud?.hint(''); }
+    hud?.cards(G.cards, G.sel, G.trebState === 'ready');
+  }
   fx.dust(new THREE.Vector3(0, 3, GATE_Z + 1), { n: 16, size: 3.2, up: 2.5, spread: 5, life: 2.6 });
   st.shake(0.6);
   star('gate', T.gate);
 }
 function star(k, text) {
-  if (G.stars[k]) return;
+  if (G.ended || G.stars[k]) return;   // (after the bell nothing more is won)
   G.stars[k] = true;
   if (k === 'flag') {
     flagFall();
@@ -787,18 +801,20 @@ function think(dt) {
   if (r && r.hp > 0) {
     const o = r.obj;
     const stopZ = GATE_Z + 6.2;
-    if (o.position.z > stopZ + 0.05) {
+    if (G.gateBroken) {
+      // (the gate is down: its men went in with the rest, and it stands where they left it)
+    } else if (o.position.z > stopZ + 0.05) {
       o.position.z = Math.max(stopZ, o.position.z - RAM_SPEED * dt);
       o.position.x += (0 - o.position.x) * Math.min(1, dt * 0.6);
       o.position.y = groundHeight(o.position.x, o.position.z);
-      r.pushers.forEach((m) => { if (m.alive) { m.x = o.position.x + m.dx; m.z = o.position.z + m.dz; m.heading = Math.PI; m.state = 'walk'; } });
-    } else if (!G.gateBroken) {
+      r.pushers.forEach((m) => { if (m.alive && m.pusher) { m.x = o.position.x + m.dx; m.z = o.position.z + m.dz; m.heading = Math.PI; m.state = 'walk'; } });
+    } else {
       r.hitT += dt;
       const k = (r.hitT % 2.2) / 2.2;
       if (r.log) r.log.position.z = -0.6 - Math.sin(Math.min(1, k * 1.4) * Math.PI) * 1.4;
       if (r.hitT >= 2.2) { r.hitT = 0; damageGate(16); sfx('land'); st.shake(0.25); }
-      r.pushers.forEach((m) => { if (m.alive) m.state = 'attack'; });
-    } else r.pushers.forEach((m) => { if (m.alive && m.pusher) m.state = 'idle'; });
+      r.pushers.forEach((m) => { if (m.alive && m.pusher) m.state = 'attack'; });
+    }
   } else if (r && r.wreck == null) {
     // broken (its last hit can land anywhere: an arrow's, the ballista's, the oil's): a crash of timber, the word,
     // its pushers fall, and the wreck sinks away (17 Oct review: it used to stop, with its men walking on the spot)
@@ -806,7 +822,7 @@ function think(dt) {
     fx.dust(o.position.clone().add(new THREE.Vector3(0, 1.5, 0)), { n: 16, size: 3.2, up: 2.4, spread: 4.5, life: 2.6, color: '#6b5a48' });
     fx.chips(o.position.clone().add(new THREE.Vector3(0, 2, 0)), new THREE.Vector3(0, 0.6, 1), 18, 7);
     o.rotation.z = 0.25;
-    r.pushers.forEach((m) => kill(m));
+    r.pushers.forEach((m) => { if (m.pusher) kill(m); });   // (the men under its roof; those who went in fight on)
     r.wreck = 0;
     sfx('land');
     st.shake(0.25);
@@ -829,6 +845,7 @@ function think(dt) {
 // --------------------------------------------------------------------------------------------- how much is down
 let measureT = 0;
 function measure(dt) {
+  if (G.ended) return;   // (the bell's count stands)
   measureT += dt;
   if (measureT < 0.25) return;
   measureT = 0;
@@ -895,7 +912,8 @@ function cameraTick(rdt) {
     k = 6;
   } else if (G.mode === 'flight' && G.stone) {
     const b = G.stone.body;
-    const p = new THREE.Vector3(b.position.x, b.position.y, b.position.z);
+    const ip = b.interpolatedPosition;   // (where the stone is drawn: smooth in slow motion)
+    const p = new THREE.Vector3(ip.x, ip.y, ip.z);
     const v = new THREE.Vector3(b.velocity.x, b.velocity.y, b.velocity.z);
     const flat = new THREE.Vector3(v.x, 0, v.z).normalize();
     if (G.impact) {
@@ -1012,10 +1030,10 @@ function tick(now) {
     G.introT += rdt;
     if (G.introT > 2.2) { G.mode = 'battle'; tip('deploy', T.help1); }
   }
-  if (['battle', 'aim', 'flight'].includes(G.mode)) {
+  if (['battle', 'aim', 'flight'].includes(G.mode) && !G.ended) {
     // the march: a war drum while your troops walk, strong on the first of four (game time: slow motion slows it too)
     G.drumT = (G.drumT ?? 0) - dt;
-    if (G.drumT <= 0 && !G.ended) {
+    if (G.drumT <= 0) {
       G.drumT = 0.62;
       if (blue.some((m) => m.alive && (m.state === 'walk' || m.state === 'run'))) {
         G.beat = ((G.beat ?? -1) + 1) % 4;
@@ -1066,6 +1084,7 @@ function tick(now) {
         G.mode = 'battle';
         hud.cards(G.cards, G.sel, G.trebState === 'ready');
         const s = G.stone;
+        s.body.removeEventListener('collide', onStoneHit);
         setTimeout(() => { phys.remove(s); scene.remove(s.mesh); }, 6000);
         G.stone = null;
       }
@@ -1078,7 +1097,7 @@ function tick(now) {
   phys.sync();
   welds.update();
   lap('physics');
-  if (G.mode !== 'scout') think(dt);
+  if (G.mode !== 'scout' && !G.ended) think(dt);
   lap('think');
   for (const m of crowd.all) {
     if (m.state !== 'fall') continue;
@@ -1087,7 +1106,7 @@ function tick(now) {
     m.z += m.vz * dt;
     m.y += m.vy * dt;
     const gy = groundHeight(m.x, m.z);
-    if (m.y <= gy) { m.y = null; m.state = 'dead'; m.diedAt = G.t; fx.dust(new THREE.Vector3(m.x, gy + 0.3, m.z), { n: 3, size: 1.4, up: 0.6, spread: 1, life: 1.2 }); }
+    if (m.y <= gy) { m.y = null; m.state = 'dead'; m.diedAt = G.t - 1; fx.dust(new THREE.Vector3(m.x, gy + 0.3, m.z), { n: 3, size: 1.4, up: 0.6, spread: 1, life: 1.2 }); }
   }
   measure(dt);
   lap('measure');
@@ -1139,18 +1158,38 @@ function bars() {
   const r = G.ram;
   hud.bar('ram', show && r && r.hp > 0 && !G.gateBroken ? onScreen(r.obj.position.x, r.obj.position.y + 4.6, r.obj.position.z) : null, r ? r.hp / RAM_HP : 0);
 }
-function endSiege() {
+/**
+ * The bell (the clock, three stars, nothing left to happen, or HOU OP): what stands now is the result. One last count
+ * of the damage (its star too), then the battle stops (17 Oct review: it ran on for the card's 1.6 s and won stars
+ * nobody was paid for), the result is kept at once (Back during those 1.6 s lost it), and the card comes up.
+ * `quit`: given up — the base coins are only for a siege played out (LOOT.minSecs), or won outright.
+ */
+function endSiege(quit = false) {
+  if (G.ended) return;
+  measureT = Infinity;
+  measure(0);
+  if (G.mode === 'aim') leaveAim();
   G.ended = true;
   G.winding = false;
+  G.slowTo = 1;
   hud.aim(false);
+  hud.call('treb', false);
+  hud.hint('');
+  zone.visible = edge.visible = false;
   const stars = starCount();
+  const destroyed = G.destroyed;
+  const lost = G.lost;
+  for (const m of blue) if (m.alive && m.state !== 'fall') m.state = stars && !m.pusher ? 'cheer' : 'idle';
+  for (const d of [...defenders, ...guards]) if (d?.alive && d.state !== 'fall') d.state = 'idle';
+  const full = stars === 3 || (!quit && 180 - G.clock >= LOOT.minSecs);
+  const loot = MINE ? null : recordSiege(stars, full);
+  if (FRIEND_ID) net.siege(FRIEND_ID, stars, destroyed);   // (their news: who, how much, a Wraak)
   setTimeout(() => {
     G.mode = 'end';
+    G.slowTo = 1;
     sfx(stars ? 'record' : 'lost');
     hudEl.classList.add('is-end');
-    const loot = MINE ? null : recordSiege(stars);
-    if (FRIEND_ID) net.siege(FRIEND_ID, stars, G.destroyed);   // (their news: who, how much, a Wraak)
-    hud.end({ stars, destroyed: G.destroyed, nameIn: NAME_IN, lost: G.lost, test: !!MINE, coins: loot ? loot.coins : null, trophies: loot ? loot.trophies : 0, capped: !!loot?.capped });
+    hud.end({ stars, destroyed, nameIn: NAME_IN, lost, test: !!MINE, coins: loot ? loot.coins : null, trophies: loot ? loot.trophies : 0, capped: !!loot?.capped });
   }, 1600);
 }
 await st.warm([shot(0.62), makeRam(mats, 'blue')]);   // (the stone and the ram come later: their shaders now)
@@ -1166,6 +1205,7 @@ window.__siege = {
   range: () => rangefind(),
   fire: (range) => { if (G.mode === 'aim') fire(range); },
   ready: () => G.mode === 'battle' && G.trebState === 'ready',
+  gate: (n) => damageGate(n),
 };
 window.__siegeProject = (x, z) => { const v = new THREE.Vector3(x, groundHeight(x, z), z).project(camera); return { x: v.x, y: v.y }; };
 window.__kasteelReady = true;

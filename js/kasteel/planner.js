@@ -10,12 +10,13 @@ import { buildWorld, DIST, rng, groundHeight } from './world.js';
 import { castleMaterials, buildCastle, sampleDaily } from './castle.js';
 import { soldier, cauldron, ballista, spikes } from './army.js';
 import { idle, setDetail } from './crew.js';
-import { PIECES, spotIds, defaultPlan, costOf, loadPlan, savePlan, mySeed, myDayInfo, budgetFor } from './plan.js';
+import { PIECES, spotIds, defaultPlan, costOf, loadPlan, savePlan, mySeed, myDayInfo, budgetFor, keepIndex, keepDayOf } from './plan.js';
 import { T, fmtM, dayName, goBack, PREFS } from './text.js';
 import { audio } from '../audio.js';
 import { ICONS, esc } from './hud.js';
 import { createCastleNet } from './net.js';
 import { weldStill } from './batch.js';
+import { isTownId } from '../core/dorp.js';
 
 const st = createStage({ fov: 46 });
 const { scene, camera, renderer } = st;
@@ -28,7 +29,7 @@ const saved = loadPlan();
 const seed = saved?.seed ?? mySeed();
 const r0 = rng(seed);
 // your own Daily Towers when the game has kept some (the rest: low foundations, still to build); else a starter castle
-const info = myDayInfo();
+const info = myDayInfo(5, saved?.plan?.keepDay);
 const real = info.map((d) => d.layout);
 const BUDGET = budgetFor(real.length);
 const dayLabel = (i) => {
@@ -43,6 +44,12 @@ const days = real.length
 const AT = new THREE.Vector3(0, 0, -DIST);
 let castle = null;
 let plan = saved?.plan ? JSON.parse(JSON.stringify(saved.plan)) : null;
+if (plan) plan.keep = keepIndex(plan, info);   // (the plan names its keep by its day: where that day stands today)
+/** The keep moves to tower `i`: the plan keeps its day's name (a new Daily can't move it). */
+function setKeep(i) {
+  plan.keep = i;
+  plan.keepDay = keepDayOf(i, info);
+}
 let spots = [];
 const rings = new Map();
 const pieces = new Map();
@@ -164,10 +171,11 @@ const hud = {
 for (const c of hudEl.querySelectorAll('.kp-card')) {
   c.addEventListener('click', () => { try { audio.unlock(); } catch { /* */ } sfx('click'); sel = sel === c.dataset.k ? null : c.dataset.k; paint(); });
 }
-$('.kp-prev').addEventListener('click', () => { plan.keep = ((plan.keep ?? 0) + days.length - 1) % days.length; dirty = true; sfx('click'); build(); });
-$('.kp-next').addEventListener('click', () => { plan.keep = ((plan.keep ?? 0) + 1) % days.length; dirty = true; sfx('click'); build(); });
+$('.kp-prev').addEventListener('click', () => { setKeep(((plan.keep ?? 0) + days.length - 1) % days.length); dirty = true; sfx('click'); build(); });
+$('.kp-next').addEventListener('click', () => { setKeep(((plan.keep ?? 0) + 1) % days.length); dirty = true; sfx('click'); build(); });
 $('.kp-save').addEventListener('click', () => {
   if (costOf(plan) > BUDGET) { flash(T.tooDear); return; }
+  setKeep(plan.keep ?? 0);
   savePlan({ seed, plan });
   net.upload();   // (your friends attack this one now)
   dirty = false;
@@ -177,6 +185,7 @@ $('.kp-save').addEventListener('click', () => {
 });
 $('.kp-test').addEventListener('click', () => {
   if (costOf(plan) > BUDGET) { flash(T.tooDear); return; }
+  setKeep(plan.keep ?? 0);
   savePlan({ seed, plan });
   location.href = `${location.pathname}?teen=my`;
 });
@@ -187,6 +196,7 @@ function leave(e) {
   if (e?.type === 'stapel:back') { e.preventDefault(); goBack(); }
 }
 addEventListener('stapel:back', leave);
+window.__kasteelBack = true;   // (the app's back button is the planner's now: main.js's stand-in steps aside)
 $('.k-back').addEventListener('click', leave);
 function flash(text) {
   const h = $('.kp-hint');
@@ -239,14 +249,15 @@ const clock = new THREE.Clock();
 // (the castle and the ground before its gate sit between the title and the cards)
 const look = new THREE.Vector3(0, 1, -DIST + 7);
 function frame() {
-  const t = clock.getElapsedTime();
+  const dt = Math.min(0.1, clock.getDelta());   // (the real frame time)
+  const t = clock.elapsedTime;
   const R = 80;
   camera.position.set(Math.sin(ang) * R, 46, -DIST + 7 + Math.cos(ang) * R);
   camera.lookAt(look);
   for (const p of crew) idle(p, t);
   castle.flags?.[0]?.userData.wave?.(t);   // (every flag waves on one shared clock, on the graphics chip)
   for (const r of rings.values()) if (r.material === RING.ok) r.scale.setScalar((r.userData.spot.kind === 'field' ? 2.6 : 1) * (1 + Math.sin(t * 6) * 0.08));
-  st.render(1 / 60);
+  st.render(dt);
   requestAnimationFrame(frame);
 }
 // (1.17) friends: your saved castle goes up for them; while you were away, who attacked it (and a Wraak)
@@ -258,9 +269,12 @@ net.home().then((r) => {
   if (!fresh.length) return;
   const last = fresh[fresh.length - 1];
   const el = $('.kp-news');
-  el.classList.toggle('is-held', !last.stars);
-  el.innerHTML = `<span>${last.stars ? T.attacked(esc(last.name), last.destroyed, last.stars) : T.held(esc(last.name))}${fresh.length > 1 ? `<small>${T.more(fresh.length - 1)}</small>` : ''}</span>`
-    + `<a href="?teen=${last.from}">${T.wraak}</a><button type="button" aria-label="✕">✕</button>`;
+  // (the server's words, kept within the rules before they go on the screen)
+  const stars = Math.max(0, Math.min(3, last.stars | 0));
+  const destroyed = Math.max(0, Math.min(100, Math.round(Number(last.destroyed) || 0)));
+  el.classList.toggle('is-held', !stars);
+  el.innerHTML = `<span>${stars ? T.attacked(esc(last.name), destroyed, stars) : T.held(esc(last.name))}${fresh.length > 1 ? `<small>${T.more(fresh.length - 1)}</small>` : ''}</span>`
+    + `${isTownId(last.from) ? `<a href="?teen=${last.from}">${T.wraak}</a>` : ''}<button type="button" aria-label="✕">✕</button>`;
   el.hidden = false;
   el.querySelector('button').addEventListener('click', () => { el.hidden = true; });
   net.home(r.newsN);   // (seen: shown once)

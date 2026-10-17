@@ -61,6 +61,7 @@ export function createCastleNet({ api = MATCH_API_URL, fetchImpl = globalThis.fe
     return r;
   }
 
+  let sending = null;   // (an upload on its way: home() waits for it, so `saved` speaks of it)
   return {
     get id() { return me()?.id || null; },
     /** Does the server keep castles? Its front door says so (`kasteel`). */
@@ -71,22 +72,33 @@ export function createCastleNet({ api = MATCH_API_URL, fetchImpl = globalThis.fe
       return on;
     },
     /** Your castle to the server, when it changed since the last time (a cheap no-op otherwise). */
-    async upload() {
-      if (!(await this.ping())) return false;
-      const snap = castleSnapshot();
-      if (!snap) return false;
-      const sum = String(JSON.stringify(snap).split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7));
-      if (readStore().up === sum) return true;
-      const r = await signed('/kasteel/save', { castle: snap });
-      if (r.ok) {
-        try { localStorage.setItem(STORE_KEY, JSON.stringify({ ...readStore(), up: sum })); } catch { /* sent again next time */ }
-      }
-      return !!r.ok;
+    upload() {
+      const go = async () => {
+        if (!(await this.ping())) return false;
+        const snap = castleSnapshot();
+        if (!snap) return false;
+        const sum = String(JSON.stringify(snap).split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7));
+        if (readStore().up === sum) return true;
+        const r = await signed('/kasteel/save', { castle: snap });
+        if (r.ok) {
+          try { localStorage.setItem(STORE_KEY, JSON.stringify({ ...readStore(), up: sum })); } catch { /* sent again next time */ }
+        }
+        return !!r.ok;
+      };
+      sending = (sending || Promise.resolve()).catch(() => {}).then(go);
+      return sending;
     },
     /** Your castle's news (who attacked it, how) and your neighbours with castles: { ok, news, newsN, seenN, friends }. */
     async home(seen = null) {
       if (!(await this.ping())) return { ok: false };
-      return signed('/kasteel/home', Number.isInteger(seen) ? { seen } : {});
+      await sending?.catch(() => {});
+      const r = await signed('/kasteel/home', Number.isInteger(seen) ? { seen } : {});
+      // (the server has no castle of yours although this phone sent one: a new server, or it was lost; send it again)
+      if (r.ok && r.saved === false && readStore().up) {
+        try { localStorage.setItem(STORE_KEY, JSON.stringify({ ...readStore(), up: null })); } catch { /* */ }
+        this.upload();
+      }
+      return r;
     },
     /** A friend's castle to attack: { ok, id, name, castle, at }. */
     castle: (id) => (isTownId(id) ? call(`/kasteel/c/${id}`) : Promise.resolve({ ok: false, status: 400 })),

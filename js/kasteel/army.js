@@ -283,9 +283,15 @@ export function ram(mats, team) {
 export function shot(r = 0.36) {
   const geo = new THREE.DodecahedronGeometry(r, 1);
   const p = geo.attributes.position;
+  // (each corner pushed in or out by where it is, not by its number: the faces don't share corners, and corners in the
+  // same place must move together or the stone shows cracks; 17 Oct review)
   for (let i = 0; i < p.count; i++) {
-    const k = 0.88 + Math.abs(Math.sin(i * 12.9898) * 43758.5453 % 1) * 0.2;
-    p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k);
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    const h = Math.round(x * 1000) * 12.9898 + Math.round(y * 1000) * 78.233 + Math.round(z * 1000) * 37.719;
+    const k = 0.88 + Math.abs((Math.sin(h) * 43758.5453) % 1) * 0.2;
+    p.setXYZ(i, x * k, y * k, z * k);
   }
   geo.computeVertexNormals();
   const o = new THREE.Mesh(geo, mat('#8c8478', 0.95));

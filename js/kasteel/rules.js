@@ -16,20 +16,29 @@ export const BUDGET = 16;
 export const budgetFor = (realTowers) => BUDGET + 2 * Math.max(0, Math.min(5, realTowers | 0));
 /** Robot Rikus's way, and every castle's plan until its owner saves one: archers on the walls and tops, a ballista, two knights, oil (15). */
 export const STARTER_PLAN = Object.freeze({ keep: 0, place: Object.freeze({ w0: 'boog', w1: 'boog', w2: 'boog', w3: 'boog', t0: 'boog', t1: 'spies', t2: 'ballista', g0: 'ridder', g1: 'ridder', oil: 'olie' }) });
-export const costOf = (plan) => Object.values(plan?.place || {}).reduce((s, k) => s + (PIECES[k]?.cost || 0), 0);
+const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+export const costOf = (plan) => Object.values(plan?.place || {}).reduce((s, k) => s + ((typeof k === 'string' && own(PIECES, k) && PIECES[k].cost) || 0), 0);
 
 /**
  * What a siege wins (Robot Rikus's castle or a friend's): coins for Stapel's wallet like Oefen and the Uitdagersreeks
- * (they count towards the same day's cap) and the castle's own trophies. Testing your own castle wins nothing.
+ * (they count towards the same day's cap) and the castle's own trophies. Testing your own castle wins nothing. The
+ * base coins are for a siege played out (the clock, three stars, or nothing left to send) after at least `minSecs` of
+ * battle: a siege given up (HOU OP) at once wins only what its stars bring (17 Oct review: thirty quick quits filled the
+ * day's 150 coins with no play at all).
  */
-export const LOOT = Object.freeze({ base: 5, perStar: 10, trophiesPerStar: 10, lossTrophies: -5 });
-export const lootFor = (stars) => ({ coins: LOOT.base + LOOT.perStar * stars, trophies: stars ? LOOT.trophiesPerStar * stars : LOOT.lossTrophies });
+export const LOOT = Object.freeze({ base: 5, perStar: 10, trophiesPerStar: 10, lossTrophies: -5, minSecs: 45 });
+export const lootFor = (stars, full = true) => ({ coins: (full ? LOOT.base : 0) + LOOT.perStar * stars, trophies: stars ? LOOT.trophiesPerStar * stars : LOOT.lossTrophies });
 
 // ------------------------------------------------------------------------------------------------ a castle's check
 export const SHAPE_IDS = Object.freeze(['plank', 'slab', 'brick', 'crate', 'cube', 'floor', 'log', 'pillar', 'wedge', 'arch', 'L', 'J', 'T']);
 const RATINGS = ['P', 'G', 'S', 'X', 'B', 'F'];
 export const CASTLE = Object.freeze({ days: 5, blocks: 120, news: 20 });
-const SPOT = /^(w\d{1,2}|t\d|g\d|oil|f\d)$/;
+// a castle's spots (castle.js buildCastle: 4 on the front wall, the keep and 4 corner towers' tops, 2 behind the gate,
+// the oil over it, 3 in the field) and the kind of each, which says what may stand there (PIECES[kind].on)
+const SPOT = /^(w[0-3]|t[0-4]|g[01]|oil|f[0-2])$/;
+const SPOT_KIND = { w: 'wall', t: 'top', g: 'gate', o: 'oil', f: 'field' };
+/** May a `kind` (a PIECES name) stand on spot `id`? (Only the castle's own spots, only what that spot takes.) */
+export const fitsSpot = (id, kind) => typeof id === 'string' && SPOT.test(id) && typeof kind === 'string' && own(PIECES, kind) && PIECES[kind].on.includes(SPOT_KIND[id[0]]);
 const num = (v, lo, hi) => (typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? Math.round(v * 1000) / 1000 : null);
 const isDateKey = (k) => typeof k === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(k);
 
@@ -65,7 +74,8 @@ export function cleanCastle(c) {
   let cost = 0;
   const budget = budgetFor(days.length);
   for (const [id, kind] of Object.entries(c.place && typeof c.place === 'object' ? c.place : {}).slice(0, 40)) {
-    if (!SPOT.test(id) || !PIECES[kind]) continue;
+    // (a piece only where it may stand, and only the pieces themselves: 'constructor' and its kind are no piece)
+    if (!fitsSpot(id, kind)) continue;
     if (cost + PIECES[kind].cost > budget) continue;
     cost += PIECES[kind].cost;
     place[id] = kind;
