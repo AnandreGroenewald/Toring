@@ -1138,6 +1138,9 @@ Later the owner added (decisions are final unless they say otherwise):
   late in a game (~880 draw calls) → one picture per box, lighter medallions, merged vine anchors (276; the build before
   the graphics round had 481); the wedge's slopes lost a tiled cross; element medallions also on the end the battle
   camera sees. Tests ALL OK, 60 fps on the slowed phone.
+- **17 Oct 2026 (late night): Blokbotsing round 4e.** He asked whether I was sure, with things still left: the wave now
+  crosses their whole rock and pours over its edge (waterfall, foam), the vines climb out of the cliff (twisting, leaves,
+  a lasso), the explosion's smoke rises behind the tower. All tests OK; 60 fps on the slowed phone.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
