@@ -1091,6 +1091,18 @@ Later the owner added (decisions are final unless they say otherwise):
   topple (slower for blocks that carry more). "The ball … breaks to whole defence": towers are now cemented like a
   Daily Tower (physics.js); a stone bites out what it hits, granite holds best; one keep hit 8-13% (was 23-28%).
   Tests: qa/kasteel_balance1170 6/6 + every castle test; 60 fps on the slowed phone profile.
+- **17 Oct 2026 (afternoon): 1.18 3D Blokbotsing / Block Clash, the small round vs Robot Rikus (local commit 7690fa6;
+  nothing pushed, nothing live).** After the castles ("This is still not what I have in mind") the owner designed a new
+  strategy mode by answering questions (memory `stapel-block-clash-idea`): two towers face off across the water, the
+  crane offers 3 blocks, pick one, BUILD or THROW, every shape two powers, height = power + risk, a diamond trophy and
+  clans later. His new honesty skill NO-BS-BOB (`~/.claude/skills/no-bs-bob`, built the same afternoon) said: 🔧 it'll
+  work IF one small round vs Rikus brings 5 of the 24 testers back on 3 days. That round is built: `botsing.html` +
+  `js/botsing/` (rules, sim = Stapel's own Matter via blocks.js createBody, world, pieces, fx, hud, text, rikus, game) +
+  `css/botsing.css`; a menu button above the castles (dom.js botsingMenuEl, 'ui:botsing'); privacy pages name
+  `stapel.v1.botsing`. Crowns start in a fort (plank, cube, crown, cube, plank roof); a crown in the sea ends it, else
+  the higher crown after 12 turns each. Tests: npm 444/444; qa/botsing1180.mjs (full battles ALL OK),
+  qa/botsing_perf1180.mjs (4x slowed CPU, mid: 60 fps). Not in the Android app yet (app/build-www.mjs), no rewards yet.
+  Next (his word): his own play on the home Wi-Fi, then (Bob's next move) the round to the 24 testers.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
