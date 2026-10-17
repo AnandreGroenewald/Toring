@@ -9,24 +9,38 @@ import { createStage } from './stage.js';
 import { buildWorld, DIST, rng, groundHeight } from './world.js';
 import { castleMaterials, buildCastle, sampleDaily } from './castle.js';
 import { trebuchet, ram as makeRam, shot, cauldron, ballista as makeBallista, spikes as makeSpikes } from './army.js';
-import { defaultPlan, loadPlan, spotIds, myDays, mySeed, helpSeen, markHelp, lootFor, recordSiege } from './plan.js';
+import { defaultPlan, loadPlan, spotIds, myDays, mySeed, helpSeen, markHelp, lootFor, recordSiege, castleFromSnapshot } from './plan.js';
+import { createCastleNet } from './net.js';
+import { isTownId } from '../core/dorp.js';
+import { SITE_URL_FALLBACK } from '../config.js';
 import { createCrowd } from './crowd.js';
 import { setDetail } from './crew.js';
 import { createPhysics } from './physics.js';
 import { createFx } from './fx.js';
 import { weldStill, towerWelds, weldInto } from './batch.js';
-import { scoutScreen, createSiegeHud } from './hud.js';
+import { scoutScreen, createSiegeHud, scoutFoes } from './hud.js';
 import { T, goBack } from './text.js';
 import { audio, haptics } from '../audio.js';
 
 const q = new URLSearchParams(location.search);
-// whose castle: Robot Rikus's (a castle by `?seed=`), or a copy of your own with your plan (`?teen=my`)
+const net = createCastleNet();
+// whose castle: Robot Rikus's (a castle by `?seed=`), a copy of your own with your plan (`?teen=my`), or a friend's as
+// the server keeps it, with their plan (`?teen=<their town id>`: a neighbour from Jou dorp)
 const MINE = q.get('teen') === 'my' ? (loadPlan() || { seed: mySeed(), plan: null }) : null;
-const seed = MINE?.seed ?? (Number(q.get('seed')) || (Date.now() % 100000) + 1);
+const FRIEND_ID = isTownId(q.get('teen')) ? q.get('teen') : null;
+let FRIEND = null;
+if (FRIEND_ID) {
+  const r = await net.castle(FRIEND_ID);
+  FRIEND = r.ok ? castleFromSnapshot(r.castle) : null;
+  if (!FRIEND) throw new Error('castle');   // (main.js: "Couldn't fetch their castle", try again or back)
+  FRIEND.name = r.name;
+}
+const OWN = MINE || FRIEND;   // (a castle built from a plan: yours, or a friend's)
+const seed = OWN?.seed ?? (Number(q.get('seed')) || (Date.now() % 100000) + 1);
 const rand = rng(seed);
-const OPP = MINE ? T.mine : T.rikus;
-const TITLE = MINE ? T.myTest : T.rikusCastle;
-const NAME_IN = MINE ? T.myIn : T.rikusIn;
+const OPP = MINE ? T.mine : FRIEND ? FRIEND.name : T.rikus;
+const TITLE = MINE ? T.myTest : FRIEND ? T.castleOf(FRIEND.name) : T.rikusCastle;
+const NAME_IN = MINE ? T.myIn : FRIEND ? T.castleOf(FRIEND.name) : T.rikusIn;
 const HALF = 15;
 const G_ACC = 16;   // the world's gravity (m/s²): everything falls with weight
 
@@ -49,10 +63,10 @@ st.onQuality((qq) => { world.setGrass(qq.grass); world.setShadow(qq.shadow); });
 const mats = castleMaterials(renderer);
 const samples = [sampleDaily(rand, 16), sampleDaily(rand, 12), sampleDaily(rand, 11), sampleDaily(rand, 13), sampleDaily(rand, 10)];
 // your own castle: your own Daily Towers (as in the planner), else the starter castle
-const real = MINE ? myDays() : [];
+const real = MINE ? myDays() : FRIEND ? FRIEND.days.map((d) => d.layout) : [];
 const r0 = rng(seed);   // (the same foundations as the planner shows)
 const days0 = real.length ? [...real, ...Array.from({ length: Math.max(0, 5 - real.length) }, () => sampleDaily(r0, 2))].slice(0, 5) : samples;
-const keepDay = MINE?.plan?.keep ?? 0;
+const keepDay = OWN?.plan?.keep ?? 0;
 const days = [days0[keepDay], ...days0.filter((_, i) => i !== keepDay)];
 const castle = buildCastle({ at: new THREE.Vector3(0, 0, -DIST), days, team: 'red', mats, rand, half: HALF });
 scene.add(castle.group);
@@ -125,7 +139,7 @@ const welds = towerWelds(scene, towerParts);
 const crowd = createCrowd(scene, groundHeight, { capacity: 36, looks: st.quality.looks });
 const fx = createFx(scene);
 // their defence, as planned (Robot Rikus's own way, or your saved plan)
-const plan = MINE?.plan || defaultPlan(castle);
+const plan = OWN?.plan || defaultPlan(castle);
 const defenders = [];
 const guards = [];
 const ballistas = [];
@@ -214,6 +228,27 @@ const starCount = () => Object.values(G.stars).filter(Boolean).length;
 const hudEl = document.getElementById('k-hud');
 let hud = null;
 scoutScreen(hudEl, { name: OPP, title: TITLE, mineLink: true, towers: castle.towers.length, perfects: days.flat().filter((b) => b.rating === 'P').length, defenders: Object.keys(plan.place).length, goals: T.goals, coins: MINE ? null : lootFor(3).coins, trophies: lootFor(3).trophies }, () => startSiege());
+// whose castle next: Robot Rikus and your friends with castles (when the server keeps castles); your own goes up for them
+if (!MINE) {
+  net.upload();
+  net.home().then((r) => {
+    if (!r.ok || G.mode !== 'scout') return;
+    scoutFoes(hudEl, { list: r.friends || [], current: FRIEND_ID, onInvite: invite });
+  });
+}
+/** ＋ Nooi: Jou dorp's friend link (it makes you neighbours both ways), with a dare. */
+function invite() {
+  if (!net.id) return;
+  const text = T.inviteText(`${siteRoot()}?buur=${net.id}`);
+  if (navigator.share) navigator.share({ text }).catch(() => {});
+  else window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+}
+/** The website (links shared from the app, a file or the old address point there, as Stapel's own do). */
+function siteRoot() {
+  const inApp = !!window.Capacitor?.isNativePlatform?.();
+  if (location.protocol === 'file:' || inApp || location.hostname === 'anandregroenewald.github.io') return SITE_URL_FALLBACK;
+  return `${location.origin}${location.pathname.replace(/kasteel\.html$/, '')}`;
+}
 
 function startSiege() {
   try { audio.unlock(); } catch { /* */ }
@@ -267,10 +302,9 @@ function tip(k, text, ms = 0, when = () => true) {
     hud.help(text).then(() => { G.helpOpen = false; G.paused = G.pauseCard; });
   }, ms);
 }
-/** "SPOG": a win to WhatsApp (the phone's own share sheet when it has one). */
+/** "SPOG": a win to WhatsApp (the phone's own share sheet when it has one); a friend's castle: a dare to take revenge. */
 function brag(r) {
-  const site = `${location.origin}${location.pathname.replace(/kasteel\.html$/, '')}`;
-  const text = `${T.brag(r.destroyed, r.stars, NAME_IN)} ${site}`;
+  const text = FRIEND ? `${T.bragFriend(r.destroyed, r.stars)} ${siteRoot()}kasteel.html?plan` : `${T.brag(r.destroyed, r.stars, NAME_IN)} ${siteRoot()}`;
   if (navigator.share) navigator.share({ text }).catch(() => {});
   else window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
 }
@@ -929,6 +963,7 @@ function endSiege() {
     sfx(stars ? 'record' : 'lost');
     hudEl.classList.add('is-end');
     const loot = MINE ? null : recordSiege(stars);
+    if (FRIEND_ID) net.siege(FRIEND_ID, stars, G.destroyed);   // (their news: who, how much, a Wraak)
     hud.end({ stars, destroyed: G.destroyed, nameIn: NAME_IN, lost: G.lost, test: !!MINE, coins: loot ? loot.coins : null, trophies: loot ? loot.trophies : 0, capped: !!loot?.capped });
   }, 1600);
 }

@@ -8,5 +8,5 @@ page.catch(async (e) => {
   let t = { failed: 'Die kasteel wil nie op hierdie toestel laai nie.', retry: 'PROBEER WEER', back: '‹ Stapel' };
   try { t = (await import('./text.js')).T; } catch { /* Afrikaans */ }
   const el = document.getElementById('k-load');
-  if (el) el.innerHTML = `<div class="kl-fail"><p>${t.failed}</p><a href="">${t.retry}</a><a href="index.html">${t.back}</a></div>`;
+  if (el) el.innerHTML = `<div class="kl-fail"><p>${e?.message === 'castle' ? t.noCastle || t.failed : t.failed}</p><a href="">${t.retry}</a><a href="index.html">${t.back}</a></div>`;
 });

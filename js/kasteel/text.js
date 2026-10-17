@@ -72,6 +72,15 @@ const AF = {
   help3: 'Sit die kruis op ’n toring. Hou GOOI en los wanneer die naald by die wit streep is.',
   gotIt: 'Reg so',
   resume: 'GAAN VOORT', quit: 'HOU OP',
+  // friends (1.17: their castles, kept by the server; Jou dorp's neighbours)
+  invite: 'Nooi',
+  inviteText: (link) => `🏰 Bou jou kasteel uit jou Daaglikse Torings en val myne aan in Stapel! As jy durf 😈\n${link}`,
+  bragFriend: (d, s) => `Ek het jou kasteel ${d}% platgeslaan in Stapel se Kasteelreeks (${'★'.repeat(s)}${'☆'.repeat(3 - s)}). Wraak? 😈`,
+  attacked: (n, d, s) => `${n} het jou kasteel aangeval: ${d}% · ${'★'.repeat(s)}${'☆'.repeat(3 - s)}`,
+  held: (n) => `${n} kon nie deur jou verdediging kom nie 🛡️`,
+  wraak: 'WRAAK ›',
+  more: (n) => `+${n} meer`,
+  noCastle: 'Kon nie hul kasteel kry nie. Is jy aanlyn?',
 };
 const EN = {
   series: 'THE CASTLE SERIES',
@@ -131,6 +140,14 @@ const EN = {
   help3: 'Put the cross on a tower. Hold THROW and let go when the needle reaches the white mark.',
   gotIt: 'Got it',
   resume: 'CONTINUE', quit: 'QUIT',
+  invite: 'Invite',
+  inviteText: (link) => `🏰 Build your castle from your Daily Towers and attack mine in Stapel! If you dare 😈\n${link}`,
+  bragFriend: (d, s) => `I knocked down ${d}% of your castle in Stapel’s Castle Series (${'★'.repeat(s)}${'☆'.repeat(3 - s)}). Revenge? 😈`,
+  attacked: (n, d, s) => `${n} attacked your castle: ${d}% · ${'★'.repeat(s)}${'☆'.repeat(3 - s)}`,
+  held: (n) => `${n} couldn’t get through your defence 🛡️`,
+  wraak: 'REVENGE ›',
+  more: (n) => `+${n} more`,
+  noCastle: 'Couldn’t fetch their castle. Are you online?',
 };
 export const T = lang === 'en' ? EN : AF;
 

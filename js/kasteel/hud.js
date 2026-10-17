@@ -56,6 +56,23 @@ export function siegeHud(root, s) {
     </div>`;
 }
 
+export const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+/**
+ * (1.17) Whose castle: Robot Rikus and your friends with castles (Jou dorp's neighbours), and ＋ Nooi (a friend's link).
+ * `current`: the town id being scouted (null: Robot Rikus).
+ */
+export function scoutFoes(root, { list, current, onInvite }) {
+  const row = document.createElement('div');
+  row.className = 'kh-foes';
+  const all = [{ id: null, name: T.rikus, bot: true }, ...list];
+  row.innerHTML = all.map((f) => `<a class="kh-foe${(f.id || null) === (current || null) ? ' is-on' : ''}" href="${f.id ? `?teen=${f.id}` : '?'}">${f.bot ? '🤖 ' : '🏰 '}${esc(f.name)}</a>`).join('')
+    + `<button type="button" class="kh-foe kh-invite">＋ ${T.invite}</button>`;
+  root.querySelector('.kh-foes')?.remove();
+  root.appendChild(row);
+  row.querySelector('.kh-invite').addEventListener('click', onInvite);
+  row.querySelector('.is-on')?.scrollIntoView?.({ inline: 'center', block: 'nearest' });
+}
+
 // ------------------------------------------------------------------------------------------- the playable siege
 /** The scout screen with a working "VAL AAN" (attack). */
 export function scoutScreen(root, s, onGo) {

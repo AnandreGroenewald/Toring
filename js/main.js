@@ -3115,12 +3115,14 @@ async function dorpStart() {
   await dorpLinks();
   refreshMenuDorp();
   dorpNewsCheck();
+  kasteelNewsCheck();   // (1.17) your castle's news: the menu button's 😱
   setInterval(() => {
     if (!dorpOn || document.visibilityState !== 'visible' || (screen !== 'menu' && screen !== 'results' && screen !== 'dorp')) return;
     dorpSync().then((r) => {
       if (!r?.ok) return;
       refreshMenuDorp();
       dorpNewsCheck();
+      kasteelNewsCheck();
       if (screen === 'dorp' && !dorpBusy && ui.dorpMode?.() === 'town') ui.setDorpMode(dorpScreenModel('town'));
     });
   }, DORP_POLL_MS);
@@ -3295,7 +3297,26 @@ function kasteelRead() {
 }
 function kasteelMenuView() {
   const v = kasteelRead();
-  return { trophies: Math.max(0, v.trophies | 0), wins: Math.max(0, v.wins | 0), played: Math.max(0, v.played | 0) };
+  return { trophies: Math.max(0, v.trophies | 0), wins: Math.max(0, v.wins | 0), played: Math.max(0, v.played | 0), news: kasteelUnseen };
+}
+/**
+ * Friends' sieges of your castle while you were away (server/src/kasteel.js, where the towns are): the menu's castle
+ * button shows how many (😱 2) until your castle has shown them. Quiet when the server keeps no castles.
+ */
+let kasteelUnseen = 0;
+async function kasteelNewsCheck() {
+  if (!dorpOn) return;
+  try {
+    const d = JSON.parse(localStorage.getItem('stapel.v1.dorp') || 'null');
+    if (!d?.id || !d?.key) return;
+    const res = await fetch(`${matchApiUrl()}/kasteel/home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: d.id, key: d.key }), credentials: 'omit', cache: 'no-store' });
+    if (!res.ok) return;
+    const r = await res.json();
+    const unseen = Math.max(0, (r.newsN | 0) - (r.seenN | 0));
+    if (unseen === kasteelUnseen) return;
+    kasteelUnseen = unseen;
+    if (screen === 'menu') ui.showMenu(menuModel());
+  } catch { /* the badge waits for the next check */ }
 }
 /** The castle's coins into the wallet (counted towards the day's cap like Oefen): { added } or null when none waited. */
 function claimKasteelLoot() {

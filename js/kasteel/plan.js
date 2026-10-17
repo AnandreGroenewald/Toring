@@ -5,21 +5,12 @@
 // the owner is away the plan fights for them. Kept on the phone under `stapel.v1.kasteel` (with the castle's seed).
 import { EARN } from '../core/economy.js';
 import { dateKeyFor } from '../core/daily.js';
+import { PIECES, BUDGET, budgetFor, costOf, LOOT, lootFor, cleanCastle, CASTLE, STARTER_PLAN } from './rules.js';
+
+export { PIECES, BUDGET, budgetFor, costOf, LOOT, lootFor };
 
 export const STORE_KEY = 'stapel.v1.kasteel';
 
-/** What may stand where, and what each costs from the budget (the names: text.js `pieces`). */
-export const PIECES = Object.freeze({
-  boog: { cost: 1, on: ['wall', 'top'] },
-  spies: { cost: 1, on: ['wall', 'top', 'gate'] },
-  ridder: { cost: 2, on: ['gate'] },
-  olie: { cost: 2, on: ['oil'] },
-  ballista: { cost: 3, on: ['top'] },
-  pieke: { cost: 1, on: ['field'] },
-});
-export const BUDGET = 16;
-/** The budget grows with the Daily Towers you've played (2 more for each, up to 5): playing the Daily makes your castle stronger. */
-export const budgetFor = (realTowers) => BUDGET + 2 * Math.max(0, Math.min(5, realTowers | 0));
 
 /** The spots of a castle (ids and kinds): front-wall spots, tower tops (0 = the keep), behind the gate, the oil over the gate, the field. */
 export function spotIds(castle) {
@@ -44,7 +35,6 @@ export function defaultPlan(castle) {
   return { keep: 0, place };
 }
 
-export const costOf = (plan) => Object.values(plan.place || {}).reduce((s, k) => s + (PIECES[k]?.cost || 0), 0);
 
 export function loadPlan() {
   try {
@@ -73,11 +63,13 @@ export function markHelp(k) {
     localStorage.setItem(STORE_KEY, JSON.stringify({ ...v, help: { ...(v.help || {}), [k]: 1 } }));
   } catch { /* the tip shows again: no harm */ }
 }
-/** The owner's castle seed (their towers stay the same between visits, until the real Daily layouts are kept). */
+/** The owner's castle seed: made once and kept (the starter towers and foundations stay the same between visits). */
 export function mySeed() {
-  const v = loadPlan();
-  if (v && Number.isFinite(v.seed)) return v.seed;
-  return 1000 + Math.floor(Math.random() * 90000);
+  const v = readStore();
+  if (Number.isFinite(v.seed)) return v.seed;
+  const seed = 1000 + Math.floor(Math.random() * 90000);
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ ...v, seed })); } catch { /* this visit only */ }
+  return seed;
 }
 
 /** The owner's own Daily Towers as the castle keeps them (main.js saves each day's best try): newest first, up to `n`. */
@@ -99,12 +91,6 @@ export function myDayInfo(n = 5) {
   }
 }
 
-/**
- * (1.17) What a siege of Robot Rikus's castle wins: coins for Stapel's wallet like Oefen and the Uitdagersreeks (they
- * count towards the same day's cap, EARN.dayCap) and the castle's own trophies. Testing your own castle wins nothing.
- */
-export const LOOT = Object.freeze({ base: 5, perStar: 10, trophiesPerStar: 10, lossTrophies: -5 });
-export const lootFor = (stars) => ({ coins: LOOT.base + LOOT.perStar * stars, trophies: stars ? LOOT.trophiesPerStar * stars : LOOT.lossTrophies });
 /** The castle's tally: { trophies, wins, played, pending (coins still to reach the wallet) }. */
 export function castleStats() {
   const v = readStore();
@@ -139,4 +125,24 @@ export function recordSiege(stars) {
   } catch {
     return { coins: 0, trophies: 0, capped: false };   // (this phone keeps nothing: nothing to win)
   }
+}
+
+/**
+ * Your castle as a friend's phone builds it (server/src/kasteel.js keeps it for them): the seed (its starter towers and
+ * foundations), the keep, the plan (the starter plan until you save one), and up to five of your kept Daily Towers,
+ * newest first.
+ */
+export function castleSnapshot() {
+  const v = loadPlan();
+  const plan = v?.plan || STARTER_PLAN;
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem(DAYS_KEY) || '{}') || {}; } catch { /* no towers kept */ }
+  const days = Object.keys(all).sort().reverse().slice(0, CASTLE.days).map((k) => ({ dateKey: k, h: all[k].h, b: all[k].b }));
+  return cleanCastle({ seed: v?.seed ?? mySeed(), keep: plan.keep ?? 0, place: plan.place, days });
+}
+/** A castle that came from the server, in the shape the castle builder takes: { seed, plan, days: [{ dateKey, h, layout }] }. */
+export function castleFromSnapshot(c) {
+  const x = cleanCastle(c);
+  if (!x) return null;
+  return { seed: x.seed, plan: { keep: x.keep, place: x.place }, days: x.days.map((d) => ({ dateKey: d.dateKey, h: d.h, layout: d.b.map((b) => ({ shape: b.s, scale: b.k, x: b.x, y: b.y, rot: b.r, rating: STONE[b.q] || 'S' })) })) };
 }

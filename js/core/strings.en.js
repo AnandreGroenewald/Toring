@@ -170,6 +170,7 @@ export const S_EN = {
   // (1.17) The Castle Series (kasteel.html): its menu button, and its coins reaching the wallet
   kasteel: 'The Castle Series',
   kasteelMenuSub: (tr, w, n) => (n ? `🏆 ${fmtInt(tr)} · ${fmtInt(w)} ${w === 1 ? 'win' : 'wins'}` : 'Troops, a trebuchet and your own castle'),
+  kasteelNews: (n) => (n === 1 ? '1 attack on your castle' : `${n} attacks on your castle`),
   kasteelLoot: (n) => `🏰 +${n} coins from the Castle Series`,
   kasteelLootFull: '🏰 Today’s coins are used up: the Castle Series trophies still count',
   // (1.17) Fruit Battle: Empire vs Empire (js/scenes/SlagScene.js)

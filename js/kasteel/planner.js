@@ -13,7 +13,8 @@ import { idle, setDetail } from './crew.js';
 import { PIECES, spotIds, defaultPlan, costOf, loadPlan, savePlan, mySeed, myDayInfo, budgetFor } from './plan.js';
 import { T, fmtM, dayName, goBack } from './text.js';
 import { audio } from '../audio.js';
-import { ICONS } from './hud.js';
+import { ICONS, esc } from './hud.js';
+import { createCastleNet } from './net.js';
 import { weldStill } from './batch.js';
 
 const st = createStage({ fov: 46 });
@@ -142,6 +143,7 @@ hudEl.innerHTML = `
       <div class="kp-keep"><button type="button" class="kp-prev" aria-label="${T.prev}">‹</button><div><small>${T.keep}</small><b class="kp-day"></b></div><button type="button" class="kp-next" aria-label="${T.next}">›</button></div>
       <div class="kp-budget"><small>${T.budget}</small><b class="kp-left">0 / ${BUDGET}</b>${real.length ? `<em>${T.budgetUp(BUDGET - budgetFor(0))}</em>` : ''}</div>
     </div>
+    <div class="kp-news" role="status" hidden></div>
   </div>
   <p class="kp-hint"></p>
   <div class="kp-cards">${Object.entries(PIECES).map(([k, p]) => `<button type="button" class="kp-card" data-k="${k}"><span class="kp-ic">${ICONS[k]}</span><b>${T.pieces[k]}</b><i>${p.cost}</i></button>`).join('')}</div>
@@ -166,6 +168,7 @@ $('.kp-next').addEventListener('click', () => { plan.keep = ((plan.keep ?? 0) + 
 $('.kp-save').addEventListener('click', () => {
   if (costOf(plan) > BUDGET) { flash(T.tooDear); return; }
   savePlan({ seed, plan });
+  net.upload();   // (your friends attack this one now)
   dirty = false;
   sfx('banner');
   flash(T.saved);
@@ -244,6 +247,22 @@ function frame() {
   st.render(1 / 60);
   requestAnimationFrame(frame);
 }
+// (1.17) friends: your saved castle goes up for them; while you were away, who attacked it (and a Wraak)
+const net = createCastleNet();
+net.upload();
+net.home().then((r) => {
+  if (!r?.ok) return;
+  const fresh = (r.news || []).filter((n) => n.n > (r.seenN | 0));
+  if (!fresh.length) return;
+  const last = fresh[fresh.length - 1];
+  const el = $('.kp-news');
+  el.classList.toggle('is-held', !last.stars);
+  el.innerHTML = `<span>${last.stars ? T.attacked(esc(last.name), last.destroyed, last.stars) : T.held(esc(last.name))}${fresh.length > 1 ? `<small>${T.more(fresh.length - 1)}</small>` : ''}</span>`
+    + `<a href="?teen=${last.from}">${T.wraak}</a><button type="button" aria-label="✕">✕</button>`;
+  el.hidden = false;
+  el.querySelector('button').addEventListener('click', () => { el.hidden = true; });
+  net.home(r.newsN);   // (seen: shown once)
+});
 await st.warm();
 requestAnimationFrame(frame);
 window.__planner = { plan: () => plan, spots: () => spots, put: (id, k) => { const ok = put(id, k); paint(); return ok; }, take: (id) => { take(id); paint(); }, select: (k) => { sel = k; paint(); }, ringAt: (id) => { const r = rings.get(id); const v = r.position.clone().project(camera); return { x: v.x, y: v.y }; } };

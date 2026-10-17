@@ -3486,12 +3486,13 @@ export function createUI(bus) {
   function kasteelMenuEl(v) {
     if (!v) return null;
     return h('button', {
-      type: 'button', class: 'kasteel-menu-btn', 'aria-label': `${S.kasteel}: ${S.kasteelMenuSub(v.trophies, v.wins, v.played)}`,
+      type: 'button', class: 'kasteel-menu-btn', 'aria-label': `${S.kasteel}: ${S.kasteelMenuSub(v.trophies, v.wins, v.played)}${v.news ? ` · ${S.kasteelNews(v.news)}` : ''}`,
       onclick: () => { if (!guard()) return; audio.play('click'); bus.emit('ui:kasteel'); },
     },
     h('span', { class: 'kasteel-menu-ic' }, emo('🏰')),
     h('span', { class: 'kasteel-menu-txt' }, h('b', { text: S.kasteel }), h('small', { text: S.kasteelMenuSub(v.trophies, v.wins, v.played) })),
-    v.played ? h('span', { class: 'kasteel-menu-go', 'aria-hidden': 'true', text: '›' }) : h('span', { class: 'btn-new-tag kasteel-new', text: S.newTag }));
+    v.news ? h('span', { class: 'dorp-btn-badge', text: `😱 ${v.news}` })
+      : v.played ? h('span', { class: 'kasteel-menu-go', 'aria-hidden': 'true', text: '›' }) : h('span', { class: 'btn-new-tag kasteel-new', text: S.newTag }));
   }
 
   function slagMenuEl(v) {

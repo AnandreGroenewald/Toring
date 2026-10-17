@@ -193,3 +193,19 @@ html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50%
 .kh-testtag { display: flex; align-items: center; padding: 0 14px; height: 58px; border-radius: 18px; background: rgba(74, 163, 255, 0.22); border: 1px solid rgba(143, 197, 255, 0.5);
   font-size: 12px; font-weight: 900; letter-spacing: 0.08em; }
 .kh-capnote { font-size: 11px !important; margin: -6px 0 12px !important; color: var(--gold); opacity: 0.9; }
+/* (1.17) friends: whose castle (the scout screen), your castle's news (the planner) */
+.kh-foes { position: absolute; left: 0; right: 0; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 166px); display: flex; gap: 8px; padding: 2px 14px; overflow-x: auto;
+  scrollbar-width: none; pointer-events: auto; }
+.kh-foes::-webkit-scrollbar { display: none; }
+.kh-foe { flex: none; padding: 8px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; color: #fff; text-decoration: none; white-space: nowrap;
+  background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.kh-foe.is-on { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 207, 107, 0.25); }
+.kh-invite { background: rgba(61, 220, 122, 0.22) !important; border-color: rgba(61, 220, 122, 0.6) !important; }
+.kp-news { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 12px; border-radius: 14px; background: rgba(120, 20, 30, 0.6); border: 1px solid rgba(255, 140, 120, 0.5);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font-size: 12px; font-weight: 800; pointer-events: auto; }
+.kp-news.is-held { background: rgba(20, 90, 50, 0.6); border-color: rgba(120, 220, 160, 0.5); }
+.kp-news span { flex: 1; min-width: 0; }
+.kp-news small { display: block; font-size: 10px; opacity: 0.8; }
+.kp-news a { flex: none; padding: 6px 10px; border-radius: 10px; text-decoration: none; color: #2a1406; font-weight: 900; font-size: 11px; background: linear-gradient(180deg, #ffe39a, #ffb84a); }
+.kp-news button { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, 0.14); font-size: 13px !important; }
+.kp-news[hidden] { display: none; }
