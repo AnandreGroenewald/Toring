@@ -154,6 +154,21 @@ export function createSiegeHud(root, { name, wind }, on) {
       toastT = setTimeout(() => t.classList.remove('on'), 2300);
     },
     hint(text) { const h = $('.kh-hint'); h.textContent = text || ''; h.classList.toggle('on', !!text); },
+    /** A small health bar over something on the field (`at`: its screen point, null hides it; `k`: 0-1 left). */
+    bar(id, at, k) {
+      let el = root.querySelector(`.kh-fbar[data-id="${id}"]`);
+      if (!at) { if (el) el.hidden = true; return; }
+      if (!el) {
+        el = document.createElement('div');
+        el.className = `kh-fbar kh-fbar-${id}`;
+        el.dataset.id = id;
+        el.innerHTML = `<span>${id === 'gate' ? T.gateBar : T.cards.ram}</span><i><i></i></i>`;
+        root.insertBefore(el, root.firstChild);
+      }
+      el.hidden = false;
+      el.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px) translate(-50%, -100%)`;
+      el.querySelector('i > i').style.width = `${Math.max(0, Math.min(1, k)) * 100}%`;
+    },
     /** A tap on the field with no card chosen: the cards bob and the hint says what to do. */
     nudge() {
       const a = $('.kh-army');

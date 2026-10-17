@@ -345,7 +345,7 @@ function deploy(kind, x, z) {
       return m;
     }).filter(Boolean);
     weldInto(r, (m) => { for (let a = m; a; a = a.parent) if (a === r.userData.log) return false; return true; });
-    G.ram = { obj: r, hp: 150, pushers, hitT: 0, log: r.userData.log };
+    G.ram = { obj: r, hp: RAM_HP, pushers, hitT: 0, log: r.userData.log };
     G.cards.ram -= 1;
   } else {
     const n = Math.min(SQUAD[kind], G.cards[kind]);
@@ -479,9 +479,14 @@ function damageGate(n) {
     scene.attach(d);
     const link = phys.addPiece(d, ...d.userData.door, 0.8);
     link.body.wakeUp();
-    link.body.applyImpulse(new phys.CANNON.Vec3((i ? 1 : -1) * 900, 600, -5200), new phys.CANNON.Vec3(0, 2, 0));
+    // (they burst inward and topple: ~6 m/s; 17 Oct review: a fixed push of 5200 sent a 76 kg door off at ~70 m/s,
+    // into the keep, and the gate alone brought 42% of the castle down)
+    const m = link.body.mass;
+    link.body.applyImpulse(new phys.CANNON.Vec3((i ? 1 : -1) * m * 1.2, m * 1.5, -m * 6), new phys.CANNON.Vec3(0, 2, 0));
   });
   castle.gate.userData.portcullis.visible = false;
+  // the ram's men draw their swords and go in with the rest (they stood idle by the ram before)
+  if (G.ram) for (const m of G.ram.pushers) if (m.alive) { m.pusher = false; m.slot = (rand() - 0.5) * 5; m.hp = HP.swaard; m.state = 'walk'; }
   fx.dust(new THREE.Vector3(0, 3, GATE_Z + 1), { n: 16, size: 3.2, up: 2.5, spread: 5, life: 2.6 });
   st.shake(0.6);
   star('gate', T.gate);
@@ -489,10 +494,26 @@ function damageGate(n) {
 function star(k, text) {
   if (G.stars[k]) return;
   G.stars[k] = true;
+  if (k === 'flag') flagFall();
   hud?.stars(starCount());
   hud?.toast(`★ ${text}`);
   sfx('banner');
   buzz('perfect');
+}
+/** Their flag falls (the star): the keep's banner topples from its pole, a puff, and it's gone. */
+let flagT = null;
+const keepFlag = castle.towers[0]?.flag || null;
+function flagFall() { if (keepFlag && flagT == null) flagT = 0; }
+function flagTick(dt) {
+  if (flagT == null || !keepFlag) return;
+  flagT += dt;
+  const k = Math.min(1, flagT / 0.9);
+  keepFlag.rotation.z = -k * k * 1.6;
+  if (flagT > 0.9 && !keepFlag.userData.puffed) {
+    keepFlag.userData.puffed = true;
+    fx.dust(keepFlag.getWorldPosition(new THREE.Vector3()), { n: 6, size: 1.6, up: 0.6, spread: 1.4, life: 1.4 });
+  }
+  if (flagT > 1.4) { keepFlag.visible = false; flagT = null; }
 }
 const chest = (m) => new THREE.Vector3(m.x, (m.y ?? groundHeight(m.x, m.z)) + 1.3, m.z);
 function nearest(list, from, max) {
@@ -518,6 +539,10 @@ function moveTo(m, x, z, speed, dt) {
   return d;
 }
 const HIT = { swaard: 0.24, spies: 0.26, boog: 0.34, ridder: 0.16 };
+// the ram (17 Oct 2026 review: it broke halfway and stood there, looking stuck): sturdier, quicker, and arrows barely
+// scratch its hide roof; the ballista and the oil are what hurt it
+const RAM_HP = 300;
+const RAM_SPEED = 3.0;
 const HP = { swaard: 2, spies: 2, boog: 1, ridder: 3 };
 function think(dt) {
   const standZ = GATE_Z + 44;
@@ -587,7 +612,7 @@ function think(dt) {
   // the guards come out when the gate falls
   if (G.gateBroken) for (const g of guards) if (g.alive && g.z < GATE_Z + 1) { moveTo(g, g.x, GATE_Z + 1.2, 3, dt); g.state = 'walk'; } else if (g.alive) g.state = 'idle';
   // their archers
-  const targets = blue.filter((m) => m.alive);
+  const targets = blue.filter((m) => m.alive && !m.pusher);   // (the ram's men push from under its hide roof)
   for (const d of defenders) {
     if (!d.alive) continue;
     if (d.role === 'tower' && d.link) {
@@ -611,7 +636,7 @@ function think(dt) {
       d.cool = 3.2 + rand() * 1.2;
       d.shotAt = G.t;
       if (t.obj) {
-        fx.arrow(chest(d), new THREE.Vector3(tx, 2.6, tz), () => { if (G.ram === t) t.hp -= 3; });
+        fx.arrow(chest(d), new THREE.Vector3(tx, 2.6, tz), () => { if (G.ram === t) t.hp -= 1; });
       } else {
         const hit = rand() < HIT[t.kind] + (d.kind === 'spies' ? 0.1 : 0);
         fx.arrow(chest(d), chest(t), () => { if (hit && t.alive && --t.hp <= 0) kill(t); });
@@ -633,7 +658,7 @@ function think(dt) {
       fx.dust(new THREE.Vector3(0, 1, GATE_Z + 3.2), { n: 10, size: 3, up: 2.2, spread: 5, life: 2.4, color: '#d8d0c4' });
       sfx('splash');
       for (const m of atGate) if (rand() < 0.55) kill(m);
-      if (ramAt) G.ram.hp -= 45;
+      if (ramAt) G.ram.hp -= 40;
     }
   }
   // ballistas on the tower tops: the ram first, else the nearest soldier
@@ -656,7 +681,7 @@ function think(dt) {
       b.cool = 5.5 + rand();
       const from = p.clone().add(new THREE.Vector3(0, 1.3, 0));
       sfx('creak');
-      if (t.obj) fx.arrow(from, new THREE.Vector3(tx, 2.2, tz), () => { if (G.ram === t) { t.hp -= 30; fx.chips(new THREE.Vector3(tx, 2, tz), new THREE.Vector3(0, 0, 1), 6, 5); } });
+      if (t.obj) fx.arrow(from, new THREE.Vector3(tx, 2.2, tz), () => { if (G.ram === t) { t.hp -= 25; fx.chips(new THREE.Vector3(tx, 2, tz), new THREE.Vector3(0, 0, 1), 6, 5); } });
       else fx.arrow(from, chest(t), () => { if (t.alive && rand() < 0.85) kill(t); });
     }
   }
@@ -676,7 +701,7 @@ function think(dt) {
     const o = r.obj;
     const stopZ = GATE_Z + 6.2;
     if (o.position.z > stopZ + 0.05) {
-      o.position.z = Math.max(stopZ, o.position.z - 2.4 * dt);
+      o.position.z = Math.max(stopZ, o.position.z - RAM_SPEED * dt);
       o.position.x += (0 - o.position.x) * Math.min(1, dt * 0.6);
       o.position.y = groundHeight(o.position.x, o.position.z);
       r.pushers.forEach((m) => { if (m.alive) { m.x = o.position.x + m.dx; m.z = o.position.z + m.dz; m.heading = Math.PI; m.state = 'walk'; } });
@@ -686,12 +711,23 @@ function think(dt) {
       if (r.log) r.log.position.z = -0.6 - Math.sin(Math.min(1, k * 1.4) * Math.PI) * 1.4;
       if (r.hitT >= 2.2) { r.hitT = 0; damageGate(16); sfx('land'); st.shake(0.25); }
       r.pushers.forEach((m) => { if (m.alive) m.state = 'attack'; });
-    } else r.pushers.forEach((m) => { if (m.alive) m.state = 'idle'; });
-    if (r.hp <= 0) {
-      fx.dust(o.position.clone().add(new THREE.Vector3(0, 1.5, 0)), { n: 12, size: 3, up: 2, spread: 4, life: 2.4, color: '#6b5a48' });
-      o.rotation.z = 0.25;
-      r.pushers.forEach((m) => kill(m));
-    }
+    } else r.pushers.forEach((m) => { if (m.alive && m.pusher) m.state = 'idle'; });
+  } else if (r && r.wreck == null) {
+    // broken (its last hit can land anywhere: an arrow's, the ballista's, the oil's): a crash of timber, the word,
+    // its pushers fall, and the wreck sinks away (17 Oct review: it used to stop, with its men walking on the spot)
+    const o = r.obj;
+    fx.dust(o.position.clone().add(new THREE.Vector3(0, 1.5, 0)), { n: 16, size: 3.2, up: 2.4, spread: 4.5, life: 2.6, color: '#6b5a48' });
+    fx.chips(o.position.clone().add(new THREE.Vector3(0, 2, 0)), new THREE.Vector3(0, 0.6, 1), 18, 7);
+    o.rotation.z = 0.25;
+    r.pushers.forEach((m) => kill(m));
+    r.wreck = 0;
+    sfx('land');
+    st.shake(0.25);
+    hud.toast(T.ramDown);
+  } else if (r) {
+    r.wreck += dt;
+    if (r.wreck > 1.2) r.obj.position.y -= dt * 0.9;
+    if (r.wreck > 4.5) { scene.remove(r.obj); G.ram = null; }
   }
   // the flag: down when the keep's top falls, or when your men hold the keep's foot
   if (!G.stars.flag && keepTop) {
@@ -726,6 +762,12 @@ const wantPos = new THREE.Vector3();
 const wantLook = new THREE.Vector3();
 let fov = 48;
 function battleView() {
+  // (troops inside the walls: up and over the wall, into the courtyard; from the field the wall hid them)
+  if (G.gateBroken && blue.some((m) => m.alive && !m.pusher && m.z < GATE_Z - 1.5)) {
+    wantPos.set(12, 50, GATE_Z + 45);
+    wantLook.set(0, 10, KEEP.z);   // (the keep's foot and its top with the flag, both in view)
+    return 46;
+  }
   let lead = Infinity;
   for (const m of blue) if (m.alive) lead = Math.min(lead, m.z);
   if (G.ram && G.ram.hp > 0) lead = Math.min(lead, G.ram.obj.position.z);
@@ -937,6 +979,7 @@ function frame(now) {
   fx.update(dt, G_ACC);
   lap('fx');
   for (const w of wavers) w.userData.wave(G.t);
+  flagTick(dt);
   lap('flags');
   for (const tch of castle.torches) { const f = 0.85 + Math.sin(G.t * 17 + tch.position.x) * 0.08; tch.userData.flame.scale.set(f, f * 1.1, f); }
   cameraTick(rdt);
@@ -946,6 +989,7 @@ function frame(now) {
     hudT = 0;
     hud.clock(G.clock);
     if (G.mode === 'aim') { hud.range(rangefind()); hud.power(G.winding ? G.power : 0, G.winding); }
+    bars();
   }
   // the end
   if (!G.ended && ['battle', 'aim', 'flight'].includes(G.mode)) {
@@ -957,6 +1001,21 @@ function frame(now) {
   lap('render');
   P.frames = (P.frames || 0) + 1;
   requestAnimationFrame(frame);
+}
+/** The gate's and the ram's health, small bars over them (the gate's once it's under attack). */
+const barAt = new THREE.Vector3();
+function onScreen(x, y, z) {
+  barAt.set(x, y, z).project(camera);
+  if (barAt.z > 1 || Math.abs(barAt.x) > 1.1 || Math.abs(barAt.y) > 1.1) return null;
+  const r = hudEl.getBoundingClientRect();
+  return { x: ((barAt.x + 1) / 2) * r.width, y: ((1 - barAt.y) / 2) * r.height };
+}
+function bars() {
+  const show = ['battle', 'flight'].includes(G.mode) && !G.ended;
+  const gateOn = show && !G.gateBroken && G.gateHP < 100;
+  hud.bar('gate', gateOn ? onScreen(0, 10.5, GATE_Z + 0.5) : null, G.gateHP / 100);
+  const r = G.ram;
+  hud.bar('ram', show && r && r.hp > 0 && !G.gateBroken ? onScreen(r.obj.position.x, r.obj.position.y + 4.6, r.obj.position.z) : null, r ? r.hp / RAM_HP : 0);
 }
 function endSiege() {
   G.ended = true;
@@ -977,7 +1036,7 @@ requestAnimationFrame(frame);
 
 // for the tests: play it without fingers
 window.__siege = {
-  G, KEEP, TREB, YAW0, castle, blue, defenders, phys, renderer, crowd, prefs: PREFS,
+  G, KEEP, TREB, YAW0, castle, blue, defenders, phys, renderer, crowd, prefs: PREFS, keepFlag,
   start: () => { if (G.mode === 'scout') startSiege(); },
   pick: (k) => pickCard(k),
   deploy: (k, x, z) => deploy(k, x, z),

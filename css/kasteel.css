@@ -219,3 +219,10 @@ html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50%
 /* a tap on the field before a card is chosen: the cards bob once */
 .kh-army.is-nudge .kh-card:not(.is-out) { animation: kh-nudge 0.45s ease 2; }
 @keyframes kh-nudge { 50% { transform: translateY(-8px); border-color: var(--gold); } }
+/* health over the field: the gate (once it's under attack) and the ram */
+.kh-fbar { position: absolute; left: 0; top: 0; display: grid; justify-items: center; gap: 2px; pointer-events: none; z-index: 0; will-change: transform; }
+.kh-fbar[hidden] { display: none; }
+.kh-fbar span { font-size: 8.5px; font-weight: 900; letter-spacing: 0.16em; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+.kh-fbar > i { display: block; width: 56px; height: 6px; border-radius: 3px; background: rgba(10, 6, 18, 0.7); border: 1px solid rgba(255, 255, 255, 0.35); overflow: hidden; }
+.kh-fbar > i > i { display: block; height: 100%; background: linear-gradient(90deg, #ff8a5a, #e63946); transition: width 0.2s; }
+.kh-fbar-ram > i > i { background: linear-gradient(90deg, #8fc5ff, #2f6fd0); }
