@@ -337,6 +337,8 @@ export const S_EN = {
     { icon: '🏠', text: 'Living Tower: every block that stands becomes a floor. Good = 1 room, Perfect = 2, and each Perfect in a row one more. People move in; when a floor falls, they jump with parachutes.' },
     { icon: '🔥', text: 'Battles in Block by Block: your joker can send your tribe (Wildfire, Water Wheel or Vine Grab) at the other player’s floors. Lose all your people and you get one turn to win some back, or you lose.' },
     { icon: '🏘️', text: 'Your town: every tower sends its people to your town. 3 Perfects in a row earn a raid: steal people from your friends, even when they’re not playing. Your first tower each day builds a wall. Got robbed? Take free revenge.' },
+    // (1.17) The Castle Series (kasteel.html)
+    { icon: '🏰', text: 'The Castle Series: your Daily Towers become the towers of your castle. Attack Robot Rikus’s and your friends’ castles with troops, a ram and a trebuchet (break the gate, knock half of it down, make their flag fall), and plan your defence: it fights for you while you’re away.' },
     { icon: '🗓️', text: (free = 1) => (free > 1
       ? `One Daily Tower a day, the same for everyone: ${free} free tries and your best try counts. After that, “One more try” costs coins. Practise as much as you like.`
       : 'One Daily Tower a day, the same for everyone. “One more try” costs coins. Practise as much as you like.') },

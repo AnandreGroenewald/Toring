@@ -255,7 +255,7 @@ function siteRoot() {
 
 function startSiege() {
   try { audio.unlock(); } catch { /* */ }
-  sfx('click');
+  sfx('horn');
   G.mode = 'intro';
   G.introT = 0;
   hud = createSiegeHud(hudEl, { name: OPP, wind: G.wind }, {
@@ -417,6 +417,7 @@ function release() {
   const v = speedFor(R, p.y, e);
   const vel = dir.multiplyScalar(v * Math.cos(e)).add(new THREE.Vector3(0, v * Math.sin(e), 0));
   TU.stone.visible = false;
+  sfx('fling');
   const mesh = shot(0.62);
   scene.add(mesh);
   G.stone = phys.addStone(mesh, 0.62, p, vel);
@@ -590,6 +591,13 @@ function think(dt) {
       m.state = G.gateBroken ? 'idle' : 'attack';
       if (!G.gateBroken) { face(m, m.x, GATE_Z); damageGate(dt * (m.kind === 'ridder' ? 0.9 : 0.6)); }
     } else m.state = m.kind === 'ridder' ? 'run' : 'walk';
+  }
+  // steel at the gate and in the duels (now and then, while anyone fights)
+  G.clashT = (G.clashT ?? 0) - dt;
+  if (G.clashT <= 0) {
+    const fighting = blue.some((m) => m.alive && m.state === 'attack' && !m.pusher);
+    G.clashT = fighting ? 0.3 + rand() * 0.6 : 0.2;
+    if (fighting) sfx('clash');
   }
   // keep them from standing in each other
   for (let i = 0; i < blue.length; i++) {
@@ -905,6 +913,15 @@ function frame(now) {
     if (G.introT > 2.2) { G.mode = 'battle'; tip('deploy', T.help1); }
   }
   if (['battle', 'aim', 'flight'].includes(G.mode)) {
+    // the march: a war drum while your troops walk, strong on the first of four (game time: slow motion slows it too)
+    G.drumT = (G.drumT ?? 0) - dt;
+    if (G.drumT <= 0 && !G.ended) {
+      G.drumT = 0.62;
+      if (blue.some((m) => m.alive && (m.state === 'walk' || m.state === 'run'))) {
+        G.beat = ((G.beat ?? -1) + 1) % 4;
+        sfx('drum', { accent: G.beat === 0 ? 1 : 0.4 });
+      }
+    }
     G.clock -= dt;
     if (G.clock <= 30 && !G.warned) { G.warned = true; sfx('warning'); hud.toast(T.thirty); }
   }

@@ -341,6 +341,8 @@ export const S = {
     { icon: '🏠', text: 'Lewende Toring: elke blok wat staan, word ’n vloer. Goed = 1 kamer, Perfek = 2, en elke Perfek op ’n ry een meer. Mense trek in; val ’n vloer, spring hulle met valskerms.' },
     { icon: '🔥', text: 'Gevegte in Blok vir Blok: jou joker kan jou stam stuur (Veldbrand, Waterwiel of Rankgryp) na die ander se vloere. Is jou mense op, kry jy een beurt om weer mense te kry, of jy verloor.' },
     { icon: '🏘️', text: 'Jou dorp: elke toring stuur sy mense na jou dorp. 3 Perfeks op ’n ry gee ’n strooptog: steel mense by jou vriende, selfs as hulle nie speel nie. Jou eerste toring elke dag bou ’n muur. Is daar by jou gesteel? Neem gratis wraak.' },
+    // (1.17) Die Kasteelreeks (kasteel.html)
+    { icon: '🏰', text: 'Die Kasteelreeks: jou Daaglikse Torings word die torings van jou kasteel. Val Robot Rikus en jou vriende se kastele aan met troepe, ’n stormram en ’n trebuchet (breek die hek, die helfte plat, hul vlag val), en beplan jou verdediging: dit veg vir jou terwyl jy weg is.' },
     // (1.13.1) with the day's free tries (from 12 Oct 2026: 3)
     { icon: '🗓️', text: (free = 1) => (free > 1
       ? `Een Daaglikse Toring per dag, dieselfde vir almal: ${free} gratis pogings en jou beste poging tel. Daarna kos “Nog ’n kans” munte. Oefen soveel jy wil.`

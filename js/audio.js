@@ -25,6 +25,7 @@ const THROTTLE = {
   banner: 250, heart: 200, record: 400, gameover: 400, fog: 400, heat: 400, gull: 2000,
   monkey: 300, shoo: 250, clown: 250, thief: 300, escape: 400, caught: 400,
   room: 45, chute: 160, milestone: 500, gold: 250, board: 120, pop: 120,
+  horn: 1000, drum: 150, clash: 120, fling: 400,
 };
 // At the per-name limit these steal the oldest voice; all others skip the new one.
 const STEAL = new Set([
@@ -39,6 +40,7 @@ const LEVEL = {
   warning: 0.22, gameover: 0.75, record: 0.62, banner: 0.4, freeze: 0.6, gull: 0.1,
   monkey: 0.85, shoo: 0.75, clown: 0.55, thief: 0.62, escape: 0.34, caught: 0.5,
   room: 0.85, chute: 0.55, milestone: 0.6, gold: 0.7, board: 0.75, pop: 0.5,
+  horn: 0.38, drum: 0.48, clash: 0.5, fling: 2.2,
 };
 
 const PENTA = [0, 2, 4, 7, 9];   // major pentatonic (semitones)
@@ -300,6 +302,40 @@ function whoosh(v, B, t, dur, from, to, q, peak, attack, buf = B.white) {
 
 // Each sound: (voice, startTime, opts, buffers). Keep every sound < 1.2 s.
 const SOUNDS = {
+  // (1.17) Die Kasteelreeks's battle: a horn for VAL AAN, the march's war drum, steel at the gate, the trebuchet's throw
+  horn(v, t) {
+    brass(v, t, mtof(43), 0.22, 0.5);            // G2…
+    brass(v, t + 0.26, mtof(50), 0.62, 0.55);    // …D3, held,
+    brass(v, t + 0.26, mtof(55), 0.62, 0.22);    // with G3 above it
+  },
+  drum(v, t, o, B) {
+    const A = clamp(num(o.accent, 0.5), 0, 1);
+    v.out.gain.value *= 0.6 + 0.4 * A;
+    const f0 = 62 * rand(0.97, 1.03);
+    // the low skin: a falling sine (headphones), and its slap an octave and more up (phone speakers)
+    const body = v.osc('sine', f0 * 2.2, t, 0.5, v.env(v.out, t, 0.9, 0.002, 0.32));
+    body.frequency.exponentialRampToValueAtTime(f0, t + 0.06);
+    body.frequency.exponentialRampToValueAtTime(f0 * 0.85, t + 0.45);
+    const skin = v.osc('triangle', f0 * 3.1, t, 0.12, v.env(v.out, t, 0.35, 0.001, 0.08));
+    skin.frequency.exponentialRampToValueAtTime(f0 * 2.2, t + 0.08);
+    const lp = v.filter('lowpass', 900, 0.7, v.env(v.out, t, 0.3 + 0.2 * A, 0.001, 0.06));
+    v.noise(B.white, t, 0.1, lp);
+  },
+  clash(v, t, o, B) {
+    // inharmonic ringing partials (steel), and the hit's hiss
+    const f = rand(1500, 1900);
+    for (const [k, p, d] of [[1, 0.35, 0.22], [1.47, 0.22, 0.16], [2.31, 0.16, 0.11], [3.12, 0.1, 0.07]]) {
+      v.osc('sine', f * k, t, d + 0.02, v.env(v.out, t, p, 0.001, d));
+    }
+    const hp = v.filter('highpass', 2500, 0.7, v.env(v.out, t, 0.4, 0.001, 0.04));
+    v.noise(B.white, t, 0.06, hp);
+  },
+  fling(v, t, o, B) {
+    whoosh(v, B, t, 0.55, 220, 1300, 1.3, 0.55, 0.12);
+    const bp = v.filter('bandpass', 2400, 2, v.env(v.out, t + 0.42, 0.35, 0.001, 0.05));
+    v.noise(B.white, t + 0.42, 0.07, bp);
+  },
+
   click(v, t) {
     const o = v.osc('triangle', 1500, t, 0.06, v.env(v.out, t, 0.6, 0.001, 0.045));
     o.frequency.exponentialRampToValueAtTime(1050, t + 0.025);
