@@ -30,7 +30,8 @@ export function createRikusPlanner(sim, me, cards, turnIdx, rand, { sudden = fal
   const foe = 1 - me;
   const tasks = [];
   for (let i = 0; i < cards.length; i++) {
-    for (let a = PIN.min; a <= PIN.max + 1e-6; a += 1.5 * DEG) for (const p of POWERS) tasks.push([i, a, p]);
+    // (forward only: the pin swings a half circle, he lets go on the way up towards their side)
+    for (let a = Math.max(PIN.min, 4 * DEG); a <= Math.min(PIN.max, 88 * DEG) + 1e-6; a += 1.5 * DEG) for (const p of POWERS) tasks.push([i, a, p]);
   }
   let k = 0;
   let best = null;

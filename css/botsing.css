@@ -150,6 +150,17 @@
 .bt-card.el-water { box-shadow: inset 0 0 0 1px rgba(63, 182, 255, 0.6), 0 8px 18px rgba(0, 0, 0, 0.32); } .bt-card.el-water small { color: #8fd2ff; }
 .bt-card.el-plof { box-shadow: inset 0 0 0 1px rgba(255, 74, 58, 0.6), 0 8px 18px rgba(0, 0, 0, 0.32); } .bt-card.el-plof small { color: #ff8f80; }
 /* the power bar: a tall gauge at the right, running up and down until a tap holds it */
+/* aiming on a phone: their tower off the screen, a marker at that edge */
+.bt-target { position: absolute; right: 10px; top: calc(max(10px, env(safe-area-inset-top)) + 128px); display: flex; align-items: center; gap: 7px; padding: 6px 9px 6px 11px; border-radius: 999px;
+  background: rgba(18, 10, 28, 0.74); border: 1px solid rgba(255, 210, 120, 0.5); color: #ffe7a8; font-size: 11px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;
+  pointer-events: none; z-index: 2; opacity: 0; transform: translateX(8px); transition: opacity 0.25s, transform 0.25s; }
+.bt-target.is-on { opacity: 1; transform: none; }
+.bt-target i { width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 9px solid #ffcf5a; animation: bt-nudge 0.9s ease-in-out infinite; }
+.bt-target.is-left { right: auto; left: 10px; flex-direction: row-reverse; padding: 6px 11px 6px 9px; transform: translateX(-8px); }
+.bt-target.is-left.is-on { transform: none; }
+.bt-target.is-left i { border-left: 0; border-right: 9px solid #ffcf5a; animation-name: bt-nudge-l; }
+@keyframes bt-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
+@keyframes bt-nudge-l { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-3px); } }
 .bt-power { position: absolute; right: 14px; top: 50%; transform: translate(30px, -50%); opacity: 0; transition: opacity 0.2s, transform 0.3s; z-index: 2; display: grid; justify-items: center; gap: 6px; pointer-events: none; }
 .bt-power.is-on { opacity: 1; transform: translate(0, -50%); }
 .bt-power small { font-size: 10px; font-weight: 900; letter-spacing: 0.22em; color: var(--gold); text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }

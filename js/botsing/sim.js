@@ -344,7 +344,7 @@ export function createSim({ seed = 1 } = {}) {
     const { r, dv } = ELEMENT.plof;
     remove(e, 'blast');
     for (const o of entries) {
-      if (!o.alive || o.role === 'proj') continue;
+      if (!o.alive || o.role === 'proj' || o.side === e.side) continue;   // (never the thrower's own)
       const b = o.body;
       const dx = b.position.x - c.x;
       const dy = b.position.y - c.y;
@@ -453,6 +453,15 @@ export function createSim({ seed = 1 } = {}) {
             events.push({ type: 'hit', entry: me, other, x: me.body.position.x, y: me.body.position.y, speed: hitV, onto: other.kind === 'stack' ? 'stack' : other.role });
           });
           const foe = other.kind !== 'stack' && other.side !== me.side;
+          // (its own side, after a backward throw: a dud; it breaks apart, nothing of its own burns or blows up)
+          if (other.side === me.side) {
+            queue.push(() => {
+              if (!me.alive) return;
+              events.push({ type: 'dud', entry: me, x: me.body.position.x, y: me.body.position.y });
+              me.dissolveAt = stepN + DISSOLVE_STEPS;
+            });
+            continue;
+          }
           // 🔥 a Vuurmuur burns the shot to ash
           if (foe && other.role === 'built' && other.fireWall && other.alive) {
             queue.push(() => {
@@ -603,6 +612,8 @@ export function createSim({ seed = 1 } = {}) {
     settled: () => quiet >= SETTLE.steps,
     resetQuiet() { quiet = 0; },
     live, towerTopY, heightM, launchParams, predict, launch, release, strength,
+    /** (tests) `n` damage to an entry through the game's own path (cracks, the glass, a break) */
+    hurt: (e, n = 1, by = 'hit') => damage(e, n, by),
     /** (friend battles) everything still in play, to make the other phone match at the end of a turn */
     snap() {
       return entries.filter((e) => e.alive).map((e) => [e.id, +e.body.position.x.toFixed(2), +e.body.position.y.toFixed(2), +e.body.angle.toFixed(4), e.hp,

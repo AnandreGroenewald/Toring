@@ -62,7 +62,9 @@ export function createHud({ onPause } = {}) {
   const modal = el('<div class="bt-modal" hidden></div>');
   // the throw's power bar (the owner: "a power bar then a direction pin"): it runs up and down until a tap holds it
   const power = el(`<div class="bt-power" aria-hidden="true"><small>${T.powerWord}</small><div class="bt-pbar"><i class="bt-pfill"></i><i class="bt-pmark"></i></div><b>0%</b></div>`);
-  root.append(top, corner, power, banner, callouts, tray, tap, modal);
+  // (aiming on a phone: where their tower is, at the screen's edge, when it's off the screen)
+  const tgt = el('<div class="bt-target" aria-hidden="true"><b></b><i></i></div>');
+  root.append(top, corner, power, tgt, banner, callouts, tray, tap, modal);
   corner.querySelector('.bt-pause').addEventListener('click', () => onPause?.());
   corner.querySelector('.bt-back').addEventListener('click', () => onPause?.(true));
 
@@ -172,6 +174,13 @@ export function createHud({ onPause } = {}) {
       power.classList.toggle('is-held', !!held);
     },
     hideCards() { tray.classList.remove('is-on'); },
+    /** The marker towards their tower (`right`: at the right edge), with its words; off with `on` false. */
+    target(on, right = true, text = '') {
+      tgt.classList.toggle('is-on', !!on);
+      if (!on) return;
+      tgt.classList.toggle('is-left', !right);
+      if (tgt.querySelector('b').textContent !== text) tgt.querySelector('b').textContent = text;
+    },
     /** The tap hint while aiming or dropping (`cancel` goes back to the cards). */
     showTap(title, sub, cancel) {
       tap.querySelector('b').textContent = title;

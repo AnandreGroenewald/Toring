@@ -72,10 +72,12 @@ export const OPEN_CROWN = { kick: 3.6, perV: 0.1, lift: 2.6, vines: 1.6, wave: 1
 
 /**
  * The throw: first the power bar runs up and down (`POWERBAR.period` s there and back, from `min`); a tap holds it.
- * Then the direction pin swings between `PIN.min` and `PIN.max` (eased at the ends); a tap lets go.
+ * Then the direction pin swings between `PIN.min` and `PIN.max` (eased at the ends); a tap lets go. The owner, 17 Oct
+ * 2026: "I think it should go 180 degrees": a full half circle, flat forward to flat backward; a tap at the wrong moment
+ * throws backwards (a dud: your own throw never burns or blows up your own tower). `period` s there and back.
  */
 export const POWERBAR = { period: 1.7, min: 0.3 };
-export const PIN = { min: (8 * Math.PI) / 180, max: (80 * Math.PI) / 180, period: 2.6 };
+export const PIN = { min: 0, max: Math.PI, period: 4.4 };
 /**
  * Launch: `out` px beyond the stack's edge towards the foe and `up` px above the tower's top. Speed (px a step) at full
  * power = V0 x (1 + perM x tower metres above the stack) x the shape's own factor: the taller the tower, the harder it

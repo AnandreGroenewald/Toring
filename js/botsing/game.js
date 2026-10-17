@@ -342,7 +342,7 @@ function throwBlock(theta, power) {
   const p = sim.predict(side, G.card.shape, theta, power);
   const e = sim.launch(side, G.card.shape, G.card.element, theta, p.perfect, power);
   // (the camera glides in with it: the steps to its first touch, the side where it comes down)
-  G.flight = { step0: sim.stepN, steps: Math.max(30, (p.path.length - 1) * 2), side: p.hit.side ?? nearestSide(p.hit.x) };
+  G.flight = { step0: sim.stepN, steps: Math.max(30, (p.path.length - 1) * 2), side: p.hit.side ?? nearestSide(p.hit.x), tx: mOf(p.hit.x), ty: Math.max(0, -mOf(p.hit.y)) };
   if (FRIEND && conn && side === ME) conn.send({ t: 'throw', i: G.cardIdx, theta, power });
   if (!G.sudden) G.blocks[side] = Math.max(0, G.blocks[side] - 1);
   updateTop();
@@ -513,7 +513,7 @@ function handle(events) {
           fx.stopTrail();
           if (G.trailRec) { G.lastTrail = G.trailRec; G.trailRec = null; }
           if (e.role === 'built' && !e.landed) callout(T.missBuild, ev.x, -40, 'is-dim');
-          else if (e.role === 'proj' && G.phase === 'flight') callout(T.splash, ev.x, -40, 'is-dim');
+          else if (e.role === 'proj' && G.phase === 'flight') callout(nearestSide(ev.x) === e.side ? T.backwards : T.splash, ev.x, -40, nearestSide(ev.x) === e.side ? 'is-dmg' : 'is-dim');
           if (G.phase === 'flight') setPhase('settle');
         } else if (e && e.role !== 'proj' && e.role !== 'crown' && e.side !== G.side) G.stats.sunk[G.side]++;
         break;
@@ -600,6 +600,12 @@ function handle(events) {
         zoomAt(e.side, 2.6);
         break;
       }
+      case 'dud': {   // (a backward throw onto its own side: it breaks apart, nothing of its own burns or blows up)
+        fx.hit(at, new THREE.Vector3(0, 1, 0), 0.4, null);
+        callout(T.backwards, ev.x, ev.y - 50, 'is-dmg');
+        sfx('skew');
+        break;
+      }
       case 'douse': {   // (a Watervat nearby: the fire doesn't take)
         fx.steam(at, e.w / PX);
         callout(T.doused, ev.x, ev.y - 50, 'is-gold');
@@ -641,6 +647,7 @@ function handle(events) {
         G.shotHit = false;
         G.zoom = null;
         if (G.shot) fx.trail(meshes.get(G.shot.id), false, G.shot.element);
+        if (G.flight) Object.assign(G.flight, { side: G.side, tx: towerX(G.side) / PX, ty: topM(G.side) });   // (the camera goes back with it)
         break;
       }
       default:
@@ -775,7 +782,7 @@ function aimTap() {
 function placePin(side, theta) {
   const p = sim.launchParams(side, G.card.shape);
   pinMesh.position.set(mOf(p.x0), -mOf(p.y0), 0);
-  pinMesh.scale.setScalar(side === ME ? 1.5 : 2.3);
+  pinMesh.scale.setScalar(1);   // (the camera is close: PIN_REACH long)
   pinMesh.userData.aim(theta, towardFoe(side));
   pinMesh.visible = true;
 }
@@ -821,88 +828,73 @@ const FOV = 46;
 const cam = { pos: new THREE.Vector3(0, 80, 240), look: new THREE.Vector3(0, 12, 0), tPos: new THREE.Vector3(0, 80, 240), tLook: new THREE.Vector3(0, 12, 0), k: 1.4, fov: FOV, tFov: FOV };
 camera.position.copy(cam.pos);
 camera.lookAt(cam.look);
-const PHI = (24 * Math.PI) / 180;   // (the battle view: from behind your tower, this far round towards the front)
+const ELEV = (7 * Math.PI) / 180;   // (straight in front of the battle: looking down this little)
+const YAW = (5 * Math.PI) / 180;    // (...and turned this little round, for depth)
+const PIN_REACH = 6.8;              // the direction pin's length (m)
 /**
- * Both towers at once (the owner: "the camera angle needs to show both the towers"): from behind your own tower and
- * a little to the front, high enough to see an arc's top; yours near, theirs across the sea.
+ * The camera straight in front of the battle (the owner, 17 Oct 2026: picking a block "its fine but once you throw or
+ * if Rikus throws then its at an akward angle"). It frames `points` (metres, [x, y]) with `pad` round them, from as
+ * close as `minD` to as far as `maxD`. Points that don't fit by then are let go from the end of the list, and the frame
+ * leans towards them as far as it can while the kept ones stay in the picture (a wide screen shows both towers, a
+ * phone the one in play, turned towards the other). `yaw` (+1/-1) turns it a little towards that side.
  */
-function battleView(set) {
-  const xMe = towerX(ME) / PX;
-  const xFoe = towerX(FOE) / PX;
-  const dMe = towardFoe(ME);
-  const you = topM(ME);
-  const rik = topM(FOE);
-  const R = 74;
-  // (looking a little short of the middle: your tower and crown and theirs sit evenly left and right)
-  set([xMe - dMe * Math.cos(PHI) * R, Math.max(you, rik) + 21, Math.sin(PHI) * R], [(xMe + xFoe) / 2 - dMe * 6, (you + rik) / 2 + 5, 0]);
+function sideOn(points, { pad = 2, minD = 22, maxD = 64, yaw = 0, lean = true, keep = 1, lift = 0 } = {}) {
+  const vf = (FOV * Math.PI) / 360;
+  const hf = Math.atan(Math.tan(vf) * camera.aspect);
+  const box = (pts) => {
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (const [x, y] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    return { x0, x1, y0, y1, d: Math.max(((x1 - x0) / 2 + pad) / Math.tan(hf), ((y1 - y0) / 2 + pad) / Math.tan(vf), minD) };
+  };
+  let kept = points;
+  let b = box(kept);
+  while (b.d > maxD && kept.length > 1) { kept = kept.slice(0, -1); b = box(kept); }
+  // (points let go: as wide as it may, to show as much as it can of the way to them)
+  const d = kept.length < points.length ? Math.max(maxD, minD) : Math.min(b.d, Math.max(maxD, minD));
+  let cx = (b.x0 + b.x1) / 2;
+  let cy = (b.y0 + b.y1) / 2;
+  if (lean && kept.length < points.length) {   // (lean towards the rest; the kept ones within `keep` of the middle)
+    const all = box(points);
+    const W = (Math.tan(hf) * d - pad) * keep;
+    const H = (Math.tan(vf) * d - pad) * keep;
+    cx = Math.min(Math.max((all.x0 + all.x1) / 2, b.x1 - W), b.x0 + W);
+    cy = Math.min(Math.max((all.y0 + all.y1) / 2, b.y1 - H), b.y0 + H);
+  }
+  cy += lift * Math.tan(vf) * d;   // (`lift`: the picture's content a little lower, clear of the bars at the top)
+  cam.tLook.set(cx, cy, 0);
+  cam.tPos.set(cx + yaw * Math.sin(YAW) * d, cy + Math.sin(ELEV) * d, Math.cos(ELEV) * d);
+  cam.tFov = FOV;
 }
-const zoomAim = new THREE.Vector3();
-const fly = { pos: new THREE.Vector3(), look: new THREE.Vector3(), b: new THREE.Vector3(), n: new THREE.Vector3(), bPos: new THREE.Vector3(), bLook: new THREE.Vector3() };
-const frameCam = new THREE.PerspectiveCamera(FOV, 0.5, 0.5, 4000);
-/**
- * The zoom on tower `z` (the owner: "then zoom in on the tower that is getting damaged"): from `from` (where the
- * battle view stands) part of the way in and a little lower, the lens narrowed until that tower and its crown fill the
- * screen (no flight across the scene). Sets `pos` and `look`; gives the lens (degrees).
- */
-function zoomPose(z, from, pos, look, { up = 0, wide = 0 } = {}) {
+/** Side `z`'s tower, its foot and its crown, close (the zoom on a hit; the tower that's settling). */
+function towerShot(z, { minD = 17, maxD = 40, up = 0, wide = 0 } = {}) {
   const c = sim.crowns[z];
   const xt = towerX(z) / PX;
   const cx = c.alive && !c.wet ? mOf(c.body.position.x) : sideX(z) / PX - towardFoe(z) * 4;
   const tz = Math.max(topM(z), STACK_TOP + 3);
-  zoomAim.set((xt + cx) / 2, (tz + STACK_TOP) / 2 + 1, 0);
-  pos.copy(from).lerp(zoomAim, 0.42);
-  // (nearly level with the tower: the sunset sky behind it instead of a wall of sea, magnified by the lens)
-  pos.y = Math.min(pos.y, zoomAim.y + 3.2);
-  look.copy(zoomAim);
-  // the lens that just holds the tower's top, its foot and the crown (measured on the screen, so the view's angle counts)
-  frameCam.fov = 30;
-  frameCam.aspect = camera.aspect;
-  frameCam.position.copy(pos);
-  frameCam.lookAt(look);
-  frameCam.updateMatrixWorld();
-  frameCam.updateProjectionMatrix();
-  let need = 0;
-  const hw = 3.4 + wide;
-  for (const [x, y] of [[xt - hw, tz + 1.6 + up], [xt + hw, tz + 1.6 + up], [xt - 3.4, STACK_TOP - 1], [xt + 3.4, STACK_TOP - 1], [cx - 2, STACK_TOP + 3], [cx + 2, STACK_TOP + 3]]) {
-    fly.n.set(x, y, 0).project(frameCam);
-    need = Math.max(need, Math.abs(fly.n.x), Math.abs(fly.n.y));
-  }
-  const f = 2 * Math.atan((Math.tan((15 * Math.PI) / 180) * need) / 0.68);
-  return Math.min(FOV, Math.max(12, (f * 180) / Math.PI));
+  sideOn([[xt - 3.6 - wide, tz + 2 + up], [xt + 3.6 + wide, tz + 2 + up], [xt, STACK_TOP - 1.5], [cx - 2.2, STACK_TOP + 3.2], [cx + 2.2, STACK_TOP + 3.2]], { pad: 1.5, minD, maxD, yaw: -towardFoe(z) });
 }
-function zoomView(z, opts) { cam.tFov = zoomPose(z, cam.tPos, cam.tPos, cam.tLook, opts); }
-const smooth01 = (x) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
-/**
- * With a throw in the air: both towers as it leaves, then the camera glides in with it and arrives close at the tower
- * it will hit just as it lands (the zoom, seamlessly), the block kept in the picture all the way.
- */
-function flightView(set) {
+/** Aiming on side `s`: its launch point and the pin's whole half circle, its tower; the other tower if it fits too. */
+function aimShot(s) {
+  const p = sim.launchParams(s, G.card?.shape || 'cube');
+  const lx = mOf(p.x0);
+  const ly = -mOf(p.y0);
+  const o = 1 - s;
+  sideOn([[lx - PIN_REACH, ly + 0.6], [lx + PIN_REACH, ly + 0.6], [lx, ly + PIN_REACH + 0.6], [towerX(s) / PX, STACK_TOP - 1], [towerX(o) / PX, topM(o) + 1.5], [towerX(o) / PX, STACK_TOP - 1]], { pad: 1.8, maxD: 58, yaw: -towardFoe(s), lean: false });
+}
+/** A throw in the air: the camera goes with it (the block kept in the picture), and arrives where it will come down. */
+function flightShot() {
   const f = G.flight;
-  const s = G.shot;
-  if (!f || !s || !s.alive) return false;
-  battleView(set);
-  const u = Math.min(1, Math.max(0, (sim.stepN - f.step0) / f.steps));
-  const k = smooth01((u - 0.18) / 0.72);
-  if (k <= 0) return true;
-  fly.bPos.copy(cam.tPos);
-  fly.bLook.copy(cam.tLook);
-  const zf = zoomPose(f.side, fly.bPos, fly.pos, fly.look);
-  fly.b.set(mOf(s.body.position.x), -mOf(s.body.position.y), 0);
-  fly.look.lerp(fly.b, 0.45 * (1 - u));
-  cam.tPos.lerpVectors(fly.bPos, fly.pos, k);
-  cam.tLook.lerpVectors(fly.bLook, fly.look, k);
-  let fov = FOV + (zf - FOV) * k;
-  // (keep the block in the picture: a wider lens if it would leave it)
-  frameCam.fov = fov;
-  frameCam.aspect = camera.aspect;
-  frameCam.position.copy(cam.tPos);
-  frameCam.lookAt(cam.tLook);
-  frameCam.updateMatrixWorld();
-  frameCam.updateProjectionMatrix();
-  fly.n.copy(fly.b).project(frameCam);
-  const over = Math.max(Math.abs(fly.n.x), Math.abs(fly.n.y)) / 0.7;
-  if (over > 1 && fly.n.z < 1) fov = Math.min(FOV + 12, (2 * Math.atan(Math.tan((fov * Math.PI) / 360) * over) * 180) / Math.PI);
-  cam.tFov = fov;
+  const b = G.shot;
+  if (!f || !b || !b.alive) return false;
+  // (the block, and a little ahead of it along its path: both kept in the picture, so the camera never trails it out)
+  const bx = mOf(b.body.position.x);
+  const by = -mOf(b.body.position.y);
+  const ax = mOf(b.body.position.x + b.body.velocity.x * 7);
+  const ay = -mOf(b.body.position.y + b.body.velocity.y * 7);
+  sideOn([[bx, by], [ax, ay], [f.tx, f.ty + 1.5], [f.tx, Math.max(0, STACK_TOP - 1.5)]], { pad: 3, minD: 20, maxD: 56, yaw: -towardFoe(f.side), keep: 0.5, lift: 0.1 });
   return true;
 }
 function camTargets(dt) {
@@ -927,17 +919,19 @@ function camTargets(dt) {
     cam.k = 6;
     return;
   }
-  // the zoom on the tower where something happened, for a moment, then back to both towers
+  // the zoom on the tower where something happened, for a moment (the owner: "zoom in on the tower that is getting
+  // damaged"), straight in front of it
   if (G.zoom && !G.over) {
     G.zoom.t -= dt;
     if (G.zoom.t <= 0) G.zoom = null;
     else {
-      battleView(set);
-      zoomView(G.zoom.side);
+      towerShot(G.zoom.side);
       cam.k = calm ? 4 : 3;
       return;
     }
   }
+  // (a side's tower as it is picked from: the view he likes)
+  const pickView = (z) => set([sideX(z) / PX + towardFoe(z) * 1.5, topM(z) + 2.5, 38], [sideX(z) / PX + towardFoe(z) * 0.5, topM(z) - 0.5, 0]);
   switch (G.phase) {
     case 'intro':
       if (G.phaseT < 0.4) set([0, 80, 240], [0, 12, 0]);
@@ -950,34 +944,43 @@ function camTargets(dt) {
         k = 0.9;
         break;
       }
-      battleView(set);
+      pickView(s);
       k = 1.7;
       break;
     case 'pick':
+    case 'other':   // (their pick: the same view of their tower)
       // (the cards cover the lower 40%: the tower and the hanging block sit in the band above them)
-      set([sideX(s) / PX + dir * 1.5, ts + 2.5, 38], [sideX(s) / PX + dir * 0.5, ts - 0.5, 0]);
+      pickView(s);
       k = 2.2;
       break;
-    case 'build': {
-      // (wide enough for the whole swing and the block at both ends)
-      const A = Math.min(BUILD.ampMax, BUILD.amp0 + BUILD.ampPer * G.builds[s]) / PX;
-      if (s !== ME) {   // (their build: zoomed in from your side, like their hits, no flight across the sea)
-        battleView(set);
-        zoomView(s, { up: BUILD.hang / PX + 2, wide: A });
-        k = 2.2;
+    case 'build':
+    case 'settle': {
+      if (G.phase === 'settle' && G.action === 'throw') {   // (where it came down, while it settles)
+        towerShot(G.flight?.side ?? 1 - s, { maxD: 46 });
+        k = 1.8;
         break;
       }
-      const d = Math.max(40, (A * 2 + 9) / 0.36);
+      // (wide enough for the whole swing and the block at both ends)
+      const A = Math.min(BUILD.ampMax, BUILD.amp0 + BUILD.ampPer * G.builds[s]) / PX;
+      const d = G.phase === 'build' ? Math.max(40, (A * 2 + 9) / 0.36) : 44;
       set([xs, ts + 6, d], [xs, ts + 3.2, 0]);
-      k = 2.2;
+      k = G.phase === 'build' ? 2.2 : 1.8;
       break;
     }
-    case 'settle':
-      if (G.action === 'build' && s !== ME) { battleView(set); zoomView(s); k = 1.8; break; }
-      if (G.action === 'build') { set([xs, ts + 6, 44], [xs, ts + 3.2, 0]); k = 1.8; break; }
-      battleView(set);
+    case 'aim':
+      aimShot(s);
+      k = 2.4;
+      break;
+    case 'flight':
+      if (!flightShot()) towerShot(G.flight?.side ?? 1 - s);
+      k = 8;
+      break;
+    case 'between': {   // (across the sea to the side that plays next)
+      const n = nextSide(s);
+      pickView(n == null ? 1 - s : n);
       k = 1.6;
       break;
+    }
     case 'over': {
       // the winner's crown, from the open side of its rock (its tower behind it, nothing in between)
       const w = G.result === 'lose' ? FOE : ME;
@@ -991,13 +994,9 @@ function camTargets(dt) {
       k = 2;
       break;
     }
-    case 'flight':
-      if (!flightView(set)) battleView(set);
-      k = 3.4;
-      break;
-    default:   // aim, other, between, wait: both towers
-      battleView(set);
-      k = G.phase === 'aim' ? 2.4 : 1.7;
+    default:
+      pickView(s);
+      k = 1.7;
       break;
   }
   cam.k = calm ? Math.max(k, 4) : k;
@@ -1044,6 +1043,23 @@ function watchCrowns() {
       return;
     }
   }
+}
+/** (aiming, mine) their tower off the screen (a phone): the marker at that edge, with the distance. */
+let tgtOn = false;
+function updateTarget() {
+  let on = !G.over && !G.paused && G.phase === 'aim' && G.side === ME && !!G.card;
+  let right = true;
+  let text = '';
+  if (on) {
+    const r = stageEl.getBoundingClientRect();
+    const sp = toScreen(towerX(FOE) / PX, topM(FOE) + 1, 0, r);
+    on = sp.x > r.width - 12 || sp.x < 12;
+    right = sp.x > r.width / 2;
+    const p = sim.launchParams(ME, G.card.shape);
+    text = T.target(foeName, Math.round(Math.abs(towerX(FOE) - p.x0) / PX));
+  }
+  if (on || tgtOn) hud.target(on, right, text);
+  tgtOn = on;
 }
 function updateCamera(dt) {
   if (cam.cut) {   // (a cut: straight to the new shot)
@@ -1178,7 +1194,7 @@ function tick(dt, time) {
       if (G.phaseT > 2.4) {
         setPhase('wait');
         let seen = false;
-        try { seen = !!JSON.parse(localStorage.getItem(KEY) || '{}').tip4; } catch { /* */ }
+        try { seen = !!JSON.parse(localStorage.getItem(KEY) || '{}').tip5; } catch { /* */ }
         const go = () => {
           if (myBonus) hud.banner(T.dailyBonus(myBonus), { kind: 'is-me is-small', ms: 1600 });
           if (FRIEND) friendSetup();
@@ -1187,7 +1203,7 @@ function tick(dt, time) {
         if (seen || q.has('notip')) go();
         else {
           hud.modal(`<div class="bt-tip"><small>${T.title}</small><p>${T.tip}</p><p>${T.tip3}</p><p class="bt-tip2">${T.higher}</p><button class="bt-ok" type="button">${T.tipOk}</button></div>`, {
-            '.bt-ok': () => { hud.closeModal(); try { localStorage.setItem(KEY, JSON.stringify({ tip4: 1 })); } catch { /* */ } go(); },
+            '.bt-ok': () => { hud.closeModal(); try { localStorage.setItem(KEY, JSON.stringify({ tip5: 1 })); } catch { /* */ } go(); },
           });
         }
       }
@@ -1393,6 +1409,7 @@ function frame(now) {
   fx.update(G.paused ? 0 : dt * (G.slowT > 0 ? Math.max(0.4, G.slowRate) : 1), camera);
   updateCamera(dt);
   updateMarks();
+  updateTarget();
   trackCallouts();
   const t2 = performance.now();
   stage.render(dt);
@@ -1424,6 +1441,14 @@ window.__bt = {
     }
     return null;
   },
+  /** (tests) one hit on a side's crown, through the game's own path (its glass cracks, then breaks) */
+  hitCrown(side) { sim.hurt(sim.crowns[side]); handle(sim.drain()); },
+  /** (tests) the pin held at `deg` degrees (time stops: a still picture) */
+  setPin(deg) {
+    const th = (deg * Math.PI) / 180;
+    placePin(G.side, th);
+    G.paused = true;
+  },
   /** Throws at once with this aim (tests: no frame between the aim and the throw). */
   throwAim(aim) { if (G.phase === 'aim' && G.side === ME) throwBlock(aim.theta, aim.power); },
   trolley: () => trolley(ME),
@@ -1434,6 +1459,13 @@ window.__bt = {
     const theta = pinAngle(G.aimT);
     const hit = G.card && G.aimStep === 'angle' ? sim.predict(ME, G.card.shape, theta, power).hit : null;
     return { step: G.aimStep, power, theta, hit: hit && { kind: hit.kind, side: hit.side } };
+  },
+  /** Where the block in the air is on the screen (0-1 across and down), or null. */
+  shotOnScreen() {
+    if (!G.shot?.alive) return null;
+    const r = stageEl.getBoundingClientRect();
+    const p = toScreen(mOf(G.shot.body.position.x), -mOf(G.shot.body.position.y), 0, r);
+    return { x: +(p.x / r.width).toFixed(3), y: +(p.y / r.height).toFixed(3) };
   },
   /** Where each tower's top and crown are on the screen (0-1 across and down). */
   view() {

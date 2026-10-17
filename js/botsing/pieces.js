@@ -503,14 +503,110 @@ export function createPieces(renderer) {
     group.userData = { shape: 'crown', side, top: H / 2, bottom: H / 2, w: W, h: H, jewel: c, glass };
     return group;
   }
-  /** The glass's cracks (0-2 lost) and its end: shattered, the panes gone, the crown open to the sky. */
-  const glassCrackMats = [1, 2].map((level) => {
-    const m = crackMatsOf(level, true);
-    return m;
-  });
+  /**
+   * The glass's cracks (1-3 hits: a spider web from each impact, wider and denser with every hit) and its end
+   * (the owner, 17 Oct 2026: "My glass was trown 3 times and now it looks fine?"): smashed, jagged shards left in the
+   * frame, broken pieces on the plinth, the crown open to the sky.
+   */
+  const glassTex = (c) => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = aniso; return t; };
+  function webCanvas(level) {
+    const c = canvas(512, 512);
+    const g = c.getContext('2d');
+    const r = rng(70 + level);
+    const hits = [[0.4, 0.36], [0.7, 0.66], [0.24, 0.74]].slice(0, level);
+    const R0 = [0, 200, 235, 270][level];
+    const line = (pts, w, a) => {
+      for (const pass of [0, 1]) {
+        g.strokeStyle = pass ? `rgba(255,255,255,${a})` : `rgba(18,34,60,${a * 0.6})`;
+        g.lineWidth = pass ? w : w + 3;
+        g.lineJoin = 'round';
+        g.beginPath();
+        pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+        g.stroke();
+      }
+    };
+    for (const [hx, hy] of hits) {
+      const cx = hx * 512;
+      const cy = hy * 512;
+      const spokes = 8 + level * 3;
+      const arms = [];
+      for (let i = 0; i < spokes; i++) {
+        let a = (i / spokes) * Math.PI * 2 + (r() - 0.5) * 0.5;
+        let x = cx;
+        let y = cy;
+        const len = R0 * (0.55 + r() * 0.6);
+        const pts = [[x, y]];
+        for (let k = 1; k <= 8; k++) { a += (r() - 0.5) * 0.32; x += (Math.cos(a) * len) / 8; y += (Math.sin(a) * len) / 8; pts.push([x, y]); }
+        line(pts, 3.2 + level * 0.4, 0.97);
+        arms.push(pts);
+      }
+      for (let ring = 1; ring <= level + 1; ring++) {   // (the web's rings between the arms)
+        const f = ring / (level + 2);
+        for (let i = 0; i < spokes; i++) {
+          if (r() < 0.2) continue;
+          const A = arms[i];
+          const B = arms[(i + 1) % spokes];
+          const ia = Math.round(f * (A.length - 1));
+          const ib = Math.round(f * (B.length - 1));
+          line([A[ia], [(A[ia][0] + B[ib][0]) / 2 + (r() - 0.5) * 12, (A[ia][1] + B[ib][1]) / 2 + (r() - 0.5) * 12], B[ib]], 1.4 + level * 0.3, 0.85);
+        }
+      }
+      // (the impact: crushed white)
+      const grd = g.createRadialGradient(cx, cy, 0, cx, cy, 14 + level * 5);
+      grd.addColorStop(0, 'rgba(255,255,255,0.95)');
+      grd.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grd;
+      g.beginPath();
+      g.arc(cx, cy, 14 + level * 5, 0, Math.PI * 2);
+      g.fill();
+    }
+    return glassTex(c);
+  }
+  const glassCrackMats = [1, 2, 3].map((level) => new THREE.MeshBasicMaterial({ map: webCanvas(level), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  const shardMat = new THREE.MeshStandardMaterial({ color: '#e8f4ff', emissive: '#7fb2e6', emissiveIntensity: 0.22, metalness: 0.75, roughness: 0.04, transparent: true, opacity: 0.82, envMapIntensity: 3, side: THREE.DoubleSide });
+  const shardGeo = new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(0, 0.55), new THREE.Vector2(0.42, -0.32), new THREE.Vector2(-0.36, -0.26)]));
+  /**
+   * What's left in the frame of a smashed cabinet: jagged shards of glass from every edge of the four sides (the middle
+   * open), one mesh. `gw, gh, gd`: the glass box's size.
+   */
+  function frameShards(gw, gh, gd, seed) {
+    const r = rng(seed);
+    const pos = [];
+    // a pane: centre c, its two directions u and v (half sizes hu, hv), its plane offset along n
+    const pane = (c, u, v, hu, hv) => {
+      for (const [eu, ev] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+        const along = eu ? v : u;
+        const inward = eu ? u.clone().multiplyScalar(-eu) : v.clone().multiplyScalar(-ev);
+        const half = eu ? hv : hu;
+        const edge = c.clone().add(eu ? u.clone().multiplyScalar(eu * hu) : v.clone().multiplyScalar(ev * hv));
+        const n = 3 + Math.floor(r() * 2);
+        for (let i = 0; i < n; i++) {
+          const t0 = -half + (2 * half * i) / n;
+          const t1 = -half + (2 * half * (i + 1)) / n;
+          const tm = (t0 + t1) / 2 + (r() - 0.5) * 0.3 * (t1 - t0);
+          const depth = Math.min(hu, hv) * (r() < 0.3 ? 0.55 + r() * 0.35 : 0.14 + r() * 0.3);
+          const a = edge.clone().add(along.clone().multiplyScalar(t0));
+          const b = edge.clone().add(along.clone().multiplyScalar(t1));
+          const m = edge.clone().add(along.clone().multiplyScalar(tm)).add(inward.clone().multiplyScalar(depth));
+          pos.push(...a.toArray(), ...b.toArray(), ...m.toArray());
+        }
+      }
+    };
+    const X = new THREE.Vector3(1, 0, 0);
+    const Y = new THREE.Vector3(0, 1, 0);
+    const Z = new THREE.Vector3(0, 0, 1);
+    pane(new THREE.Vector3(0, 0, gd / 2), X, Y, gw / 2, gh / 2);
+    pane(new THREE.Vector3(0, 0, -gd / 2), X, Y, gw / 2, gh / 2);
+    pane(new THREE.Vector3(gw / 2, 0, 0), Z, Y, gd / 2, gh / 2);
+    pane(new THREE.Vector3(-gw / 2, 0, 0), Z, Y, gd / 2, gh / 2);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    return g;
+  }
   function glassCrack(group, lost) {
     const gl = group.userData.glass;
-    if (!gl) return;
+    if (!gl || group.userData.broken) return;
     let ov = group.userData.glassCrack;
     if (!ov) {
       ov = new THREE.Mesh(gl.geometry, glassCrackMats[0]);
@@ -521,12 +617,34 @@ export function createPieces(renderer) {
       group.userData.glassCrack = ov;
     }
     ov.visible = lost > 0;
-    ov.material = glassCrackMats[Math.min(2, Math.max(1, lost)) - 1];
+    ov.material = glassCrackMats[Math.min(3, Math.max(1, lost)) - 1];
   }
   function glassBreak(group) {
-    if (group.userData.glass) group.userData.glass.visible = false;
-    if (group.userData.glassCrack) group.userData.glassCrack.visible = false;
-    group.userData.broken = true;
+    const u = group.userData;
+    if (u.broken) return;
+    u.broken = true;
+    if (u.glassCrack) u.glassCrack.visible = false;
+    const shards = new THREE.Group();
+    if (u.glass) {   // (the panes gone, jagged pieces left in the frame)
+      u.glass.visible = false;
+      const gp = u.glass.geometry.parameters;
+      const left = new THREE.Mesh(frameShards(gp.width, gp.height, gp.depth, 17 + (u.side || 0) * 31), shardMat);
+      left.position.copy(u.glass.position);
+      left.renderOrder = 3;
+      shards.add(left);
+    }
+    const r = rng(23 + (u.side || 0) * 31);
+    for (let i = 0; i < 12; i++) {   // (broken pieces lying on the plinth round the crown's cushion, edges up)
+      const m = new THREE.Mesh(shardGeo, shardMat);
+      const a = (i / 12) * Math.PI * 2 + r() * 0.4;
+      const rad = 0.9 + r() * 0.25;
+      m.position.set(Math.cos(a) * rad * (u.w / 2.5), -u.h / 2 + 0.47, Math.sin(a) * rad * 0.95);
+      m.rotation.set(-Math.PI / 2 + (r() - 0.5) * 0.9, (r() - 0.5) * 0.6, r() * Math.PI * 2);
+      m.scale.setScalar(0.28 + r() * 0.3);
+      shards.add(m);
+    }
+    group.add(shards);
+    u.shards = shards;
   }
 
   /** Cracks, worse with every hit (levels 1-3): dark jagged lines with pale chipped edges, tiling over the block. */

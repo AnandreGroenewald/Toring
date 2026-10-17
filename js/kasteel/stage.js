@@ -28,9 +28,11 @@ const GRADE = {
 
 /**
  * Quality (the owner: "optomised for phones, it should not lag"). A Mac or PC draws everything; a phone starts at `mid`
- * and the stage steps down by itself if frames come slow (a two-second average under 48 fps): the glow and its finish
+ * and the stage steps down by itself if frames come slow (a three-second average under 45 fps): the glow and its finish
  * passes go first (the edges stay smooth: the screen's own anti-aliasing), then the pixel density, then the shadow's
- * detail. `?q=high|mid|low` forces one.
+ * detail. It climbs back (never above where it started) once frames have run smooth for nine seconds: one heavy
+ * moment no longer leaves the picture soft for good (the owner, 17 Oct 2026: "once the water goes over it pixelates").
+ * `?q=high|mid|low` forces one.
  */
 export const QUALITY = {
   high: { name: 'high', dpr: 2, post: true, shadow: 4096, soft: true, grass: 1, looks: 2 },
@@ -84,11 +86,21 @@ export function createStage({ fov = 50, quality = pickQuality() } = {}) {
     composer.addPass(new OutputPass());
   }
   buildPost();
-  // stepping down when frames come slow (never up again: no flicker between levels)
+  // stepping down when frames come slow, back up when they run smooth again (slowly: no flicker between levels)
   const listeners = [];
+  const best = { ...q };   // (where it started: never above that)
   let winT = 0;
   let winN = 0;
   let calm = 0;
+  let upT = 0;
+  let ups = 0;
+  function apply() {
+    renderer.setPixelRatio(prOf());
+    renderer.setSize(...size(), false);
+    renderer.shadowMap.type = q.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    buildPost();
+    for (const f of listeners) f(q);
+  }
   function stepDown() {
     const i = ORDER.indexOf(q.name);
     if (i >= 0 && i < ORDER.length - 1) {
@@ -96,11 +108,17 @@ export function createStage({ fov = 50, quality = pickQuality() } = {}) {
     } else if (q.dpr > 0.85) {
       q.dpr = Math.max(0.85, q.dpr - 0.15);
     } else return false;
-    renderer.setPixelRatio(prOf());
-    renderer.setSize(...size(), false);
-    renderer.shadowMap.type = q.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
-    buildPost();
-    for (const f of listeners) f(q);
+    apply();
+    return true;
+  }
+  function stepUp() {
+    const i = ORDER.indexOf(q.name);
+    const bi = ORDER.indexOf(best.name);
+    const levelDpr = i === bi ? best.dpr : QUALITY[q.name].dpr;
+    if (q.dpr < levelDpr - 0.01) q.dpr = Math.min(levelDpr, q.dpr + 0.15);   // (the sharpness back first)
+    else if (i > bi) Object.assign(q, i - 1 === bi ? best : QUALITY[ORDER[i - 1]], { name: ORDER[i - 1] });
+    else return false;
+    apply();
     return true;
   }
   function watch(dt) {
@@ -108,11 +126,17 @@ export function createStage({ fov = 50, quality = pickQuality() } = {}) {
     if (calm > 0) { calm -= dt; return; }
     winT += dt;
     winN += 1;
-    if (winT < 2) return;
+    if (winT < 3) return;
     const fps = winN / winT;
     winT = 0;
     winN = 0;
-    if (fps < 48 && stepDown()) calm = 2.5;   // (a moment to settle before it judges again)
+    if (fps < 45) {
+      upT = 0;
+      if (stepDown()) calm = 2.5;   // (a moment to settle before it judges again)
+    } else if (fps >= 57) {
+      upT += 3;
+      if (upT >= 9 && ups < 8 && stepUp()) { upT = 0; ups += 1; calm = 3; }
+    } else upT = 0;
   }
   // the loading screen stays until the first frames are drawn (their shaders compiled behind it)
   let drawn = 0;
