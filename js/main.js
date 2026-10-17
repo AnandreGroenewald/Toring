@@ -3318,6 +3318,17 @@ async function kasteelNewsCheck() {
     if (screen === 'menu') ui.showMenu(menuModel());
   } catch { /* the badge waits for the next check */ }
 }
+/** (1.18) Blokbotsing's coins into the wallet, the same way (stapel.v1.botsing `pending`): { added } or null. */
+function claimBotsingLoot() {
+  let v = {};
+  try { v = JSON.parse(localStorage.getItem('stapel.v1.botsing') || '{}') || {}; } catch { return null; }
+  const n = Math.max(0, Math.min(5000, v.pending | 0));
+  if (!n) return null;
+  try { localStorage.setItem('stapel.v1.botsing', JSON.stringify({ ...v, pending: 0 })); } catch { return null; }   // (cleared first: never paid twice)
+  const r = store.earnCoins(n, { capped: true });
+  coinsChanged();
+  return { added: r.added };
+}
 /** The castle's coins into the wallet (counted towards the day's cap like Oefen): { added } or null when none waited. */
 function claimKasteelLoot() {
   const v = kasteelRead();
@@ -3560,8 +3571,10 @@ function onReady() {
   });
   startIdle();
   const castleCoins = claimKasteelLoot();   // (before the menu: its wallet shows them)
+  const battleCoins = claimBotsingLoot();
   showMenu();
   if (castleCoins) setTimeout(() => ui.toast(castleCoins.added ? S.kasteelLoot(fmtInt(castleCoins.added)) : S.kasteelLootFull, 4200), 1200);
+  if (battleCoins) setTimeout(() => ui.toast(battleCoins.added ? S.botsingLoot(fmtInt(battleCoins.added)) : S.kasteelLootFull, 4200), castleCoins ? 5600 : 1200);
   dorpStart();   // (1.16) Jou dorp: only where the server knows the towns
   if (SLAG_ON) {
     // (1.17) a friend's Vrugteslag link (?slag=CODE): into their room

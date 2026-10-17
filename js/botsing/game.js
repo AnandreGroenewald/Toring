@@ -16,7 +16,8 @@ import { createSim, shapeInfo } from './sim.js';
 import { createBattleFx } from './fx.js';
 import { createHud } from './hud.js';
 import { createRikusPlanner } from './rikus.js';
-import { PX, sideX, towardFoe, towerX, BUILD, RIKUS, SETTLE, LAUNCH, STACK, G_STEP, BUDGET, ELEMENT, PIN, WIND, offer, rng, pinAngle, powerAt, windFor } from './rules.js';
+import { PX, sideX, towardFoe, towerX, BUILD, RIKUS, SETTLE, LAUNCH, STACK, G_STEP, BUDGET, ELEMENT, PIN, WIND, LOOT, offer, rng, pinAngle, powerAt, windFor } from './rules.js';
+import { EARN } from '../core/economy.js';
 import { dateKeyFor } from '../core/daily.js';
 import { matchApiUrl } from '../sponsorConfig.js';
 import { createSlagNet } from '../slagNet.js';
@@ -37,6 +38,27 @@ const FOE = 1 - ME;
 let conn = null;
 let foeName = '';
 const readJson = (k) => { try { return JSON.parse(localStorage.getItem(k) || '{}') || {}; } catch { return {}; } };
+/** The battle's record (stapel.v1.botsing: the tip seen, wins, played, coins still to reach the wallet), merged in. */
+function saveRecord(patch) {
+  try { localStorage.setItem(KEY, JSON.stringify({ ...readJson(KEY), ...patch })); } catch { /* this phone keeps nothing */ }
+}
+/**
+ * A finished battle's coins: they wait in the record until Stapel adds them to the wallet (one place keeps the wallet),
+ * no more than today's cap leaves (the wallet's own count, less what already waits). Returns { coins, capped }.
+ */
+function recordBattle(result) {
+  const want = result === 'win' ? (FRIEND ? LOOT.friendWin : LOOT.win) : result === 'draw' ? LOOT.draw : LOOT.loss;
+  const v = readJson(KEY);
+  const pending = Math.max(0, v.pending | 0);
+  let earned = 0;
+  try {
+    const e = JSON.parse(localStorage.getItem('stapel.v1.econ') || 'null');
+    if (e?.earned?.day === dateKeyFor()) earned = Math.max(0, e.earned.n | 0);
+  } catch { /* a new wallet */ }
+  const coins = Math.max(0, Math.min(want, EARN.dayCap - earned - pending));
+  saveRecord({ pending: Math.min(5000, pending + coins), played: (v.played | 0) + 1, wins: (v.wins | 0) + (result === 'win' ? 1 : 0) });
+  return { coins, capped: coins < want };
+}
 const myName = String(readJson('stapel.v1')?.duel?.name || '').slice(0, 16);
 /** Today's Daily Tower Perfeks, at most BUDGET.dailyMax: extra blocks for every battle today. */
 const myBonus = Math.max(0, Math.min(BUDGET.dailyMax, Math.floor(Number(readJson('stapel.v1.kasteeldae')?.[dateKeyFor()]?.p) || 0)));
@@ -1161,8 +1183,10 @@ function gameOver(result, why) {
   const title = result === 'win' ? T.win : result === 'lose' ? (FRIEND ? `${foeName.toUpperCase()} ${T.lose.split(' ').slice(1).join(' ')}` : T.lose) : T.draw;
   const sub = why === 'gone' ? T.gone(foeName) : why === 'sea' ? (result === 'win' ? T.winSeaOf(foeName) : result === 'lose' ? T.loseSea : T.drawSea) : T.drawSudden;
   const st = G.stats;
+  const loot = recordBattle(result);
+  const lootLine = loot.coins ? `<p class="bt-loot">${T.loot(loot.coins)}</p>` : loot.capped ? `<p class="bt-loot is-full">${T.lootFull}</p>` : '';
   setTimeout(() => {
-    hud.modal(`<div class="bt-res is-${result}"><small>${T.title}</small><h2>${title}</h2><p>${sub}</p>
+    hud.modal(`<div class="bt-res is-${result}"><small>${T.title}</small><h2>${title}</h2><p>${sub}</p>${lootLine}
       <dl><div><dt>${T.stats.pb}</dt><dd>${st.pb[ME]}</dd></div><div><dt>${T.stats.pt}</dt><dd>${st.pt[ME]}</dd></div>
       <div><dt>${T.stats.hits}</dt><dd>${st.hits[ME]}</dd></div><div><dt>${T.stats.sunk}</dt><dd>${st.sunk[ME]}</dd></div></dl>
       <button class="bt-again" type="button">${T.again}</button><button class="bt-home" type="button">${T.toStapel}</button></div>`, {
@@ -1230,7 +1254,7 @@ function tick(dt, time) {
         if (seen || q.has('notip')) go();
         else {
           hud.modal(`<div class="bt-tip"><small>${T.title}</small><p>${T.tip}</p><p>${T.tip3}</p><p class="bt-tip2">${T.higher}</p><button class="bt-ok" type="button">${T.tipOk}</button></div>`, {
-            '.bt-ok': () => { hud.closeModal(); try { localStorage.setItem(KEY, JSON.stringify({ tip5: 1 })); } catch { /* */ } go(); },
+            '.bt-ok': () => { hud.closeModal(); saveRecord({ tip5: 1 }); go(); },
           });
         }
       }

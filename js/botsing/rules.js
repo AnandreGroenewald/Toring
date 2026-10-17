@@ -114,6 +114,11 @@ export const SETTLE = { speed: 0.14, ang: 0.005, steps: 36, maxMs: 9000, minMs: 
 /** Below the sea: a splash at the surface, gone from the physics at `gone` px down. */
 export const SEA = { gone: 140 };
 
+/**
+ * Coins for a battle (the owner, 18 Oct 2026: "Coins for wins", inside Oefen's daily coin limit like the Castle Series):
+ * they wait in the battle's record (`pending`) until Stapel adds them to the wallet (js/main.js, when Stapel opens).
+ */
+export const LOOT = Object.freeze({ win: 30, friendWin: 40, draw: 10, loss: 5 });
 /** Robot Rikus: how far off his angle (degrees, early turns and later) and his power, how far off his drop (px). */
 export const RIKUS = { aimSd: [2.6, 2.0], powerSd: 0.035, buildSd: 24, throwChance: 0.66, thinkMs: 1300 };
 
