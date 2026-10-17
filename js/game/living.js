@@ -130,9 +130,14 @@ export class Living {
     this.casting = createCasting(mine, this.tribe);
     this.theirCasting = createCasting(theirs, this.theirTribe);
     this.floors = new Map();       // block index -> { block, mine, wins: [{ s, who, gold }], key, rated, gone }
+    // (Blok vir Blok) floors that left this tower here, with who lived in them: the other game's report can bring the block
+    // back (it never fell there), and its people come back with it (block index -> { mine, was, wasN, rated })
+    this.left = new Map();
+    this.comingSeq = 0;            // the order people were sent to their rooms (the game's end moves the last ones in in it)
     this.people = 0;               // living in the tower now (yours)
     this.theirs = 0;               // ...and the other player's (Blok vir Blok)
     this.movedIn = 0;              // moved in this game (the ones who jumped too)
+    this.peak = 0;                 // the most of yours at once (the record: the toast says it the moment it is passed)
     this.jumped = 0;
     this.met = new Set();
     this.goldMet = [];
@@ -152,7 +157,11 @@ export class Living {
   }
 
   // ------------------------------------------------------------------------------------------- the floors
-  /** A block joined the tower: a floor, its windows dark until its landing is rated. (Again for a block brought back.) */
+  /**
+   * A block joined the tower: a floor, its windows dark until its landing is rated. (Again for a block brought back: in
+   * Blok vir Blok the other game's report can bring back a floor that fell only here; it keeps its owner, and whoever
+   * lived in it comes back with it, as they never left on the other phone.)
+   */
   landed(b) {
     if (this.dead || !b || b.destroyed || !this.fits(b)) return null;
     let f = this.floors.get(b.index);
@@ -160,14 +169,52 @@ export class Living {
     if (!f) {
       const n = windowSlots(b.geom).length;
       if (!n) return null;
-      f = { block: b, mine: this.ownerOf(b) !== false, wins: Array.from({ length: n }, () => ({ s: 'dark', who: null, gold: false })), key: `lvw_${++uid}`, rated: false, gone: false };
+      const left = this.left.get(b.index);
+      this.left.delete(b.index);
+      f = { block: b, mine: left ? left.mine : this.ownerOf(b) !== false, wins: Array.from({ length: n }, () => ({ s: 'dark', who: null, gold: false })), key: `lvw_${++uid}`, rated: !!left?.rated, gone: false };
       this.floors.set(b.index, f);
+      if (left?.was && this.jumpedNow(left.wasN)) this.comeBack(f, left.was);
     } else {
       f.block = b;
+      if (f.gone && f.was && this.jumpedNow(f.wasN)) this.comeBack(f, f.was);
       f.gone = false;
     }
+    f.was = null;
     this.dirty.add(f);
     return f;
+  }
+
+  /**
+   * (Blok vir Blok) Did people jump out in this turn (`n`: the turn they jumped in)? The report that brings their floor
+   * back is this turn's: a floor that fell in an earlier turn stayed down in that turn's report.
+   */
+  jumpedNow(n) {
+    const cur = this.scene.turns?.cur?.n;
+    return Number.isInteger(cur) && n === cur;
+  }
+
+  /** A floor brought back: the people who jumped out of it here are home again (its windows as they were). */
+  comeBack(f, was) {
+    let back = 0;
+    was.forEach((v, i) => {
+      const w = f.wins[i];
+      if (!w || w.s === 'home' || w.s === 'burnt') return;
+      if (v.s === 'home') {
+        Object.assign(w, { s: 'home', who: v.who, gold: !!v.gold, known: false });
+        if (f.mine) {
+          this.people++;
+          this.jumped = Math.max(0, this.jumped - 1);
+        } else {
+          this.theirs++;
+        }
+        back++;
+      } else if (v.s === 'boarded' && w.s === 'dark') {
+        w.s = 'boarded';
+      }
+    });
+    if (!back) return;
+    this.peak = Math.max(this.peak, this.people);
+    this.emit(0);
   }
 
   paint(f) {
@@ -222,6 +269,7 @@ export class Living {
     const per = (r === 'P' ? Math.max(0, combo - 1) : 0);
     spots.forEach((p, k) => {
       p.f.wins[p.slot].s = 'coming';
+      p.f.wins[p.slot].q = ++this.comingSeq;
       if (p.f.mine) this.opened.push([p.f.block.index, p.slot]);
       this.later(FIRST_MS + k * STEP_MS, () => this.moveIn(p.f, p.slot, k + per, k, p.f !== f));
     });
@@ -279,7 +327,7 @@ export class Living {
       // the other player's people move in behind their curtains: only the light comes on
       this.theirs++;
       this.dirty.add(f);
-      if (!this.quiet) {
+      if (!this.quiet && !this.hushed) {
         const p = windowWorld(b, slot);
         this.flash(p.x, p.y, windowSlots(b.geom)[slot], b.body.angle);
         this.emit(0);
@@ -288,12 +336,13 @@ export class Living {
     }
     this.people++;
     this.movedIn++;
+    this.peak = Math.max(this.peak, this.people);
     const fresh = !this.met.has(who) && !this.known(who, false);
     this.met.add(who);
     if (gold) this.goldMet.push(who);
     if (fresh && !this.newMet.includes(who)) this.newMet.push(who);
     this.dirty.add(f);
-    if (this.quiet) return;
+    if (this.quiet || this.hushed) return;
     this.emit(1);
     const p = windowWorld(b, slot);
     const s = windowSlots(b.geom)[slot];
@@ -379,8 +428,14 @@ export class Living {
   eject(f, quiet) {
     const b = f.block;
     let n = 0;
+    // (who lived there, and in which turn they jumped: a floor this turn's report brings back gets them again)
+    if (f.wins.some((w) => w.s === 'home')) {
+      f.was = f.wins.map((w) => ({ s: w.s, who: w.who, gold: w.gold }));
+      f.wasN = this.scene.turns?.cur?.n ?? null;
+    }
     const sea = this.scene.water ? this.scene.water.surfaceY : (b?.bottom || 0) + 400;
     f.wins.forEach((w, i) => {
+      if (f.mine && b && (w.s === 'coming' || w.s === 'home')) this.unopen(b.index, i);
       if (w.s === 'coming') w.s = 'dark';
       if (w.s !== 'home') return;
       if (!quiet && b && !b.destroyed) {
@@ -419,6 +474,11 @@ export class Living {
     return out;
   }
 
+  /** A window of yours emptied again before the report went (a mission, a fall): the other phone never moves anyone in. */
+  unopen(i, slot) {
+    this.opened = this.opened.filter(([a, b]) => a !== i || b !== slot);
+  }
+
   /** The other player's landing, as their game chose its rooms: the same people move into the same windows here. */
   openRooms(list) {
     const touched = new Set();
@@ -429,6 +489,7 @@ export class Living {
       const w = f.wins[slot];
       if (w.s !== 'dark' && w.s !== 'boarded') continue;
       w.s = 'coming';
+      w.q = ++this.comingSeq;
       touched.add(f);
       const n = k++;
       this.later(FIRST_MS + n * STEP_MS, () => this.moveIn(f, slot, n, n, false));
@@ -563,6 +624,8 @@ export class Living {
     for (const p of spots) {
       const w = p.f.wins[p.slot];
       if (!w) continue;
+      // (a window of yours that got people this turn and lost them again: the report never moves anyone in there)
+      if (p.f.mine && (w.s === 'coming' || w.s === 'home') && p.f.block) this.unopen(p.f.block.index, p.slot);
       if (w.s === 'coming') w.s = 'dark';
       if (w.s === 'home') {
         jumps.push({ f: p.f, slot: p.slot, who: w.who, mineFloor: p.f.mine });
@@ -644,7 +707,7 @@ export class Living {
   // ------------------------------------------------------------------------------------------- the town
   /** After a landing's people are in: the HUD's count, a new title, the record. */
   checkTown() {
-    if (this.dead || this.quiet) return;
+    if (this.dead || this.quiet || this.scene.over) return;   // (the game is over: the results card says it)
     const { now } = titleFor(this.people);
     if (now && now.id !== this.titleId) {
       const up = !this.titleId || this.rankOf(now.id) > this.rankOf(this.titleId);
@@ -734,8 +797,11 @@ export class Living {
       for (const [i, f] of this.floors) {
         if (f.block && f.block.destroyed) {
           this.free(f);
-          // (a Blok vir Blok block brought back gets its floor again from landed(): keep its people's record)
-          if (f.gone || f.wins.every((w) => w.s !== 'home')) this.floors.delete(i);
+          // (a Blok vir Blok block brought back gets its floor again from landed(): keep its owner and who lived there)
+          if (f.gone || f.wins.every((w) => w.s !== 'home')) {
+            this.floors.delete(i);
+            if (f.gone) this.left.set(i, { mine: f.mine, was: f.was || null, wasN: f.wasN ?? null, rated: f.rated });
+          }
         }
       }
     }
@@ -746,7 +812,9 @@ export class Living {
     const sc = this.scene;
     const cr = sc.crane;
     const mineNow = !sc.turns || !!sc.turns.cur?.mine;
-    const on = !!(cr && cr.hasBlock() && cr.visible && !sc.falling && !sc.over && mineNow && !sc.inputLocked);
+    const sp = sc.curSpec || {};
+    const rooms = !(sp.foundation || sp.gift || sp.log);   // (the Fondamentblok never gets rooms: no Perfek +N on it)
+    const on = !!(cr && cr.hasBlock() && cr.visible && !sc.falling && !sc.over && mineNow && !sc.inputLocked && rooms);
     if (!on) {
       if (this.tag.visible) this.tag.setVisible(false);
       return;
@@ -804,13 +872,31 @@ export class Living {
     if (b?.winImage) b.winImage.setVisible(!on);
   }
 
+  /**
+   * The game is over: everyone still on their way into a room moves in now, quietly and in the order they were sent (the
+   * results card, the record and Jou dorp count them, as a Blok vir Blok referee already did).
+   */
+  settleComing() {
+    const due = [];
+    for (const f of this.floors.values()) f.wins.forEach((w, i) => { if (w.s === 'coming') due.push({ f, i, q: w.q || 0 }); });
+    if (!due.length) return;
+    due.sort((a, c) => a.q - c.q);
+    this.hushed = true;
+    try {
+      for (const d of due) this.moveIn(d.f, d.i, 0, 1, false);
+    } finally {
+      this.hushed = false;
+    }
+  }
+
   /** The game is over: the town in numbers (the results card), and the lights twinkle through the reveal. */
   summary() {
+    this.settleComing();
     const { now } = titleFor(this.people);
     let rooms = 0;
     for (const f of this.floors.values()) if (!f.gone && f.mine) rooms += f.wins.filter((w) => w.s === 'home').length;
     return {
-      people: this.people, theirs: this.theirs, rooms, movedIn: this.movedIn, jumped: this.jumped,
+      people: this.people, peak: this.peak, theirs: this.theirs, rooms, movedIn: this.movedIn, jumped: this.jumped,
       title: now ? now.id : null, met: [...this.met], gold: [...this.goldMet], fresh: [...this.newMet],
       best: this.best,
     };

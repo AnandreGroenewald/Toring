@@ -85,7 +85,7 @@ const POSE = [360.125, -812.5, 0.0314, 120.5, -3.25];
 const snap = (i, r = 'G') => (r === 'X' ? { blocks: [], lost: [i] } : { blocks: [[i, 360 + i, 400 - 40 * i, 0.001, 0, r]], lost: [] });
 
 /** A Blok vir Blok room with two players who said hello (protocol v: 3 = 1.11, 4 = 1.12). Returns sockets by seat. */
-async function turnsRoom({ fresh = false, v = [3, 3] } = {}) {
+async function turnsRoom({ fresh = false, v = [3, 3], cards = [null, null] } = {}) {
   const clk = clock();
   const state = fakeState();
   let room = new MatchRoom(state, {}, { now: clk.now, upgrade });
@@ -94,8 +94,8 @@ async function turnsRoom({ fresh = false, v = [3, 3] } = {}) {
   const b = fakeSocket();
   await room.join(a);
   await room.join(b);
-  await say(room, a, { t: 'hello', name: 'Anna', v: v[0] });
-  await say(room, b, { t: 'hello', name: 'Bennie', v: v[1] });
+  await say(room, a, { t: 'hello', name: 'Anna', v: v[0], ...(cards[0] ? { card: cards[0] } : {}) });
+  await say(room, b, { t: 'hello', name: 'Bennie', v: v[1], ...(cards[1] ? { card: cards[1] } : {}) });
   clk.tick(DUEL.countdownMs);
   if (fresh) room = new MatchRoom(state, {}, { now: clk.now, upgrade });   // woken after hibernation
   const first = a.last('start').turn.seat;
@@ -488,7 +488,7 @@ test('1.12 emoji reactions: passed on in either mode, a known one only, at most 
 });
 
 test('(1.16) two protocol-8 games: the Living Tower battles (lv in the start; a joker may be a mission, passed on as counted; nobody left loses)', async () => {
-  const { room, first, bySeat } = await turnsRoom({ v: [8, 8] });
+  const { room, first, bySeat } = await turnsRoom({ v: [8, 8], cards: [{ tr: 'water' }, { tr: 'water' }] });
   const me = bySeat[first];
   const them = bySeat[1 - first];
   const meSeat = first;
@@ -501,7 +501,7 @@ test('(1.16) two protocol-8 games: the Living Tower battles (lv in the start; a 
     await say(room, ws, { t: 'settled', n, lost: false, r, snap: snap(n - 1, r), pp: people });
   };
   // a mission without a joker goes nowhere
-  await say(room, me, { t: 'mission', kind: 'vuur', at: [300, -200], hits: [[0, 1]], pp: pp(1, 0) });
+  await say(room, me, { t: 'mission', kind: 'water', at: [300, -200], hits: [[0, 1]], pp: pp(1, 0) });
   assert.equal(them.of('mission').length, 0, 'no joker, no mission');
   let n = 1;
   for (let k = 0; k < TURNS.jokerStreak7 - 1; k++) {
@@ -511,9 +511,26 @@ test('(1.16) two protocol-8 games: the Living Tower battles (lv in the start; a 
   await playP(me, n++, 'P', pp(9, 2));
   const noN = ({ n: _n, ...o }) => o;
   assert.deepEqual(noN(me.last('choose')), { t: 'choose', options: ['missie', ...TURNS.sabotages7], def: TURNS.sabotages7[0] }, 'the mission is offered first');
-  await say(room, me, { t: 'mission', kind: 'water', at: [320.5, -410], hits: [[1, 0], [1, 1], [3, 2]], pp: pp(9, 0) });
+  // (a mission a joker can't do is not passed on, and doesn't spend the joker: another tribe's, or at the sender's own floor)
+  await say(room, me, { t: 'mission', kind: 'vuur', at: [320.5, -410], hits: [[1, 0]], pp: pp(9, 0), k: 1 });
+  assert.equal(them.of('mission').length, 0, 'not this player\'s tribe');
+  assert.deepEqual(me.last('mission-ok'), { t: 'mission-ok', k: 1 }, 'answered all the same (not sent again)');
+  await say(room, me, { t: 'mission', kind: 'water', at: [320.5, -410], hits: [[0, 0]], pp: pp(9, 0), k: 2 });
+  assert.equal(them.of('mission').length, 0, 'a floor of the sender\'s own');
+  // their turn 6: the mission takes the last of their people
+  await say(room, me, { t: 'mission', kind: 'water', at: [320.5, -410], hits: [[1, 0], [1, 1], [3, 2]], pp: pp(9, 0), k: 3 });
   assert.deepEqual(noN(them.last('mission')), { t: 'mission', kind: 'water', at: [320.5, -410], hits: [[1, 0], [1, 1], [3, 2]] }, 'passed on as counted');
-  assert.equal(me.of('result').length, 0, 'their last chance: their next turn');
+  assert.deepEqual(me.last('mission-ok'), { t: 'mission-ok', k: 3 });
+  // said again after coming back: counted once (no second mission, no joker spent twice)
+  await say(room, me, { t: 'mission', kind: 'water', at: [320.5, -410], hits: [[1, 0], [1, 1], [3, 2]], pp: pp(9, 0), k: 3 });
+  assert.equal(them.of('mission').length, 1, 'once');
+  // their turn ends with nobody, but it was the turn the mission came in: their last chance is their NEXT turn
+  // (the same whichever reached the room first, the mission or their report)
+  await playP(them, n++, 'S', pp(9, 0));
+  assert.equal(me.of('result').length, 0, 'a last chance first');
+  assert.equal(me.last('turn').lc, undefined, 'my turn is no last chance');
+  await playP(me, n++, 'G', pp(9, 0));
+  assert.equal(them.last('turn').lc, true, 'their last chance, said with the turn');
   await playP(them, n++, 'S', pp(9, 0));   // a Skeef: still nobody
   const res = me.last('result');
   assert.ok(res, 'their people are gone');

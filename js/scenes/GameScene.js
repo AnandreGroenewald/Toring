@@ -449,6 +449,7 @@ export class GameScene extends Phaser.Scene {
         // (1.15.3) the newer rules (both games know them; Robot Rikus always): a faster crane, Wankelblok's pillar and
         // Gladde blok's ice on a turn's block (by block index, the same in both games), Haastig's short aim
         v7: d.duel.v7 === true, overrides: {},
+        seats: {},   // (1.16) turn n -> its seat (block n - 1 is that player's floor, here and on the other phone)
         hud: { n: 0, seat: 0, you: 0, mine: false, names: ['', ''], hearts: [0, 0], streaks: [0, 0], left: null, phase: 'wait' },
       }
       : null;
@@ -482,6 +483,7 @@ export class GameScene extends Phaser.Scene {
     this.towerTopY = LAYOUT.baseTopY;
     this.topBlock = null;
     this.maxHeightM = 0;
+    this.calmCastle = null;   // (1.17) the tower the last time it stood still: what a day's castle keeps
     this.nextMilestoneM = MILESTONE_STEP_M;   // the next height (m) that earns a saying toast
     this.zoneShown = 0;                       // the highest height zone whose banner this tower got
     this.score = 0;
@@ -606,8 +608,12 @@ export class GameScene extends Phaser.Scene {
           tribe: lo.tribe, theirTribe: this.duel?.oppTribe || null,
           seat: this.turns ? this.turns.you : null,   // (Blok vir Blok: each seat's people come in the same order on both phones)
           seed: this.seed, quiet: this.idle, best: lo.best, known: lo.known, firstTown: lo.firstTown, reducedMotion: this.reducedMotion,
-          // Blok vir Blok: one tower, two towns: a floor is yours when it was your turn's block
-          ownerOf: this.turns ? () => !!this.turns.cur?.mine : null,
+          // Blok vir Blok: one tower, two towns: a floor is yours when it was your turn's block (block i is turn i + 1's;
+          // by its turn, not by whose turn it is now: a block the other game's report brings back keeps its owner)
+          ownerOf: this.turns ? (b) => {
+            const seat = b ? this.turns.seats[b.index + 1] : undefined;
+            return seat === undefined ? !!this.turns.cur?.mine : seat === this.turns.you;
+          } : null,
         });
         if (lo.intro && !this.idle) {
           this.living.intro = () => {
@@ -702,6 +708,7 @@ export class GameScene extends Phaser.Scene {
     // (1.16) Die Lewende Toring's battles (Blok vir Blok, both games know them; Robot Rikus always): missions
     this.battles = !!(this.living && this.turns && this.duel?.lv);
     this.aim = null;
+    this.aimHeld = false;   // (a mission picked during your own turn: it is aimed once your block is down)
     if (this.battles) {
       this.offs.push(
         bus.on('turns:aim', () => this.startAim()),
@@ -1276,9 +1283,14 @@ export class GameScene extends Phaser.Scene {
         // Blok vir Blok: the turn ends once the tower is at rest (the next block comes with the next turn)
         this.spawnDue = null;
         this.turnSettled();
-      } else if (this.now >= this.calmCap || this.towerCalm()) {
-        this.spawnDue = null;
-        this.spawnBlock(this.i + 1);
+      } else {
+        const calm = this.towerCalm();
+        if (calm || this.now >= this.calmCap) {
+          this.spawnDue = null;
+          // (1.17) the Daily's tower at rest: the castle keeps this, never a collapse caught in the air
+          if (calm && this.mode === 'daily') this.calmCastle = this.castleLayout();
+          this.spawnBlock(this.i + 1);
+        }
       }
     }
     if (this.turns?.cur?.pendingReport) this.watchStep();
@@ -1494,6 +1506,7 @@ export class GameScene extends Phaser.Scene {
     const deadline = T.bot ? now + TURNS.turnMs : Math.min(now + TURNS.turnMs, Math.max(came + TURN_LIVE_MAX_MS, now + TURN_BACK_MS));
     // (1.15.3) Haastig: this turn has TURNS.rushMs to aim
     const rush = T.v7 && t.sab === 'rush';
+    T.seats[t.n] = seat;
     T.cur = {
       n: t.n, seat, mine, botTurn, dropped: false, ended: false, dropAt: 0,
       startedWall: came, deadline: rush ? Math.min(deadline, now + TURNS.rushMs) : deadline, livesAt: t.hearts[seat], lost: [],
@@ -1523,8 +1536,13 @@ export class GameScene extends Phaser.Scene {
     this.autoOn = botTurn || (mine && T.myAuto > 0);
     if (this.crane.hasBlock()) this.crane.release(0);
     if (mine && this.aim) this.fireAim();   // (1.16) a mission still being aimed goes where it points: your block comes
-    // (1.16) down to nobody: this turn is the last chance
-    if (mine && this.battles && t.n > TURNS.lvSafeTurns && this.living.people === 0) {
+    // (1.16) a mission picked during your own turn: aimed now, while the other player builds
+    if (!mine && this.aimHeld && !this.over) {
+      this.aimHeld = false;
+      this.startAim();
+    }
+    // (1.16) down to nobody: the referee says this turn is the last chance (the same in both games, whatever came first)
+    if (mine && this.battles && t.lc) {
       this.time.delayedCall(400, () => bus.emit('hud:banner', { emoji: '⚠️', title: S.lvLastChance, subtitle: S.lvLastChanceSub, kind: 'stage' }));
     }
     this.spawnBlock(t.n - 1);
@@ -3832,22 +3850,36 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * (1.17) The standing tower as the castle keeps it: per block its shape and size, the middle of its bottom edge (game
-   * metres from the base's middle, y up), its turn (anticlockwise) and its rating.
+   * metres from the base's middle, y up), its turn (anticlockwise, within half a turn: a block that spun as it fell and
+   * came to rest has a raw angle of several turns) and its rating. `top`: its highest point (m).
    */
   castleLayout() {
     const out = [];
     const r2 = (v) => Math.round(v * 100) / 100;
+    let top = 0;
     for (const b of this.tower) {
-      if (!b?.body || !b.geom || !b.spec) continue;
+      if (!b?.body || !b.geom || !b.spec || b.destroyed || b.state === 'lost' || b.state === 'falling') continue;
       const g = b.geom;
-      const a = b.body.angle;
+      const a = Math.atan2(Math.sin(b.body.angle), Math.cos(b.body.angle));
+      if (Number.isFinite(b.top)) top = Math.max(top, (LAYOUT.baseTopY - b.top) / PX_PER_M);
       const ox = g.w / 2 - g.cx;
       const oy = g.h - g.cy;
       const px = b.body.position.x + ox * Math.cos(a) - oy * Math.sin(a);
       const py = b.body.position.y + ox * Math.sin(a) + oy * Math.cos(a);
       out.push({ s: b.spec.shape, k: b.spec.scale ?? 1, x: r2((px - BASE_CX) / PX_PER_M), y: r2((LAYOUT.baseTopY - py) / PX_PER_M), r: Math.round(-a * 1000) / 1000, q: b.rating || 'S' });
     }
+    out.top = r2(top);
     return out;
+  }
+
+  /**
+   * (1.17) The castle's tower at the end of a Daily: the tower now if it stands still, else as it last stood still (the
+   * game ends in the middle of a fall: the blocks still in the air would be cemented there, hanging or tilted).
+   */
+  castleAtEnd() {
+    if (this.dynDirty) this.rebuildDyn();
+    if (this.towerCalm() || !this.calmCastle) return this.castleLayout();
+    return this.calmCastle;
   }
 
   buildResult(reason) {
@@ -3920,7 +3952,11 @@ export class GameScene extends Phaser.Scene {
     this.result = result;
     // (1.17) Die Kasteelreeks: a day's tower becomes a tower of the player's castle (main.js keeps it)
     if (this.mode === 'daily' && this.dateKey) {
-      try { bus.emit('game:castle', { dateKey: this.dateKey, heightM: result.heightM, perfects: result.perfects, layout: this.castleLayout() }); } catch { /* the castle is a bonus */ }
+      try {
+        const layout = this.castleAtEnd();
+        // (standM: how tall the kept tower stands, for the day's pick between tries; heightM is the try's best moment)
+        bus.emit('game:castle', { dateKey: this.dateKey, heightM: result.heightM, standM: layout.top || 0, perfects: result.perfects, layout: [...layout] });
+      } catch { /* the castle is a bonus */ }
     }
     // the tower ended by itself (hearts, flood, quit): the match hears it before the result is built
     if (this.duel && reason !== 'won' && reason !== 'lost') bus.emit('duel:over', { reason, t: this.now });
@@ -4081,6 +4117,14 @@ export class GameScene extends Phaser.Scene {
   // -------------------------------------------------------------------------
   startAim() {
     if (!this.battles || this.over || this.aim) return;
+    // (the joker's choice can still be open when your own turn comes: aiming then would take the taps meant for your block,
+    // and its clock drops the block for you; the mission waits for the other player's turn)
+    const c = this.turns?.cur;
+    if (c && c.mine && !c.ended) {
+      if (!this.aimHeld) bus.emit('hud:toast', { text: S.lvAimHeld, color: '#ffe38c' });
+      this.aimHeld = true;
+      return;
+    }
     const L = this.living;
     const kind = L.tribe;
     this.aim = {

@@ -65,9 +65,23 @@ function shapeSvg(shape) {
 }
 const shortName = (n) => (/^Klein /.test(n) ? n : String(n).split(/[ -]/)[0]);
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const PROFILE_KEY = 'stapel.v1.lewende';
+// (its own key: 'stapel.v1.lewende' is the Living Tower's record in Stapel itself, js/core/living.js, another shape)
+const PROFILE_KEY = 'stapel.v1.lewende.idees';
+const OLD_KEY = 'stapel.v1.lewende';
 function readJson(key, d) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : d; } catch { return d; } }
 function writeJson(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* private mode */ } }
+/** The preview's profile; one kept under the old shared key (a tester's vote number) comes along once. */
+function readProfile(d) {
+  const ok = (o) => ({ ...d, ...o, played: Array.isArray(o.played) ? o.played : [] });
+  const own = readJson(PROFILE_KEY, null);
+  if (own && typeof own === 'object') return ok(own);
+  const old = readJson(OLD_KEY, null);
+  if (old && typeof old === 'object' && ('voter' in old || 'pts' in old)) {
+    const { pts, xp, tribe, played, vote, voter } = old;
+    return ok(Object.fromEntries(Object.entries({ pts, xp, tribe, played, vote, voter }).filter(([, v]) => v !== undefined)));
+  }
+  return ok({});
+}
 
 /**
  * The Living Tower's screens. `host`: { root (the #ui element), name() (the player's nickname), apiUrl() (the Worker),
@@ -78,7 +92,7 @@ export function createLewendeUi(host) {
   el.className = 'lt-root';
   el.hidden = true;
   host.root.appendChild(el);
-  let st = readJson(PROFILE_KEY, { pts: 640, xp: 1650, tribe: 'vuur', played: [], vote: null, voter: null });
+  let st = readProfile({ pts: 640, xp: 1650, tribe: 'vuur', played: [], vote: null, voter: null });
   const save = () => writeJson(PROFILE_KEY, st);
   const me = () => ({ name: host.name() || 'Jy', av: TRIBE_INFO[st.tribe]?.hero || 'braai', pts: st.pts, xp: st.xp, tribe: st.tribe });
   const face = (id, cls = '') => `<img class="lt-face ${cls}" alt="" src="${portraitDataUrl(id, 112) || ''}">`;

@@ -24,7 +24,7 @@ import {
 } from '../../js/core/duel.js';
 import { cleanCard } from '../../js/core/economy.js';
 import { lobbyVotes } from './ideas.js';
-import { createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, firstSeat, sabotagesFor, cleanVis, cleanPeople, cleanMission, cleanRooms } from '../../js/core/turns.js';
+import { createTurnReferee, cleanPose, cleanSnap, cleanRating, snapFits, firstSeat, sabotagesFor, cleanVis, cleanPeople, cleanMission, cleanRooms, missionFits } from '../../js/core/turns.js';
 
 const MSG_MAX = 512;                   // characters per message (the lobby)
 const ROOM_MSG_MAX = 2048;             // in a room: a Blok vir Blok turn's report carries the loose top
@@ -50,8 +50,10 @@ const PROTOCOL_STAKES = 6;  // 1.13: coin matches (a room's stake); a staked roo
 // crane) when both games know them; the lobby's offers (another stake or mode); "Speel weer" for another stake
 const PROTOCOL_V7 = 7;
 // 1.16: Die Lewende Toring's battles in Blok vir Blok when both games know them: a joker may be a mission (your tribe at the
-// other player's floors: 'mission', passed on as the attacker's game counted it), the games report the people
-// ('settled' and 'mission' carry pp: [seat 0, seat 1]), and nobody left in the tower loses
+// other player's floors: 'mission', passed on as the attacker's game counted it when a joker can do it, answered with
+// 'mission-ok' k so a game back on a new connection sends it again only until then), the games report the people
+// ('settled' and 'mission' carry pp: [seat 0, seat 1]), and nobody left in the tower loses (a turn says `lc` when it
+// is that player's last chance)
 const PROTOCOL_LIVING = 8;
 /** (1.13) A stake as asked for: one of DUEL.stakes, else 0 (no stake). */
 const stakeOf = (n) => (DUEL.stakes.includes(Number(n)) ? Number(n) : 0);
@@ -132,6 +134,7 @@ function turnMsg(e) {
   return {
     n: e.n, seat: e.seat, hearts: e.hearts, streaks: e.streaks, sab: e.sab,
     ...(e.ev ? { ev: e.ev } : {}), ...(e.nx ? { nx: e.nx } : {}),
+    ...(e.lc ? { lc: true } : {}),   // (1.16) that player's last chance (down to nobody)
   };
 }
 
@@ -754,6 +757,13 @@ export class MatchRoom {
       // (1.15.3) the newer rules only when both games know them: a match with an older game plays as before
       m.v7 = [0, 1].every((k) => version(this.socketFor(k)) >= PROTOCOL_V7);
       m.lv = m.v7 && [0, 1].every((k) => version(this.socketFor(k)) >= PROTOCOL_LIVING);   // (1.16) the battles
+      if (m.lv) {
+        // (1.16) what a mission is checked against: each player's tribe (their card), the blocks' middles as the turns'
+        // reports left them, and each player's missions so far (one said again after coming back counts once)
+        m.tribes = [0, 1].map((k) => cleanCard(att(this.socketFor(k)).card).tr);
+        m.pos = {};
+        m.missions = [0, 0];
+      }
       const ref = createTurnReferee({ first: firstSeat(randFloat), seed: m.seed, rounds: m.rounds, v7: m.v7, lv: m.lv });
       const [e] = ref.start();
       m.tref = ref.snapshot();
@@ -823,11 +833,26 @@ export class MatchRoom {
       return;
     }
     if (msg.t === 'mission') {
-      // (1.16) a joker spent on a mission: the other game shows it exactly as the attacker's game counted it
+      // (1.16) a joker spent on a mission: the other game shows it exactly as the attacker's game counted it, if it is
+      // one a joker can do (its tribe, the other player's floors, as far as it reaches from its aim)
       const ms = cleanMission(msg);
       if (!ms) return;
-      events = ref.mission(seat, ms.pp || null);
-      if (!events.length) return;
+      // k: the sender's missions so far; one said again after coming back (it never heard 'mission-ok') counts once
+      const k = Number.isInteger(msg.k) && msg.k > 0 && msg.k < 1000 ? msg.k : null;
+      if (!m.missions) m.missions = [0, 0];
+      const ok = () => { if (k !== null) this.tell(seat, { t: 'mission-ok', k }); };
+      if (k !== null && k <= m.missions[seat]) {
+        ok();
+        return;
+      }
+      const fits = missionFits(ms, { seat, first: ref.first, n: ref.n, tribe: m.tribes?.[seat] || null, pos: m.pos || null });
+      events = fits ? ref.mission(seat, ms.pp || null) : [];
+      if (k !== null) m.missions[seat] = k;
+      ok();
+      if (!events.length) {
+        if (k !== null) await this.save();
+        return;
+      }
       this.tell(1 - seat, { t: 'mission', kind: ms.kind, at: ms.at, hits: ms.hits, ...this.turnTag(1 - seat, ref.n) });
     } else if (msg.t === 'settled') {
       const snap = cleanSnap(msg.snap);
@@ -839,6 +864,11 @@ export class MatchRoom {
       const k = Number.isInteger(msg.k) && msg.k >= 0 && msg.k <= 100000 ? msg.k : null;
       // (1.16) the rooms the landing opened, as that game chose them: the other game moves the same people in
       const rooms = ref.lv ? cleanRooms(msg.rooms) : null;
+      if (ref.lv) {   // (1.16) where the blocks are now, for the missions' check
+        if (!m.pos) m.pos = {};
+        for (const [i, x, y] of snap.blocks) m.pos[i] = [Math.round(x), Math.round(y)];
+        for (const i of snap.lost) delete m.pos[i];
+      }
       this.tell(1 - seat, { t: 'settled', n: ref.n, lost, r, snap, ...(k !== null ? { k } : {}), ...(rooms && rooms.length ? { rooms } : {}) });
       events = ref.settled(seat, { n: ref.n, lost, r, vis: cleanVis(msg.vis), pp: cleanPeople(msg.pp) });
     } else if (msg.t === 'joker') {

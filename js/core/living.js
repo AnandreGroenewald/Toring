@@ -11,6 +11,7 @@
 // js/game/living.js.
 
 import { createRng } from './rng.js';
+import { safeLocalStorage } from './storage.js';
 
 export const LIVING = Object.freeze({
   maxRoomsPerLanding: 6,   // a long run of Perfeks keeps lighting windows, six at most per landing
@@ -110,8 +111,11 @@ function clean(raw) {
   return d;
 }
 
-/** The Living Tower's own little store (its own key: the main save and the cloud save stay as they are). */
-export function createLivingStore(backend = typeof localStorage !== 'undefined' ? localStorage : null) {
+/**
+ * The Living Tower's own little store (its own key: the main save and the cloud save stay as they are). (A browser that
+ * blocks site data throws on the very mention of localStorage: safeLocalStorage keeps it in memory for the visit.)
+ */
+export function createLivingStore(backend = safeLocalStorage()) {
   let data = blank();
   const load = () => {
     try {
@@ -134,14 +138,17 @@ export function createLivingStore(backend = typeof localStorage !== 'undefined' 
     markIntro() { load(); if (!data.intro) { data.intro = true; save(); } },
     /** Has this person ever lived in one of your towers (and in gold)? */
     known(id, gold = false) { load(); return !!(gold ? data.gold[id] : data.met[id]); },
-    /** A game's town: the people who moved in (ids, gold ones) and how many lived there at the end. */
-    record({ people = 0, met = [], gold = [] } = {}) {
+    /**
+     * A game's town: the people who moved in (ids, gold ones), how many lived there at the end, and `peak`: the most at
+     * once (the record: the game cheers "Nuwe rekord" the moment the town passes it, and a later fall can't take it back).
+     */
+    record({ people = 0, peak = 0, met = [], gold = [] } = {}) {
       load();
       const first = !Object.keys(data.met).length;   // the player's first town: everyone is new, nobody is marked so
       for (const id of met) if (CAST_TRIBE[id]) data.met[id] = (data.met[id] || 0) + 1;
       for (const id of gold) if (CAST_TRIBE[id]) data.gold[id] = (data.gold[id] || 0) + 1;
       const was = data.best;
-      const n = Math.max(0, Math.floor(people) || 0);
+      const n = Math.max(0, Math.floor(people) || 0, Math.floor(peak) || 0);
       if (n > data.best) {
         data.best = n;
         data.bestTitle = titleFor(n).now?.id || null;

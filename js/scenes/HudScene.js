@@ -385,7 +385,8 @@ export class HudScene extends Phaser.Scene {
     this.drawWobble(0);
 
     // --- Hint (over the sea below the base, clear of the landing spot) ---------
-    this.hint = add(text(this, W / 2, LAYOUT.dropLineY + st + 160, '', 40, { strokeMul: 0.14, emoji: true }).setOrigin(0.5).setVisible(false));
+    this.hint = add(text(this, W / 2, LAYOUT.dropLineY + st + 160, '', 40, { strokeMul: 0.14, emoji: true, align: 'center' }).setOrigin(0.5).setVisible(false));
+    this.hint.setWordWrapWidth(W - 80, true);   // (a long hint, like a mission's aim, wraps; its pulse still fits the screen)
     this.hintTween = null;
 
     // --- Coach (first game only): a roomy pill over the sea, well below the landing spot ---------
@@ -583,7 +584,28 @@ export class HudScene extends Phaser.Scene {
     const bar = add(this.add.image(x - barW / 2, y + LV_H / 2 - 7, 'fx_px').setOrigin(0, 0.5).setDisplaySize(1, 5).setTint(0xffd23f));
     const cap = add(text(this, x, y + LV_H / 2 + 14, '', 19, { color: '#ffe38c', strokeMul: 0.24, shadow: false, emoji: true }).setOrigin(0.5));
     this.lv = { x, y, bg, face, num, lbl, bar, barW, cap, shown: 0, truth: 0, theirs: 0, changedAt: 0, title: '', prog: 0, faceId: null };
+    // (where the shake starts from and comes back to: shakes that overlap never leave the counter off its place)
+    this.lv.home = [bg.x, face.x, num.x];
     this.placeLiving();
+  }
+
+  /** People jumped: the counter shakes (from its own place, however often it comes). */
+  shakeLiving() {
+    const lv = this.lv;
+    lv.shake?.stop();
+    const [bx, fx, nx] = lv.home;
+    const put = (d) => {
+      lv.bg.x = bx + d;
+      lv.face.x = fx + d;
+      lv.num.x = nx + d;
+      this.placeLiving();
+    };
+    lv.shake = this.tweens.addCounter({
+      from: 0, to: 7, duration: 45, yoyo: true, repeat: 3,
+      onUpdate: (tw) => put(tw.getValue()),
+      onComplete: () => put(0),
+      onStop: () => put(0),
+    });
   }
 
   placeLiving() {
@@ -612,7 +634,7 @@ export class HudScene extends Phaser.Scene {
       if (l.delta < 0 && !lv.duel) {
         lv.num.setColor('#ff8a8a');
         this.time.delayedCall(650, () => { if (lv.num.scene) lv.num.setColor('#ffffff'); });
-        this.tweens.add({ targets: [lv.bg, lv.face, lv.num, lv.lbl], x: '+=7', duration: 45, yoyo: true, repeat: 3 });
+        this.shakeLiving();
       } else if (l.delta < 0 && this.duelHud?.you) {
         this.pulse(this.duelHud.you.bg, 1.08);
       }

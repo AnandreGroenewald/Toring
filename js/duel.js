@@ -38,7 +38,9 @@ const PROTOCOL = 8;            // 2: the first to a height mark chooses the puni
                               // Wankelblok / Haastig / Gladde blok, a faster crane); the lobby's offers ('offer'); "Speel weer"
                               // for another stake ('again' with `stake`)
                               // 8 (1.16): Die Lewende Toring's battles in Blok vir Blok when both know them (start `lv`): a
-                              // joker may be a mission ('mission': kind, at, hits, pp), 'settled' carries the people (pp)
+                              // joker may be a mission ('mission': kind, at, hits, pp, k: our missions so far, said again
+                              // after coming back until the room's 'mission-ok' k), 'settled' carries the people (pp), a
+                              // 'turn' says `lc` when it is that player's last chance (down to nobody)
 const V5 = 5;                  // the protocol that brought rejoin, "Speel weer" and the pause for both (a 1.12.1 game has them too)
 const REJOIN_RETRY_MS = [600, 1200, 2000, 3000];   // a dropped match tries its room again after these (then every 3 s)
 // (1.13) a coin match is settled by the room's result only: after our tower ended (or we quit) the game waits this long
@@ -175,6 +177,7 @@ export function createDuel({
       backAt: 0,   // when this game last came back to its room (a verdict on its way gets a full wait from then)
       rejoin: null,
       outbox: [], jokerOut: null, chosen: {}, overMsg: null,
+      missions: 0, missionPend: null,   // (1.16) our missions so far, and the last one until the room says it has it
       seen: new Set(),
       paused: null, pausesLeft: DUEL.pauses,
       again: null,
@@ -439,6 +442,7 @@ export function createDuel({
       sab: isSabotage(e.sab, true) ? e.sab : null,   // (1.15.3: the referee only sends a newer one when both games know it)
       ev: cleanRound(e.ev),   // (1.12) this turn's round: the weather or visitor both players get
       nx: cleanRound(e.nx),   // ...and the round the next turn begins (shown coming)
+      ...(e.lc === true ? { lc: true } : {}),   // (1.16) this player is down to nobody: this turn is their last chance
     };
   }
 
@@ -492,8 +496,12 @@ export function createDuel({
     m.missionOut = false;
     const ms = cleanMission(d);
     if (!ms) return;
-    if (m.kind === 'live') send(m.ws, { t: 'mission', n: m.turn?.n || 0, ...ms });
-    else turnEvents(m, m.tref.mission(m.you, ms.pp || null));
+    if (m.kind === 'live') {
+      // (said again after coming back until the room has it: our game has already struck; k makes it count once)
+      m.missions += 1;
+      m.missionPend = { t: 'mission', n: m.turn?.n || 0, k: m.missions, ...ms };
+      send(m.ws, m.missionPend);
+    } else turnEvents(m, m.tref.mission(m.you, ms.pp || null));
   });
   // (1.16) Robot Rikus's mission has landed (the game aimed and showed it): the referee counts it
   bus.on('turns:bot-mission-done', (d) => {
@@ -578,6 +586,9 @@ export function createDuel({
         break;
       case 'sabotage':
         if (isSabotage(msg.kind, m.v7) && once()) sabotageIn(m, msg.kind);
+        break;
+      case 'mission-ok':   // (1.16) the room has our mission (passed on, or not a joker's after all): not again
+        if (m.missionPend && msg.k === m.missionPend.k) m.missionPend = null;
         break;
       case 'mission': {   // (1.16) the other player's mission, as their game counted it
         const ms = cleanMission(msg);
@@ -1085,6 +1096,7 @@ export function createDuel({
     } else {
       for (const o of m.outbox) send(ws, o);   // (the room passes each on once, and scores a report once)
       if (m.jokerOut) send(ws, m.jokerOut);
+      if (m.missionPend) send(ws, m.missionPend);   // (1.16: the room counts it once, by its k)
     }
     if (m.overMsg) send(ws, m.overMsg);
     if (msg.paused && typeof msg.paused === 'object') onShared(m, { t: 'paused', ...msg.paused });

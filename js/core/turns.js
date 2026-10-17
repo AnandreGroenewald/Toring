@@ -125,8 +125,9 @@ const seatOk = (s) => s === 0 || s === 1;
  * The referee. `first` is the seat that drops the first block; with `rounds` (1.12, both games know
  * them) and the match `seed`, turns bring the rounds' weather and visitors; with `v7` (1.15.3, both games
  * know it) three Perfeks in a row earn a joker and it has the newer sabotages. Events:
- *  { type: 'turn', n, seat, hearts, streaks, sab, ev, nx }  turn n is seat's (sab: a sabotage on this block,
- *      ev: this turn's round event, nx: the round that begins with the next turn (to show it coming))
+ *  { type: 'turn', n, seat, hearts, streaks, sab, ev, nx, lc }  turn n is seat's (sab: a sabotage on this block,
+ *      ev: this turn's round event, nx: the round that begins with the next turn (to show it coming), lc (1.16
+ *      battles): this player is down to nobody and this turn is their last chance)
  *  { type: 'joker', seat }                           seat earned a joker: they choose a sabotage
  *  { type: 'sent', seat, kind }                      seat's sabotage waits for the other player's next block
  *  { type: 'result', winner, reason, hearts }        'hearts' | 'quit' | 'timeout' | 'turns'
@@ -145,12 +146,15 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
     rounds: !!rounds && typeof seed === 'string' && seed.length > 0,
     seed: typeof seed === 'string' ? seed : null,
     v7: !!v7,
-    // (1.16, protocol 8) Die Lewende Toring's battles: each seat's people as the games count them, and who is down to
-    // nobody (that player's next turn is their last chance to get people back)
+    // (1.16, protocol 8) Die Lewende Toring's battles: each seat's people as the games count them, and since which turn
+    // a player is down to nobody (null: they have people): their next turn after that one is their last chance
     lv: !!lv && !!v7,
     people: [0, 0],
-    empty: [false, false],
+    emptyAt: [null, null],
   };
+  // (a referee saved before the turn of emptiness was kept: down to nobody counts from the turn before)
+  if (!Array.isArray(s.emptyAt)) s.emptyAt = (Array.isArray(s.empty) ? s.empty : [false, false]).map((e) => (e ? Math.max(0, s.n - 1) : null));
+  delete s.empty;
   let plan = null;
   const planOf = () => plan || (plan = s.rounds ? turnRounds(s.seed) : []);
   const evAt = (n) => (s.rounds ? roundFor(planOf(), n) : null);
@@ -160,8 +164,11 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
     return {
       type: 'turn', n: s.n, seat: s.seat, hearts: [...s.hearts], streaks: [...s.streak], sab: s.sabNow || null,
       ev: evAt(s.n), nx: nx && nx.first ? nx : null,
+      ...(lastChance(s.seat) ? { lc: true } : {}),
     };
   };
+  /** (1.16) Seat is down to nobody since an earlier turn than this one: this turn is their last chance. */
+  const lastChance = (seat) => s.lv && s.emptyAt[seat] !== null && s.emptyAt[seat] < s.n;
 
   function next() {
     s.n += 1;
@@ -182,24 +189,35 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
   }
 
   /**
-   * (1.16) The people as a game counts them ([seat 0, seat 1]). From TURNS.lvSafeTurns on, a player down to nobody gets
-   * one more turn: still nobody at the end of it (`ended`: the seat whose turn just ended) loses.
+   * (1.16) The people as a game counts them ([seat 0, seat 1]; `from`: the seat whose game counted them). From
+   * TURNS.lvSafeTurns on, a player seen with nobody is down to nobody since this turn; only their own game's count of
+   * people brings them back (the other game's count of them can lag behind a mission or a fall there). Returns the
+   * cleaned count (null: none came).
    */
-  function peopleNow(pp, ended = null) {
+  function takePeople(pp, from) {
     const p = cleanPeople(pp);
     if (!s.lv || !p) return null;
     s.people = p;
-    if (!s.empty) s.empty = [false, false];
-    if (s.n < TURNS.lvSafeTurns) return null;
+    if (s.n < TURNS.lvSafeTurns) return p;
     for (const k of [0, 1]) {
-      if (s.people[k] > 0) {
-        s.empty[k] = false;
-      } else if (k === ended && s.empty[k] && s.people[1 - k] > 0) {
-        return decide(1 - k, 'people');
-      } else if (k !== ended || !s.empty[k]) {
-        s.empty[k] = true;
+      if (p[k] === 0) {
+        if (s.emptyAt[k] === null) s.emptyAt[k] = s.n;
+      } else if (k === from) {
+        s.emptyAt[k] = null;
       }
     }
+    return p;
+  }
+
+  /**
+   * (1.16) Seat's own turn ended with nobody of theirs left (their own count): down to nobody since an earlier turn, this
+   * was their last chance, and they lose (while the other player has people). Down to nobody only since this turn (their
+   * block, a fall or a mission during it): the next turn is their last chance. Whichever of a mission and this report
+   * reached the referee first, the last chance is the same turn.
+   */
+  function peopleGone(seat, p) {
+    if (!s.lv || !p || s.n < TURNS.lvSafeTurns || p[seat] > 0) return null;
+    if (s.emptyAt[seat] !== null && s.emptyAt[seat] < s.n && s.people[1 - seat] > 0) return decide(1 - seat, 'people');
     return null;
   }
 
@@ -217,6 +235,8 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
     settled(seat, { n, lost = false, r = 'S', vis = null, pp = null } = {}) {
       if (s.result || seat !== s.seat || n !== s.n || s.n < 1) return [];
       const events = [];
+      // (1.16) this report's people first: a result says the people as this turn left them
+      const p = takePeople(pp, seat);
       // a turn costs at most one heart; beating the round's visitor gives one back (never above the start)
       const ev = evAt(s.n);
       const beat = TURNS.visitorHeart && !!ev && beatVisitor(ev.kind, r, cleanVis(vis));
@@ -236,7 +256,7 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
         events.push(decide(1 - seat, 'hearts'));
         return events;
       }
-      const gone = peopleNow(pp, seat);
+      const gone = peopleGone(seat, p);
       if (gone) {
         events.push(gone);
         return events;
@@ -264,10 +284,8 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
     mission(seat, pp = null) {
       if (s.result || !s.lv || !seatOk(seat) || s.jokers[seat] < 1) return [];
       s.jokers[seat] -= 1;
-      const events = [{ type: 'mission', seat }];
-      const gone = peopleNow(pp);
-      if (gone) events.push(gone);
-      return events;
+      takePeople(pp, seat);   // (nobody loses at a mission: at the end of their own turn, by their own count)
+      return [{ type: 'mission', seat }];
     },
 
     /** A player left (or quit): the other one wins. */
@@ -284,6 +302,7 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
 
     get n() { return s.n; },
     get seat() { return s.seat; },
+    get first() { return s.first; },
     get hearts() { return [...s.hearts]; },
     get perfects() { return [...s.perfects]; },
     get streaks() { return [...s.streak]; },
@@ -292,7 +311,9 @@ export function createTurnReferee({ first = 0, init = null, seed = null, rounds 
     get v7() { return !!s.v7; },
     get lv() { return !!s.lv; },
     get people() { return [...(s.people || [0, 0])]; },
-    get empty() { return [...(s.empty || [false, false])]; },
+    get empty() { return s.emptyAt.map((t) => t !== null); },
+    /** (1.16) Is this turn seat's last chance (down to nobody since an earlier turn)? */
+    lastChance(seat) { return !!lastChance(seat); },
     get jokers() { return [...s.jokers]; },
     get result() { return s.result ? { ...s.result } : null; },
     snapshot() { return clone(s); },
@@ -399,6 +420,50 @@ export function cleanMission(o) {
   }
   const pp = cleanPeople(o.pp);
   return { kind: o.kind, at: [o.at[0], o.at[1]], hits, ...(pp ? { pp } : {}) };
+}
+
+// (1.16) How far each mission can reach (js/game/living.js: Veldbrand's oval round the aim, Waterwiel's nearest floors,
+// Rankgryp's column up from the aim and its extra grab), as Ekstra sterk makes them, with room for a block's own size
+// round its middle (a window can sit up to half a block from it).
+const MISSION_REACH = Object.freeze({
+  vuur: Object.freeze({ dx: 135, dy: 84, floors: 8 }),
+  water: Object.freeze({ floors: 3 }),
+  gras: Object.freeze({ dx: 56, up: 330, down: 40, floors: 12, extra: 2 }),
+});
+const BLOCK_HALF = 200;   // px: a window up to half the widest block (224 px) from its middle, and a block moved since its report
+const WINDOWS_MAX = 4;    // windows in one floor (js/game/residents.js MAX_WIN)
+
+/**
+ * (1.16) Does a mission fit what a joker can do (the room's check before it passes one on: a game can't make one up
+ * that burns windows anywhere)? `seat`: who sent it; `first`: who dropped the first block (block i is turn i + 1's,
+ * that player's floor); `n`: the turn now; `tribe`: the sender's tribe, when the room knows it; `pos`: the blocks'
+ * middles as the turns' reports left them ({ i: [x, y] }; the block of the turn now has none yet).
+ */
+export function missionFits(ms, { seat, first, n, tribe = null, pos = null } = {}) {
+  if (!ms || !seatOk(seat) || !seatOk(first) || !Number.isInteger(n) || n < 1) return false;
+  if (tribe && ms.kind !== tribe) return false;
+  const reach = MISSION_REACH[ms.kind];
+  const perFloor = new Map();
+  for (const [i, w] of ms.hits) {
+    if (i > n - 1 || w >= WINDOWS_MAX) return false;   // not dropped yet / no such window
+    if ((i % 2 === 0 ? first : 1 - first) === seat) return false;   // a floor of the sender's own
+    perFloor.set(i, (perFloor.get(i) || 0) + 1);
+  }
+  if ([...perFloor.values()].some((k) => k > WINDOWS_MAX)) return false;
+  if (perFloor.size > reach.floors + (reach.extra || 0)) return false;
+  if (!pos || ms.kind === 'water') return true;   // (Waterwiel: the nearest floors wherever they stand)
+  const [ax, ay] = ms.at;
+  let away = 0;
+  for (const i of perFloor.keys()) {
+    const p = pos[i];
+    if (!Array.isArray(p)) continue;   // (the block of the turn now, or one no report has placed yet)
+    const dx = Math.abs(p[0] - ax);
+    const near = ms.kind === 'vuur'
+      ? dx <= reach.dx + BLOCK_HALF && Math.abs(p[1] - ay) <= reach.dy + BLOCK_HALF
+      : dx <= reach.dx + BLOCK_HALF && p[1] >= ay - reach.up - BLOCK_HALF && p[1] <= ay + reach.down + BLOCK_HALF;
+    if (!near) away += perFloor.get(i);
+  }
+  return away <= (reach.extra || 0);
 }
 
 /** How a turn's report is rated (anything else counts as a plain landing). */
