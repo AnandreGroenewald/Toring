@@ -1062,6 +1062,28 @@ Later the owner added (decisions are final unless they say otherwise):
   Rikus), "- jou kasteel 1" (the planner with a Daily as the keep), "- jou kasteel 2" (a siege on your own castle).
   Waiting for his word: friends' castles over the internet (Worker + D1), the castle's rewards into the wallet, a
   Kasteelreeks button in Stapel's menu, a real phone's speed.
+- **17 Oct ~08:30–12:00 — Die Kasteelreeks finished on the Mac (local commits e2579ac..cbcae39, nothing live, nothing
+  pushed).** His ask: "there is a lot of small issues, and it needs to be optomised for phones, it should not lag. I want
+  the finished product". No critics (his rule). Phones: quality levels (a phone starts at mid: no finish passes, a CSS
+  vignette; steps down by itself under 48 fps), welding, lighter soldiers/grass/dust, flags in their shader, shaders
+  warmed behind a loading screen: 58-61 fps in every phase on a 4x slowed CPU. Small things: Afrikaans + English
+  (js/kasteel/text.js follows `stapel.v1.lang`), ‹ Stapel everywhere, pause (button, a locked phone, a sideways phone),
+  three first-time tips, Stapel's sound/vibration/less-motion settings, a no-3D message, SPOG (brag), health bars over
+  the gate and the ram, a camera over the wall into the courtyard, the keep's flag topples with its star, battle sounds
+  (audio.js: horn, drum, clash, fling), a 🏰 line in Speelreëls. Fixed bugs: a dead ram stood still with its men walking
+  on the spot (its death code never ran); the gate's doors flew into the keep at ~70 m/s (42% down from the gate alone).
+  Inside Stapel: the menu's 🏰 Die Kasteelreeks button (Nuut, then trophies and wins, 😱 N for attacks); **Vrugteslag is
+  switched off** (`SLAG_ON = false` in main.js; his "lets forget about the fruit"; code kept); rewards: a siege of
+  Robot Rikus's or a friend's castle pays 5 + 10 a star (35 max), counted in Oefen's day cap (150), waiting in
+  `stapel.v1.kasteel.pending` until main.js puts it in the wallet when Stapel opens (a toast), trophies 10 a star — the
+  numbers wait for his OK; testing your own castle pays nothing. The app: build-www copies kasteel.html with the shim
+  (share sheet, Android back pauses a battle / steps back); the website build copies it; offline through the service
+  worker's runtime cache. Friends' castles (his "any time, but the defender plans the offline defence"):
+  server/src/kasteel.js keeps each player's castle (their Daily Towers + plan, checked by js/kasteel/rules.js) for their
+  Jou dorp neighbours; a siege leaves news (who, %, stars; a castle that held counts as its owner's win) with WRAAK;
+  invites use Jou dorp's friend link. It runs only in matchhost.mjs, like Jou dorp: going online needs both on the Worker
+  with a store (his word). Privacy pages describe the castle record's new fields. Tests: qa/kasteel_polish1170 17/17,
+  kasteel_stapel1170 7/7, kasteel_friends1170 9/9, siege 8/8, plan 8/8, days 4/4, tests/kasteel.test.js, npm 444/444.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
