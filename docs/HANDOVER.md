@@ -1141,6 +1141,10 @@ Later the owner added (decisions are final unless they say otherwise):
 - **17 Oct 2026 (late night): Blokbotsing round 4e.** He asked whether I was sure, with things still left: the wave now
   crosses their whole rock and pours over its edge (waterfall, foam), the vines climb out of the cliff (twisting, leaves,
   a lasso), the explosion's smoke rises behind the tower. All tests OK; 60 fps on the slowed phone.
+- **17 Oct 2026 (late night): Blokbotsing round 4f.** Before he plays: sudden death now goes in rounds like penalties
+  (a crown lost on a round's first throw gets its answer: LAASTE KANS; both in the sea = GELYKOP), banner subtitles wrap,
+  words never overlap the banner or each other, the tip holds the intro view. New QA: botsing_sudden1180, _words1180,
+  _banners1180, _endings1180. All tests OK.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
