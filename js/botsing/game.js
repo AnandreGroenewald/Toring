@@ -127,6 +127,11 @@ function syncMeshes(alpha, dt) {
     g.position.set(x / PX + gl, -y / PX, 0);
     g.rotation.z = -a;
     if (gl) g.userData.glide = Math.abs(gl) < 0.002 ? 0 : gl * Math.exp(-dt * 14);
+    if (g.userData.spikeT != null && g.userData.spikeT < 1) {
+      g.userData.spikeT = Math.min(1, g.userData.spikeT + dt / 0.28);
+      const k = g.userData.spikeT;
+      g.userData.spikes.scale.set(1, Math.max(0.01, 1 - (1 - k) * (1 - k) * (1 + 1.7 * k)), 1);
+    }
     if (g.userData.boing > 0) {
       g.userData.boing -= dt;
       const k = Math.max(0, g.userData.boing / 0.45);
@@ -368,6 +373,7 @@ function handle(events) {
         }
         const p = { x: mOf(ev.x), y: -mOf(ev.y) };
         fx.land(p, ev.rating, e.w / PX);
+        if (g?.userData.spikes && e.role === 'built') { g.userData.spikes.visible = true; g.userData.spikeT = 0; sfx('zap'); }
         if (ev.rating === 'P') {
           if (g) pieces.seam(g);
           G.stats.pb[e.side]++;
@@ -401,9 +407,27 @@ function handle(events) {
       }
       case 'damage': {
         const g = meshes.get(e.id);
+        if (e.role === 'crown') {
+          if (g && e.hp > 0) { pieces.glassCrack(g, e.hpMax - e.hp); sfx('zap'); callout(T.glassCracked, ev.x, ev.y - 30, 'is-dmg'); }
+          break;
+        }
         if (g && e.hp > 0) pieces.crack(g, e.hpMax - e.hp);
         callout(`−${ev.n}`, ev.x, ev.y, 'is-dmg');
         if (e.hp > 0) fx.hit(new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0), new THREE.Vector3(0, 1, 0), 0.4);
+        break;
+      }
+      case 'glass': {
+        const g = meshes.get(e.id);
+        if (g) pieces.glassBreak(g);
+        const p = new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0);
+        fx.shatter(p, pieces.M.glassShard, { n: 20, size: 0.55 });
+        fx.sparkle(p, 50, '#e8f4ff', 10);
+        hud.banner(e.side === ME ? T.glassMine : T.glassTheirs, { sub: T.glassSub, kind: e.side === ME ? 'is-foe' : 'is-me', ms: 1600 });
+        sfx('clash');
+        sfx('zap');
+        stage.shake(0.6);
+        slow(0.4, 0.4);
+        if (e.side === ME) buzz('heavy');
         break;
       }
       case 'splash': {
@@ -698,6 +722,12 @@ function camTargets() {
   const dMe = towardFoe(ME);
   let k = 2.2;
   const set = (p, l) => { cam.tPos.set(...p); cam.tLook.set(...l); };
+  // (the owner: "the video once Rikus throws is very bad, maybe zoom out and make it a static view everytime")
+  if (s === FOE && !G.over && (G.phase === 'other' || G.phase === 'wait' || (G.action === 'throw' && ['aim', 'flight', 'settle'].includes(G.phase)))) {
+    set([xMe - dMe * 36, Math.max(you, rik) + 15, 9], [xFoe - dMe * 12, (you + rik) / 2 + 7, 0]);
+    cam.k = calm ? 4 : 1.8;
+    return;
+  }
   switch (G.phase) {
     case 'intro':
       if (G.phaseT < 0.4) set([0, 80, 240], [0, 12, 0]);
@@ -822,6 +852,7 @@ function renderScope() {
 // ------------------------------------------------------------------------------------------------ the bars
 function crownState(side) {
   if (sim.crownLost(side)) return 'lost';
+  if (sim.crowns[side].hp <= 0) return 'open';
   const c = sim.crowns[side].body;
   const off = Math.abs(c.position.x - sideX(side));
   const tilt = Math.abs(Math.atan2(Math.sin(c.angle), Math.cos(c.angle)));
@@ -945,7 +976,7 @@ function tick(dt, time) {
       if (G.phaseT > 2.4) {
         setPhase('wait');
         let seen = false;
-        try { seen = !!JSON.parse(localStorage.getItem(KEY) || '{}').tip2; } catch { /* */ }
+        try { seen = !!JSON.parse(localStorage.getItem(KEY) || '{}').tip3; } catch { /* */ }
         const go = () => {
           if (myBonus) hud.banner(T.dailyBonus(myBonus), { kind: 'is-me is-small', ms: 1600 });
           if (FRIEND) friendSetup();
@@ -954,7 +985,7 @@ function tick(dt, time) {
         if (seen || q.has('notip')) go();
         else {
           hud.modal(`<div class="bt-tip"><small>${T.title}</small><p>${T.tip}</p><p>${T.tip3}</p><p class="bt-tip2">${T.higher}</p><button class="bt-ok" type="button">${T.tipOk}</button></div>`, {
-            '.bt-ok': () => { hud.closeModal(); try { localStorage.setItem(KEY, JSON.stringify({ tip2: 1 })); } catch { /* */ } go(); },
+            '.bt-ok': () => { hud.closeModal(); try { localStorage.setItem(KEY, JSON.stringify({ tip3: 1 })); } catch { /* */ } go(); },
           });
         }
       }
@@ -1025,7 +1056,9 @@ function tick(dt, time) {
         for (const e of sim.entries) {
           const g = meshes.get(e.id);
           if (!g || !e.alive) continue;
-          if (e.hp < e.hpMax) pieces.crack(g, e.hpMax - e.hp);
+          if (e.role === 'crown') { if (e.hp <= 0) pieces.glassBreak(g); else if (e.hp < e.hpMax) pieces.glassCrack(g, e.hpMax - e.hp); }
+          else if (e.hp < e.hpMax) pieces.crack(g, e.hpMax - e.hp);
+          if (g.userData.spikes && e.role === 'built' && e.landed) { g.userData.spikes.visible = true; g.userData.spikes.scale.set(1, 1, 1); }
           e.ix = undefined;
         }
         G.crownT = 0;

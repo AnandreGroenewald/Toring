@@ -11,7 +11,10 @@ import {
 
 const Mt = () => Phaser.Physics.Matter.Matter;
 /** Each block's strength (the owner: "it doesnt indecate any damage?"): a hit cracks it, at 0 it shatters. */
-export const HP = { cube: 4, plank: 3, slab: 3, brick: 3, wedge: 3, crate: 2, pillar: 3, crown: 0 };
+export const HP = { cube: 4, plank: 3, slab: 3, brick: 3, wedge: 3, crate: 2, pillar: 3, crown: 3 };
+/** The crown stands in a glass cabinet (the owner: "Put it in a glass cabinet"): hits crack the glass (the crown's hp),
+ * the third shatters it; then the crown is this much lighter, easy to throw off. */
+export const GLASS = { brokenDensity: 1.1 };
 const BASE_DENSITY = PHYSICS.block.density;
 const STACK_SLOPE = 0.12;   // px wider per px further down (world.js SLOPE: m per m)
 const DT = 1000 / 60;
@@ -144,11 +147,29 @@ export function createSim() {
     e.flying = false;
     M.Composite.remove(world, e.body);
     events.push({ type: why, entry: e, x: e.body.position.x, y: e.body.position.y });
+    wakeAll();
+  }
+  /** (the owner: "the block is floating") Matter never wakes a sleeping block when what held it is removed: wake all. */
+  function wakeAll() {
+    for (const o of entries) if (o.alive && o.body.isSleeping) M.Sleeping.set(o.body, false);
+    quiet = 0;
   }
   const wake = (b) => { if (b.isSleeping) M.Sleeping.set(b, false); };
-  /** `n` damage to a block (never the crown, the rock or a shot in flight): cracks, then it shatters. */
+  /** `n` damage to a block (never the rock or a shot in flight): cracks, then it shatters; the crown's glass breaks. */
   function damage(e, n, by) {
-    if (!e || !e.alive || e.kind === 'stack' || e.role === 'crown' || n <= 0 || e.flying) return;
+    if (!e || !e.alive || e.kind === 'stack' || n <= 0 || e.flying) return;
+    if (e.role === 'crown') {
+      if (e.hp <= 0) return;
+      n = 1;   // (one crack a hit, however hard: the third hit shatters it)
+      e.hp = Math.max(0, e.hp - n);
+      events.push({ type: 'damage', entry: e, n, hp: e.hp, by, x: e.body.position.x, y: e.body.bounds.min.y });
+      if (e.hp <= 0) {
+        M.Body.setDensity(e.body, BASE_DENSITY * GLASS.brokenDensity);
+        events.push({ type: 'glass', entry: e, x: e.body.position.x, y: e.body.position.y });
+        wakeAll();
+      }
+      return;
+    }
     e.hp = Math.max(0, e.hp - n);
     events.push({ type: 'damage', entry: e, n, hp: e.hp, by, x: e.body.position.x, y: e.body.bounds.min.y });
     if (e.hp <= 0) remove(e, 'break');
@@ -363,7 +384,7 @@ export function createSim() {
           });
           const foe = other.kind !== 'stack' && other.side !== me.side;
           if (me.power.blast) { queue.push(() => me.alive && blast(me)); continue; }
-          if (foe && other.role !== 'crown' && !(me.pierce > 0) && !(other.role === 'built' && (other.power.spikes || other.springReady))) {
+          if (foe && (other.role === 'crown' || !(me.pierce > 0)) && !(other.role === 'built' && (other.power.spikes || other.springReady))) {
             const dmg = hitDamage(me, hitV);
             queue.push(() => damage(other, dmg, 'hit'));
           }
@@ -471,6 +492,9 @@ export function createSim() {
         e.landed = !!r[6];
         e.perfect = !!r[7];
         e.flying = false;
+      }
+      for (const e of entries) {   // (the glass as the other phone has it)
+        if (e.alive && e.role === 'crown' && e.hp <= 0 && e.body.density > BASE_DENSITY * (GLASS.brokenDensity + 0.1)) M.Body.setDensity(e.body, BASE_DENSITY * GLASS.brokenDensity);
       }
       quiet = SETTLE.steps;
     },

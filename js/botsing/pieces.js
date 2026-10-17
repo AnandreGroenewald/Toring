@@ -78,6 +78,35 @@ function crateCanvas() {
   return c;
 }
 
+/** Glass: a faint blue body with two bright diagonal glare streaks and a lighter rim, so it reads as glass. */
+function glareTexture() {
+  const c = canvas(256, 256);
+  const g = c.getContext('2d');
+  g.fillStyle = 'rgba(200,225,255,0.35)';
+  g.fillRect(0, 0, 256, 256);
+  const streak = (x, w, a) => {
+    g.save();
+    g.translate(128, 128);
+    g.rotate(-0.6);
+    const grd = g.createLinearGradient(x - w, 0, x + w, 0);
+    grd.addColorStop(0, 'rgba(255,255,255,0)');
+    grd.addColorStop(0.5, `rgba(255,255,255,${a})`);
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd;
+    g.fillRect(x - w, -260, w * 2, 520);
+    g.restore();
+  };
+  streak(-40, 26, 0.95);
+  streak(10, 10, 0.7);
+  streak(70, 6, 0.5);
+  g.strokeStyle = 'rgba(255,255,255,0.8)';
+  g.lineWidth = 6;
+  g.strokeRect(3, 3, 250, 250);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 export function createPieces(renderer) {
   const base = castleMaterials(renderer);
   const cTex = new THREE.CanvasTexture(crateCanvas());
@@ -95,6 +124,9 @@ export function createPieces(renderer) {
     concrete: new THREE.MeshStandardMaterial({ color: '#a39d92', roughness: 0.95 }),
     glass: new THREE.MeshStandardMaterial({ color: '#1b2633', roughness: 0.12, metalness: 0.7, envMapIntensity: 1.5 }),
     cable: new THREE.MeshStandardMaterial({ color: '#2a2a2e', roughness: 0.55, metalness: 0.5 }),
+    walnut: new THREE.MeshStandardMaterial({ color: '#3b2416', roughness: 0.45, metalness: 0.1 }),
+    glassPane: new THREE.MeshStandardMaterial({ map: glareTexture(), color: '#d6ebff', roughness: 0.04, metalness: 0.7, transparent: true, opacity: 0.44, envMapIntensity: 2.8, depthWrite: false }),
+    glassShard: new THREE.MeshStandardMaterial({ color: '#cfe6ff', roughness: 0.05, metalness: 0.8, transparent: true, opacity: 0.55, envMapIntensity: 2 }),
   };
   M.basalt.color = new THREE.Color('#7b808b');
   M.heavy = base.granite.clone();   // (the cube: dark dressed stone, iron-banded: it looks as heavy as it is)
@@ -166,15 +198,21 @@ export function createPieces(renderer) {
         group.add(band);
       }
     } else if (shape === 'wedge') {
+      // (the owner: "the spikes on the blocks does not work for throwing") the spikes grow out once it's built
       const tw = (90 / PX) * 0.92;
+      const spikes = new THREE.Group();
       for (const z of [-0.85, 0.85]) {
         for (let i = 0; i < 4; i++) {
           const sp = new THREE.Mesh(spikeGeo, M.iron);
           sp.position.set(-tw / 2 + (i + 0.5) * (tw / 4), top, z);
           sp.castShadow = true;
-          group.add(sp);
+          spikes.add(sp);
         }
       }
+      spikes.visible = false;
+      spikes.scale.set(1, 0.01, 1);
+      group.add(spikes);
+      group.userData.spikes = spikes;
     } else if (shape === 'crate') {
       for (const [x, y] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
         const c = box(0.36, 0.36, DEPTH + 0.05, M.iron);
@@ -194,52 +232,57 @@ export function createPieces(renderer) {
         group.add(capb);
       }
     }
-    group.userData = { shape, side, top, bottom, w: W, h: H };
+    group.userData = { ...group.userData, shape, side, top, bottom, w: W, h: H };
     return group;
   }
 
   /**
-   * The crown block (its physics box: 3.0 m x 2.3 m): a plump velvet cushion with gold piping and tassels, and on it a
-   * big gold crown with rubies and sapphires, filling the box to its top.
+   * The crown block (its physics box: 3.0 m x 2.3 m), in a glass cabinet (the owner: "the crown aspect doesnt work for
+   * me. Put it in a glass cabinet"): a dark wooden plinth with gold trim, glass on four sides and on top in a slim gold
+   * frame, and inside, on a small velvet cushion, the gold crown with its rubies and sapphires. Hits crack the glass
+   * (`glassCrack`), the third shatters it (`glassBreak`).
    */
   function crown(side) {
     const s = shapeInfo('crown');
     const W = s.w / PX;
     const H = s.h / PX;
+    const D = 2.5;
     const group = new THREE.Group();
-    const cushH = 0.92;
-    const geo = new THREE.BoxGeometry(W - 0.1, cushH, 2.6, 10, 4, 8);
-    const p = geo.attributes.position;
-    for (let i = 0; i < p.count; i++) {   // (plumped: a cushion's soft dome and rounded edges)
-      const x = p.getX(i) / ((W - 0.1) / 2);
-      const y = p.getY(i) / (cushH / 2);
-      const z = p.getZ(i) / 1.3;
-      const edge = (1 - x * x) * (1 - z * z);
-      p.setY(i, p.getY(i) + (y > 0 ? 0.22 * edge : -0.04 * edge));
-      const pinch = 1 - 0.08 * (1 - y * y);
-      p.setX(i, p.getX(i) * (y > 0 ? 1 - 0.05 * (1 - edge) : pinch));
-      p.setZ(i, p.getZ(i) * pinch);
-    }
-    geo.translate(0, -H / 2 + cushH / 2, 0);
-    geo.computeVertexNormals();
-    const cushion = new THREE.Mesh(geo, velvet[side]);
-    cushion.castShadow = cushion.receiveShadow = true;
-    group.add(cushion);
+    const plinthH = 0.42;
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(W, plinthH, D), M.walnut);
+    plinth.position.y = -H / 2 + plinthH / 2;
+    plinth.castShadow = plinth.receiveShadow = true;
+    group.add(plinth);
+    // the gold frame: trim round the plinth, four posts, the top's edges (one piece)
     {
       const g = [];
-      const pipe = new THREE.TorusGeometry(1, 0.045, 6, 40);
-      pipe.rotateX(Math.PI / 2);
-      pipe.scale((W - 0.12) / 2, 1, 1.28);
-      pipe.translate(0, -H / 2 + cushH * 0.52, 0);
-      g.push(pipe);
-      for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-        const t = new THREE.ConeGeometry(0.13, 0.42, 8);
-        t.translate(x * (W / 2 - 0.12), -H / 2 + 0.12, z * 1.18);
-        g.push(t);
-      }
-      group.add(new THREE.Mesh(merge(g), M.gold));
+      const bar = (w, h, d, x, y, z) => { const b = new THREE.BoxGeometry(w, h, d); b.translate(x, y, z); g.push(b); };
+      const t = 0.11;
+      const y0 = -H / 2 + plinthH;
+      const y1 = H / 2 - t / 2;
+      bar(W + 0.04, 0.06, D + 0.04, 0, y0 - 0.03, 0);
+      bar(W + 0.04, 0.05, D + 0.04, 0, -H / 2 + 0.03, 0);
+      for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) bar(t, H - plinthH, t, (x * (W - t)) / 2, (y0 + H / 2) / 2, (z * (D - t)) / 2);
+      for (const z of [-1, 1]) bar(W, t, t, 0, y1, (z * (D - t)) / 2);
+      for (const x of [-1, 1]) bar(t, t, D, (x * (W - t)) / 2, y1, 0);
+      const frame = new THREE.Mesh(merge(g), M.gold);
+      frame.castShadow = true;
+      group.add(frame);
     }
-    // the crown: every part placed, then merged by material (a phone draws 4 pieces instead of ~45)
+    // inside: a small cushion and the crown
+    const innerY = -H / 2 + plinthH;
+    const cush = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.26, 1.3, 4, 2, 4), velvet[side]);
+    {
+      const p = cush.geometry.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i) / 0.75;
+        const z = p.getZ(i) / 0.65;
+        if (p.getY(i) > 0) p.setY(i, p.getY(i) + 0.09 * (1 - x * x) * (1 - z * z));
+      }
+      cush.geometry.computeVertexNormals();
+    }
+    cush.position.y = innerY + 0.13;
+    group.add(cush);
     const parts = { gold: [], ruby: [], sapphire: [], velvet: [] };
     const o = new THREE.Object3D();
     const put = (key, geo, { p = [0, 0, 0], r = [0, 0, 0], sc = [1, 1, 1], look = null } = {}) => {
@@ -277,21 +320,52 @@ export function createPieces(renderer) {
       mesh.castShadow = key === 'gold';
       c.add(mesh);
     }
-    c.position.y = -H / 2 + cushH + 0.06;
-    c.scale.setScalar(0.85);
+    c.scale.setScalar(0.62);
+    c.position.y = innerY + 0.3;
     group.add(c);
-    group.userData = { shape: 'crown', side, top: H / 2, bottom: H / 2, w: W, h: H, jewel: c };
+    // the glass: four panes and a lid (reflecting the sky), drawn after what's inside
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(W - 0.09, H - plinthH - 0.06, D - 0.09), M.glassPane);
+    glass.position.y = innerY + (H - plinthH - 0.06) / 2;
+    glass.renderOrder = 3;
+    group.add(glass);
+    group.userData = { shape: 'crown', side, top: H / 2, bottom: H / 2, w: W, h: H, jewel: c, glass };
     return group;
+  }
+  /** The glass's cracks (0-2 lost) and its end: shattered, the panes gone, the crown open to the sky. */
+  const glassCrackMats = [1, 2].map((level) => {
+    const m = crackMatsOf(level, true);
+    return m;
+  });
+  function glassCrack(group, lost) {
+    const gl = group.userData.glass;
+    if (!gl) return;
+    let ov = group.userData.glassCrack;
+    if (!ov) {
+      ov = new THREE.Mesh(gl.geometry, glassCrackMats[0]);
+      ov.position.copy(gl.position);
+      ov.scale.setScalar(1.004);
+      ov.renderOrder = 4;
+      group.add(ov);
+      group.userData.glassCrack = ov;
+    }
+    ov.visible = lost > 0;
+    ov.material = glassCrackMats[Math.min(2, Math.max(1, lost)) - 1];
+  }
+  function glassBreak(group) {
+    if (group.userData.glass) group.userData.glass.visible = false;
+    if (group.userData.glassCrack) group.userData.glassCrack.visible = false;
+    group.userData.broken = true;
   }
 
   /** Cracks, worse with every hit (levels 1-3): dark jagged lines with pale chipped edges, tiling over the block. */
-  const crackMats = [1, 2, 3].map((level) => {
+  const crackMats = [1, 2, 3].map((level) => crackMatsOf(level, false));
+  function crackMatsOf(level, glassy) {
     const c = canvas(256, 256);
     const g = c.getContext('2d');
     const r = rng(40 + level);
     const crackLine = (x, y, a, len, w) => {
       for (let pass = 0; pass < 2; pass++) {
-        g.strokeStyle = pass ? `rgba(18,12,10,${0.85})` : 'rgba(255,240,220,0.35)';
+        g.strokeStyle = glassy ? (pass ? 'rgba(255,255,255,0.95)' : 'rgba(170,210,255,0.35)') : pass ? `rgba(18,12,10,${0.85})` : 'rgba(255,240,220,0.35)';
         g.lineWidth = pass ? w : w + 2;
         g.beginPath();
         let px = x;
@@ -314,9 +388,10 @@ export function createPieces(renderer) {
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(0.34, 0.34);
+    t.repeat.set(glassy ? 0.6 : 0.34, glassy ? 0.6 : 0.34);
+    if (glassy) { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.repeat.set(1, 1); }
     return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-  });
+  }
   /** Shows a block's damage: cracks for what it has lost (0 = none). */
   function crack(group, lost) {
     const main = group.children[0];
@@ -552,5 +627,5 @@ export function createPieces(renderer) {
     return m;
   }
 
-  return { M, block, crown, seam, crack, crane, blockGeometry, tint, team, velvet, ghost };
+  return { M, block, crown, seam, crack, glassCrack, glassBreak, crane, blockGeometry, tint, team, velvet, ghost };
 }

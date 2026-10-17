@@ -18,6 +18,7 @@
 .bt-crown svg { width: 100%; height: 100%; display: block; }
 .bt-side[data-crown="danger"] .bt-crown { color: #ff6b5a; filter: drop-shadow(0 0 7px rgba(255, 80, 60, 0.8)); animation: bt-pulse 0.7s ease-in-out infinite; }
 .bt-side[data-crown="lost"] .bt-crown { color: #6d6878; filter: none; }
+.bt-side[data-crown="open"] .bt-crown { color: #ffb35a; filter: drop-shadow(0 0 7px rgba(255, 140, 60, 0.75)); }
 .bt-h { font-size: 16px; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
 .bt-pow { position: absolute; bottom: -9px; font-style: normal; font-size: 9.5px; font-weight: 900; color: var(--ink); background: linear-gradient(180deg, #ffe39a, #ffb84a); padding: 1px 6px; border-radius: 999px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); }
 .bt-me .bt-pow { left: 10px; } .bt-foe .bt-pow { right: 10px; }
