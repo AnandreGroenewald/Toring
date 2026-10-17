@@ -3219,7 +3219,13 @@ bus.on('ui:dorp', async () => {
   const r = await dorpSync({ force: true, collect: todayKey() });
   if (screen === 'dorp' && !dorpBusy && ui.dorpMode?.() === 'town') {
     // the server's word changed the town (tourists, a raid while away, another phone's towers): built again as it stands
-    if (r?.tourists > 0) enterDorp('town', { scene: { tourists: r.tourists, onTourists: () => ui.setDorpCounts({ me: dorpView()?.me?.people }) } });
+    const onTourists = () => ui.setDorpCounts({ me: dorpView()?.me?.people });
+    const open3D = dorp3d || dorp3dMod?.town3D?.();   // (the 3D town on screen, or still being built)
+    if (r?.tourists > 0 && open3D?.tourists) {   // (into the town as it is: no second build)
+      ui.setDorpMode(dorpScreenModel('town', { online: !!r?.ok }));
+      open3D.tourists(r.tourists, onTourists);
+    }
+    else if (r?.tourists > 0) enterDorp('town', { scene: { tourists: r.tourists, onTourists } });
     else if (dorpView()?.me?.people !== was) enterDorp('town');
     else ui.setDorpMode(dorpScreenModel('town', { online: !!r?.ok }));
   }

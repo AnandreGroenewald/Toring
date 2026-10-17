@@ -907,6 +907,15 @@ function createView(K, d) {
       frameBars(ms);
     },
     buyMark,
+    /**
+     * The day's tourists into the town on screen (or the moment it's built): the server's answer came after the town
+     * opened, and the town isn't built a second time for them.
+     */
+    tourists(n, onTourists = null) {
+      if (!alive || !(n > 0)) return;
+      if (onTourists) d.onTourists = onTourists;
+      ready.then(() => wait(300)).then(() => { if (alive && myTown) playTourists(n); });
+    },
     /** Out of the town: everything this visit made is taken down; the stage waits, hidden, for the next one. */
     close() {
       if (!alive) return;
