@@ -17,11 +17,12 @@ import { createBattleFx } from './fx.js';
 import { createHud } from './hud.js';
 import { createRikusPlanner } from './rikus.js';
 import { PX, sideX, towardFoe, towerX, BUILD, RIKUS, SETTLE, LAUNCH, STACK, G_STEP, BUDGET, ELEMENT, PIN, WIND, LOOT, offer, rng, pinAngle, powerAt, windFor } from './rules.js';
-import { EARN } from '../core/economy.js';
+import { EARN, cleanEconomy, skin as skinItem } from '../core/economy.js';
 import { dateKeyFor } from '../core/daily.js';
+import { checkName } from '../core/nameRules.js';
 import { matchApiUrl } from '../sponsorConfig.js';
 import { createSlagNet } from '../slagNet.js';
-import { PHYSICS } from '../config.js';
+import { PHYSICS, DUEL } from '../config.js';
 import { T, PREFS, goBack } from './text.js';
 import { audio, haptics } from '../audio.js';
 
@@ -59,11 +60,19 @@ function recordBattle(result) {
   saveRecord({ pending: Math.min(5000, pending + coins), played: (v.played | 0) + 1, wins: (v.wins | 0) + (result === 'win' ? 1 : 0) });
   return { coins, capped: coins < want };
 }
-const myName = String(readJson('stapel.v1')?.duel?.name || '').slice(0, 16);
+/** A name as Stapel's own nickname rules allow it (kid-clean; letters, digits and a little punctuation), else ''. */
+const cleanName = (raw) => { const c = checkName(String(raw ?? '').slice(0, 40), { max: DUEL.nameMax }); return c.ok ? c.value : ''; };
+/** Text for the cards' HTML (the result card shows the friend's name). */
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const myName = cleanName(readJson('stapel.v1')?.duel?.name);
 /** Today's Daily Tower Perfeks, at most BUDGET.dailyMax: extra blocks for every battle today. */
 const myBonus = Math.max(0, Math.min(BUDGET.dailyMax, Math.floor(Number(readJson('stapel.v1.kasteeldae')?.[dateKeyFor()]?.p) || 0)));
-/** (the owner: "the type of block they have purched") the block skin you wear in Stapel; Rikus wears the standard one. */
-const mySkin = String(q.get('skin') || readJson('stapel.v1.econ')?.skins?.wear?.blocks || 'kleur');   // (?skin= to show one: a test link)
+/**
+ * (the owner: "the type of block they have purched") the block skin you wear in Stapel, one you own (the wallet's own
+ * check); Rikus wears the standard one. `?skin=` shows another you own (a test link).
+ */
+const myEcon = cleanEconomy(readJson('stapel.v1.econ'));
+const mySkin = myEcon.skins.owned.blocks.includes(q.get('skin')) ? q.get('skin') : myEcon.skins.wear.blocks;
 const skins = [];
 skins[ME] = mySkin;
 skins[FOE] = 'kleur';
@@ -99,6 +108,13 @@ const G = {
   blocks: [BUDGET.base, BUDGET.base], sudden: false, suddenLeft: [0, 0], remoteDone: null, remoteThrow: null,
   zoom: null, trailRec: null, lastTrail: null, said: {},
   stats: { pb: [0, 0], pt: [0, 0], hits: [0, 0], sunk: [0, 0] },
+  // (a turn's count, the same on both phones of a friend battle: each message says which turn it belongs to; the
+  // friend's messages wait in `inbox` until this phone gets there; `heard` s since the friend was last heard;
+  // `resolving`: a move is playing out, the only time a friend battle's world moves; `steps` it has taken)
+  turnNo: 0, inbox: [], heard: 0, resolving: false, steps: 0,
+  // (the side whose turn ended last; a crown that reaches the sea after its turn ended; where the throw left from;
+  // each crown's glass and place when the turn began; which card is open)
+  lastSide: null, lateSink: false, lateTurn: false, shotX0: null, crownStart: [0, 0], crownAt: [0, 0], modal: null,
 };
 const mOf = (px) => px / PX;
 const topM = (side) => -mOf(sim.towerTopY(side));
@@ -231,6 +247,10 @@ function sayOnce(key, text, px, py, kind = 'is-gold') {
 function setPhase(p) { G.phase = p; G.phaseT = 0; }
 function startTurn(side) {
   G.side = side;
+  G.turnNo++;
+  G.heard = 0;
+  G.crownT = 0;
+  G.lateSink = false;
   G.cards = offer(rand);
   G.card = null;
   G.action = null;
@@ -244,8 +264,12 @@ function startTurn(side) {
   G.crownFall = null;
   G.said = {};
   G.strStart = [sim.strength(0), sim.strength(1)];
+  G.crownStart = [sim.crowns[0].hp, sim.crowns[1].hp];
+  G.crownAt = [sim.crowns[0].body.position.x, sim.crowns[1].body.position.x];
+  G.shotX0 = null;
   G.wind = windFor(rand);   // (after the cards: the same order on both phones of a friend battle)
   sim.setWind(G.wind);
+  if (FRIEND) sim.reseed((Math.imul(SEED | 0, 2654435761 | 0) + G.turnNo) >>> 0);   // (the fire's luck, the same on both)
   for (const c of cranes) c.setWind(G.wind);
   G.sunkStart = G.stats.sunk[side];
   G.remoteDone = null;
@@ -282,7 +306,7 @@ function onChoose(i, action) {
   G.card = G.cards[i];
   showHanging(ME, G.card);
   sfx('click');
-  if (FRIEND && conn) conn.send({ t: 'pick', i });
+  if (FRIEND && conn) conn.send({ t: 'pick', i, n: G.turnNo });
   if (action) { buzz('tap'); beginAction(action); }
 }
 function showHanging(side, card) {
@@ -345,7 +369,9 @@ function dropBlock(remote = null) {
   const tr = trolley(side);
   const at = remote || { x: wp.x * PX, y: -wp.y * PX, vx: tr.vx / 60 };
   const e = sim.release(side, G.card.shape, G.card.element, at.x, at.y, at.vx);
-  if (FRIEND && conn && side === ME) conn.send({ t: 'build', i: G.cardIdx, x: at.x, y: at.y, vx: at.vx });
+  G.resolving = true;
+  G.steps = 0;
+  if (FRIEND && conn && side === ME) conn.send({ t: 'build', i: G.cardIdx, x: at.x, y: at.y, vx: at.vx, n: G.turnNo });
   if (!G.sudden) G.blocks[side] = Math.max(0, G.blocks[side] - 1);
   scene.attach(g);
   g.rotation.set(0, 0, 0);
@@ -366,9 +392,12 @@ function throwBlock(theta, power) {
   const side = G.side;
   const p = sim.predict(side, G.card.shape, theta, power);
   const e = sim.launch(side, G.card.shape, G.card.element, theta, p.perfect, power);
+  G.resolving = true;
+  G.steps = 0;
+  G.shotX0 = p.x0;
   // (the camera glides in with it: the steps to its first touch, the side where it comes down)
   G.flight = { step0: sim.stepN, steps: Math.max(30, (p.path.length - 1) * 2), side: p.hit.side ?? nearestSide(p.hit.x), tx: mOf(p.hit.x), ty: Math.max(0, -mOf(p.hit.y)) };
-  if (FRIEND && conn && side === ME) conn.send({ t: 'throw', i: G.cardIdx, theta, power });
+  if (FRIEND && conn && side === ME) conn.send({ t: 'throw', i: G.cardIdx, theta, power, n: G.turnNo });
   if (!G.sudden) G.blocks[side] = Math.max(0, G.blocks[side] - 1);
   updateTop();
   scene.attach(g);
@@ -398,6 +427,20 @@ function throwBlock(theta, power) {
   hud.hideTap();
   setPhase('flight');
 }
+/**
+ * After `thrower`'s turn, a crown in the sea: 'win', 'lose' or 'draw' (this phone's side of it), or 'answer' — sudden
+ * death goes in rounds, like penalties: when the first throw of a round puts the other side's crown in the sea, that
+ * side still answers; knock theirs off too and it's a draw (the owner must never lose without a throw). null: both
+ * crowns stand.
+ */
+function seaOutcome(thrower) {
+  const lostMe = sim.crownLost(ME);
+  const lostFoe = sim.crownLost(FOE);
+  if (!lostMe && !lostFoe) return null;
+  const answerer = 1 - thrower;
+  if (G.sudden && G.suddenLeft[answerer] > G.suddenLeft[thrower] && sim.crownLost(answerer) && !sim.crownLost(thrower)) return 'answer';
+  return lostMe && lostFoe ? 'draw' : lostFoe ? 'win' : 'lose';
+}
 function endTurn() {
   if (G.over) return;
   fx.stopTrail();
@@ -405,26 +448,30 @@ function endTurn() {
   pinMesh.visible = false;
   cranes[G.side].park(true);
   G.turns[G.side]++;
-  const lostMe = sim.crownLost(ME);
-  const lostFoe = sim.crownLost(FOE);
+  G.lastSide = G.side;
   if (G.sudden) G.suddenLeft[G.side] = Math.max(0, G.suddenLeft[G.side] - 1);
-  // (sudden death goes in rounds, like penalties: when the first throw of a round puts the other side's crown in the
-  // sea, that side still answers; knock theirs off too and it's a draw. The owner must never lose without a throw.)
-  const answerer = 1 - G.side;
-  const answers = G.sudden && G.suddenLeft[answerer] > G.suddenLeft[G.side] && sim.crownLost(answerer) && !sim.crownLost(G.side);
-  if ((lostMe || lostFoe) && !answers) { gameOver(lostMe && lostFoe ? 'draw' : lostFoe ? 'win' : 'lose', 'sea'); return; }
-  if (answers) { setPhase('between'); return; }   // (startTurn says it: LAASTE KANS)
+  const sea = seaOutcome(G.side);
+  if (sea === 'answer') { setPhase('between'); return; }   // (startTurn says it: LAASTE KANS)
+  if (sea) { gameOver(sea, 'sea'); return; }
   // what this turn did to the other side (the owner: "it doesnt indecate any damage?")
   if (G.action === 'throw') {
     const foe = 1 - G.side;
     const drop = Math.max(0, G.strStart[foe] - sim.strength(foe));
     const pct = Math.round((drop / Math.max(1, G.strMax[foe])) * 100);
     const sunk = G.stats.sunk[G.side] - G.sunkStart;
+    const kind = G.side === ME ? 'is-me is-dmg' : 'is-foe is-dmg';
+    const crown = sim.crowns[foe];
+    // (their crown counts too: cracks in its glass, or an open crown knocked along)
+    const glass = Math.max(0, G.crownStart[foe] - crown.hp);
+    const shoved = crown.alive && Math.abs(crown.body.position.x - G.crownAt[foe]) > 18;
     if (sunk >= 2) {   // (a tower coming down: the big moment of a turn)
-      hud.banner(T.towerDown, { sub: `${T.damage(pct)} · ${T.lostBlocks(sunk)}`, kind: G.side === ME ? 'is-me is-dmg' : 'is-foe is-dmg', ms: 1900 });
+      hud.banner(T.towerDown, { sub: `${T.damage(pct)} · ${T.lostBlocks(sunk)}`, kind, ms: 1900 });
       sfx('thunder');
       stage.shake(0.8);
-    } else if (pct > 0) hud.banner(T.damage(pct), { sub: sunk ? T.lostBlocks(sunk) : '', kind: G.side === ME ? 'is-me is-dmg' : 'is-foe is-dmg', ms: 1500 });
+    } else if (pct > 0) hud.banner(T.damage(pct), { sub: sunk ? T.lostBlocks(sunk) : '', kind, ms: 1500 });
+    else if (glass && crown.hp > 0) hud.banner(foe === ME ? T.glassCrackMine : T.glassCrackTheirs, { sub: T.glassLeft(crown.hp), kind, ms: 1500 });
+    else if (glass) hud.banner(foe === ME ? T.glassMine : T.glassTheirs, { sub: T.glassSub, kind, ms: 1500 });
+    else if (shoved) hud.banner(T.crownShove, { kind, ms: 1300 });
     else hud.banner(T.noDamage, { kind: 'is-small', ms: 1100 });
   }
   if (G.sudden && G.suddenLeft[0] <= 0 && G.suddenLeft[1] <= 0) { gameOver('draw', 'sudden'); return; }
@@ -446,8 +493,24 @@ function nextTurn() {
   sim.openCrowns();   // (both glasses burst: whoever knocks a crown off first wins)
   hud.banner(T.sudden, { sub: T.suddenSub, kind: 'is-dmg', ms: 2200 });
   sfx('horn');
-  setTimeout(() => { if (!G.over) startTurn(1 - G.side); }, 2200);
+  const turn = G.turnNo;
+  setTimeout(() => { if (!G.over && G.turnNo === turn && G.phase === 'wait' && !G.lateSink) startTurn(1 - G.side); }, 2200);
   setPhase('wait');
+}
+/**
+ * (against Rikus) A crown that reached the sea after its turn had ended (it slid off slowly, past the turn's time):
+ * that turn's result after all — the battle ends, or in sudden death the other side gets its answer throw.
+ */
+function lateSink() {
+  const cut = G.lateTurn;   // (a turn that had begun waits: it starts again, or the battle ends)
+  G.lateSink = false;
+  G.lateTurn = false;
+  if (G.over) return;
+  const sea = seaOutcome(G.lastSide ?? G.side);
+  if (sea === 'answer') startTurn(1 - (G.lastSide ?? G.side));
+  else if (sea) gameOver(sea, 'sea');
+  else if (cut) startTurn(G.side);
+  else if (G.phase === 'wait') startTurn(1 - G.side);
 }
 /** The camera's close look at the tower where something just happened (the owner: "zoom in on the tower"). */
 function zoomAt(side, secs = 2.8) {
@@ -475,7 +538,7 @@ function handle(events) {
         if (g && e.role === 'built' && e.element === 'plof') pieces.springCoil(g);
         if (g && e.role === 'built' && e.element === 'water') pieces.waterSkin(g);
         if (ev.rating === 'P') {
-          if (g) pieces.seam(g);
+          if (g && !g.userData.seamMesh) g.userData.seamMesh = pieces.seam(g);
           G.stats.pb[e.side]++;
           if (!G.sudden && e.role === 'built') { G.blocks[e.side] += BUDGET.perfectBack; setTimeout(() => callout(T.perfectBack, ev.x, ev.y - e.h - 40, 'is-gold'), 380); }
           callout(T.perfect, ev.x, ev.y - e.h, 'is-gold');
@@ -546,14 +609,32 @@ function handle(events) {
           fx.stopTrail();
           if (G.trailRec) { G.lastTrail = G.trailRec; G.trailRec = null; }
           if (e.role === 'built' && !e.landed) callout(T.missBuild, ev.x, -40, 'is-dim');
-          else if (e.role === 'proj' && G.phase === 'flight') callout(nearestSide(ev.x) === e.side ? T.backwards : T.splash, ev.x, -40, nearestSide(ev.x) === e.side ? 'is-dmg' : 'is-dim');
+          else if (e.role === 'proj' && G.phase === 'flight') {
+            // (backwards: it came down behind where it left from; a weak throw that falls short is only a splash)
+            const back = G.shotX0 != null && (ev.x - G.shotX0) * towardFoe(e.side) < 0;
+            callout(back ? T.backwards : T.splash, ev.x, -40, back ? 'is-dmg' : 'is-dim');
+          }
           if (G.phase === 'flight') setPhase('settle');
         } else if (e && e.role !== 'proj' && e.role !== 'crown' && e.side !== G.side) G.stats.sunk[G.side]++;
         break;
       }
       case 'crown': {
-        if (G.crownT > 0) break;
+        if (G.crownT > 0 || G.over) break;
         G.crownT = 1.9;   // (then the winner's crown)
+        // (after its turn had ended: that turn's result, once the moment has played; a turn already begun waits. A
+        // friend battle's world stands still between turns: there it can't happen)
+        if (!FRIEND && !['flight', 'settle'].includes(G.phase)) {
+          G.lateSink = true;
+          if (['pick', 'other', 'build', 'aim'].includes(G.phase)) {
+            G.lateTurn = true;
+            hud.hideCards();
+            hud.hideTap();
+            hud.power(false);
+            pinMesh.visible = false;
+            clearHanging();
+            setPhase('wait');
+          }
+        }
         const minelost = ev.side === ME;
         hud.banner(T.crownSea, { kind: minelost ? 'is-foe' : 'is-me', ms: 2200 });
         slow(1.0, 0.4);
@@ -680,6 +761,7 @@ function handle(events) {
         sfx('clown');
         // the shot flies back home: both towers again, and its next touch counts as a hit of its own
         G.shotHit = false;
+        G.shotX0 = null;
         G.zoom = null;
         if (G.shot) fx.trail(meshes.get(G.shot.id), false, G.shot.element);
         if (G.flight) Object.assign(G.flight, { side: G.side, tx: towerX(G.side) / PX, ty: topM(G.side) });   // (the camera goes back with it)
@@ -694,6 +776,9 @@ function handle(events) {
 // --------------------------------------------------------------------------------------------- the physics
 let acc = 0;
 function physics(dt) {
+  // (a friend battle: the world moves only from a move until its turn's snapshot, so both phones step the same world
+  // the same number of steps: what the other phone replays is what happened)
+  if (FRIEND && !G.resolving) { acc = 0; return; }
   if (G.freeze > 0) { G.freeze -= dt; return; }
   const ts = G.slowT > 0 ? G.slowRate : 1;
   if (G.slowT > 0) { G.slowT -= dt; if (G.slowT <= 0) G.slowRate = 1; }
@@ -707,6 +792,7 @@ function physics(dt) {
       e.ia = e.body.angle;
     }
     sim.step();
+    G.steps++;
     handle(sim.drain());
     // your throw's path, kept to show while you aim again ("your last throw's trail")
     if (G.trailRec && G.shot?.alive && G.shot.flying && sim.stepN % 2 === 0) G.trailRec.push({ x: mOf(G.shot.body.position.x), y: -mOf(G.shot.body.position.y) });
@@ -1183,10 +1269,12 @@ function gameOver(result, why) {
   const title = result === 'win' ? T.win : result === 'lose' ? (FRIEND ? `${foeName.toUpperCase()} ${T.lose.split(' ').slice(1).join(' ')}` : T.lose) : T.draw;
   const sub = why === 'gone' ? T.gone(foeName) : why === 'sea' ? (result === 'win' ? T.winSeaOf(foeName) : result === 'lose' ? T.loseSea : T.drawSea) : T.drawSudden;
   const st = G.stats;
-  const loot = recordBattle(result);
+  // (a friend who left before the battle really began: no coins, and it isn't counted as played)
+  const loot = why === 'gone' && G.turns[0] + G.turns[1] < 4 ? { coins: 0, capped: false } : recordBattle(result);
   const lootLine = loot.coins ? `<p class="bt-loot">${T.loot(loot.coins)}</p>` : loot.capped ? `<p class="bt-loot is-full">${T.lootFull}</p>` : '';
   setTimeout(() => {
-    hud.modal(`<div class="bt-res is-${result}"><small>${T.title}</small><h2>${title}</h2><p>${sub}</p>${lootLine}
+    G.modal = 'result';
+    hud.modal(`<div class="bt-res is-${result}"><small>${T.title}</small><h2>${esc(title)}</h2><p>${esc(sub)}</p>${lootLine}
       <dl><div><dt>${T.stats.pb}</dt><dd>${st.pb[ME]}</dd></div><div><dt>${T.stats.pt}</dt><dd>${st.pt[ME]}</dd></div>
       <div><dt>${T.stats.hits}</dt><dd>${st.hits[ME]}</dd></div><div><dt>${T.stats.sunk}</dt><dd>${st.sunk[ME]}</dd></div></dl>
       <button class="bt-again" type="button">${T.again}</button><button class="bt-home" type="button">${T.toStapel}</button></div>`, {
@@ -1205,9 +1293,10 @@ function openPause() {
   if (G.over || hud.modalOpen) return;
   G.paused = !FRIEND;   // (a friend battle keeps going: the other phone is playing too)
   try { audio.suspend(); } catch { /* */ }
+  G.modal = 'pause';
   hud.modal(`<div class="bt-pausecard"><small>${T.title}</small><h2>${T.paused}</h2>
     <button class="bt-resume" type="button">${T.resume}</button><button class="bt-restart" type="button">${T.restart}</button><button class="bt-quit" type="button">${T.quit}</button></div>`, {
-    '.bt-resume': () => { hud.closeModal(); G.paused = false; try { audio.resume(); } catch { /* */ } },
+    '.bt-resume': () => { G.modal = null; hud.closeModal(); G.paused = false; try { audio.resume(); } catch { /* */ } },
     '.bt-restart': () => { location.href = again(); },
     '.bt-quit': () => goBack(),
   });
@@ -1216,7 +1305,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && !G.
 
 // ------------------------------------------------------------------------------------------------ the input
 function onTap() {
-  if (G.side !== ME || G.paused) return;
+  if (G.side !== ME || G.paused || hud.modalOpen) return;
   if (G.phase === 'build' && G.phaseT > 0.25) dropBlock();
   else if (G.phase === 'aim' && G.phaseT > 0.25) aimTap();
 }
@@ -1227,18 +1316,35 @@ stageEl.addEventListener('pointerdown', (e) => {
   onTap();
 });
 addEventListener('keydown', (e) => {
-  if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); onTap(); }
+  // (a card is open: its buttons take Space and Enter)
+  if ((e.code === 'Space' || e.code === 'Enter') && !hud.modalOpen) { e.preventDefault(); onTap(); }
   if (e.code === 'Escape') openPause();
+});
+// (the Android app's back button, through the app's shim: one step back, never out of a battle by accident)
+window.__botsingBack = true;   // (main.js's stand-in steps aside)
+addEventListener('stapel:back', (e) => {
+  e.preventDefault();
+  if (G.modal === 'pause') { document.querySelector('.bt-resume')?.click(); return; }
+  if (G.modal === 'tip') { document.querySelector('.bt-ok')?.click(); return; }
+  if (G.modal || G.over || G.phase === 'intro') { goBack(); return; }   // (the result, the invite, the loading: to Stapel)
+  if (G.side === ME && (G.phase === 'build' || G.phase === 'aim')) { backToCards(); return; }
+  openPause();
 });
 
 // ------------------------------------------------------------------------------------------------ the loop
 function tick(dt, time) {
   G.phaseT += dt;
+  G.heard += dt;
+  if (FRIEND && !G.over) pumpRemote();
   physics(dt);
   watchCrowns();
   syncMeshes(Math.min(1, acc), dt);
   burning(dt);
-  if (G.crownT > 0 && !FRIEND) { G.crownT -= dt; if (G.crownT <= 0 && !G.over) endTurn(); }
+  // (a crown in the sea: its moment plays, then the turn ends — or, after its turn, that turn's result)
+  if (G.crownT > 0) {
+    G.crownT -= dt;
+    if (G.crownT <= 0 && !G.over && !FRIEND) { if (G.lateSink) lateSink(); else if (G.phase === 'flight' || G.phase === 'settle') endTurn(); }
+  }
   switch (G.phase) {
     case 'intro':
       if (!G.titled && G.phaseT > 0.35) { G.titled = true; hud.banner(T.title, { sub: `${T.you} · ${FRIEND ? T.friend : T.rikus}`, kind: '', ms: 1900 }); sfx('horn'); }
@@ -1253,14 +1359,17 @@ function tick(dt, time) {
         };
         if (seen || q.has('notip')) go();
         else {
+          G.modal = 'tip';
           hud.modal(`<div class="bt-tip"><small>${T.title}</small><p>${T.tip}</p><p>${T.tip3}</p><p class="bt-tip2">${T.higher}</p><button class="bt-ok" type="button">${T.tipOk}</button></div>`, {
-            '.bt-ok': () => { hud.closeModal(); saveRecord({ tip5: 1 }); go(); },
+            '.bt-ok': () => { G.modal = null; hud.closeModal(); saveRecord({ tip5: 1 }); go(); },
           });
         }
       }
       break;
     case 'other':
-      // Robot Rikus thinks (a few throws ahead each frame); a friend's moves come over the room (onRemote)
+      // Robot Rikus thinks (a few throws ahead each frame); a friend's moves come over the room (pumpRemote): not a
+      // word from them in FRIEND_WAIT.move s, they've gone
+      if (FRIEND && G.heard > FRIEND_WAIT.move) friendGone();
       if (!FRIEND && !G.plan) {
         if (!G.planner) G.planner = createRikusPlanner(sim, FOE, G.cards, G.turns[FOE], rand, { sudden: G.sudden });
         const done = G.planner.step(40);
@@ -1309,38 +1418,32 @@ function tick(dt, time) {
       break;
     case 'settle': {
       if (G.crownT > 0 && !FRIEND) break;
+      const longest = SETTLE.maxMs / 1000 + 6;
+      // (a crown going over the edge: the turn waits for it to reach the sea, a while longer than any other)
+      if (G.crownFall && !sim.crownLost(G.crownFall.side) && G.phaseT < longest && !G.remoteDone) break;
       const quiet = (sim.settled() && G.phaseT > SETTLE.minMs / 1000) || G.phaseT > SETTLE.maxMs / 1000;
       if (!FRIEND) { if (quiet && !G.zoom) endTurn(); break; }
-      // a friend battle: the one whose turn it is sends where everything ended up; the other phone takes it
+      // a friend battle: the one whose turn it is sends where everything ended up and takes it itself; the other phone
+      // takes it when its replay has played as many steps (the same world by then: nothing jumps), or at once when it
+      // is behind (the friend has played on)
       if (G.side === ME) {
         if (quiet && !G.sentDone) {
           G.sentDone = true;
-          conn?.send({ t: 'done', snap: sim.snap(), blocks: G.blocks });
-          G.crownT = 0;
+          const snap = sim.snap();
+          conn?.send({ t: 'done', snap, blocks: G.blocks, steps: G.steps, n: G.turnNo });
+          takeSnap(snap);
           endTurn();
         }
-      } else if (G.remoteDone && (quiet || G.phaseT > 3)) {
+      } else if (G.remoteDone && (!G.resolving || G.steps >= (G.remoteDone.steps | 0) || G.phaseT > longest || G.inbox.some((m) => m.n > G.turnNo))) {
         const d = G.remoteDone;
         G.remoteDone = null;
-        sim.applySnap(d.snap);
-        if (Array.isArray(d.blocks)) G.blocks = [d.blocks[0] | 0, d.blocks[1] | 0];
-        for (const e of sim.entries) {
-          const g = meshes.get(e.id);
-          if (!g || !e.alive) continue;
-          if (e.role === 'crown') { if (e.hp <= 0) pieces.glassBreak(g); else if (e.hp < e.hpMax) pieces.glassCrack(g, e.hpMax - e.hp); }
-          else if (e.hp < e.hpMax) pieces.crack(g, e.hpMax - e.hp);
-          if (e.rooted) pieces.vineWrap(g);
-          if (e.barrel) pieces.waterSkin(g); else pieces.drySkin(g);
-          if (e.springReady) pieces.springCoil(g); else pieces.dropCoil(g);
-          e.ix = undefined;
-        }
-        G.crownT = 0;
+        takeSnap(d.snap, d.blocks);
         endTurn();
-      } else if (G.phaseT > 25) friendGone();
+      } else if (!G.remoteDone && G.heard > FRIEND_WAIT.done) friendGone();
       break;
     }
     case 'between':
-      if (G.phaseT > 1.5) { G.sentDone = false; nextTurn(); }
+      if (G.phaseT > 1.5 && !(G.crownT > 0 && G.lateSink)) { G.sentDone = false; nextTurn(); }
       break;
     default:
       break;
@@ -1361,22 +1464,54 @@ function tick(dt, time) {
 }
 
 // ------------------------------------------------------------------------------------------- a friend battle
+/** How long a friend battle waits (s): for the friend's move on their turn, for their turn's end after their move. */
+const FRIEND_WAIT = { move: 120, done: 60 };
+const HERE_MS = 15000;   // (a friend's game says it's still there this often while it's on screen)
 function friendGone() {
   if (G.over) return;
+  G.inbox.length = 0;
   hud.banner(T.gone(foeName), { kind: 'is-small', ms: 2200 });
   gameOver('draw', 'gone');
+}
+/** Puts `text` on the clipboard: true when it's there (the phone's clipboard, or the older way on a plain-http page). */
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch { /* no clipboard here (a plain-http page on the home Wi-Fi) */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.append(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
 }
 function showInvite(code) {
   const u = new URL(location.href);
   u.search = '';
   u.searchParams.set('kamer', code);
   const link = u.toString();
+  G.modal = 'invite';
   hud.modal(`<div class="bt-invite"><small>${T.title}</small><h2>${T.inviteTitle}</h2><p>${T.inviteText}</p>
-    <div class="bt-code">${code}</div><div class="bt-link">${link}</div>
+    <div class="bt-code">${code}</div><div class="bt-link">${esc(link)}</div>
     <button class="bt-wa" type="button">${T.inviteWa}</button><button class="bt-copy" type="button">${T.inviteCopy}</button>
     <p class="bt-waiting">${T.inviteWait}</p><button class="bt-home" type="button">${T.toStapel}</button></div>`, {
     '.bt-wa': () => { window.open(`https://wa.me/?text=${encodeURIComponent(T.waText(link))}`, '_blank'); },
-    '.bt-copy': (e) => { try { navigator.clipboard.writeText(link); e.target.textContent = T.inviteCopied; } catch { /* */ } },
+    '.bt-copy': async (e) => {
+      const b = e.currentTarget;
+      if (await copyText(link)) { b.textContent = T.inviteCopied; return; }
+      // (it couldn't: the link is chosen on the screen, to copy by hand)
+      b.textContent = T.inviteCopyOwn;
+      const el = document.querySelector('.bt-link');
+      if (el) try { getSelection().selectAllChildren(el); } catch { /* */ }
+    },
     '.bt-home': () => goBack(),
   });
 }
@@ -1385,57 +1520,122 @@ async function friendSetup() {
   let code = FRIEND_CODE;
   if (FRIEND_HOST) {
     code = await net.create();
-    if (!code) { hud.modal(`<div class="bt-tip"><small>${T.title}</small><p>${T.noServer}</p><button class="bt-home" type="button">${T.toStapel}</button></div>`, { '.bt-home': () => goBack() }); return; }
+    if (!code) { G.modal = 'noserver'; hud.modal(`<div class="bt-tip"><small>${T.title}</small><p>${T.noServer}</p><button class="bt-home" type="button">${T.toStapel}</button></div>`, { '.bt-home': () => goBack() }); return; }
     showInvite(code);
   } else {
+    G.modal = 'joining';
     hud.modal(`<div class="bt-invite"><small>${T.title}</small><p class="bt-waiting">${T.joining}</p><button class="bt-home" type="button">${T.toStapel}</button></div>`, { '.bt-home': () => goBack() });
   }
   conn = net.connect(code);
-  const ready = await Promise.race([conn.ready, conn.next(['gone'])]);
-  if (ready && ready.t === 'gone') { hud.closeModal(); friendGone(); return; }
-  conn.send({ t: 'hello', name: myName || '', bonus: myBonus, seed: SEED, skin: mySkin });
+  const ready = await Promise.race([conn.ready, conn.gone]);
+  const closeCard = () => { G.modal = null; hud.closeModal(); };
+  if (ready && ready.t === 'gone') { closeCard(); friendGone(); return; }
+  conn.send({ t: 'hello', name: myName, bonus: myBonus, seed: SEED, skin: mySkin });
   const hi = await conn.next(['hello']);
-  if (hi.t === 'gone') { hud.closeModal(); friendGone(); return; }
-  hud.closeModal();
-  foeName = String(hi.name || '').slice(0, 16) || T.friend;
-  skins[FOE] = typeof hi.skin === 'string' && /^[a-z]{2,16}$/.test(hi.skin) ? hi.skin : 'kleur';
+  if (hi.t === 'gone') { closeCard(); friendGone(); return; }
+  closeCard();
+  foeName = cleanName(hi.name) || T.friend;
+  skins[FOE] = typeof hi.skin === 'string' && skinItem('blocks', hi.skin) ? hi.skin : 'kleur';
   G.blocks[FOE] = BUDGET.base + Math.max(0, Math.min(BUDGET.dailyMax, hi.bonus | 0));
   if (ME === 1) { SEED = Number(hi.seed) || SEED; rand = rng(SEED); }   // (the host's seed: the same cards offered on both phones)
   // the blocks already standing (the starting towers) in each side's own skin
   for (const e of sim.entries) { const g = meshes.get(e.id); if (g && e.side === FOE && e.role !== 'crown') { scene.remove(g); meshes.delete(e.id); } }
   nameBars();
   listen();
+  // (still here: a friend who thinks long over a card, or has the game paused, isn't gone; a phone put away stops saying it)
+  setInterval(() => { if (!G.over && !document.hidden) conn.send({ t: 'here' }); }, HERE_MS);
   startTurn(0);
 }
+/** Everything the friend sends, in the order sent, into the inbox (the game takes each in its turn: pumpRemote). */
 async function listen() {
   for (;;) {
-    const m = await conn.next(['pick', 'build', 'throw', 'done', 'bye']);
-    if (m.t === 'gone' || m.t === 'bye') { friendGone(); return; }
-    onRemote(m);
+    const m = await conn.next(['pick', 'build', 'throw', 'done', 'bye', 'here']);
+    if (m.t === 'here') { G.heard = 0; continue; }
+    G.inbox.push(m);
+    if (m.t === 'gone' || m.t === 'bye') return;
   }
 }
+/**
+ * The friend's messages, one after another: each when this phone has reached its turn and its moment (it may still be
+ * replaying the turn before, or the screen was off for a while: the friend's phone doesn't wait for this one).
+ */
+function pumpRemote() {
+  while (G.inbox.length && !G.over) {
+    const m = G.inbox[0];
+    if (m.t === 'gone' || m.t === 'bye') { friendGone(); return; }
+    if (!Number.isInteger(m.n) || m.n < G.turnNo) { G.inbox.shift(); continue; }   // (not one of this battle's turns)
+    if (m.n > G.turnNo || G.side !== FOE || !onRemote(m)) return;   // (not there yet)
+    G.inbox.shift();
+    G.heard = 0;
+  }
+}
+/** One of the friend's messages for this turn: true when it was taken (false: this phone isn't at its moment yet). */
 function onRemote(m) {
-  const theirs = G.side === FOE;
-  const card = G.cards[m.i | 0];
-  if (m.t === 'pick' && theirs && G.phase === 'other' && card) { G.card = card; G.cardIdx = m.i | 0; showHanging(FOE, card); return; }
-  if (m.t === 'build' && theirs && (G.phase === 'other' || G.phase === 'build') && card) {
-    G.card = card;
-    G.cardIdx = m.i | 0;
-    G.action = 'build';
-    showHanging(FOE, card);
-    hud.hideTap();
-    dropBlock({ x: m.x, y: m.y, vx: m.vx });
-    return;
+  const i = m.i | 0;
+  const card = G.cards[i];
+  switch (m.t) {
+    case 'pick':
+      if (G.phase === 'other' && card) { G.card = card; G.cardIdx = i; showHanging(FOE, card); }
+      return true;
+    case 'build':
+      if (G.phase !== 'other') return true;   // (a move this turn already has: never twice)
+      if (!card || ![m.x, m.y, m.vx].every(Number.isFinite)) return true;   // (a broken one: the turn's end puts it right)
+      G.card = card;
+      G.cardIdx = i;
+      G.action = 'build';
+      showHanging(FOE, card);
+      hud.hideTap();
+      dropBlock({ x: m.x, y: m.y, vx: m.vx });
+      return true;
+    case 'throw':
+      if (G.phase !== 'other') return true;
+      if (!card || !Number.isFinite(m.theta) || !Number.isFinite(m.power)) return true;
+      G.card = card;
+      G.cardIdx = i;
+      showHanging(FOE, card);
+      G.remoteThrow = { theta: Math.min(PIN.max, Math.max(PIN.min, m.theta)), power: Math.min(1, Math.max(0, m.power)) };
+      beginAction('throw');
+      return true;
+    case 'done':
+      if (G.phase === 'aim' || G.phase === 'flight') return false;   // (its throw is still being replayed here)
+      if (G.phase === 'other') { setPhase('settle'); G.action = G.action || 'build'; }   // (its move never came: the end puts it right)
+      if (G.phase !== 'settle') return true;
+      G.remoteDone = m;
+      return true;
+    default:
+      return true;
   }
-  if (m.t === 'throw' && theirs && (G.phase === 'other' || G.phase === 'aim') && card) {
-    G.card = card;
-    G.cardIdx = m.i | 0;
-    showHanging(FOE, card);
-    G.remoteThrow = { theta: m.theta, power: m.power };
-    beginAction('throw');
-    return;
+}
+/**
+ * A turn's end in a friend battle: the world as the phone that played it has it (both phones take the same one), and
+ * each block shows what it now is.
+ */
+function takeSnap(snap, blocks) {
+  sim.applySnap(snap);
+  handle(sim.drain());
+  if (Array.isArray(blocks)) G.blocks = [Math.max(0, blocks[0] | 0), Math.max(0, blocks[1] | 0)];
+  G.resolving = false;
+  G.crownT = 0;
+  dressAll();
+}
+/** After a snapshot: every block in its place, cracked, glazed, wrapped and skinned as it now is. */
+function dressAll() {
+  for (const e of sim.entries) {
+    let g = meshes.get(e.id);
+    if (!e.alive) { if (g) g.visible = false; continue; }
+    // (what a block can't lose again — broken glass, vines — comes back with a fresh block)
+    if (g && ((e.role === 'crown' && e.hp > 0 && g.userData.broken) || (!e.rooted && g.userData.vines))) { scene.remove(g); meshes.delete(e.id); g = null; }
+    g = g || meshFor(e);
+    g.visible = true;
+    if (e.role === 'crown') { if (e.hp <= 0) pieces.glassBreak(g); else pieces.glassCrack(g, e.hpMax - e.hp); }
+    else pieces.crack(g, e.hpMax - e.hp);
+    if (e.perfect && !g.userData.seamMesh) g.userData.seamMesh = pieces.seam(g);
+    if (g.userData.seamMesh) g.userData.seamMesh.visible = e.perfect;
+    if (e.rooted) pieces.vineWrap(g);
+    if (e.barrel) pieces.waterSkin(g); else pieces.drySkin(g);
+    if (e.springReady) pieces.springCoil(g); else pieces.dropCoil(g);
+    e.ix = undefined;
   }
-  if (m.t === 'done') G.remoteDone = m;
 }
 
 // warm the shaders behind the loading screen (every block, every emblem), then go
@@ -1449,8 +1649,10 @@ let time = 0;
 // (?prof: ms per part of a frame, averaged, in window.__btProf)
 const PROF = q.has('prof') ? { tick: 0, fx: 0, render: 0, draws: 0 } : null;
 const avg = (k, v) => { PROF[k] += (v - PROF[k]) * 0.05; };
+let dozeUntil = 0;   // (tests: a phone with its screen off — no frames, while the friend's messages still arrive)
 function frame(now) {
   requestAnimationFrame(frame);
+  if (now < dozeUntil) { last = now; return; }
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   const t0 = performance.now();
@@ -1487,6 +1689,8 @@ window.__bt = {
     if (action) onChoose(i, action);
   },
   tap: onTap,
+  /** (tests) the screen off for `ms`: no frames, as on a locked phone (a friend's messages still come in). */
+  doze(ms) { dozeUntil = performance.now() + ms; },
   /** An aim (angle, power) whose throw reaches their `kind` ('crown', 'block'), or null. */
   findAim(kind = 'crown') {
     for (let p = 1; p >= 0.5; p -= 0.05) {

@@ -34,6 +34,9 @@ export function shapeInfo(shape) {
 
 export function createSim({ seed = 1 } = {}) {
   const M = Mt();
+  // (Stapel's own friction at rest: Phaser's Matter plugin sets this when Stapel's game starts; this page has no
+  // Phaser game. Measured 18 Oct 2026 over 40 towers and 120 throws: the battle plays the same)
+  M.Resolver._restingThreshTangent = 6;
   const engine = M.Engine.create({
     enableSleeping: PHYSICS.enableSleeping,
     positionIterations: PHYSICS.positionIterations,
@@ -47,7 +50,7 @@ export function createSim({ seed = 1 } = {}) {
   const entries = [];
   const events = [];
   const queue = [];
-  const srand = rng((seed | 0) ^ 0x5bd1e995);   // (fire's spread: the same on both phones of a friend battle)
+  let srand = rng((seed | 0) ^ 0x5bd1e995);   // (fire's spread: the same on both phones of a friend battle)
   let nextId = 1;
   let stepN = 0;
   let quiet = 0;
@@ -82,12 +85,12 @@ export function createSim({ seed = 1 } = {}) {
     }
     return createBody({ shape }, x, y, angle);
   }
-  function add(shape, side, role, x, y, extra = {}) {
+  function add(shape, side, role, x, y, extra = {}, id = nextId++) {
     const info = shapeInfo(shape);
     const body = makeBody(shape, x, y, extra.angle || 0);
     const hp = HP[shape] || 3;
     const e = {
-      id: nextId++, shape, side, role, body, w: info.w, h: info.h, alive: true, wet: false, landed: role !== 'built',
+      id, shape, side, role, body, w: info.w, h: info.h, alive: true, wet: false, landed: role !== 'built',
       perfect: false, flying: false, born: stepN, element: null, hp, hpMax: hp, burnT: 0, burnTick: 0, vineT: 0, vineDir: 0,
       ...extra,
     };
@@ -529,6 +532,17 @@ export function createSim({ seed = 1 } = {}) {
     }
   }
   M.Events.on(engine, 'collisionStart', onCollide);
+  // (the owner: "the block is floating") Matter wakes a sleeping block only when something moving runs into it: one
+  // whose support was shoved, dragged or blown out from under it would hang in the air. A contact that ends between a
+  // sleeper and a moving block wakes the sleeper.
+  M.Events.on(engine, 'collisionEnd', (ev) => {
+    for (const pair of ev.pairs) {
+      const A = pair.bodyA.parent;
+      const B = pair.bodyB.parent;
+      if (A.isSleeping && !B.isSleeping && !B.isStatic) wake(A);
+      else if (B.isSleeping && !A.isSleeping && !A.isStatic) wake(B);
+    }
+  });
 
   function seaCheck() {
     for (const e of entries) {
@@ -594,6 +608,79 @@ export function createSim({ seed = 1 } = {}) {
   }
 
   const FLAGS = ['fireWall', 'barrel', 'springReady', 'rooted'];
+  const ASLEEP = 1 << FLAGS.length;
+  const ROLES = ['start', 'built', 'crown'];
+  const SHAPES = ['cube', 'plank', 'slab', 'brick', 'wedge', 'crate', 'pillar', 'crown'];
+  const fin = (v) => typeof v === 'number' && Number.isFinite(v);
+  const keep = (v, n) => +v.toFixed(n);
+  /**
+   * (a friend battle) every block as it stands: [id, x, y, angle, hp, wet, landed, perfect, flags, mass, inertia,
+   * friction, frictionStatic, shape, side, role, element]. Thrown blocks aren't kept: a turn's throw ends with it.
+   */
+  function snapRows() {
+    return entries.filter((e) => e.alive && e.role !== 'proj').map((e) => {
+      const b = e.body;
+      return [e.id, keep(b.position.x, 2), keep(b.position.y, 2), keep(b.angle, 4), e.hp, e.wet ? 1 : 0, e.landed ? 1 : 0,
+        e.perfect ? 1 : 0, FLAGS.reduce((m, f, i) => m | (e[f] ? 1 << i : 0), 0) | (b.isSleeping ? ASLEEP : 0),
+        b.mass, b.inertia, b.friction, b.frictionStatic, e.shape, e.side, e.role, e.element || ''];
+    });
+  }
+  /** A snapshot row from the network, checked: null when it isn't one. */
+  function cleanRow(r) {
+    if (!Array.isArray(r) || r.length < 17) return null;
+    const [id, x, y, a, hp, , , , flags, mass, inertia, fr, frs, shape, side, role, el] = r;
+    if (!Number.isInteger(id) || id < 1 || id > 100000 || ![x, y, a, hp, flags, mass, inertia, fr, frs].every(fin)) return null;
+    if (!SHAPES.includes(shape) || (side !== 0 && side !== 1) || !ROLES.includes(role) || (el && !ELEMENT[el])) return null;
+    if (mass <= 0 || inertia <= 0 || fr < 0 || frs < 0 || Math.abs(x) > 1e5 || Math.abs(y) > 1e5 || Math.abs(a) > 1e4) return null;
+    return r;
+  }
+  /**
+   * Makes this world the snapshot's: every block where it is there (one this phone lost comes back, one it has too
+   * many goes), as heavy and as grippy as there, asleep or awake as there, still. Each block's body is made afresh
+   * from its shape and Matter's own memory (contacts, the order it tests bodies in) starts again: the same on both
+   * phones to the last digit, so the next turn plays out the same.
+   */
+  function applySnap(s) {
+    const raw = Array.isArray(s) ? s : Array.isArray(s?.rows) ? s.rows : [];
+    const rows = raw.map(cleanRow).filter(Boolean);
+    const by = new Map(rows.map((r) => [r[0], r]));
+    for (const e of entries) if (e.alive && !by.has(e.id)) remove(e, e.role === 'proj' ? 'dissolve' : 'sunk');
+    const byId = new Map(entries.map((e) => [e.id, e]));
+    for (const e of entries) if (e.alive) M.Composite.remove(world, e.body);
+    for (const r of rows) {
+      const [id, x, y, a, hp, wet, landed, perfect, flags, mass, inertia, fr, frs, shape, side, role, el] = r;
+      let e = byId.get(id);
+      if (!e) {   // (a block this phone never had: its move never came)
+        const info = shapeInfo(shape);
+        e = { id, shape, side, role, w: info.w, h: info.h, element: el || null, hpMax: HP[shape] || 3 };
+        entries.push(e);
+        byId.set(id, e);
+      }
+      const b = makeBody(shape, x, y, a);
+      b.plugin = { bt: e };
+      M.Body.setMass(b, mass);
+      M.Body.setInertia(b, inertia);
+      b.friction = fr;
+      b.frictionStatic = frs;
+      FLAGS.forEach((f, i) => { e[f] = !!(flags & (1 << i)); });
+      Object.assign(e, {
+        body: b, alive: true, hp: Math.max(0, Math.min(e.hpMax, hp | 0)), wet: !!wet, landed: !!landed, perfect: !!perfect,
+        flying: false, burnT: 0, burnTick: 0, vineT: 0, vineDir: 0, dissolveAt: 0, spreadT: 0, crownBurnt: false, pv: null, snapDx: 0,
+      });
+    }
+    // (the blocks back in the world in id order, no contacts carried over, asleep as the snapshot says)
+    entries.sort((p, q) => p.id - q.id);
+    for (const e of entries) if (e.alive) M.Composite.add(world, e.body);
+    M.Pairs.clear(engine.pairs);
+    M.Detector.clear(engine.detector);
+    for (const e of entries) if (e.alive) M.Sleeping.set(e.body, !!(by.get(e.id)[8] & ASLEEP));
+    const top = Math.max(0, ...entries.map((e) => e.id));
+    nextId = Math.max(top + 1, Number.isInteger(s?.next) && s.next <= top + 1000 ? s.next : 0);
+    // (a row that wasn't one: what stood on that block must be free to fall, and the turn waits for it)
+    if (rows.length < raw.length) wakeAll();
+    else quiet = SETTLE.steps;
+  }
+
   return {
     M, engine, entries, crowns, stacks,
     get stepN() { return stepN; },
@@ -620,37 +707,14 @@ export function createSim({ seed = 1 } = {}) {
     live, towerTopY, heightM, launchParams, predict, launch, release, strength,
     /** (tests) `n` damage to an entry through the game's own path (cracks, the glass, a break) */
     hurt: (e, n = 1, by = 'hit') => damage(e, n, by),
-    /** (friend battles) everything still in play, to make the other phone match at the end of a turn */
-    snap() {
-      return entries.filter((e) => e.alive).map((e) => [e.id, +e.body.position.x.toFixed(2), +e.body.position.y.toFixed(2), +e.body.angle.toFixed(4), e.hp,
-        e.wet ? 1 : 0, e.landed ? 1 : 0, e.perfect ? 1 : 0, FLAGS.reduce((m, f, i) => m | (e[f] ? 1 << i : 0), 0)]);
-    },
-    /** Puts every block where the other phone has it (what it no longer has is removed). */
-    applySnap(list) {
-      const by = new Map(list.map((r) => [r[0], r]));
-      for (const e of entries) {
-        if (!e.alive) continue;
-        const r = by.get(e.id);
-        if (!r) { remove(e, 'sunk'); continue; }
-        M.Body.setPosition(e.body, { x: r[1], y: r[2] });
-        M.Body.setAngle(e.body, r[3]);
-        M.Body.setVelocity(e.body, { x: 0, y: 0 });
-        M.Body.setAngularVelocity(e.body, 0);
-        e.hp = r[4];
-        e.wet = !!r[5];
-        e.landed = !!r[6];
-        e.perfect = !!r[7];
-        FLAGS.forEach((f, i) => { e[f] = !!((r[8] | 0) & (1 << i)); });
-        e.flying = false;
-        e.burnT = 0;
-        e.vineT = 0;
-        e.dissolveAt = 0;
-      }
-      for (const e of entries) {   // (the glass as the other phone has it)
-        if (e.alive && e.role === 'crown' && e.hp <= 0 && e.body.density > BASE_DENSITY * (GLASS.brokenDensity + 0.1)) M.Body.setDensity(e.body, BASE_DENSITY * GLASS.brokenDensity);
-      }
-      quiet = SETTLE.steps;
-    },
+    /**
+     * (friend battles) the world at the end of a turn, from the phone that played it: { next, rows }. The other phone
+     * takes it with `applySnap`, and so does this one (both then start the next turn from exactly the same world).
+     */
+    snap: () => ({ next: nextId, rows: snapRows() }),
+    applySnap,
+    /** (friend battles) a new start for the fire's random, the same on both phones (each turn). */
+    reseed(n) { srand = rng(n >>> 0); },
     /** (sudden death) both glasses burst at once: the crowns are light from now on. */
     openCrowns() {
       for (const c of crowns) {
