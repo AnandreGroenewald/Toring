@@ -85,7 +85,16 @@ const PRECACHE = [
   'icons/icon-192.png',
   'icons/apple-touch-icon.png',
   // the 512 px icons are only for installing; the browser fetches them itself
+  // (1.17, 1.18) the pages of their own (the castle, the battle): their pages only; their 3D files are kept on the first
+  // visit (see PAGES below)
+  'kasteel.html',
+  'botsing.html',
 ];
+
+// (1.17, 1.18) Pages of their own: a visit to one is never answered with the game's page (offline or slow, its own kept
+// copy opens, or the browser says it's offline). Cloudflare Pages serves them without '.html' (it redirects
+// /kasteel.html to /kasteel), so a kept copy may sit under either name.
+const PAGES = ['kasteel', 'botsing'];
 
 // On a flaky connection, don't make the player stare at a blank screen: if the
 // page itself is this slow, open the cached copy instead.
@@ -104,7 +113,7 @@ self.addEventListener('install', (event) => {
     await Promise.all(PRECACHE.map(async (path) => {
       try {
         const res = await fetch(new Request(path, { cache: 'no-cache' }));
-        if (res.ok) await cache.put(path, res);
+        if (res.ok) await cache.put(path, await unredirected(res));
       } catch {
         // offline or 404: the network-first handler will fill it in later
       }
@@ -161,12 +170,39 @@ function fetchAndStore(req, event) {
   return net;
 }
 
+/**
+ * A response the server reached through a redirect (Pages sends /index.html to /, /kasteel.html to /kasteel) can't
+ * answer a page visit (the browser shows an error instead): kept as a plain copy.
+ */
+async function unredirected(res) {
+  if (!res.redirected) return res;
+  return new Response(await res.blob(), { status: res.status, statusText: res.statusText, headers: res.headers });
+}
+
+/** Which page of its own `url` is ('kasteel', 'botsing'), or null (the game). */
+function pageOf(url) {
+  const m = /\/([a-z]+)(?:\.html)?$/.exec(url.pathname);
+  return m && PAGES.includes(m[1]) ? m[1] : null;
+}
+
 async function fromCache(req) {
   const cache = await caches.open(VERSION);
   const hit = await cache.match(req, { ignoreSearch: true });
-  if (hit) return hit;
+  if (hit && !(req.mode === 'navigate' && hit.redirected)) return hit;
   if (req.mode === 'navigate') {
-    return (await cache.match('index.html')) || (await cache.match('./')) || undefined;
+    const page = pageOf(new URL(req.url));
+    if (page) {
+      // its own copy under either name, never the game's page
+      for (const name of [`${page}.html`, page]) {
+        const own = await cache.match(name, { ignoreSearch: true });
+        if (own && !own.redirected) return own;
+      }
+      return undefined;
+    }
+    for (const name of ['./', 'index.html']) {
+      const own = await cache.match(name);
+      if (own && !own.redirected) return own;
+    }
   }
   return undefined;
 }
@@ -195,6 +231,16 @@ async function navigate(event) {
   } catch {
     clearTimeout(timer);
     const hit = await useCache();
-    return hit || new Response('', { status: 504, statusText: 'Offline' });
+    return hit || (pageOf(new URL(req.url)) ? offlinePage() : new Response('', { status: 504, statusText: 'Offline' }));
   }
+}
+
+/** (1.17) A page of its own that was never opened online: a short word and the way back to Stapel. */
+function offlinePage() {
+  const html = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<title>Stapel</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#1c1b33;'
+    + 'color:#fff;font:600 18px/1.5 system-ui,sans-serif;text-align:center;padding:24px;box-sizing:border-box">'
+    + '<div><p>📶 Jy is nie aanlyn nie.<br><span style="opacity:.7;font-weight:400">You’re offline.</span></p>'
+    + '<p><a href="./" style="color:#ffd23f">‹ Stapel</a></p></div>';
+  return new Response(html, { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }

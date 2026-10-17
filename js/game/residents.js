@@ -455,6 +455,11 @@ export function ensureWindows(scene, g, wins, pad) {
   overlayKeys.add(key);
   return key;
 }
+/** The town is closed: its windows' pictures go (each visit and raid draws new ones; only the town draws them). */
+export function dropWindows(scene) {
+  for (const key of overlayKeys) if (scene.textures.exists(key)) scene.textures.remove(key);
+  overlayKeys.clear();
+}
 /** Redraw callbacks for windows drawn before the portraits were ready. */
 export function whenPortraits(fn) {
   if (readyVersion) return;

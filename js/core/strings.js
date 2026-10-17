@@ -180,7 +180,7 @@ export const S = {
   kasteelNews: (n) => (n === 1 ? '1 aanval op jou kasteel' : `${n} aanvalle op jou kasteel`),
   kasteelLoot: (n) => `🏰 +${n} munte uit die Kasteelreeks`,
   botsingLoot: (n) => `⚔️ +${n} munte uit Blokbotsing`,
-  kasteelLootFull: '🏰 Vandag se munte is op: die Kasteelreeks se trofeë tel steeds',
+  modeLootFull: (n) => `🪙 Vandag se munte is op: ${n} wag vir môre`,
   // (1.17) Vrugteslag: Ryk teen Ryk (js/scenes/SlagScene.js; the owner's fruit battle)
   slag: 'Vrugteslag',
   slagFruit: { druiwe: 'Druiwe', piesang: 'Piesang', sap: 'Sapdoos', waatlemoen: 'Waatlemoen' },

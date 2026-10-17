@@ -181,7 +181,7 @@ export const S_EN = {
   kasteelNews: (n) => (n === 1 ? '1 attack on your castle' : `${n} attacks on your castle`),
   kasteelLoot: (n) => `🏰 +${n} coins from the Castle Series`,
   botsingLoot: (n) => `⚔️ +${n} coins from Block Clash`,
-  kasteelLootFull: '🏰 Today’s coins are used up: the Castle Series trophies still count',
+  modeLootFull: (n) => `🪙 Today’s coins are used up: ${n} wait for tomorrow`,
   // (1.17) Fruit Battle: Empire vs Empire (js/scenes/SlagScene.js)
   slag: 'Fruit Battle',
   slagFruit: { druiwe: 'Grapes', piesang: 'Banana', sap: 'Juice box', waatlemoen: 'Watermelon' },

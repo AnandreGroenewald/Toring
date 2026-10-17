@@ -181,9 +181,10 @@ export function mergeSaves(localRaw, cloudRaw, baseRaw = null, { today = null } 
     skins.owned[kind] = [...new Set([...ce.skins.owned[kind], ...le.skins.owned[kind]])];
     skins.wear[kind] = worn(pick(le.skins.wear[kind], ce.skins.wear[kind], be.skins.wear[kind], DEFAULT_SKIN[kind]), le.skins.wear[kind], le.skins.owned[kind], ce.skins.owned[kind], DEFAULT_SKIN[kind]);
   }
-  // (1.16) the Living Tower's tribes: bought on either side stays bought; the one worn is a choice
+  // (1.16) the Living Tower's tribes: bought on either side stays bought; the one worn is a choice (an older game,
+  // which drops the tribes it doesn't know, doesn't take this device's worn tribe away: as with the looks above)
   const trOwned = TRIBE_IDS.filter((id) => ce.tribes.owned.includes(id) || le.tribes.owned.includes(id));
-  const trWear = pick(le.tribes.wear, ce.tribes.wear, be.tribes.wear, null);
+  const trWear = worn(pick(le.tribes.wear, ce.tribes.wear, be.tribes.wear, null), le.tribes.wear, le.tribes.owned, ce.tribes.owned, null);
   const tribes = { owned: trOwned, wear: trOwned.includes(trWear) ? trWear : (trOwned[0] || null) };
   const econ = {
     coins: add(le.coins, ce.coins, be.coins, MAX_COINS),

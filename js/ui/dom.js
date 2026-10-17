@@ -465,6 +465,7 @@ export function createUI(bus) {
       // (1.16) Jou dorp: out of the town, or (a result, the news) back to it; a raid in flight carries on
       const m = st.dorpV?.mode;
       if (m === 'town') bus.emit('ui:dorp-back');
+      else if (m === 'marks') bus.emit('ui:dorp-marks-close');
       else if (m === 'result' || m === 'newsDone') bus.emit('ui:dorp-home');
     } else if (st.screen === 'duelwait') {
       // the screen's own way out (what its ✕ does); none during the 3-2-1: Back can't leave a match just found
@@ -2920,7 +2921,8 @@ export function createUI(bus) {
       type: 'button', class: `tribe-card tribe-${t}${t === worn ? ' is-on' : ''}`, 'aria-pressed': String(t === worn),
       onclick: () => {
         audio.play('click');
-        bus.emit('ui:lv-tribe', t);
+        // (the price this card showed: main.js never takes more than that)
+        bus.emit('ui:lv-tribe', t, { price: owned.includes(t) || !owned.length ? 0 : TRIBE_PRICE });
         closeModal();
       },
     },

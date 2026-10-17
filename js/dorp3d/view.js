@@ -345,7 +345,7 @@ function createView(K, d) {
         onLand: () => {
           myTown.setLit(w, true);
           fx.sparkle(to, 10, '#ffe38c', 3);
-          audio.play('room', { combo: Math.min(8, ++landed) });
+          audio.play('room', { n: ++landed });
           if (landed === homes.length) {
             pop(S.dorpTouristsPop(n), '#ffd23f', 2600);
             audio.play('milestone');
@@ -510,7 +510,7 @@ function createView(K, d) {
           landed += 1;
           if (home) myTown.setLit(home, true, gold);
           fx.sparkle(to, gold ? 18 : 8, gold ? '#fff1a0' : '#ffe38c', gold ? 5 : 3);
-          audio.play(gold ? 'gold' : 'room', { combo: Math.min(8, landed) });
+          audio.play(gold ? 'gold' : 'room', { n: landed });
           const upTo = Math.round((landed / set.length) * took);
           d.onCount?.({ me: nMe + upTo, them: Math.max(0, nThem - upTo) });
           if (landed === set.length) reward(took, goldTook, r);

@@ -4,27 +4,33 @@
 // the server for everything else. Nothing here throws: without the server the town simply waits.
 
 import { isTownId, isTownKey, newTownId, newTownKey, isRaidId, isDayKey, markOf, DORP, RIKUS_ID } from './core/dorp.js';
+import { safeLocalStorage } from './core/storage.js';
 
 const KEY = 'stapel.v1.dorp';
 const TIMEOUT_MS = 8000;
 
 const blank = () => ({ v: 1, id: null, key: null, seq: 0, gains: [], wallDay: null, last: null, shownN: 0 });
 
-export function createDorpClient({ api = '', storage = typeof localStorage !== 'undefined' ? localStorage : null, fetchImpl = globalThis.fetch?.bind(globalThis) } = {}) {
+export function createDorpClient({ api = '', storage = safeLocalStorage(), fetchImpl = globalThis.fetch?.bind(globalThis) } = {}) {
   let d = blank();
   const load = () => {
+    let raw = null;
     try {
-      const raw = JSON.parse(storage?.getItem(KEY) || 'null');
-      d = { ...blank(), ...(raw && typeof raw === 'object' ? raw : {}) };
-      if (!Array.isArray(d.gains)) d.gains = [];
+      raw = JSON.parse(storage?.getItem(KEY) || 'null');
     } catch {
-      d = blank();
+      raw = null;
     }
-    if (!isTownId(d.id) || !isTownKey(d.key)) {
-      d.id = newTownId();
-      d.key = newTownKey();
-      save();
+    if (raw && typeof raw === 'object' && isTownId(raw.id) && isTownKey(raw.key)) {
+      d = { ...blank(), ...raw };
+      if (!Array.isArray(d.gains)) d.gains = [];
+      return;
     }
+    // (nothing kept yet; or a phone that won't keep it: the town made on this visit stays, with its waiting reports)
+    if (isTownId(d.id) && isTownKey(d.key)) return;
+    d = blank();
+    d.id = newTownId();
+    d.key = newTownKey();
+    save();
   };
   const save = () => {
     try { storage?.setItem(KEY, JSON.stringify(d)); } catch { /* private mode: this visit only */ }
@@ -53,7 +59,14 @@ export function createDorpClient({ api = '', storage = typeof localStorage !== '
   function took(r) {
     if (!r?.town) return;
     load();
-    d.gains = d.gains.filter((g) => g.seq > (r.town.seq | 0));
+    const seq = r.town.seq | 0;
+    if (seq > d.seq) {
+      // (a record brought back from an older backup: the server has counted further than this phone remembers, so the
+      // reports waiting here were made after that and were skipped as counted. They carry on after the server's number)
+      d.gains.forEach((g, i) => { g.seq = seq + 1 + i; });
+      d.seq = seq + d.gains.length;
+    }
+    d.gains = d.gains.filter((g) => g.seq > seq);
     d.last = { ...(d.last || {}), town: r.town, ...(r.news ? { news: r.news } : {}), ...(r.bure ? { bure: r.bure } : {}), at: Date.now() };
     save();
   }

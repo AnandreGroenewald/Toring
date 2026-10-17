@@ -16,7 +16,7 @@ import { audio, haptics } from '../audio.js';
 import { Water } from '../game/water.js';
 import { createIsland } from '../game/island.js';
 import { getGeometry, ensureTexture } from '../game/blocks.js';
-import { windowSlots, ensureWindows, burnRoom, waterWheel, vinesTo, prepareFx, whenPortraits, castOf, CAST, badgeKey, chuteTexture, portraitsReady } from '../game/residents.js';
+import { windowSlots, ensureWindows, dropWindows, burnRoom, waterWheel, vinesTo, prepareFx, whenPortraits, castOf, CAST, badgeKey, chuteTexture, portraitsReady } from '../game/residents.js';
 import { createRng } from '../core/rng.js';
 import { createCasting } from '../core/living.js';
 import { markOf, cleanMarks } from '../core/dorp.js';
@@ -99,7 +99,8 @@ export function planTown({ id = 'TOWN', people = 0, tribe = 'vuur', gold = 0 } =
   // the golden people: spread over the lit windows (the same ones every time)
   const litKeys = [];
   towers.forEach((t, ti) => { for (const key of t.who.keys()) litKeys.push([ti, key]); });
-  for (let g = 0; g < Math.min(gold | 0, litKeys.length); g++) {
+  const golden = Math.min(gold | 0, litKeys.length);   // (counted once: the list shrinks as they're placed)
+  for (let g = 0; g < golden; g++) {
     const pick = litKeys.splice(rng.int(0, litKeys.length - 1), 1)[0];
     towers[pick[0]].gold.add(pick[1]);
   }
@@ -119,6 +120,7 @@ export class DorpScene extends Phaser.Scene {
     this.rays = null;
     this.side = 'me';
     this.markParts = [];
+    this.busy = false;   // (a raid left half-way on the last visit doesn't hold the framing)
   }
 
   create() {
@@ -150,9 +152,11 @@ export class DorpScene extends Phaser.Scene {
   }
 
   teardown() {
+    if (!this.alive) return;
     this.alive = false;
     try { this.water?.destroy(); } catch { /* the scene is going */ }
     this.water = null;
+    try { dropWindows(this); } catch { /* the scene is going */ }
   }
 
   update(time, dtMs) {
@@ -458,6 +462,7 @@ export class DorpScene extends Phaser.Scene {
         });
       };
       if (!this.reduced) this.time.delayedCall(1500 + Math.random() * 1500, jump);
+      else d.setPosition(cx + 220, sea + 6).setAlpha(1).setAngle(-8);   // (less motion: it rests in the sea, still seen)
       return d;
     }
     if (id === 'walvis') {
@@ -521,7 +526,7 @@ export class DorpScene extends Phaser.Scene {
           w.b.who[w.i] = who;
           this.paintBlock(w.b, me.town.tribe);
           this.sparkle(w.x, w.y, 0xffe38c, 0.9);
-          audio.play('room', { combo: Math.min(8, ++landed) });
+          audio.play('room', { n: ++landed });
           if (landed === homes.length) {
             const W = this.scale.width;
             const at = this.onScreen(W / 2, (this.d.topBar || this.H * 0.2) + 110);
@@ -687,7 +692,7 @@ export class DorpScene extends Phaser.Scene {
             this.paintBlock(home.b, me.town.tribe);
           }
           this.sparkle(home.x, home.y, w.fliesGold ? 0xfff1a0 : 0xffe38c, w.fliesGold ? 1.6 : 0.9);
-          audio.play(w.fliesGold ? 'gold' : 'room', { combo: Math.min(8, landed) });
+          audio.play(w.fliesGold ? 'gold' : 'room', { n: landed });
           const upTo = Math.round((landed / set.length) * took);
           this.d.onCount?.({ me: nMe + upTo, them: Math.max(0, nThem - upTo) });
           if (landed === set.length) this.reward(took, goldTook, res);

@@ -345,6 +345,7 @@ bus.on('ui:signin-offer-no', () => ui.hideSigninOffer());
 
 bus.on('account:changed', ({ why } = {}) => {
   ui.setAccount(accountStatus());
+  ui.setLiving(tribesView());   // (1.16) the tribes the account brought (owned, worn) for Instellings and its sheet
   if (account.status().signedIn) ui.hideSigninOffer();
   // the account brought progress here (or this device started over): the menu shows it at once
   if ((why === 'merged' || why === 'signed-out' || why === 'deleted') && screen === 'menu') showMenu();
@@ -1723,7 +1724,14 @@ bus.on('ui:settings', (partial) => {
 // (1.16) the residents album (the results card's town, Instellings)
 bus.on('ui:lv-album', () => ui.showAlbum(livingStore.get()));
 // (1.16) a tribe chosen (Instellings, the results card): the next towers' people, and the menu's tower at once
-bus.on('ui:lv-tribe', (t) => {
+bus.on('ui:lv-tribe', (t, { price = 0 } = {}) => {
+  // (the sheet showed an older wallet, e.g. before an account's tribes arrived: it shows the real price first)
+  const had = store.getTribes().owned;
+  if (!had.includes(t) && had.length && price < TRIBE_PRICE) {
+    ui.setLiving(tribesView());
+    ui.showTribe?.();
+    return;
+  }
   const r = store.chooseTribe(t);
   if (!r.ok) {
     if (r.why === 'coins') ui.toast(S.lvTribeNoCoins(TRIBE_PRICE), 3200);
@@ -2671,7 +2679,11 @@ bus.on('game:castle', (c) => {
     const KEY = 'stapel.v1.kasteeldae';
     const all = JSON.parse(localStorage.getItem(KEY) || '{}') || {};
     const old = all[c.dateKey];
-    if (!old || (c.heightM || 0) >= (old.h || 0)) all[c.dateKey] = { h: c.heightM, p: c.perfects, b: c.layout };
+    // (the day's castle tower is the try that STANDS tallest: its blocks as they stood at the end, not its best moment)
+    const stands = (b) => (Array.isArray(b) ? b.reduce((m, x) => Math.max(m, Number(x?.y) || 0), 0) : 0);
+    const a = stands(c.layout);
+    const was = old ? stands(old.b) : -1;
+    if (a > was || (a === was && (c.heightM || 0) >= (old?.h || 0))) all[c.dateKey] = { h: c.heightM, p: c.perfects, b: c.layout };
     const keep = {};
     for (const k of Object.keys(all).sort().slice(-7)) keep[k] = all[k];
     localStorage.setItem(KEY, JSON.stringify(keep));
@@ -2968,9 +2980,11 @@ let dorp3d = null;          // the 3D town's controller while it's open
 let dorp3dFailed = false;   // (no 3D here: the 2D town from now on)
 let dorp3dSeq = 0;
 Object.defineProperty(window.__stapel, 'dorp3d', { get: () => dorp3d, configurable: true });   // (tests)
+let dorp3dMod = null;        // js/dorp3d/view.js once loaded
 function stopDorpScene() {
   dorp3dSeq += 1;
   if (dorp3d) { dorp3d.close(); dorp3d = null; }
+  dorp3dMod?.town3D()?.close();   // (one still being built)
   if (game.scene.isActive('Dorp') || game.scene.isPaused('Dorp') || game.scene.isSleeping('Dorp')) game.scene.stop('Dorp');
   if (game.scene.isSleeping('Game')) game.scene.wake('Game');
   wakeLoop();
@@ -3013,7 +3027,8 @@ async function enterDorp3D(view, sm, scene) {
   const seq = ++dorp3dSeq;
   const b = ui.dorpBars();
   try {
-    const { openTown3D } = await import('./dorp3d/view.js');
+    dorp3dMod = await import('./dorp3d/view.js');
+    const { openTown3D } = dorp3dMod;
     if (seq !== dorp3dSeq || screen !== 'dorp') return;
     dorp3d?.close();
     dorp3d = null;
@@ -3219,8 +3234,10 @@ bus.on('ui:dorp-buy', async (id) => {
   }
   dorpBusy = true;
   const r = await dorp.buyMark(id);
+  // (no answer at all: the server may still have built it; the town says so before the coins go back)
+  if (!r.ok && !r.status) await dorpSync({ force: true });
   dorpBusy = false;
-  if (!r.ok) {
+  if (!r.ok && (r.status || !(dorpView()?.me?.marks || []).includes(id))) {
     store.earnCoins(m.price, { capped: false });   // (not built: the coins go back)
     coinsChanged();
     ui.toast(S.dorpOffline, 2800);
@@ -3258,6 +3275,10 @@ bus.on('ui:dorp-raid', async ({ target, wraak = null } = {}) => {
     them = t.ok ? t : null;
   }
   const me = dorpView()?.me;
+  if (screen !== 'dorp') {   // (the town was left while the server was asked: no raid over another screen)
+    dorpBusy = false;
+    return;
+  }
   if (!them || !me) {
     dorpBusy = false;
     ui.toast(S.dorpOffline, 2800);
@@ -3268,7 +3289,9 @@ bus.on('ui:dorp-raid', async ({ target, wraak = null } = {}) => {
     ui.toast(S.dorpNoRaidsLeft, 2800);
     return;
   }
-  dorpRaid = { target, wraak, them, share: '' };
+  // (this raid's own record: the server's answer is kept, and its golden coins paid, even if the town is left meanwhile)
+  const raid = { target, wraak, them, share: '' };
+  dorpRaid = raid;
   enterDorp('raid', {
     mode: 'fly',
     screenExtra: { them, wraak: !!wraak },
@@ -3277,11 +3300,11 @@ bus.on('ui:dorp-raid', async ({ target, wraak = null } = {}) => {
       onCount: (c) => ui.setDorpCounts(c),
       onAim: () => ui.setDorpMode({ mode: 'aim' }),
       onStrike: async (hit) => {
-        ui.setDorpMode({ mode: 'fly' });
+        if (dorpRaid === raid) ui.setDorpMode({ mode: 'fly' });
         const r = await dorp.raid(target, wraak, hit);
         if (r.ok) {
           const link = `${siteUrl()}?wraak=${r.raidId}`;
-          dorpRaid.share = r.wraak ? S.dorpTauntWraak(r.took | 0, link) : S.dorpTaunt(r.took | 0, link);
+          raid.share = r.wraak ? S.dorpTauntWraak(r.took | 0, link) : S.dorpTaunt(r.took | 0, link);
           // golden people caught: coins (the wallet's own, not the day's cap)
           if (r.goldTook > 0) {
             r.goldCoins = r.goldTook * DORP.goldCoins;
@@ -3292,6 +3315,7 @@ bus.on('ui:dorp-raid', async ({ target, wraak = null } = {}) => {
         return r;
       },
       onDone: (r) => {
+        if (dorpRaid !== raid) return;
         dorpBusy = false;
         if (!r) {
           bus.emit('ui:dorp-home');
@@ -3308,6 +3332,7 @@ bus.on('ui:dorp-raid', async ({ target, wraak = null } = {}) => {
         dorpSync({ force: true }).then(refreshMenuDorp);
       },
       onFail: (r) => {
+        if (dorpRaid !== raid) return;
         dorpBusy = false;
         ui.toast(r?.error === 'raids' ? S.dorpNoRaidsLeft : S.dorpOffline, 2800);
         bus.emit('ui:dorp-home');
@@ -3361,27 +3386,43 @@ async function kasteelNewsCheck() {
     if (screen === 'menu') ui.showMenu(menuModel());
   } catch { /* the badge waits for the next check */ }
 }
-/** (1.18) Blokbotsing's coins into the wallet, the same way (stapel.v1.botsing `pending`): { added } or null. */
-function claimBotsingLoot() {
+/**
+ * A mode's coins into the wallet (its own record's `pending`, worked out there under the day's cap: the Kasteelreeks'
+ * stapel.v1.kasteel, Blokbotsing's stapel.v1.botsing), counted towards the day's cap like Oefen. What the cap can't take
+ * today (Oefen filled it before this claim) waits in `pending` for the next claim: coins won are never lost.
+ * Returns { added, left } or null when none waited.
+ */
+function claimPending(key) {
   let v = {};
-  try { v = JSON.parse(localStorage.getItem('stapel.v1.botsing') || '{}') || {}; } catch { return null; }
+  try { v = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { return null; }
   const n = Math.max(0, Math.min(5000, v.pending | 0));
   if (!n) return null;
-  try { localStorage.setItem('stapel.v1.botsing', JSON.stringify({ ...v, pending: 0 })); } catch { return null; }   // (cleared first: never paid twice)
+  try { localStorage.setItem(key, JSON.stringify({ ...v, pending: 0 })); } catch { return null; }   // (cleared first: never paid twice)
   const r = store.earnCoins(n, { capped: true });
+  const left = n - r.added;
+  if (left > 0) {
+    try { localStorage.setItem(key, JSON.stringify({ ...v, pending: left })); } catch { /* this phone keeps nothing */ }
+  }
   coinsChanged();
-  return { added: r.added };
+  return { added: r.added, left };
 }
-/** The castle's coins into the wallet (counted towards the day's cap like Oefen): { added } or null when none waited. */
-function claimKasteelLoot() {
-  const v = kasteelRead();
-  const n = Math.max(0, Math.min(5000, v.pending | 0));
-  if (!n) return null;
-  try { localStorage.setItem(KASTEEL_KEY, JSON.stringify({ ...v, pending: 0 })); } catch { return null; }   // (cleared first: never paid twice)
-  const r = store.earnCoins(n, { capped: true });
-  coinsChanged();
-  return { added: r.added };
+/**
+ * The castle's and Block Clash's coins, on every return to Stapel (a fresh start, or the page brought back as it was
+ * by the browser's Back), each with its toast.
+ */
+function claimModeCoins() {
+  const castle = claimPending(KASTEEL_KEY);
+  const battle = claimPending('stapel.v1.botsing');
+  const say = (c, won) => (c.added ? won(fmtInt(c.added)) : S.modeLootFull(fmtInt(c.left)));
+  if (castle) setTimeout(() => ui.toast(say(castle, S.kasteelLoot), 4200), 1200);
+  if (battle) setTimeout(() => ui.toast(say(battle, S.botsingLoot), 4200), castle ? 5600 : 1200);
 }
+// (the browser's Back from the castle or the battle can bring this page back from its memory, without a new start)
+window.addEventListener('pageshow', (e) => {
+  if (!e.persisted || !window.__stapel?.booted) return;
+  claimModeCoins();
+  if (screen === 'menu') showMenu();
+});
 bus.on('ui:kasteel', () => { location.href = 'kasteel.html'; });
 bus.on('ui:botsing', () => { location.href = 'botsing.html'; });   // (1.18 3D) Blokbotsing
 bus.on('ui:botsing-friend', () => { location.href = 'botsing.html?vriend=1'; });
@@ -3613,11 +3654,8 @@ function onReady() {
     if (n) setTimeout(() => ui.toast(S.stakeEarlier(fmtInt(n)), 4200), 1200);
   });
   startIdle();
-  const castleCoins = claimKasteelLoot();   // (before the menu: its wallet shows them)
-  const battleCoins = claimBotsingLoot();
+  claimModeCoins();   // (before the menu: its wallet shows them)
   showMenu();
-  if (castleCoins) setTimeout(() => ui.toast(castleCoins.added ? S.kasteelLoot(fmtInt(castleCoins.added)) : S.kasteelLootFull, 4200), 1200);
-  if (battleCoins) setTimeout(() => ui.toast(battleCoins.added ? S.botsingLoot(fmtInt(battleCoins.added)) : S.kasteelLootFull, 4200), castleCoins ? 5600 : 1200);
   dorpStart();   // (1.16) Jou dorp: only where the server knows the towns
   if (SLAG_ON) {
     // (1.17) a friend's Vrugteslag link (?slag=CODE): into their room
