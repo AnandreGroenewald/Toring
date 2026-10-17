@@ -1134,6 +1134,10 @@ Later the owner added (decisions are final unless they say otherwise):
   graphics. Changed: blocks are rounded boxes painted on all six faces with Stapel's art in the worn skin (blocks.js
   blockPanelCanvas), medallions for the elements, a real explosion, a curling flood wave, leafy vines, coloured
   splinters, a level zoom with the sunset behind, non-overlapping words, no dead ‹ on Rikus's turn. Tests ALL OK.
+- **17 Oct 2026 (late night): Blokbotsing round 4d (local 186679e).** Before showing it: the painted blocks were heavy
+  late in a game (~880 draw calls) → one picture per box, lighter medallions, merged vine anchors (276; the build before
+  the graphics round had 481); the wedge's slopes lost a tiled cross; element medallions also on the end the battle
+  camera sees. Tests ALL OK, 60 fps on the slowed phone.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
