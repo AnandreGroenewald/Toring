@@ -1,0 +1,115 @@
+/* (1.18 3D) Blokbotsing: the screen over the battle — the Kasteelreeks's dark glass and gold (css/kasteel.css carries the
+   stage, the loading screen and the turn-your-phone card), blue for you, red for Robot Rikus. */
+.bt { --me: #4b8df0; --foe: #e2483d; --ink: #2a1406; }
+.bt * { box-sizing: border-box; }
+.bt button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+
+/* the bars at the top */
+.bt-top { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 10px; right: 10px; display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; z-index: 2; }
+.bt-side, .bt-turn { background: var(--glass); border: 1px solid var(--glass-line); border-radius: 14px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28); }
+.bt-side { position: relative; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 7px; align-items: center; padding: 7px 9px 7px 10px; min-width: 0; transition: box-shadow 0.25s, border-color 0.25s; }
+.bt-side::before { content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--me); }
+.bt-foe::before { background: var(--foe); left: auto; right: 0; border-radius: 3px 0 0 3px; }
+.bt-foe { grid-template-columns: 1fr auto; text-align: right; padding: 7px 10px 7px 9px; }
+.bt-name { grid-column: 1 / -1; font-size: 9.5px; font-weight: 900; letter-spacing: 0.16em; opacity: 0.88; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bt-crown { width: 24px; height: 20px; color: var(--gold); filter: drop-shadow(0 0 6px rgba(255, 200, 80, 0.55)); }
+.bt-foe .bt-crown { grid-column: 2; grid-row: 2; }
+.bt-foe .bt-h { grid-column: 1; grid-row: 2; }
+.bt-crown svg { width: 100%; height: 100%; display: block; }
+.bt-side[data-crown="danger"] .bt-crown { color: #ff6b5a; filter: drop-shadow(0 0 7px rgba(255, 80, 60, 0.8)); animation: bt-pulse 0.7s ease-in-out infinite; }
+.bt-side[data-crown="lost"] .bt-crown { color: #6d6878; filter: none; }
+.bt-h { font-size: 16px; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+.bt-pow { position: absolute; bottom: -9px; font-style: normal; font-size: 9.5px; font-weight: 900; color: var(--ink); background: linear-gradient(180deg, #ffe39a, #ffb84a); padding: 1px 6px; border-radius: 999px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); }
+.bt-me .bt-pow { left: 10px; } .bt-foe .bt-pow { right: 10px; }
+.bt-pow:empty { display: none; }
+.bt-turn { display: grid; justify-items: center; align-content: center; padding: 6px 11px; min-width: 86px; }
+.bt-turn b { font-size: 19px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
+.bt-turn span { font-size: 8.5px; font-weight: 900; letter-spacing: 0.14em; margin-top: 3px; color: var(--gold); white-space: nowrap; }
+.bt-top[data-active="0"] .bt-me { border-color: rgba(120, 170, 255, 0.7); box-shadow: 0 0 0 1px rgba(90, 150, 255, 0.4), 0 8px 24px rgba(60, 120, 255, 0.3); }
+.bt-top[data-active="1"] .bt-foe { border-color: rgba(255, 130, 110, 0.7); box-shadow: 0 0 0 1px rgba(255, 90, 70, 0.4), 0 8px 24px rgba(255, 70, 50, 0.3); }
+.bt-top[data-active="1"] .bt-turn span { color: #ff9c8f; }
+
+.bt-corner { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 68px); left: 10px; right: 10px; display: flex; justify-content: space-between; z-index: 2; pointer-events: none; }
+.bt-corner button { pointer-events: auto; width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--glass-line); background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: 22px; font-weight: 900; line-height: 1; display: grid; place-content: center; }
+.bt-pause { grid-auto-flow: column; gap: 4px; }
+.bt-pause i { display: block; width: 4px; height: 14px; border-radius: 2px; background: #fff; }
+
+/* the banner and the call-outs */
+.bt-banner { position: absolute; left: 0; right: 0; top: 27%; display: grid; justify-items: center; gap: 4px; pointer-events: none; z-index: 3; opacity: 0; transform: scale(0.85); transition: opacity 0.25s, transform 0.35s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.bt-banner.is-on { opacity: 1; transform: scale(1); }
+.bt-banner b { font-size: 34px; font-weight: 900; letter-spacing: 0.06em; text-align: center; padding: 0 16px;
+  background: linear-gradient(180deg, #fff6d8, #ffd36b 55%, #f2a33a); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 3px 0 rgba(90, 40, 10, 0.55)) drop-shadow(0 8px 24px rgba(0, 0, 0, 0.5)); }
+.bt-banner.is-me b { background-image: linear-gradient(180deg, #ffffff, #bcd6ff 55%, #6ea4ff); }
+.bt-banner.is-foe b { background-image: linear-gradient(180deg, #fff1ee, #ffb3a6 55%, #ff6a55); }
+.bt-banner span { font-size: 13px; font-weight: 800; letter-spacing: 0.12em; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7); }
+.bt-callouts { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: hidden; }
+.bt-co { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font-size: 18px; font-weight: 900; letter-spacing: 0.04em; color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55), 0 0 14px rgba(0, 0, 0, 0.55); animation: bt-rise 1.45s ease-out forwards; }
+.bt-co.is-gold { color: #ffd46a; font-size: 21px; }
+.bt-co.is-boom { color: #ffb35a; font-size: 30px; letter-spacing: 0.08em; }
+.bt-co.is-dim { font-size: 14px; color: #f3eee8; }
+@keyframes bt-rise { 0% { opacity: 0; transform: translate(-50%, -60%) scale(0.6); } 12% { opacity: 1; transform: translate(-50%, -100%) scale(1.12); } 22% { transform: translate(-50%, -100%) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -220%) scale(0.98); } }
+@keyframes bt-pulse { 50% { transform: scale(1.18); } }
+
+/* the cards, BUILD and THROW */
+.bt-tray { position: absolute; left: 8px; right: 8px; bottom: max(10px, env(safe-area-inset-bottom)); z-index: 2; display: grid; gap: 8px;
+  transform: translateY(calc(100% + 24px)); opacity: 0; transition: transform 0.4s cubic-bezier(0.2, 1.1, 0.3, 1), opacity 0.25s; pointer-events: none; }
+.bt-tray.is-on { transform: none; opacity: 1; }
+.bt-tray.is-on .bt-cards, .bt-tray.is-on .bt-acts { pointer-events: auto; }
+.bt-pickt { justify-self: center; font-size: 10.5px; font-weight: 900; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold); text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7); }
+.bt-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.bt-card { position: relative; height: 84px; border-radius: 16px; border: 1px solid var(--glass-line); background: linear-gradient(180deg, rgba(40, 28, 64, 0.72), rgba(16, 10, 28, 0.72));
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); display: grid; justify-items: center; align-content: center; gap: 2px; padding: 4px; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; }
+.bt-card svg { width: 58px; height: 46px; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.45)); }
+.bt-card b { font-size: 12px; font-weight: 900; letter-spacing: 0.04em; }
+.bt-card.is-on { transform: translateY(-6px); border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 207, 107, 0.4), 0 12px 26px rgba(255, 180, 70, 0.28); background: linear-gradient(180deg, rgba(74, 50, 30, 0.82), rgba(28, 16, 34, 0.82)); }
+.bt-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.bt-act { position: relative; min-height: 104px; border-radius: 18px; border: 0; padding: 10px 10px 9px; display: grid; justify-items: start; align-content: start; gap: 2px; text-align: left; }
+.bt-act svg { position: absolute; right: 10px; top: 10px; width: 24px; height: 24px; opacity: 0.85; }
+.bt-act b { font-size: 19px !important; font-weight: 900 !important; letter-spacing: 0.16em; }
+.bt-act span { font-size: 12.5px; font-weight: 900; }
+.bt-act small { font-size: 10.5px; font-weight: 700; line-height: 1.3; opacity: 0.86; }
+.bt-build { color: #fff !important; background: linear-gradient(180deg, #4f8ff2, #2f63c8 70%, #244ea3); box-shadow: 0 5px 0 #18346e, 0 12px 24px rgba(40, 90, 200, 0.35); }
+.bt-throw { color: var(--ink) !important; background: linear-gradient(180deg, #ffe39a, #ffb84a 60%, #f59a2a); box-shadow: 0 5px 0 #a8621a, 0 12px 26px rgba(255, 160, 60, 0.35); }
+.bt-act:active { transform: translateY(3px); box-shadow: none; }
+
+/* the tap hint */
+.bt-tap { position: absolute; left: 50%; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 8px); transform: translate(-50%, 30px); opacity: 0; transition: transform 0.3s, opacity 0.2s; z-index: 2;
+  display: flex; align-items: center; gap: 8px; pointer-events: none; }
+.bt-tap.is-on { transform: translate(-50%, 0); opacity: 1; }
+.bt-tap.is-on .bt-cancel { pointer-events: auto; }
+.bt-cancel { width: 44px; height: 44px; border-radius: 14px; border: 1px solid var(--glass-line); background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: 24px; font-weight: 900; display: grid; place-content: center; }
+.bt-tapt { display: grid; justify-items: center; padding: 9px 20px 10px; border-radius: 16px; background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3); min-width: 200px; }
+.bt-tapt b { font-size: 17px; font-weight: 900; letter-spacing: 0.08em; white-space: nowrap; animation: bt-breathe 1.3s ease-in-out infinite; }
+.bt-tapt span { font-size: 11px; font-weight: 700; opacity: 0.85; margin-top: 2px; color: var(--gold); }
+.bt-tapt span:empty { display: none; }
+@keyframes bt-breathe { 50% { opacity: 0.62; } }
+
+/* the cards over everything: tip, pause, result */
+.bt-modal { position: absolute; inset: 0; z-index: 10; display: grid; place-items: center; padding: 20px; background: rgba(8, 4, 16, 0.42); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  opacity: 0; transition: opacity 0.3s; pointer-events: auto; }
+.bt-modal[hidden] { display: none; }
+.bt-modal.is-on { opacity: 1; }
+.bt-modal > div { width: min(100%, 340px); display: grid; justify-items: center; gap: 10px; padding: 22px 20px 18px; border-radius: 24px; text-align: center;
+  background: linear-gradient(180deg, rgba(44, 28, 70, 0.9), rgba(16, 10, 28, 0.92)); border: 1px solid rgba(255, 255, 255, 0.16); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  transform: translateY(14px) scale(0.96); transition: transform 0.45s cubic-bezier(0.2, 1.3, 0.35, 1); }
+.bt-modal.is-on > div { transform: none; }
+.bt-modal small { font-size: 10px; font-weight: 900; letter-spacing: 0.3em; color: var(--gold); }
+.bt-modal h2 { margin: 0; font-size: 34px; font-weight: 900; letter-spacing: 0.04em; }
+.bt-modal p { margin: 0; font-size: 14px; font-weight: 700; line-height: 1.45; opacity: 0.92; }
+.bt-modal p b { color: var(--gold); }
+.bt-tip2 { font-size: 12.5px !important; opacity: 0.78 !important; }
+.bt-res.is-win h2 { background: linear-gradient(180deg, #fff6d8, #ffd36b 55%, #f2a33a); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 3px 0 rgba(90, 40, 10, 0.5)); }
+.bt-res.is-lose h2 { color: #ff9c8f; }
+.bt-res dl { margin: 4px 0 2px; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.bt-res dl div { padding: 8px 6px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.08); }
+.bt-res dt { font-size: 9.5px; font-weight: 800; letter-spacing: 0.06em; opacity: 0.75; }
+.bt-res dd { margin: 2px 0 0; font-size: 20px; font-weight: 900; }
+.bt-again, .bt-ok, .bt-resume { width: 100%; height: 54px; border: 0; border-radius: 17px; font-size: 17px !important; font-weight: 900 !important; letter-spacing: 0.2em; color: var(--ink) !important;
+  background: linear-gradient(180deg, #ffe39a, #ffb84a 60%, #f59a2a); box-shadow: 0 5px 0 #a8621a, 0 12px 26px rgba(255, 160, 60, 0.3); margin-top: 6px; }
+.bt-home, .bt-restart, .bt-quit { width: 100%; height: 46px; border-radius: 15px; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.06); font-size: 14px !important; font-weight: 800 !important; }
+@media (max-height: 640px) {
+  .bt-act { min-height: 88px; } .bt-act small { display: none; } .bt-card { height: 72px; } .bt-card svg { height: 38px; }
+}

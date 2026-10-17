@@ -1043,7 +1043,7 @@ export function createUI(bus) {
       },
     }, coinIc(), h('b', { class: 'wallet-n', text: fmtInt(m.coins || 0) }), m.refill ? h('span', { class: 'wallet-plus', 'aria-hidden': 'true', text: '+' }) : null);
     screens.menu.replaceChildren(brand, gap,
-      h('div', { class: 'menu-stack' }, card, dorpMenuEl(m.dorp), kasteelMenuEl(m.kasteel), slagMenuEl(m.slag), playRow, dock, adSlot), langChip, wallet);
+      h('div', { class: 'menu-stack' }, card, dorpMenuEl(m.dorp), botsingMenuEl(), kasteelMenuEl(m.kasteel), slagMenuEl(m.slag), playRow, dock, adSlot), langChip, wallet);
     // the gap shrinks when the sponsor feed adds the ad card later, so re-check whenever it resizes
     if (saying && typeof ResizeObserver === 'function') {
       if (!st.sayingRO) st.sayingRO = new ResizeObserver(() => fitSaying());
@@ -3479,6 +3479,17 @@ export function createUI(bus) {
       box.prepend(h('div', { class: 'slag-mini-head' }, h('b', { text: S.slagMiniNames[kind] }), score), h('span', { class: 'slag-mini-timer' }, bar));
       slagMode('mini', { kind, miniEl: box });
     });
+  }
+
+  /** (1.18 3D) Blokbotsing: its own page (botsing.html), a battle vs Robot Rikus: build or throw every block. */
+  function botsingMenuEl() {
+    return h('button', {
+      type: 'button', class: 'kasteel-menu-btn botsing-menu-btn', 'aria-label': `${S.botsing}: ${S.botsingMenuSub}`,
+      onclick: () => { if (!guard()) return; audio.play('click'); bus.emit('ui:botsing'); },
+    },
+    h('span', { class: 'kasteel-menu-ic' }, emo('⚔️')),
+    h('span', { class: 'kasteel-menu-txt' }, h('b', { text: S.botsing }), h('small', { text: S.botsingMenuSub })),
+    h('span', { class: 'btn-new-tag kasteel-new', text: S.newTag }));
   }
 
   /** The menu's way into the fruit battle (with your trophies and fruit). */

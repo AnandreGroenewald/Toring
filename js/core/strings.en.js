@@ -167,6 +167,9 @@ export const S_EN = {
   dorpPlayForRaids: 'Build for raids',
   dorpRank: (r, n) => `Number ${r} of ${n} towns`,
   dorpWallHeld: 'The wall holds!',
+  // (1.18 3D) Block Clash (botsing.html): its menu button
+  botsing: 'Block Clash',
+  botsingMenuSub: 'Build or throw: Rikus’s crown into the sea',
   // (1.17) The Castle Series (kasteel.html): its menu button, and its coins reaching the wallet
   kasteel: 'The Castle Series',
   kasteelMenuSub: (tr, w, n) => (n ? `🏆 ${fmtInt(tr)} · ${fmtInt(w)} ${w === 1 ? 'win' : 'wins'}` : 'Troops, a trebuchet and your own castle'),

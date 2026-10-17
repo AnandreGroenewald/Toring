@@ -166,6 +166,9 @@ export const S = {
   dorpPlayForRaids: 'Bou vir strooptogte',
   dorpRank: (r, n) => `Nommer ${r} van ${n} dorpe`,
   dorpWallHeld: 'Die muur hou!',
+  // (1.18 3D) Blokbotsing (botsing.html): its menu button
+  botsing: 'Blokbotsing',
+  botsingMenuSub: 'Bou óf gooi: Rikus se kroon in die see',
   // (1.17) Die Kasteelreeks (kasteel.html): its menu button, and its coins reaching the wallet
   kasteel: 'Die Kasteelreeks',
   kasteelMenuSub: (tr, w, n) => (n ? `🏆 ${fmtInt(tr)} · ${fmtInt(w)} ${w === 1 ? 'oorwinning' : 'oorwinnings'}` : 'Troepe, ’n trebuchet en jou eie kasteel'),
