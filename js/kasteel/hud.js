@@ -25,7 +25,7 @@ export function scoutHud(root, s) {
     <div class="kh-legend"><span class="kh-l kh-gran">${T.legend[0]}</span><span class="kh-l kh-sand">${T.legend[1]}</span><span class="kh-l kh-wood">${T.legend[2]}</span></div>
     ${s.mineLink ? `<a class="kh-mine" href="?plan">${T.yourCastleLink}</a>` : ''}
     <div class="kh-goals">${(s.goals || T.goals).map((g) => `<div>${ICONS.star(false)}<span>${g}</span></div>`).join('')}</div>
-    <div class="kh-cta"><div class="kh-loot">${ICONS.coin}<b>+${s.coins}</b>${ICONS.trophy}<b>+${s.trophies}</b></div><button type="button" class="kh-go">${T.attack}</button></div>`;
+    <div class="kh-cta">${s.coins == null ? `<div class="kh-testtag">${T.testNoLoot}</div>` : `<div class="kh-loot">${ICONS.coin}<b>+${s.coins}</b>${ICONS.trophy}<b>+${s.trophies}</b></div>`}<button type="button" class="kh-go">${T.attack}</button></div>`;
 }
 
 export function siegeHud(root, s) {
@@ -89,7 +89,7 @@ export function createSiegeHud(root, { name, wind }, on) {
         <circle cx="50" cy="50" r="1.6" fill="none" stroke="#e63946" stroke-width=".35"/>
       </svg>
       <button type="button" class="kh-back" aria-label="Terug">✕</button>
-      <div class="kh-wind"><svg viewBox="0 0 24 24" style="transform:rotate(${wind < 0 ? 0 : 180}deg)"><path d="M21 12H6m5-6-6 6 6 6" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><b>${Math.abs(wind).toFixed(1)}</b><small>m/s · ${T.wind}</small></div>
+      <div class="kh-wind"><svg viewBox="0 0 24 24" style="transform:rotate(${wind < 0 ? 0 : 180}deg)"><path d="M21 12H6m5-6-6 6 6 6" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><b>${Math.abs(wind).toFixed(1)}</b><small>m/s</small><small class="kh-wk">${T.wind}</small></div>
       <div class="kh-range"><small>${T.range}</small><b>—</b></div>
       <div class="kh-power"><span>${T.power}</span><div class="kh-meter"><i class="kh-fill"></i><i class="kh-mark"></i><i class="kh-needle"></i></div><div class="kh-scale"><small>90 m</small><b class="kh-now">—</b><small>210 m</small></div></div>
       <button type="button" class="kh-gooi">${T.throw}</button>
@@ -159,8 +159,8 @@ export function createSiegeHud(root, { name, wind }, on) {
         <small>${T.series}</small><b>${r.stars ? T.won : T.lost}</b>
         <div class="kh-endstars">${[0, 1, 2].map((i) => ICONS.star(i < r.stars)).join('')}</div>
         <p>${T.endLine(r.destroyed, r.nameIn, r.lost)}</p>
-        <div class="kh-loot">${ICONS.coin}<b>+${r.coins}</b>${ICONS.trophy}<b>${r.trophies >= 0 ? '+' : ''}${r.trophies}</b></div>
-        ${r.stars && on.share ? `<button type="button" class="kh-share">${T.share}</button>` : ''}
+        ${r.coins == null ? '' : `<div class="kh-loot">${ICONS.coin}<b>+${r.coins}</b>${ICONS.trophy}<b>${r.trophies >= 0 ? '+' : ''}${r.trophies}</b></div>`}
+        ${r.stars && on.share && !r.test ? `<button type="button" class="kh-share">${T.share}</button>` : ''}
         <div class="kh-endbtns"><button type="button" class="kh-again">${T.again}</button><button type="button" class="kh-done">${T.done}</button></div></div>`;
       e.hidden = false;
       e.querySelector('.kh-again').addEventListener('click', () => on.again());

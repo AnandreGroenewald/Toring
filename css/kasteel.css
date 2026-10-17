@@ -56,6 +56,8 @@ html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50%
 .kh-scope > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .kh-zoom { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font-weight: 900; font-size: 13px; color: var(--gold); letter-spacing: 0.1em; }
 .kh-scope .kh-wind { position: absolute; left: 50%; transform: translateX(-50%); top: calc(max(12px, env(safe-area-inset-top)) + 64px); display: flex; align-items: baseline; gap: 4px; color: var(--gold); }
+.kh-scope .kh-wind { box-sizing: border-box; flex-wrap: wrap; justify-content: center; width: 180px; margin-left: -90px; transform: none; padding: 4px 10px; border-radius: 12px; background: rgba(10, 6, 18, 0.5); }
+.kh-scope .kh-wind .kh-wk { flex-basis: 100%; text-align: center; font-size: 9.5px; opacity: 0.75; }
 .kh-scope .kh-wind svg { width: 16px; height: 16px; align-self: center; } .kh-scope .kh-wind b { font-size: 16px; color: #fff; } .kh-scope .kh-wind small { font-size: 10px; color: #fff; opacity: 0.8; }
 .kh-power { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(max(12px, env(safe-area-inset-bottom)) + 100px); display: grid; justify-items: center; gap: 5px; }
 .kh-power span { font-size: 11px; font-weight: 900; letter-spacing: 0.24em; color: var(--gold); }
@@ -75,10 +77,11 @@ html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50%
 .kh-hint { position: absolute; left: 0; right: 0; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 92px); text-align: center; font-size: 12.5px; font-weight: 800; letter-spacing: 0.04em;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7); opacity: 0; transition: opacity 0.25s; z-index: 2; }
 .kh-hint.on { opacity: 1; }
-.kh.is-aim .kh-army, .kh.is-aim .kh-hint { display: none; }
+.kh.is-aim .kh-army, .kh.is-aim .kh-hint, .kh.is-end .kh-army, .kh.is-end .kh-hint, .kh.is-end .kh-pause { display: none; }
 .kh-back { position: absolute; left: 14px; top: calc(max(12px, env(safe-area-inset-top)) + 62px); width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--glass-line);
   background: var(--glass); font-size: 18px !important; font-weight: 900; z-index: 3; }
-.kh-range { position: absolute; left: 50%; top: calc(50% + 24px); transform: translateX(-50%); display: grid; justify-items: center; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); }
+.kh-range { position: absolute; left: 50%; top: calc(50% + 24px); transform: translateX(-50%); display: grid; justify-items: center; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+  padding: 3px 12px 4px; border-radius: 12px; background: rgba(10, 6, 18, 0.55); }
 .kh-range small { font-size: 9px; font-weight: 900; letter-spacing: 0.24em; color: var(--gold); }
 .kh-range b { font-size: 17px; font-weight: 900; }
 .kh-aim .kh-power { position: absolute; left: 22px; right: 124px; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 26px); transform: none; display: grid; gap: 6px; justify-items: stretch; }
@@ -111,17 +114,20 @@ html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50%
 .kh-deploy { position: absolute; inset: 0; z-index: 0; }
 
 /* the defence planner */
-.kp-title { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px; padding: 10px 14px; border-radius: 18px;
+.kp-top { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px; display: grid; gap: 8px; }
+.kp-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.kp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.kp-title { position: relative; padding: 10px 14px; border-radius: 18px;
   background: linear-gradient(180deg, rgba(16, 10, 28, 0.74), rgba(16, 10, 28, 0.46)); border: 1px solid var(--glass-line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 .kp-title small { display: block; font-size: 10px; font-weight: 800; letter-spacing: 0.28em; color: var(--gold); }
 .kp-title b { display: block; font-size: 24px; font-weight: 900; margin-top: 2px; }
 .kp-title p { margin: 4px 0 0; font-size: 12px; opacity: 0.85; }
-.kp-keep { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 96px); left: 12px; display: flex; align-items: center; gap: 6px; padding: 5px 6px;
+.kp-keep { display: flex; align-items: center; gap: 6px; padding: 5px 6px;
   border-radius: 14px; background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .kp-keep button { width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--glass-line); background: rgba(255, 255, 255, 0.08); font-size: 20px !important; font-weight: 900; line-height: 1; }
 .kp-keep small, .kp-budget small { display: block; font-size: 9px; font-weight: 900; letter-spacing: 0.22em; color: var(--gold); }
 .kp-keep b { font-size: 13px; }
-.kp-budget { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 96px); right: 12px; padding: 6px 12px; border-radius: 14px; text-align: right;
+.kp-budget { padding: 6px 12px; border-radius: 14px; text-align: right;
   background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .kp-budget b { font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; }
 .kp-budget.is-over b { color: #ff6b5a; }
@@ -142,7 +148,7 @@ html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50%
 .kp-test { color: #2a1406 !important; background: linear-gradient(180deg, #9fd0ff, #4aa3ff) !important; box-shadow: 0 5px 0 #1f5fa8; }
 .kh-mine, .kp-attack { pointer-events: auto; text-decoration: none; color: #fff; font-weight: 900; font-size: 12px; letter-spacing: 0.06em; }
 .kh-mine { position: absolute; right: 14px; top: calc(max(14px, env(safe-area-inset-top)) + 140px); padding: 8px 12px; border-radius: 12px; background: rgba(74, 163, 255, 0.28); border: 1px solid rgba(143, 197, 255, 0.55); }
-.kp-attack { position: absolute; right: 12px; top: 12px; padding: 6px 10px; border-radius: 10px; background: rgba(255, 207, 107, 0.18); border: 1px solid rgba(255, 207, 107, 0.5); color: var(--gold); font-size: 11px; }
+.kp-attack { flex: none; padding: 6px 10px; border-radius: 10px; background: rgba(255, 207, 107, 0.18); border: 1px solid rgba(255, 207, 107, 0.5); color: var(--gold); font-size: 11px; }
 /* (phones without the finish passes: the vignette drawn by the page, for free) */
 #k-stage.k-vignette::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
   background: radial-gradient(ellipse 80% 70% at 50% 46%, transparent 55%, rgba(10, 4, 20, 0.38) 100%); }
@@ -184,3 +190,5 @@ html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50%
 .kl-fail { display: grid; gap: 12px; justify-items: center; max-width: 280px; text-align: center; }
 .kl-fail a { color: #2a1406; text-decoration: none; font-weight: 900; letter-spacing: 0.12em; padding: 12px 20px; border-radius: 14px; background: linear-gradient(180deg, #ffe39a, #ffb84a); }
 @media (prefers-reduced-motion: reduce) { .kl-tower i { animation: none; opacity: 1; } .kh-help > div { animation: none; } }
+.kh-testtag { display: flex; align-items: center; padding: 0 14px; height: 58px; border-radius: 18px; background: rgba(74, 163, 255, 0.22); border: 1px solid rgba(143, 197, 255, 0.5);
+  font-size: 12px; font-weight: 900; letter-spacing: 0.08em; }

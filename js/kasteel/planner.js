@@ -136,9 +136,13 @@ function paint() {
 // ------------------------------------------------------------------------------------------------------- the screen
 const hudEl = document.getElementById('k-hud');
 hudEl.innerHTML = `
-  <div class="kp-title"><small><a class="k-back" href="index.html">${T.back}</a>${T.series}</small><b>${T.yourCastle}</b><p>${real.length ? T.standHere(real.length) : T.playToBuild}. ${T.planLine}</p><a class="kp-attack" href="?">${T.attackRikus}</a></div>
-  <div class="kp-keep"><button type="button" class="kp-prev" aria-label="${T.prev}">‹</button><div><small>${T.keep}</small><b class="kp-day"></b></div><button type="button" class="kp-next" aria-label="${T.next}">›</button></div>
-  <div class="kp-budget"><small>${T.budget}</small><b class="kp-left">0 / ${BUDGET}</b>${real.length ? `<em>${T.budgetUp(BUDGET - budgetFor(0))}</em>` : ''}</div>
+  <div class="kp-top">
+    <div class="kp-title"><small><a class="k-back" href="index.html">${T.back}</a>${T.series}</small><div class="kp-head"><b>${T.yourCastle}</b><a class="kp-attack" href="?">${T.attackRikus}</a></div><p>${real.length ? T.standHere(real.length) : T.playToBuild}. ${T.planLine}</p></div>
+    <div class="kp-row">
+      <div class="kp-keep"><button type="button" class="kp-prev" aria-label="${T.prev}">‹</button><div><small>${T.keep}</small><b class="kp-day"></b></div><button type="button" class="kp-next" aria-label="${T.next}">›</button></div>
+      <div class="kp-budget"><small>${T.budget}</small><b class="kp-left">0 / ${BUDGET}</b>${real.length ? `<em>${T.budgetUp(BUDGET - budgetFor(0))}</em>` : ''}</div>
+    </div>
+  </div>
   <p class="kp-hint"></p>
   <div class="kp-cards">${Object.entries(PIECES).map(([k, p]) => `<button type="button" class="kp-card" data-k="${k}"><span class="kp-ic">${ICONS[k]}</span><b>${T.pieces[k]}</b><i>${p.cost}</i></button>`).join('')}</div>
   <div class="kp-btns"><button type="button" class="kp-save">${T.save}</button><button type="button" class="kp-test">${T.test}</button></div>`;

@@ -24,7 +24,7 @@ const q = new URLSearchParams(location.search);
 const MINE = q.get('teen') === 'my' ? (loadPlan() || { seed: mySeed(), plan: null }) : null;
 const seed = MINE?.seed ?? (Number(q.get('seed')) || (Date.now() % 100000) + 1);
 const rand = rng(seed);
-const OPP = MINE ? T.myIn : T.rikus;
+const OPP = MINE ? T.mine : T.rikus;
 const TITLE = MINE ? T.myTest : T.rikusCastle;
 const NAME_IN = MINE ? T.myIn : T.rikusIn;
 const HALF = 15;
@@ -213,14 +213,14 @@ const starCount = () => Object.values(G.stars).filter(Boolean).length;
 // ------------------------------------------------------------------------------------------------------ the screen
 const hudEl = document.getElementById('k-hud');
 let hud = null;
-scoutScreen(hudEl, { name: OPP, title: TITLE, mineLink: true, towers: castle.towers.length, perfects: days.flat().filter((b) => b.rating === 'P').length, defenders: Object.keys(plan.place).length, goals: T.goals, coins: 130, trophies: 30 }, () => startSiege());
+scoutScreen(hudEl, { name: OPP, title: TITLE, mineLink: true, towers: castle.towers.length, perfects: days.flat().filter((b) => b.rating === 'P').length, defenders: Object.keys(plan.place).length, goals: T.goals, coins: MINE ? null : 130, trophies: 30 }, () => startSiege());
 
 function startSiege() {
   try { audio.unlock(); } catch { /* */ }
   sfx('click');
   G.mode = 'intro';
   G.introT = 0;
-  hud = createSiegeHud(hudEl, { name: TITLE, wind: G.wind }, {
+  hud = createSiegeHud(hudEl, { name: OPP, wind: G.wind }, {
     card: (k) => pickCard(k),
     goDown: () => { if (G.mode === 'aim' && G.trebState === 'ready' && !G.ended) { G.winding = true; G.windPh = 0; sfx('creak'); } },
     goUp: () => { if (G.winding) { G.winding = false; fire(G.power); } },
@@ -917,7 +917,8 @@ function endSiege() {
   setTimeout(() => {
     G.mode = 'end';
     sfx(stars ? 'record' : 'lost');
-    hud.end({ stars, destroyed: G.destroyed, nameIn: NAME_IN, lost: G.lost, coins: 10 + stars * 40, trophies: stars ? stars * 10 : -5 });
+    hudEl.classList.add('is-end');
+    hud.end({ stars, destroyed: G.destroyed, nameIn: NAME_IN, lost: G.lost, test: !!MINE, coins: MINE ? null : 10 + stars * 40, trophies: stars ? stars * 10 : -5 });
   }, 1600);
 }
 await st.warm([shot(0.62), makeRam(mats, 'blue')]);   // (the stone and the ram come later: their shaders now)
