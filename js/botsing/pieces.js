@@ -6,7 +6,8 @@
 import * as THREE from '../../lib/three.module.min.js';
 import { castleMaterials, banner, TEAM } from '../kasteel/castle.js';
 import { rng } from '../kasteel/world.js';
-import { blockFaceCanvas, blockPanelCanvas } from '../game/blocks.js';
+import { blockFaceCanvas, blockPanelCanvas, getGeometry } from '../game/blocks.js';
+import { boxSurface, wedgeSurface, surfaceMaterial, hasMaterial } from './materials.js';
 import { shapeInfo } from './sim.js';
 import { PX, sideX, towardFoe, SHAPE_COLOR, ELEMENT } from './rules.js';
 import { merge, STACK_TOP } from './world.js';
@@ -21,22 +22,23 @@ const EDGE_R = 0.17;   // how round a block's edges are (m): they catch the ligh
  * edge, so the outline's stroke lies on the rounded corner). Sizes in canvas px.
  */
 const ATLAS_K = 3;
-const ATLAS_GAP = 6;
-function atlasLayout(s) {
+const PAINT_K = 2;   // (the painted materials: fewer pixels to paint at load, plenty on a phone)
+function atlasLayout(s, K = ATLAS_K) {
   const D = DEPTH * PX;
   const P = 3;
-  const fw = (s.w + 2 * P) * ATLAS_K;
-  const fh = (s.h + 2 * P) * ATLAS_K;
-  const ew = (D + 2 * P) * ATLAS_K;
-  const ch = (D + 2 * P) * ATLAS_K;
-  const W = Math.max(fw + ATLAS_GAP + ew, fw);
-  const H = fh + ATLAS_GAP + ch;
-  const reg = (x, y, w, h) => ({ x: x + (P - 1) * ATLAS_K, y: y + (P - 1) * ATLAS_K, w: (w + 2) * ATLAS_K, h: (h + 2) * ATLAS_K });
+  const GAP = 2 * K;   // (in proportion: the same UVs whatever K)
+  const fw = (s.w + 2 * P) * K;
+  const fh = (s.h + 2 * P) * K;
+  const ew = (D + 2 * P) * K;
+  const ch = (D + 2 * P) * K;
+  const W = Math.max(fw + GAP + ew, fw);
+  const H = fh + GAP + ch;
+  const reg = (x, y, w, h) => ({ x: x + (P - 1) * K, y: y + (P - 1) * K, w: (w + 2) * K, h: (h + 2) * K });
   return {
     W, H, D,
     face: { at: [0, 0], ...reg(0, 0, s.w, s.h) },
-    end: { at: [fw + ATLAS_GAP, 0], ...reg(fw + ATLAS_GAP, 0, D, s.h) },
-    cap: { at: [0, fh + ATLAS_GAP], ...reg(0, fh + ATLAS_GAP, s.w, D) },
+    end: { at: [fw + GAP, 0], ...reg(fw + GAP, 0, D, s.h) },
+    cap: { at: [0, fh + GAP], ...reg(0, fh + GAP, s.w, D) },
   };
 }
 const SIDE_TEAM = ['blue', 'red'];
@@ -101,26 +103,138 @@ function roundedBox(width, height, depth, segments = 2, radius = 0.15) {
   }
   return geo;
 }
-/** An element's emblem: a glossy disc in its colour, a white rim, its emoji. */
+/**
+ * An element's emblem, engraved (the owner: "childs play"; no emoji): a deep enamel disc in the element's colour, its
+ * sign cut in light metal: a flame, a leaf, a drop, a bomb with its fuse.
+ */
+const ENAMEL = { vuur: ['#7a1e0c', '#3a0a04'], gras: ['#21511c', '#0c260a'], water: ['#123f6e', '#061a33'], plof: ['#3a3533', '#141110'] };
 function emblemCanvas(element) {
   const c = canvas(256, 256);
   const g = c.getContext('2d');
-  const col = ELEMENT[element]?.color || '#888888';
-  const grd = g.createRadialGradient(108, 96, 10, 128, 128, 124);
-  grd.addColorStop(0, '#ffffff');
-  grd.addColorStop(0.18, col);
-  grd.addColorStop(1, '#1a1020');
+  const [a, b] = ENAMEL[element] || ['#444', '#111'];
+  const grd = g.createRadialGradient(110, 100, 10, 128, 128, 128);
+  grd.addColorStop(0, a);
+  grd.addColorStop(1, b);
   g.fillStyle = grd;
   g.beginPath();
-  g.arc(128, 128, 118, 0, Math.PI * 2);
+  g.arc(128, 128, 124, 0, Math.PI * 2);
   g.fill();
-  g.lineWidth = 12;
-  g.strokeStyle = 'rgba(255,255,255,0.92)';
-  g.stroke();
-  g.font = '150px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(EMOJI[element] || '', 128, 140);
+  // the sign: light metal, a dark cut line round it (engraved)
+  const metalG = g.createLinearGradient(60, 50, 190, 210);
+  metalG.addColorStop(0, '#fff1c8');
+  metalG.addColorStop(0.55, '#e3bd6a');
+  metalG.addColorStop(1, '#a8823a');
+  const draw = (path) => {
+    g.save();
+    g.lineJoin = 'round';
+    g.lineCap = 'round';
+    g.translate(4, 5);   // (its shadow, cut into the enamel)
+    path();
+    g.fillStyle = 'rgba(0,0,0,0.55)';
+    g.fill();
+    g.restore();
+    g.save();
+    g.lineJoin = 'round';
+    g.lineCap = 'round';
+    path();
+    g.fillStyle = metalG;
+    g.fill();
+    g.lineWidth = 3;
+    g.strokeStyle = 'rgba(70,46,12,0.8)';
+    g.stroke();
+    g.restore();
+  };
+  if (element === 'vuur') {
+    draw(() => {
+      g.beginPath();
+      g.moveTo(128, 40);
+      g.bezierCurveTo(150, 82, 196, 104, 186, 158);
+      g.bezierCurveTo(178, 202, 146, 220, 128, 220);
+      g.bezierCurveTo(98, 220, 70, 198, 70, 160);
+      g.bezierCurveTo(70, 126, 96, 112, 100, 82);
+      g.bezierCurveTo(116, 98, 116, 118, 112, 132);
+      g.bezierCurveTo(132, 112, 138, 78, 128, 40);
+      g.closePath();
+    });
+    g.save();   // (its hot heart)
+    g.beginPath();
+    g.moveTo(128, 120);
+    g.bezierCurveTo(146, 146, 158, 160, 152, 182);
+    g.bezierCurveTo(146, 202, 110, 202, 104, 182);
+    g.bezierCurveTo(100, 164, 116, 152, 128, 120);
+    g.fillStyle = ENAMEL.vuur[0];
+    g.fill();
+    g.restore();
+  } else if (element === 'gras') {
+    draw(() => {
+      g.beginPath();
+      g.moveTo(64, 196);
+      g.bezierCurveTo(60, 110, 120, 52, 198, 52);
+      g.bezierCurveTo(200, 132, 150, 196, 64, 196);
+      g.closePath();
+    });
+    g.save();   // (the midrib and veins, cut in)
+    g.strokeStyle = 'rgba(40,30,8,0.75)';
+    g.lineWidth = 6;
+    g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(70, 190);
+    g.quadraticCurveTo(128, 128, 190, 62);
+    for (const [x, y, dx, dy] of [[100, 156, -6, -34], [126, 128, -4, -36], [152, 100, -2, -32], [108, 148, 34, 6], [134, 120, 36, 6], [158, 94, 30, 6]]) { g.moveTo(x, y); g.lineTo(x + dx, y + dy); }
+    g.stroke();
+    g.restore();
+  } else if (element === 'water') {
+    draw(() => {
+      g.beginPath();
+      g.moveTo(128, 38);
+      g.bezierCurveTo(150, 86, 192, 124, 192, 162);
+      g.bezierCurveTo(192, 200, 162, 222, 128, 222);
+      g.bezierCurveTo(94, 222, 64, 200, 64, 162);
+      g.bezierCurveTo(64, 124, 106, 86, 128, 38);
+      g.closePath();
+    });
+    g.save();
+    g.strokeStyle = 'rgba(255,255,255,0.75)';
+    g.lineWidth = 9;
+    g.lineCap = 'round';
+    g.beginPath();
+    g.arc(128, 162, 40, Math.PI * 0.95, Math.PI * 1.35);
+    g.stroke();
+    g.restore();
+  } else if (element === 'plof') {
+    draw(() => {
+      g.beginPath();
+      g.arc(118, 150, 62, 0, Math.PI * 2);
+      g.moveTo(152, 92);
+      g.lineTo(168, 76);
+      g.lineTo(184, 92);
+      g.lineTo(168, 108);
+      g.closePath();
+    });
+    g.save();   // (the fuse and its spark)
+    g.strokeStyle = '#e3bd6a';
+    g.lineWidth = 7;
+    g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(170, 84);
+    g.quadraticCurveTo(186, 56, 204, 62);
+    g.stroke();
+    g.fillStyle = '#ffd36a';
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; g.beginPath(); g.moveTo(206, 58); g.lineTo(206 + Math.cos(a) * 18, 58 + Math.sin(a) * 18); g.lineWidth = 4; g.strokeStyle = '#ffd36a'; g.stroke(); }
+    g.beginPath();
+    g.arc(98, 130, 14, 0, Math.PI * 2);
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.fill();
+    g.restore();
+  }
+  // the enamel's gloss
+  const gl = g.createLinearGradient(0, 0, 0, 256);
+  gl.addColorStop(0, 'rgba(255,255,255,0.16)');
+  gl.addColorStop(0.45, 'rgba(255,255,255,0)');
+  g.fillStyle = gl;
+  g.beginPath();
+  g.arc(128, 128, 124, 0, Math.PI * 2);
+  g.fill();
   return c;
 }
 /** Glass: a faint blue body with two bright diagonal glare streaks and a lighter rim, so it reads as glass. */
@@ -264,7 +378,18 @@ export function createPieces(renderer) {
     const s = shapeInfo(shape);
     const D = DEPTH * PX;   // (the depth in Stapel's px)
     let mats = [base.sandstone, base.sandstone];
-    if (BOX.has(shape)) {
+    // (a real material for the skin: painted timber, gold, stone ... (materials.js); the playful skins keep Stapel's art)
+    const chipFrom = (c) => { const g = c.getContext('2d'); const d = g.getImageData(Math.floor(c.width * 0.3), Math.floor(c.height * 0.2), 4, 4).data; return new THREE.Color(`rgb(${d[0]},${d[1]},${d[2]})`); };
+    if (hasMaterial(skin) && BOX.has(shape)) {
+      const L = atlasLayout(s, PAINT_K);
+      const sf = boxSurface(shape, skin, color, s.w, s.h, D, L, PAINT_K);
+      mats = surfaceMaterial(sf, aniso);
+      mats.chipColor = chipFrom(sf.color);
+    } else if (hasMaterial(skin)) {
+      const sf = wedgeSurface(skin, color, getGeometry({ shape, color }), D, PAINT_K);
+      mats = [surfaceMaterial({ ...sf.face, roughness: sf.roughness, metalness: sf.metalness }, aniso), surfaceMaterial({ ...sf.wall, roughness: sf.roughness, metalness: sf.metalness }, aniso)];
+      mats.chipColor = chipFrom(sf.face.color);
+    } else if (BOX.has(shape)) {
       const face = blockFaceCanvas({ shape, color }, skin, ATLAS_K, true);
       const end = blockPanelCanvas(shape, skin, color, D, s.h, ATLAS_K);
       const cap = blockPanelCanvas(shape, skin, color, s.w, D, ATLAS_K);
@@ -296,7 +421,7 @@ export function createPieces(renderer) {
       }
     }
     // (its pieces when it breaks: plain splinters in its own colour)
-    mats.chip = new THREE.MeshStandardMaterial({ color: mats.pal ? new THREE.Color(mats.pal.fill) : '#b8996c', roughness: 0.62, metalness: 0.03 });
+    mats.chip = new THREE.MeshStandardMaterial({ color: mats.chipColor || (mats.pal ? new THREE.Color(mats.pal.fill) : '#b8996c'), roughness: 0.7, metalness: 0.03 });
     matCache.set(k, mats);
     return mats;
   }
@@ -381,29 +506,152 @@ export function createPieces(renderer) {
         }
       }
     }
+    if (element) dress(group, shape, element, W, H);
     group.userData = { shape, side, element, top, bottom, w: W, h: H };
     return group;
   }
-  /** (cards) the block as Stapel draws it in that skin, its emblem in the corner: a data URL. */
+  /**
+   * The element in the block itself, not only its emblem (the owner: "childs play"): fire blocks charred with embers
+   * glowing in the cracks, grass blocks grown over with moss, water blocks wet and glossy, explosive blocks strapped in
+   * riveted steel with a fuse on top. Overlays share one material each (the same block shape underneath).
+   */
+  const overlayTex = (draw, rep = 2) => {
+    const c = canvas(256, 256);
+    draw(c.getContext('2d'));
+    const tx = new THREE.CanvasTexture(c);
+    tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
+    tx.repeat.set(rep, rep);
+    tx.anisotropy = aniso;
+    return tx;
+  };
+  const blotches = (g, n, rmin, rmax, seed, col = '255,255,255') => {
+    const r = rng(seed);
+    for (let i = 0; i < n; i++) {
+      const x = r() * 256;
+      const y = r() * 256;
+      const rad = rmin + r() * (rmax - rmin);
+      for (const [dx, dy] of [[0, 0], [256, 0], [-256, 0], [0, 256], [0, -256]]) {   // (it tiles)
+        const grd = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, rad);
+        grd.addColorStop(0, `rgba(${col},${0.5 + r() * 0.5})`);
+        grd.addColorStop(1, `rgba(${col},0)`);
+        g.fillStyle = grd;
+        g.fillRect(x + dx - rad, y + dy - rad, rad * 2, rad * 2);
+      }
+    }
+  };
+  const cracks = (g, n, seed, w, col) => {
+    const r = rng(seed);
+    g.strokeStyle = col;
+    g.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      let x = r() * 256;
+      let y = r() * 256;
+      let a = r() * Math.PI * 2;
+      g.lineWidth = w * (0.5 + r());
+      g.beginPath();
+      g.moveTo(x, y);
+      for (let k = 0; k < 9; k++) { a += (r() - 0.5) * 1.1; x += Math.cos(a) * 10; y += Math.sin(a) * 10; g.lineTo(x, y); }
+      g.stroke();
+    }
+  };
+  const OVER = {
+    vuur: new THREE.MeshStandardMaterial({
+      color: '#18110d', roughness: 0.95, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+      alphaMap: overlayTex((g) => { g.fillStyle = '#000'; g.fillRect(0, 0, 256, 256); blotches(g, 26, 14, 46, 5); }),
+      emissive: '#ff5a14', emissiveIntensity: 1.2,
+      emissiveMap: overlayTex((g) => { g.fillStyle = '#000'; g.fillRect(0, 0, 256, 256); cracks(g, 16, 9, 2.2, '#ffb060'); }),
+    }),
+    gras: new THREE.MeshStandardMaterial({
+      color: '#4f7d2a', roughness: 0.95, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+      alphaMap: overlayTex((g) => { g.fillStyle = '#000'; g.fillRect(0, 0, 256, 256); blotches(g, 40, 10, 34, 13); blotches(g, 90, 3, 9, 17); }),
+    }),
+    // (wet through: a glossy dark film, the sky's light running off it; no pattern to squash on a long plank)
+    water: new THREE.MeshStandardMaterial({ color: '#163f66', roughness: 0.04, metalness: 0.25, envMapIntensity: 2.4, transparent: true, opacity: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
+  };
+  const steel = new THREE.MeshStandardMaterial({ color: '#3b3d42', roughness: 0.45, metalness: 0.85, envMapIntensity: 1.2 });
+  const fuseMat = new THREE.MeshStandardMaterial({ color: '#c8b48a', roughness: 0.9 });
+  function dress(group, shape, element, W, H) {
+    if (OVER[element]) {
+      const m = new THREE.Mesh(blockGeometry(shape), OVER[element]);
+      m.scale.set(1.004, 1.004, 1.004);
+      m.renderOrder = 2;
+      group.add(m);
+    }
+    if (element === 'plof') {   // (riveted steel straps round it, a fuse on top)
+      const parts = [];
+      const n = W > 3.2 ? 2 : 1;
+      for (let i = 0; i < n; i++) {
+        const x = n === 1 ? 0 : (i ? 1 : -1) * W * 0.26;
+        const band = new THREE.BoxGeometry(0.26, H + 0.08, DEPTH + 0.08);
+        band.translate(x, 0, 0);
+        parts.push(band);
+        for (const z of [1, -1]) for (const y of [-H * 0.32, 0, H * 0.32]) {
+          const rv = new THREE.SphereGeometry(0.07, 8, 6);
+          rv.translate(x, y, z * (DEPTH / 2 + 0.05));
+          parts.push(rv);
+        }
+      }
+      if (shape === 'wedge') parts.length = 0;   // (its slopes: the fuse alone)
+      if (parts.length) group.add(new THREE.Mesh(merge(parts), steel));
+      const fuse = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.12, 0.35, 0), new THREE.Vector3(0.34, 0.5, 0.05), new THREE.Vector3(0.5, 0.42, 0.1)]), 12, 0.05, 6), fuseMat);
+      fuse.position.set(W * 0.18, H / 2, 0);
+      group.add(fuse);
+      group.userData.fuseTip = new THREE.Vector3(W * 0.18 + 0.5, H / 2 + 0.42, 0.1);
+    }
+  }
+  /**
+   * (cards) the block itself, rendered in 3D as it is in the battle (its real material, its emblem), a three-quarter
+   * view against nothing: a data URL. A small renderer of its own, made the first time (the cards keep up with the look).
+   */
+  let thumb = null;
+  function thumbKit() {
+    if (thumb) return thumb;
+    const c = canvas(480, 320);
+    const r = new THREE.WebGLRenderer({ canvas: c, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    r.toneMapping = THREE.ACESFilmicToneMapping;
+    r.toneMappingExposure = 1.15;
+    r.outputColorSpace = THREE.SRGBColorSpace;
+    r.setClearColor(0x000000, 0);
+    const sc = new THREE.Scene();
+    // (a warm studio: a sky above, the sunset round it, for metal to reflect)
+    const env = new THREE.Scene();
+    const skyGeo = new THREE.SphereGeometry(10, 24, 12);
+    const skyMat = new THREE.ShaderMaterial({ side: THREE.BackSide, vertexShader: 'varying vec3 p; void main(){ p = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }', fragmentShader: 'varying vec3 p; void main(){ float h = normalize(p).y; vec3 c = mix(vec3(0.85, 0.55, 0.42), vec3(0.42, 0.5, 0.75), smoothstep(-0.1, 0.8, h)); c = mix(c, vec3(0.12, 0.1, 0.12), smoothstep(0.0, -0.6, h)); gl_FragColor = vec4(c, 1.0); }' });
+    env.add(new THREE.Mesh(skyGeo, skyMat));
+    const pm = new THREE.PMREMGenerator(r);
+    sc.environment = pm.fromScene(env, 0.02).texture;
+    sc.environmentIntensity = 0.8;
+    const key = new THREE.DirectionalLight('#ffe2c4', 2.6);
+    key.position.set(-4, 6, 7);
+    const rim = new THREE.DirectionalLight('#9fc2ff', 1.2);
+    rim.position.set(5, 3, -6);
+    sc.add(key, rim, new THREE.HemisphereLight('#fff0dc', '#2a2030', 0.6));
+    const cam = new THREE.PerspectiveCamera(26, 1.5, 0.1, 200);
+    thumb = { r, sc, cam, c };
+    return thumb;
+  }
   const cardCache = new Map();
   function cardImage(shape, element, skin) {
     const k = `${shape}|${element}|${skin}`;
     if (cardCache.has(k)) return cardCache.get(k);
-    const art = blockFaceCanvas({ shape, color: SHAPE_COLOR[shape] ?? 0 }, skin, 2);
-    const c = canvas(240, 160);
-    const g = c.getContext('2d');
-    if (art) {
-      const k2 = Math.min(200 / art.canvas.width, 120 / art.canvas.height);
-      const w = art.canvas.width * k2;
-      const h = art.canvas.height * k2;
-      g.shadowColor = 'rgba(0,0,0,0.45)';
-      g.shadowBlur = 10;
-      g.shadowOffsetY = 5;
-      g.drawImage(art.canvas, (240 - w) / 2, (160 - h) / 2 + 6, w, h);
-      g.shadowColor = 'transparent';
+    let url = '';
+    try {
+      const { r, sc, cam, c } = thumbKit();
+      const g = block(shape, 0, element, skin);
+      g.rotation.set(0.22, -0.5, 0);
+      sc.add(g);
+      const box = new THREE.Box3().setFromObject(g);
+      const size = box.getSize(new THREE.Vector3());
+      const mid = box.getCenter(new THREE.Vector3());
+      const fit = Math.max(size.x / 1.5, size.y) * 0.5 / Math.tan((cam.fov * Math.PI) / 360);
+      cam.position.set(mid.x, mid.y + size.y * 0.08, mid.z + fit * 1.06 + size.z * 0.5);
+      cam.lookAt(mid);
+      r.render(sc, cam);
+      sc.remove(g);
+      url = c.toDataURL('image/png');
+    } catch {
+      url = '';   // (no 3D for the cards: the picture stays empty, the name still shows)
     }
-    if (element) g.drawImage(emblemCanvas(element), 168, 2, 70, 70);
-    const url = c.toDataURL('image/png');
     cardCache.set(k, url);
     return url;
   }
@@ -793,6 +1041,7 @@ export function createPieces(renderer) {
   function drySkin(group) { if (group.userData.skin) group.userData.skin.visible = false; }
   /** What moves by itself every frame (the water's shimmer). */
   function tick(time) {
+    OVER.vuur.emissiveIntensity = 0.9 + 0.45 * Math.sin(time * 3.1) * Math.sin(time * 1.7 + 0.6);
     waterSkinMat.opacity = 0.5 + 0.08 * Math.sin(time * 2.6);
     waterSkinMat.emissiveIntensity = 0.7 + 0.25 * Math.sin(time * 1.7 + 1);
   }
@@ -1077,5 +1326,7 @@ export function createPieces(renderer) {
     return s;
   }
 
-  return { M, block, crown, seam, crack, glassCrack, glassBreak, soot, vineWrap, springCoil, dropCoil, waterSkin, drySkin, tick, crane, pin, blockGeometry, cardImage, team, velvet, ghost, crownMark };
+  /** (behind the loading screen) a shape's material in a skin made now, not on its first use (no stall mid-game). */
+  const prepare = (shape, skin) => { faceMaterials(shape, skin); };
+  return { M, block, crown, seam, crack, glassCrack, glassBreak, soot, vineWrap, springCoil, dropCoil, waterSkin, drySkin, tick, crane, pin, blockGeometry, cardImage, team, velvet, ghost, crownMark, prepare };
 }

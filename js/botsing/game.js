@@ -1388,7 +1388,11 @@ function onRemote(m) {
 }
 
 // warm the shaders behind the loading screen (every block, every emblem), then go
-const extras = ['cube', 'plank', 'wedge', 'crate', 'pillar'].map((s, i) => { const g = pieces.block(s, i % 2, ['vuur', 'gras', 'water', 'plof', 'vuur'][i], skins[i % 2] || 'kleur'); g.position.set(0, -50, 0); return g; });
+// every shape's material in the skins in play, painted behind the loading screen (painting is per pixel: on a phone a
+// shape takes a tenth of a second or more; mid-game, when the cards first show, it would stall)
+for (const sk of new Set([skins[ME], skins[FOE]])) for (const sh of ['plank', 'slab', 'cube', 'wedge', 'crate', 'pillar']) pieces.prepare(sh, sk);
+// (one small block of each element: every kind of material compiled)
+const extras = ['vuur', 'gras', 'water', 'plof'].map((el, i) => { const g = pieces.block('cube', i % 2, el, skins[i % 2] || 'kleur'); g.position.set(0, -50, 0); return g; });
 let last = performance.now();
 let time = 0;
 // (?prof: ms per part of a frame, averaged, in window.__btProf)
