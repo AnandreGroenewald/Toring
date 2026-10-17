@@ -144,11 +144,17 @@ const toScreen = (x, y, z = 0, r = stageEl.getBoundingClientRect()) => {
  * spot at the same moment stack upwards instead of covering each other.
  */
 const calls = [];
+const chipOf = (g) => g?.children[0]?.material?.chip || pieces.M.sandstone;
 function callout(text, px, py, kind) {
   const p = new THREE.Vector3(px / PX, -py / PX + 2.2, 0);
   const now = performance.now();
-  const dy = -30 * calls.filter((c) => now - c.t0 < 1400 && c.p.distanceTo(p) < 5).length;
-  const s = toScreen(p.x, p.y);
+  const r = stageEl.getBoundingClientRect();
+  const clampX = (x) => Math.max(70, Math.min(r.width - 70, x));
+  const s = toScreen(p.x, p.y, 0, r);
+  // (move up past any word still showing where this one would land: they never print over each other)
+  let dy = 0;
+  const near = calls.filter((c) => now - c.t0 < 1400).map((c) => { const q = toScreen(c.p.x, c.p.y, 0, r); return { x: clampX(q.x), y: q.y + c.dy }; });
+  for (let i = 0; i < 6 && near.some((q) => Math.abs(q.x - clampX(s.x)) < 150 && Math.abs(q.y - (s.y + dy)) < 30); i++) dy -= 32;
   calls.push({ el: hud.callout(text, s.x, s.y + dy, kind), p, dy, t0: now });
 }
 function trackCallouts() {
@@ -419,7 +425,7 @@ function handle(events) {
         const k = Math.min(1.6, (ev.speed / LAUNCH.V0) * Math.sqrt(e.body.mass / 2.4));
         const dir = new THREE.Vector3(Math.sign(e.body.velocity.x) || towardFoe(e.side), 0.2, 0);
         const struck = ev.other && ev.other.kind !== 'stack' ? meshes.get(ev.other.id) : null;
-        fx.hit(at, dir, k, struck?.children[0]?.material?.[1] || null);
+        fx.hit(at, dir, k, struck ? chipOf(struck) : null);
         fx.stopTrail();
         stage.shake(0.3 + 0.45 * k);
         const foeHit = ev.other && ev.other.kind !== 'stack' && ev.other.side !== e.side;
@@ -441,7 +447,7 @@ function handle(events) {
         }
         if (g && e.hp > 0) pieces.crack(g, e.hpMax - e.hp);
         if (ev.by !== 'blast') callout(`−${ev.n}`, ev.x, ev.y, 'is-dmg');   // (an explosion says BOEM once: its cracks show the rest)
-        if (e.hp > 0 && ev.by !== 'fire') fx.hit(at, new THREE.Vector3(0, 1, 0), 0.4, g?.children[0]?.material?.[1] || null);
+        if (e.hp > 0 && ev.by !== 'fire') fx.hit(at, new THREE.Vector3(0, 1, 0), 0.4, g ? chipOf(g) : null);
         break;
       }
       case 'glass': {
@@ -501,7 +507,7 @@ function handle(events) {
       }
       case 'break': {
         const g = meshes.get(e.id);
-        fx.shatter(at, g?.children[0]?.material?.[1] || g?.children[0]?.material || pieces.M.sandstone, { n: 14, size: Math.max(0.8, e.w / PX / 3.5) });
+        fx.shatter(at, chipOf(g), { n: 14, size: Math.max(0.8, e.w / PX / 3.5) });
         sayOnce('smashed', T.smashed, ev.x, ev.y - 50);
         sfx('clash');
         stage.shake(0.5);
@@ -509,7 +515,7 @@ function handle(events) {
       }
       case 'dissolve': {   // (the thrown block breaks apart: "the block that is thrown disapears")
         const g = meshes.get(e.id);
-        fx.shatter(at, g?.children[0]?.material?.[1] || pieces.M.sandstone, { n: 10, size: Math.max(0.6, e.w / PX / 4) });
+        fx.shatter(at, chipOf(g), { n: 10, size: Math.max(0.6, e.w / PX / 4) });
         if (e.element) fx.sparkle(at, 24, ELEMENT[e.element].color, 7);
         break;
       }
@@ -531,7 +537,7 @@ function handle(events) {
         break;
       }
       case 'wave': {
-        fx.wave(new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0), ev.dir, 1);
+        fx.wave(new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0), ev.dir, Math.min(2.2, Math.max(1, (-mOf(ev.y) - STACK_TOP) / 2.6)), STACK_TOP + 0.05);
         sayOnce('wave', T.waveHit, ev.x, ev.y - 50);
         stage.shake(0.7);
         sfx('splash');
@@ -804,7 +810,8 @@ function zoomPose(z, from, pos, look, { up = 0, wide = 0 } = {}) {
   const tz = Math.max(topM(z), STACK_TOP + 3);
   zoomAim.set((xt + cx) / 2, (tz + STACK_TOP) / 2 + 1, 0);
   pos.copy(from).lerp(zoomAim, 0.42);
-  pos.y = Math.min(pos.y, zoomAim.y + 9);
+  // (nearly level with the tower: the sunset sky behind it instead of a wall of sea, magnified by the lens)
+  pos.y = Math.min(pos.y, zoomAim.y + 3.2);
   look.copy(zoomAim);
   // the lens that just holds the tower's top, its foot and the crown (measured on the screen, so the view's angle counts)
   frameCam.fov = 30;

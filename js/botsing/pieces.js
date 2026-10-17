@@ -6,12 +6,14 @@
 import * as THREE from '../../lib/three.module.min.js';
 import { castleMaterials, banner, TEAM } from '../kasteel/castle.js';
 import { rng } from '../kasteel/world.js';
-import { blockFaceCanvas } from '../game/blocks.js';
+import { blockFaceCanvas, blockPanelCanvas } from '../game/blocks.js';
 import { shapeInfo } from './sim.js';
 import { PX, sideX, towardFoe, SHAPE_COLOR, ELEMENT } from './rules.js';
 import { merge, STACK_TOP } from './world.js';
 
 export const DEPTH = 3.2;   // every block is this deep (m)
+const BOX = new Set(['cube', 'plank', 'slab', 'brick', 'crate', 'pillar']);   // (the wedge is the one that isn't a box)
+const EDGE_R = 0.17;   // how round a block's edges are (m): they catch the light
 const SIDE_TEAM = ['blue', 'red'];
 export const EMOJI = { vuur: '🔥', gras: '🌿', water: '💧', plof: '💣' };
 
@@ -20,6 +22,59 @@ function canvas(w, h) {
   c.width = w;
   c.height = h;
   return c;
+}
+/**
+ * A box with rounded edges and one square of UVs on each face (+x, -x, +y, -y, +z, -z: six material groups), the arcs
+ * of its edges sharing their faces' pictures. After three.js's RoundedBoxGeometry (MIT, examples/jsm/geometries).
+ */
+const _rn = new THREE.Vector3();
+function arcUv(faceDir, normal, uvAxis, projAxis, radius, side) {
+  const arc = (2 * Math.PI * radius) / 4;
+  const mid = Math.max(side - 2 * radius, 0);
+  _rn.copy(normal);
+  _rn[projAxis] = 0;
+  _rn.normalize();
+  const arcUvRatio = (0.5 * arc) / (arc + mid);
+  const arcAngleRatio = 1 - _rn.angleTo(faceDir) / (Math.PI / 4);
+  if (Math.sign(_rn[uvAxis]) === 1) return arcAngleRatio * arcUvRatio;
+  return mid / (arc + mid) + arcUvRatio + arcUvRatio * (1 - arcAngleRatio);
+}
+function roundedBox(width, height, depth, segments = 2, radius = 0.15) {
+  const seg = segments * 2 + 1;
+  const r = Math.min(width / 2, height / 2, depth / 2, radius);
+  const geo = new THREE.BoxGeometry(1, 1, 1, seg, seg, seg).toNonIndexed();
+  const pos = geo.attributes.position.array;
+  const nor = geo.attributes.normal.array;
+  const uvs = geo.attributes.uv.array;
+  const p = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const box = new THREE.Vector3(width, height, depth).divideScalar(2).subScalar(r);
+  const faceTris = pos.length / 6;
+  const dir = new THREE.Vector3();
+  const half = 0.5 / seg;
+  for (let i = 0, j = 0; i < pos.length; i += 3, j += 2) {
+    p.fromArray(pos, i);
+    n.copy(p);
+    n.x -= Math.sign(n.x) * half;
+    n.y -= Math.sign(n.y) * half;
+    n.z -= Math.sign(n.z) * half;
+    n.normalize();
+    pos[i] = box.x * Math.sign(p.x) + n.x * r;
+    pos[i + 1] = box.y * Math.sign(p.y) + n.y * r;
+    pos[i + 2] = box.z * Math.sign(p.z) + n.z * r;
+    nor[i] = n.x;
+    nor[i + 1] = n.y;
+    nor[i + 2] = n.z;
+    switch (Math.floor(i / faceTris)) {
+      case 0: dir.set(1, 0, 0); uvs[j] = arcUv(dir, n, 'z', 'y', r, depth); uvs[j + 1] = 1 - arcUv(dir, n, 'y', 'z', r, height); break;
+      case 1: dir.set(-1, 0, 0); uvs[j] = 1 - arcUv(dir, n, 'z', 'y', r, depth); uvs[j + 1] = 1 - arcUv(dir, n, 'y', 'z', r, height); break;
+      case 2: dir.set(0, 1, 0); uvs[j] = 1 - arcUv(dir, n, 'x', 'z', r, width); uvs[j + 1] = arcUv(dir, n, 'z', 'x', r, depth); break;
+      case 3: dir.set(0, -1, 0); uvs[j] = 1 - arcUv(dir, n, 'x', 'z', r, width); uvs[j + 1] = 1 - arcUv(dir, n, 'z', 'x', r, depth); break;
+      case 4: dir.set(0, 0, 1); uvs[j] = 1 - arcUv(dir, n, 'x', 'y', r, width); uvs[j + 1] = 1 - arcUv(dir, n, 'y', 'x', r, height); break;
+      default: dir.set(0, 0, -1); uvs[j] = arcUv(dir, n, 'x', 'y', r, width); uvs[j + 1] = 1 - arcUv(dir, n, 'y', 'x', r, height); break;
+    }
+  }
+  return geo;
 }
 /** An element's emblem: a glossy disc in its colour, a white rim, its emoji. */
 function emblemCanvas(element) {
@@ -106,6 +161,11 @@ export function createPieces(renderer) {
     const k = `${shape}|${depth}`;
     if (geoCache.has(k)) return geoCache.get(k);
     const s = shapeInfo(shape);
+    if (BOX.has(shape)) {   // (a box: rounded edges, each of its six faces painted)
+      const g = roundedBox(s.w / PX, s.h / PX, depth, 2, EDGE_R);
+      geoCache.set(k, g);
+      return g;
+    }
     const pts = s.outline.map((p) => new THREE.Vector2((p.x - s.cx) / PX, -(p.y - s.cy) / PX)).reverse();
     const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: depth - 2 * bev, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 1 });
     g.translate(0, 0, -(depth - 2 * bev) / 2);
@@ -125,34 +185,79 @@ export function createPieces(renderer) {
     geoCache.set(k, g);
     return g;
   }
-  /** The face (Stapel's block art in that skin) and the sides (its colour, a little deeper) for a shape. */
+  /**
+   * A block's look in skin `skin` (the owner, 17 Oct 2026, on the graphics: "would you be happy with this"; the battle's
+   * camera sees mostly a block's sides, which were plain colour): Stapel's own art on every face. A box gets its front
+   * and back, its ends and its top and bottom each painted at their own size with the shape's detail (the plank's grain
+   * and nails, the crate's brace); the wedge its face, and its sloping sides in panels of its stone.
+   */
   const matCache = new Map();
+  const lacquer = (t) => new THREE.MeshStandardMaterial({ map: t, roughness: 0.4, metalness: 0.03, envMapIntensity: 1.15 });
+  function faceTexture(art, w, h) {
+    const t = new THREE.CanvasTexture(art.canvas);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = aniso;
+    // (the face's square of UVs onto the art without its 3-unit edge: the outline's stroke lies on the rounded edge)
+    t.repeat.set((w + 2) / art.texW, (h + 2) / art.texH);
+    t.offset.set((art.pad - 1) / art.texW, (art.pad - 1) / art.texH);
+    return t;
+  }
   function faceMaterials(shape, skin) {
     const k = `${shape}|${skin}`;
     if (matCache.has(k)) return matCache.get(k);
-    const art = blockFaceCanvas({ shape, color: SHAPE_COLOR[shape] ?? 0 }, skin, 3);
-    let mats;
-    if (art) {
-      const t = new THREE.CanvasTexture(art.canvas);
-      t.colorSpace = THREE.SRGBColorSpace;
-      t.anisotropy = aniso;
-      const side = new THREE.Color(art.pal.fill).multiplyScalar(0.82);
-      mats = [new THREE.MeshStandardMaterial({ map: t, roughness: 0.5, metalness: 0.02 }), new THREE.MeshStandardMaterial({ color: side, roughness: 0.55, metalness: 0.02 })];
+    const color = SHAPE_COLOR[shape] ?? 0;
+    const s = shapeInfo(shape);
+    const D = DEPTH * PX;   // (the depth in Stapel's px)
+    let mats = [base.sandstone, base.sandstone];
+    if (BOX.has(shape)) {
+      const face = blockFaceCanvas({ shape, color }, skin, 3, true);
+      const end = blockPanelCanvas(shape, skin, color, D, s.h, 3);
+      const cap = blockPanelCanvas(shape, skin, color, s.w, D, 3);
+      if (face && end && cap) {
+        const fm = lacquer(faceTexture(face, s.w, s.h));
+        const em = lacquer(faceTexture(end, D, s.h));
+        const cm = lacquer(faceTexture(cap, s.w, D));
+        mats = [em, em, cm, cm, fm, fm];
+        mats.pal = face.pal;
+      }
     } else {
-      mats = [base.sandstone, base.sandstone];
+      const art = blockFaceCanvas({ shape, color }, skin, 3);
+      const wall = blockPanelCanvas(shape, skin, color, D, D, 3);
+      if (art && wall) {
+        const t = new THREE.CanvasTexture(art.canvas);
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.anisotropy = aniso;
+        const w = new THREE.CanvasTexture(wall.canvas);
+        w.colorSpace = THREE.SRGBColorSpace;
+        w.anisotropy = aniso;
+        w.wrapS = w.wrapT = THREE.RepeatWrapping;
+        w.repeat.set(1 / DEPTH, 1 / DEPTH);   // (the extruded walls' UVs are in metres: one panel every block-depth)
+        mats = [lacquer(t), lacquer(w)];
+        mats.pal = art.pal;
+      }
     }
+    // (its pieces when it breaks: plain splinters in its own colour)
+    mats.chip = new THREE.MeshStandardMaterial({ color: mats.pal ? new THREE.Color(mats.pal.fill) : '#b8996c', roughness: 0.62, metalness: 0.03 });
     matCache.set(k, mats);
     return mats;
   }
   const emblemMats = new Map();
+  /** The emblem on a medallion's face: its picture, lit a little from within so it reads in shadow too. */
   function emblemMaterial(element) {
     if (!emblemMats.has(element)) {
       const t = new THREE.CanvasTexture(emblemCanvas(element));
       t.colorSpace = THREE.SRGBColorSpace;
-      emblemMats.set(element, new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
+      t.anisotropy = aniso;
+      emblemMats.set(element, new THREE.MeshStandardMaterial({ map: t, emissive: '#ffffff', emissiveMap: t, emissiveIntensity: 0.32, roughness: 0.28, metalness: 0.05, envMapIntensity: 1.2 }));
     }
     return emblemMats.get(element);
   }
+  // a medallion: a thick disc (its face the emblem, facing +z, upright) and a gold ring round it
+  const medalGeo = new THREE.CylinderGeometry(1, 1, 0.12, 40, 1);
+  medalGeo.rotateX(Math.PI / 2);
+  medalGeo.rotateZ(Math.PI / 2);   // (the cap's picture upright when seen from the front)
+  const medalRing = new THREE.TorusGeometry(1, 0.09, 10, 48);
+  const medalMetal = new THREE.MeshStandardMaterial({ color: '#d6ad55', metalness: 1, roughness: 0.3, envMapIntensity: 1.7 });
   const box = (w, h, d, m) => {
     const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
     o.castShadow = o.receiveShadow = true;
@@ -174,14 +279,20 @@ export function createPieces(renderer) {
     const m = new THREE.Mesh(blockGeometry(shape), faceMaterials(shape, skin));
     m.castShadow = m.receiveShadow = true;
     group.add(m);
-    if (element) {
-      const size = Math.max(0.8, Math.min(1.5, Math.min(W, H) * 0.66));
+    if (element) {   // (a raised medallion on the front and the back: the element at a glance, from any side)
+      const r = Math.max(0.42, Math.min(0.76, Math.min(W, H) * 0.33));
       for (const z of [1, -1]) {
-        const e = new THREE.Mesh(new THREE.PlaneGeometry(size, size), emblemMaterial(element));
-        e.position.set(0, 0, z * (DEPTH / 2 + 0.015));
-        if (z < 0) e.rotation.y = Math.PI;
-        e.renderOrder = 3;
-        group.add(e);
+        const md = new THREE.Group();
+        const disc = new THREE.Mesh(medalGeo, [medalMetal, emblemMaterial(element), medalMetal]);
+        disc.scale.set(r, r, 1);
+        const ring = new THREE.Mesh(medalRing, medalMetal);
+        ring.scale.setScalar(r);
+        ring.position.z = 0.05;
+        disc.castShadow = ring.castShadow = true;
+        md.add(disc, ring);
+        md.position.z = z * (DEPTH / 2 + 0.05);
+        if (z < 0) md.rotation.y = Math.PI;
+        group.add(md);
       }
     }
     group.userData = { shape, side, element, top, bottom, w: W, h: H };

@@ -96,6 +96,7 @@
   display: flex; align-items: center; gap: 8px; pointer-events: none; }
 .bt-tap.is-on { transform: translate(-50%, 0); opacity: 1; }
 .bt-tap.is-on .bt-cancel { pointer-events: auto; }
+.bt-cancel[hidden] { display: none; }   /* (no way back on the other side's turn: its grid would show it anyway) */
 .bt-cancel { width: 44px; height: 44px; border-radius: 14px; border: 1px solid var(--glass-line); background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: 24px; font-weight: 900; display: grid; place-content: center; }
 .bt-tapt { display: grid; justify-items: center; padding: 9px 20px 10px; border-radius: 16px; background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3); min-width: 200px; }
 .bt-tapt b { font-size: 17px; font-weight: 900; letter-spacing: 0.08em; white-space: nowrap; animation: bt-breathe 1.3s ease-in-out infinite; }

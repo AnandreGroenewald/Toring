@@ -2264,7 +2264,7 @@ export function drawSkinRect(ctx, skinId, color, w, h) {
  * game's own block art in skin `skinId` on a fresh canvas `scale` times its size (with the 3-unit transparent edge, like
  * its texture), for the 3D battle's block faces and cards. The worn skin is left as it was. Null without a canvas.
  */
-export function blockFaceCanvas(spec, skinId, scale = 2) {
+export function blockFaceCanvas(spec, skinId, scale = 2, opaque = false) {
   const g = getGeometry(spec);
   const c = scratchCanvas(Math.ceil(g.texW * scale), Math.ceil(g.texH * scale));
   if (!c) return null;
@@ -2273,11 +2273,44 @@ export function blockFaceCanvas(spec, skinId, scale = 2) {
   const worn = blockSkin;
   blockSkin = Object.prototype.hasOwnProperty.call(BLOCK_SKINS, skinId) ? skinId : 'kleur';
   try {
-    drawBlock(ctx, g, skinned(shapeColor(spec)), textureKeyFor(spec));
+    const pal = skinned(shapeColor(spec));
+    if (opaque) {   // (a box face: its corners in the outline's colour, so they read as the block's edge)
+      ctx.fillStyle = hex(mix(pal.dark, 0x000000, 0.38));
+      ctx.fillRect(0, 0, g.texW, g.texH);
+    }
+    drawBlock(ctx, g, pal, textureKeyFor(spec));
   } finally {
     blockSkin = worn;
   }
   return { canvas: c, pad: PAD, texW: g.texW, texH: g.texH, w: g.w, h: g.h, pal: (() => { const w0 = blockSkin; blockSkin = Object.prototype.hasOwnProperty.call(BLOCK_SKINS, skinId) ? skinId : 'kleur'; try { return skinned(shapeColor(spec)); } finally { blockSkin = w0; } })() };
+}
+
+/**
+ * (1.18 Blokbotsing, the owner: "would you be happy with this, specifically the graphics now") one SIDE of a 3D block: a
+ * w x h panel with shape `shapeName`'s own detail (the plank's grain and nails, the crate's brace, the pillar's flutes) in
+ * skin `skinId` and palette colour `color`, on a canvas `scale` times its size, its 3-unit edge filled in the outline's
+ * colour (an opaque face). The worn skin is left as it was. Null without a canvas.
+ */
+export function blockPanelCanvas(shapeName, skinId, color, w, h, scale = 2) {
+  const g = {
+    shape: shapeName, scale: 1, w, h, pad: PAD, texW: w + 2 * PAD, texH: h + 2 * PAD,
+    parts: [R(0, 0, w, h)], cells: [R(0, 0, w, h)], outline: rectOutline(w, h), cx: w / 2, cy: h / 2,
+  };
+  const c = scratchCanvas(Math.ceil(g.texW * scale), Math.ceil(g.texH * scale));
+  if (!c) return null;
+  const ctx = c.getContext('2d');
+  ctx.scale(scale, scale);
+  const worn = blockSkin;
+  blockSkin = Object.prototype.hasOwnProperty.call(BLOCK_SKINS, skinId) ? skinId : 'kleur';
+  try {
+    const pal = skinned(PALETTE[color] || PALETTE[0]);
+    ctx.fillStyle = hex(mix(pal.dark, 0x000000, 0.38));
+    ctx.fillRect(0, 0, g.texW, g.texH);
+    drawBlock(ctx, g, pal, `panel_${shapeName}_${Math.round(w)}x${Math.round(h)}_${color}_${blockSkin}`);
+  } finally {
+    blockSkin = worn;
+  }
+  return { canvas: c, pad: PAD, texW: g.texW, texH: g.texH, w, h };
 }
 
 export function textureKeyFor(spec, name = null) {

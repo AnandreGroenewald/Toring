@@ -127,21 +127,21 @@ export function createBattleFx(stage) {
     return { m, age: 0, life: 1, s0: 1, s1: 4, gold: false };
   });
   let ri = 0;
-  function ring(p, { s0 = 1, s1 = 6, life = 1.6, gold = false, flat = true, y = 0.08 } = {}) {
+  function ring(p, { s0 = 1, s1 = 6, life = 1.6, gold = false, flat = true, y = 0.08, color = null, add = false } = {}) {
     const r = rings[ri++ % rings.length];
     r.m.visible = true;
     r.m.position.set(p.x, flat ? y : p.y, p.z || 0);
     r.m.rotation.set(flat ? -Math.PI / 2 : 0, 0, 0);
-    r.m.material.color.set(gold ? '#ffcf5a' : '#f4f0ea');
-    r.m.material.blending = gold ? THREE.AdditiveBlending : THREE.NormalBlending;
+    r.m.material.color.set(color || (gold ? '#ffcf5a' : '#f4f0ea'));
+    r.m.material.blending = gold || add ? THREE.AdditiveBlending : THREE.NormalBlending;
     r.age = 0;
     r.life = life;
     r.s0 = s0;
     r.s1 = s1;
     r.flat = flat;
   }
-  // a block's pieces: chunky stones of its own material that fly, spin, and drop into the sea
-  const chunkGeo = new THREE.DodecahedronGeometry(0.5, 0);
+  // a block's pieces: splinters and shards in its own colour that fly, spin, and drop into the sea
+  const chunkGeo = new THREE.BoxGeometry(1, 0.5, 0.7);
   const chunkPool = Array.from({ length: 48 }, () => {
     const m = new THREE.Mesh(chunkGeo, null);
     m.castShadow = true;
@@ -156,7 +156,8 @@ export function createBattleFx(stage) {
       c.m.material = Array.isArray(material) ? material[1] : material;
       c.m.visible = true;
       c.m.position.set(p.x + (R() - 0.5) * size, p.y + (R() - 0.5) * size, (R() - 0.5) * 2.4);
-      c.m.scale.setScalar(size * (0.35 + R() * 0.55));
+      const cs = size * (0.3 + R() * 0.45);
+      c.m.scale.set(cs * (0.7 + R() * 0.9), cs * (0.45 + R() * 0.5), cs * (0.6 + R() * 0.6));
       c.v.set((R() - 0.5) * speed, R() * speed * 0.9 + 2, (R() - 0.5) * speed * 0.8);
       if (dir) c.v.addScaledVector(dir, speed * 0.6);
       c.w.set(R() * 8, R() * 8, R() * 8);
@@ -208,7 +209,43 @@ export function createBattleFx(stage) {
 
   // 🌿 vines: tubes rebuilt as their ends move (a few at a time), growing in, fading out
   const VINE_N = 6;
-  const vineMat = new THREE.MeshStandardMaterial({ color: '#3fa532', roughness: 0.7, transparent: true, opacity: 1 });
+  const vineMat = new THREE.MeshStandardMaterial({ color: '#4cbb36', emissive: '#16420f', emissiveIntensity: 0.35, roughness: 0.6, transparent: true, opacity: 1 });
+  // (their leaves: one instanced mesh, eight leaves along each vine, opening as it grows)
+  const LEAVES = 8;
+  const leafTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 32;
+    const g = c.getContext('2d');
+    const grd = g.createLinearGradient(0, 0, 64, 32);
+    grd.addColorStop(0, '#a6ec62');
+    grd.addColorStop(1, '#2c8a22');
+    g.fillStyle = grd;
+    g.beginPath();
+    g.moveTo(2, 16);
+    g.quadraticCurveTo(28, -6, 62, 16);
+    g.quadraticCurveTo(28, 38, 2, 16);
+    g.fill();
+    g.strokeStyle = 'rgba(22,72,16,0.75)';
+    g.lineWidth = 1.5;
+    g.beginPath();
+    g.moveTo(4, 16);
+    g.lineTo(58, 16);
+    g.stroke();
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
+  const leafMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 0.5), new THREE.MeshStandardMaterial({ map: leafTex, alphaTest: 0.35, side: THREE.DoubleSide, roughness: 0.55, emissive: '#1d4f14', emissiveIntensity: 0.3 }), VINE_N * LEAVES);
+  leafMesh.frustumCulled = false;
+  const noLeaf = new THREE.Matrix4().makeScale(0, 0, 0);
+  for (let i = 0; i < VINE_N * LEAVES; i++) leafMesh.setMatrixAt(i, noLeaf);
+  scene.add(leafMesh);
+  const lm = new THREE.Matrix4();
+  const lq = new THREE.Quaternion();
+  const le = new THREE.Euler();
+  const ls = new THREE.Vector3();
+  const lp = new THREE.Vector3();
   const vinePool = Array.from({ length: VINE_N }, () => {
     const mesh = new THREE.Mesh(new THREE.BufferGeometry(), vineMat.clone());
     mesh.visible = false;
@@ -220,22 +257,127 @@ export function createBattleFx(stage) {
   let vi = 0;
   const vEnd = new THREE.Vector3();
   function updateVines(dt) {
-    for (const vn of vinePool) {
-      if (!vn.mesh.visible) continue;
+    let leavesMoved = false;
+    vinePool.forEach((vn, idx) => {
+      if (!vn.mesh.visible) return;
       vn.t += dt;
       const holding = vn.hold ? vn.hold(vn.target) : vn.t < 1.2;
       if (!holding || !vn.target?.visible) vn.fade += dt;
-      if (vn.fade > 0.6) { vn.mesh.visible = false; continue; }
-      if ((vn.tick = (vn.tick + 1) % 2) !== 0 && vn.t > 0.05) continue;
+      if (vn.fade > 0.6) {
+        vn.mesh.visible = false;
+        for (let L = 0; L < LEAVES; L++) leafMesh.setMatrixAt(idx * LEAVES + L, noLeaf);
+        leavesMoved = true;
+        return;
+      }
+      if ((vn.tick = (vn.tick + 1) % 2) !== 0 && vn.t > 0.05) return;
       vn.target.getWorldPosition(vEnd);
       const grow = Math.min(1, vn.t / 0.35);
       const mid = vn.from.clone().lerp(vEnd, 0.5).add(new THREE.Vector3(0, 1.6 + Math.sin(vn.seed) * 0.6, 1.4));
       const a = vn.from.clone().lerp(mid, 0.5).add(new THREE.Vector3(Math.sin(vn.seed * 3) * 0.6, 0, 0.6));
       const curve = new THREE.CatmullRomCurve3([vn.from.clone(), a, mid, vEnd.clone()]);
       vn.mesh.geometry.dispose();
-      vn.mesh.geometry = new THREE.TubeGeometry(curve, 22, 0.13 * (1 - vn.fade), 5);
+      vn.mesh.geometry = new THREE.TubeGeometry(curve, 22, 0.24 * (1 - vn.fade), 6);
       vn.mesh.geometry.setDrawRange(0, Math.floor(vn.mesh.geometry.index.count * grow));
       vn.mesh.material.opacity = 1 - vn.fade / 0.6;
+      for (let L = 0; L < LEAVES; L++) {
+        const tt = 0.1 + (L / (LEAVES - 1)) * 0.82;
+        if (tt > grow) { leafMesh.setMatrixAt(idx * LEAVES + L, noLeaf); continue; }
+        curve.getPointAt(tt, lp);
+        le.set(vn.seed * 3 + L * 1.9, vn.seed + L * 2.3, L * 0.7 + vn.seed);
+        lq.setFromEuler(le);
+        const sc = (1 - vn.fade / 0.6) * (0.8 + ((L * 37 + Math.floor(vn.seed * 10)) % 5) * 0.12);
+        ls.set(sc, sc, sc);
+        lm.compose(lp, lq, ls);
+        leafMesh.setMatrixAt(idx * LEAVES + L, lm);
+      }
+      leavesMoved = true;
+    });
+    if (leavesMoved) leafMesh.instanceMatrix.needsUpdate = true;
+  }
+  // 💧 the flood wave: a curling sheet of water that rears up, rushes along the rock and crashes down, spray off its lip
+  const waveGeo = (() => {
+    const prof = [[0, 0], [0.3, 0.9], [0.8, 1.8], [1.5, 2.45], [2.25, 2.6], [2.85, 2.2], [3.1, 1.6]].map(([x, y]) => new THREE.Vector2(x, y));
+    const pts = new THREE.SplineCurve(prof).getPoints(24);
+    const NZ = 8;
+    const W = 5;
+    const pos = [];
+    const uv = [];
+    const idx = [];
+    for (let j = 0; j <= NZ; j++) for (let i = 0; i < pts.length; i++) { pos.push(pts[i].x, pts[i].y, (j / NZ - 0.5) * W); uv.push(i / (pts.length - 1), j / NZ); }
+    for (let j = 0; j < NZ; j++) {
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = j * pts.length + i;
+        idx.push(a, a + pts.length, a + 1, a + 1, a + pts.length, a + pts.length + 1);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    return g;
+  })();
+  const waveTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 64;
+    const g = c.getContext('2d');
+    const grd = g.createLinearGradient(0, 0, 256, 0);   // (from its foot to its lip)
+    grd.addColorStop(0, 'rgba(22,96,150,0)');
+    grd.addColorStop(0.08, 'rgba(22,96,150,0.92)');
+    grd.addColorStop(0.5, 'rgba(58,170,232,0.9)');
+    grd.addColorStop(0.8, 'rgba(170,230,255,0.95)');
+    grd.addColorStop(0.92, 'rgba(255,255,255,1)');
+    grd.addColorStop(1, 'rgba(255,255,255,0.85)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 256, 64);
+    for (let k = 0; k < 40; k++) {   // streaks running up its face
+      g.strokeStyle = `rgba(255,255,255,${0.12 + Math.random() * 0.2})`;
+      g.lineWidth = 1 + Math.random() * 1.5;
+      const y = Math.random() * 64;
+      g.beginPath();
+      g.moveTo(40 + Math.random() * 60, y);
+      g.lineTo(150 + Math.random() * 100, y + (Math.random() - 0.5) * 4);
+      g.stroke();
+    }
+    g.globalCompositeOperation = 'destination-in';   // (soft at both sides)
+    const side = g.createLinearGradient(0, 0, 0, 64);
+    side.addColorStop(0, 'rgba(0,0,0,0)');
+    side.addColorStop(0.16, 'rgba(0,0,0,1)');
+    side.addColorStop(0.84, 'rgba(0,0,0,1)');
+    side.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = side;
+    g.fillRect(0, 0, 256, 64);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
+  const wavePool = [0, 1].map(() => {
+    const m = new THREE.Mesh(waveGeo, new THREE.MeshStandardMaterial({ map: waveTex, transparent: true, opacity: 0.92, roughness: 0.1, metalness: 0, side: THREE.DoubleSide, depthWrite: false, emissive: '#0b3a5c', emissiveIntensity: 0.45, envMapIntensity: 1.6 }));
+    m.visible = false;
+    m.renderOrder = 2;
+    scene.add(m);
+    return { m, t: 0, life: 0.95, dir: 1, size: 1, p: new THREE.Vector3() };
+  });
+  let wvi = 0;
+  function updateWaves(dt) {
+    for (const w of wavePool) {
+      if (!w.m.visible) continue;
+      w.t += dt;
+      const k = w.t / w.life;
+      if (k >= 1) { w.m.visible = false; continue; }
+      const rise = Math.sin(Math.min(1, k * 2.2) * (Math.PI / 2));
+      const fall = k > 0.55 ? Math.max(0.05, 1 - (k - 0.55) / 0.45) : 1;
+      const sx = w.size * (0.9 + 0.7 * k);
+      w.m.position.set(w.p.x + w.dir * (-3.2 + 6.5 * k) * w.size, w.p.y, 0);
+      w.m.scale.set(w.dir * sx, w.size * 1.25 * rise * fall + 0.01, w.size * 1.1);
+      w.m.material.opacity = 0.92 * Math.min(1, (1 - k) * 2.5);
+      const lx = w.m.position.x + w.dir * 2.6 * sx;
+      const ly = w.p.y + 2.45 * w.m.scale.y;
+      for (let i = 0; i < 3; i++) {
+        spray.spawn(tmp.set(lx + (R() - 0.5), ly, (R() - 0.5) * 5 * w.size), v.set(w.dir * (3 + R() * 5), 1 + R() * 4, (R() - 0.5) * 2),
+          { life: 0.6 + R() * 0.4, size: 0.4 + R() * 0.5, size1: 1, color: R() < 0.6 ? '#ffffff' : '#bfe6ff', alpha: 0.9, g: 14, drag: 0.6 });
+      }
     }
   }
   // your last throw's path: faint white dots
@@ -269,6 +411,8 @@ export function createBattleFx(stage) {
   const flash = new THREE.PointLight('#ffb15a', 0, 60, 1.6);
   scene.add(flash);
   let flashT = 0;
+  let flashPeak = 900;
+  let flashDur = 0.45;
   const fireAtV = new THREE.Vector3();
   let fireAt = null;
 
@@ -290,24 +434,35 @@ export function createBattleFx(stage) {
       ring({ x, z }, { s0: 0.8 * s, s1: 5 * s, life: 1.4 });
     },
     /** The crate's explosion at p (metres). */
+    /**
+     * 💣 The explosion at p (metres): a short white-hot core, a fireball of orange and red rolling out and up (in plain
+     * colour, so it stays orange against the sky instead of burning out to white), black smoke billowing after it,
+     * sparks and burning bits, and a shockwave racing out.
+     */
     boom(p, r = 9) {
-      for (let i = 0; i < 70; i++) {
-        v.set((R() - 0.5), (R() - 0.3), (R() - 0.5)).normalize().multiplyScalar(4 + R() * 16);
-        glow.spawn(p, v, { life: 0.35 + R() * 0.45, size: 1.6 + R() * 2.2, size1: 0.4, color: R() < 0.5 ? '#ffd27a' : '#ff7a2a', alpha: 1, g: 6, drag: 2.5 });
+      for (let i = 0; i < 12; i++) {
+        v.set(R() - 0.5, R() - 0.3, R() - 0.5).normalize().multiplyScalar(2 + R() * 5);
+        glow.spawn(p, v, { life: 0.16 + R() * 0.12, size: 2 + R() * 1.4, size1: 0.6, color: R() < 0.5 ? '#fff0b0' : '#ffbe55', alpha: 0.85, drag: 3 });
       }
-      for (let i = 0; i < 14; i++) {
-        v.set((R() - 0.5) * 5, R() * 4, (R() - 0.5) * 5);
-        glow.spawn(tmp.copy(p).add(new THREE.Vector3((R() - 0.5) * 2, (R() - 0.5) * 2, (R() - 0.5) * 2)), v, { life: 0.5 + R() * 0.3, size: r * 0.55, size1: r * 0.9, color: '#ff9a3c', alpha: 0.9, drag: 3 });
+      for (let i = 0; i < 44; i++) {
+        v.set(R() - 0.5, R() * 0.8 - 0.1, R() - 0.5).normalize().multiplyScalar(3 + R() * 9);
+        const c = R();
+        spray.spawn(tmp.set(p.x + (R() - 0.5) * 1.5, p.y + (R() - 0.5) * 1.2, (p.z || 0) + (R() - 0.5) * 1.2), v,
+          { life: 0.5 + R() * 0.5, size: 1.8 + R() * 1.5, size1: 3.2 + R() * 2.2, color: c < 0.3 ? '#ffb347' : c < 0.72 ? '#ff6a1f' : '#c4301a', alpha: 1, g: -3, drag: 2.4 });
       }
-      for (let i = 0; i < 40; i++) {
-        v.set((R() - 0.5), R() * 0.5, (R() - 0.5)).normalize().multiplyScalar(14 + R() * 18);
-        glow.spawn(p, v, { life: 0.6 + R() * 0.6, size: 0.25, size1: 0.05, color: '#ffe7a0', alpha: 1, g: 16, drag: 0.5 });
+      // (smoke rising off it, not a fog over the tower)
+      base.dust({ x: p.x, y: p.y + 1.5, z: p.z || 0 }, { n: 10, size: 2.6, color: '#2e2826', up: 6, spread: 2.2, life: 2.2 });
+      base.dust(p, { n: 5, size: 2, color: '#5a4a44', up: 3, spread: 2, life: 1.6 });
+      for (let i = 0; i < 46; i++) {
+        v.set(R() - 0.5, R() * 0.7 - 0.05, R() - 0.5).normalize().multiplyScalar(12 + R() * 16);
+        glow.spawn(p, v, { life: 0.5 + R() * 0.7, size: 0.22 + R() * 0.12, size1: 0.05, color: R() < 0.6 ? '#ffd27a' : '#ff8a3a', alpha: 1, g: 16, drag: 0.4 });
       }
-      base.dust(p, { n: 22, size: 5, color: '#463c3a', up: 4, spread: 5, life: 3.4 });
-      base.dust(p, { n: 10, size: 3.5, color: '#8a6a52', up: 2, spread: 4, life: 2.4 });
-      flash.position.copy(p);
-      flash.intensity = 900;
-      flashT = 0.45;
+      ring({ x: p.x, z: 0 }, { s0: 1, s1: r * 2.2, life: 0.55, color: '#ffb066', add: true, y: p.y - 0.6 });
+      ring({ x: p.x, y: p.y, z: 0.5 }, { s0: 1, s1: r * 1.6, life: 0.4, color: '#ffe2b8', add: true, flat: false });
+      flash.position.copy(p).add(new THREE.Vector3(0, 1, 3));
+      flashPeak = 520;
+      flashDur = 0.32;
+      flashT = flashDur;
     },
     /** A block broken (a spear went through it, a shot hit the spikes). */
     shatter(p, material, { n = 12, size = 0.9, dir = null } = {}) {
@@ -377,8 +532,16 @@ export function createBattleFx(stage) {
       }
     },
     /** 💧 The flood wave: a wall of water bursting along `dir` from p, spray falling back. */
-    wave(p, dir, size = 1) {
-      for (let i = 0; i < 90 * size; i++) {
+    wave(p, dir, size = 1, base = null) {
+      if (base != null) {   // (the wall of water itself, along the rock's top)
+        const w = wavePool[wvi++ % wavePool.length];
+        w.p.set(p.x, base, 0);
+        w.dir = dir;
+        w.size = size;
+        w.t = 0;
+        w.m.visible = true;
+      }
+      for (let i = 0; i < 70 * Math.min(size, 1.4); i++) {
         const sp = 6 + R() * 12;
         v.set(dir * sp * (0.6 + R() * 0.6), 3 + R() * 9, (R() - 0.5) * 5);
         spray.spawn(tmp.set(p.x + (R() - 0.5) * 2, p.y + R() * 1.5, (R() - 0.5) * 2.4), v, { life: 0.9 + R() * 0.7, size: 0.5 + R() * 0.9, size1: 1.4, color: R() < 0.6 ? '#e9f6ff' : '#7cc8f2', alpha: 0.92, g: 16, drag: 0.5 });
@@ -431,6 +594,7 @@ export function createBattleFx(stage) {
     hideArc() { arc.visible = false; mark.visible = false; arcPath = []; },
     update(dt, camera) {
       updateVines(dt);
+      updateWaves(dt);
       base.update(dt, 16);
       spray.update(dt);
       glow.update(dt);
@@ -441,6 +605,7 @@ export function createBattleFx(stage) {
         if (k >= 1) { r.m.visible = false; continue; }
         const s = r.s0 + (r.s1 - r.s0) * (1 - (1 - k) ** 2.4);
         r.m.scale.set(s, s, s);
+        if (!r.flat && camera) r.m.quaternion.copy(camera.quaternion);   // (a standing shockwave faces you)
         r.m.material.opacity = (1 - k) ** 1.4 * 0.9;
       }
       for (const c of chunkPool) {
@@ -496,7 +661,7 @@ export function createBattleFx(stage) {
       }
       if (flashT > 0) {
         flashT -= dt;
-        flash.intensity = Math.max(0, flashT / 0.45) ** 2 * 900;
+        flash.intensity = Math.max(0, flashT / flashDur) ** 2 * flashPeak;
       } else if (fireAt) {
         const t = performance.now();
         flash.position.copy(fireAt);
