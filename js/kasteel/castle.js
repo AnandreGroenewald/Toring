@@ -382,20 +382,23 @@ export function buildCastle({ at = new THREE.Vector3(), days, team = 'red', mats
   const corners = [[-half, half], [half, half], [half, -half], [-half, -half]];
   const towers = [];
   const flags = [];
-  // (a very tall Daily Tower keeps its shape but is scaled to stand in a castle: the keep at most 34 m, the others 24 m)
+  // (a tall Daily Tower is scaled to stand in a castle — the keep at most 34 m, the others 24 m — but never into slivers:
+  // at most down to 0.38; a still taller tower stands as far as it fits, from its foundation up)
   const fit = (layout, max, s0) => {
-    let h0 = 0;
-    for (const b of layout) { const d = SHAPES[b.shape] || SHAPES.plank; h0 = Math.max(h0, b.y + ((d.h * (d.u && Number.isFinite(b.scale) ? b.scale : 1)) / PX)); }
-    return h0 > 0 ? Math.min(s0, max / h0) : s0;
+    const top = (b) => { const d = SHAPES[b.shape] || SHAPES.plank; return b.y + ((d.h * (d.u && Number.isFinite(b.scale) ? b.scale : 1)) / PX); };
+    const h0 = layout.reduce((m, b) => Math.max(m, top(b)), 0);
+    const s = h0 > 0 ? Math.max(0.38, Math.min(s0, max / h0)) : s0;
+    return { s, blocks: layout.filter((b) => top(b) * s <= max + 0.01) };
   };
-  const keepT = towerFromDaily(days[0], mats, { S: fit(days[0], 34, S * 1.08), team, rand });
+  const kf = fit(days[0], 34, S * 1.08);
+  const keepT = towerFromDaily(kf.blocks, mats, { S: kf.s, team, rand });
   keepT.group.position.set(0, 0, -half * 0.35);
   group.add(keepT.group);
   towers.push({ ...keepT, pos: keepT.group.position.clone(), keep: true });
   if (keepT.flag) flags.push(keepT.flag);
   corners.forEach(([x, z], i) => {
-    const lay = days[1 + (i % (days.length - 1))];
-    const t = towerFromDaily(lay, mats, { S: fit(lay, 24, S), team, rand });
+    const f = fit(days[1 + (i % (days.length - 1))], 24, S);
+    const t = towerFromDaily(f.blocks, mats, { S: f.s, team, rand });
     t.group.position.set(x, 0, z);
     t.group.rotation.y = i % 2 ? 0.04 : -0.04;
     group.add(t.group);
