@@ -95,6 +95,7 @@ export const S = {
   lvLastChanceSub: 'Land hierdie blok goed, of jy verloor.',
   lvAimHint: (name) => `🎯 ${name}: tik op die toring om te mik`,
   lvAimAgain: 'Tik weer daar om te stuur!',
+  lvAimHeld: 'Eers jou blok: dan mik jy jou missie.',
   lvMissionHit: (n, name) => (n === 1 ? `Raak! 1 van ${name} se mense het gespring` : `Raak! ${fmtInt(n)} van ${name} se mense het gespring`),
   lvMissionMiss: 'Mis! Daar was niemand tuis',
   lvMissionOwn: (n) => (n === 1 ? '1 van joune het ook gespring' : `${fmtInt(n)} van joune het ook gespring`),
@@ -180,6 +181,7 @@ export const S = {
   kasteelNews: (n) => (n === 1 ? '1 aanval op jou kasteel' : `${n} aanvalle op jou kasteel`),
   kasteelLoot: (n) => `🏰 +${n} munte uit die Kasteelreeks`,
   botsingLoot: (n) => `⚔️ +${n} munte uit Blokbotsing`,
+  dorpSoon: (name) => `🛡️ ${name ? `${name} se dorp` : 'Hulle dorp'} is hierdie uur al genoeg beroof. Jou strooptog bly joune: probeer later weer!`,
   modeLootFull: (n) => `🪙 Vandag se munte is op: ${n} wag vir môre`,
   // (1.17) Vrugteslag: Ryk teen Ryk (js/scenes/SlagScene.js; the owner's fruit battle)
   slag: 'Vrugteslag',

@@ -96,6 +96,7 @@ export const S_EN = {
   lvLastChanceSub: 'Land this block well, or you lose.',
   lvAimHint: (name) => `🎯 ${name}: tap the tower to aim`,
   lvAimAgain: 'Tap there again to send it!',
+  lvAimHeld: 'Your block first: then you aim your mission.',
   lvMissionHit: (n, name) => (n === 1 ? `Hit! 1 of ${name}’s people jumped` : `Hit! ${fmtInt(n)} of ${name}’s people jumped`),
   lvMissionMiss: 'Missed! Nobody was home',
   lvMissionOwn: (n) => (n === 1 ? '1 of yours jumped too' : `${fmtInt(n)} of yours jumped too`),
@@ -181,6 +182,7 @@ export const S_EN = {
   kasteelNews: (n) => (n === 1 ? '1 attack on your castle' : `${n} attacks on your castle`),
   kasteelLoot: (n) => `🏰 +${n} coins from the Castle Series`,
   botsingLoot: (n) => `⚔️ +${n} coins from Block Clash`,
+  dorpSoon: (name) => `🛡️ ${name ? `${name}’s town` : 'Their town'} has been raided enough this hour. Your raid stays yours: try again later!`,
   modeLootFull: (n) => `🪙 Today’s coins are used up: ${n} wait for tomorrow`,
   // (1.17) Fruit Battle: Empire vs Empire (js/scenes/SlagScene.js)
   slag: 'Fruit Battle',

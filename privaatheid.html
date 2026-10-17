@@ -33,7 +33,7 @@
   <main id="hoof" class="wrap" tabindex="-1">
     <div class="legal-title">
       <h1>Privaatheidsbeleid</h1>
-      <p>Weergawe: <time datetime="2026-10-15">2026-10-15</time> · <a href="privacy.html" hreflang="en" lang="en">English</a></p>
+      <p>Weergawe: <time datetime="2026-10-18">2026-10-18</time> · <a href="privacy.html" hreflang="en" lang="en">English</a></p>
     </div>
 
     <article class="card legal">
@@ -136,8 +136,20 @@
       <ul>
         <li><strong>Wat:</strong> as die bediener Jou dorp ken, stuur die spel jou dorp se nommer, jou Uitdagersreeks-bynaam (of “Bouer” met ’n nommer), jou stam, hoeveel mense (ook goue mense), strooptogte en mure jou torings verdien het, en die landmerke wat jy gekoop het. Die bediener hou jou dorp: die getalle, wie jou bure is, en die nuus van strooptogte (wie by wie gesteel het, hoeveel en wanneer).</li>
         <li><strong>Wie sien dit:</strong> jou bure (vriende wat jou skakel oopgemaak het, of by wie jy gesteel het) sien jou bynaam, stam en getalle. ’n Strooptog se skakel wys wie by wie gesteel het, en hoeveel.</li>
-        <li><strong>Hoe lank:</strong> tot jy vra dat ons jou dorp uitvee (skryf aan ons, afdeling 9, met jou dorp se nommer).</li>
+        <li><strong>Misbruik keer:</strong> die bediener tel hoeveel nuwe dorpe en versoeke van een adres kom, en hoeveel keer ’n dorp elke uur beroof word. Jou IP-adres word nie gestoor nie; net ’n daaglikse gehashte afleiding daarvan word kort in die geheue gehou, soos by die ranglys.</li>
+        <li><strong>Hoe lank:</strong> tot jy vra dat ons jou dorp uitvee (skryf aan ons, afdeling 9, met jou dorp se nommer). Dit vee jou kasteel saam uit.</li>
         <li><strong>Jonger as 18?</strong> Vra eers jou ouer of voog. ’n Bynaam is genoeg; die bediener weier rowwe name, telefoonnommers en adresse.</li>
+      </ul>
+      <h3 id="kasteel">Die Kasteelreeks (vriende se kastele)</h3>
+      <ul>
+        <li><strong>Wat:</strong> as die bediener Jou dorp ken, stuur die spel jou kasteel saam met jou dorp se nommer: hoe jou laaste vyf Daaglikse Torings gestaan het (elke blok se vorm, plek, kanteling en of dit Perfek, Goed of Skeef was), jou verdedigingsplan en die kasteel se saadnommer, sodat jou bure dit kan aanval. Val jy ’n buurman se kasteel aan, stuur die spel hoeveel sterre jy gekry het en hoeveel van die kasteel geval het; dit word hul nuus (wie, wanneer en hoeveel).</li>
+        <li><strong>Wie sien dit:</strong> jou bure (Jou dorp, hierbo) sien jou kasteel en jou bynaam; jy sien die nuus van aanvalle op jou kasteel.</li>
+        <li><strong>Hoe lank:</strong> tot jy vra dat ons jou dorp uitvee (dit vee jou kasteel saam uit).</li>
+      </ul>
+      <h3 id="botsing">Blokbotsing</h3>
+      <ul>
+        <li><strong>Teen Robot Rikus:</strong> niks word gestuur nie.</li>
+        <li><strong>Teen ’n vriend (met ’n kamerskakel):</strong> terwyl julle speel, gee die bediener jou bynaam, die styl van jou blokke, hoeveel ekstra blokke jou Daaglikse Toring jou gegee het, en elke beurt (die kaart wat jy kies, waar jy bou of hoe jy gooi, en hoe die torings ná die beurt staan) aan jou vriend deur. Niks daarvan word gestoor nie: die kamer vergeet alles wanneer dit toegaan (hoogstens ’n paar uur nadat dit oopgemaak is). Om misbruik te keer, tel die bediener hoeveel kamers een adres oopmaak, soos hierbo.</li>
       </ul>
       <h3 id="uitvee">Jou rekening uitvee</h3>
       <ul>
@@ -280,11 +292,13 @@
         <dt><code>stapel.sponsors.v1</code></dt>
         <dd>Die laaste lys van Borge, sodat die spel vinnig en ook sonder internet begin. Word ná 7 dae nie meer gebruik nie en met elke opdatering vervang.</dd>
         <dt><code>stapel.v1.lewende</code></dt>
-        <dd>Net vir Die Lewende Toring (proef, in die Uitdagersreeks): jou proef-rang en -vlak, die stam wat jy laas gekies het, watter idees jy gespeel het, jou stem en jou lukrake stemnommer (dié gaan saam met jou stem, afdeling 2). Die res word nie gestuur nie. Bly tot jy jou blaaierdata uitvee.</dd>
+        <dd>Net vir Die Lewende Toring in jou torings: jou stam, jou dorp se rekord (die meeste mense op een slag) en sy titel, wie al by jou ingetrek het en hoe dikwels, jou goue mense, en of jy die eerste wenk gesien het. Word nie gestuur nie. Bly tot jy jou blaaierdata uitvee.</dd>
+        <dt><code>stapel.v1.lewende.idees</code></dt>
+        <dd>Net vir die proef met Die Lewende Toring se idees (in die Uitdagersreeks): jou proef-rang en -vlak, die stam wat jy laas gekies het, watter idees jy gespeel het, jou stem en jou lukrake stemnommer (dié gaan saam met jou stem, afdeling 2). Die res word nie gestuur nie. Bly tot jy jou blaaierdata uitvee.</dd>
         <dt><code>stapel.v1.slag</code></dt>
         <dd>Net vir die Vrugteslag: jou vrugtemandjie (piesangs, sapdose en waatlemoene van jou Daaglikse Torings), jou trofeë en hoeveel gevegte jy gewen en verloor het. Word nie gestuur nie. Bly tot jy jou blaaierdata uitvee.</dd>
         <dt><code>stapel.v1.kasteel</code>, <code>stapel.v1.kasteeldae</code></dt>
-        <dd>Net vir Die Kasteelreeks (proef): hoe jou laaste sewe Daaglikse Torings gestaan het (elke blok se vorm, plek, kanteling en of dit Perfek, Goed of Skeef was) sodat hulle die torings van jou kasteel word, jou verdedigingsplan (watter toring jou hoof-toring is en waar jou verdedigers, olie, ballista en pieke staan), jou trofeë, hoeveel gevegte jy gespeel en gewen het, munte wat jy gewen het totdat Stapel hulle in jou beursie sit, en watter wenke jy al gesien het. Word nie gestuur nie. Bly tot jy jou blaaierdata uitvee.</dd>
+        <dd>Net vir Die Kasteelreeks (proef): hoe jou laaste sewe Daaglikse Torings gestaan het (elke blok se vorm, plek, kanteling en of dit Perfek, Goed of Skeef was) sodat hulle die torings van jou kasteel word, jou verdedigingsplan (watter dag se toring jou hoof-toring is en waar jou verdedigers, olie, ballista en pieke staan), jou trofeë, hoeveel gevegte jy gespeel en gewen het, munte wat jy gewen het totdat Stapel hulle in jou beursie sit, en watter wenke jy al gesien het. As die bediener Jou dorp ken, word jou kasteel (die torings en jou plan) gestuur sodat jou bure dit kan aanval (afdeling 2, Die Kasteelreeks); die res word nie gestuur nie. Bly tot jy jou blaaierdata uitvee.</dd>
         <dt><code>stapel.v1.botsing</code></dt>
         <dd>Net vir Blokbotsing: of jy die eerste wenk al gesien het, hoeveel gevegte jy gespeel en gewen het, en munte wat nog na jou beursie toe moet gaan. Word nie gestuur nie. Bly tot jy jou blaaierdata uitvee.</dd>
         <dt><code>stapel.v1.dorp</code></dt>

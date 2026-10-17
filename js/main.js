@@ -2657,7 +2657,7 @@ function finalize(result) {
 function recordTown(t) {
   try {
     if (!(t.movedIn > 0)) return { ...t, best: livingStore.best(), newBest: false };
-    const rec = livingStore.record({ people: t.people, met: t.met, gold: t.gold });
+    const rec = livingStore.record({ people: t.people, peak: t.peak, met: t.met, gold: t.gold });   // (the record is the most at once, as its toast said)
     const a = livingStore.get();
     const album = { met: Object.keys(a.met).length, gold: Object.keys(a.gold).length, total: CAST_IDS.length };
     return { ...t, best: rec.best, newBest: rec.newBest && rec.was > 0, fresh: rec.first ? [] : t.fresh, album };
@@ -3179,7 +3179,7 @@ async function dorpStart() {
       if (!r?.ok) return;
       refreshMenuDorp();
       dorpNewsCheck();
-      kasteelNewsCheck();
+      kasteelNewsCheck(r.kasteel);
       if (screen === 'dorp' && !dorpBusy && ui.dorpMode?.() === 'town') ui.setDorpMode(dorpScreenModel('town'));
     });
   }, DORP_POLL_MS);
@@ -3244,8 +3244,8 @@ bus.on('ui:dorp-buy', async (id) => {
     return;
   }
   coinsChanged();
-  dorp3d?.buyMark(id);
-  game.scene.getScene('Dorp')?.buyMark?.(id);
+  if (dorp3d) dorp3d.buyMark(id);
+  else if (game.scene.isActive('Dorp')) game.scene.getScene('Dorp')?.buyMark?.(id);   // (the 2D town, where 3D can't run)
   ui.setDorpMode({ ...dorpScreenModel('marks'), coins: store.getEconomy().coins });
   refreshMenuDorp();
 });
@@ -3334,7 +3334,8 @@ bus.on('ui:dorp-raid', async ({ target, wraak = null } = {}) => {
       onFail: (r) => {
         if (dorpRaid !== raid) return;
         dorpBusy = false;
-        ui.toast(r?.error === 'raids' ? S.dorpNoRaidsLeft : S.dorpOffline, 2800);
+        // ('soon': their town was raided often this hour; the strooptog stays yours)
+        ui.toast(r?.error === 'raids' ? S.dorpNoRaidsLeft : r?.error === 'soon' ? S.dorpSoon(them.name || '') : S.dorpOffline, 3200);
         bus.emit('ui:dorp-home');
       },
     },
@@ -3372,8 +3373,17 @@ function kasteelMenuView() {
  * button shows how many (😱 2) until your castle has shown them. Quiet when the server keeps no castles.
  */
 let kasteelUnseen = 0;
-async function kasteelNewsCheck() {
+async function kasteelNewsCheck(told = null) {
   if (!dorpOn) return;
+  // (1.18) the Worker's town answer brings the castle's count along: no second call every poll
+  if (told && Number.isInteger(told.newsN) && Number.isInteger(told.seenN)) {
+    const unseen = Math.max(0, told.newsN - told.seenN);
+    if (unseen !== kasteelUnseen) {
+      kasteelUnseen = unseen;
+      if (screen === 'menu') ui.showMenu(menuModel());
+    }
+    return;
+  }
   try {
     const d = JSON.parse(localStorage.getItem('stapel.v1.dorp') || 'null');
     if (!d?.id || !d?.key) return;

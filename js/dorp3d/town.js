@@ -513,6 +513,8 @@ export function buildTown({ plan, isle, pieces, renderer, cm = castleMaterials(r
   });
   return {
     group, buildings, isle,
+    /** The landmarks standing (tests). */
+    get marks() { return [...owned]; },
     walls: wallList,
     windows: front,
     setLit, windowAt, addMark,
