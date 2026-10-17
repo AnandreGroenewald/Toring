@@ -154,6 +154,14 @@ export function createSiegeHud(root, { name, wind }, on) {
       toastT = setTimeout(() => t.classList.remove('on'), 2300);
     },
     hint(text) { const h = $('.kh-hint'); h.textContent = text || ''; h.classList.toggle('on', !!text); },
+    /** A tap on the field with no card chosen: the cards bob and the hint says what to do. */
+    nudge() {
+      const a = $('.kh-army');
+      a.classList.remove('is-nudge');
+      void a.offsetWidth;
+      a.classList.add('is-nudge');
+      this.hint(T.pickHint);
+    },
     aim(on) { $('.kh-aim').hidden = !on; root.classList.toggle('is-aim', !!on); },
     range(m) { $('.kh-range b').textContent = m ? `${Math.round(m)} m` : '—'; $('.kh-mark').style.left = m ? pct(m) : '-10%'; },
     power(m, live) {

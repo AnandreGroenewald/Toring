@@ -11,7 +11,7 @@ import { castleMaterials, buildCastle, sampleDaily } from './castle.js';
 import { soldier, cauldron, ballista, spikes } from './army.js';
 import { idle, setDetail } from './crew.js';
 import { PIECES, spotIds, defaultPlan, costOf, loadPlan, savePlan, mySeed, myDayInfo, budgetFor } from './plan.js';
-import { T, fmtM, dayName, goBack } from './text.js';
+import { T, fmtM, dayName, goBack, PREFS } from './text.js';
 import { audio } from '../audio.js';
 import { ICONS, esc } from './hud.js';
 import { createCastleNet } from './net.js';
@@ -49,6 +49,7 @@ const pieces = new Map();
 const crew = [];
 let sel = null;
 let dirty = false;
+audio.setEnabled(PREFS.sound);   // (Stapel's own Instellings)
 const sfx = (n) => { try { audio.play(n); } catch { /* */ } };
 
 const ringGeo = new THREE.TorusGeometry(0.9, 0.09, 8, 32);

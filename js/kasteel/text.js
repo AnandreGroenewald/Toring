@@ -9,6 +9,14 @@ try {
   if (v === 'en' || v === 'af') lang = v;
 } catch { /* Afrikaans */ }
 export const LANG = lang;
+
+/** Stapel's own Instellings (its 'stapel.v1' record, read only): sound, vibration, and less motion (the phone's wish by default). */
+export const PREFS = (() => {
+  let v = {};
+  try { v = JSON.parse(localStorage.getItem('stapel.v1') || '{}')?.settings || {}; } catch { /* the defaults */ }
+  const calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return { sound: v.sound !== false, vibration: v.vibration !== false, reducedMotion: typeof v.reducedMotion === 'boolean' ? v.reducedMotion : calm };
+})();
 setNumberStyle(lang);   // (Stapel's own: "37,5 m" in Afrikaans, "37.5 m" in English, and the day names to match)
 export { fmtM, dayName };
 

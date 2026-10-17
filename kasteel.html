@@ -18,11 +18,12 @@
     <div id="k-hud" class="kh"></div>
     <div id="k-load" role="status"><small>DIE KASTEELREEKS</small><div class="kl-tower" aria-hidden="true"><i></i><i></i><i></i><i></i></div><p>Die kasteel word gebou…</p></div>
   </div>
+  <div id="k-rotate"><div class="kr-phone" aria-hidden="true">📱</div><p>Draai jou foon regop om te speel.</p></div>
   <script>
     // (the loading screen in the player's own language, before anything else loads)
     try {
       var l = new URLSearchParams(location.search).get('lang') || localStorage.getItem('stapel.v1.lang');
-      if (l === 'en') { document.documentElement.lang = 'en'; var el = document.getElementById('k-load'); el.querySelector('small').textContent = 'THE CASTLE SERIES'; el.querySelector('p').textContent = 'Building the castle…'; }
+      if (l === 'en') { document.documentElement.lang = 'en'; var el = document.getElementById('k-load'); el.querySelector('small').textContent = 'THE CASTLE SERIES'; el.querySelector('p').textContent = 'Building the castle…'; document.querySelector('#k-rotate p').textContent = 'Turn your phone upright to play.'; }
     } catch (e) { /* Afrikaans */ }
   </script>
   <script type="module" src="js/kasteel/main.js"></script>

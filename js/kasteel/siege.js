@@ -19,7 +19,7 @@ import { createPhysics } from './physics.js';
 import { createFx } from './fx.js';
 import { weldStill, towerWelds, weldInto } from './batch.js';
 import { scoutScreen, createSiegeHud, scoutFoes } from './hud.js';
-import { T, goBack } from './text.js';
+import { T, goBack, PREFS } from './text.js';
 import { audio, haptics } from '../audio.js';
 
 const q = new URLSearchParams(location.search);
@@ -220,6 +220,9 @@ const G = {
   stone: null, flightT: 0, impact: null, impactT: 0, ram: null, flagT: 0, ended: false,
 };
 const YAW0 = Math.atan2(KEEP.x - TREB.x, -(KEEP.z - TREB.z));
+// (Stapel's own Instellings: sound and vibration as the player set them; less motion: no jolts, no slow motion)
+audio.setEnabled(PREFS.sound);
+haptics.setEnabled(PREFS.vibration);
 const sfx = (n, o) => { try { audio.play(n, o); } catch { /* sound off */ } };
 const buzz = (k) => { try { haptics[k]?.(); } catch { /* no haptics */ } };
 const starCount = () => Object.values(G.stars).filter(Boolean).length;
@@ -278,8 +281,9 @@ function pause() {
   G.winding = false;
   hud.paused(true);
 }
-// (the phone locked, a call, another app: the battle waits on the pause card)
+// (the phone locked, a call, another app, or turned sideways: the battle waits on the pause card)
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+matchMedia('(orientation: landscape) and (max-height: 540px) and (pointer: coarse)').addEventListener?.('change', (e) => { if (e.matches) pause(); });
 // (the Android app's back button, through the app's shim: one step back, never out of a battle by accident)
 addEventListener('stapel:back', (e) => {
   e.preventDefault();
@@ -428,7 +432,7 @@ function onStoneHit(e) {
   const hitCastle = !!e.body.link || e.body.mass === 0 && at.y > 0.8;
   G.impact = { at, hitCastle, t: 0 };
   window.__siege && (window.__siege.lastHit = { at: [at.x, at.y, at.z].map((v) => Math.round(v * 10) / 10), what: e.body.link?.block?.shape || (e.body.mass === 0 ? (at.y > 0.8 ? 'wall' : 'ground') : 'piece') });
-  G.hitStop = hitCastle ? 0.08 : 0;
+  G.hitStop = hitCastle && !PREFS.reducedMotion ? 0.08 : 0;
   const dir = new THREE.Vector3(b.velocity.x, 0, b.velocity.z).normalize();
   if (hitCastle) {
     fx.dust(at, { n: 18, size: 3.6, up: 3, spread: 5, life: 2.8 });
@@ -793,7 +797,8 @@ function canvasEvents(cv) {
   cv.addEventListener('pointerdown', (e) => {
     try { audio.unlock(); } catch { /* */ }
     if (G.mode === 'aim') { drag = { x: e.clientX, y: e.clientY }; return; }
-    if (G.mode !== 'battle' || !G.sel) return;
+    if (G.mode !== 'battle' || G.paused) return;
+    if (!G.sel) { hud.nudge(); return; }
     toNdc(e);
     ray.setFromCamera(ndc, camera);
     const p = new THREE.Vector3();
@@ -894,7 +899,7 @@ function frame(now) {
     if (!G.impact && G.trailT > 0.05) { G.trailT = 0; fx.dust(new THREE.Vector3(b.position.x, b.position.y, b.position.z), { n: 1, size: 0.9, up: 0, spread: 0.2, life: 0.9, color: '#d9c7ad' }); }
     b.applyForce(new phys.CANNON.Vec3(G.wind * 0.3 * b.mass, 0, 0));   // (about one dot, 1°, per m/s at 150 m)
     const near = Math.hypot(b.position.x - KEEP.x, b.position.z - (KEEP.z + 6)) < 34 && b.velocity.y < 0;
-    G.slowTo = G.impact ? (G.impact.t < 1.0 ? 0.35 : 1) : near ? 0.32 : 1;
+    G.slowTo = PREFS.reducedMotion ? 1 : G.impact ? (G.impact.t < 1.0 ? 0.35 : 1) : near ? 0.32 : 1;
     if (G.impact) {
       G.impact.t += rdt;
       if (G.impact.t > 2.6 || (!G.impact.hitCastle && G.impact.t > 1.4)) {
@@ -972,7 +977,7 @@ requestAnimationFrame(frame);
 
 // for the tests: play it without fingers
 window.__siege = {
-  G, KEEP, TREB, YAW0, castle, blue, defenders, phys, renderer, crowd,
+  G, KEEP, TREB, YAW0, castle, blue, defenders, phys, renderer, crowd, prefs: PREFS,
   start: () => { if (G.mode === 'scout') startSiege(); },
   pick: (k) => pickCard(k),
   deploy: (k, x, z) => deploy(k, x, z),

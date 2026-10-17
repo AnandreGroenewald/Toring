@@ -209,3 +209,13 @@ html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50%
 .kp-news a { flex: none; padding: 6px 10px; border-radius: 10px; text-decoration: none; color: #2a1406; font-weight: 900; font-size: 11px; background: linear-gradient(180deg, #ffe39a, #ffb84a); }
 .kp-news button { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, 0.14); font-size: 13px !important; }
 .kp-news[hidden] { display: none; }
+/* a phone turned sideways: the castle waits upright (as Stapel itself does) */
+#k-rotate { position: fixed; inset: 0; z-index: 50; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 24px;
+  background: radial-gradient(ellipse at 50% 40%, #2f1c48, #140c24 72%); color: #fff; text-align: center; font-family: var(--font); }
+#k-rotate p { margin: 0; max-width: 420px; font-size: 20px; font-weight: 900; }
+#k-rotate .kr-phone { font-size: 56px; animation: kr-turn 2.2s ease-in-out infinite; }
+@keyframes kr-turn { 0%, 20% { transform: rotate(-90deg); } 55%, 100% { transform: rotate(0deg); } }
+@media (orientation: landscape) and (max-height: 540px) and (pointer: coarse) { #k-rotate { display: flex; } }
+/* a tap on the field before a card is chosen: the cards bob once */
+.kh-army.is-nudge .kh-card:not(.is-out) { animation: kh-nudge 0.45s ease 2; }
+@keyframes kh-nudge { 50% { transform: translateY(-8px); border-color: var(--gold); } }

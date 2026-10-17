@@ -7,6 +7,7 @@ import { RenderPass } from '../../lib/three-addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from '../../lib/three-addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from '../../lib/three-addons/postprocessing/ShaderPass.js';
 import { OutputPass } from '../../lib/three-addons/postprocessing/OutputPass.js';
+import { PREFS } from './text.js';
 
 const GRADE = {
   uniforms: { tDiffuse: { value: null }, vignette: { value: 0.32 }, sat: { value: 1.08 }, contrast: { value: 1.05 }, warm: { value: 0.03 } },
@@ -130,7 +131,7 @@ export function createStage({ fov = 50, quality = pickQuality() } = {}) {
     get bloom() { return bloom; },
     /** (fn(q) when the quality steps down: the world can thin its grass, the light its shadow) */
     onQuality(fn) { listeners.push(fn); },
-    shake(k) { shakeK = Math.max(shakeK, k); },
+    shake(k) { if (!PREFS.reducedMotion) shakeK = Math.max(shakeK, k); },   // (less motion, Stapel's Instellings: no jolts)
     /**
      * Compiles every shader of the scene (and of `extra`, things that only come later: a stone, a ram) while the loading
      * screen still shows, in parallel where the phone can: no stall on the first frame or the first throw.
