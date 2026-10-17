@@ -1145,6 +1145,11 @@ Later the owner added (decisions are final unless they say otherwise):
   (a crown lost on a round's first throw gets its answer: LAASTE KANS; both in the sea = GELYKOP), banner subtitles wrap,
   words never overlap the banner or each other, the tip holds the intro view. New QA: botsing_sudden1180, _words1180,
   _banners1180, _endings1180. All tests OK.
+- **17 Oct 2026 (night): "improve everything" (local; nothing pushed).** His first play: "I am impressed", four fixes
+  (65868b5: 180° pin, straight-on camera following the block, no lasting pixelation, smashed glass). Then "the Block Clash
+  and the Your town feels like childs play": Block Clash's blocks are now real materials (painted timber, gold, stone,
+  marble, lava ...; js/botsing/materials.js), elements show in the block, engraved emblems, 3D cards (b185774); wind each
+  turn and hits with weight (1e58777); Your Town 3D look test dorp3d.html (a0f2f62) — waiting for his verdict.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
