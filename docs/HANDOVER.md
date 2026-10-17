@@ -1084,6 +1084,13 @@ Later the owner added (decisions are final unless they say otherwise):
   invites use Jou dorp's friend link. It runs only in matchhost.mjs, like Jou dorp: going online needs both on the Worker
   with a store (his word). Privacy pages describe the castle record's new fields. Tests: qa/kasteel_polish1170 17/17,
   kasteel_stapel1170 7/7, kasteel_friends1170 9/9, siege 8/8, plan 8/8, days 4/4, tests/kasteel.test.js, npm 444/444.
+- **17 Oct ~11:45 — his first play, fixed (6410120, local).** "It froze here?": not a crash; with troops deep in the
+  castle and a card picked, the blue field was off screen (the camera followed the front). Now picking a card or
+  sending troops shows the field for 4.5 s, then the camera watches the action (the courtyard); a tap brings the field
+  back. "The men are just standing still": inside they take the keep, cheer, then dig at the towers' feet until they
+  topple (slower for blocks that carry more). "The ball … breaks to whole defence": towers are now cemented like a
+  Daily Tower (physics.js); a stone bites out what it hits, granite holds best; one keep hit 8-13% (was 23-28%).
+  Tests: qa/kasteel_balance1170 6/6 + every castle test; 60 fps on the slowed phone profile.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
