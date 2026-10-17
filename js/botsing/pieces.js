@@ -12,8 +12,33 @@ import { PX, sideX, towardFoe, SHAPE_COLOR, ELEMENT } from './rules.js';
 import { merge, STACK_TOP } from './world.js';
 
 export const DEPTH = 3.2;   // every block is this deep (m)
+const D_PX = DEPTH * PX;     // ...in Stapel's px
 const BOX = new Set(['cube', 'plank', 'slab', 'brick', 'crate', 'pillar']);   // (the wedge is the one that isn't a box)
 const EDGE_R = 0.17;   // how round a block's edges are (m): they catch the light
+/**
+ * One picture per box (one draw call, not six): the face top-left, the end beside it, the cap under them, each with
+ * Stapel's 3-unit edge, at `ATLAS_K` canvas px per game px. Regions are what a face's 0-1 UVs map onto (1 unit into the
+ * edge, so the outline's stroke lies on the rounded corner). Sizes in canvas px.
+ */
+const ATLAS_K = 3;
+const ATLAS_GAP = 6;
+function atlasLayout(s) {
+  const D = DEPTH * PX;
+  const P = 3;
+  const fw = (s.w + 2 * P) * ATLAS_K;
+  const fh = (s.h + 2 * P) * ATLAS_K;
+  const ew = (D + 2 * P) * ATLAS_K;
+  const ch = (D + 2 * P) * ATLAS_K;
+  const W = Math.max(fw + ATLAS_GAP + ew, fw);
+  const H = fh + ATLAS_GAP + ch;
+  const reg = (x, y, w, h) => ({ x: x + (P - 1) * ATLAS_K, y: y + (P - 1) * ATLAS_K, w: (w + 2) * ATLAS_K, h: (h + 2) * ATLAS_K });
+  return {
+    W, H, D,
+    face: { at: [0, 0], ...reg(0, 0, s.w, s.h) },
+    end: { at: [fw + ATLAS_GAP, 0], ...reg(fw + ATLAS_GAP, 0, D, s.h) },
+    cap: { at: [0, fh + ATLAS_GAP], ...reg(0, fh + ATLAS_GAP, s.w, D) },
+  };
+}
 const SIDE_TEAM = ['blue', 'red'];
 export const EMOJI = { vuur: '🔥', gras: '🌿', water: '💧', plof: '💣' };
 
@@ -161,8 +186,19 @@ export function createPieces(renderer) {
     const k = `${shape}|${depth}`;
     if (geoCache.has(k)) return geoCache.get(k);
     const s = shapeInfo(shape);
-    if (BOX.has(shape)) {   // (a box: rounded edges, each of its six faces painted)
+    if (BOX.has(shape)) {   // (a box: rounded edges, its six faces painted from one picture)
       const g = roundedBox(s.w / PX, s.h / PX, depth, 2, EDGE_R);
+      const L = atlasLayout(s);
+      const uv = g.attributes.uv;
+      const per = uv.count / 6;
+      const regionOf = [L.end, L.end, L.cap, L.cap, L.face, L.face];   // (+x, -x, +y, -y, +z, -z)
+      for (let i = 0; i < uv.count; i++) {
+        const r = regionOf[Math.floor(i / per)];
+        const u = uv.getX(i);
+        const v = uv.getY(i);
+        uv.setXY(i, (r.x + u * r.w) / L.W, 1 - (r.y + (1 - v) * r.h) / L.H);
+      }
+      g.clearGroups();
       geoCache.set(k, g);
       return g;
     }
@@ -175,11 +211,39 @@ export function createPieces(renderer) {
     const PAD = 3;
     const texW = s.w + 2 * PAD;
     const texH = s.h + 2 * PAD;
+    // (its walls: each one panel wide along the block's depth and its own length, no tiling seam; u across the
+    // depth, v along the wall, upwards where it climbs; the corner's bevel goes with the nearer wall)
+    const walls = pts.map((a, i) => {
+      const b = pts[(i + 1) % pts.length];
+      const d = b.clone().sub(a);
+      const len = d.length();
+      d.divideScalar(len);
+      const up = d.y < -0.01;   // (it falls from a to b: run the picture from b)
+      return { a: up ? b : a, d: up ? d.clone().negate() : d, len, n: new THREE.Vector2(d.y, -d.x) };
+    });
+    const zHalf = depth / 2;
     for (let i = 0; i < uv.count; i++) {
-      if (Math.abs(nor.getZ(i)) < 0.7) continue;
-      const px = pos.getX(i) * PX + s.cx;
-      const py = s.cy - pos.getY(i) * PX;
-      uv.setXY(i, (PAD + px) / texW, 1 - (PAD + py) / texH);
+      const nz = nor.getZ(i);
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      if (Math.abs(nz) >= 0.7) {
+        const px = x * PX + s.cx;
+        const py = s.cy - y * PX;
+        uv.setXY(i, (PAD + px) / texW, 1 - (PAD + py) / texH);
+        continue;
+      }
+      let best = null;
+      let bestD = Infinity;
+      for (const w of walls) {   // (the wall this point lies on: the nearest line)
+        const rx = x - w.a.x;
+        const ry = y - w.a.y;
+        const along = Math.max(0, Math.min(w.len, rx * w.d.x + ry * w.d.y));
+        const dd = Math.hypot(rx - w.d.x * along, ry - w.d.y * along);
+        if (dd < bestD) { bestD = dd; best = { w, along }; }
+      }
+      const u = (pos.getZ(i) + zHalf) / depth;
+      const v = best.along / best.w.len;
+      uv.setXY(i, ((PAD - 1) + u * (D_PX + 2)) / (D_PX + 2 * PAD), ((PAD - 1) + v * (D_PX + 2)) / (D_PX + 2 * PAD));
     }
     g.computeVertexNormals();
     geoCache.set(k, g);
@@ -193,15 +257,6 @@ export function createPieces(renderer) {
    */
   const matCache = new Map();
   const lacquer = (t) => new THREE.MeshStandardMaterial({ map: t, roughness: 0.4, metalness: 0.03, envMapIntensity: 1.15 });
-  function faceTexture(art, w, h) {
-    const t = new THREE.CanvasTexture(art.canvas);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = aniso;
-    // (the face's square of UVs onto the art without its 3-unit edge: the outline's stroke lies on the rounded edge)
-    t.repeat.set((w + 2) / art.texW, (h + 2) / art.texH);
-    t.offset.set((art.pad - 1) / art.texW, (art.pad - 1) / art.texH);
-    return t;
-  }
   function faceMaterials(shape, skin) {
     const k = `${shape}|${skin}`;
     if (matCache.has(k)) return matCache.get(k);
@@ -210,14 +265,20 @@ export function createPieces(renderer) {
     const D = DEPTH * PX;   // (the depth in Stapel's px)
     let mats = [base.sandstone, base.sandstone];
     if (BOX.has(shape)) {
-      const face = blockFaceCanvas({ shape, color }, skin, 3, true);
-      const end = blockPanelCanvas(shape, skin, color, D, s.h, 3);
-      const cap = blockPanelCanvas(shape, skin, color, s.w, D, 3);
+      const face = blockFaceCanvas({ shape, color }, skin, ATLAS_K, true);
+      const end = blockPanelCanvas(shape, skin, color, D, s.h, ATLAS_K);
+      const cap = blockPanelCanvas(shape, skin, color, s.w, D, ATLAS_K);
       if (face && end && cap) {
-        const fm = lacquer(faceTexture(face, s.w, s.h));
-        const em = lacquer(faceTexture(end, D, s.h));
-        const cm = lacquer(faceTexture(cap, s.w, D));
-        mats = [em, em, cm, cm, fm, fm];
+        const L = atlasLayout(s);
+        const c = canvas(Math.ceil(L.W), Math.ceil(L.H));
+        const g = c.getContext('2d');
+        g.drawImage(face.canvas, ...L.face.at);
+        g.drawImage(end.canvas, ...L.end.at);
+        g.drawImage(cap.canvas, ...L.cap.at);
+        const t = new THREE.CanvasTexture(c);
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.anisotropy = aniso;
+        mats = lacquer(t);
         mats.pal = face.pal;
       }
     } else {
@@ -230,8 +291,6 @@ export function createPieces(renderer) {
         const w = new THREE.CanvasTexture(wall.canvas);
         w.colorSpace = THREE.SRGBColorSpace;
         w.anisotropy = aniso;
-        w.wrapS = w.wrapT = THREE.RepeatWrapping;
-        w.repeat.set(1 / DEPTH, 1 / DEPTH);   // (the extruded walls' UVs are in metres: one panel every block-depth)
         mats = [lacquer(t), lacquer(w)];
         mats.pal = art.pal;
       }
@@ -242,6 +301,26 @@ export function createPieces(renderer) {
     return mats;
   }
   const emblemMats = new Map();
+  /** A shape's end facing -x (metres, round its centroid): its middle, its outward normal, its length. */
+  const endCache = new Map();
+  function endOf(shape) {
+    if (endCache.has(shape)) return endCache.get(shape);
+    const s = shapeInfo(shape);
+    const pts = s.outline.map((p) => new THREE.Vector2((p.x - s.cx) / PX, -(p.y - s.cy) / PX));
+    let best = null;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i];
+      const b = pts[(i + 1) % pts.length];
+      const d = b.clone().sub(a);
+      const len = d.length();
+      let n = new THREE.Vector2(d.y, -d.x).divideScalar(len);
+      const mid = a.clone().add(b).multiplyScalar(0.5);
+      if (n.dot(mid) < 0) n = n.negate();   // (outwards)
+      if (!best || n.x < best.n.x) best = { mid, n, len };
+    }
+    endCache.set(shape, best);
+    return best;
+  }
   /** The emblem on a medallion's face: its picture, lit a little from within so it reads in shadow too. */
   function emblemMaterial(element) {
     if (!emblemMats.has(element)) {
@@ -252,12 +331,18 @@ export function createPieces(renderer) {
     }
     return emblemMats.get(element);
   }
-  // a medallion: a thick disc (its face the emblem, facing +z, upright) and a gold ring round it
-  const medalGeo = new THREE.CylinderGeometry(1, 1, 0.12, 40, 1);
-  medalGeo.rotateX(Math.PI / 2);
-  medalGeo.rotateZ(Math.PI / 2);   // (the cap's picture upright when seen from the front)
-  const medalRing = new THREE.TorusGeometry(1, 0.09, 10, 48);
-  const medalMetal = new THREE.MeshStandardMaterial({ color: '#d6ad55', metalness: 1, roughness: 0.3, envMapIntensity: 1.7 });
+  // a medallion: a gold rim (the disc's edge and a raised ring, one mesh) round its face (the emblem, facing +z)
+  const medalMetalGeo = (() => {
+    const wall = new THREE.CylinderGeometry(1, 1, 0.14, 40, 1, true);
+    wall.rotateX(Math.PI / 2);
+    wall.translate(0, 0, 0.07);
+    const ring = new THREE.TorusGeometry(1, 0.09, 10, 48);
+    ring.translate(0, 0, 0.14);
+    return merge([wall, ring]);
+  })();
+  const medalFaceGeo = new THREE.CircleGeometry(1, 40);
+  medalFaceGeo.translate(0, 0, 0.14);
+  const medalMetal = new THREE.MeshStandardMaterial({ color: '#d6ad55', metalness: 1, roughness: 0.3, envMapIntensity: 1.7, side: THREE.DoubleSide });
   const box = (w, h, d, m) => {
     const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
     o.castShadow = o.receiveShadow = true;
@@ -279,20 +364,21 @@ export function createPieces(renderer) {
     const m = new THREE.Mesh(blockGeometry(shape), faceMaterials(shape, skin));
     m.castShadow = m.receiveShadow = true;
     group.add(m);
-    if (element) {   // (a raised medallion on the front and the back: the element at a glance, from any side)
-      const r = Math.max(0.42, Math.min(0.76, Math.min(W, H) * 0.33));
-      for (const z of [1, -1]) {
-        const md = new THREE.Group();
-        const disc = new THREE.Mesh(medalGeo, [medalMetal, emblemMaterial(element), medalMetal]);
-        disc.scale.set(r, r, 1);
-        const ring = new THREE.Mesh(medalRing, medalMetal);
-        ring.scale.setScalar(r);
-        ring.position.z = 0.05;
-        disc.castShadow = ring.castShadow = true;
-        md.add(disc, ring);
-        md.position.z = z * (DEPTH / 2 + 0.05);
-        if (z < 0) md.rotation.y = Math.PI;
-        group.add(md);
+    if (element) {
+      // a raised medallion on its face (the cards' and the build's cameras look at it) and one on the end the battle
+      // camera sees (it stands behind your tower and looks at theirs from your side: both from -x)
+      const end = endOf(shape);
+      const places = [
+        { r: Math.max(0.42, Math.min(0.76, Math.min(W, H) * 0.33)), at: new THREE.Vector3(0, 0, DEPTH / 2 + 0.02), q: new THREE.Quaternion() },
+        { r: Math.max(0.36, Math.min(0.7, Math.min(end.len, DEPTH) * 0.3)), at: new THREE.Vector3(end.mid.x + end.n.x * 0.02, end.mid.y + end.n.y * 0.02, 0), q: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(end.n.x, end.n.y, 0)) },
+      ];
+      for (const pl of places) {
+        for (const o of [new THREE.Mesh(medalMetalGeo, medalMetal), new THREE.Mesh(medalFaceGeo, emblemMaterial(element))]) {
+          o.scale.set(pl.r, pl.r, 1);
+          o.position.copy(pl.at);
+          o.quaternion.copy(pl.q);
+          group.add(o);
+        }
       }
     }
     group.userData = { shape, side, element, top, bottom, w: W, h: H };
@@ -517,32 +603,41 @@ export function createPieces(renderer) {
     }
     ov.material.opacity = Math.min(0.55, k * 0.55);
   }
-  /** 🌿 Rankanker: vines over the block's faces, with leaves. */
+  /**
+   * 🌿 Rankanker: vines over the block's face, with leaves (the front only: every camera looks at it). Two meshes a
+   * block, the vines merged into one and the leaves into another (a full tower of anchors stays cheap to draw).
+   */
   function vineWrap(group) {
     if (group.userData.vines) return;
     const u = group.userData;
     const r = rng(Math.floor((u.w * 13 + u.h * 7) * 100));
-    const g = new THREE.Group();
-    for (const z of [1, -1]) {
-      for (let i = 0; i < 2; i++) {
-        const x0 = (r() - 0.5) * u.w * 0.7;
-        const pts = [];
-        for (let k = 0; k <= 6; k++) {
-          const t = k / 6;
-          pts.push(new THREE.Vector3(x0 + Math.sin(t * 5 + i) * 0.35 + (r() - 0.5) * 0.15, u.top + 0.05 - t * (u.top + u.bottom + 0.1), z * (DEPTH / 2 + 0.06)));
-        }
-        const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.075, 5), M.vine);
-        tube.castShadow = true;
-        g.add(tube);
-        for (let k = 1; k < 6; k++) {
-          const leaf = new THREE.Mesh(new THREE.CircleGeometry(0.2, 6), M.leaf);
-          leaf.position.copy(pts[k]).add(new THREE.Vector3(0.18 * (k % 2 ? 1 : -1), 0, z * 0.03));
-          leaf.scale.set(1, 0.55, 1);
-          leaf.rotation.set(0, z < 0 ? Math.PI : 0, (k % 2 ? 0.6 : -0.6));
-          g.add(leaf);
-        }
+    const tubes = [];
+    const leaves = [];
+    const m4 = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const e = new THREE.Euler();
+    const n = Math.max(2, Math.min(4, Math.round(u.w / 2.6)));
+    for (let i = 0; i < n; i++) {
+      const x0 = ((i + 0.5) / n - 0.5) * u.w * 0.85 + (r() - 0.5) * 0.4;
+      const pts = [];
+      for (let k = 0; k <= 6; k++) {
+        const t = k / 6;
+        pts.push(new THREE.Vector3(x0 + Math.sin(t * 5 + i) * 0.35 + (r() - 0.5) * 0.15, u.top + 0.05 - t * (u.top + u.bottom + 0.1), DEPTH / 2 + 0.06));
+      }
+      tubes.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.085, 5));
+      for (let k = 1; k < 6; k++) {
+        const leaf = new THREE.CircleGeometry(0.22, 6);
+        e.set(0, 0, k % 2 ? 0.6 : -0.6);
+        q.setFromEuler(e);
+        m4.compose(pts[k].clone().add(new THREE.Vector3(0.2 * (k % 2 ? 1 : -1), 0, 0.03)), q, new THREE.Vector3(1, 0.55, 1));
+        leaf.applyMatrix4(m4);
+        leaves.push(leaf);
       }
     }
+    const g = new THREE.Group();
+    const vm = new THREE.Mesh(merge(tubes), M.vine);
+    vm.castShadow = true;
+    g.add(vm, new THREE.Mesh(merge(leaves), M.leaf));
     group.add(g);
     u.vines = g;
   }
