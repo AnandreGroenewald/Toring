@@ -118,6 +118,7 @@ export function createHud({ onPause } = {}) {
     /** Moves a call-out (it follows its point while the camera moves). */
     place(c, x, y) {
       const w = root.clientWidth || 390;
+      c.style.visibility = x < 24 || x > w - 24 ? 'hidden' : '';   // (its point left the screen: it goes with it)
       c.style.left = `${Math.round(Math.max(70, Math.min(w - 70, x)))}px`;
       c.style.top = `${Math.round(Math.max(150, y))}px`;
     },

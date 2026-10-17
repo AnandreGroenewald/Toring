@@ -319,9 +319,11 @@ export function createBattleFx(stage) {
       }
     },
     /** A hit: dust and chips from the point, along the shot's push. */
-    hit(p, dir, k = 1) {
+    hit(p, dir, k = 1, material = null) {
       base.dust(p, { n: Math.round(6 + 10 * k), size: 2 + k * 1.6, color: '#b9a589', up: 1.6, spread: 2.4, life: 1.9 });
-      base.chips(p, dir, Math.round(6 + 12 * k), 7 + 5 * k);
+      // (a block splinters in its own colour; the rock in stone chips)
+      if (material) chunks(p, material, { n: Math.round(5 + 8 * k), size: 0.42, speed: 7 + 4 * k, dir });
+      else base.chips(p, dir, Math.round(6 + 12 * k), 7 + 5 * k);
     },
     /** A landing's puff (Perfek: a gold ring and sparks). */
     land(p, rating, w = 3) {
@@ -343,12 +345,17 @@ export function createBattleFx(stage) {
     },
     /** 🔥 A burning block's flames at p (world), `w` metres wide: called every frame while it burns. */
     flame(p, w = 2, k = 1) {
-      const n = Math.max(1, Math.round(3 * k));
+      // the body of the flames in plain colour (orange and red stay orange and red against a bright sky), a hot core
+      // that glows on top of it, smoke, embers
+      const n = Math.max(1, Math.round(2.4 * k));
       for (let i = 0; i < n; i++) {
         const x = p.x + (R() - 0.5) * w * 0.9;
-        const hot = R();
-        glow.spawn(tmp.set(x, p.y + R() * 0.3, (R() - 0.5) * 2.6), v.set((R() - 0.5) * 0.8, 3 + R() * 3.5, (R() - 0.5) * 0.5),
-          { life: 0.5 + R() * 0.45, size: 1.3 + R() * 1.4 * k, size1: 0.2, color: hot < 0.3 ? '#ffe9a0' : hot < 0.7 ? '#ff9a2e' : '#ff5a1a', alpha: 0.95, drag: 0.9 });
+        spray.spawn(tmp.set(x, p.y + R() * 0.25, (R() - 0.5) * 2.4), v.set((R() - 0.5) * 0.7, 2.6 + R() * 3, (R() - 0.5) * 0.4),
+          { life: 0.45 + R() * 0.35, size: 1.1 + R() * 1.2 * k, size1: 0.25, color: R() < 0.55 ? '#ff7a1c' : '#e8401a', alpha: 0.85, drag: 0.8 });
+      }
+      if (R() < 0.7 * k) {
+        glow.spawn(tmp.set(p.x + (R() - 0.5) * w * 0.7, p.y + R() * 0.3, (R() - 0.5) * 2), v.set((R() - 0.5) * 0.5, 2 + R() * 2, 0),
+          { life: 0.35 + R() * 0.25, size: 0.9 + R() * 0.8 * k, size1: 0.2, color: R() < 0.5 ? '#ffc04a' : '#ff9a2e', alpha: 0.55, drag: 0.8 });
       }
       if (R() < 0.18 * k) base.dust({ x: p.x + (R() - 0.5) * w, y: p.y + 1.2, z: 0 }, { n: 1, size: 2, color: '#2e2420', up: 2.6, spread: 0.7, life: 2.4 });
       // embers
@@ -356,6 +363,12 @@ export function createBattleFx(stage) {
     },
     /** The firelight over what burns (null when nothing does): the explosion's light, flickering, when it's free. */
     fireGlow(p) { fireAt = p ? fireAtV.copy(p) : null; },
+    /** 💧 A Watervat brimming: a drop or two running off its edge. */
+    drip(p, w = 2) {
+      const side = R() < 0.5 ? -1 : 1;
+      spray.spawn(tmp.set(p.x + side * w * (0.35 + R() * 0.15), p.y - R() * 0.4, (R() - 0.5) * 2.2), v.set(side * (0.3 + R() * 0.6), -0.5 - R(), 0),
+        { life: 0.7 + R() * 0.4, size: 0.24 + R() * 0.12, size1: 0.12, color: R() < 0.5 ? '#9fdcff' : '#e6f6ff', alpha: 0.95, g: 12 });
+    },
     /** 💧 Steam where water meets fire: white puffs rising, a few drops. */
     steam(p, w = 2) {
       base.dust({ x: p.x, y: p.y + 0.4, z: 0 }, { n: 10, size: 2.2, color: '#f2f5f8', up: 3.2, spread: w * 0.5, life: 1.8 });

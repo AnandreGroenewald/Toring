@@ -454,6 +454,24 @@ export function createPieces(renderer) {
     u.coil = g;
   }
   function dropCoil(group) { if (group.userData.coil) { group.userData.coil.visible = false; } }
+  /** 💧 Watervat: the block wrapped in a skin of water, shimmering (`tick`), dry once it has soaked a shot. */
+  const waterSkinMat = new THREE.MeshStandardMaterial({ color: '#2f9dff', emissive: '#0d5ea0', emissiveIntensity: 0.75, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.55, envMapIntensity: 2.6, depthWrite: false });
+  function waterSkin(group) {
+    const u = group.userData;
+    if (u.skin) { u.skin.visible = true; return; }
+    if (!u.shape || u.shape === 'crown') return;
+    const m = new THREE.Mesh(blockGeometry(u.shape), waterSkinMat);
+    m.scale.set(1 + 0.24 / Math.max(1, u.w), 1 + 0.24 / Math.max(1, u.h), 1.08);
+    m.renderOrder = 4;
+    group.add(m);
+    u.skin = m;
+  }
+  function drySkin(group) { if (group.userData.skin) group.userData.skin.visible = false; }
+  /** What moves by itself every frame (the water's shimmer). */
+  function tick(time) {
+    waterSkinMat.opacity = 0.5 + 0.08 * Math.sin(time * 2.6);
+    waterSkinMat.emissiveIntensity = 0.7 + 0.25 * Math.sin(time * 1.7 + 1);
+  }
 
   // ---------------------------------------------------------------------------------------------- the crane
   const lattice = (() => {
@@ -735,5 +753,5 @@ export function createPieces(renderer) {
     return s;
   }
 
-  return { M, block, crown, seam, crack, glassCrack, glassBreak, soot, vineWrap, springCoil, dropCoil, crane, pin, blockGeometry, cardImage, team, velvet, ghost, crownMark };
+  return { M, block, crown, seam, crack, glassCrack, glassBreak, soot, vineWrap, springCoil, dropCoil, waterSkin, drySkin, tick, crane, pin, blockGeometry, cardImage, team, velvet, ghost, crownMark };
 }

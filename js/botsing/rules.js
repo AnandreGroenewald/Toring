@@ -17,9 +17,10 @@ export const towardFoe = (side) => (side === 0 ? 1 : -1);
 /**
  * Blocks, not turns (the owner, 17 Oct 2026): each side has `base` blocks, every build or throw spends one, a Perfek
  * build earns one back, each Perfek of today's Daily Tower adds one (at most `dailyMax` a game). Both out: sudden
- * death, a free throw each in turn (at most `sudden` each); no crown in the sea: a draw.
+ * death: both glass cabinets burst (the crowns light: "make it about the crown"), then a free throw each in turn (at
+ * most `sudden` each); no crown in the sea after that: a draw.
  */
-export const BUDGET = { base: 12, dailyMax: 4, rikusBonus: 2, perfectBack: 1, sudden: 3 };
+export const BUDGET = { base: 12, dailyMax: 4, rikusBonus: 2, perfectBack: 1, sudden: 4 };
 export const TURNS_EACH = 12;   // (kept for older tests)
 
 /** The blocks (Stapel's own shapes, each in its own Stapel colour) and the elements the crane offers. */
@@ -61,6 +62,13 @@ export const START = [['plank', 0, 0], ['slab', 0, 1], ['cube', 0, 2]];
 export const LAYOUT = { crown: -100, tower: 55 };
 export const towerX = (side) => sideX(side) + towardFoe(side) * LAYOUT.tower;
 export const CROWN = { w: 76, h: 58, density: 2.6 };
+/**
+ * A crown whose glass is gone is light and loose (the owner: "make it about the crown, you need to throw it off"; a
+ * first measure had direct hits move an open crown 0-10 px, so games ended in draws): a direct hit knocks it along the
+ * shot (`kick` + `perV` x the shot's speed, px a step, popped up by `lift`); vines pull it `vines` x, a wave shoves it
+ * `wave` x, an explosion `blast` x as hard as a block. About two good hits put it off the rock.
+ */
+export const OPEN_CROWN = { kick: 3.6, perV: 0.1, lift: 2.6, vines: 1.6, wave: 1.5, blast: 1 };
 
 /**
  * The throw: first the power bar runs up and down (`POWERBAR.period` s there and back, from `min`); a tap holds it.
@@ -93,7 +101,7 @@ export const SETTLE = { speed: 0.14, ang: 0.005, steps: 36, maxMs: 9000, minMs: 
 export const SEA = { gone: 140 };
 
 /** Robot Rikus: how far off his angle (degrees, early turns and later) and his power, how far off his drop (px). */
-export const RIKUS = { aimSd: [3.6, 2.6], powerSd: 0.04, buildSd: 24, throwChance: 0.66, thinkMs: 1300 };
+export const RIKUS = { aimSd: [2.6, 2.0], powerSd: 0.035, buildSd: 24, throwChance: 0.66, thinkMs: 1300 };
 
 /** A seeded random (mulberry32). */
 export function rng(seed = 1) {

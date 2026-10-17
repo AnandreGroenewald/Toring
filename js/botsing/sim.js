@@ -6,13 +6,13 @@
 import { createBody, getGeometry } from '../game/blocks.js';
 import { PHYSICS } from '../config.js';
 import {
-  STACK, sideX, towardFoe, START, CROWN, LAUNCH, BUILD, PERFECT_BUILD, SETTLE, SEA, G_STEP, PERFECT_NEAR,
+  STACK, sideX, towardFoe, START, CROWN, OPEN_CROWN, LAUNCH, BUILD, PERFECT_BUILD, SETTLE, SEA, G_STEP, PERFECT_NEAR,
   PERFECT_THROW_DENSITY, PX, LAYOUT, FLIGHT_G, towerX, SHAPE_THROW, BUILD_HEAVY, ELEMENT, DISSOLVE_STEPS, rng,
 } from './rules.js';
 
 const Mt = () => Phaser.Physics.Matter.Matter;
 /** Each block's strength (the owner: "it doesnt indecate any damage?"): a hit cracks it, at 0 it shatters. */
-export const HP = { cube: 4, plank: 3, slab: 3, brick: 3, wedge: 3, crate: 2, pillar: 3, crown: 3 };
+export const HP = { cube: 4, plank: 3, slab: 3, brick: 3, wedge: 3, crate: 2, pillar: 3, crown: 4 };
 /** The crown stands in a glass cabinet (the owner: "Put it in a glass cabinet"): hits crack the glass (the crown's hp),
  * the third shatters it; then the crown is this much lighter, easy to throw off. */
 export const GLASS = { brokenDensity: 1.1 };
@@ -330,7 +330,7 @@ export function createSim({ seed = 1 } = {}) {
       const d = Math.hypot(e.body.position.x - x, e.body.position.y - y);
       const k = Math.max(0.2, 1 - d / v.r);
       const heavy = Math.sqrt(e.body.density / BASE_DENSITY);
-      const dv = (v.dv * k) / Math.max(1, heavy * 0.75);
+      const dv = ((v.dv * k) / Math.max(1, heavy * 0.75)) * (e.role === 'crown' && e.hp <= 0 ? OPEN_CROWN.wave : 1);
       wake(e.body);
       M.Body.setVelocity(e.body, { x: e.body.velocity.x + dir * dv, y: e.body.velocity.y - dv * 0.22 });
       putOut(e, 'water');
@@ -354,11 +354,14 @@ export function createSim({ seed = 1 } = {}) {
       queue.push(() => damage(o, d < r * 0.45 ? 3 : d < r * 0.75 ? 2 : 1, 'blast'));
       let ux = d > 1 ? dx / d : 0;
       let uy = (d > 1 ? dy / d : -1) - 0.45;
+      const along = Math.sign(e.pv?.x || e.body.velocity.x) || towardFoe(e.side);
+      if (Math.abs(dx) < 24) ux = along * 0.7;   // (straight under it: thrown along the shot, not only pressed down)
+      if (o.role === 'crown' && o.hp <= 0) { ux = along * 0.85; uy = -0.5; }   // (an open crown: blown off, away from the thrower)
       const n = Math.hypot(ux, uy) || 1;
       ux /= n;
       uy /= n;
       const heavy = Math.sqrt(b.density / BASE_DENSITY);
-      const kick = (dv * k) / Math.max(1, heavy * 0.8);
+      const kick = ((dv * k) / Math.max(1, heavy * 0.8)) * (o.role === 'crown' && o.hp <= 0 ? OPEN_CROWN.blast : 1);
       wake(b);
       M.Body.setVelocity(b, { x: b.velocity.x + ux * kick, y: b.velocity.y + uy * kick });
       M.Body.setAngularVelocity(b, b.angularVelocity + (srand() - 0.5) * 0.12 * k);
@@ -488,6 +491,18 @@ export function createSim({ seed = 1 } = {}) {
             });
             continue;
           }
+          // an open crown (its glass gone) is light and loose: a hit knocks it along the shot
+          if (foe && other.role === 'crown' && other.hp <= 0) {
+            queue.push(() => {
+              if (!other.alive) return;
+              wake(other.body);
+              // (always a hop away from the thrower, however the shot came down on it: the same knock every time)
+              const kick = OPEN_CROWN.kick + hitV * OPEN_CROWN.perV;
+              M.Body.setVelocity(other.body, { x: dirX * Math.max(kick, Math.abs(other.body.velocity.x)), y: Math.min(other.body.velocity.y, -OPEN_CROWN.lift) });
+              M.Body.setAngularVelocity(other.body, other.body.angularVelocity + dirX * 0.03);
+              events.push({ type: 'crownshove', entry: other, x: other.body.position.x, y: other.body.bounds.min.y });
+            });
+          }
           if (me.element === 'plof') { queue.push(() => me.alive && blast(me)); continue; }
           if (other.kind !== 'stack' && other.side !== me.side) {
             const dmg = hitDamage(me, hitV);
@@ -547,7 +562,7 @@ export function createSim({ seed = 1 } = {}) {
       if (e.vineT > 0 && e.alive) {
         e.vineT--;
         const heavy = Math.sqrt(e.body.density / BASE_DENSITY);
-        const pull = (g.pull * (e.role === 'crown' ? (e.hp > 0 ? 0.55 : 1) : 1)) / Math.max(1, heavy * 0.7);
+        const pull = (g.pull * (e.role === 'crown' ? (e.hp > 0 ? 0.55 : OPEN_CROWN.vines) : 1)) / Math.max(1, heavy * 0.7);
         wake(e.body);
         M.Body.setVelocity(e.body, { x: e.body.velocity.x + e.vineDir * pull, y: e.body.velocity.y + g.down });
         if (e.vineT === 0) events.push({ type: 'unvine', entry: e });
@@ -618,6 +633,16 @@ export function createSim({ seed = 1 } = {}) {
         if (e.alive && e.role === 'crown' && e.hp <= 0 && e.body.density > BASE_DENSITY * (GLASS.brokenDensity + 0.1)) M.Body.setDensity(e.body, BASE_DENSITY * GLASS.brokenDensity);
       }
       quiet = SETTLE.steps;
+    },
+    /** (sudden death) both glasses burst at once: the crowns are light from now on. */
+    openCrowns() {
+      for (const c of crowns) {
+        if (!c.alive || c.hp <= 0) continue;
+        c.hp = 0;
+        M.Body.setDensity(c.body, BASE_DENSITY * GLASS.brokenDensity);
+        events.push({ type: 'glass', entry: c, x: c.body.position.x, y: c.body.position.y, why: 'sudden' });
+      }
+      wakeAll();
     },
     crownLost: (side) => !crowns[side].alive || crowns[side].wet,
     crownY: (side) => crowns[side].body.position.y,

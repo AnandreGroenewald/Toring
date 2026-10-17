@@ -1,7 +1,8 @@
 // (1.18 3D) Blokbotsing: Robot Rikus's turn. He looks at his three cards and runs throws ahead (the same prediction the
 // game uses) over several angles and powers, a few each frame so a phone never stalls; then he throws the best one, a
 // little off as a person would be (angle and power), or builds when his crown is open or nothing reaches. Each element
-// counts for what it does: the explosive and the wave near a crown, the fire into a crowd of blocks.
+// counts for what it does: the explosive and the wave near a crown, the fire into a crowd of blocks. On a crown he aims
+// at the middle of the angles that reach it (the edge of that window missed nearly every time: 17 Oct balance runs).
 import { PIN, RIKUS } from './rules.js';
 
 const DEG = Math.PI / 180;
@@ -11,7 +12,7 @@ function gauss(rand) {
 }
 const NEAR_CROWN = { plof: 20, water: 16, gras: 16, vuur: 6 };
 const ON_BLOCKS = { plof: 14, vuur: 12, gras: 8, water: 6 };
-const POWERS = [1, 0.86, 0.72, 0.58];
+const POWERS = [1, 0.93, 0.86, 0.79, 0.72, 0.65, 0.58];   // (fine enough to find the narrow lob over a tall tower)
 
 /** Is anything resting on a side's crown? (a roof over it) */
 function covered(sim, side) {
@@ -29,11 +30,12 @@ export function createRikusPlanner(sim, me, cards, turnIdx, rand, { sudden = fal
   const foe = 1 - me;
   const tasks = [];
   for (let i = 0; i < cards.length; i++) {
-    for (let a = PIN.min; a <= PIN.max + 1e-6; a += 3 * DEG) for (const p of POWERS) tasks.push([i, a, p]);
+    for (let a = PIN.min; a <= PIN.max + 1e-6; a += 1.5 * DEG) for (const p of POWERS) tasks.push([i, a, p]);
   }
   let k = 0;
   let best = null;
   const crown = sim.crowns[foe];
+  const onCrown = new Map();   // (card, power) → the angles that reach their crown
   return {
     step(n = 24) {
       for (let j = 0; j < n && k < tasks.length; j++, k++) {
@@ -41,7 +43,12 @@ export function createRikusPlanner(sim, me, cards, turnIdx, rand, { sudden = fal
         const card = cards[i];
         const r = sim.predict(me, card.shape, a, p);
         let score = 0;
-        if (r.hit.kind === 'crown' && r.hit.side === foe) score = 100 + (NEAR_CROWN[card.element] || 0) + (crown.hp <= 0 ? 20 : 0);
+        if (r.hit.kind === 'crown' && r.hit.side === foe) {
+          score = 100 + (NEAR_CROWN[card.element] || 0) + (crown.hp <= 0 ? 20 : 0);
+          const key = `${i}|${p}`;
+          if (!onCrown.has(key)) onCrown.set(key, []);
+          onCrown.get(key).push(a);
+        }
         else if (r.hit.kind === 'block' && r.hit.side === foe) {
           const d = Math.hypot(r.hit.x - crown.body.position.x, r.hit.y - crown.body.position.y);
           score = Math.max(12, 72 - d / 6) + (ON_BLOCKS[card.element] || 0) + (d < 140 ? (NEAR_CROWN[card.element] || 0) * 0.5 : 0);
@@ -57,7 +64,13 @@ export function createRikusPlanner(sim, me, cards, turnIdx, rand, { sudden = fal
       if (myOpen && turnIdx > 1) buildBias += 0.1;
       if (lowerBy > 3) buildBias += 0.1;
       if (sudden) buildBias = -1;
+      if (best && best.score >= 100) buildBias = Math.min(buildBias, 0.12);   // (an open shot at their crown: he takes it)
       if (best && best.score >= 30 && rand() > buildBias) {
+        if (best.score >= 100) {   // (the middle of the widest window onto their crown, for that card)
+          let wide = null;
+          for (const [key, list] of onCrown) if (Number(key.split('|')[0]) === best.i && (!wide || list.length > wide.list.length)) wide = { list, p: Number(key.split('|')[1]) };
+          if (wide) { best.theta = wide.list[Math.floor(wide.list.length / 2)]; best.power = wide.p; }
+        }
         const sd = (turnIdx < 4 ? RIKUS.aimSd[0] : RIKUS.aimSd[1]) * DEG;
         const theta = Math.min(PIN.max, Math.max(PIN.min, best.theta + gauss(rand) * sd));
         const power = Math.min(1, Math.max(0.3, best.power + gauss(rand) * RIKUS.powerSd));

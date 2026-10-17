@@ -180,6 +180,7 @@ function startTurn(side) {
   G.planner = null;
   G.shot = null;
   G.shotHit = false;
+  G.flight = null;
   G.prevRel = null;
   G.zoom = null;
   G.said = {};
@@ -189,7 +190,7 @@ function startTurn(side) {
   G.remoteThrow = null;
   cranes[side].park(false);
   cranes[1 - side].park(true);
-  const left = G.sudden ? T.suddenSub : T.blocksLeft(G.blocks[side]);
+  const left = G.sudden ? T.suddenLeft(G.suddenLeft[side]) : T.blocksLeft(G.blocks[side]);
   hud.banner(turnLabel(side), { sub: left, kind: side === ME ? 'is-me' : 'is-foe', ms: 1250 });
   sfx('banner');
   updateTop();
@@ -297,6 +298,8 @@ function throwBlock(theta, power) {
   const side = G.side;
   const p = sim.predict(side, G.card.shape, theta, power);
   const e = sim.launch(side, G.card.shape, G.card.element, theta, p.perfect, power);
+  // (the camera glides in with it: the steps to its first touch, the side where it comes down)
+  G.flight = { step0: sim.stepN, steps: Math.max(30, (p.path.length - 1) * 2), side: p.hit.side ?? nearestSide(p.hit.x) };
   if (FRIEND && conn && side === ME) conn.send({ t: 'throw', i: G.cardIdx, theta, power });
   if (!G.sudden) G.blocks[side] = Math.max(0, G.blocks[side] - 1);
   updateTop();
@@ -365,9 +368,10 @@ function nextTurn() {
   if (n != null) { startTurn(n); return; }
   G.sudden = true;
   G.suddenLeft = [BUDGET.sudden, BUDGET.sudden];
-  hud.banner(T.sudden, { sub: T.suddenSub, kind: 'is-dmg', ms: 1800 });
+  sim.openCrowns();   // (both glasses burst: whoever knocks a crown off first wins)
+  hud.banner(T.sudden, { sub: T.suddenSub, kind: 'is-dmg', ms: 2200 });
   sfx('horn');
-  setTimeout(() => { if (!G.over) startTurn(1 - G.side); }, 1600);
+  setTimeout(() => { if (!G.over) startTurn(1 - G.side); }, 2200);
   setPhase('wait');
 }
 /** The camera's close look at the tower where something just happened (the owner: "zoom in on the tower"). */
@@ -394,6 +398,7 @@ function handle(events) {
         }
         fx.land({ x: mOf(ev.x), y: -mOf(ev.y) }, ev.rating, e.w / PX);
         if (g && e.role === 'built' && e.element === 'plof') pieces.springCoil(g);
+        if (g && e.role === 'built' && e.element === 'water') pieces.waterSkin(g);
         if (ev.rating === 'P') {
           if (g) pieces.seam(g);
           G.stats.pb[e.side]++;
@@ -413,17 +418,18 @@ function handle(events) {
         if (G.trailRec) { G.lastTrail = G.trailRec; G.trailRec = null; }
         const k = Math.min(1.6, (ev.speed / LAUNCH.V0) * Math.sqrt(e.body.mass / 2.4));
         const dir = new THREE.Vector3(Math.sign(e.body.velocity.x) || towardFoe(e.side), 0.2, 0);
-        fx.hit(at, dir, k);
+        const struck = ev.other && ev.other.kind !== 'stack' ? meshes.get(ev.other.id) : null;
+        fx.hit(at, dir, k, struck?.children[0]?.material?.[1] || null);
         fx.stopTrail();
         stage.shake(0.3 + 0.45 * k);
         const foeHit = ev.other && ev.other.kind !== 'stack' && ev.other.side !== e.side;
         zoomAt(nearestSide(ev.x));
-        if (foeHit && ev.onto === 'crown') { G.freeze = calm ? 0 : 0.05; slow(0.5, 0.35); } else slow(0.45, 0.45);
+        if (foeHit && ev.onto === 'crown') { G.freeze = calm ? 0 : 0.06; slow(0.7, 0.32); } else slow(0.6, 0.38);
         sfx('clash');
         sfx('land');
         if (e.side === ME) buzz('heavy');
         if (foeHit) G.stats.hits[e.side]++;
-        if (foeHit && ev.onto === 'crown') { hud.banner(T.crownHit, { kind: e.side === ME ? 'is-me' : 'is-foe', ms: 1100 }); sfx('warning'); }
+        if (foeHit && ev.onto === 'crown' && ev.other.hp > 0) { hud.banner(T.crownHit, { kind: e.side === ME ? 'is-me' : 'is-foe', ms: 1100 }); sfx('warning'); }
         if (G.phase === 'flight') setPhase('settle');
         break;
       }
@@ -434,8 +440,8 @@ function handle(events) {
           break;
         }
         if (g && e.hp > 0) pieces.crack(g, e.hpMax - e.hp);
-        callout(`−${ev.n}`, ev.x, ev.y, 'is-dmg');
-        if (e.hp > 0 && ev.by !== 'fire') fx.hit(at, new THREE.Vector3(0, 1, 0), 0.4);
+        if (ev.by !== 'blast') callout(`−${ev.n}`, ev.x, ev.y, 'is-dmg');   // (an explosion says BOEM once: its cracks show the rest)
+        if (e.hp > 0 && ev.by !== 'fire') fx.hit(at, new THREE.Vector3(0, 1, 0), 0.4, g?.children[0]?.material?.[1] || null);
         break;
       }
       case 'glass': {
@@ -443,6 +449,7 @@ function handle(events) {
         if (g) pieces.glassBreak(g);
         fx.shatter(at, pieces.M.glassShard, { n: 20, size: 0.55 });
         fx.sparkle(at, 50, '#e8f4ff', 10);
+        if (ev.why === 'sudden') { sfx('zap'); break; }
         hud.banner(e.side === ME ? T.glassMine : T.glassTheirs, { sub: T.glassSub, kind: e.side === ME ? 'is-foe' : 'is-me', ms: 1600 });
         sfx('clash');
         sfx('zap');
@@ -467,7 +474,7 @@ function handle(events) {
       }
       case 'crown': {
         if (G.crownT > 0) break;
-        G.crownT = 2.6;
+        G.crownT = 1.9;   // (then the winner's crown)
         const minelost = ev.side === ME;
         hud.banner(T.crownSea, { kind: minelost ? 'is-foe' : 'is-me', ms: 2200 });
         slow(1.0, 0.4);
@@ -495,7 +502,7 @@ function handle(events) {
       case 'break': {
         const g = meshes.get(e.id);
         fx.shatter(at, g?.children[0]?.material?.[1] || g?.children[0]?.material || pieces.M.sandstone, { n: 14, size: Math.max(0.8, e.w / PX / 3.5) });
-        callout(T.smashed, ev.x, ev.y - 50, 'is-gold');
+        sayOnce('smashed', T.smashed, ev.x, ev.y - 50);
         sfx('clash');
         stage.shake(0.5);
         break;
@@ -540,6 +547,12 @@ function handle(events) {
         zoomAt(e.side, 2);
         break;
       }
+      case 'crownshove': {   // (an open crown knocked along)
+        callout(T.crownShove, ev.x, ev.y - 40, 'is-dmg');
+        sfx('clash');
+        zoomAt(e.side, 2.6);
+        break;
+      }
       case 'douse': {   // (a Watervat nearby: the fire doesn't take)
         fx.steam(at, e.w / PX);
         callout(T.doused, ev.x, ev.y - 50, 'is-gold');
@@ -556,6 +569,7 @@ function handle(events) {
         break;
       }
       case 'soak': {
+        if (meshes.get(e.id)) pieces.drySkin(meshes.get(e.id));
         fx.wave(at, towardFoe(e.side), 0.6);
         fx.splash(mOf(ev.x), { size: 0.8 });
         callout(T.soaked, ev.x, ev.y - 60, 'is-gold');
@@ -630,6 +644,9 @@ function burning(dt) {
       n++;
       g.userData.sootK = Math.min(1, (g.userData.sootK || 0) + dt / ELEMENT.vuur.secs);
       pieces.soot(g, g.userData.sootK);
+    } else if (e.barrel && e.landed && Math.random() < 0.3) {
+      flameAt.set(mOf(e.body.position.x), -mOf(e.body.bounds.min.y) - 0.05, 0);
+      fx.drip(flameAt, e.w / PX);
     } else if (e.fireWall && e.landed && Math.random() < 0.35) {
       flameAt.set(mOf(e.body.position.x), -mOf(e.body.bounds.min.y) - 0.05, 0);
       fx.flame(flameAt, e.w / PX * 0.6, 0.35);
@@ -773,23 +790,72 @@ function battleView(set) {
   set([xMe - dMe * Math.cos(PHI) * R, Math.max(you, rik) + 21, Math.sin(PHI) * R], [(xMe + xFoe) / 2 - dMe * 6, (you + rik) / 2 + 5, 0]);
 }
 const zoomAim = new THREE.Vector3();
+const fly = { pos: new THREE.Vector3(), look: new THREE.Vector3(), b: new THREE.Vector3(), n: new THREE.Vector3(), bPos: new THREE.Vector3(), bLook: new THREE.Vector3() };
+const frameCam = new THREE.PerspectiveCamera(FOV, 0.5, 0.5, 4000);
 /**
- * The zoom on a tower (the owner: "then zoom in on the tower that is getting damaged"): from where the battle view
- * stands a third of the way in, the lens narrowed until that tower and its crown fill the screen (no flight across).
+ * The zoom on tower `z` (the owner: "then zoom in on the tower that is getting damaged"): from `from` (where the
+ * battle view stands) part of the way in and a little lower, the lens narrowed until that tower and its crown fill the
+ * screen (no flight across the scene). Sets `pos` and `look`; gives the lens (degrees).
  */
-function zoomView(z) {
+function zoomPose(z, from, pos, look, { up = 0, wide = 0 } = {}) {
   const c = sim.crowns[z];
   const xt = towerX(z) / PX;
   const cx = c.alive && !c.wet ? mOf(c.body.position.x) : sideX(z) / PX - towardFoe(z) * 4;
   const tz = Math.max(topM(z), STACK_TOP + 3);
   zoomAim.set((xt + cx) / 2, (tz + STACK_TOP) / 2 + 1, 0);
-  cam.tLook.copy(zoomAim);
-  cam.tPos.lerp(zoomAim, 0.3);
-  const d = cam.tPos.distanceTo(zoomAim);
-  const h = Math.max(6.5, (tz - STACK_TOP) / 2 + 4.5);
-  const w = Math.abs(xt - cx) / 2 + 6;
-  const f = Math.max(2 * Math.atan(h / d), 2 * Math.atan(w / d / camera.aspect));
-  cam.tFov = Math.min(FOV, Math.max(12, (f * 180) / Math.PI));
+  pos.copy(from).lerp(zoomAim, 0.42);
+  pos.y = Math.min(pos.y, zoomAim.y + 9);
+  look.copy(zoomAim);
+  // the lens that just holds the tower's top, its foot and the crown (measured on the screen, so the view's angle counts)
+  frameCam.fov = 30;
+  frameCam.aspect = camera.aspect;
+  frameCam.position.copy(pos);
+  frameCam.lookAt(look);
+  frameCam.updateMatrixWorld();
+  frameCam.updateProjectionMatrix();
+  let need = 0;
+  const hw = 3.4 + wide;
+  for (const [x, y] of [[xt - hw, tz + 1.6 + up], [xt + hw, tz + 1.6 + up], [xt - 3.4, STACK_TOP - 1], [xt + 3.4, STACK_TOP - 1], [cx - 2, STACK_TOP + 3], [cx + 2, STACK_TOP + 3]]) {
+    fly.n.set(x, y, 0).project(frameCam);
+    need = Math.max(need, Math.abs(fly.n.x), Math.abs(fly.n.y));
+  }
+  const f = 2 * Math.atan((Math.tan((15 * Math.PI) / 180) * need) / 0.8);
+  return Math.min(FOV, Math.max(12, (f * 180) / Math.PI));
+}
+function zoomView(z, opts) { cam.tFov = zoomPose(z, cam.tPos, cam.tPos, cam.tLook, opts); }
+const smooth01 = (x) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
+/**
+ * With a throw in the air: both towers as it leaves, then the camera glides in with it and arrives close at the tower
+ * it will hit just as it lands (the zoom, seamlessly), the block kept in the picture all the way.
+ */
+function flightView(set) {
+  const f = G.flight;
+  const s = G.shot;
+  if (!f || !s || !s.alive) return false;
+  battleView(set);
+  const u = Math.min(1, Math.max(0, (sim.stepN - f.step0) / f.steps));
+  const k = smooth01((u - 0.18) / 0.72);
+  if (k <= 0) return true;
+  fly.bPos.copy(cam.tPos);
+  fly.bLook.copy(cam.tLook);
+  const zf = zoomPose(f.side, fly.bPos, fly.pos, fly.look);
+  fly.b.set(mOf(s.body.position.x), -mOf(s.body.position.y), 0);
+  fly.look.lerp(fly.b, 0.45 * (1 - u));
+  cam.tPos.lerpVectors(fly.bPos, fly.pos, k);
+  cam.tLook.lerpVectors(fly.bLook, fly.look, k);
+  let fov = FOV + (zf - FOV) * k;
+  // (keep the block in the picture: a wider lens if it would leave it)
+  frameCam.fov = fov;
+  frameCam.aspect = camera.aspect;
+  frameCam.position.copy(cam.tPos);
+  frameCam.lookAt(cam.tLook);
+  frameCam.updateMatrixWorld();
+  frameCam.updateProjectionMatrix();
+  fly.n.copy(fly.b).project(frameCam);
+  const over = Math.max(Math.abs(fly.n.x), Math.abs(fly.n.y)) / 0.7;
+  if (over > 1 && fly.n.z < 1) fov = Math.min(FOV + 12, (2 * Math.atan(Math.tan((fov * Math.PI) / 360) * over) * 180) / Math.PI);
+  cam.tFov = fov;
+  return true;
 }
 function camTargets(dt) {
   const s = G.side;
@@ -802,6 +868,17 @@ function camTargets(dt) {
   let k = 2.2;
   const set = (p, l) => { cam.tPos.set(...p); cam.tLook.set(...l); };
   cam.tFov = FOV;
+  // a crown going over the edge: the shot that follows it down into the sea (the battle's big moment)
+  if (G.crownFall && !G.over) {
+    const z = G.crownFall.side;
+    const c = sim.crowns[z];
+    const out = G.crownFall.out;
+    const cx = mOf(c.body.position.x);
+    const cy = Math.max(1.2, -mOf(c.body.position.y));
+    set([cx + out * 11, cy + 2.6, 19], [cx - out * 1.4, cy - 1.1, 0]);
+    cam.k = 6;
+    return;
+  }
   // the zoom on the tower where something happened, for a moment, then back to both towers
   if (G.zoom && !G.over) {
     G.zoom.t -= dt;
@@ -827,26 +904,41 @@ function camTargets(dt) {
     case 'build': {
       // (wide enough for the whole swing and the block at both ends)
       const A = Math.min(BUILD.ampMax, BUILD.amp0 + BUILD.ampPer * G.builds[s]) / PX;
+      if (s !== ME) {   // (their build: zoomed in from your side, like their hits, no flight across the sea)
+        battleView(set);
+        zoomView(s, { up: BUILD.hang / PX + 2, wide: A });
+        k = 2.2;
+        break;
+      }
       const d = Math.max(40, (A * 2 + 9) / 0.36);
       set([xs, ts + 6, d], [xs, ts + 3.2, 0]);
       k = 2.2;
       break;
     }
     case 'settle':
+      if (G.action === 'build' && s !== ME) { battleView(set); zoomView(s); k = 1.8; break; }
       if (G.action === 'build') { set([xs, ts + 6, 44], [xs, ts + 3.2, 0]); k = 1.8; break; }
       battleView(set);
       k = 1.6;
       break;
     case 'over': {
+      // the winner's crown, from the open side of its rock (its tower behind it, nothing in between)
       const w = G.result === 'lose' ? FOE : ME;
       const c = sim.crowns[w];
       const cx = c.alive ? mOf(c.body.position.x) : sideX(w) / PX;
       const cy = c.alive ? -mOf(c.body.position.y) : topM(w);
-      set([cx + 7 * towardFoe(w), cy + 3.2, 16], [cx, cy + 0.8, 0]);
+      // (the crown is the hero: close, from the open side of its rock and a little in front, easing in)
+      const back = -towardFoe(w);
+      const ease = Math.min(2, G.phaseT * 0.4);
+      set([cx + back * 5.5, cy + 2.8, 13 - ease], [cx - back * 0.3, cy + 0.9, 0]);
       k = 2;
       break;
     }
-    default:   // aim, other, flight, between, wait: both towers
+    case 'flight':
+      if (!flightView(set)) battleView(set);
+      k = 3.4;
+      break;
+    default:   // aim, other, between, wait: both towers
       battleView(set);
       k = G.phase === 'aim' ? 2.4 : 1.7;
       break;
@@ -874,7 +966,35 @@ function updateMarks() {
     m.scale.set(px * k, px * 1.3125 * k, 1);
   }
 }
+/** A crown leaving its rock: cut to it and follow it down, slowly (`G.crownFall`). */
+function watchCrowns() {
+  if (G.crownFall || G.over) return;
+  for (const s of [0, 1]) {
+    const c = sim.crowns[s];
+    if (!c.alive || c.wet) continue;
+    const dx = c.body.position.x - sideX(s);
+    if (Math.abs(dx) > STACK.w / 2 + 6 && c.body.bounds.max.y > STACK.topY + 30) {
+      G.crownFall = { side: s, out: Math.sign(dx) };
+      G.zoom = null;
+      cam.cut = true;
+      hud.hideCards();   // (nothing in front of the big moment)
+      hud.hideTap();
+      hud.power(false);
+      pinMesh.visible = false;
+      slow(1.5, 0.33);
+      sfx('wind', { v: 0.7 });
+      hud.banner(s === ME ? T.crownFalling : T.crownFallingTheirs, { kind: s === ME ? 'is-foe' : 'is-me', ms: 1400 });
+      return;
+    }
+  }
+}
 function updateCamera(dt) {
+  if (cam.cut) {   // (a cut: straight to the new shot)
+    cam.cut = false;
+    cam.pos.copy(cam.tPos);
+    cam.look.copy(cam.tLook);
+    cam.fov = cam.tFov;
+  }
   const a = 1 - Math.exp(-cam.k * dt);
   cam.pos.lerp(cam.tPos, a);
   cam.look.lerp(cam.tLook, 1 - Math.exp(-cam.k * 1.7 * dt));   // (the eye finds its target before the camera arrives)
@@ -922,6 +1042,7 @@ function gameOver(result, why) {
   G.over = true;
   G.result = result;
   setPhase('over');
+  cam.cut = !calm;   // (cut to the winner's crown, rather than a flight across the scene)
   hud.hideTap();
   hud.hideCards();
   hud.power(false);
@@ -990,6 +1111,7 @@ addEventListener('keydown', (e) => {
 function tick(dt, time) {
   G.phaseT += dt;
   physics(dt);
+  watchCrowns();
   syncMeshes(Math.min(1, acc), dt);
   burning(dt);
   if (G.crownT > 0 && !FRIEND) { G.crownT -= dt; if (G.crownT <= 0 && !G.over) endTurn(); }
@@ -1017,7 +1139,7 @@ function tick(dt, time) {
       // Robot Rikus thinks (a few throws ahead each frame); a friend's moves come over the room (onRemote)
       if (!FRIEND && !G.plan) {
         if (!G.planner) G.planner = createRikusPlanner(sim, FOE, G.cards, G.turns[FOE], rand, { sudden: G.sudden });
-        const done = G.planner.step(26);
+        const done = G.planner.step(40);
         if (done && G.phaseT > RIKUS.thinkMs / 1000) {
           G.plan = G.planner.plan();
           G.card = G.cards.find((c) => c.shape === G.plan.shape && c.element === G.plan.element) || G.cards[0];
@@ -1084,6 +1206,8 @@ function tick(dt, time) {
           if (e.role === 'crown') { if (e.hp <= 0) pieces.glassBreak(g); else if (e.hp < e.hpMax) pieces.glassCrack(g, e.hpMax - e.hp); }
           else if (e.hp < e.hpMax) pieces.crack(g, e.hpMax - e.hp);
           if (e.rooted) pieces.vineWrap(g);
+          if (e.barrel) pieces.waterSkin(g); else pieces.drySkin(g);
+          if (e.springReady) pieces.springCoil(g); else pieces.dropCoil(g);
           e.ix = undefined;
         }
         G.crownT = 0;
@@ -1208,6 +1332,7 @@ function frame(now) {
   }
   const t1 = performance.now();
   world.update(time);
+  pieces.tick(time);
   fx.update(G.paused ? 0 : dt * (G.slowT > 0 ? Math.max(0.4, G.slowRate) : 1), camera);
   updateCamera(dt);
   updateMarks();
