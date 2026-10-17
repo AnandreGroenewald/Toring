@@ -371,10 +371,10 @@ export function createPieces(renderer) {
    */
   const matCache = new Map();
   const lacquer = (t) => new THREE.MeshStandardMaterial({ map: t, roughness: 0.4, metalness: 0.03, envMapIntensity: 1.15 });
-  function faceMaterials(shape, skin) {
-    const k = `${shape}|${skin}`;
+  function faceMaterials(shape, skin, colorIndex = null) {
+    const color = colorIndex ?? SHAPE_COLOR[shape] ?? 0;
+    const k = `${shape}|${skin}|${color}`;
     if (matCache.has(k)) return matCache.get(k);
-    const color = SHAPE_COLOR[shape] ?? 0;
     const s = shapeInfo(shape);
     const D = DEPTH * PX;   // (the depth in Stapel's px)
     let mats = [base.sandstone, base.sandstone];
@@ -478,7 +478,7 @@ export function createPieces(renderer) {
    * A block's look: `shape` on `side`, its `element`'s emblem on the front and back, painted in Stapel `skin`.
    * userData: { top, bottom, w, h } (m above/below its centroid).
    */
-  function block(shape, side, element = null, skin = 'kleur') {
+  function block(shape, side, element = null, skin = 'kleur', colorIndex = null) {
     if (shape === 'crown') return crown(side);
     const s = shapeInfo(shape);
     const group = new THREE.Group();
@@ -486,7 +486,7 @@ export function createPieces(renderer) {
     const H = s.h / PX;
     const top = s.cy / PX;
     const bottom = (s.h - s.cy) / PX;
-    const m = new THREE.Mesh(blockGeometry(shape), faceMaterials(shape, skin));
+    const m = new THREE.Mesh(blockGeometry(shape), faceMaterials(shape, skin, colorIndex));
     m.castShadow = m.receiveShadow = true;
     group.add(m);
     if (element) {

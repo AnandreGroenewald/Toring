@@ -89,8 +89,8 @@ uniform vec3 uZenith;
 uniform vec3 uFog;
 uniform float uFogNear;
 uniform float uFogFar;
-uniform float uStackX;
-uniform float uStackR;
+uniform vec3 uIsle0;   // (x, z, radius: foam where the swell meets each island)
+uniform vec3 uIsle1;
 uniform float uDetail;
 uniform sampler2D uNoise;
 varying vec3 vW;
@@ -123,8 +123,8 @@ void main() {
   // foam: where the swell breaks on the two stacks, and on the highest crests
   float foam = 0.0;
   for (int s = 0; s < 2; s++) {
-    vec2 c = vec2(s == 0 ? -uStackX : uStackX, 0.0);
-    float d = length(vW.xz - c) - uStackR;
+    vec3 I = s == 0 ? uIsle0 : uIsle1;
+    float d = length(vW.xz - I.xy) - I.z;
     float band = 1.0 - smoothstep(0.0, 3.4 + 1.2 * sin(uT * 1.3 + float(s) * 2.0), d);
     float lace = smoothstep(0.38, 0.7, texture2D(uNoise, vW.xz * 0.11 + vec2(uT * 0.03, -uT * 0.02)).b);
     foam += band * mix(lace, 1.0, smoothstep(1.2, 0.0, d));
@@ -467,7 +467,11 @@ function gulls(scene) {
 // ----------------------------------------------------------------------------------------------- the world
 export const SUN_DIR = new THREE.Vector3(-0.82, 0.19, -0.36).normalize();
 
-export function buildWorld(stage) {
+/**
+ * The world: the sunset sea and sky, the far islands, the gulls; the battle's two sea stacks unless `stacks` is false
+ * (Jou dorp builds its own islands). `isles`: where the swell foams ([x, z, radius] each, two at most).
+ */
+export function buildWorld(stage, { stacks: withStacks = true, isles = null } = {}) {
   const { scene, renderer, quality } = stage;
   const sky = makeSky(SUN_DIR);
   scene.add(sky);
@@ -501,7 +505,8 @@ export function buildWorld(stage) {
       uDeep: { value: lin('#0d2a48') }, uShallow: { value: lin('#1d6a86') },
       uHorizon: { value: lin('#ffcc80') }, uZenith: { value: lin('#6a3b8f') },
       uFog: { value: fogCol }, uFogNear: { value: 300 }, uFogFar: { value: 1700 },
-      uStackX: { value: STACK_X }, uStackR: { value: stackR(0) + 0.15 },
+      uIsle0: { value: new THREE.Vector3(...(isles?.[0] || [-STACK_X, 0, stackR(0) + 0.15])) },
+      uIsle1: { value: new THREE.Vector3(...(isles?.[1] || [STACK_X, 0, stackR(0) + 0.15])) },
     },
     vertexShader: SEA_VERT, fragmentShader: SEA_FRAG,
   });
@@ -521,8 +526,8 @@ export function buildWorld(stage) {
     boulder: new THREE.MeshStandardMaterial({ map: rockT, color: '#7a5a48', roughness: 0.75, bumpMap: bumpT, bumpScale: 2 }),
     far: new THREE.MeshStandardMaterial({ color: '#5a4060', roughness: 1, flatShading: true }),
   };
-  const stacks = [makeStack(0, renderer, mats), makeStack(1, renderer, mats)];
-  scene.add(...stacks);
+  const stacks = withStacks ? [makeStack(0, renderer, mats), makeStack(1, renderer, mats)] : [];
+  if (stacks.length) scene.add(...stacks);
   const far = farIslands(mats);
   scene.add(far);
   const flyGulls = gulls(scene);

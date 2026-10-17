@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="af">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#140c24">
+  <title>Stapel · Jou dorp (3D)</title>
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/kasteel.css">
+  <script type="importmap">{ "imports": { "three": "./lib/three.module.min.js" } }</script>
+  <style>
+    #d3-label { position: absolute; left: 50%; top: calc(max(14px, env(safe-area-inset-top)) + 8px); transform: translateX(-50%); z-index: 3; padding: 7px 14px; border-radius: 999px;
+      background: rgba(18, 10, 28, 0.72); border: 1px solid rgba(255, 210, 120, 0.45); color: #ffe7a8; font: 900 12px/1 "Trebuchet MS", system-ui, sans-serif; letter-spacing: 0.12em; white-space: nowrap; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div id="k-stage">
+    <canvas id="k-canvas"></canvas>
+    <div id="d3-label"></div>
+    <div id="k-load" role="status"><small>JOU DORP</small><div class="kl-tower" aria-hidden="true"><i></i><i></i><i></i><i></i></div><p>Die dorp word gebou…</p></div>
+  </div>
+  <script type="module" src="js/dorp3d/main.js"></script>
+</body>
+</html>
