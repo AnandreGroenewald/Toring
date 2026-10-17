@@ -226,3 +226,7 @@ html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50%
 .kh-fbar > i { display: block; width: 56px; height: 6px; border-radius: 3px; background: rgba(10, 6, 18, 0.7); border: 1px solid rgba(255, 255, 255, 0.35); overflow: hidden; }
 .kh-fbar > i > i { display: block; height: 100%; background: linear-gradient(90deg, #ff8a5a, #e63946); transition: width 0.2s; }
 .kh-fbar-ram > i > i { background: linear-gradient(90deg, #8fc5ff, #2f6fd0); }
+/* a card that calls for a tap (the trebuchet, once every troop card is spent) */
+.kh-card.is-call { border-color: var(--gold); animation: kh-call 1.1s ease-in-out infinite; }
+@keyframes kh-call { 50% { transform: translateY(-6px); box-shadow: 0 0 0 3px rgba(255, 207, 107, 0.45), 0 10px 24px rgba(255, 190, 80, 0.35); } }
+@media (prefers-reduced-motion: reduce) { .kh-card.is-call { animation: none; } }

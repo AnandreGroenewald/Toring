@@ -37,12 +37,23 @@ export function createCastleNet({ api = MATCH_API_URL, fetchImpl = globalThis.fe
       if (timer) clearTimeout(timer);
     }
   }
-  /** Signed calls: a town the server doesn't know yet is made first (Jou dorp's sync), then asked again. */
+  /** Signed calls: a town the server hasn't seen yet is made first (Jou dorp's sync, once), so nothing asks in vain. */
+  let made = null;
+  const townReady = () => {
+    if (!made) {
+      let seen = false;
+      try { seen = !!JSON.parse(localStorage.getItem(DORP_KEY) || 'null')?.last; } catch { /* not yet */ }
+      made = seen ? Promise.resolve() : dorp.sync({}).catch(() => {});
+    }
+    return made;
+  };
   async function signed(path, body) {
+    await townReady();
     let who = me();
     if (!who) return { ok: false, status: 0 };
     let r = await call(path, { ...who, ...body });
     if (r.status === 404 && r.error === 'town') {
+      made = null;
       await dorp.sync({});
       who = me();
       r = await call(path, { ...who, ...body });

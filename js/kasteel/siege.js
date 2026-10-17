@@ -76,41 +76,109 @@ const KEEP = castle.group.localToWorld(castle.keep.pos.clone());
 
 // ------------------------------------------------------------------------------------------------------ physics
 const phys = createPhysics({ gravity: -G_ACC });
+phys.onBody = (b) => b.addEventListener('collide', onBlockHit);
 const blocks = [];
 const rayTargets = [];
 const towerParts = [];
 let totalVol = 0;
+// (each tower cemented as its Daily Tower stood: a stone bites out what it hits; physics.js)
 castle.towers.forEach((t, ti) => {
   const meshes = t.group.children.filter((o) => o.userData.block);
   const merlons = t.group.children.filter((o) => o.userData.merlon);
-  const part = { meshes: [...meshes, ...merlons], links: [] };
+  const part = { meshes: [...meshes, ...merlons], links: [], tower: ti };
   towerParts.push(part);
+  for (const m of meshes) scene.attach(m);
+  const ls = phys.addTower(meshes.map((m) => ({ mesh: m, b: m.userData.block, S: m.userData.S, D: m.userData.D })), ti);
   let top = null;
-  for (const m of meshes) {
-    scene.attach(m);
-    const link = phys.addBlock(m, m.userData.block, m.userData.S, m.userData.D);
-    link.tower = ti;
+  for (const link of ls) {
     blocks.push(link);
     part.links.push(link);
-    rayTargets.push(m);
+    rayTargets.push(link.mesh);
     totalVol += link.vol;
     if (!top || link.home.y > top.home.y) top = link;
   }
-  for (const m of merlons) { scene.attach(m); part.links.push(phys.addPiece(m, ...m.userData.merlon)); }
+  for (const m of merlons) {
+    scene.attach(m);
+    const pl = phys.addPiece(m, ...m.userData.merlon);
+    pl.tower = ti;
+    part.links.push(pl);
+  }
   if (t.flag && top) top.mesh.attach(t.flag);
   t.topLink = top;
 });
 const keepTop = castle.towers[0].topLink;
+// (17 Oct 2026, the owner: "the men are just standing still") inside the walls they take the keep, then dig at the
+// towers' feet: every few seconds of picks breaks a foundation block out, until what stands on it comes down.
+const CENTRE = new THREE.Vector3(0, 0, -DIST);
+const TOWERS = castle.towers.map((t, ti) => {
+  const feet = blocks.filter((l) => l.tower === ti && l.grounded);
+  const box = new THREE.Box3();
+  for (const l of feet) box.union(l.box);
+  const c = box.getCenter(new THREE.Vector3());
+  c.y = 0;
+  // (the side that faces the courtyard; the keep: its front, towards the gate)
+  const inward = ti === 0 ? new THREE.Vector3(0, 0, 1) : CENTRE.clone().sub(c).setY(0).normalize();
+  const reach = Math.abs(inward.x) * (box.max.x - box.min.x) / 2 + Math.abs(inward.z) * (box.max.z - box.min.z) / 2;
+  return { c, spot: c.clone().addScaledVector(inward, reach + 1.1), inward, dig: 0 };
+});
+const DIG = 8;   // soldier-seconds of picks the smallest foundation block takes (a big granite one: up to 80)
+const FIELD_MS = 4500;   // (after a card is picked or troops sent, the field stays in view this long)
+const towerStands = (ti) => blocks.some((l) => l.tower === ti && phys.standing(l));
+/** Where a soldier inside the walls goes: the keep's foot (until the flag falls), then the nearest standing tower. */
+function insideJob(m) {
+  if (!G.stars.flag && towerStands(0)) { m.dig = null; return { x: KEEP.x + m.slot * 0.6, z: KEEP.z + 4.5 }; }
+  if (m.dig == null || !towerStands(m.dig)) {
+    let best = null;
+    let bd = Infinity;
+    TOWERS.forEach((t, ti) => {
+      if (!towerStands(ti)) return;
+      const d = Math.hypot(t.spot.x - m.x, t.spot.z - m.z);
+      if (d < bd) { bd = d; best = ti; }
+    });
+    m.dig = best;
+  }
+  if (m.dig == null) return { x: m.x, z: m.z };
+  const t = TOWERS[m.dig];
+  const side = new THREE.Vector3(-t.inward.z, 0, t.inward.x);
+  return { x: t.spot.x + side.x * m.slot * 0.5, z: t.spot.z + side.z * m.slot * 0.5 };
+}
+/** Picks at tower `ti`'s foot: when they add up, the standing block nearest the diggers breaks out. */
+function digAt(ti, dt) {
+  const t = TOWERS[ti];
+  const at = new THREE.Vector3(t.spot.x, 0.9, t.spot.z);
+  let best = null;
+  let bd = Infinity;
+  for (const l of blocks) {
+    if (l.tower !== ti || !phys.standing(l)) continue;
+    const d = phys.posOf(l, tmpP).distanceTo(at);
+    if (d < bd) { bd = d; best = l; }
+  }
+  if (!best) return;
+  t.dig += dt;
+  // (a block takes picks by its weight and by the weight it carries: a foundation under a whole keep holds out long; a
+  // timber block high up gives way soon. Granite is the hardest.)
+  let above = 0;
+  for (const l of best.chunk.links) if (l !== best && l.home.y > best.home.y) above += l.mass;
+  const cost = Math.max(DIG, Math.min(150, ((best.mass + above * 0.3) / 60) * ({ P: 1.4, S: 0.6 }[best.block.rating] || 1)));
+  if (t.dig < cost) return;
+  t.dig = 0;
+  const p = phys.posOf(best);
+  phys.fracture(best.chunk, p, { radius: 0.9, push: 2.5, dir: t.inward.clone().negate(), topple: t.inward.clone().negate() });
+  fx.dust(new THREE.Vector3(p.x, 0.6, p.z), { n: 8, size: 2.4, up: 1.4, spread: 2.5, life: 2 });
+  fx.chips(p, t.inward.clone().negate(), 10, 5);
+  sfx('land');
+  st.shake(0.15);
+}
 let thudAt = 0;
 function onBlockHit(e) {
-  const v = Math.abs(e.contact?.getImpactVelocityAlongNormal?.() || 0);
+  const c = e.contact;
+  const v = Math.abs(c?.getImpactVelocityAlongNormal?.() || 0);
   if (v < 5.5) return;
-  const b = e.target;
-  const p = new THREE.Vector3(b.position.x, Math.max(0.3, b.position.y - 0.8), b.position.z);
+  // (where they touched: a cemented tower's body is the whole tower)
+  const p = new THREE.Vector3(c.bi.position.x + c.ri.x, Math.max(0.3, c.bi.position.y + c.ri.y), c.bi.position.z + c.ri.z);
   fx.dust(p, { n: v > 10 ? 6 : 3, size: v > 10 ? 3 : 2, up: 1.2, spread: 2.5, life: 2.2 });
   if (v > 9 && G.t - thudAt > 0.18) { thudAt = G.t; sfx('land'); if (G.mode !== 'aim') st.shake(Math.min(0.35, v * 0.02)); }
 }
-for (const l of phys.links) l.body.addEventListener('collide', onBlockHit);
 const doors = [];
 const doorStatics = [];
 castle.group.traverse((o) => {
@@ -133,7 +201,7 @@ for (const d of doors) {
 const within = (o, test) => { for (let a = o; a; a = a.parent) if (test(a)) return true; return false; };
 const portcullis = castle.gate.userData.portcullis;
 weldStill(castle.group, scene, (m) => !within(m, (a) => a.userData.door || a.userData.wave || a.userData.flame || a === portcullis));
-const welds = towerWelds(scene, towerParts);
+const welds = towerWelds(scene, towerParts, (t) => phys.broken.has(t.tower) || t.links.some((l) => l.piece && l.body.sleepState === 0));
 
 // ------------------------------------------------------------------------------------------------- soldiers, fx
 const crowd = createCrowd(scene, groundHeight, { capacity: 36, looks: st.quality.looks });
@@ -145,7 +213,8 @@ const guards = [];
 const ballistas = [];
 const spikeRows = [];
 let oil = null;
-const relTo = (link, w) => new THREE.Vector3(w.x - link.body.position.x, w.y - link.body.position.y, w.z - link.body.position.z);
+const relTo = (link, w) => w.clone().sub(phys.posOf(link));
+const tmpP = new THREE.Vector3();
 for (const s of spotIds(castle)) {
   const kind = plan.place[s.id];
   if (!kind) continue;
@@ -199,11 +268,11 @@ function setArm(a) {
 
 // the deploy zone: where your troops may be sent (shown while a troop card is chosen)
 const ZONE = { z0: -98, z1: 8, x: 40 };
-const zone = new THREE.Mesh(new THREE.PlaneGeometry(ZONE.x * 2, ZONE.z1 - ZONE.z0), new THREE.MeshBasicMaterial({ color: '#4aa3ff', transparent: true, opacity: 0.1, depthWrite: false }));
+const zone = new THREE.Mesh(new THREE.PlaneGeometry(ZONE.x * 2, ZONE.z1 - ZONE.z0), new THREE.MeshBasicMaterial({ color: '#4aa3ff', transparent: true, opacity: 0.17, depthWrite: false }));
 zone.rotation.x = -Math.PI / 2;
 zone.position.set(0, 0.25, (ZONE.z0 + ZONE.z1) / 2);
 zone.visible = false;
-const edge = new THREE.Mesh(new THREE.PlaneGeometry(ZONE.x * 2, 0.6), new THREE.MeshBasicMaterial({ color: '#8fc5ff', transparent: true, opacity: 0.55, depthWrite: false }));
+const edge = new THREE.Mesh(new THREE.PlaneGeometry(ZONE.x * 2, 0.6), new THREE.MeshBasicMaterial({ color: '#8fc5ff', transparent: true, opacity: 0.75, depthWrite: false }));
 edge.rotation.x = -Math.PI / 2;
 edge.position.set(0, 0.3, ZONE.z0);
 edge.visible = false;
@@ -321,6 +390,7 @@ function pickCard(k) {
     enterAim();
   } else if (G.cards[k] > 0) {
     G.sel = G.sel === k ? null : k;
+    if (G.sel) G.fieldUntil = performance.now() + FIELD_MS;
   }
   zone.visible = edge.visible = !!G.sel;
   hud.cards(G.cards, G.sel, G.trebState === 'ready');
@@ -356,6 +426,7 @@ function deploy(kind, x, z) {
     G.cards[kind] -= n;
   }
   fx.dust(new THREE.Vector3(x, 0.4, z), { n: 6, size: 2.2, up: 1, spread: 3, life: 1.6, color: '#c9ad82' });
+  G.fieldUntil = performance.now() + FIELD_MS;
   sfx('drop');
   buzz('tap');
   if (G.cards[kind] <= 0) { G.sel = null; zone.visible = edge.visible = false; hud.hint(''); }
@@ -430,9 +501,10 @@ function onStoneHit(e) {
   if (G.impact) return;
   const b = G.stone.body;
   const at = new THREE.Vector3(b.position.x, b.position.y, b.position.z);
-  const hitCastle = !!e.body.link || e.body.mass === 0 && at.y > 0.8;
+  const hitCastle = !!(e.body.link || e.body.chunk) || (e.body.mass === 0 && at.y > 0.8);
   G.impact = { at, hitCastle, t: 0 };
-  window.__siege && (window.__siege.lastHit = { at: [at.x, at.y, at.z].map((v) => Math.round(v * 10) / 10), what: e.body.link?.block?.shape || (e.body.mass === 0 ? (at.y > 0.8 ? 'wall' : 'ground') : 'piece') });
+  const near = e.body.chunk ? e.body.chunk.links.reduce((a, l) => (phys.posOf(l).distanceTo(at) < phys.posOf(a).distanceTo(at) ? l : a)) : null;
+  window.__siege && (window.__siege.lastHit = { at: [at.x, at.y, at.z].map((v) => Math.round(v * 10) / 10), what: e.body.link?.block?.shape || near?.block?.shape || (e.body.mass === 0 ? (at.y > 0.8 ? 'wall' : 'ground') : 'piece') });
   G.hitStop = hitCastle && !PREFS.reducedMotion ? 0.08 : 0;
   const dir = new THREE.Vector3(b.velocity.x, 0, b.velocity.z).normalize();
   if (hitCastle) {
@@ -495,7 +567,10 @@ function damageGate(n) {
 function star(k, text) {
   if (G.stars[k]) return;
   G.stars[k] = true;
-  if (k === 'flag') flagFall();
+  if (k === 'flag') {
+    flagFall();
+    for (const m of blue) if (m.alive && !m.pusher && m.kind !== 'boog' && m.z < GATE_Z - 1.5) m.cheer = 1.3 + rand() * 0.5;   // (the keep is theirs)
+  }
   hud?.stars(starCount());
   hud?.toast(`★ ${text}`);
   sfx('banner');
@@ -574,8 +649,9 @@ function think(dt) {
       tx = Math.max(-1.8, Math.min(1.8, m.slot * 0.4));
       tz = GATE_Z - 4;
     } else {
-      tx = KEEP.x + m.slot * 0.6;
-      tz = KEEP.z + 4.5;
+      const job = insideJob(m);
+      tx = job.x;
+      tz = job.z;
     }
     const foe = G.gateBroken ? nearest(guards, m, 2.4) : null;
     if (foe) {
@@ -588,8 +664,11 @@ function think(dt) {
     const slow = spikeRows.some((row) => Math.abs(m.x - row.x) < 4.5 && Math.abs(m.z - row.z) < 3) ? 0.55 : 1;
     const d = moveTo(m, tx, tz, SPEED[m.kind] * slow, dt);
     if (d < 0.9) {
-      m.state = G.gateBroken ? 'idle' : 'attack';
-      if (!G.gateBroken) { face(m, m.x, GATE_Z); damageGate(dt * (m.kind === 'ridder' ? 0.9 : 0.6)); }
+      if (!G.gateBroken) { m.state = 'attack'; face(m, m.x, GATE_Z); damageGate(dt * (m.kind === 'ridder' ? 0.9 : 0.6)); }
+      else if (m.cheer > 0) { m.state = 'cheer'; m.cheer -= dt; }
+      else if (m.dig != null) { m.state = 'attack'; face(m, TOWERS[m.dig].c.x, TOWERS[m.dig].c.z); digAt(m.dig, dt); }
+      else if (m.z < GATE_Z - 1.5) { m.state = 'attack'; face(m, KEEP.x, KEEP.z); }   // (taking the keep: the flag's timer counts them)
+      else m.state = 'idle';
     } else m.state = m.kind === 'ridder' ? 'run' : 'walk';
   }
   // steel at the gate and in the duels (now and then, while anyone fights)
@@ -624,15 +703,15 @@ function think(dt) {
   for (const d of defenders) {
     if (!d.alive) continue;
     if (d.role === 'tower' && d.link) {
-      const b = d.link.body;
       const off = phys.displaced(d.link);
       if (off.d > 0.7 || off.ang > 22) { kill(d, true); continue; }
-      d.x = b.position.x + d.rel.x;
-      d.y = b.position.y + d.rel.y;
-      d.z = b.position.z + d.rel.z;
+      const b = phys.posOf(d.link, tmpP);
+      d.x = b.x + d.rel.x;
+      d.y = b.y + d.rel.y;
+      d.z = b.z + d.rel.z;
     }
     const reach = d.kind === 'spies' ? 44 : 66;
-    let t = G.ram && G.ram.hp > 0 && Math.hypot(G.ram.obj.position.x - d.x, G.ram.obj.position.z - d.z) < Math.min(40, reach) ? G.ram : null;
+    let t = G.ram && G.ram.hp > 0 && !G.gateBroken && Math.hypot(G.ram.obj.position.x - d.x, G.ram.obj.position.z - d.z) < Math.min(40, reach) ? G.ram : null;
     if (!t) t = nearest(targets, d, reach);
     d.cool -= dt;
     if (!t) { d.state = 'idle'; continue; }
@@ -655,7 +734,7 @@ function think(dt) {
   if (oil) {
     oil.cool -= dt;
     const atGate = blue.filter((m) => m.alive && !G.gateBroken && Math.abs(m.x) < 5 && Math.abs(m.z - (GATE_Z + 3)) < 3.5);
-    const ramAt = G.ram && G.ram.hp > 0 && G.ram.obj.position.z < GATE_Z + 8;
+    const ramAt = G.ram && G.ram.hp > 0 && !G.gateBroken && G.ram.obj.position.z < GATE_Z + 8;
     if (oil.cool <= 0 && (atGate.length || ramAt)) {
       oil.cool = 12;
       oil.pours += 1;
@@ -675,11 +754,11 @@ function think(dt) {
     if (b.link) {
       const off = phys.displaced(b.link);
       if (off.d > 0.7 || off.ang > 22) { b.alive = false; fx.dust(b.obj.position.clone(), { n: 8, size: 2.4, up: 1, spread: 3, life: 2 }); b.obj.visible = false; continue; }
-      b.obj.position.set(b.link.body.position.x + b.rel.x, b.link.body.position.y + b.rel.y, b.link.body.position.z + b.rel.z);
+      b.obj.position.copy(phys.posOf(b.link, tmpP)).add(b.rel);
     }
     b.cool -= dt;
     const p = b.obj.position;
-    let t = G.ram && G.ram.hp > 0 && Math.hypot(G.ram.obj.position.x - p.x, G.ram.obj.position.z - p.z) < 100 ? G.ram : null;
+    let t = G.ram && G.ram.hp > 0 && !G.gateBroken && Math.hypot(G.ram.obj.position.x - p.x, G.ram.obj.position.z - p.z) < 100 ? G.ram : null;
     if (!t) t = nearest(blue, p, 90);
     if (!t) continue;
     const tx = t.obj ? t.obj.position.x : t.x;
@@ -771,7 +850,16 @@ const wantLook = new THREE.Vector3();
 let fov = 48;
 function battleView() {
   // (troops inside the walls: up and over the wall, into the courtyard; from the field the wall hid them)
+  const placing = G.sel && performance.now() < (G.fieldUntil || 0);
+  G.view = 'field';
+  // (a card picked, troops just sent: the field where they go, in view however far in the battle is)
+  if (placing) {
+    wantPos.set(14, 27, 12);
+    wantLook.set(-1, 2, -88);
+    return 48;
+  }
   if (G.gateBroken && blue.some((m) => m.alive && !m.pusher && m.z < GATE_Z - 1.5)) {
+    G.view = 'yard';
     wantPos.set(12, 50, GATE_Z + 45);
     wantLook.set(0, 10, KEEP.z);   // (the keep's foot and its top with the flag, both in view)
     return 46;
@@ -849,6 +937,7 @@ function canvasEvents(cv) {
     if (G.mode === 'aim') { drag = { x: e.clientX, y: e.clientY }; return; }
     if (G.mode !== 'battle' || G.paused) return;
     if (!G.sel) { hud.nudge(); return; }
+    if (G.view === 'yard') { G.fieldUntil = performance.now() + FIELD_MS; hud.hint(T.fieldHint); return; }
     toNdc(e);
     ray.setFromCamera(ndc, camera);
     const p = new THREE.Vector3();
@@ -901,7 +990,18 @@ const wavers = [];
 scene.traverse((o) => { if (o.userData.wave) wavers.push(o); });
 let last = performance.now();
 let hudT = 0;
+// (the next frame is asked for first, and a frame that fails is told once in the console: one bad moment never stops
+// the whole battle)
+let frameErr = false;
 function frame(now) {
+  requestAnimationFrame(frame);
+  try {
+    tick(now);
+  } catch (e) {
+    if (!frameErr) { frameErr = true; console.error('kasteel frame', e); }
+  }
+}
+function tick(now) {
   const rdt = Math.min(0.05, (now - last) / 1000);
   last = now;
   if (G.hitStop > 0) G.hitStop -= rdt;
@@ -1008,16 +1108,21 @@ function frame(now) {
     if (G.mode === 'aim') { hud.range(rangefind()); hud.power(G.winding ? G.power : 0, G.winding); }
     bars();
   }
-  // the end
+  // the end: the clock, three stars, or nothing more that can happen (no cards, no stones, nobody busy for 3 s)
   if (!G.ended && ['battle', 'aim', 'flight'].includes(G.mode)) {
-    const out = G.clock <= 0 || starCount() === 3 || (G.mode === 'battle' && !G.stone && G.cards.treb <= 0 && G.trebState !== 'firing' && ['swaard', 'spies', 'boog', 'ridder'].every((k) => G.cards[k] <= 0) && !G.cards.ram && !blue.some((m) => m.alive));
-    if (out) endSiege();
+    const troopsLeft = ['swaard', 'spies', 'boog', 'ridder'].some((k) => G.cards[k] > 0) || G.cards.ram > 0;
+    const stonesLeft = G.cards.treb > 0 || G.trebState === 'firing' || !!G.stone;
+    const busy = blue.some((m) => m.alive && m.state !== 'idle');
+    G.stuckT = G.mode === 'battle' && !troopsLeft && !stonesLeft && !busy ? (G.stuckT || 0) + dt : 0;
+    // (every troop card spent and stones left: the trebuchet's card calls, and the hint says so)
+    const call = G.mode === 'battle' && !troopsLeft && G.cards.treb > 0 && !G.sel;
+    if (call !== !!G.calling) { G.calling = call; hud.call('treb', call); if (call) hud.hint(T.trebHint); }
+    if (G.clock <= 0 || starCount() === 3 || G.stuckT > 3) endSiege();
   }
   lap('rest');
   st.render(rdt);
   lap('render');
   P.frames = (P.frames || 0) + 1;
-  requestAnimationFrame(frame);
 }
 /** The gate's and the ram's health, small bars over them (the gate's once it's under attack). */
 const barAt = new THREE.Vector3();

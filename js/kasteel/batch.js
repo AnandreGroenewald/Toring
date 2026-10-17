@@ -65,24 +65,29 @@ export function weldStill(root, scene, take) {
 }
 
 /**
- * Each tower as one welded piece while all its blocks sleep. `towers`: [{ meshes: [block and battlement meshes] , links }].
- * `update()` (each frame, after the physics) breaks a tower apart when any of its bodies is awake.
+ * Each tower as one welded piece while it stands untouched. `towers`: [{ meshes: [block and battlement meshes], links }].
+ * `update()` (each frame, after the physics) breaks a tower apart once `moved(tower)` says so (a stone broke into it, a
+ * battlement woke). Whatever hangs on its meshes (the flag) stays in sight meanwhile, and goes back to its block after.
  */
-export function towerWelds(scene, towers) {
+export function towerWelds(scene, towers, moved) {
   const state = towers.map((t) => {
     const welded = mergeByMaterial(t.meshes);
     for (const w of welded) scene.add(w);
-    for (const m of t.meshes) m.visible = false;
-    return { ...t, welded, apart: false };
+    const hung = [];
+    for (const m of t.meshes) {
+      for (const c of [...m.children]) { hung.push([c, m]); scene.attach(c); }
+      m.visible = false;
+    }
+    return { ...t, welded, hung, apart: false };
   });
   return {
     update() {
       for (const t of state) {
-        if (t.apart) continue;
-        if (!t.links.some((l) => l.body.sleepState !== 2)) continue;
+        if (t.apart || !moved(t)) continue;
         t.apart = true;
         for (const w of t.welded) { scene.remove(w); w.geometry.dispose(); }
         for (const m of t.meshes) m.visible = true;
+        for (const [c, m] of t.hung) m.attach(c);
       }
     },
     apart: (i) => state[i]?.apart,

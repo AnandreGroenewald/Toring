@@ -122,6 +122,13 @@ export function createCrowd(scene, groundY, { kinds = ['swaard', 'spies', 'boog'
       B.neck.rotation.y = -0.15;
     } else if (m.state === 'fall') {
       rig.rotation.set(m.spin * time, m.heading, m.spin * 0.6 * time);
+    } else if (m.state === 'cheer') {
+      // (the keep is theirs: arms up, a little hop)
+      const k = Math.abs(Math.sin(time * 5.5 + m.t));
+      B.shL.rotation.set(-2.75 + k * 0.3, 0, -0.35);
+      B.shR.rotation.set(-2.75 + k * 0.3, 0, 0.35);
+      B.body.position.y = k * 0.08;
+      rig.position.y = y + k * 0.14;
     } else if (m.state === 'dead') {
       const f = Math.min(1, (time - (m.diedAt ?? time)) * 2.5);
       rig.rotation.set(1.45 * f, m.heading, 0.25 * f);

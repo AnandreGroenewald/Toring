@@ -154,6 +154,8 @@ export function createSiegeHud(root, { name, wind }, on) {
       toastT = setTimeout(() => t.classList.remove('on'), 2300);
     },
     hint(text) { const h = $('.kh-hint'); h.textContent = text || ''; h.classList.toggle('on', !!text); },
+    /** A card that calls for a tap (it pulses), e.g. the trebuchet when every troop card is spent. */
+    call(k, on) { root.querySelector(`.kh-card[data-k="${k}"]`)?.classList.toggle('is-call', !!on); },
     /** A small health bar over something on the field (`at`: its screen point, null hides it; `k`: 0-1 left). */
     bar(id, at, k) {
       let el = root.querySelector(`.kh-fbar[data-id="${id}"]`);
