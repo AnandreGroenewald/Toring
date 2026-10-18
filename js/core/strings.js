@@ -364,7 +364,7 @@ export const S = {
     { icon: '🏰', text: 'Die Kasteelreeks: jou Daaglikse Torings word die torings van jou kasteel. Val Robot Rikus en jou vriende se kastele aan met troepe, ’n stormram en ’n trebuchet (breek die hek, die helfte plat, hul vlag val), en beplan jou verdediging: dit veg vir jou terwyl jy weg is.' },
     // (1.13.1) with the day's free tries (from 12 Oct 2026: 3)
     // (1.18) Blokbotsing (botsing.html)
-    { icon: '🌀', text: 'Glybaan: kies Vuurman, Waterman of Aardman en hardloop al vinniger teen die glybaan af. Swiep vir ’n baan, tik om te spring, swiep af om te gly. Rooi kring: uit. Geel: jy sien sleg. Groen: jou eie, dalk met ’n sak munte. Elke 600 m ’n nuwe wêreld.' },
+    { icon: '🌀', text: 'Glybaan: kies Vuurman, Waterman of Aardman en hardloop al vinniger teen die glybaan af. Swiep vir ’n baan, tik om te spring, swiep af om te gly. Rooi: uit. Geel: jy sien sleg. Groen: jou eie, dalk met ’n sak munte. Elke 600 m ’n nuwe wêreld.' },
     { icon: '💥', text: 'Blokbotsing: twee torings op rotse in die see. Kies elke beurt ’n blok met ’n element en bou óf gooi: slaan die ander se kroon in die see. Let op die wind!' },
     { icon: '🗓️', text: (free = 1) => (free > 1
       ? `Een Daaglikse Toring per dag, dieselfde vir almal: ${free} gratis pogings en jou beste poging tel. Daarna kos “Nog ’n kans” munte. Oefen soveel jy wil.`
