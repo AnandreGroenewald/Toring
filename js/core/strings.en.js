@@ -170,7 +170,7 @@ export const S_EN = {
   dorpWallHeld: 'The wall holds!',
   // (1.18 3D) Block Clash (botsing.html): its menu button
   botsing: 'Block Clash',
-  botsingMenuSub: 'Build or throw: Rikus’s crown into the sea',
+  botsingMenuSub: 'Build or throw: sink Rikus’s crown',
   botsingDuelSub: 'Build or throw every block. Knock their crown into the sea.',
   botsingFriend: 'Challenge a friend',
   botsingFriendSub: 'Send a link; you take turns',
