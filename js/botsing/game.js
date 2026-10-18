@@ -1333,6 +1333,10 @@ function openPause() {
   });
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden && !G.over && !FRIEND) openPause(); });
+// (18 Oct, "the phone rotated mid-throw": sideways, "Draai jou foon regop" covers the battle, so it waits on its pause card
+// as it does when the app goes away, and as the castle and Stapel's own game do; a friend battle goes on, the other phone
+// is playing. Checked every frame: a battle opened on a sideways phone waits too)
+const sidewaysMq = typeof matchMedia === 'function' ? matchMedia('(orientation: landscape) and (max-height: 540px) and (pointer: coarse)') : null;
 
 // ------------------------------------------------------------------------------------------------ the input
 function onTap() {
@@ -1689,6 +1693,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   const t0 = performance.now();
+  if (sidewaysMq?.matches && !G.paused && !G.over && !FRIEND && G.phase !== 'intro') openPause();
   if (!G.paused) {
     time += dt;
     tick(dt, time);
