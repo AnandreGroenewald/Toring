@@ -1258,6 +1258,15 @@ Later the owner added (decisions are final unless they say otherwise):
   was, with your best; Speelreëls has its line. VERSION 1.19.0; glybaan.html in both builds and the service worker.
   Tests: check-all quick ALL CLEAR, smoke, lang, howto, owner18, qa/gly_wallet1190 8/8, and the built site. The app bundle
   (1.19.0 / 11900) waits in the Play folder "Upload 1.19.0 internal" with its README (the order: Worker, website, app).
+- **18 Oct 2026 (evening): Glybaan becomes a runner game (49f99e1; still 1.19.0, rebuilt; nothing live).** The owner: "make
+  it small men that runs, fire man, Water man, and earth man ... adjust the theme ... make it so good that I will not
+  change ONE THING!". Three little men (js/gly/runner.js: Vuurman, Waterman, Aardman, each with a portrait on the start
+  card) run down the slide: swipe for a lane, tap or swipe up to jump, swipe down to slide. Whirlpools and lava can be
+  jumped, waterfalls, fires, vines and boulders only dodged; barriers: a low beam (jump), a high beam (slide), a wall with
+  a gap. Every 600 m another world (js/gly/worlds.js: sunset sea, jungle, volcano, ice, stars). Music (js/audio.js
+  `audio.music`) builds with the run. Missions (three at a time) and levels pay coins; your best is a gold line on the
+  slide; WEER goes straight back in. Tests: npm test 477, check-all quick, qa/gly1190 (three men), gly_nonsense1190,
+  gly_wallet1190, gly_perf1190, gly_webkit1190, the built site. A 75 s play-through with sound in Previews.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
