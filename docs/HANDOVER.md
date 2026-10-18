@@ -1150,6 +1150,19 @@ Later the owner added (decisions are final unless they say otherwise):
   and the Your town feels like childs play": Block Clash's blocks are now real materials (painted timber, gold, stone,
   marble, lava ...; js/botsing/materials.js), elements show in the block, engraved emblems, 3D cards (b185774); wind each
   turn and hits with weight (1e58777); Your Town 3D look test dorp3d.html (a0f2f62) — waiting for his verdict.
+- **18 Oct 2026 (~00:30–02:30): 1.18.0, ready to go live on the owner's word (local f498fb8..c053e02; nothing pushed,
+  deployed or uploaded).** He asked to finish, be certain, and not push; his picks: the full 3D Your Town, raids aimed
+  and thrown, the wind kept, and Block Clash + Your Town 3D + the Castle Series + coins for wins to go live.
+  - The 3D town is in the game (js/dorp3d/view.js behind DorpScene's contract; the 2D scene stays the fallback).
+  - His /code-review of the unreleased branch confirmed ~40 bugs; all fixed and reviewed (release builds and offline
+    pages, coins never lost, bought tribes kept, the game starting with blocked site data, the town client, leaving a
+    raid, the castle's bell/stones/ram/farming/keep/quality, the Living Tower battles' order and missions, Block Clash
+    friend battles that never hang or drift, escaped names, painting once per shape, cards at load, vines, pieces on
+    the rock).
+  - The Worker (server/src/towns.js TownHall, slagroom.js SlagRoom; GET / says dorp/kasteel/slag): built and tested,
+    not deployed. Order to go live: server tests → `./wr.sh deploy` → (carry-over: only the real towns, and only useful
+    with the phones' keys: see server/README §15) → `node tools/build-pages.mjs` + Pages → the app bundle 11800.
+  - Version 1.18.0; privacy 2026-10-18.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
