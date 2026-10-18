@@ -22,7 +22,7 @@ const AF = {
   names: { cube: 'Blokkie', plank: 'Plank', wedge: 'Wig', crate: 'Krat', pillar: 'Pilaar', slab: 'Blad', crown: 'Kroon' },
   el: {
     vuur: { name: 'Vuur', build: 'Vuurmuur', buildWhy: 'Die eerste skoot wat dit raak, brand tot as.', throw: 'Veldbrand', throwWhy: 'Steek hulle blokke aan die brand; die vuur versprei.' },
-    gras: { name: 'Gras', build: 'Rankanker', buildWhy: 'Ranke bind dit vas aan die blokke wat dit raak.', throw: 'Rankgryp', throwWhy: 'Ranke gryp hulle blokke en sleep dit see toe.' },
+    gras: { name: 'Gras', build: 'Rankanker', buildWhy: 'Ranke bind dit vas aan die blokke wat dit raak.', throw: 'Rankgryp', throwWhy: 'Ranke gryp hulle blokke en trek dit na jou kant toe, die see in.' },
     water: { name: 'Water', build: 'Watervat', buildWhy: 'Blus vuur naby; die eerste skoot wat dit raak, plons dood.', throw: 'Vloedgolf', throwWhy: '’n Golf stamp alles opsy en blus vuur.' },
     plof: { name: 'Plofstof', build: 'Verrassing', buildWhy: 'Die eerste skoot wat dit raak, vlieg terug na hulle.', throw: 'Ontploffing', throwWhy: 'Ontplof waar dit tref.' },
   },
@@ -134,7 +134,7 @@ const EN = {
   names: { cube: 'Cube', plank: 'Plank', wedge: 'Wedge', crate: 'Crate', pillar: 'Pillar', slab: 'Slab', crown: 'Crown' },
   el: {
     vuur: { name: 'Fire', build: 'Fire wall', buildWhy: 'The first shot that touches it burns to ash.', throw: 'Veld fire', throwWhy: 'Sets their blocks alight; the fire spreads.' },
-    gras: { name: 'Grass', build: 'Vine anchor', buildWhy: 'Vines bind it to the blocks it touches.', throw: 'Vine grab', throwWhy: 'Vines grab their blocks and drag them to the sea.' },
+    gras: { name: 'Grass', build: 'Vine anchor', buildWhy: 'Vines bind it to the blocks it touches.', throw: 'Vine grab', throwWhy: 'Vines grab their blocks and pull them towards you, into the sea.' },
     water: { name: 'Water', build: 'Water barrel', buildWhy: 'Puts out fire nearby; the first shot that touches it splashes dead.', throw: 'Flood wave', throwWhy: 'A wave shoves everything aside and puts out fire.' },
     plof: { name: 'Explosive', build: 'Surprise', buildWhy: 'The first shot that touches it flies back at them.', throw: 'Explosion', throwWhy: 'Blows up where it hits.' },
   },

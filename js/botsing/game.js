@@ -704,10 +704,16 @@ function handle(events) {
         const from = new THREE.Vector3(mOf(ev.x), -mOf(ev.y), 0);
         fx.vines(items, (m) => ev.list.some((o) => meshes.get(o.id) === m && o.alive && o.vineT > 0));
         fx.sparkle(from, 30, '#8bea5c', 6);
-        sayOnce('vines', T.vinesGrab, ev.x, ev.y - 50);
+        // (every time, with the way they pull: to the cliff edge facing the thrower. The owner, 18 Oct, chose to keep the
+        // pull and make it obvious: a block sliding towards the thrower looked like "the physics just jamed out")
+        const pull = ev.list[0]?.vineDir || 1;
+        const held = ev.list[0]?.body?.position || { x: ev.x, y: ev.y };
+        callout(`${T.vinesGrab} ${pull < 0 ? '⟵' : '⟶'}`, held.x, held.y - 60, 'is-dmg');   // (on the block they pull)
+        slow(0.7, 0.5);
         sfx('creak');
         sfx('wind', { v: 0.5 });
-        zoomAt(ev.side);
+        zoomAt(ev.side, 3);
+        if (G.zoom) G.zoom.edge = (sideX(ev.side) + pull * (STACK.w / 2)) / PX;   // (the edge they pull to, in the picture)
         break;
       }
       case 'wave': {
@@ -1013,12 +1019,14 @@ function sideOn(points, { pad = 2, minD = 22, maxD = 64, yaw = 0, lean = true, k
   cam.tFov = FOV;
 }
 /** Side `z`'s tower, its foot and its crown, close (the zoom on a hit; the tower that's settling). */
-function towerShot(z, { minD = 17, maxD = 40, up = 0, wide = 0 } = {}) {
+function towerShot(z, { minD = 17, maxD = 40, up = 0, wide = 0, edge = null } = {}) {
   const c = sim.crowns[z];
   const xt = towerX(z) / PX;
   const cx = c.alive && !c.wet ? mOf(c.body.position.x) : sideX(z) / PX - towardFoe(z) * 4;
   const tz = Math.max(topM(z), STACK_TOP + 3);
-  sideOn([[xt - 3.6 - wide, tz + 2 + up], [xt + 3.6 + wide, tz + 2 + up], [xt, STACK_TOP - 1.5], [cx - 2.2, STACK_TOP + 3.2], [cx + 2.2, STACK_TOP + 3.2]], { pad: 1.5, minD, maxD, yaw: -towardFoe(z) });
+  // (`edge`: a rock edge (m) that must be in the picture too: where vines drag the blocks over)
+  const at = edge == null ? [] : [[edge, STACK_TOP + 1.5], [edge, STACK_TOP - 2]];
+  sideOn([[xt - 3.6 - wide, tz + 2 + up], [xt + 3.6 + wide, tz + 2 + up], ...at, [xt, STACK_TOP - 1.5], [cx - 2.2, STACK_TOP + 3.2], [cx + 2.2, STACK_TOP + 3.2]], { pad: 1.5, minD, maxD: edge == null ? maxD : maxD + 8, yaw: -towardFoe(z) });
 }
 /** Aiming on side `s`: its launch point and the pin's whole half circle, its tower; the other tower if it fits too. */
 function aimShot(s) {
@@ -1069,7 +1077,7 @@ function camTargets(dt) {
     G.zoom.t -= dt;
     if (G.zoom.t <= 0) G.zoom = null;
     else {
-      towerShot(G.zoom.side);
+      towerShot(G.zoom.side, { edge: G.zoom.edge ?? null });
       cam.k = calm ? 4 : 3;
       return;
     }

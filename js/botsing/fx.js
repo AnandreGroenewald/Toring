@@ -334,7 +334,8 @@ export function createBattleFx(stage) {
     geo.attributes.position.needsUpdate = true;
     geo.attributes.normal.needsUpdate = true;
   }
-  const vineMat = new THREE.MeshStandardMaterial({ color: '#4cbb36', emissive: '#16420f', emissiveIntensity: 0.35, roughness: 0.6, transparent: true, opacity: 1 });
+  // (bright and thick enough to read from across the sea: the vines are what pulls the block, 18 Oct)
+  const vineMat = new THREE.MeshStandardMaterial({ color: '#58d13e', emissive: '#1f6a14', emissiveIntensity: 0.7, roughness: 0.55, transparent: true, opacity: 1 });
   // (their leaves: one instanced mesh, eight leaves along each vine, opening as it grows)
   const LEAVES = 12;
   const leafTex = (() => {
@@ -440,7 +441,7 @@ export function createBattleFx(stage) {
         }
       }
       const curve = vn.path;
-      bendTube(vn.mesh.geometry, curve, 0.15 * (1 - vn.fade));
+      bendTube(vn.mesh.geometry, curve, 0.21 * (1 - vn.fade));
       vn.mesh.geometry.setDrawRange(0, Math.floor(vn.mesh.geometry.index.count * grow));
       vn.mesh.material.opacity = 1 - vn.fade / 0.6;
       for (let L = 0; L < LEAVES; L++) {
