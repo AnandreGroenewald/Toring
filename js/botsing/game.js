@@ -524,6 +524,14 @@ function zoomAt(side, secs = 2.8) {
   G.zoom = { side, t: secs };
 }
 const nearestSide = (x) => (Math.abs(x - sideX(0)) < Math.abs(x - sideX(1)) ? 0 : 1);
+/**
+ * The shot came down here (px): after the close look, the camera stays on that tower, not on the one the throw was
+ * predicted to reach (the owner, 18 Oct: Rikus's block came over, then "the camera went to his side without showing
+ * the impact").
+ */
+function cameDown(x, y = 0, side = nearestSide(x)) {
+  if (G.flight) Object.assign(G.flight, { side, tx: mOf(x), ty: Math.max(0, -mOf(y)) });
+}
 
 // ----------------------------------------------------------------------------------------- what happens
 const seen = {};   // (tests: how often each event came)
@@ -568,6 +576,7 @@ function handle(events) {
         stage.shake(0.3 + 0.45 * k);
         const foeHit = ev.other && ev.other.kind !== 'stack' && ev.other.side !== e.side;
         zoomAt(nearestSide(ev.x));
+        cameDown(ev.x, ev.y);
         // (weight: a heavy hit holds the moment, the camera punches in, a deep drum under the crash)
         if (foeHit && ev.onto === 'crown') { G.freeze = calm ? 0 : 0.07; slow(0.7, 0.32); } else if (foeHit && k > 0.75) { G.freeze = calm ? 0 : 0.05; slow(0.65, 0.34); } else slow(0.6, 0.38);
         cam.punch = calm ? 0 : Math.min(1, 0.35 + k * 0.5);
@@ -613,6 +622,7 @@ function handle(events) {
         sfx('splash');
         if (e && e === G.shot) {
           fx.stopTrail();
+          cameDown(ev.x);
           if (G.trailRec) { G.lastTrail = G.trailRec; G.trailRec = null; }
           if (e.role === 'built' && !e.landed) callout(T.missBuild, ev.x, -40, 'is-dim');
           else if (e.role === 'proj' && G.phase === 'flight') {
@@ -659,6 +669,7 @@ function handle(events) {
         if (!calm) G.freeze = 0.05;
         slow(0.5, 0.35);
         zoomAt(nearestSide(ev.x));
+        cameDown(ev.x, ev.y);
         callout(T.boom, ev.x, ev.y - 60, 'is-boom');
         sfx('thunder');
         sfx('clash');
@@ -714,6 +725,7 @@ function handle(events) {
         callout(T.wallBurn, ev.x, ev.y - 60, 'is-gold');
         sfx('heat');
         zoomAt(e.side, 2);
+        cameDown(ev.x, ev.y, e.side);
         break;
       }
       case 'crownshove': {   // (an open crown knocked along)
@@ -750,6 +762,7 @@ function handle(events) {
         callout(T.soaked, ev.x, ev.y - 60, 'is-gold');
         sfx('splash');
         zoomAt(e.side, 2);
+        cameDown(ev.x, ev.y, e.side);
         if (G.phase === 'flight') setPhase('settle');
         break;
       }
@@ -765,12 +778,16 @@ function handle(events) {
         callout(T.sprung, ev.x, ev.y - 60, 'is-gold');
         sfx('pop');
         sfx('clown');
-        // the shot flies back home: both towers again, and its next touch counts as a hit of its own
+        // the shot flies back home: its next touch counts as a hit of its own. The moment the spring catches it is seen
+        // at that tower first (a beat of slow motion), then the camera flies home with it (it used to turn away at once:
+        // the impact was never seen)
         G.shotHit = false;
         G.shotX0 = null;
-        G.zoom = null;
+        G.zoom = { side: e.side, t: calm ? 0.8 : 1.1 };
+        slow(0.5, 0.4);
+        stage.shake(0.35);
         if (G.shot) fx.trail(meshes.get(G.shot.id), false, G.shot.element);
-        if (G.flight) Object.assign(G.flight, { side: G.side, tx: towerX(G.side) / PX, ty: topM(G.side) });   // (the camera goes back with it)
+        if (G.flight) Object.assign(G.flight, { side: G.side, tx: towerX(G.side) / PX, ty: topM(G.side) });   // (then it goes back with it)
         break;
       }
       default:
