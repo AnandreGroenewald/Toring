@@ -65,7 +65,7 @@ export function waysThrough(row, element, sw = false) {
 /**
  * The track ahead, row after row, from a seed (the same seed, the same track: a Daily slide could share one). Each row:
  * { at (m), kind: 'hazards'|'bar'|'wall'|'coins', cells: [{ lane, type, low, bag }], coins: [{ lane, at, high }], bar
- * ('low'|'high'), gap (a wall's open lane), item, n }. Always passable: a "path" lane moves at most one lane a row (two
+ * ('low'|'high'), gap (a wall's open lane), item, gem (the rare diamond, high over a jump), n }. Always passable: a "path" lane moves at most one lane a row (two
  * once it is fast) and never holds what would end the run, unless it lies low enough to jump (then coins hang over it).
  */
 export function createTrack(seed, { element = 'water', sw = false } = {}) {
@@ -79,6 +79,7 @@ export function createTrack(seed, { element = 'water', sw = false } = {}) {
   let item = 0;
   let gates = 0;
   let sinceGate = 0;
+  let gemAt = 320;   // (the rare diamond: none before here, then far apart; the owner: "needs to be hard and scarse")
   const anyEl = () => ELEMENTS[Math.floor(r() * ELEMENTS.length)];
   const hazardType = (d) => {
     const x = r();
@@ -96,7 +97,7 @@ export function createTrack(seed, { element = 'water', sw = false } = {}) {
     next() {
       const d = at;
       const v = speedAt(d);
-      const row = { at: d, kind: 'hazards', cells: [], coins: [], bar: null, gap: null, item: null, n: n++ };
+      const row = { at: d, kind: 'hazards', cells: [], coins: [], bar: null, gap: null, item: null, gem: null, n: n++ };
       const step = d > 1500 && r() < 0.35 ? 2 : 1;
       const from = path;
       path = Math.max(0, Math.min(LANES - 1, path + (r() < 0.5 ? -step : step) * (r() < 0.6 ? 1 : 0)));
@@ -119,6 +120,8 @@ export function createTrack(seed, { element = 'water', sw = false } = {}) {
         const t = anyEl();
         for (let l = 0; l < LANES; l++) row.cells.push({ lane: l, type: t, low: false });
         if (r() < 0.5) row.cells[path].bag = bagCoins(r);
+        // (a diamond over a gate: the right man and a perfect jump, both)
+        if (d >= gemAt && r() < 0.3) { row.gem = { lane: path, at: d }; gemAt = d + 380 + r() * 320; }
       } else {
         // hazards: one lane early on, up to three later; the path kept clear of what ends the run
         const most = d < 200 ? 1 : d < 700 ? 2 : 3;
@@ -130,7 +133,10 @@ export function createTrack(seed, { element = 'water', sw = false } = {}) {
           // something low right on the path: jump it (or find another way) - coins hang in the air over it
           const t = r() < 0.5 ? 'water' : 'vuur';
           row.cells.push({ lane: path, type: sw || t !== element ? t : (element === 'water' ? 'vuur' : 'water'), low: true });
-          for (let k = 0; k < 3; k++) row.coins.push({ lane: path, at: d - 2.6 + k * 2.6, high: true });
+          // (now and then the arc's top holds the rare diamond instead of a coin: only a perfect jump takes it)
+          const gem = d >= gemAt && r() < 0.5;
+          if (gem) { row.gem = { lane: path, at: d }; gemAt = d + 380 + r() * 320; }
+          for (let k = 0; k < 3; k++) if (!(gem && k === 1)) row.coins.push({ lane: path, at: d - 2.6 + k * 2.6, high: true });
         } else if (onPath < (sw ? 0.55 : 0.3)) {
           row.cells.push(cellOf(path, sw ? anyEl() : element));   // (your own, right in your way: safe; the switch test: any element)
         }

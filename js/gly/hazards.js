@@ -5,13 +5,15 @@
 // does to you is still rules.js's (the ring the game lays under it says so). One program per look, one clock for them all,
 // a seed per hazard so no two move alike; the game pools them.
 import * as THREE from '../../lib/three.module.min.js';
+import { createElemental, elementalClock } from './elemental.js';
 
-/** Each element's looks (a row's lane picks one; the rules are the same for all of an element's looks). */
+/** Each element's looks (a row's lane picks one; the rules are the same for all of an element's looks): since 18 Oct
+ *  2026 the elemental ones (elemental.js), tall and low (`pool`, `molten`: to jump). */
 export const VARIANTS = Object.freeze({
-  water: Object.freeze(['whirl', 'fall']),
-  vuur: Object.freeze(['fire', 'lava']),
-  gras: Object.freeze(['vines']),
-  stone: Object.freeze(['rock']),
+  water: Object.freeze(['glass', 'pool']),
+  vuur: Object.freeze(['swirl', 'molten']),
+  gras: Object.freeze(['cage']),
+  stone: Object.freeze(['basalt']),
 });
 
 const clock = { value: 0 };
@@ -785,22 +787,26 @@ export function rockPillar(i, height) {
   return m;
 }
 
-const MAKERS = { whirl: laneWhirl, fall: curtain, fire: trench, lava: lavaBed, vines: thicket, rock: barricade };
+// (the looks before the elemental redesign: whirl laneWhirl, fall curtain, fire trench, lava lavaBed, vines thicket, rock
+// barricade; their old names now make the new ones)
 
 /**
  * The hazards: `make(type, look)` builds one (its root on the chute's floor, about a lane across); `update(time, camera,
  * height)` moves them all on (the clock, and the size of a point for this screen).
  */
 export function createHazards() {
+  const el = createElemental({ flameMesh, sparks, glow });
+  const makers = { glass: el.glass, pool: el.pool, swirl: el.swirl, molten: el.molten, cage: el.cage, basalt: el.basalt, whirl: el.pool, fall: el.glass, fire: el.swirl, lava: el.molten, vines: el.cage, rock: el.basalt };
   return {
     make(type, look) {
       const looks = VARIANTS[type] || VARIANTS.stone;
-      const g = (MAKERS[looks.includes(look) ? look : looks[0]])();
+      const g = (makers[looks.includes(look) ? look : looks[0]])();
       g.userData = { type, look };
       return g;
     },
     update(time, camera, height) {
       clock.value = time;
+      elementalClock.value = time;
       pxPerUnit.value = height / (2 * Math.tan((camera.fov * Math.PI) / 360));
     },
   };

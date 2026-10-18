@@ -9,11 +9,12 @@ import * as THREE from '../../lib/three.module.min.js';
 export const WORLD_LEN = 600;
 /** The worlds in order (names in text.js). Colours: the slide's glaze, its lines, walls, rails; the light; the haze. */
 export const WORLDS = Object.freeze([
-  { id: 'sononder', floor: '#2f50c6', line: '#bff3ff', wall: '#241a44', rail: '#ffb347', sky: '#a796ff', ground: '#4a3040', sun: '#ffd2a1', fog: '#d9967a', below: 0, air: 0 },
-  { id: 'oerwoud', floor: '#2f7d3a', line: '#e2ff9e', wall: '#1d3a19', rail: '#a8ff5a', sky: '#c4f5a8', ground: '#203018', sun: '#fff2c0', fog: '#5f8f5f', below: 1, air: 1 },
-  { id: 'vulkaan', floor: '#5a1e12', line: '#ff7a2a', wall: '#2a0f0a', rail: '#ff4d1a', sky: '#ff9a6a', ground: '#401008', sun: '#ff9a60', fog: '#6a2214', below: 2, air: 2 },
-  { id: 'ys', floor: '#8fbfe8', line: '#5fd0ff', wall: '#5f8fb8', rail: '#e8fbff', sky: '#d8f0ff', ground: '#4a5a6a', sun: '#eef6ff', fog: '#a9c8e4', below: 3, air: 3 },
-  { id: 'sterre', floor: '#3a1e7a', line: '#ff6bd6', wall: '#140a30', rail: '#7af7ff', sky: '#8a7aff', ground: '#100820', sun: '#c0b0ff', fog: '#1d1440', below: 4, air: 4 },
+  // (the elemental look, 18 Oct 2026: a dark glossy slide in every world, its lines and kerbs the world's own light)
+  { id: 'sononder', floor: '#3a4462', line: '#22e3c8', wall: '#161a2a', rail: '#3ff0dc', sky: '#a796ff', ground: '#4a3040', sun: '#ffd2a1', fog: '#9a7fb8', below: 0, air: 0 },
+  { id: 'oerwoud', floor: '#2c4334', line: '#9dff5a', wall: '#111c14', rail: '#9dff5a', sky: '#c4f5a8', ground: '#203018', sun: '#fff2c0', fog: '#5f8f5f', below: 1, air: 1 },
+  { id: 'vulkaan', floor: '#43271f', line: '#ff7a2a', wall: '#170b08', rail: '#ff5a1a', sky: '#ff9a6a', ground: '#401008', sun: '#ff9a60', fog: '#6a2214', below: 2, air: 2 },
+  { id: 'ys', floor: '#36495c', line: '#7fe3ff', wall: '#131d27', rail: '#bff3ff', sky: '#d8f0ff', ground: '#4a5a6a', sun: '#eef6ff', fog: '#a9c8e4', below: 3, air: 3 },
+  { id: 'sterre', floor: '#332754', line: '#ff6bd6', wall: '#0d0a1c', rail: '#7af7ff', sky: '#8a7aff', ground: '#100820', sun: '#c0b0ff', fog: '#1d1440', below: 4, air: 4 },
 ]);
 /** The world at `d` metres (round and round) and how far into it (0-1). */
 export const worldAt = (d) => ({ i: Math.floor(Math.max(0, d) / WORLD_LEN) % WORLDS.length, into: (Math.max(0, d) % WORLD_LEN) / WORLD_LEN });

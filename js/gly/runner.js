@@ -57,20 +57,21 @@ function rimLight(m, color, k) {
   m.customProgramCacheKey = () => 'gly-rim';
   return m;
 }
-/** The man's own skin, by element. */
+/** The man's own skin, by element (the elemental look of 18 Oct 2026: glossy little heroes glowing from within, as in the
+ *  owner's pick of the Gemini pictures). */
 function skinOf(element) {
-  if (element === 'vuur') return new THREE.MeshStandardMaterial({ color: '#4a1407', emissive: '#ff6a1a', emissiveMap: lavaCracks(), emissiveIntensity: 1.7, roughness: 0.62, metalness: 0.05 });
-  if (element === 'water') return rimLight(new THREE.MeshStandardMaterial({ color: '#1f86e8', roughness: 0.06, metalness: 0.08, envMapIntensity: 1.8 }), '#a6ecff', 0.95);
-  return new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92, metalness: 0 });
+  if (element === 'vuur') return new THREE.MeshStandardMaterial({ color: '#3a1006', emissive: '#ff7a24', emissiveMap: lavaCracks(), emissiveIntensity: 2.4, roughness: 0.38, metalness: 0.08 });
+  if (element === 'water') return rimLight(new THREE.MeshStandardMaterial({ color: '#2f9cff', emissive: '#1560c0', emissiveIntensity: 0.45, roughness: 0.04, metalness: 0.05, transparent: true, opacity: 0.86, envMapIntensity: 1.8 }), '#bff4ff', 1.3);
+  return new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88, metalness: 0 });
 }
-/** The earth man's shapes: a little rocky (pushed in and out), brown earth with moss on what faces up. */
+/** The earth man's shapes: a little rocky (pushed in and out), grey stone with moss on what faces up. */
 function earthy(g, r, amt = 0.06) {
   const p = g.attributes.position;
   const n = g.attributes.normal;
   const col = new Float32Array(p.count * 3);
-  const earth = new THREE.Color('#7b5434');
-  const deep = new THREE.Color('#4e331f');
-  const moss = new THREE.Color('#5f9a3a');
+  const earth = new THREE.Color('#8b8e94');
+  const deep = new THREE.Color('#5c5f66');
+  const moss = new THREE.Color('#6fb04a');
   const c = new THREE.Color();
   const seen = new Map();
   for (let i = 0; i < p.count; i++) {
@@ -103,7 +104,7 @@ export function createRunner(element) {
   const r = rand(element === 'vuur' ? 3 : element === 'water' ? 5 : 9);
   const earth = element === 'gras';
   const skin = skinOf(element);
-  const accent = new THREE.MeshStandardMaterial({ color: element === 'vuur' ? '#1c0b06' : element === 'water' ? '#0e4f9e' : '#3e2a1a', roughness: 0.7, flatShading: earth });
+  const accent = new THREE.MeshStandardMaterial({ color: element === 'vuur' ? '#1c0b06' : element === 'water' ? '#0e4f9e' : '#4a4d52', roughness: 0.7, flatShading: earth });
   const geo = (g, amt) => (earth ? earthy(g, r, amt) : g);
   const seg = earth ? [12, 9] : [24, 18];
   const mesh = (g, m) => { const o = new THREE.Mesh(g, m); o.castShadow = true; return o; };
@@ -120,6 +121,7 @@ export function createRunner(element) {
   const head = new THREE.Group();
   head.position.y = 1.12;
   head.rotation.x = 0.22;
+  head.scale.setScalar(1.1);   // (a collectible toy's big head)
   body.add(head);
   head.add(mesh(geo(new THREE.SphereGeometry(0.53, ...seg), 0.05), skin));
   // eyes that blink, pupils with a glint, a determined brow, a little smile
@@ -172,21 +174,18 @@ export function createRunner(element) {
   const orbit = [];
   const sway = [];
   if (element === 'vuur') {
+    // (a big flame crest)
     crest.add(flameMesh([
-      { at: [0, 0.36, 0.06], info: [0.44, 1.4, r(), 0] },
-      { at: [-0.24, 0.3, 0.12], info: [0.3, 0.92, r(), -0.12] },
-      { at: [0.24, 0.3, 0.12], info: [0.3, 0.98, r(), 0.12] },
-      { at: [0, 0.26, 0.3], info: [0.34, 0.85, r(), 0] },
+      { at: [0, 0.36, 0.06], info: [0.5, 1.85, r(), 0] },
+      { at: [-0.26, 0.3, 0.12], info: [0.34, 1.2, r(), -0.14] },
+      { at: [0.26, 0.3, 0.12], info: [0.34, 1.25, r(), 0.14] },
+      { at: [0, 0.26, 0.3], info: [0.38, 1.1, r(), 0] },
     ]));
   } else if (element === 'water') {
-    const drop = mesh(new THREE.SphereGeometry(0.23, 20, 14), skin);
-    drop.position.set(0, 0.47, 0.1);
-    const curl = mesh(new THREE.ConeGeometry(0.22, 0.62, 20, 1, true), skin);
-    curl.position.set(0, 0.8, 0.24);
-    curl.rotation.x = 0.6;
-    const foam = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 8), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.3, emissive: '#bff4ff', emissiveIntensity: 0.25 }));
-    foam.position.set(0, 1.06, 0.41);
-    crest.add(drop, curl, foam);
+    // (his head runs up into a drop's point)
+    const tip = mesh(new THREE.ConeGeometry(0.36, 0.78, 24, 1, true), skin);
+    tip.position.set(0, 0.74, 0.04);
+    crest.add(tip);
     for (let i = 0; i < 3; i++) {
       const d = mesh(new THREE.SphereGeometry(0.075, 12, 8), skin);
       d.userData.a = (i / 3) * Math.PI * 2;
@@ -194,34 +193,17 @@ export function createRunner(element) {
       orbit.push(d);
     }
   } else {
-    const green = new THREE.MeshStandardMaterial({ color: '#4caf3a', roughness: 0.6, side: THREE.DoubleSide });
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.3, 6), green);
-    stem.position.set(0, 0.62, 0.04);
-    crest.add(stem);
-    for (const [s, len] of [[-1, 0.62], [1, 0.55]]) {
-      const leaf = new THREE.Mesh(leafGeo(len), green);
-      leaf.position.set(0, 0.74, 0.04);
-      leaf.rotation.set(-0.35, 0, s * 0.85);
+    // (a crown of glowing leaves)
+    const green = new THREE.MeshStandardMaterial({ color: '#8dff8a', emissive: '#3dff6a', emissiveIntensity: 1.1, roughness: 0.4, side: THREE.DoubleSide });
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2;
+      const leaf = new THREE.Mesh(leafGeo(0.4 + (i % 2) * 0.1), green);
+      leaf.position.set(Math.cos(a) * 0.34, 0.44, Math.sin(a) * 0.34);
+      leaf.rotation.order = 'YXZ';
+      leaf.rotation.set(-0.35, -a + Math.PI / 2, 0);
       crest.add(leaf);
       sway.push(leaf);
     }
-    // a little flower over one eye
-    const flower = new THREE.Group();
-    flower.position.set(0.3, 0.42, -0.2);
-    flower.rotation.set(-0.7, 0, 0.3);
-    const petal = new THREE.MeshStandardMaterial({ color: '#ff8fc8', roughness: 0.55 });
-    for (let i = 0; i < 5; i++) {
-      const p = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), petal);
-      p.scale.set(1, 0.45, 1.5);
-      const a = (i / 5) * Math.PI * 2;
-      p.position.set(Math.cos(a) * 0.085, 0, Math.sin(a) * 0.085);
-      p.rotation.y = -a;
-      flower.add(p);
-    }
-    const mid = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshStandardMaterial({ color: '#ffd84a', roughness: 0.5 }));
-    mid.position.y = 0.03;
-    flower.add(mid);
-    crest.add(flower);
   }
 
   // ------------------------------------------------------------------------------------------------- moving him

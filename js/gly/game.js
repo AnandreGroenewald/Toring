@@ -13,11 +13,13 @@ import { createRunFx } from './fx.js';
 import { createHazards, VARIANTS, fieldMat, rockPillar } from './hazards.js';
 import { createRunner, portraits } from './runner.js';
 import { createWorlds, WORLDS } from './worlds.js';
+import { createScenery } from './scenery.js';
 import { audio, haptics } from '../audio.js';
 import { fmtInt } from '../core/format.js';
 import { EARN } from '../core/economy.js';
 import { dateKeyFor } from '../core/daily.js';
 import { T, PREFS, goBack, EMOJI } from './text.js';
+import { makeDiamond } from './elemental.js';
 import { LANES, LANE_W, ELEMENTS, JUMP, SLIDE, laneX, moveLane, effectOf, speedAt, createTrack, killerOf, victimOf, runXp, MISSIONS, newMission, cleanMissions, levelOf, levelReward } from './rules.js';
 
 // (the slide runs from the top of the screen to the bottom, the camera looking back up it: a lane's place across the slide
@@ -69,7 +71,7 @@ function payCoins(n) {
 /** What the slide keeps besides the record: all your XP, the missions done, and the three missions now. */
 const prog = (() => {
   const mdone = Math.max(0, Math.min(1e6, saved.mdone | 0));
-  return { xp: Math.max(0, Math.min(1e9, Math.floor(Number(saved.xp) || 0))), mdone, missions: cleanMissions(saved.missions, Math.random, mdone) };
+  return { xp: Math.max(0, Math.min(1e9, Math.floor(Number(saved.xp) || 0))), gems: Math.max(0, Math.min(1e6, saved.gems | 0)), mdone, missions: cleanMissions(saved.missions, Math.random, mdone) };
 })();
 /** Into the slide's record, merged (what else it keeps stays). */
 const keep = (patch) => { try { localStorage.setItem(STORE_KEY, JSON.stringify({ ...(read(STORE_KEY) || {}), ...patch })); } catch { /* private window */ } };
@@ -116,7 +118,7 @@ function floorTextures() {
     g.fillRect(i * lane, 0, lane, H);
   }
   // cross marks every quarter (speed: they rush at you)
-  g.fillStyle = 'rgba(255,255,255,0.07)';
+  g.fillStyle = 'rgba(255,255,255,0.1)';
   for (let y = 0; y < H; y += H / 4) g.fillRect(0, y, W, 10);
   const e = document.createElement('canvas');
   e.width = W; e.height = H;
@@ -129,7 +131,7 @@ function floorTextures() {
     const edge = i === 0 || i === LANES;
     ge.fillStyle = '#ffffff';
     if (edge) ge.fillRect(x - (i ? 12 : 0), 0, 12, H);
-    else for (let y = 0; y < H; y += 128) ge.fillRect(x - 4, y, 8, 84);
+    else ge.fillRect(x - 3, 0, 6, H);   // (the elemental look, 18 Oct 2026: thin unbroken lines of light)
   }
   const map = new THREE.CanvasTexture(c);
   const emi = new THREE.CanvasTexture(e);
@@ -144,21 +146,22 @@ function floorTextures() {
   return { map, emi };
 }
 const floorTex = floorTextures();
-const floorMat = new THREE.MeshStandardMaterial({ map: floorTex.map, emissive: '#ffffff', emissiveMap: floorTex.emi, emissiveIntensity: 0.9, roughness: 0.32, metalness: 0.15 });
+const floorMat = new THREE.MeshStandardMaterial({ map: floorTex.map, emissive: '#ffffff', emissiveMap: floorTex.emi, emissiveIntensity: 1.0, roughness: 0.28, metalness: 0.2 });   // (dark glossy graphite)
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(WIDTH, LEN), floorMat);
 floor.rotation.x = -Math.PI / 2;
 floor.position.set(0, 0, BEHIND - LEN / 2);
 floor.receiveShadow = true;
 trk.add(floor);
-// the side walls with a glowing rail along their tops, and the slide's underside (it hangs in the air)
+// the slide's low kerbs with a line of light along their tops (the elemental look: the world beside it stays in view),
+// and the slide's underside (it hangs in the air)
 const wallMat = new THREE.MeshStandardMaterial({ color: '#241a44', roughness: 0.45, metalness: 0.35 });
-const railMat = new THREE.MeshStandardMaterial({ color: '#ffb347', emissive: '#ff9d2e', emissiveIntensity: 1.6, roughness: 0.4 });
+const railMat = new THREE.MeshStandardMaterial({ color: '#ffb347', emissive: '#ff9d2e', emissiveIntensity: 1.8, roughness: 0.4 });
 for (const s of [-1, 1]) {
-  const wall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.5, LEN), wallMat);
-  wall.position.set(s * (WIDTH / 2 + 0.25), 0.55, BEHIND - LEN / 2);
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, LEN), wallMat);
+  wall.position.set(s * (WIDTH / 2 + 0.25), 0.05, BEHIND - LEN / 2);
   wall.castShadow = wall.receiveShadow = true;
-  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, LEN), railMat);
-  rail.position.set(s * (WIDTH / 2 + 0.25), 1.36, BEHIND - LEN / 2);
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.07, LEN), railMat);
+  rail.position.set(s * (WIDTH / 2 + 0.25), 0.33, BEHIND - LEN / 2);
   trk.add(wall, rail);
 }
 const under = new THREE.Mesh(new THREE.BoxGeometry(WIDTH + 1, 0.9, LEN), wallMat);
@@ -168,14 +171,18 @@ trk.add(under);
 const LAMP_SP = 9;
 const LAMPS = Math.ceil(LEN / LAMP_SP) + 1;
 const lampMat = new THREE.MeshStandardMaterial({ color: '#fff3d1', emissive: '#ffd27a', emissiveIntensity: 2.2 });
-const lamps = new THREE.InstancedMesh(new THREE.BoxGeometry(0.34, 0.5, 0.34), lampMat, LAMPS * 2);
+// (beacons: a slim post, a glowing ball on top)
+const lamps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 12, 8), lampMat, LAMPS * 2);
+const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.1, 0.62, 8), wallMat, LAMPS * 2);
 const STRUT_SP = 36;
 const STRUTS = Math.ceil(LEN / STRUT_SP) + 1;
 const struts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.55, 0.9, 60, 8), wallMat, STRUTS * 2);
-lamps.frustumCulled = struts.frustumCulled = false;
-trk.add(lamps, struts);
+lamps.frustumCulled = posts.frustumCulled = struts.frustumCulled = false;
+trk.add(lamps, posts, struts);
 /** The worlds (worlds.js): every 600 m another, the slide, the light, the ground below and the air turning with it. */
 const worlds = createWorlds(scene, trk, { floor: floorMat, wall: wallMat, rail: railMat, lamp: lampMat });
+/** The world beside the slide (scenery.js): floating islands of the four elements rushing past. */
+const scenery = createScenery(trk, { behind: BEHIND, len: LEN, half: WIDTH / 2 });
 const m4 = new THREE.Matrix4();
 const v3 = new THREE.Vector3();
 const qId = new THREE.Quaternion();
@@ -186,9 +193,12 @@ function rushPast(d) {
   const b = d % LAMP_SP;
   for (let k = 0; k < LAMPS; k++) {
     const z = BEHIND - (k * LAMP_SP - b);
-    for (const s of [0, 1]) lamps.setMatrixAt(k * 2 + s, m4.compose(v3.set((s ? 1 : -1) * (WIDTH / 2 + 0.25), 1.68, z), qId, one));
+    for (const s of [0, 1]) {
+      lamps.setMatrixAt(k * 2 + s, m4.compose(v3.set((s ? 1 : -1) * (WIDTH / 2 + 0.25), 0.98, z), qId, one));
+      posts.setMatrixAt(k * 2 + s, m4.compose(v3.set((s ? 1 : -1) * (WIDTH / 2 + 0.25), 0.6, z), qId, one));
+    }
   }
-  lamps.instanceMatrix.needsUpdate = true;
+  lamps.instanceMatrix.needsUpdate = posts.instanceMatrix.needsUpdate = true;
   const bs = d % STRUT_SP;
   for (let k = 0; k < STRUTS; k++) {
     const z = BEHIND - (k * STRUT_SP - bs);
@@ -400,7 +410,7 @@ const nextSign = SW ? new THREE.Sprite(nextSigns.water) : null;
 if (nextSign) { nextSign.scale.setScalar(0.85); nextSign.renderOrder = 21; nextSign.visible = false; trk.add(nextSign); }
 const pools = new Map();
 /** A hazard's look: water lies low as a whirlpool or stands as a waterfall, fire as lava or a fire; vines; a boulder. */
-const lookOf = (type, low) => (type === 'water' ? (low ? 'whirl' : 'fall') : type === 'vuur' ? (low ? 'lava' : 'fire') : VARIANTS[type]?.[0] || 'rock');
+const lookOf = (type, low) => (type === 'water' ? (low ? 'pool' : 'glass') : type === 'vuur' ? (low ? 'molten' : 'swirl') : VARIANTS[type]?.[0] || 'basalt');
 function hazardMesh(type, look) {
   const key = `${type}:${look}`;
   let g = pools.get(key)?.pop();
@@ -462,6 +472,11 @@ function coinTexture() {
   return t;
 }
 const coinMat = new THREE.SpriteMaterial({ map: coinTexture(), depthWrite: false, fog: true });
+/** The rare diamond (one on the slide at a time): the track hangs it where only a perfect jump reaches. */
+const gemMesh = makeDiamond();
+gemMesh.visible = false;
+const GEM_Y = 3;        // (m) over the slide: his chest at the top of a jump
+const GEM_JUMP = 1.9;   // (m) how high in his jump he must be to take it
 const coinPool = [];
 const coinMesh = () => { const m = coinPool.pop() || new THREE.Sprite(coinMat); m.scale.set(1.2, 1.2, 1); trk.add(m); m.visible = true; return m; };
 const freeCoin = (m) => { trk.remove(m); coinPool.push(m); };
@@ -732,7 +747,7 @@ function startRun() {
   G.state = 'run';
   G.paused = false;
   G.d = 0; G.t = 0; G.timeScale = 1;
-  G.coins = 0; G.bars = 0; G.perfects = 0; G.jumps = 0; G.holding = false; G.bags = 0; G.closes = 0;
+  G.coins = 0; G.bars = 0; G.perfects = 0; G.jumps = 0; G.holding = false; G.bags = 0; G.closes = 0; G.gems = 0;
   G.settled = false; G.missionsDone = []; G.mcheck = 0;
   G.blindUntil = 0; G.why = null; G.nextSpeedUp = 500; G.recordAt = 0; G.coinRun = 0; G.coinAt = -9;
   G.combo = 0; G.bestCombo = 0; G.smashes = 0; G.stumbles = 0; G.stumbledAt = -9; G.switches = 0; G.saves = 0; G.pend = null; G.freezeUntil = 0;
@@ -756,6 +771,7 @@ function addRow(row) {
   const r = { ...row, cells: row.cells.map((c) => ({ ...c, mesh: hazardMesh(c.type, c.look || lookOf(c.type, c.low)), done: false })), coins: row.coins.map((c) => ({ ...c, mesh: coinMesh(), done: false })), done: false };
   if (row.kind === 'bar' || row.kind === 'wall') r.barrier = makeBarrier(row);
   if (row.item) { r.item = { ...row.item, done: false }; trk.add(itemMesh); itemMesh.visible = true; }
+  if (row.gem) { r.gem = { ...row.gem, done: false }; trk.add(gemMesh); gemMesh.visible = true; }
   rows.push(r);
 }
 function dropRow(r) {
@@ -763,6 +779,7 @@ function dropRow(r) {
   for (const c of r.coins) freeCoin(c.mesh);
   if (r.barrier) freeBarrier(r.barrier);
   if (r.item && itemMesh.parent) trk.remove(itemMesh);
+  if (r.gem && gemMesh.parent) trk.remove(gemMesh);
 }
 
 /** How far a thing he is past has sunk back into the slide (seen from high over him, what's behind him would otherwise
@@ -798,6 +815,11 @@ function placeRows(time) {
       itemMesh.rotation.y = time * 2;
       itemMesh.rotation.x = time * 1.3;
     }
+    if (r.gem && !r.gem.done) {
+      const gs = r.gem.at - G.d;
+      gemMesh.position.set(LX(r.gem.lane), GEM_Y + y0 - sunk(gs, 1, 4) + Math.sin(time * 2.6) * 0.08, -gs);
+      gemMesh.rotation.y = time * 1.7;
+    }
   }
 }
 
@@ -831,6 +853,19 @@ function step(dt) {
         sfx('room', { n: G.coinRun });
         const cy = c.high ? 2.6 : 1.25;
         if (!calm) { fx.sparkle(trk.localToWorld(v3.set(LX(c.lane), cy, 0)), 8, '#ffd46a', 4); flyCoin(toScreen(v3.set(LX(c.lane), cy, 0))); }
+      }
+    }
+    // the diamond: only a jump at its height takes it (the owner: "needs to be hard and scarse")
+    if (r.gem && !r.gem.done && r.gem.at - G.d <= 0.4) {
+      r.gem.done = true;
+      if (r.gem.lane === G.lane && G.state === 'run' && h > GEM_JUMP) {
+        G.gems++;
+        gemMesh.visible = false;
+        callout(T.gem, new THREE.Vector3(LX(r.gem.lane), 3.8, -1), 'is-gold');
+        sfx('rainbow');
+        sfx('perfect', { combo: 6 });
+        buzz('perfect');
+        if (!calm) fx.sparkle(trk.localToWorld(v3.set(LX(r.gem.lane), GEM_Y, 0)), 46, '#cfefff', 10);
       }
     }
     if (r.item && !r.item.done && r.item.at - G.d <= 0.4) {
@@ -1082,7 +1117,7 @@ function gameOver() {
   modal(`<div class="bt-res gl-res"><small>${T.title}</small><h2>${record ? T.record : T.over}</h2>
     <p>${G.why || ''}</p><p class="gl-big">${T.slid(metres(dist))}</p>
     <dl><div><dt>${T.coins}</dt><dd>${fmtInt(G.coins)}</dd></div><div><dt>${T.bars}</dt><dd>${G.bars}</dd></div>
-    <div><dt>${T.perfects}</dt><dd>${G.perfects}</dd></div><div><dt>${T.xp}</dt><dd>+${fmtInt(s.gained)}</dd></div></dl>
+    <div><dt>${T.perfects}</dt><dd>${G.perfects}</dd></div><div><dt>${T.xp}</dt><dd>+${fmtInt(s.gained)}</dd></div>${prog.gems ? `<div><dt>${T.gems}</dt><dd>${G.gems} <small>· ${fmtInt(prog.gems)}</small></dd></div>` : ''}</dl>
     ${wallet ? `<p class="gl-wallet"><i class="coin-ic" aria-hidden="true"></i> ${wallet}</p>` : ''}
     ${levelBar(s.after, s.before)}
     ${s.levels.length ? `<p class="gl-lvup">${T.levelUp(s.after.level)} <b>${T.plusCoins(fmtInt(up))}</b></p>` : ''}
@@ -1152,7 +1187,8 @@ function finishRun() {
   const next = prog.missions.map((m) => (m.done ? null : m));
   for (let i = 0; i < next.length; i++) if (!next[i]) next[i] = newMission(Math.random, next.filter(Boolean).map((x) => x.kind), prog.mdone);
   prog.missions = next;
-  keep({ xp: prog.xp, level: after.level, missions: prog.missions, mdone: prog.mdone });
+  prog.gems = Math.min(1e6, prog.gems + (G.gems || 0));
+  keep({ xp: prog.xp, level: after.level, missions: prog.missions, mdone: prog.mdone, gems: prog.gems });
   return { paid, gained, before, after, levels, done: G.missionsDone.slice() };
 }
 
@@ -1175,12 +1211,15 @@ function showStart() {
     <p class="gl-lab">${T.pickMan}</p><div class="gl-row">${ELEMENTS.map(manBtn).join('')}</div>
     <p class="gl-rules">${SW ? T.rulesSw : T.rules(kill, blindEl, element)}</p>
     <p class="gl-how">${SW ? T.howSw : T.how}</p>
+    <p class="gl-swt"><button class="gl-swtb" type="button">${SW ? T.swOff : T.swOn}</button></p>
     ${best ? `<p class="gl-bestline">${T.best(metres(best))}</p>` : ''}
     ${levelBar(levelOf(prog.xp))}
     <p class="gl-lab">${T.missions}</p>${missionRows(prog.missions)}
     <button class="bt-ok gl-go" type="button">${T.go}</button><button class="bt-home" type="button">${T.toStapel}</button></div>`, {
     '[data-el]': (e) => { const pick = e.currentTarget.dataset.el; if (pick !== element) { element = pick; save(); makeRunner(); } sfx('click'); showStart(); },
     '.gl-go': () => { audio.unlock(); startRun(); },
+    // (the switch test from the app too, where there's no address bar for ?switch=1)
+    '.gl-swtb': () => { const u = new URL(location.href); if (SW) u.searchParams.delete('switch'); else u.searchParams.set('switch', '1'); location.replace(u.toString()); },
     '.bt-home': () => goBack(),
   });
   el.best.textContent = best ? T.best(metres(best)) : '';
@@ -1341,7 +1380,8 @@ function trailVisual(dt) {
  * the slide rises away to the top of the screen, he runs high on it towards you, and what comes rises from the bottom (the
  * bottom 30% that steam, ash or vines cloud). No roll and no swing; a little further back as it gets faster, to see more.
  */
-const VIEW = Object.freeze({ angle: 70 * Math.PI / 180, dist: 34, fov: 44, look: 8 });
+// (fov 50 since the elemental look, 18 Oct 2026: the same angle, a little more of the world beside the slide)
+const VIEW = Object.freeze({ angle: 70 * Math.PI / 180, dist: 34, fov: 50, look: 8 });
 function cameraVisual(dt) {
   const k = Math.min(1, Math.max(0, (G.v - 15) / 25));
   // (the whole slide in the picture with sea on both sides: the camera follows him only a little)
@@ -1378,6 +1418,7 @@ function frame(now) {
   else if (G.state === 'dying') { G.d += speedAt(G.d) * dt * 0.4; G.timeScale = Math.min(1, G.timeScale + raw * 0.5); }
   else if (G.state === 'start' || G.state === 'over') { G.v = 7; G.d += 7 * raw; }   // (the slide idles under the cards)
   rushPast(G.d);
+  scenery.update(G.d, time);
   placeRows(time);
   hz.update(time, camera, renderer.domElement.height);
   outlineMats.kill.opacity = 0.72 + 0.26 * Math.sin(time * 6);
@@ -1447,7 +1488,7 @@ window.__gly = {
     clearRows();
     hud.classList.remove('is-running');
     G.state = 'show';
-    const looks = [['water', 'whirl'], ['water', 'fall'], ['vuur', 'fire'], ['vuur', 'lava'], ['gras', 'vines'], ['stone', 'rock']];
+    const looks = [['water', 'pool'], ['water', 'glass'], ['vuur', 'swirl'], ['vuur', 'molten'], ['gras', 'cage'], ['stone', 'basalt']];
     addRow({ at: G.d + 8, kind: 'hazards', n: 0, coins: [], cells: looks.slice(0, 4).map(([type, look], lane) => ({ lane, type, look })) });
     addRow({ at: G.d + 17, kind: 'hazards', n: 1, coins: [], cells: looks.slice(4).map(([type, look], i) => ({ lane: i + 1, type, look })) });
   },
