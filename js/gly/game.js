@@ -11,6 +11,7 @@ import { createStage } from '../kasteel/stage.js';
 import { buildWorld, SUN_DIR } from '../botsing/world.js';
 import { createPieces } from '../botsing/pieces.js';
 import { createRunFx } from './fx.js';
+import { createHazards, VARIANTS } from './hazards.js';
 import { audio, haptics } from '../audio.js';
 import { fmtInt } from '../core/format.js';
 import { T, PREFS, goBack, EMOJI } from './text.js';
@@ -178,65 +179,53 @@ function makeBlock() {
 const fill = new THREE.DirectionalLight('#fff0dc', 1.15);
 fill.position.set(0, 60, -45);
 trk.add(fill, fill.target);
-/** A hazard: a Stapel block in its element's skin (lava, ice, moss, stone) with its emblem, and its sign over it. */
-const HAZARD_SKIN = { stone: 'klip', vuur: 'lawa', water: 'ys', gras: 'mos' };
+/** A hazard: a piece of its element's nature (hazards.js: a whirlpool or a waterfall, a fire pit or lava, thorny vines, a
+ *  boulder), with a ring on the floor in what it does to you. */
+const hz = createHazards();
 /** What a hazard does to you, at a glance: red ends the run, amber clouds your view, green is yours (safe). */
 const EFFECT_COL = { kill: '#ff3b30', blind: '#ffe14a', safe: '#3fdc6a' };
-const signMats = {};
-/** A hazard's sign: its element (or stone) on a dark disc ringed in what it does to you. */
-function signMat(type, eff = null) {
-  const key = `${type}:${eff}`;
-  if (signMats[key]) return signMats[key];
+/** The ✨'s halo: the sparkle on a soft dark disc. */
+function itemHaloMat() {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const g = c.getContext('2d');
-  if (eff) {
-    g.beginPath();
-    g.arc(64, 64, 56, 0, Math.PI * 2);
-    g.fillStyle = 'rgba(20,12,36,0.82)';
-    g.fill();
-    g.lineWidth = 9;
-    g.strokeStyle = EFFECT_COL[eff];
-    g.stroke();
-  }
-  g.font = `${eff ? 70 : 96}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+  g.font = '96px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText(type === 'item' ? '✨' : EMOJI[type], 64, eff ? 68 : 70);
+  g.fillText('✨', 64, 70);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  return (signMats[key] = new THREE.SpriteMaterial({ map: t, depthWrite: false, fog: true }));
+  return new THREE.SpriteMaterial({ map: t, depthWrite: false, fog: true });
 }
-const ringGeo = new THREE.RingGeometry(1.25, 1.7, 40).rotateX(-Math.PI / 2);
-const ringMats = Object.fromEntries(Object.entries(EFFECT_COL).map(([k, c]) => [k, new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false })]));
+// (true colours on the blue floor: drawn over it, not added to it; just inside the lane, so two side by side don't meet)
+const ringGeo = new THREE.RingGeometry(1.2, 1.32, 48).rotateX(-Math.PI / 2);
+const ringMats = Object.fromEntries(Object.entries(EFFECT_COL).map(([k, c]) => [k, new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.9, depthWrite: false })]));
 const pools = new Map();
-function hazardMesh(type) {
-  const list = pools.get(type) || [];
-  let g = list.pop();
+/** A row's lane picks the look of its element (the same track, the same looks). */
+const lookFor = (type, n, lane) => { const v = VARIANTS[type] || VARIANTS.stone; return v[(n * 3 + lane * 5 + (n >> 2)) % v.length]; };
+function hazardMesh(type, look) {
+  const key = `${type}:${look}`;
+  let g = pools.get(key)?.pop();
   if (!g) {
-    g = pieces.block('cube', 1, type === 'stone' ? null : type, HAZARD_SKIN[type]);
-    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-    const sign = new THREE.Sprite(signMat(type, 'kill'));
-    sign.scale.set(2.1, 2.1, 1);
-    sign.position.set(0, 2.75, 0);
+    g = hz.make(type, look);
     const ring = new THREE.Mesh(ringGeo, ringMats.kill);
-    ring.position.set(0, -1.16, 0);
-    g.add(sign, ring);
-    g.userData = { ...g.userData, type, sign, ring };
+    ring.position.y = 0.03;
+    ring.renderOrder = 2;
+    g.add(ring);
+    g.userData.ring = ring;
+    g.userData.key = key;
   }
-  // (what it does to this run's block: the sign's ring and the glow under it)
-  const eff = effectOf(element, type);
-  g.userData.sign.material = signMat(type, eff);
-  g.userData.ring.material = ringMats[eff];
+  g.userData.ring.material = ringMats[effectOf(element, type)];
+  g.scale.setScalar(1);
   g.visible = true;
   trk.add(g);
   return g;
 }
 function freeHazard(g) {
   trk.remove(g);
-  const type = g.userData.type;
-  if (!pools.has(type)) pools.set(type, []);
-  pools.get(type).push(g);
+  const key = g.userData.key;
+  if (!pools.has(key)) pools.set(key, []);
+  pools.get(key).push(g);
 }
 /** (the owner, 18 Oct: "can you make it the same look as the coins in the menu") Stapel's own gold coin (css .coin-ic): a
  *  gold face, a darker ring, a gleam and the star. */
@@ -273,7 +262,7 @@ const coinPool = [];
 const coinMesh = () => { const m = coinPool.pop() || new THREE.Sprite(coinMat); m.scale.set(1.5, 1.5, 1); trk.add(m); m.visible = true; return m; };
 const freeCoin = (m) => { trk.remove(m); coinPool.push(m); };
 const itemMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.62, 0), new THREE.MeshStandardMaterial({ color: '#bff7ff', emissive: '#58e6ff', emissiveIntensity: 2.4, roughness: 0.2 }));
-const itemHalo = new THREE.Sprite(signMat('item'));
+const itemHalo = new THREE.Sprite(itemHaloMat());
 itemHalo.scale.set(1.9, 1.9, 1);
 itemMesh.add(itemHalo);
 const gateMat = new THREE.MeshStandardMaterial({ color: '#2b2160', emissive: '#3b2c8f', emissiveIntensity: 0.45, roughness: 0.15, metalness: 0.3, transparent: true, opacity: 0.8 });
@@ -452,7 +441,7 @@ function startRun() {
 
 /** A row comes into the chute: its things from the pools. */
 function addRow(row) {
-  const r = { ...row, cells: row.cells.map((c) => ({ ...c, mesh: hazardMesh(c.type), done: false })), coins: row.coins.map((c) => ({ ...c, mesh: coinMesh(), done: false })), done: false };
+  const r = { ...row, cells: row.cells.map((c) => ({ ...c, mesh: hazardMesh(c.type, c.look || lookFor(c.type, row.n, c.lane)), done: false })), coins: row.coins.map((c) => ({ ...c, mesh: coinMesh(), done: false })), done: false };
   if (row.kind === 'gate') r.gate = makeGate(row.hole);
   if (row.item) { r.item = { ...row.item, done: false }; trk.add(itemMesh); itemMesh.visible = true; }
   rows.push(r);
@@ -475,7 +464,7 @@ function placeRows(time) {
     const y0 = -3.2 * rise;
     const down = r.hit ? 0 : sunk(s, 1.5, 4.5);
     for (const c of r.cells) {
-      c.mesh.position.set(LX(c.lane), 1.2 + y0 - down, -s);
+      c.mesh.position.set(LX(c.lane), y0 - down, -s);
     }
     for (const c of r.coins) {
       const cs = c.at - G.d;
@@ -566,10 +555,11 @@ function meet(r) {
     const at = trk.localToWorld(v3.set(LX(c.lane), 1.2, 0)).clone();
     if (eff === 'kill') { r.hit = true; die(c.type === 'stone' ? 'stone' : 'kill', c.type, c); return; }
     c.done = true;
-    c.mesh.visible = false;
     if (eff === 'blind') {
+      // (what you beat is gone: water puts the fire out, fire burns the vines to ash, the vines drink the water)
+      c.mesh.visible = false;
       blind(c.type);
-      if (!calm) { fx.puff(at, 16, PUFF[c.type]); fx.chunks(at, 8, BLOCK_COL[c.type], 7); }
+      if (!calm) { fx.puff(at, 18, PUFF[c.type]); fx.sparkle(at, 14, BLOCK_COL[c.type], 6); }
     } else if (c.bag) {
       // a bag of coins in your own element's block (the owner: "it might get coins, but its random")
       G.coins += c.bag;
@@ -832,6 +822,8 @@ function frame(now) {
   else if (G.state === 'start' || G.state === 'over') { G.v = 7; G.d += 7 * raw; }   // (the chute idles under the cards)
   rushPast(G.d);
   placeRows(time);
+  hz.update(time, camera, renderer.domElement.height);
+  ringMats.kill.opacity = 0.72 + 0.26 * Math.sin(time * 6);
   blockVisual(dt || raw * 0.0001);
   cameraVisual(raw);
   world.update(time);
@@ -845,7 +837,7 @@ function frame(now) {
   makeBlock();
   // every shader and every painted skin ready behind the loading screen (no stall on the first hazard or gate)
   const warm = [];
-  for (const t of ['stone', 'vuur', 'water', 'gras']) { const g = hazardMesh(t); warm.push(g); }
+  for (const [t, looks] of Object.entries(VARIANTS)) for (const l of looks) warm.push(hazardMesh(t, l));
   const gate = makeGate({ lane: 1, w: 2, h: 1 });
   await stage.warm([]);
   for (const g of warm) freeHazard(g);
@@ -868,6 +860,17 @@ window.__gly = {
   taken,
   /** Where the block is on the screen (CSS px). */
   blockAt: () => toScreen(blockGroup.position),
+  /** (pictures) every look of every element side by side, still: the whirlpool, the waterfall, fire, lava; vines, a boulder. */
+  showcase: () => {
+    closeModal();
+    clearBag();
+    clearRows();
+    hud.classList.remove('is-running');
+    G.state = 'show';
+    const looks = [['water', 'whirl'], ['water', 'fall'], ['vuur', 'fire'], ['vuur', 'lava'], ['gras', 'vines'], ['stone', 'rock']];
+    addRow({ at: G.d + 8, kind: 'hazards', n: 0, coins: [], cells: looks.slice(0, 4).map(([type, look], lane) => ({ lane, type, look })) });
+    addRow({ at: G.d + 17, kind: 'hazards', n: 1, coins: [], cells: looks.slice(4).map(([type, look], i) => ({ lane: i + 1, type, look })) });
+  },
   /** A bag's pop over the block (the bag rule itself is the track's: rules.js). */
   popBag: (n) => popBag(n, new THREE.Vector3(G.x, 2.6, 0)),
 };
