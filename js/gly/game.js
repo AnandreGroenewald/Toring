@@ -591,6 +591,7 @@ const G = {
   d: 0, v: 0, t: 0, timeScale: 1,
   lane: 1, x: LX(1), xv: 0, tumble: null,
   jumpT: -1, slideT: -1, slideAfter: false,   // (time into a jump or a slide; a slide asked for in the air comes on landing)
+  squash: 0,                 // (a cartoon's give: + squashed as he lands, - stretched as he springs)
   coins: 0, bars: 0, perfects: 0, jumps: 0, bags: 0, closes: 0, holding: false,
   blindUntil: 0, blindKind: '',
   why: null, nextSpeedUp: 500,
@@ -610,7 +611,9 @@ function resetRunner() {
   G.tumble = null;
   G.jumpT = G.slideT = -1;
   G.slideAfter = false;
+  G.squash = 0;
   if (!runner) makeRunner();
+  runner.root.scale.setScalar(MAN);
   runner.root.position.set(G.x, 0, 0);
   runner.root.rotation.set(0, 0, 0);
   runner.root.visible = true;
@@ -712,6 +715,7 @@ function step(dt) {
   // a jump's arc and a slide run their time (a slide asked for in the air comes as he lands)
   if (G.jumpT >= 0 && (G.jumpT += dt) >= JUMP.time) {
     G.jumpT = -1;
+    G.squash = 1;
     sfx('land');
     if (!calm) fx.puff(trk.localToWorld(v3.set(G.x, 0.2, 0.3)), 5, DUST[element], 1.2);
     if (G.slideAfter) { G.slideAfter = false; startSlide(); }
@@ -1051,6 +1055,7 @@ function jump() {
   G.slideT = -1;
   G.slideAfter = false;
   G.jumpT = 0;
+  G.squash = -0.8;
   G.movedAt = performance.now();
   sfx('fling');
   buzz('tap');
@@ -1123,6 +1128,13 @@ function runnerVisual(dt) {
   G.x += G.xv * dt;
   const h = airH();
   R.position.set(G.x, h, 0);
+  // squash and stretch: he gives as he lands, stretches as he springs (and it settles fast)
+  if (!calm && G.squash) {
+    const s = G.squash;
+    R.scale.set(MAN * (1 + 0.14 * s), MAN * (1 - 0.2 * s), MAN * (1 + 0.14 * s));
+    G.squash *= Math.exp(-dt * 11);
+    if (Math.abs(G.squash) < 0.01) { G.squash = 0; R.scale.setScalar(MAN); }
+  }
   const mode = G.state === 'run' ? (G.jumpT >= 0 ? 'jump' : G.slideT >= 0 ? 'slide' : 'run') : G.state === 'show' ? 'idle' : 'run';
   runner.update(dt, { mode, speed: G.state === 'run' ? G.v : 6, lean: G.xv, time });
   shadow.visible = true;
