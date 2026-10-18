@@ -1267,6 +1267,13 @@ Later the owner added (decisions are final unless they say otherwise):
   `audio.music`) builds with the run. Missions (three at a time) and levels pay coins; your best is a gold line on the
   slide; WEER goes straight back in. Tests: npm test 477, check-all quick, qa/gly1190 (three men), gly_nonsense1190,
   gly_wallet1190, gly_perf1190, gly_webkit1190, the built site. A 75 s play-through with sound in Previews.
+- **18 Oct 2026 (night): Glybaan's hazards fill their lane (ef2a5aa + 687e28d; still 1.19.0, rebuilt; nothing live).** The
+  owner after playing: "the rock does not fit, the round obstacles feels fake ... Then the walls is really good". Every
+  hazard is now the lane's own shape inside a rounded-rectangle outline (red = out, yellow = you see badly, green = your
+  own): a whirlpool filling its lane, a curtain of water between two stones, a trench of coals with flames, a lava bed, a
+  hedge of thorny vines, and a dry-stone wall in the gates' own stone (too tall to jump). Speelreëls says "Rooi: uit".
+  Tests: npm test 477, qa/gly1190 (three men), gly_nonsense1190, gly_wallet1190, gly_perf1190, gly_webkit1190, the built
+  site; pictures in the real camera: qa/gly_hazards1190.mjs. The app bundle (1.19.0 / 11900) rebuilt in the Play folder.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
