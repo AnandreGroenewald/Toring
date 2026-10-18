@@ -125,3 +125,14 @@
 /* the end card's "pick another man": as its neighbour ‹ Stapel (dark glass) */
 .gl-change { width: 100%; height: 46px; border-radius: 15px; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.06); color: #fff; font: inherit; font-size: 14px !important; font-weight: 800 !important; cursor: pointer; }
 .gl-change:active, .bt-home:active { transform: translateY(1px); }
+/* (small phones: the game keeps its phone shape, ~296 px wide on a 360 x 640 screen; everything on the cards shrinks to fit) */
+.gl .bt-modal { padding: 12px; }
+.bt-modal > .gl-start, .bt-modal > .gl-res { padding-left: 14px; padding-right: 14px; }
+.gl-row { grid-auto-columns: minmax(0, 1fr) !important; }
+.gl-man { min-width: 0; }
+.gl-man img { width: 100%; max-width: 74px; height: auto; aspect-ratio: 1; }
+.gl-man b { font-size: 13px; }
+.gl-res dl { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+.gl-res dl dd { font-size: 17px !important; }
+.gl-missions li { min-width: 0; }
+.gl-missions li span { min-width: 0; overflow-wrap: anywhere; }
