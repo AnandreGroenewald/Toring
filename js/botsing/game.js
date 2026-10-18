@@ -1552,12 +1552,31 @@ function showInvite(code) {
     '.bt-home': () => goBack(),
   });
 }
+/** A battle against Robot Rikus: this page without the friend's room. */
+function rikusUrl() {
+  const u = new URL(location.href);
+  u.search = '';
+  return u.toString();
+}
+/**
+ * (18 Oct) A friend's link to a room that isn't open (an old invite, the host closed the game, a code typed wrong, both
+ * seats taken): said plainly, with Robot Rikus or Stapel. No battle was played, so none is counted (before: "GELYKOP,
+ * Vriend het die geveg verlaat").
+ */
+function roomGone() {
+  G.over = true;
+  G.modal = 'roomgone';
+  hud.modal(`<div class="bt-tip"><small>${T.title}</small><p>${T.roomGone}</p><button class="bt-ok bt-rikus" type="button">${T.playRikus}</button><button class="bt-home" type="button">${T.toStapel}</button></div>`, {
+    '.bt-rikus': () => { location.href = rikusUrl(); },
+    '.bt-home': () => goBack(),
+  });
+}
 async function friendSetup() {
   const net = createSlagNet({ api: matchApiUrl() });
   let code = FRIEND_CODE;
   if (FRIEND_HOST) {
     code = await net.create();
-    if (!code) { G.modal = 'noserver'; hud.modal(`<div class="bt-tip"><small>${T.title}</small><p>${T.noServer}</p><button class="bt-home" type="button">${T.toStapel}</button></div>`, { '.bt-home': () => goBack() }); return; }
+    if (!code) { G.modal = 'noserver'; hud.modal(`<div class="bt-tip"><small>${T.title}</small><p>${T.noServer}</p><button class="bt-ok bt-rikus" type="button">${T.playRikus}</button><button class="bt-home" type="button">${T.toStapel}</button></div>`, { '.bt-rikus': () => { location.href = rikusUrl(); }, '.bt-home': () => goBack() }); return; }
     showInvite(code);
   } else {
     G.modal = 'joining';
@@ -1566,7 +1585,7 @@ async function friendSetup() {
   conn = net.connect(code);
   const ready = await Promise.race([conn.ready, conn.gone]);
   const closeCard = () => { G.modal = null; hud.closeModal(); };
-  if (ready && ready.t === 'gone') { closeCard(); friendGone(); return; }
+  if (ready && ready.t === 'gone') { closeCard(); if (FRIEND_HOST) friendGone(); else roomGone(); return; }
   conn.send({ t: 'hello', name: myName, bonus: myBonus, seed: SEED, skin: mySkin });
   const hi = await conn.next(['hello']);
   if (hi.t === 'gone') { closeCard(); friendGone(); return; }

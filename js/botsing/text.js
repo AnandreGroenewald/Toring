@@ -112,6 +112,9 @@ const AF = {
   waText: (link) => `Kom speel Blokbotsing teen my! ⚔️ Gooi my kroon in die see as jy kan: ${link}`,
   joining: 'Sluit aan by die geveg…',
   noServer: 'Die geveg-bediener is nie nou bereikbaar nie. Probeer weer, of speel teen Robot Rikus.',
+  // (18 Oct: a friend's link to a room that isn't open: an old invite, the host closed the game, a code typed wrong)
+  roomGone: 'Hierdie uitnodiging is nie meer oop nie: jou vriend het dalk die spel toegemaak. Vra vir ’n nuwe skakel, of speel teen Robot Rikus.',
+  playRikus: 'SPEEL TEEN RIKUS',
   loading: 'Die torings word gebou…',
   rotate: 'Draai jou foon regop om te speel.',
 };
@@ -224,6 +227,8 @@ const EN = {
   waText: (link) => `Come play Block Clash against me! ⚔️ Knock my crown into the sea if you can: ${link}`,
   joining: 'Joining the battle…',
   noServer: 'The battle server can’t be reached right now. Try again, or play Robot Rikus.',
+  roomGone: 'This invite isn’t open any more: your friend may have closed the game. Ask for a new link, or play Robot Rikus.',
+  playRikus: 'PLAY RIKUS',
   loading: 'Building the towers…',
   rotate: 'Turn your phone upright to play.',
 };
