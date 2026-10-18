@@ -1204,6 +1204,16 @@ Later the owner added (decisions are final unless they say otherwise):
     mission names only windows the sender knows are lived in (0fd4492; the live two-phone check had failed 4 runs in 5).
   - In the end every check of check-all.sh full passed (re-runs after the disk, another terminal's emulator and the fixes);
     speed on a 4x slower phone: the 3D town and Block Clash at 60 fps; WebKit OK. Home play restarted for his phone.
+- **18 Oct 2026 (~14:00–15:30): Block Clash off; Glybaan, the downhill four-lane runner (a playable test, local 346df23;
+  not on the menu, not in the website or app builds).** The owner: Block Clash "Its not working ... The gameplay will be a
+  slide going downwards and also it needs to be four lanes"; his picks: the runner replaces Block Clash, four lanes, a 3D
+  chute with the camera behind, a playable test of the core first (no economy yet).
+  - config `BOTSING.on` false (4e525fb): Block Clash's menu button, Uitdagersreeks cards and how-to line are gone;
+    botsing.html stays for old links. The 1.18.0 Play notes no longer announce it.
+  - glybaan.html (js/gly/): swipe for a lane, tap to turn, swipe up with a ✨; Stapel's circle of elements (what beats you
+    ends the run, what you beat clouds the bottom 30%, your own is safe), stone, Shadow Gates; always faster. Rules in
+    js/gly/rules.js with tests/gly.test.js; played by qa/gly1190's autopilot, 60 fps on a 4x slower phone, WebKit OK.
+  - His phone on the home Wi-Fi: http://192.168.1.225:8500/glybaan.html?nosw=1.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
