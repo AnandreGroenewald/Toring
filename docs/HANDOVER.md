@@ -1276,6 +1276,11 @@ Later the owner added (decisions are final unless they say otherwise):
   site; pictures in the real camera: qa/gly_hazards1190.mjs. The app bundle (1.19.0 / 11900) rebuilt in the Play folder.
 <!-- STATUS-END -->
 
+### 18 Oct 2026 ~23:30 · Glybaan switch test + the test fixes (f3fb495, local, nothing live)
+The owner asked for the element-switch feel test and the three fixes from the Game Tester's report. `glybaan.html?switch=1`
+turns the switch on (off by default); the badges, the ✨ button and the mission note apply to everyone. Details and tests:
+the stapel skill's changelog. The Play bundle in the Play folder is still 687e28d.
+
 ## 3. Remaining work, in order
 
 <!-- TODO-START -->
