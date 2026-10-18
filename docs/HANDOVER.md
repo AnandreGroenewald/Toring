@@ -1246,6 +1246,12 @@ Later the owner added (decisions are final unless they say otherwise):
   makes each hazard a piece of nature in its own shader: water a whirlpool or a waterfall, fire a fire pit or a lava pool,
   grass thorny vines, stone a boulder; the rules are unchanged. The ring under each shows what it does to you in true
   red, yellow or green. Tests: npm test 475; qa/gly1190, gly_nonsense1190, gly_perf1190 (60 fps on a 4x slower phone).
+- **18 Oct 2026 (~18:40–19:15): Glybaan, fifth round: the details (local a7415a2).** The owner: "make sure its 110%".
+  Your block leaves a trail of its element; picked-up coins fly to the counter and a row of them climbs the scale; the
+  Shadow Gate is a see-through field of light between rock pillars that flashes gold as you pass; speed lines; NUWE
+  REKORD! the moment you pass your best; NET-NET! on a close call. Tests: npm test 475; qa/gly1190 ×3,
+  gly_nonsense1190, gly_perf1190 (60 fps), gly_webkit1190. Before release (his word): coins into the wallet, the menu
+  button, the version, the website and Play builds.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
