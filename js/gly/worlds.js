@@ -65,8 +65,10 @@ vec4 below(float k, vec2 w) {
     // a jungle's canopy: round crowns of trees, lighter on top, deep shade between, a few in flower
     vec3 c = cells(p * 2.6);
     float crown = smoothstep(0.78, 0.1, c.x);
-    vec3 leaf = mix(vec3(0.03, 0.16, 0.05), vec3(0.16, 0.42, 0.12), c.z);
-    vec3 col = mix(vec3(0.005, 0.03, 0.012), leaf * (0.7 + 0.6 * fbm(p * 9.0)) * (0.55 + 0.45 * crown), crown);
+    float leafy = fbm(p * 15.0 + c.z * 7.0);
+    vec3 leaf = mix(vec3(0.03, 0.16, 0.05), vec3(0.18, 0.46, 0.12), c.z);
+    vec3 col = mix(vec3(0.004, 0.025, 0.01), leaf * (0.5 + 0.8 * leafy) * (0.4 + 0.6 * crown), crown);
+    col += vec3(0.3, 0.45, 0.1) * smoothstep(0.6, 0.9, leafy) * crown * 0.35;   // (sunlit leaves)
     col += vec3(0.9, 0.35, 0.55) * step(0.93, c.z) * smoothstep(0.3, 0.0, c.x) * 0.7;
     return vec4(col, 1.0);
   }
