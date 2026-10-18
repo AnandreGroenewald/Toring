@@ -354,6 +354,8 @@ export const S_EN = {
     { icon: '🏘️', text: 'Your town: every tower sends its people to your town. 3 Perfects in a row earn a raid: steal people from your friends, even when they’re not playing. Your first tower each day builds a wall. Got robbed? Take free revenge.' },
     // (1.17) The Castle Series (kasteel.html)
     { icon: '🏰', text: 'The Castle Series: your Daily Towers become the towers of your castle. Attack Robot Rikus’s and your friends’ castles with troops, a ram and a trebuchet (break the gate, knock half of it down, make their flag fall), and plan your defence: it fights for you while you’re away.' },
+    // (1.18) Block Clash (botsing.html)
+    { icon: '💥', text: 'Block Clash: two towers on rocks in the sea. Each turn, pick a block with an element and build or throw: knock the other crown into the sea. Mind the wind!' },
     { icon: '🗓️', text: (free = 1) => (free > 1
       ? `One Daily Tower a day, the same for everyone: ${free} free tries and your best try counts. After that, “One more try” costs coins. Practise as much as you like.`
       : 'One Daily Tower a day, the same for everyone. “One more try” costs coins. Practise as much as you like.') },

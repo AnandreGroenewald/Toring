@@ -359,6 +359,8 @@ export const S = {
     // (1.17) Die Kasteelreeks (kasteel.html)
     { icon: '🏰', text: 'Die Kasteelreeks: jou Daaglikse Torings word die torings van jou kasteel. Val Robot Rikus en jou vriende se kastele aan met troepe, ’n stormram en ’n trebuchet (breek die hek, die helfte plat, hul vlag val), en beplan jou verdediging: dit veg vir jou terwyl jy weg is.' },
     // (1.13.1) with the day's free tries (from 12 Oct 2026: 3)
+    // (1.18) Blokbotsing (botsing.html)
+    { icon: '💥', text: 'Blokbotsing: twee torings op rotse in die see. Kies elke beurt ’n blok met ’n element en bou óf gooi: slaan die ander se kroon in die see. Let op die wind!' },
     { icon: '🗓️', text: (free = 1) => (free > 1
       ? `Een Daaglikse Toring per dag, dieselfde vir almal: ${free} gratis pogings en jou beste poging tel. Daarna kos “Nog ’n kans” munte. Oefen soveel jy wil.`
       : 'Een Daaglikse Toring per dag, dieselfde vir almal. “Nog ’n kans” kos munte. Oefen soveel jy wil.') },
