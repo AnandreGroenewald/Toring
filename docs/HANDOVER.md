@@ -1184,6 +1184,21 @@ Later the owner added (decisions are final unless they say otherwise):
     Daily Tower tries feed the town (people, strooptogte, the day's wall: main.js `dorpGainFor`); the town's
     "Bou jou Daaglikse Toring" opens today's Daily; only the Daily flashes "🔥 Strooptog!" and matches' jokers no longer
     promise raids (a01b41a). Tests: qa/owner18_1180.mjs, qa/dorp1160.mjs (an Oefen tower of Perfeks sends nothing).
+- **18 Oct 2026 (~08:30–12:00): the Boss-mode test pass ("test it the way he will"), local a01b41a..3ae8715; nothing
+  pushed or live.** Jarvis for him: everything tapped twice, rubbish typed, back halfway, the phone turned, the signal lost,
+  closed and reopened; each fix proven by a test that fails on the old code. Found and fixed:
+  - An Oefen tower flashed "🔥 Strooptog!" and Blok vir Blok jokers toasted raids that never reach the town (a01b41a).
+  - A new town showed 18 walkers at "0 mense"; now half the people at home walk, up to 18 (ecd2222).
+  - A raid's aim threw by itself after 14 s while the phone was sideways or the app away; now it waits (ecd2222).
+  - Block Clash: a quick double tap on the power bar threw at once, flat into the sea; the pin's tap now waits 0.25 s
+    (6926b2e).
+  - Block Clash played on under "Draai jou foon regop" (a throw landed, Rikus played unseen); now it pauses (7e3b727).
+  - Block Clash: a friend's link to a room that isn't open said "GELYKOP, Vriend het die geveg verlaat"; now "Hierdie
+    uitnodiging is nie meer oop nie" with SPEEL TEEN RIKUS and ‹ Stapel (3ae8715).
+  - Checked and fine: the signal lost at a raid's throw (the strooptog stays), a Daily finished offline (its people
+    reach the town once), a friend battle with each phone 8 s offline, rubbish names and links, Stapel's own tower
+    turned sideways, Jarvis's nonsense tester (game, Block Clash), WebKit, Block Clash balance (2 wins, 1 loss).
+  - The disk hit 0 bytes at ~10:00 (the owner chose the clean-up: 12.5 GB junk, his screenshots to the Trash).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
