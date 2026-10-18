@@ -213,45 +213,7 @@ function rockGeo(r, radius, { detail = 1, squash = 0.8, rough = 0.22, light = '#
   return g;
 }
 const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92, metalness: 0.04 });
-/** A ring of rocks round a pit (a fire's, lava's). */
-function rimRocks(seed, n, radius, size) {
-  const r = rand(seed);
-  const gs = [];
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2 + r() * 0.3;
-    const g = rockGeo(r, size * (0.75 + r() * 0.5), { detail: 0, squash: 0.6, rough: 0.3, light: '#5b524c', dark: '#272220' });
-    g.rotateY(r() * 6.28);
-    g.translate(Math.cos(a) * radius, 0, Math.sin(a) * radius);
-    gs.push(g);
-  }
-  const m = new THREE.Mesh(merge(gs), rockMat);
-  m.castShadow = m.receiveShadow = true;
-  return m;
-}
-
-// ----------------------------------------------------------------------------------------------------- water: whirlpool
-const WHIRL_FRAG = /* glsl */ `
-varying vec2 vP;
-void main() {
-  float r = length(vP);
-  if (r > 1.0) discard;
-  float a = atan(vP.y, vP.x);
-  float spin = uT * 2.2 + uSeed * 6.2832;
-  // arms that wind in to the eye as it turns
-  float arms = 0.5 + 0.5 * sin(a * 3.0 + 7.0 * log(r + 0.07) + spin * 3.0);
-  float br = fbm(vec2(a * 2.0 + spin, r * 6.0 - uT * 2.0));
-  float foam = smoothstep(0.55, 0.95, arms * 0.8 + br * 0.45) * smoothstep(0.08, 0.38, r);
-  vec3 col = mix(vec3(0.0, 0.02, 0.07), vec3(0.01, 0.2, 0.4), smoothstep(0.0, 0.3, r));
-  col = mix(col, vec3(0.1, 0.6, 0.86), smoothstep(0.3, 0.88, r));
-  col = mix(col, vec3(0.86, 0.97, 1.0), foam * 0.7);
-  // the white lip where it starts to turn, and a gleam on its slope
-  float lip = smoothstep(0.74, 0.86, r) * (1.0 - smoothstep(0.9, 1.0, r));
-  col = mix(col, vec3(0.95, 1.0, 1.0), lip * (0.45 + 0.55 * vnoise(vec2(a * 5.0 - spin * 1.5, uT * 1.5))));
-  float gleam = smoothstep(0.7, 1.0, sin(a - 0.8 + spin * 0.5)) * smoothstep(0.25, 0.6, r) * (1.0 - smoothstep(0.7, 0.9, r));
-  col += vec3(0.5, 0.8, 1.0) * gleam * 0.4;
-  gl_FragColor = vec4(col * 0.92, 1.0 - smoothstep(0.93, 1.0, r));
-  ${OUT}
-}`;
+// ----------------------------------------------------------------------------------------------------- water: the whirlpool's and the waterfall's shaders
 /** Spray thrown round the whirlpool's lip (points circling and hopping). */
 const SPRAY_VERT = /* glsl */ `
 attribute vec4 aE;   // angle, radius, phase, size
@@ -266,17 +228,6 @@ void main() {
   gl_PointSize = aE.w * uPx / -mv.z;
   vA = sin(t * 3.1416) * 0.9;
 }`;
-function whirl() {
-  const g = new THREE.Group();
-  g.add(floorDisc(1.2, WHIRL_FRAG, { order: 1 }));
-  const r = rand(11);
-  const spray = new THREE.Points(points(26, () => [r() * 6.28, 0.95 + r() * 0.25, r(), 0.08 + r() * 0.06]), shaderMat(SPRAY_VERT, DOT_FRAG, { extra: { uCol: { value: new THREE.Color('#e9f8ff') } } }));
-  spray.renderOrder = 4;
-  g.add(spray);
-  return g;
-}
-
-// ----------------------------------------------------------------------------------------------------- water: waterfall
 const FALL_VERT = /* glsl */ `
 varying vec2 vUv;
 void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
@@ -289,20 +240,6 @@ void main() {
   vec3 col = mix(vec3(0.16, 0.5, 0.86), vec3(0.9, 0.97, 1.0), streak);
   float a = (0.32 + 0.48 * streak) * (1.0 - smoothstep(0.5, 1.0, vUv.y));
   gl_FragColor = vec4(col * 0.95, a);
-  ${OUT}
-}`;
-const SPLASH_FRAG = /* glsl */ `
-varying vec2 vP;
-void main() {
-  float r = length(vP);
-  if (r > 1.0) discard;
-  float a = atan(vP.y, vP.x);
-  float c1 = fbm(vec2(a * 2.5 + uSeed * 7.0, r * 3.5 - uT * 2.8));
-  float c2 = vnoise(vec2(a * 8.0 - uSeed * 3.0, r * 9.0 - uT * 5.0));
-  float foam = smoothstep(0.35, 0.8, c1 * 0.7 + c2 * 0.45);
-  foam = max(foam, 1.0 - smoothstep(0.0, 0.34, r));
-  vec3 col = mix(vec3(0.08, 0.4, 0.74), vec3(0.92, 0.98, 1.0), foam * 0.85);
-  gl_FragColor = vec4(col * 0.92, (0.65 + 0.35 * foam) * (1.0 - smoothstep(0.7, 1.0, r)));
   ${OUT}
 }`;
 /** Mist rising off the fall's foot: soft puffs that grow and fade. */
@@ -343,24 +280,7 @@ void main() {
   gl_PointSize = aE.w * uPx / -mv.z;
   vA = 1.0 - t;
 }`;
-const fallColumnGeo = new THREE.CylinderGeometry(0.55, 0.85, 7.5, 22, 1, true).translate(0, 3.75, 0);
-function fall() {
-  const g = new THREE.Group();
-  g.add(floorDisc(1.22, SPLASH_FRAG, { order: 1 }));
-  const col = new THREE.Mesh(fallColumnGeo, shaderMat(FALL_VERT, FALL_FRAG, { side: THREE.DoubleSide }));
-  col.renderOrder = 2;
-  g.add(col);
-  const r = rand(23);
-  const mist = new THREE.Mesh(quads(Array.from({ length: 6 }, (_, i) => ({ at: [Math.cos(i * 1.05) * 0.8, 0.3, Math.sin(i * 1.05) * 0.8], info: [0.9 + r() * 0.5, 1.4 + r(), i / 6 + r() * 0.1, 0] })), MID_CORNERS), shaderMat(MIST_VERT, MIST_FRAG));
-  mist.renderOrder = 5;
-  g.add(mist);
-  const drops = new THREE.Points(points(30, () => [r() * 6.28, 0.8 + r() * 1.2, r(), 0.07 + r() * 0.06]), shaderMat(DROPS_VERT, DOT_FRAG, { extra: { uCol: { value: new THREE.Color('#dff4ff') } } }));
-  drops.renderOrder = 4;
-  g.add(drops);
-  return g;
-}
-
-// ----------------------------------------------------------------------------------------------------- fire: a fire pit
+// ----------------------------------------------------------------------------------------------------- fire: flames and sparks
 /** A flame: a tongue of fire that narrows to a tip, its edge licking (noise), white-hot at its root. */
 const FLAME_VERT = /* glsl */ `
 attribute vec2 aCorner;
@@ -390,21 +310,6 @@ void main() {
   vec3 col = mix(vec3(0.95, 0.12, 0.02), vec3(1.0, 0.5, 0.05), smoothstep(0.15, 0.6, f));
   col = mix(col, vec3(1.0, 0.86, 0.5), smoothstep(0.75, 0.98, f) * (1.0 - y));
   gl_FragColor = vec4(col * (0.75 + 0.95 * f), f * 0.8);
-  ${OUT}
-}`;
-/** The bed of coals: dark, its seams glowing and breathing. */
-const EMBER_FRAG = /* glsl */ `
-varying vec2 vP;
-void main() {
-  float r = length(vP);
-  if (r > 1.0) discard;
-  float n = fbm(vP * 3.2 + uSeed * 10.0 + vec2(0.0, uT * 0.4));
-  float seam = 1.0 - smoothstep(0.0, 0.13, abs(n - 0.5));
-  float hot = 1.0 - smoothstep(0.0, 0.85, r);
-  float pulse = 0.75 + 0.25 * sin(uT * 5.0 + n * 10.0);
-  vec3 col = mix(vec3(0.06, 0.02, 0.01), mix(vec3(1.0, 0.22, 0.02), vec3(1.0, 0.6, 0.12), hot) * (1.5 + 2.0 * hot) * pulse, seam * (0.4 + 0.6 * hot));
-  col += vec3(1.0, 0.35, 0.05) * hot * hot * 0.9;
-  gl_FragColor = vec4(col, 1.0 - smoothstep(0.8, 1.0, r));
   ${OUT}
 }`;
 /** Sparks rising off a fire (or lava), drifting, going out. */
@@ -442,72 +347,7 @@ function sparks(n, rise, spread, seed) {
   p.renderOrder = 6;
   return p;
 }
-function fire() {
-  const g = new THREE.Group();
-  g.add(glow(2.0, '#ff6a14', 1));
-  g.add(floorDisc(0.92, EMBER_FRAG, { order: 1 }));
-  g.add(rimRocks(5, 9, 0.98, 0.3));
-  const r = rand(41);
-  const tongues = [];
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * 6.28 + r();
-    const rr = i === 0 ? 0 : 0.42 + r() * 0.15;
-    // (one tall tongue in the middle, four lower round it leaning out)
-    tongues.push({ at: [Math.cos(a) * rr, 0.1, Math.sin(a) * rr], info: [i === 0 ? 0.62 : 0.42 + r() * 0.15, i === 0 ? 3.4 : 1.6 + r() * 0.8, r(), i === 0 ? 0 : Math.cos(a) * 0.35] });
-  }
-  const flames = new THREE.Mesh(quads(tongues, UP_CORNERS), shaderMat(FLAME_VERT, FLAME_FRAG, { add: true, side: THREE.DoubleSide }));
-  flames.renderOrder = 5;
-  g.add(flames);
-  g.add(sparks(22, 3.6, 1.2, 43));
-  return g;
-}
-
-// ----------------------------------------------------------------------------------------------------- fire: lava pool
-const LAVA_FRAG = /* glsl */ `
-varying vec2 vP;
-float edge(vec2 p, float t) {
-  vec2 n = floor(p);
-  vec2 f = fract(p);
-  float f1 = 8.0;
-  float f2 = 8.0;
-  for (int j = -1; j <= 1; j++) {
-    for (int i = -1; i <= 1; i++) {
-      vec2 g = vec2(float(i), float(j));
-      vec2 o = 0.5 + 0.45 * sin(t + 6.2832 * hash22(n + g));
-      float d = length(g + o - f);
-      if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) { f2 = d; }
-    }
-  }
-  return f2 - f1;
-}
-void main() {
-  float r = length(vP);
-  if (r > 1.0) discard;
-  vec2 q = vP * 2.4 + uSeed * 7.0;
-  q += (vec2(vnoise(q * 0.9 + uT * 0.12), vnoise(q * 0.9 - uT * 0.1 + 5.0)) - 0.5) * 0.9;
-  float e = edge(q, uT * 0.35 + uSeed * 6.0);
-  float crack = 1.0 - smoothstep(0.02, 0.15, e);
-  float heat = vnoise(vP * 3.0 + uT * 0.3);
-  vec3 crust = mix(vec3(0.07, 0.025, 0.02), vec3(0.22, 0.07, 0.03), heat);
-  vec3 hot = mix(vec3(1.0, 0.26, 0.02), vec3(1.0, 0.78, 0.24), crack * heat);
-  vec3 col = mix(crust, hot * (2.4 + 1.6 * heat), crack);
-  // open lava in the middle, cooled at the shore
-  float open = 1.0 - smoothstep(0.0, 0.55, r + (heat - 0.5) * 0.35);
-  col = mix(col, vec3(1.0, 0.42, 0.05) * (2.2 + 1.0 * sin(uT * 2.0 + heat * 6.0)), open * 0.6);
-  col *= 1.0 - 0.6 * smoothstep(0.82, 1.0, r);
-  gl_FragColor = vec4(col, 1.0 - smoothstep(0.94, 1.0, r));
-  ${OUT}
-}`;
-function lava() {
-  const g = new THREE.Group();
-  g.add(glow(2.1, '#ff5a10', 0.6));
-  g.add(floorDisc(1.1, LAVA_FRAG, { order: 1 }));
-  g.add(rimRocks(9, 12, 1.14, 0.3));
-  g.add(sparks(12, 2.2, 1.6, 47));
-  return g;
-}
-
-// ----------------------------------------------------------------------------------------------------- grass: vines
+// ----------------------------------------------------------------------------------------------------- grass: vines' parts
 /** A tube that narrows to its tip along a curve (vines), coloured dark at the root and bright at the tip. */
 function taperTube(curve, r0, segs, radial, root, tip) {
   const frames = curve.computeFrenetFrames(segs, false);
@@ -553,55 +393,6 @@ function leafGeo() {
   s.quadraticCurveTo(-0.2, 0.18, 0, 0);
   return new THREE.ShapeGeometry(s, 4);
 }
-const vineGeos = [];
-function vineGeo(seed) {
-  const r = rand(seed);
-  const parts = [];
-  const up = new THREE.Vector3(0, 1, 0);
-  const N = 6;
-  for (let i = 0; i < N; i++) {
-    const a0 = (i / N) * Math.PI * 2 + r() * 0.6;
-    const h = 2.3 + r() * 1.4;
-    const out = 0.45 + r() * 0.55;
-    const turn = (r() < 0.5 ? -1 : 1) * (1.4 + r() * 1.8);
-    const pts = [];
-    for (let k = 0; k <= 7; k++) {
-      const t = k / 7;
-      const ang = a0 + turn * t;
-      const rad = 0.42 + out * Math.sin(t * Math.PI * 0.85) + 0.1 * t;
-      pts.push(new THREE.Vector3(Math.cos(ang) * rad, h * t + 0.1, Math.sin(ang) * rad));
-    }
-    const curve = new THREE.CatmullRomCurve3(pts);
-    parts.push(taperTube(curve, 0.21 + r() * 0.06, 26, 8, '#1d4d18', '#7bd64f'));
-    // thorns along it, pointing out
-    for (let k = 0; k < 6; k++) {
-      const t = 0.12 + 0.72 * (k / 6) + r() * 0.04;
-      const p = curve.getPointAt(t);
-      const tan = curve.getTangentAt(t);
-      const side = new THREE.Vector3(r() - 0.5, r() * 0.4, r() - 0.5).cross(tan).normalize();
-      const thorn = new THREE.ConeGeometry(0.06, 0.3, 5);
-      thorn.translate(0, 0.12, 0);
-      thorn.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, side));
-      thorn.translate(p.x + side.x * 0.1 * (1 - t), p.y + side.y * 0.1 * (1 - t), p.z + side.z * 0.1 * (1 - t));
-      parts.push(paint(thorn, '#5a2a14'));
-    }
-    // two leaves
-    for (let k = 0; k < 2; k++) {
-      const t = 0.35 + 0.4 * k + r() * 0.1;
-      const p = curve.getPointAt(t);
-      const leaf = leafGeo();
-      leaf.rotateX(-0.6 - r() * 0.5);
-      leaf.rotateY(r() * 6.28);
-      leaf.translate(p.x, p.y, p.z);
-      parts.push(paint(leaf, k ? '#58c23a' : '#3f9e2c'));
-    }
-  }
-  // the knot of roots they burst from
-  const mound = new THREE.SphereGeometry(0.85, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2);
-  mound.scale(1, 0.42, 1);
-  parts.push(paint(mound, (x, y) => new THREE.Color('#24461a').lerp(new THREE.Color('#4f7a2c'), Math.min(1, y * 3))));
-  return merge(parts);
-}
 function vineMat() {
   const seed = { value: Math.random() };
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0, side: THREE.DoubleSide });
@@ -616,35 +407,309 @@ function vineMat() {
   };
   return m;
 }
-function vines() {
-  if (!vineGeos.length) for (const s of [3, 8, 15]) vineGeos.push(vineGeo(s));
+// ----------------------------------------------------------------------------------------------------- lane-shaped
+// (the owner, 18 Oct 2026, of round props in hoops: "the rock does not fit, the round obstacles feels fake"; of the walls:
+// "the walls is really good". Every hazard now fills its lane the way a wall fills the slide: grounded, edged, inside it.)
+const LANE_HW = 1.1;   // (m) half a hazard's width: a lane is 2,5 m
+const SD_BOX = /* glsl */ `
+float sdBox(vec2 p, vec2 b, float r) { vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }`;
+const RECT_VERT = /* glsl */ `
+varying vec2 vP;
+void main() { vP = position.xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+/** A rounded rectangle on the slide's floor (`w` across, `l` along), its shader told its size (uHalf, uRad). */
+function floorRect(w, l, rad, frag, opts = {}, y = 0.04) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, l).rotateX(-Math.PI / 2), shaderMat(RECT_VERT, frag, { ...opts, extra: { uHalf: { value: new THREE.Vector2(w / 2, l / 2) }, uRad: { value: rad }, ...(opts.extra || {}) } }));
+  m.position.y = y;
+  m.renderOrder = opts.order ?? 1;
+  return m;
+}
+/** Rocks along a rectangle's edge (a trench's, a pool's shore). */
+function edgeRocks(seed, hw, hl, n, size, colors = { light: '#6b6058', dark: '#2a2420' }) {
+  const r = rand(seed);
+  const gs = [];
+  const per = 4 * hw + 4 * hl;
+  for (let i = 0; i < n; i++) {
+    let t = ((i + r() * 0.4) / n) * per;
+    let x;
+    let z;
+    if (t < 2 * hw) { x = -hw + t; z = -hl; } else if ((t -= 2 * hw) < 2 * hl) { x = hw; z = -hl + t; } else if ((t -= 2 * hl) < 2 * hw) { x = hw - t; z = hl; } else { t -= 2 * hw; x = -hw; z = hl - t; }
+    const g = rockGeo(r, size * (0.7 + r() * 0.6), { detail: 0, squash: 0.65, rough: 0.3, ...colors });
+    g.rotateY(r() * 6.28);
+    g.translate(x, 0, z);
+    gs.push(g);
+  }
+  const m = new THREE.Mesh(merge(gs), rockMat);
+  m.castShadow = m.receiveShadow = true;
+  return m;
+}
+/** Lava filling its rectangle: plates of crust, glowing seams, open lava deep in, cooled at the shore. */
+const LAVA_RECT_FRAG = /* glsl */ `
+uniform vec2 uHalf;
+uniform float uRad;
+varying vec2 vP;
+${SD_BOX}
+float edge(vec2 p, float t) {
+  vec2 n = floor(p);
+  vec2 f = fract(p);
+  float f1 = 8.0;
+  float f2 = 8.0;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 g = vec2(float(i), float(j));
+      vec2 o = 0.5 + 0.45 * sin(t + 6.2832 * hash22(n + g));
+      float d = length(g + o - f);
+      if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) { f2 = d; }
+    }
+  }
+  return f2 - f1;
+}
+void main() {
+  float d = sdBox(vP, uHalf, uRad);
+  if (d > 0.0) discard;
+  vec2 q = vP * 1.9 + uSeed * 7.0;
+  q += (vec2(vnoise(q * 0.9 + uT * 0.12), vnoise(q * 0.9 - uT * 0.1 + 5.0)) - 0.5) * 0.9;
+  float e = edge(q, uT * 0.35 + uSeed * 6.0);
+  float crack = 1.0 - smoothstep(0.02, 0.15, e);
+  float heat = vnoise(vP * 2.2 + uT * 0.3);
+  vec3 crust = mix(vec3(0.07, 0.025, 0.02), vec3(0.22, 0.07, 0.03), heat);
+  vec3 hot = mix(vec3(1.0, 0.26, 0.02), vec3(1.0, 0.78, 0.24), crack * heat);
+  vec3 col = mix(crust, hot * (2.4 + 1.6 * heat), crack);
+  float inner = clamp(-d / 0.8, 0.0, 1.0);
+  col = mix(col, vec3(1.0, 0.42, 0.05) * (2.2 + 1.0 * sin(uT * 2.0 + heat * 6.0)), smoothstep(0.45, 1.0, inner + (heat - 0.5) * 0.35) * 0.6);
+  col *= 0.4 + 0.6 * smoothstep(0.0, 0.3, inner);
+  gl_FragColor = vec4(col, smoothstep(0.0, 0.05, -d));
+  ${OUT}
+}`;
+/** Coals filling a trench: dark, their seams glowing and breathing, hottest down the middle. */
+const EMBER_RECT_FRAG = /* glsl */ `
+uniform vec2 uHalf;
+uniform float uRad;
+varying vec2 vP;
+${SD_BOX}
+void main() {
+  float d = sdBox(vP, uHalf, uRad);
+  if (d > 0.0) discard;
+  float inner = clamp(-d / 0.55, 0.0, 1.0);
+  float n = fbm(vP * 2.6 + uSeed * 10.0 + vec2(0.0, uT * 0.4));
+  float seam = 1.0 - smoothstep(0.0, 0.13, abs(n - 0.5));
+  float pulse = 0.75 + 0.25 * sin(uT * 5.0 + n * 10.0);
+  vec3 col = mix(vec3(0.06, 0.02, 0.01), mix(vec3(1.0, 0.22, 0.02), vec3(1.0, 0.6, 0.12), inner) * (1.5 + 2.0 * inner) * pulse, seam * (0.4 + 0.6 * inner));
+  col += vec3(1.0, 0.35, 0.05) * inner * inner * 0.8;
+  gl_FragColor = vec4(col, smoothstep(0.0, 0.06, -d));
+  ${OUT}
+}`;
+/** The foot of a curtain of water: churning foam, white where it lands. */
+const SPLASH_RECT_FRAG = /* glsl */ `
+uniform vec2 uHalf;
+uniform float uRad;
+varying vec2 vP;
+${SD_BOX}
+void main() {
+  float d = sdBox(vP, uHalf, uRad);
+  if (d > 0.0) discard;
+  float c1 = fbm(vec2(vP.x * 2.2 + uSeed * 7.0, vP.y * 2.6 - uT * 2.8));
+  float c2 = vnoise(vec2(vP.x * 6.0 - uSeed * 3.0, vP.y * 7.0 - uT * 5.0));
+  float foam = smoothstep(0.35, 0.8, c1 * 0.7 + c2 * 0.45);
+  foam = max(foam, 1.0 - smoothstep(0.0, 0.32, abs(vP.y)));
+  vec3 col = mix(vec3(0.08, 0.4, 0.74), vec3(0.92, 0.98, 1.0), foam * 0.85);
+  gl_FragColor = vec4(col * 0.92, (0.65 + 0.35 * foam) * smoothstep(0.0, 0.22, -d));
+  ${OUT}
+}`;
+/** Water filling its rectangle, turning: a whirlpool's arms winding in to the dark eye, white water lapping at its edge. */
+const WHIRL_RECT_FRAG = /* glsl */ `
+uniform vec2 uHalf;
+uniform float uRad;
+varying vec2 vP;
+${SD_BOX}
+void main() {
+  float d = sdBox(vP, uHalf, uRad);
+  if (d > 0.0) discard;
+  vec2 p = vP / uHalf;
+  float r = length(p) * 0.92;
+  float a = atan(p.y, p.x);
+  float spin = uT * 2.2 + uSeed * 6.2832;
+  float arms = 0.5 + 0.5 * sin(a * 3.0 + 7.0 * log(r + 0.07) + spin * 3.0);
+  float br = fbm(vec2(a * 2.0 + spin, r * 6.0 - uT * 2.0));
+  float foam = smoothstep(0.55, 0.95, arms * 0.8 + br * 0.45) * smoothstep(0.08, 0.38, r);
+  vec3 col = mix(vec3(0.0, 0.02, 0.07), vec3(0.01, 0.2, 0.4), smoothstep(0.0, 0.3, r));
+  col = mix(col, vec3(0.1, 0.6, 0.86), smoothstep(0.3, 0.88, r));
+  col = mix(col, vec3(0.86, 0.97, 1.0), foam * 0.7);
+  float gleam = smoothstep(0.7, 1.0, sin(a - 0.8 + spin * 0.5)) * smoothstep(0.25, 0.6, r) * (1.0 - smoothstep(0.7, 0.9, r));
+  col += vec3(0.5, 0.8, 1.0) * gleam * 0.4;
+  float lap = 1.0 - smoothstep(0.0, 0.07 + 0.08 * vnoise(vec2(a * 7.0 - spin * 1.5, uT * 1.7)), -d);
+  col = mix(col, vec3(0.95, 1.0, 1.0), lap * 0.75);
+  gl_FragColor = vec4(col * 0.92, smoothstep(0.0, 0.03, -d));
+  ${OUT}
+}`;
+/** A rock's few stones (merged), the walls' own stone. */
+function stones(r, list, colors) {
+  return merge(list.map(([size, x, z, squash]) => {
+    const g = rockGeo(r, size, { detail: size > 0.4 ? 1 : 0, squash, rough: 0.24, ...colors });
+    g.rotateY(r() * 6.28);
+    g.translate(x, 0, z);
+    return g;
+  }));
+}
+const STONE = { light: '#857b6e', dark: '#3b3631' };
+
+/** Water, low: a whirlpool filling its lane (a pool the lane's shape, turning). */
+function laneWhirl() {
   const g = new THREE.Group();
-  const m = new THREE.Mesh(vineGeos[Math.floor(Math.random() * vineGeos.length)], vineMat());
-  m.rotation.y = Math.random() * 6.28;
+  g.add(floorRect(2 * LANE_HW - 0.1, 2.6, 0.5, WHIRL_RECT_FRAG, { order: 1 }));
+  const r = rand(11);
+  const spray = new THREE.Points(points(26, () => [r() * 6.28, 0.95 + r() * 0.2, r(), 0.08 + r() * 0.06]), shaderMat(SPRAY_VERT, DOT_FRAG, { extra: { uCol: { value: new THREE.Color('#e9f8ff') } } }));
+  spray.scale.set(0.98, 1, 1.18);
+  spray.renderOrder = 4;
+  g.add(spray);
+  return g;
+}
+/** Water, tall: a curtain of water falling across the lane between two stones, foaming at its foot. */
+const curtainGeo = new THREE.PlaneGeometry(2 * LANE_HW - 0.1, 6.5, 1, 1).translate(0, 3.25, 0);
+const curtainStones = [];
+function curtain() {
+  if (!curtainStones.length) for (const seed of [21, 27]) { const r = rand(seed); curtainStones.push(stones(r, [[0.3, -LANE_HW + 0.36, 0, 1.7], [0.3, LANE_HW - 0.36, 0, 1.6]], STONE)); }
+  const g = new THREE.Group();
+  g.add(floorRect(2 * LANE_HW, 1.6, 0.5, SPLASH_RECT_FRAG, { order: 1 }));
+  const sheet = new THREE.Mesh(curtainGeo, shaderMat(FALL_VERT, FALL_FRAG, { side: THREE.DoubleSide }));
+  sheet.renderOrder = 2;
+  g.add(sheet);
+  const rocks = new THREE.Mesh(curtainStones[Math.floor(Math.random() * curtainStones.length)], rockMat);
+  rocks.castShadow = rocks.receiveShadow = true;
+  g.add(rocks);
+  const r = rand(23);
+  const mist = new THREE.Mesh(quads(Array.from({ length: 5 }, (_, i) => ({ at: [-0.9 + i * 0.45, 0.3, -0.35], info: [0.75 + r() * 0.35, 1.3 + r(), i / 5 + r() * 0.1, 0] })), MID_CORNERS), shaderMat(MIST_VERT, MIST_FRAG));
+  mist.renderOrder = 5;
+  g.add(mist);
+  const drops = new THREE.Points(points(26, () => [r() * 6.28, 0.6 + r() * 0.8, r(), 0.07 + r() * 0.06]), shaderMat(DROPS_VERT, DOT_FRAG, { extra: { uCol: { value: new THREE.Color('#dff4ff') } } }));
+  drops.scale.set(1.2, 1, 0.6);
+  drops.renderOrder = 4;
+  g.add(drops);
+  return g;
+}
+/** Fire, tall: a trench of glowing coals across the lane, a row of flames, stones along its sides. */
+function trench() {
+  const g = new THREE.Group();
+  const lightOf = glow(1.9, '#ff6a14', 1);
+  lightOf.scale.set(1, 1, 0.8);
+  g.add(lightOf);
+  g.add(floorRect(2 * LANE_HW, 1.5, 0.45, EMBER_RECT_FRAG, { order: 1 }));
+  g.add(edgeRocks(5, LANE_HW - 0.3, 0.66, 14, 0.2));
+  const r = rand(41);
+  const tongues = [];
+  for (let i = 0; i < 5; i++) {
+    const x = -0.84 + i * 0.42;
+    const mid = 1 - Math.abs(i - 2) / 2;
+    tongues.push({ at: [x, 0.1, (r() - 0.5) * 0.3], info: [0.38 + r() * 0.08, 1.5 + mid * 1.2 + r() * 0.4, r(), (r() - 0.5) * 0.2] });
+  }
+  g.add(flameMesh(tongues));
+  g.add(sparks(22, 3.4, 2.0, 43));
+  return g;
+}
+/** Fire, low: lava filling its lane, its crust cracked and glowing, rocks along its shore. */
+function lavaBed() {
+  const g = new THREE.Group();
+  const lightOf = glow(2.0, '#ff5a10', 0.6);
+  lightOf.scale.set(1, 1, 1.15);
+  g.add(lightOf);
+  g.add(floorRect(2 * LANE_HW - 0.2, 2.4, 0.55, LAVA_RECT_FRAG, { order: 1 }));
+  g.add(edgeRocks(9, LANE_HW - 0.28, 1.05, 16, 0.19));
+  g.add(sparks(12, 2.2, 1.9, 47));
+  return g;
+}
+/** Grass: a hedge of thorny vines grown right across the lane, swaying (three clumps on a long leafy mound). */
+const thicketGeos = [];
+function thicketGeo(seed) {
+  const r = rand(seed);
+  const parts = [];
+  const up = new THREE.Vector3(0, 1, 0);
+  for (let cl = 0; cl < 4; cl++) {
+    const cx = -0.66 + cl * 0.44;
+    for (let k = 0; k < 3; k++) {
+      const a0 = r() * 6.28;
+      const h = 2.0 + r() * 1.5;
+      const turn = (r() < 0.5 ? -1 : 1) * (1.4 + r() * 1.8);
+      const out = 0.1 + r() * 0.18;
+      const pts = [];
+      for (let i = 0; i <= 7; i++) {
+        const t = i / 7;
+        const ang = a0 + turn * t;
+        const rad = 0.1 + out * Math.sin(t * Math.PI * 0.9) + 0.05 * t;
+        pts.push(new THREE.Vector3(cx + Math.cos(ang) * rad, h * t + 0.2, Math.sin(ang) * rad * 0.8));
+      }
+      const curve = new THREE.CatmullRomCurve3(pts);
+      parts.push(taperTube(curve, 0.13 + r() * 0.05, 20, 7, '#1d4d18', '#7bd64f'));
+      for (let n = 0; n < 4; n++) {
+        const t = 0.15 + 0.7 * (n / 4) + r() * 0.04;
+        const p = curve.getPointAt(t);
+        const side = new THREE.Vector3(r() - 0.5, r() * 0.4, r() - 0.5).cross(curve.getTangentAt(t)).normalize();
+        const thorn = new THREE.ConeGeometry(0.05, 0.24, 5);
+        thorn.translate(0, 0.12, 0);
+        thorn.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, side));
+        thorn.translate(p.x + side.x * 0.08, p.y + side.y * 0.08, p.z + side.z * 0.08);
+        parts.push(paint(thorn, '#5a2a14'));
+      }
+      const t = 0.5 + r() * 0.3;
+      const p = curve.getPointAt(t);
+      const leaf = leafGeo();
+      leaf.rotateX(-0.6 - r() * 0.5);
+      leaf.rotateY(r() * 6.28);
+      leaf.translate(p.x, p.y, p.z);
+      parts.push(paint(leaf, r() < 0.5 ? '#58c23a' : '#3f9e2c'));
+    }
+  }
+  // the hedge they grow from: a long mound of leaves and roots across the lane, bushy on top
+  const mound = new THREE.SphereGeometry(1, 18, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  mound.scale(LANE_HW, 0.5, 0.6);
+  parts.push(paint(mound, (x, y) => new THREE.Color('#24461a').lerp(new THREE.Color('#4f7a2c'), Math.min(1, y * 2.2))));
+  for (let i = 0; i < 7; i++) {
+    const bush = new THREE.IcosahedronGeometry(0.22 + r() * 0.12, 1);
+    bush.translate(-0.78 + i * 0.26 + (r() - 0.5) * 0.08, 0.35 + r() * 0.1, (r() - 0.5) * 0.5);
+    parts.push(paint(bush, r() < 0.5 ? '#3d8a2c' : '#58a83a'));
+  }
+  return merge(parts);
+}
+function thicket() {
+  if (!thicketGeos.length) for (const s of [3, 8, 15]) thicketGeos.push(thicketGeo(s));
+  const g = new THREE.Group();
+  const m = new THREE.Mesh(thicketGeos[Math.floor(Math.random() * thicketGeos.length)], vineMat());
   m.castShadow = true;
   g.add(m);
   return g;
 }
-
-// ----------------------------------------------------------------------------------------------------- stone: a boulder
-const boulderGeos = [];
-function rock() {
-  if (!boulderGeos.length) {
-    for (const s of [2, 6, 12]) {
-      const r = rand(s);
-      const parts = [rockGeo(r, 1.08, { detail: 1, squash: 0.85, rough: 0.24 })];
-      for (let i = 0; i < 4; i++) {
-        const a = r() * 6.28;
-        const p = rockGeo(r, 0.16 + r() * 0.14, { detail: 0, squash: 0.7, rough: 0.3 });
-        p.translate(Math.cos(a) * (0.95 + r() * 0.2), 0, Math.sin(a) * (0.95 + r() * 0.2));
-        parts.push(p);
+/** Stone: a dry-stone wall across the lane, too tall to jump: flat stones laid in courses (two, then three, like
+ *  bricks), a long capstone on top, a few fallen at its foot. The gates' own stone. */
+const barricadeGeos = [];
+function slab(r, x, y, half, deep) {
+  const g = rockGeo(r, 0.5, { detail: 0, squash: 0.62, rough: 0.16, ...STONE });
+  g.scale(half / 0.5, 1, deep / 0.5);
+  g.rotateY((r() - 0.5) * 0.12);
+  g.translate(x, y, (r() - 0.5) * 0.06);
+  return g;
+}
+function barricade() {
+  if (!barricadeGeos.length) {
+    for (const seed of [2, 6, 12]) {
+      const r = rand(seed);
+      const parts = [];
+      let y = 0;
+      for (let k = 0; k < 6; k++) {
+        const n = k % 2 ? 3 : 2;
+        const half = (2 * LANE_HW - 0.36) / n / 2;
+        for (let i = 0; i < n; i++) parts.push(slab(r, -LANE_HW + 0.18 + half * (2 * i + 1) + (r() - 0.5) * 0.06, y, half * (0.9 + r() * 0.06), 0.42 - k * 0.025));
+        y += 0.43;
       }
-      boulderGeos.push(merge(parts));
+      parts.push(slab(r, (r() - 0.5) * 0.16, y, LANE_HW - 0.24, 0.42));
+      for (let i = 0; i < 3; i++) {
+        const g = rockGeo(r, 0.13 + r() * 0.06, { detail: 0, squash: 0.7, rough: 0.3, ...STONE });
+        g.translate(-0.7 + i * 0.7 + (r() - 0.5) * 0.15, 0, (i % 2 ? -0.62 : 0.62) + (r() - 0.5) * 0.1);
+        parts.push(g);
+      }
+      barricadeGeos.push(merge(parts));
     }
   }
   const g = new THREE.Group();
-  const m = new THREE.Mesh(boulderGeos[Math.floor(Math.random() * boulderGeos.length)], rockMat);
-  m.rotation.y = Math.random() * 6.28;
+  const m = new THREE.Mesh(barricadeGeos[Math.floor(Math.random() * barricadeGeos.length)], rockMat);
+  m.scale.x = Math.random() < 0.5 ? -1 : 1;
   m.castShadow = m.receiveShadow = true;
   g.add(m);
   return g;
@@ -691,9 +756,11 @@ export function fieldMat({ deep = '#3d1a99', glow = '#b38cff', bot = 0, top = 8 
   return shaderMat(FIELD_VERT, FIELD_FRAG, { side: THREE.DoubleSide, extra: { uHit: { value: 0 }, uDeep: { value: new THREE.Color(deep) }, uGlow: { value: new THREE.Color(glow) }, uBot: { value: bot }, uTop: { value: top } } });
 }
 /** A pillar of stacked rock at the chute's side, holding a gate's field (two shapes, kept). */
-const pillarGeos = [];
+const pillarGeos = new Map();
 export function rockPillar(i, height) {
-  if (!pillarGeos.length) {
+  const key = height.toFixed(2);
+  if (!pillarGeos.has(key)) {
+    const list = [];
     for (const seed of [31, 37]) {
       const r = rand(seed);
       const parts = [];
@@ -708,15 +775,17 @@ export function rockPillar(i, height) {
       }
       const geo = merge(parts);
       geo.userData.shared = true;
-      pillarGeos.push(geo);
+      list.push(geo);
     }
+    pillarGeos.set(key, list);
   }
-  const m = new THREE.Mesh(pillarGeos[i % pillarGeos.length], rockMat);
+  const list = pillarGeos.get(key);
+  const m = new THREE.Mesh(list[i % list.length], rockMat);
   m.castShadow = m.receiveShadow = true;
   return m;
 }
 
-const MAKERS = { whirl, fall, fire, lava, vines, rock };
+const MAKERS = { whirl: laneWhirl, fall: curtain, fire: trench, lava: lavaBed, vines: thicket, rock: barricade };
 
 /**
  * The hazards: `make(type, look)` builds one (its root on the chute's floor, about a lane across); `update(time, camera,

@@ -292,10 +292,10 @@ const shadow = (() => {
 const fill = new THREE.DirectionalLight('#fff0dc', 1.15);
 fill.position.set(0, 60, -45);
 trk.add(fill, fill.target);
-/** A hazard: a piece of its element's nature (hazards.js: a whirlpool or a waterfall, a fire pit or lava, thorny vines, a
- *  boulder), with a ring on the floor in what it does to you. */
+/** A hazard: a piece of its element's nature filling its lane (hazards.js: a whirlpool or a curtain of water, a trench of
+ *  fire or lava, a hedge of thorny vines, a barricade of rock), outlined on the floor in what it does to you. */
 const hz = createHazards();
-const HZ_SCALE = 0.9;   // (a lane is 2,5 m: each hazard a little inside it)
+const HZ_SCALE = 1;   // (each hazard is made to fill its lane: 2,2 m of the lane's 2,5)
 /** What a hazard does to you, at a glance: red ends the run, amber clouds your view, green is yours (safe). */
 const EFFECT_COL = { kill: '#ff3b30', blind: '#ffe14a', safe: '#3fdc6a' };
 /** The ✨'s halo: the sparkle on a soft dark disc. */
@@ -311,9 +311,22 @@ function itemHaloMat() {
   t.colorSpace = THREE.SRGBColorSpace;
   return new THREE.SpriteMaterial({ map: t, depthWrite: false, fog: true });
 }
-// (true colours on the blue floor: drawn over it, not added to it; just inside the lane, so two side by side don't meet)
-const ringGeo = new THREE.RingGeometry(1.2, 1.32, 48).rotateX(-Math.PI / 2);
-const ringMats = Object.fromEntries(Object.entries(EFFECT_COL).map(([k, c]) => [k, new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.9, depthWrite: false })]));
+/**
+ * The outline round a hazard's place in its lane, like a wall's glowing edge (the owner: "the round obstacles feels fake";
+ * "the walls is really good"): a slim rounded rectangle just inside the lane, in true colours over the floor (drawn over
+ * it, not added to it), so two side by side never meet.
+ */
+function frameGeo(w, l, rad, th) {
+  const rr = (p, x, y, W, L, R) => { p.moveTo(x + R, y); p.lineTo(x + W - R, y); p.quadraticCurveTo(x + W, y, x + W, y + R); p.lineTo(x + W, y + L - R); p.quadraticCurveTo(x + W, y + L, x + W - R, y + L); p.lineTo(x + R, y + L); p.quadraticCurveTo(x, y + L, x, y + L - R); p.lineTo(x, y + R); p.quadraticCurveTo(x, y, x + R, y); };
+  const s = new THREE.Shape();
+  rr(s, -w / 2, -l / 2, w, l, rad);
+  const hole = new THREE.Path();
+  rr(hole, -w / 2 + th, -l / 2 + th, w - 2 * th, l - 2 * th, Math.max(0.02, rad - th));
+  s.holes.push(hole);
+  return new THREE.ShapeGeometry(s, 8).rotateX(-Math.PI / 2);
+}
+const outlineGeo = frameGeo(2.34, 2.8, 0.38, 0.085);
+const outlineMats = Object.fromEntries(Object.entries(EFFECT_COL).map(([k, c]) => [k, new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.9, depthWrite: false })]));
 const pools = new Map();
 /** A hazard's look: water lies low as a whirlpool or stands as a waterfall, fire as lava or a fire; vines; a boulder. */
 const lookOf = (type, low) => (type === 'water' ? (low ? 'whirl' : 'fall') : type === 'vuur' ? (low ? 'lava' : 'fire') : VARIANTS[type]?.[0] || 'rock');
@@ -322,14 +335,14 @@ function hazardMesh(type, look) {
   let g = pools.get(key)?.pop();
   if (!g) {
     g = hz.make(type, look);
-    const ring = new THREE.Mesh(ringGeo, ringMats.kill);
-    ring.position.y = 0.03;
-    ring.renderOrder = 2;
-    g.add(ring);
-    g.userData.ring = ring;
+    const outline = new THREE.Mesh(outlineGeo, outlineMats.kill);
+    outline.position.y = 0.03;
+    outline.renderOrder = 2;
+    g.add(outline);
+    g.userData.outline = outline;
     g.userData.key = key;
   }
-  g.userData.ring.material = ringMats[effectOf(element, type)];
+  g.userData.outline.material = outlineMats[effectOf(element, type)];
   g.scale.setScalar(HZ_SCALE);
   g.visible = true;
   trk.add(g);
@@ -1209,7 +1222,7 @@ function frame(now) {
   rushPast(G.d);
   placeRows(time);
   hz.update(time, camera, renderer.domElement.height);
-  ringMats.kill.opacity = 0.72 + 0.26 * Math.sin(time * 6);
+  outlineMats.kill.opacity = 0.72 + 0.26 * Math.sin(time * 6);
   if (!G.paused) runnerVisual(dt || raw);
   trailVisual(dt);
   {
