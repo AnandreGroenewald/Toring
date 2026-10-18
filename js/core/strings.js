@@ -136,7 +136,6 @@ export const S = {
     '🤖 Robot Rikus is altyd jou buurman: oefen op hom, en pas op, hy steel terug!',
   ],
   dorpRaidEarned: '🔥 Strooptog!',
-  dorpRaidToast: '🔥 ’n Strooptog vir jou dorp!',
   dorpRaidTitle: 'Strooptog!',
   dorpWraakTitle: 'Wraak!',
   dorpTook: (n) => (n === 1 ? '+1 mens!' : `+${fmtInt(n)} mense!`),

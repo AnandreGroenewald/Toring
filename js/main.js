@@ -129,7 +129,6 @@ const dorp = createDorpClient({ api: matchApiUrl() });
 let dorpOn = false;
 let dorpSyncAt = 0;
 let dorpBusy = false;
-let dorpJokers = 0;          // this match's jokers (Blok vir Blok's run of 3 Perfeks): each a strooptog too
 let dorpMenuKey = '';
 let dorpNameAsked = false;
 const DORP_POLL_MS = 15000;
@@ -149,7 +148,7 @@ function livingFor(mode, force = false) {
     firstTown: !Object.keys(livingStore.get().met).length,
     intro: mode !== 'idle' && !livingStore.introSeen(),
     onIntro: () => livingStore.markIntro(),
-    dorp: dorpOn,   // (1.16) Jou dorp: 3 Perfeks in a row earn a strooptog
+    dorp: dorpOn && mode === 'daily',   // (1.16) Jou dorp: 3 Perfeks in a row earn a strooptog (1.18: only the Daily feeds the town)
   };
 }
 // Afrikaans or English (1.9). Someone who played before there was a choice stays in Afrikaans; a new
@@ -761,7 +760,6 @@ let lesson = null;   // { step, landings, after } while it runs
 
 function startGame(data) {
   wakeLoop();
-  dorpJokers = 0;
   if (data.seed !== LESSON_SEED || data.mode !== 'practice') {
     lesson = null;
     ui.showTutor(null);
@@ -3099,13 +3097,11 @@ function dorpNewsCheck() {
 
 /** A finished tower's gifts to the town: its people, strooptogte, golden people, the day's first wall (results line). */
 function dorpGainFor(result) {
-  const jokers = dorpJokers;
-  dorpJokers = 0;
   // (the owner, 18 Oct 2026: "your town should only be build with the daily challenge else the town will grow way to
   // quick": only the Daily Tower's tries feed the town; Oefen and matches build towers, not towns)
   if (!dorpOn || result?.mode !== 'daily' || !result?.living || !(result.blocksDropped > 0)) return null;
   const g = dorp.queue({
-    people: result.living.people | 0, raids: (result.raids | 0) + jokers, gold: (result.living.gold || []).length,
+    people: result.living.people | 0, raids: result.raids | 0, gold: (result.living.gold || []).length,
     dayKey: result.blocksDropped >= 3 ? todayKey() : null,
   });
   if (!g) return null;
@@ -3367,13 +3363,6 @@ bus.on('ui:dorp-raid', async ({ target, wraak = null } = {}) => {
 bus.on('ui:dorp-invite', () => {
   const v = dorpView();
   ui.shareText(S.dorpInviteText(v?.me?.people | 0, `${siteUrl()}?buur=${dorp.id}`), 'whatsapp');
-});
-
-// Blok vir Blok: a joker of ours (3 Perfeks in a row) is a strooptog for the town too
-bus.on('duel:choose', (c) => {
-  if (!c?.joker || !dorpOn || settings.living === false) return;
-  dorpJokers += 1;
-  bus.emit('hud:toast', { text: S.dorpRaidToast, color: '#ffb35c' });
 });
 
 // ---------------------------------------------------------------------------

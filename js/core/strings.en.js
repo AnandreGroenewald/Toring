@@ -137,7 +137,6 @@ export const S_EN = {
     '🤖 Robot Rikus is always your neighbour: practise on him, and watch out, he steals back!',
   ],
   dorpRaidEarned: '🔥 Raid!',
-  dorpRaidToast: '🔥 A raid for your town!',
   dorpRaidTitle: 'Raid!',
   dorpWraakTitle: 'Revenge!',
   dorpTook: (n) => (n === 1 ? '+1 person!' : `+${fmtInt(n)} people!`),
