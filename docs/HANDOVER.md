@@ -1229,6 +1229,18 @@ Later the owner added (decisions are final unless they say otherwise):
   - Tests: npm test 475; qa/gly1190 (rect water, square vuur, rect gras: ALL OK; passed things sunk; a bag's coins counted
     on screen), gly_nonsense1190 20/20 (a swipe left moves the block left on the screen), gly_perf1190 60 fps on a 4x
     slower phone, gly_webkit1190 OK. Screens: Previews › "1.19 Glybaan - bo na onder (18 Oct)".
+- **18 Oct 2026 (~17:00–17:40): Glybaan, third round (local 93e9efb).** The owner on the camera looking down the chute:
+  "That will make me nausious, I meant at an angle towards me, basically at a 70 degree upwards."
+  - The camera now stands down the chute and looks back up it at about 70° to its floor (game.js `VIEW`): the chute
+    rises away to the top of the screen, the block rides high on it and slides down towards you, and what comes rises
+    from the bottom. No roll or swing; a little further back as it speeds up.
+  - The block's element medallion lies on its top (`pieces.medallion`, new in js/botsing/pieces.js) and stays on top
+    through every turn; the gate's gold outline is on the face the camera sees; a soft light over the camera.
+  - A bag of coins pops as one big "💰 +N" over the block for 1.6 s with a sound and a small shake; two bags in a row
+    add up in the same pop (Jarvis for the owner).
+  - The coins sit top left, the ✨ top right and km/h under the distance; the controls line is on the start card.
+  - Tests: npm test 475; qa/gly1190 ×3 ALL OK; gly_nonsense1190 22/22; gly_perf1190 60 fps; gly_webkit1190 OK. Screens:
+    Previews › "1.19 Glybaan - 70 grade na jou toe (18 Oct)".
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
