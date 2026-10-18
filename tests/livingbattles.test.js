@@ -189,6 +189,40 @@ test('a window a mission (or a fall) empties again never goes out with the turn\
   assert.deepEqual(L.takeOpened(), []);
 });
 
+test('a mission sent before the target\'s newest rooms reached the sender takes the same people on both phones', () => {
+  // Anna (seat 0) is the target: her older floor (3) has people on both phones; her newest landing (4) has them home on
+  // her phone, while on Bennie's (seat 1) its report hasn't arrived yet. Bennie's mission reaches both floors; Anna's
+  // phone takes what it names; then her report reaches Bennie's phone and those rooms open there.
+  const race = (kind, named) => {
+    const scA = scene();
+    const scB = scene();
+    const A = new Living(scA, { tribe: 'water', theirTribe: 'vuur', seat: 0, seed: 'm', reducedMotion: true, ownerOf: () => true });
+    const B = new Living(scB, { tribe: 'vuur', theirTribe: 'water', seat: 1, seed: 'm', reducedMotion: true, ownerOf: () => false });
+    const [a3, b3, a4, b4] = [block(3), block(3), block(4), block(4)];
+    A.landed(a3); A.rated(a3, 'P', 3); scA.run(2000);
+    B.landed(b3); B.openRooms(A.takeOpened()); scB.run(2000);
+    A.landed(a4); A.rated(a4, 'P', 3); scA.run(2000);
+    const late = A.takeOpened();   // (her report, still on its way to Bennie)
+    B.landed(b4);
+    const at = { x: 360, y: (b3.centerY + b4.centerY) / 2 };
+    const spots = B.reach(kind, at, { mine: true });
+    const hits = named(B, spots);
+    B.strike(kind, at, spots, { mine: true, quiet: true });
+    A.strike(kind, at, A.spotsOf(hits), { mine: false, quiet: true });
+    B.openRooms(late); scB.run(2000);
+    return { anna: A.peopleBySeat(0, { coming: true })[0], bennieSees: B.peopleBySeat(1, { coming: true })[0] };
+  };
+  for (const kind of ['water', 'gras']) {
+    const before = race(kind, (B, spots) => B.hitsOf(spots));   // (how it was: every window reached)
+    assert.notEqual(before.anna, before.bennieSees, `${kind}: the old way lost agreement (${JSON.stringify(before)})`);
+    const now = race(kind, (B, spots) => B.hitsFor(kind, spots));
+    assert.equal(now.anna, now.bennieSees, `${kind}: both phones agree (${JSON.stringify(now)})`);
+  }
+  // Veldbrand burns every window it reaches, so it names them all, and the burnt windows never open on Bennie's phone
+  const fire = race('vuur', (B, spots) => B.hitsFor('vuur', spots));
+  assert.equal(fire.anna, fire.bennieSees, `vuur: both phones agree (${JSON.stringify(fire)})`);
+});
+
 test('the end of a game: everyone on the way in counts; the record is the most people at once', () => {
   const sc = scene();
   const L = new Living(sc, { tribe: 'vuur', seed: 'e', reducedMotion: true });

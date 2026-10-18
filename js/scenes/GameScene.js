@@ -4183,7 +4183,7 @@ export class GameScene extends Phaser.Scene {
     const at = a.at || L.botAim(a.kind, { mine: true });
     let spots = L.reach(a.kind, at, { mine: true, strong: a.strong });
     if (a.kind === 'gras') spots = spots.concat(L.extras(spots, a.strong ? 2 : 1, { mine: true }));
-    const hits = L.hitsOf(spots);
+    const hits = L.hitsFor(a.kind, spots);   // (18 Oct: only what this game knows is there, so both phones agree)
     const res = L.strike(a.kind, at, spots, { mine: true, strong: a.strong });
     bus.emit('turns:mission-out', { kind: a.kind, at: [Math.round(at.x), Math.round(at.y)], hits, pp: L.peopleBySeat(this.turns.you, { coming: true }) });
     const opp = this.duel?.name || S.duelSomeone;

@@ -572,6 +572,17 @@ export class Living {
     return spots.map((p) => [p.f.block.index, p.slot]);
   }
 
+  /**
+   * (18 Oct) The windows a mission of this game's names for the other phone. Veldbrand's: every window it reaches (it burns
+   * them, people or not, and a burnt window never opens later). Waterwiel's and Rankgryp's: only the windows lived in here
+   * ('home' or 'coming'). A window still dark here may hold people their game moved in at a landing whose report hasn't
+   * reached this one yet: naming it took those people on their phone, while here they moved in afterwards, and the two
+   * phones disagreed for the rest of the match (the live two-phone check, 4 runs in 5).
+   */
+  hitsFor(kind, spots) {
+    return this.hitsOf(kind === 'vuur' ? spots : spots.filter((p) => ['home', 'coming'].includes(p.f.wins[p.slot]?.s)));
+  }
+
   spotsOf(hits) {
     const out = [];
     for (const [i, slot] of hits || []) {
