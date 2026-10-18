@@ -1338,7 +1338,9 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && !G.
 function onTap() {
   if (G.side !== ME || G.paused || hud.modalOpen) return;
   if (G.phase === 'build' && G.phaseT > 0.25) dropBlock();
-  else if (G.phase === 'aim' && G.phaseT > 0.25) aimTap();
+  // (the pin's tap waits a moment after the power's, as each phase's first tap does: a quick double tap on the power bar
+  // never throws the block flat from the pin's first position into the sea. 18 Oct, "tap everything twice")
+  else if (G.phase === 'aim' && G.phaseT > 0.25 && !(G.aimStep === 'angle' && G.aimT < 0.25)) aimTap();
 }
 let ambOn = false;
 stageEl.addEventListener('pointerdown', (e) => {
