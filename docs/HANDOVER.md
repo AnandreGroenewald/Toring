@@ -1199,6 +1199,11 @@ Later the owner added (decisions are final unless they say otherwise):
     reach the town once), a friend battle with each phone 8 s offline, rubbish names and links, Stapel's own tower
     turned sideways, Jarvis's nonsense tester (game, Block Clash), WebKit, Block Clash balance (2 wins, 1 loss).
   - The disk hit 0 bytes at ~10:00 (the owner chose the clean-up: 12.5 GB junk, his screenshots to the Trash).
+  - The Living Tower battles: after a Waterwiel or Rankgryp mission sent while the target's newest rooms were still on
+    their way, the two phones showed different people for the rest of the match (the room's referee was right); now a
+    mission names only windows the sender knows are lived in (0fd4492; the live two-phone check had failed 4 runs in 5).
+  - In the end every check of check-all.sh full passed (re-runs after the disk, another terminal's emulator and the fixes);
+    speed on a 4x slower phone: the 3D town and Block Clash at 60 fps; WebKit OK. Home play restarted for his phone.
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
