@@ -47,17 +47,18 @@ export const gapAt = (v) => v * (1.05 - 0.22 * Math.min(1, Math.max(0, (v - 15) 
  * Does a man in `lane`, doing `act`, get through `row` alive? A low beam wants a jump, a high one a slide, a wall its gap;
  * a hazard that would end the run is passed only by jumping it, and only when it lies low.
  */
-export function passes(row, lane, act, element) {
+export function passes(row, lane, act, element, sw = false) {
   if (row.kind === 'bar') return row.bar === 'low' ? act === 'jump' : act === 'slide';
   if (row.kind === 'wall') return lane === row.gap;
   const cell = row.cells.find((c) => c.lane === lane);
-  if (!cell || effectOf(element, cell.type) !== 'kill') return true;
+  // (the switch test: an element's hazard is met by switching to the right man; only stone must be dodged)
+  if (!cell || (sw ? cell.type !== 'stone' : effectOf(element, cell.type) !== 'kill')) return true;
   return cell.low && act === 'jump';
 }
 /** The ways through a row, as { lane, act } (none: the row can't be passed, a test's check). */
-export function waysThrough(row, element) {
+export function waysThrough(row, element, sw = false) {
   const out = [];
-  for (let lane = 0; lane < LANES; lane++) for (const act of ACTS) if (passes(row, lane, act, element)) out.push({ lane, act });
+  for (let lane = 0; lane < LANES; lane++) for (const act of ACTS) if (passes(row, lane, act, element, sw)) out.push({ lane, act });
   return out;
 }
 
@@ -67,7 +68,7 @@ export function waysThrough(row, element) {
  * ('low'|'high'), gap (a wall's open lane), item, n }. Always passable: a "path" lane moves at most one lane a row (two
  * once it is fast) and never holds what would end the run, unless it lies low enough to jump (then coins hang over it).
  */
-export function createTrack(seed, { element = 'water' } = {}) {
+export function createTrack(seed, { element = 'water', sw = false } = {}) {
   const r = rng(typeof seed === 'number' ? seed : hashSeed(String(seed)));
   const kill = killerOf(element);
   const blind = victimOf(element);
@@ -76,8 +77,13 @@ export function createTrack(seed, { element = 'water' } = {}) {
   let n = 0;
   let sinceBar = 0;
   let item = 0;
+  let gates = 0;
+  let sinceGate = 0;
+  const anyEl = () => ELEMENTS[Math.floor(r() * ELEMENTS.length)];
   const hazardType = (d) => {
     const x = r();
+    // (the switch test: any element may come, and the man switches to meet it; stone is still dodged)
+    if (sw) return x < (d < 120 ? 0.5 : 0.3) ? 'stone' : anyEl();
     if (d < 120) return x < 0.7 ? 'stone' : element;   // (the start: stone to dodge, your own to try)
     if (x < 0.34) return 'stone';
     if (x < 0.64) return kill;
@@ -96,6 +102,7 @@ export function createTrack(seed, { element = 'water' } = {}) {
       path = Math.max(0, Math.min(LANES - 1, path + (r() < 0.5 ? -step : step) * (r() < 0.6 ? 1 : 0)));
       if (Math.abs(path - from) > step) path = from;
       sinceBar++;
+      sinceGate++;
       if (d > 140 && sinceBar >= 5 && r() < 0.45) {
         // a barrier: a low beam to jump, a high one to slide under, or a wall with its gap on the path
         sinceBar = 0;
@@ -105,6 +112,13 @@ export function createTrack(seed, { element = 'water' } = {}) {
       } else if (d < 60 || r() < 0.16) {
         row.kind = 'coins';
         for (let k = 0; k < 5; k++) row.coins.push({ lane: path, at: d + k * 2.6, high: false });
+      } else if (sw && (gates === 0 || (sinceGate >= 3 && r() < 0.4))) {
+        // a gate (concept A, the element gates): one element across all four lanes, so no lane dodges it, only the right man
+        gates++;
+        sinceGate = 0;
+        const t = anyEl();
+        for (let l = 0; l < LANES; l++) row.cells.push({ lane: l, type: t, low: false });
+        if (r() < 0.5) row.cells[path].bag = bagCoins(r);
       } else {
         // hazards: one lane early on, up to three later; the path kept clear of what ends the run
         const most = d < 200 ? 1 : d < 700 ? 2 : 3;
@@ -115,14 +129,14 @@ export function createTrack(seed, { element = 'water' } = {}) {
         if (d > 250 && onPath < 0.18) {
           // something low right on the path: jump it (or find another way) - coins hang in the air over it
           const t = r() < 0.5 ? 'water' : 'vuur';
-          row.cells.push({ lane: path, type: t === element ? (element === 'water' ? 'vuur' : 'water') : t, low: true });
+          row.cells.push({ lane: path, type: sw || t !== element ? t : (element === 'water' ? 'vuur' : 'water'), low: true });
           for (let k = 0; k < 3; k++) row.coins.push({ lane: path, at: d - 2.6 + k * 2.6, high: true });
-        } else if (onPath < 0.3) {
-          row.cells.push(cellOf(path, element));   // (your own, right in your way: safe)
+        } else if (onPath < (sw ? 0.55 : 0.3)) {
+          row.cells.push(cellOf(path, sw ? anyEl() : element));   // (your own, right in your way: safe; the switch test: any element)
         }
         // (the owner, 18 Oct: "maybe we should have the bags in the blocks ... it might get coins, but its random": your
         // own element's hazard may hold a bag of coins, decided by the track's seed so a shared track shares its luck)
-        for (const c of row.cells) if (c.type === element) c.bag = r() < BAG.chance ? bagCoins(r) : 0;
+        for (const c of row.cells) if (sw ? c.type !== 'stone' : c.type === element) c.bag = r() < BAG.chance * (sw ? 0.4 : 1) ? bagCoins(r) : 0;
         if (!row.coins.length && r() < 0.45) for (let k = 0; k < 3; k++) row.coins.push({ lane: path, at: d + 3 + k * 2.6, high: false });
         if (d > 220 && item <= 0 && r() < 0.05) { row.item = { lane: path, at: d + 6 }; item = 8; }
       }

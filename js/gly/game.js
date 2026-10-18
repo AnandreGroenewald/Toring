@@ -24,6 +24,13 @@ import { LANES, LANE_W, ELEMENTS, JUMP, SLIDE, laneX, moveLane, effectOf, speedA
 // is mirrored so lane 0 is still on the left of the screen and a swipe right goes right)
 const LX = (l) => -laneX(l);
 const q = new URLSearchParams(location.search);
+/**
+ * The switch test (the owner, 18 Oct 2026: "Build the switch test"), ?switch=1: a tap switches your man mid-run
+ * (🔥 → 💧 → 🌿); your own element glides through, what you beat is smashed (a combo), what beats you trips you, and a
+ * second trip within 5 s ends the run. Off by default, so the 1.19.0 slide stays as it is.
+ */
+const SW = q.get('switch') === '1';
+const SWITCH = Object.freeze({ grace: 150, window: 5, cloud: 2, freeze: 70 });   // (ms, s, s, ms)
 const calm = PREFS.reducedMotion;
 audio.setEnabled(PREFS.sound);
 haptics.setEnabled(PREFS.vibration);
@@ -269,9 +276,10 @@ const streaks = (() => {
 /** Your man (runner.js), made again when you pick another; a soft shadow under him that stays on the slide as he jumps. */
 let runner = null;
 const MAN = 1.5;   // (his size on the slide: the hero of the picture, still well inside his lane)
+const men = {};   // (the switch test: the three men stay made, so a switch is instant)
 function makeRunner() {
-  if (runner) { trk.remove(runner.root); runner.dispose(); }
-  runner = createRunner(element);
+  if (runner) { trk.remove(runner.root); if (!SW) runner.dispose(); }
+  runner = SW ? (men[element] ||= createRunner(element)) : createRunner(element);
   runner.root.scale.setScalar(MAN);
   trk.add(runner.root);
 }
@@ -296,8 +304,9 @@ trk.add(fill, fill.target);
  *  fire or lava, a hedge of thorny vines, a barricade of rock), outlined on the floor in what it does to you. */
 const hz = createHazards();
 const HZ_SCALE = 1;   // (each hazard is made to fill its lane: 2,2 m of the lane's 2,5)
-/** What a hazard does to you, at a glance: red ends the run, amber clouds your view, green is yours (safe). */
-const EFFECT_COL = { kill: '#ff3b30', blind: '#ffe14a', safe: '#3fdc6a' };
+/** What a hazard does to you, at a glance: red ends the run, amber clouds your view, green is yours (safe); in the switch
+ *  test red trips you, green you smash, blue you glide through. */
+const EFFECT_COL = { kill: '#ff3b30', blind: '#ffe14a', safe: '#3fdc6a', stumble: '#ff3b30', smash: '#3fdc6a', glide: '#7fd6ff' };
 /** The ✨'s halo: the sparkle on a soft dark disc. */
 function itemHaloMat() {
   const c = document.createElement('canvas');
@@ -327,6 +336,68 @@ function frameGeo(w, l, rad, th) {
 }
 const outlineGeo = frameGeo(2.34, 2.8, 0.38, 0.085);
 const outlineMats = Object.fromEntries(Object.entries(EFFECT_COL).map(([k, c]) => [k, new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.9, depthWrite: false })]));
+/**
+ * What it does to you as a shape too (the test of 18 Oct 2026: about 1 in 12 men are colour-blind, so red and green
+ * alone can look alike): a badge on each hazard, ✕ ends the run (or trips you), ≈ clouds your view (or you glide
+ * through), ✓ is yours (or yours to smash).
+ */
+const ICON = { kill: '✕', blind: '≈', safe: '✓', stumble: '✕', smash: '✓', glide: '≈' };
+function badgeMat(key) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  // (a dark disc, so it reads on bright fire and on the blue slide alike; the ring and the sign in its colour)
+  g.beginPath();
+  g.arc(64, 64, 50, 0, Math.PI * 2);
+  g.fillStyle = 'rgba(12, 8, 28, 0.85)';
+  g.fill();
+  g.lineWidth = 10;
+  g.strokeStyle = EFFECT_COL[key];
+  g.stroke();
+  g.font = '900 70px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillStyle = EFFECT_COL[key];
+  g.fillText(ICON[key], 64, 68);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.SpriteMaterial({ map: t, depthTest: false, depthWrite: false, transparent: true, fog: false });
+}
+const badgeMats = Object.fromEntries(Object.keys(EFFECT_COL).map((k) => [k, badgeMat(k)]));
+const SW_OUT = { kill: 'stumble', blind: 'smash', safe: 'glide' };
+/** What a hazard of `type` does to the man you are now. */
+const outcomeOf = (type) => (SW && type !== 'stone' ? SW_OUT[effectOf(element, type)] : effectOf(element, type));
+function setLook(g, type) {
+  const o = outcomeOf(type);
+  g.userData.outline.material = outlineMats[o];
+  g.userData.badge.material = badgeMats[o];
+}
+/** (the switch test) who a tap makes you next, a small sign over your man */
+const SIGN_COL = { vuur: '#ff7a2a', water: '#3fb8ff', gras: '#5fd14a' };
+function signMat(e) {
+  const glyph = EMOJI[e];
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  // (the next man's colour, ringed in white: it reads even where an emoji font is missing)
+  g.beginPath();
+  g.arc(64, 64, 52, 0, Math.PI * 2);
+  g.fillStyle = SIGN_COL[e];
+  g.fill();
+  g.lineWidth = 9;
+  g.strokeStyle = '#fff';
+  g.stroke();
+  g.font = '78px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(glyph, 64, 70);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.SpriteMaterial({ map: t, depthTest: false, depthWrite: false, transparent: true, fog: false });
+}
+const nextSigns = SW ? Object.fromEntries(ELEMENTS.map((e) => [e, signMat(e)])) : null;
+const nextSign = SW ? new THREE.Sprite(nextSigns.water) : null;
+if (nextSign) { nextSign.scale.setScalar(0.85); nextSign.renderOrder = 21; nextSign.visible = false; trk.add(nextSign); }
 const pools = new Map();
 /** A hazard's look: water lies low as a whirlpool or stands as a waterfall, fire as lava or a fire; vines; a boulder. */
 const lookOf = (type, low) => (type === 'water' ? (low ? 'whirl' : 'fall') : type === 'vuur' ? (low ? 'lava' : 'fire') : VARIANTS[type]?.[0] || 'rock');
@@ -340,9 +411,15 @@ function hazardMesh(type, look) {
     outline.renderOrder = 2;
     g.add(outline);
     g.userData.outline = outline;
+    const badge = new THREE.Sprite(badgeMats.kill);
+    badge.scale.setScalar(0.9);
+    badge.position.y = 0.5;
+    badge.renderOrder = 20;   // (over the flames' glow)
+    g.add(badge);
+    g.userData.badge = badge;
     g.userData.key = key;
   }
-  g.userData.outline.material = outlineMats[effectOf(element, type)];
+  setLook(g, type);
   g.scale.setScalar(HZ_SCALE);
   g.visible = true;
   trk.add(g);
@@ -658,13 +735,14 @@ function startRun() {
   G.coins = 0; G.bars = 0; G.perfects = 0; G.jumps = 0; G.holding = false; G.bags = 0; G.closes = 0;
   G.settled = false; G.missionsDone = []; G.mcheck = 0;
   G.blindUntil = 0; G.why = null; G.nextSpeedUp = 500; G.recordAt = 0; G.coinRun = 0; G.coinAt = -9;
+  G.combo = 0; G.bestCombo = 0; G.smashes = 0; G.stumbles = 0; G.stumbledAt = -9; G.switches = 0; G.saves = 0; G.pend = null; G.freezeUntil = 0;
   G.inputAt = performance.now() + 350;   // (GLY! tapped twice: its second tap never makes him jump)
   el.blind.classList.remove('is-on');
   clearBag();
   clearFlyers();
   resetRunner();
   const seed = Number(q.get('seed')) ? Number(q.get('seed')) + G.runs - 1 : Math.floor(Math.random() * 1e9);
-  track = createTrack(seed, { element });
+  track = createTrack(seed, { element, sw: SW });
   pending = track.next();
   if (best) bestMark.text(T.bestMark(metres(best)));
   hud.classList.add('is-running');
@@ -698,6 +776,8 @@ function placeRows(time) {
     const y0 = -3.2 * rise;
     const down = r.hit ? 0 : sunk(s, 1.5, 4.5);
     for (const c of r.cells) c.mesh.position.set(LX(c.lane), y0 - down, -s);
+    // (a badge only on what is still coming: never through the floor as a row rises or sinks, nor once it is met)
+    for (const c of r.cells) if (c.mesh.userData.badge) c.mesh.userData.badge.visible = !c.done && s > 2.5 && rise < 0.6;
     for (const c of r.coins) {
       const cs = c.at - G.d;
       // (coins in the air hang over something to jump: an arc over it)
@@ -786,6 +866,7 @@ function step(dt) {
     banner(T.speedUp, { sub: T.speed(Math.round(G.v * 3.6)), kind: 'is-small', ms: 1100 });
     sfx('milestone');
   }
+  if (G.pend && performance.now() > G.pend.until) { const p = G.pend; G.pend = null; stumble(p); }
   if (G.blindUntil && G.t > G.blindUntil) { G.blindUntil = 0; el.blind.classList.remove('is-on'); }
 }
 
@@ -823,6 +904,9 @@ function meet(r) {
       G.jumps++;
       if (perfectNow('jump')) perfectMoment(G.x);
       else { callout(T.overIt, new THREE.Vector3(G.x, 3.4, -1), 'is-small'); sfx('good'); }
+    } else if (SW && c.type !== 'stone') {
+      meetSw(r, c, at);
+      if (G.state !== 'run') return;
     } else if (eff === 'kill') {
       r.hit = true;
       die(c.type === 'stone' ? 'stone' : 'kill', c.type, c);
@@ -834,16 +918,7 @@ function meet(r) {
       blind(c.type);
       if (!calm) { fx.puff(at, 18, PUFF[c.type], 3); fx.sparkle(at, 14, BLOCK_COL[c.type], 6); }
     } else if (c.bag) {
-      // a bag of coins in your own element (the owner: "it might get coins, but its random")
-      c.done = true;
-      G.coins += c.bag;
-      G.bags++;
-      popBag(c.bag, new THREE.Vector3(LX(c.lane), 2.6, 0));
-      sfx('gold');
-      setTimeout(() => sfx('pop'), 110);
-      buzz('perfect');
-      stage.shake(0.18);
-      if (!calm) fx.sparkle(at, 34, '#ffd46a', 8);
+      payBag(c, at);
     } else {
       c.done = true;
       callout(T.safe, new THREE.Vector3(LX(c.lane), 3, -1), 'is-small');
@@ -852,11 +927,92 @@ function meet(r) {
     }
   }
   // (a close call: a lane over from what would have ended it, a moment after a swipe or a jump)
-  if (performance.now() - G.movedAt < 450 && r.cells.some((x) => Math.abs(x.lane - G.lane) === 1 && effectOf(element, x.type) === 'kill')) {
+  if (performance.now() - G.movedAt < 450 && r.cells.some((x) => Math.abs(x.lane - G.lane) === 1 && (SW ? x.type === 'stone' : effectOf(element, x.type) === 'kill'))) {
     G.closes++;
     callout(T.close, new THREE.Vector3(G.x, 3.6, -1), 'is-gold');
     sfx('good');
     buzz('tap');
+  }
+}
+
+/** A bag of coins in your own element (the owner: "it might get coins, but its random"). */
+function payBag(c, at) {
+  c.done = true;
+  G.coins += c.bag;
+  G.bags++;
+  popBag(c.bag, new THREE.Vector3(LX(c.lane), 2.6, 0));
+  sfx('gold');
+  setTimeout(() => sfx('pop'), 110);
+  buzz('perfect');
+  stage.shake(0.18);
+  if (!calm) fx.sparkle(at, 34, '#ffd46a', 8);
+}
+/** (the switch test) an element's hazard met: glide, smash, or, what beats you, a trip after a moment's grace. */
+function meetSw(r, c, at) {
+  const rel = effectOf(element, c.type);
+  if (rel !== 'kill') { swOutcome(rel, c, at); return; }
+  // (a late switch still counts: SWITCH.grace ms to tap the right man before it trips you)
+  if (G.pend) { const p = G.pend; G.pend = null; stumble(p); if (G.state !== 'run') return; }
+  G.pend = { r, c, at, until: performance.now() + SWITCH.grace };
+}
+function swOutcome(rel, c, at) {
+  c.done = true;
+  if (rel === 'blind') {
+    // what you beat bursts: a short freeze, a shake that grows with the combo, its element flying
+    c.mesh.visible = false;
+    G.combo++;
+    G.smashes++;
+    G.bestCombo = Math.max(G.bestCombo, G.combo);
+    G.coins += Math.min(5, G.combo);
+    G.freezeUntil = performance.now() + SWITCH.freeze;
+    callout(G.combo > 1 ? T.combo(G.combo) : T.smash, new THREE.Vector3(LX(c.lane), 3.6, -1), 'is-gold');
+    sfx('perfect', { combo: Math.min(8, 2 + G.combo) });
+    buzz('perfect');
+    stage.shake(calm ? 0 : Math.min(0.6, 0.2 + G.combo * 0.05));
+    if (!calm) { fx.chunks(at, 14, BLOCK_COL[c.type], 9); fx.puff(at, 16, PUFF[c.type], 3); fx.sparkle(at, 20, BLOCK_COL[c.type], 7); }
+  } else if (!c.bag) {
+    callout(T.glide, new THREE.Vector3(LX(c.lane), 3, -1), 'is-small');
+    sfx('pop');
+    if (!calm) fx.sparkle(at, 18, TRAIL_COL[element], 6);
+  }
+  if (c.bag) payBag(c, at);
+}
+const TRIP_KIND = { vuur: 'ash', water: 'steam', gras: 'vines' };   // (fire scorches, water steams, vines tangle)
+/** (the switch test) what beats you trips you: the combo gone, the bottom clouded 2 s; twice within 5 s ends the run. */
+function stumble({ r, c, at }) {
+  c.done = true;
+  if (G.t - G.stumbledAt < SWITCH.window) { r.hit = true; die('stumble2', c.type, c); return; }
+  G.stumbledAt = G.t;
+  G.stumbles++;
+  G.combo = 0;
+  const kind = TRIP_KIND[c.type] || 'steam';
+  G.blindUntil = G.t + SWITCH.cloud;
+  G.blindKind = kind;
+  el.blind.dataset.kind = kind;
+  el.blind.classList.add('is-on');
+  banner(T.stumble, { sub: T.stumbleSub, kind: 'is-dmg', ms: 1100 });
+  sfx(kind === 'steam' ? 'fog' : kind === 'ash' ? 'heat' : 'creak');
+  buzz('heavy');
+  stage.shake(calm ? 0 : 0.45);
+  flash('#ff3b30', 140);
+  if (!calm) fx.chunks(at, 8, BLOCK_COL[c.type] || '#c9a27a', 6);
+}
+const nextEl = (e) => ELEMENTS[(ELEMENTS.indexOf(e) + 1) % ELEMENTS.length];
+/** (the switch test) a tap: the next man, at once; every hazard ahead shows what it now does to you. */
+function switchMan() {
+  if (!SW || !canAct()) return;
+  element = nextEl(element);
+  makeRunner();
+  G.switches++;
+  sfx('pop');
+  buzz('tap');
+  if (!calm) fx.sparkle(trk.localToWorld(v3.set(G.x, 1.2 + airH(), 0.3)), 16, TRAIL_COL[element], 5);
+  for (const r of rows) for (const c of r.cells) if (!c.done && c.mesh) setLook(c.mesh, c.type);
+  if (G.pend && effectOf(element, G.pend.c.type) !== 'kill') {
+    const p = G.pend;
+    G.pend = null;
+    G.saves++;
+    swOutcome(effectOf(element, p.c.type), p.c, p.at);
   }
 }
 
@@ -967,7 +1123,8 @@ function completeMission(m) {
   G.missionsDone.push(m);
   keep({ missions: prog.missions, mdone: prog.mdone });
   if (G.state === 'run') {
-    banner(T.missionDone, { sub: `${T.mission(m)} · ${T.plusCoins(m.r)}`, kind: 'is-gold', ms: 2000 });
+    // (the test of 18 Oct 2026: the banner covered the track just ahead; now it floats over the man, behind what's coming)
+    callout(`${T.missionDone} ${T.plusCoins(m.r)}`, new THREE.Vector3(G.x, 4.6, -1.5), 'is-gold');
     sfx('perfect', { combo: 4 });
     buzz('perfect');
   }
@@ -1016,8 +1173,8 @@ function showStart() {
   const manBtn = (e) => `<button type="button" class="gl-pick gl-man${e === element ? ' is-on' : ''}" data-el="${e}">${faces[e] ? `<img src="${faces[e]}" alt="">` : `<span>${EMOJI[e]}</span>`}<b>${T.man(e)}</b></button>`;
   modal(`<div class="gl-start"><small>STAPEL</small><h2>${T.title}</h2>
     <p class="gl-lab">${T.pickMan}</p><div class="gl-row">${ELEMENTS.map(manBtn).join('')}</div>
-    <p class="gl-rules">${T.rules(kill, blindEl, element)}</p>
-    <p class="gl-how">${T.how}</p>
+    <p class="gl-rules">${SW ? T.rulesSw : T.rules(kill, blindEl, element)}</p>
+    <p class="gl-how">${SW ? T.howSw : T.how}</p>
     ${best ? `<p class="gl-bestline">${T.best(metres(best))}</p>` : ''}
     ${levelBar(levelOf(prog.xp))}
     <p class="gl-lab">${T.missions}</p>${missionRows(prog.missions)}
@@ -1103,7 +1260,7 @@ stageEl.addEventListener('pointermove', (e) => {
 stageEl.addEventListener('pointerup', (e) => {
   if (!ptr || e.pointerId !== ptr.id) return;
   const moved = Math.hypot(e.clientX - ptr.x, e.clientY - ptr.y);
-  if (!ptr.done && moved < 16 && performance.now() - ptr.t < 350) jump();
+  if (!ptr.done && moved < 16 && performance.now() - ptr.t < 350) (SW ? switchMan : jump)();   // (the switch test: a tap switches, a swipe up jumps)
   ptr = null;
 });
 stageEl.addEventListener('pointercancel', () => { ptr = null; });
@@ -1113,6 +1270,7 @@ addEventListener('keydown', (e) => {
   else if (e.code === 'ArrowRight' || e.code === 'KeyD') swipe(1);
   else if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space') { e.preventDefault(); jump(); }
   else if (e.code === 'ArrowDown' || e.code === 'KeyS') { e.preventDefault(); slide(); }
+  else if (SW && (e.code === 'KeyQ' || e.code === 'KeyF')) switchMan();
   else if (e.code === 'KeyE' || e.code === 'Enter') useItem();
   else if (e.code === 'Escape') openPause();
 });
@@ -1214,7 +1372,7 @@ function frame(now) {
   const raw = Math.min(0.05, (now - last) / 1000);
   last = now;
   if (sidewaysMq?.matches && G.state === 'run' && !G.paused) openPause();
-  const dt = G.paused ? 0 : raw * G.timeScale;
+  const dt = G.paused || now < (G.freezeUntil || 0) ? 0 : raw * G.timeScale;   // (a smash's short freeze)
   time += dt;
   if (G.state === 'run') step(dt);
   else if (G.state === 'dying') { G.d += speedAt(G.d) * dt * 0.4; G.timeScale = Math.min(1, G.timeScale + raw * 0.5); }
@@ -1223,7 +1381,12 @@ function frame(now) {
   placeRows(time);
   hz.update(time, camera, renderer.domElement.height);
   outlineMats.kill.opacity = 0.72 + 0.26 * Math.sin(time * 6);
+  outlineMats.stumble.opacity = outlineMats.kill.opacity;
   if (!G.paused) runnerVisual(dt || raw);
+  if (nextSign) {
+    nextSign.visible = G.state === 'run';
+    if (nextSign.visible) { nextSign.material = nextSigns[nextEl(element)]; nextSign.position.copy(runner.root.position); nextSign.position.y += 4.3; }
+  }
   trailVisual(dt);
   {
     const bs = best - G.d;
@@ -1252,11 +1415,11 @@ function frame(now) {
   const warm = [];
   for (const [t, looks] of Object.entries(VARIANTS)) for (const l of looks) warm.push(hazardMesh(t, l));
   const bars = [makeBarrier({ kind: 'bar', bar: 'low' }), makeBarrier({ kind: 'bar', bar: 'high' }), makeBarrier({ kind: 'wall', gap: 1 })];
-  const others = ELEMENTS.filter((e) => e !== element).map((e) => { const m = createRunner(e); trk.add(m.root); return m; });
+  const others = ELEMENTS.filter((e) => e !== element).map((e) => { const m = createRunner(e); trk.add(m.root); if (SW) men[e] = m; return m; });
   await stage.warm([]);
   for (const g of warm) freeHazard(g);
   for (const b of bars) freeBarrier(b);
-  for (const m of others) { trk.remove(m.root); m.dispose(); }
+  for (const m of others) { trk.remove(m.root); if (!SW) m.dispose(); }
   faces = portraits();
   resetRunner();
   showStart();
@@ -1271,7 +1434,9 @@ window.__gly = {
   get element() { return element; },
   set: (o = {}) => { if (ELEMENTS.includes(o.element) && o.element !== element) { element = o.element; makeRunner(); } },
   start: () => { if (G.state !== 'run') startRun(); },
-  swipe, jump, slide, up: useItem, pause: openPause,
+  swipe, jump, slide, up: useItem, pause: openPause, switchMan, sw: SW, sign: nextSign,
+  /** A row of the test's own just ahead (the switch test's checks: one hazard of a chosen type). */
+  put: (row) => { if (G.state === 'run') addRow({ at: G.d + 14, kind: 'hazards', n: -1, coins: [], cells: [], bar: null, gap: null, item: null, mine: true, ...row }); },
   air: airH,
   /** Where the man is on the screen (CSS px). */
   runnerAt: () => toScreen(v3.set(G.x, 1, 0)),
