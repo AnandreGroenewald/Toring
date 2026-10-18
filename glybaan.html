@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="af">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#140c24">
+  <title>Stapel · Glybaan</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/kasteel.css">
+  <link rel="stylesheet" href="css/botsing.css">
+  <link rel="stylesheet" href="css/gly.css">
+  <script type="importmap">{ "imports": { "three": "./lib/three.module.min.js" } }</script>
+</head>
+<body>
+  <div id="k-stage">
+    <canvas id="k-canvas"></canvas>
+    <div id="k-hud" class="kh"></div>
+    <div id="k-load" role="status"><small>GLYBAAN</small><div class="kl-tower" aria-hidden="true"><i></i><i></i><i></i><i></i></div><p>Die baan word gebou…</p></div>
+  </div>
+  <div id="k-rotate"><div class="kr-phone" aria-hidden="true">📱</div><p>Draai jou foon regop om te speel.</p></div>
+  <script>
+    // (the loading screen in the player's own language, before anything else loads)
+    try {
+      var l = new URLSearchParams(location.search).get('lang') || localStorage.getItem('stapel.v1.lang');
+      if (l === 'en') { document.documentElement.lang = 'en'; var el = document.getElementById('k-load'); el.querySelector('small').textContent = 'SLIDE'; el.querySelector('p').textContent = 'Building the slide…'; document.querySelector('#k-rotate p').textContent = 'Turn your phone upright to play.'; document.title = 'Stapel · Slide'; }
+    } catch (e) { /* Afrikaans */ }
+  </script>
+  <script type="module" src="js/gly/main.js"></script>
+</body>
+</html>
