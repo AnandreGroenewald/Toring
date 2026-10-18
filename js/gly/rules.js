@@ -1,12 +1,13 @@
 // (1.19 3D) Glybaan, Stapel's downhill runner: its rules, apart from any picture (tests/gly.test.js runs them). The owner
 // (18 Oct 2026): "The gameplay will be a slide going downwards and also it needs to be four lanes"; his picks: four lanes,
-// a 3D chute with the camera behind the block, a playable test of the core first.
+// a 3D chute, a playable test of the core first.
 //
 // Your block slides down a chute of four lanes that keeps speeding up. The Square takes one lane; the Rectangle lies two
 // lanes wide (and one high) or, turned, stands one lane wide and two high. Elements follow Stapel's own circle (water
 // beats vuur, vuur beats gras, gras beats water): a hazard of the element that beats yours ends the run, one of the
-// element you beat clouds the bottom of the screen for a while (steam, ash or vines), your own is safe (a few coins), and
-// stone you dodge. A Shadow Gate is a wall with an outline cut out of it: fit through it, exactly for a Perfek.
+// element you beat clouds the bottom of the screen for a while (steam, ash or vines), your own is safe (now and then with a
+// bag of coins inside), and stone you dodge. A Shadow Gate is a wall with an outline cut out of it: fit through it,
+// exactly for a Perfek.
 import { rng } from '../kasteel/world.js';
 
 export const LANES = 4;
@@ -137,6 +138,10 @@ export function createTrack(seed, { shape = 'square', element = 'water' } = {}) 
           row.cells.push({ lane: l, type: hazardType(d) });
         }
         if (r() < 0.12) row.cells.push({ lane: path, type: element });   // (your own, right in your way: safe)
+        // (the owner, 18 Oct: "maybe we should have the bags in the blocks, for example if its a fire block and it goes
+        // through the firebox then it might get coins, but its random": a block of your own element may hold a bag of
+        // coins, decided by the track's seed so a shared track shares its luck)
+        for (const c of row.cells) if (c.type === element) c.bag = r() < BAG.chance ? bagCoins(r) : 0;
         if (r() < 0.45) for (let k = 0; k < 3; k++) row.coins.push({ lane: path, at: d + 3 + k * 2.6 });
         if (d > 220 && item <= 0 && r() < 0.05) { row.item = { lane: path, at: d + 6 }; item = 8; }
       }
@@ -146,6 +151,13 @@ export function createTrack(seed, { shape = 'square', element = 'water' } = {}) 
       return row;
     },
   };
+}
+
+/** A bag in a block of your own element: how often, and how many coins (mostly a few, now and then a lot). */
+export const BAG = Object.freeze({ chance: 0.55, min: 3, max: 20 });
+export function bagCoins(r) {
+  const x = r();
+  return Math.round(BAG.min + (BAG.max - BAG.min) * x * x * x);
 }
 
 /** A string seed as a number (FNV-1a). */

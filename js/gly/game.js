@@ -1,6 +1,7 @@
 // (1.19 3D) Glybaan, Stapel's downhill runner (the owner, 18 Oct 2026: Block Clash "Its not working ... The gameplay will
-// be a slide going downwards and also it needs to be four lanes"; his picks: four lanes, a 3D chute with the camera behind
-// the block, a playable test of the core first). Your block slides down a chute high over the sunset sea, always faster:
+// be a slide going downwards and also it needs to be four lanes"; his picks: four lanes, a 3D chute, a playable test of the
+// core first; after his first look: "can't we make it that it slides from top to bottom", bags of coins in the blocks of
+// your own element, the menu's coins). Your block slides down a chute high over the sunset sea, always faster:
 // swipe ⟵ ⟶ for a lane, tap to turn it (the Rectangle lies two lanes wide, or stands one lane wide and two high), swipe ⬆
 // with a ✨ to clear your view. The rules (elements, gates, the track) are in rules.js; the look reuses Block Clash's
 // world (sky, sea, islands), its painted blocks in the player's own skin (the hazards are Stapel blocks too: lava 🔥, ice
@@ -15,6 +16,9 @@ import { fmtInt } from '../core/format.js';
 import { T, PREFS, goBack, EMOJI } from './text.js';
 import { LANES, LANE_W, UNIT_H, ELEMENTS, SHAPES, XP_K, laneX, sizeOf, lanesOf, moveLane, turn, effectOf, gateFit, speedAt, createTrack, killerOf, victimOf } from './rules.js';
 
+// (the slide runs from the top of the screen to the bottom, the camera turned to look down it: a lane's place across the
+// chute is mirrored so lane 0 is still on the left of the screen and a swipe right goes right)
+const LX = (l) => -laneX(l);
 const q = new URLSearchParams(location.search);
 const calm = PREFS.reducedMotion;
 audio.setEnabled(PREFS.sound);
@@ -185,7 +189,7 @@ function signMat(type, eff = null) {
   g.font = `${eff ? 70 : 96}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText(type === 'item' ? '✨' : EMOJI[type], 64, eff ? 68 : 70);
+  g.fillText(type === 'item' ? '✨' : type === 'bag' ? '💰' : EMOJI[type], 64, eff ? 68 : 70);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return (signMats[key] = new THREE.SpriteMaterial({ map: t, depthWrite: false, fog: true }));
@@ -221,10 +225,39 @@ function freeHazard(g) {
   if (!pools.has(type)) pools.set(type, []);
   pools.get(type).push(g);
 }
-const coinGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.16, 24).rotateX(Math.PI / 2);
-const coinMat = new THREE.MeshStandardMaterial({ color: '#ffcf4a', metalness: 1, roughness: 0.24, emissive: '#7a4a00', emissiveIntensity: 0.35 });
+/** (the owner, 18 Oct: "can you make it the same look as the coins in the menu") Stapel's own gold coin (css .coin-ic): a
+ *  gold face, a darker ring, a gleam and the star. */
+function coinTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const disc = (r, fill) => { g.beginPath(); g.arc(64, 64, r, 0, Math.PI * 2); g.fillStyle = fill; g.fill(); };
+  disc(60, '#ffd23f');
+  disc(36, '#f0b41a');
+  disc(30, '#ffe25c');
+  g.lineWidth = 5;
+  g.strokeStyle = '#c98d07';
+  g.beginPath(); g.arc(64, 64, 57.5, 0, Math.PI * 2); g.stroke();
+  g.lineWidth = 6;
+  g.strokeStyle = '#b67b00';
+  g.beginPath(); g.arc(64, 64, 55, Math.PI * 0.15, Math.PI * 0.85); g.stroke();
+  const gl = g.createRadialGradient(44, 36, 0, 44, 36, 38);
+  gl.addColorStop(0, 'rgba(255,251,224,1)'); gl.addColorStop(0.3, 'rgba(255,251,224,0.5)'); gl.addColorStop(1, 'rgba(255,251,224,0)');
+  disc(60, gl);
+  g.font = '900 64px sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillStyle = '#fff2a8';
+  g.fillText('★', 64, 70);
+  g.fillStyle = '#d39500';
+  g.fillText('★', 64, 66);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const coinMat = new THREE.SpriteMaterial({ map: coinTexture(), depthWrite: false, fog: true });
 const coinPool = [];
-const coinMesh = () => { const m = coinPool.pop() || new THREE.Mesh(coinGeo, coinMat); trk.add(m); m.visible = true; return m; };
+const coinMesh = () => { const m = coinPool.pop() || new THREE.Sprite(coinMat); m.scale.set(1.5, 1.5, 1); trk.add(m); m.visible = true; return m; };
 const freeCoin = (m) => { trk.remove(m); coinPool.push(m); };
 const itemMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.62, 0), new THREE.MeshStandardMaterial({ color: '#bff7ff', emissive: '#58e6ff', emissiveIntensity: 2.4, roughness: 0.2 }));
 const itemHalo = new THREE.Sprite(signMat('item'));
@@ -240,8 +273,8 @@ function makeGate(hole) {
   const H = 3 * UNIT_H + 0.9;
   const x0 = -WIDTH / 2 - 0.5;
   const x3 = WIDTH / 2 + 0.5;
-  const hx0 = laneX(hole.lane) - LANE_W / 2;
-  const hx1 = hx0 + hole.w * LANE_W;
+  const hx0 = LX(hole.lane + hole.w - 1) - LANE_W / 2;   // (mirrored: the hole's last lane is its left side)
+  const hx1 = LX(hole.lane) + LANE_W / 2;
   const hh = hole.h * UNIT_H + 0.5;
   const D = 0.9;
   const piece = (a, b, y0, y1, m = gateMat) => {
@@ -272,7 +305,27 @@ function makeGate(hole) {
 }
 function freeGate(g) {
   trk.remove(g);
-  g.traverse((o) => { if (o.isMesh && o.geometry !== coinGeo) o.geometry.dispose(); });
+  g.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+}
+/** A bag of coins bursting out of a block of your own element: it pops up and fades (a few at once, pooled). */
+const bagMat = signMat('bag');
+const bags = Array.from({ length: 4 }, () => { const b = new THREE.Sprite(bagMat.clone()); b.visible = false; trk.add(b); return { b, t: 9 }; });
+function popBag(x) {
+  const q = bags.find((o) => o.t >= 1) || bags[0];
+  q.t = 0;
+  q.x = x;
+  q.b.visible = true;
+}
+function bagsVisual(dt) {
+  for (const q of bags) {
+    if (q.t >= 1) { q.b.visible = false; continue; }
+    q.t += dt * 1.1;
+    const k = q.t;
+    q.b.position.set(q.x, 2.4 + 4 * k, -1.5 - 2 * k);
+    const s = 1.4 + 1.2 * Math.sin(Math.min(1, k * 2.2) * Math.PI / 2);
+    q.b.scale.set(s, s, 1);
+    q.b.material.opacity = 1 - Math.max(0, (k - 0.6) / 0.4);
+  }
 }
 
 // ------------------------------------------------------------------------------------------- the screen
@@ -280,7 +333,7 @@ const hud = document.getElementById('k-hud');
 hud.classList.add('bt', 'gl');
 hud.innerHTML = `
   <div class="gl-top"><b class="gl-m">0&nbsp;m</b><span class="gl-best"></span></div>
-  <div class="gl-side"><span class="gl-coins">🪙 0</span><span class="gl-kmh"></span><span class="gl-item" aria-label="✨">✨</span></div>
+  <div class="gl-side"><span class="gl-coins"><i class="coin-ic" role="img" aria-label="🪙"></i><b>0</b></span><span class="gl-kmh"></span><span class="gl-item" aria-label="✨">✨</span></div>
   <div class="gl-blind" aria-hidden="true"><i></i><i></i><i></i></div>
   <div class="bt-flash" aria-hidden="true"></div>
   <div class="bt-banner" aria-live="polite"><b></b><span></span></div>
@@ -289,7 +342,7 @@ hud.innerHTML = `
   <p class="gl-hint"></p>
   <div class="bt-modal" hidden></div>`;
 const $ = (s) => hud.querySelector(s);
-const el = { m: $('.gl-m'), best: $('.gl-best'), coins: $('.gl-coins'), kmh: $('.gl-kmh'), item: $('.gl-item'), blind: $('.gl-blind'), flash: $('.bt-flash'), banner: $('.bt-banner'), callouts: $('.bt-callouts'), modal: $('.bt-modal'), hint: $('.gl-hint') };
+const el = { m: $('.gl-m'), best: $('.gl-best'), coins: $('.gl-coins'), coinsN: $('.gl-coins b'), kmh: $('.gl-kmh'), item: $('.gl-item'), blind: $('.gl-blind'), flash: $('.bt-flash'), banner: $('.bt-banner'), callouts: $('.bt-callouts'), modal: $('.bt-modal'), hint: $('.gl-hint') };
 let bannerT = null;
 function banner(text, { sub = '', kind = '', ms = 1400 } = {}) {
   el.banner.querySelector('b').textContent = text;
@@ -333,11 +386,11 @@ const G = {
   paused: false,
   d: 0, v: 0, t: 0, timeScale: 1,
   lane: 1, orient: 'flat', lastDir: -1,
-  x: laneX(1), xv: 0, roll: 0, rollTo: 0, tumble: null,
+  x: LX(1), xv: 0, roll: 0, rollTo: 0, tumble: null,
   coins: 0, gates: 0, perfects: 0, holding: false,
   blindUntil: 0, blindKind: '',
   why: null, nextSpeedUp: 500,
-  runs: 0,
+  runs: 0, inputAt: 0,
 };
 let track = null;
 let pending = null;   // the next row, not yet in the chute
@@ -346,7 +399,7 @@ const rows = [];
 function resetBlock() {
   G.orient = 'flat';
   G.lane = shape === 'rect' ? 1 : 1;
-  G.x = laneX(G.lane) + (shape === 'rect' ? LANE_W / 2 : 0);
+  G.x = LX(G.lane) - (shape === 'rect' ? LANE_W / 2 : 0);
   G.xv = 0;
   G.roll = G.rollTo = 0;
   G.tumble = null;
@@ -367,8 +420,9 @@ function startRun() {
   G.state = 'run';
   G.paused = false;
   G.d = 0; G.t = 0; G.timeScale = 1;
-  G.coins = 0; G.gates = 0; G.perfects = 0; G.holding = false;
+  G.coins = 0; G.gates = 0; G.perfects = 0; G.holding = false; G.bags = 0;
   G.blindUntil = 0; G.why = null; G.nextSpeedUp = 500;
+  G.inputAt = performance.now() + 350;   // (GLY! tapped twice: its second tap never turns the block)
   resetBlock();
   const seed = Number(q.get('seed')) ? Number(q.get('seed')) + G.runs - 1 : Math.floor(Math.random() * 1e9);
   track = createTrack(seed, { shape, element });
@@ -394,24 +448,30 @@ function dropRow(r) {
   if (r.item && itemMesh.parent) trk.remove(itemMesh);
 }
 
-/** Where the things are this frame (they rise out of the chute as they come into view). */
+/** How far a thing the block is past has sunk back into the chute (seen from high over the block, what's behind it would
+ *  otherwise slide up over the numbers at the top); what ended the run stays. */
+const sunk = (s, after, rate) => Math.max(0, -s - after) * rate;
+/** Where the things are this frame (they rise out of the chute as they come into view, and sink back once passed). */
 function placeRows(time) {
   for (const r of rows) {
     const s = r.at - G.d;
     const rise = s > AHEAD - 28 ? Math.min(1, (s - (AHEAD - 28)) / 28) : 0;
     const y0 = -3.2 * rise;
+    const down = r.hit ? 0 : sunk(s, 1.5, 4.5);
     for (const c of r.cells) {
-      c.mesh.position.set(laneX(c.lane), 1.2 + y0, -s);
+      c.mesh.position.set(LX(c.lane), 1.2 + y0 - down, -s);
     }
     for (const c of r.coins) {
       const cs = c.at - G.d;
-      c.mesh.position.set(laneX(c.lane), 1.3 + y0 + Math.sin(time * 3 + cs) * 0.12, -cs);
-      c.mesh.rotation.y = time * 4 + cs;
+      c.mesh.position.set(LX(c.lane), 1.3 + y0 - sunk(cs, 1, 4) + Math.sin(time * 3 + cs) * 0.12, -cs);
+      const pulse = 1.5 * (1 + 0.06 * Math.sin(time * 6 + cs));
+      c.mesh.scale.set(pulse, pulse, 1);
     }
-    if (r.gate) r.gate.position.set(0, y0 * 2.2, -s);
+    // (a gate sinks once it is clear of the block's back, quickly: it stands three blocks high)
+    if (r.gate) r.gate.position.set(0, y0 * 2.2 - (r.hit ? 0 : sunk(s, 1.7, 14)), -s);
     if (r.item && !r.item.done) {
       const is = r.item.at - G.d;
-      itemMesh.position.set(laneX(r.item.lane), 1.5 + y0 + Math.sin(time * 4) * 0.2, -is);
+      itemMesh.position.set(LX(r.item.lane), 1.5 + y0 - sunk(is, 1, 4) + Math.sin(time * 4) * 0.2, -is);
       itemMesh.rotation.y = time * 2;
       itemMesh.rotation.x = time * 1.3;
     }
@@ -435,7 +495,7 @@ function step(dt) {
         G.coins++;
         c.mesh.visible = false;
         sfx('gold');
-        if (!calm) fx.sparkle(trk.localToWorld(v3.set(laneX(c.lane), 1.3, 0)), 8, '#ffd46a', 4);
+        if (!calm) fx.sparkle(trk.localToWorld(v3.set(LX(c.lane), 1.3, 0)), 8, '#ffd46a', 4);
       }
     }
     if (r.item && !r.item.done && r.item.at - G.d <= 0.4) {
@@ -445,7 +505,7 @@ function step(dt) {
         itemMesh.visible = false;
         sfx('rainbow');
         buzz('tap');
-        callout(T.gotItem, new THREE.Vector3(laneX(r.item.lane), 2.4, 0), 'is-gold');
+        callout(T.gotItem, new THREE.Vector3(LX(r.item.lane), 2.4, 0), 'is-gold');
       }
     }
     if (r.done || r.at - G.d > 0) continue;
@@ -469,17 +529,17 @@ function meet(r) {
   const mine = taken();
   if (r.kind === 'gate') {
     const fit = gateFit(shape, G.orient, G.lane, r.hole);
-    if (fit === 'crash') { die('gate'); return; }
+    if (fit === 'crash') { r.hit = true; die('gate'); return; }
     G.gates++;
     if (fit === 'perfect') {
       G.perfects++;
       G.coins += 5;
-      callout(T.perfect, new THREE.Vector3(laneX(G.lane), 3.6, -1), 'is-gold');
+      callout(T.perfect, new THREE.Vector3(LX(G.lane), 3.6, -1), 'is-gold');
       sfx('perfect', { combo: 3 });
       buzz('perfect');
       if (!calm) fx.sparkle(trk.localToWorld(v3.set(G.x, 2, -0.5)), 26, '#ffe38c', 7);
     } else {
-      callout(T.through, new THREE.Vector3(laneX(G.lane), 3.2, -1), 'is-small');
+      callout(T.through, new THREE.Vector3(LX(G.lane), 3.2, -1), 'is-small');
       sfx('good');
     }
     return;
@@ -487,16 +547,25 @@ function meet(r) {
   for (const c of r.cells) {
     if (!mine.includes(c.lane) || c.done) continue;
     const eff = effectOf(element, c.type);
-    const at = trk.localToWorld(v3.set(laneX(c.lane), 1.2, 0)).clone();
-    if (eff === 'kill') { die(c.type === 'stone' ? 'stone' : 'kill', c.type, c); return; }
+    const at = trk.localToWorld(v3.set(LX(c.lane), 1.2, 0)).clone();
+    if (eff === 'kill') { r.hit = true; die(c.type === 'stone' ? 'stone' : 'kill', c.type, c); return; }
     c.done = true;
     c.mesh.visible = false;
     if (eff === 'blind') {
       blind(c.type);
       if (!calm) { fx.puff(at, 16, PUFF[c.type]); fx.chunks(at, 8, BLOCK_COL[c.type], 7); }
+    } else if (c.bag) {
+      // a bag of coins in your own element's block (the owner: "it might get coins, but its random")
+      G.coins += c.bag;
+      G.bags = (G.bags || 0) + 1;
+      popBag(LX(c.lane));
+      callout(T.bag(c.bag), new THREE.Vector3(LX(c.lane), 3.4, -1), 'is-gold');
+      sfx('gold');
+      setTimeout(() => sfx('gold'), 120);
+      buzz('perfect');
+      if (!calm) fx.sparkle(at, 34, '#ffd46a', 8);
     } else {
-      G.coins += 2;
-      callout(T.safe, new THREE.Vector3(laneX(c.lane), 2.8, -1), 'is-small');
+      callout(T.safe, new THREE.Vector3(LX(c.lane), 2.8, -1), 'is-small');
       sfx('pop');
       if (!calm) fx.sparkle(at, 18, c.type === 'vuur' ? '#ff9a3c' : c.type === 'water' ? '#7fd8ff' : '#8bea5c', 6);
     }
@@ -617,16 +686,16 @@ addEventListener('stapel:back', (e) => { e.preventDefault(); if (G.state === 'ru
 // ------------------------------------------------------------------------------------------- the controls
 /** A swipe: one lane that way. */
 function swipe(dir) {
-  if (G.state !== 'run' || G.paused) return;
+  if (G.state !== 'run' || G.paused || performance.now() < G.inputAt) return;
   const lane = moveLane(shape, G.orient, G.lane, dir);
   G.lastDir = dir < 0 ? -1 : 1;
-  if (lane === G.lane) { G.xv += dir * 6; return; }   // (the wall: a nudge, no lane)
+  if (lane === G.lane) { G.xv -= dir * 6; return; }   // (the wall: a nudge, no lane)
   G.lane = lane;
   sfx('click');
 }
 /** A tap: the block turns a quarter (the Rectangle stands up or lies down). */
 function tapTurn() {
-  if (G.state !== 'run' || G.paused) return;
+  if (G.state !== 'run' || G.paused || performance.now() < G.inputAt) return;
   const t = turn(shape, G.orient, G.lane, G.lastDir);
   G.orient = t.orient;
   G.lane = t.lane;
@@ -667,11 +736,11 @@ addEventListener('keydown', (e) => {
 // ------------------------------------------------------------------------------------------- the frame
 const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
-let camX = laneX(1);
+let camX = LX(1);
 let tilt = 0;
 function blockVisual(dt) {
   const { w, h } = sizeOf(shape, G.orient);
-  const target = laneX(G.lane) + (w - 1) * LANE_W / 2;
+  const target = LX(G.lane) - (w - 1) * LANE_W / 2;
   if (G.tumble) {
     const t = G.tumble;
     t.vy -= 22 * dt;
@@ -694,24 +763,34 @@ function blockVisual(dt) {
   blockGroup.rotation.set(0, 0, a);
   void h;
 }
+const upHill = new THREE.Vector3();
+/**
+ * (the owner, 18 Oct: "can't we make it that it slides from top to bottom") The camera hangs high over the block, a little
+ * uphill of it, looking down the chute; "up" on the screen is uphill. The block slides near the top of the screen, the
+ * chute runs down to the bottom, and what comes rises from there (the bottom 30% is where it comes from: what clouds your
+ * view hides it). Higher, and further ahead, as it gets faster.
+ */
 function cameraVisual(dt) {
   const k = Math.min(1, Math.max(0, (G.v - 15) / 25));
   const tall = sizeOf(shape, G.orient).h === 2;
-  camX += (G.x * 0.55 - camX) * Math.min(1, dt * 6);
-  tilt += ((-G.xv * 0.006) - tilt) * Math.min(1, dt * 8);
-  camPos.set(camX, 8.6 + (tall ? 0.8 : 0) + k * 0.6, 15.5 + k * 1.6);
-  camLook.set(camX * 0.45, 0.4, -30);
+  // (the whole chute in the picture with sea on both sides: the camera follows the block only a little)
+  camX += (G.x * 0.15 - camX) * Math.min(1, dt * 6);
+  tilt += ((G.xv * 0.003) - tilt) * Math.min(1, dt * 8);
+  camPos.set(camX, 21 + 4 * k + (tall ? 0.8 : 0), 15 + 3 * k);
+  camLook.set(camX, 0, -11 - 4 * k);
   trk.localToWorld(camPos);
   trk.localToWorld(camLook);
+  upHill.set(0, 0, 1).applyQuaternion(trk.quaternion);
+  camera.up.copy(upHill);
   camera.position.copy(camPos);
   camera.lookAt(camLook);
   camera.rotateZ(calm ? 0 : tilt);
-  const fov = 58 + 14 * k;
+  const fov = 62 + 4 * k;
   if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = fov; camera.updateProjectionMatrix(); }
 }
 function hudVisual() {
   el.m.innerHTML = metres(G.d);
-  el.coins.textContent = `🪙 ${fmtInt(G.coins)}`;
+  el.coinsN.textContent = fmtInt(G.coins);
   el.kmh.textContent = G.state === 'run' ? T.speed(Math.round(G.v * 3.6)) : '';
   el.item.dataset.on = G.holding ? '1' : '0';
 }
@@ -731,6 +810,7 @@ function frame(now) {
   rushPast(G.d);
   placeRows(time);
   blockVisual(dt || raw * 0.0001);
+  bagsVisual(dt);
   cameraVisual(raw);
   world.update(time);
   fx.update(dt || raw * 0.5);
@@ -764,4 +844,6 @@ window.__gly = {
   start: () => { if (G.state !== 'run') startRun(); },
   swipe, turn: tapTurn, up: useItem, pause: openPause,
   taken,
+  /** Where the block is on the screen (CSS px). */
+  blockAt: () => toScreen(blockGroup.position),
 };

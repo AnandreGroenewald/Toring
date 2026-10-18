@@ -84,6 +84,22 @@ test('every row of a long track can be passed, by each shape and element, and th
   }
 });
 
+test('bags of coins only in blocks of your own element, about half of them, 3 to 20 coins', () => {
+  for (const element of ELEMENTS) {
+    const tr = createTrack(99, { shape: 'square', element });
+    let own = 0;
+    let bags = 0;
+    for (let i = 0; i < 600; i++) {
+      for (const c of tr.next().cells) {
+        if (c.type !== element) { assert.equal(c.bag, undefined, 'no bag in a block of another element or stone'); continue; }
+        own++;
+        if (c.bag) { bags++; assert.ok(c.bag >= 3 && c.bag <= 20, `bag ${c.bag}`); }
+      }
+    }
+    assert.ok(own > 30 && bags / own > 0.35 && bags / own < 0.75, `${element}: ${bags} bags in ${own} of its own blocks`);
+  }
+});
+
 test('the same seed, the same track (a Daily slide could share one)', () => {
   const a = createTrack('x', { shape: 'rect', element: 'vuur' });
   const b = createTrack('x', { shape: 'rect', element: 'vuur' });
