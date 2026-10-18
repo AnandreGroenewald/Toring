@@ -1214,6 +1214,21 @@ Later the owner added (decisions are final unless they say otherwise):
     ends the run, what you beat clouds the bottom 30%, your own is safe), stone, Shadow Gates; always faster. Rules in
     js/gly/rules.js with tests/gly.test.js; played by qa/gly1190's autopilot, 60 fps on a 4x slower phone, WebKit OK.
   - His phone on the home Wi-Fi: http://192.168.1.225:8500/glybaan.html?nosw=1.
+- **18 Oct 2026 (~16:00–16:50): Glybaan, second round (local d345862; still not on the menu or in the builds).** The
+  owner after his first look: "can't we make it that it slides from top to bottom and also maybe we should have the bags
+  in the blocks, for example if its a fire block and it goes through the firebox then it might get coins, but its random
+  ... can you make it the same look as the coins in the menu."
+  - Top to bottom: the camera hangs high over the block looking down the chute (`camera.up` = uphill; lanes mirrored with
+    `LX = -laneX`, so a swipe left still goes left on the screen). The block slides near the top; what comes rises from
+    the bottom, so the bottom 30% that steam, ash or vines cloud is now where the danger comes from. What the block is
+    past sinks back into the chute (`sunk()`), so it never covers the numbers at the top; what ended the run stays.
+  - Bags: a block of your own element holds a bag of coins 55% of the time (rules.js `BAG`, 3 to 20, mostly few), set by
+    the track's seed; a 💰 pops out with "+N". The start card's rules line says so.
+  - Coins: Stapel's own gold coin (a canvas copy of `css/style.css` `.coin-ic`; the corner count uses `.coin-ic` itself).
+  - GLY! tapped twice: its second tap never turns the block (`G.inputAt`, 350 ms).
+  - Tests: npm test 475; qa/gly1190 (rect water, square vuur, rect gras: ALL OK; passed things sunk; a bag's coins counted
+    on screen), gly_nonsense1190 20/20 (a swipe left moves the block left on the screen), gly_perf1190 60 fps on a 4x
+    slower phone, gly_webkit1190 OK. Screens: Previews › "1.19 Glybaan - bo na onder (18 Oct)".
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
