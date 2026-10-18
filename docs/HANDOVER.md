@@ -1281,6 +1281,10 @@ The owner asked for the element-switch feel test and the three fixes from the Ga
 turns the switch on (off by default); the badges, the ✨ button and the mission note apply to everyone. Details and tests:
 the stapel skill's changelog. The Play bundle in the Play folder is still 687e28d.
 
+### 18 Oct 2026 23:31 · Glybaan's elemental look; 1.19.0 (11900) on Play internal testing (e84cd4c)
+The owner's pick of the Gemini pictures, built: js/gly/elemental.js (hazards), js/gly/scenery.js (islands), the rare diamond,
+the remodelled men; uploaded to internal testing on his word. The Worker and website are untouched. Details: the stapel skill.
+
 ## 3. Remaining work, in order
 
 <!-- TODO-START -->
