@@ -11,7 +11,7 @@ import { createStage } from '../kasteel/stage.js';
 import { buildWorld, SUN_DIR } from '../botsing/world.js';
 import { createPieces } from '../botsing/pieces.js';
 import { createRunFx } from './fx.js';
-import { createHazards, VARIANTS } from './hazards.js';
+import { createHazards, VARIANTS, fieldMat, rockPillar } from './hazards.js';
 import { audio, haptics } from '../audio.js';
 import { fmtInt } from '../core/format.js';
 import { T, PREFS, goBack, EMOJI } from './text.js';
@@ -156,6 +156,43 @@ function rushPast(d) {
   floorTex.map.offset.y = floorTex.emi.offset.y = (d / WIDTH) % 1;
 }
 
+/** Speed lines: thin streaks of light rushing up the chute (most along its walls), more and brighter the faster it goes. */
+const STREAKS = 46;
+const streaks = (() => {
+  const a = new Float32Array(STREAKS * 8);
+  for (let i = 0; i < STREAKS; i++) {
+    const wall = Math.random() < 0.65;
+    const x = wall ? (Math.random() < 0.5 ? -1 : 1) * (WIDTH / 2 - 0.15 - Math.random() * 0.35) : (Math.random() - 0.5) * (WIDTH - 1.5);
+    const y = wall ? 0.35 + Math.random() * 1.3 : 3 + Math.random() * 4;
+    const ph = Math.random();
+    const len = 4 + Math.random() * 7;
+    a.set([x, y, ph, 0, x, y, ph, len], i * 8);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(STREAKS * 6), 3));
+  geo.setAttribute('aS', new THREE.BufferAttribute(a, 4));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 2, -25), 90);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uOff: { value: 0 }, uK: { value: 0 } },
+    vertexShader: `attribute vec4 aS; uniform float uOff; varying float vA;
+      void main() {
+        float L = 75.0;
+        float z = mod(aS.z * L + uOff, L) - (L - 16.0);
+        vA = smoothstep(-(L - 16.0), -(L - 34.0), z) * (1.0 - smoothstep(4.0, 16.0, z)) * (aS.w > 0.0 ? 0.0 : 1.0);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(aS.x, aS.y, z - aS.w, 1.0);
+      }`,
+    fragmentShader: `uniform float uK; varying float vA;
+      void main() { gl_FragColor = vec4(vec3(0.78, 0.92, 1.0) * 1.5, vA * uK);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const lines = new THREE.LineSegments(geo, mat);
+  trk.add(lines);
+  return mat;
+})();
+
 // ------------------------------------------------------------------------------------------- the block and the things
 const blockGroup = new THREE.Group();
 trk.add(blockGroup);
@@ -265,11 +302,11 @@ const itemMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.62, 0), new THRE
 const itemHalo = new THREE.Sprite(itemHaloMat());
 itemHalo.scale.set(1.9, 1.9, 1);
 itemMesh.add(itemHalo);
-const gateMat = new THREE.MeshStandardMaterial({ color: '#2b2160', emissive: '#3b2c8f', emissiveIntensity: 0.45, roughness: 0.15, metalness: 0.3, transparent: true, opacity: 0.8 });
 const gateEdgeMat = new THREE.MeshStandardMaterial({ color: '#fff4cf', emissive: '#ffd36b', emissiveIntensity: 3 });
 const gateRimMat = new THREE.MeshStandardMaterial({ color: '#b9a6ff', emissive: '#7a5cff', emissiveIntensity: 1.6 });
 const gateGlowMat = new THREE.MeshBasicMaterial({ color: '#ffd36b', transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false });
-/** A Shadow Gate: a wall across the chute, three blocks high, with the hole's outline glowing gold. */
+/** A Shadow Gate: a wall of shimmering light across the chute between two pillars of rock, three blocks high, the hole's
+ *  outline glowing gold; it flashes gold as you go through. */
 function makeGate(hole) {
   const g = new THREE.Group();
   const H = 3 * UNIT_H + 0.9;
@@ -279,11 +316,12 @@ function makeGate(hole) {
   const hx1 = LX(hole.lane) + LANE_W / 2;
   const hh = hole.h * UNIT_H + 0.5;
   const D = 0.9;
-  const piece = (a, b, y0, y1, m = gateMat) => {
+  const field = fieldMat();
+  const piece = (a, b, y0, y1) => {
     if (b - a < 0.01 || y1 - y0 < 0.01) return;
-    const o = new THREE.Mesh(new THREE.BoxGeometry(b - a, y1 - y0, D), m);
-    o.position.set((a + b) / 2, (y0 + y1) / 2, 0);
-    o.castShadow = o.receiveShadow = true;
+    // (its shape baked in place: the field's honeycomb runs on from piece to piece)
+    const o = new THREE.Mesh(new THREE.BoxGeometry(b - a, y1 - y0, D).translate((a + b) / 2, (y0 + y1) / 2, 0), field);
+    o.renderOrder = 3;
     g.add(o);
   };
   piece(x0, hx0, 0, H);
@@ -297,8 +335,8 @@ function makeGate(hole) {
   edge(hx1, hx1 + e, 0, hh + e);
   edge(hx0 - e, hx1 + e, hh, hh + e);
   edge(x0, x3, H - 0.12, H, gateRimMat);
-  edge(x0, x0 + 0.12, 0, H, gateRimMat);
-  edge(x3 - 0.12, x3, 0, H, gateRimMat);
+  for (const [i, x] of [[0, x0 - 0.3], [1, x3 + 0.3]]) { const pl = rockPillar(i, H + 0.4); pl.position.set(x, 0, 0); g.add(pl); }
+  g.userData = { field, flashAt: -9, flashK: 0 };
   // a glow on the chute's floor through the hole (where to be)
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(hx1 - hx0, 6).rotateX(-Math.PI / 2), gateGlowMat);
   glow.position.set((hx0 + hx1) / 2, 0.03, 2.4);
@@ -308,7 +346,8 @@ function makeGate(hole) {
 }
 function freeGate(g) {
   trk.remove(g);
-  g.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+  g.traverse((o) => { if (o.isMesh && !o.geometry.userData.shared) o.geometry.dispose(); });
+  g.userData.field?.dispose();
 }
 // ------------------------------------------------------------------------------------------- the screen
 const hud = document.getElementById('k-hud');
@@ -366,6 +405,41 @@ function popBag(n, local) {
   clearTimeout(bagT);
   bagT = setTimeout(() => el.bag.classList.remove('is-on'), 1600);
 }
+/** A coin picked up flies to the counter (which counts it when it lands, and jumps). */
+const flyers = [];
+let inFlight = 0;
+function flyCoin(from) {
+  let f = flyers.find((x) => !x.busy);
+  if (!f) {
+    if (flyers.length >= 12) return;
+    f = { e: document.createElement('i'), busy: false, t: null };
+    f.e.className = 'coin-ic gl-fly';
+    hud.append(f.e);
+    flyers.push(f);
+  }
+  const hb = hud.getBoundingClientRect();
+  const cb = el.coins.getBoundingClientRect();
+  f.busy = true;
+  inFlight++;
+  f.e.style.transition = 'none';
+  f.e.style.opacity = '1';
+  f.e.style.transform = `translate(${Math.round(from.x)}px, ${Math.round(from.y)}px) scale(1.25)`;
+  void f.e.offsetWidth;   // (from where it was picked up)
+  f.e.style.transition = 'transform 0.5s cubic-bezier(0.55, 0, 0.75, 0.6)';
+  f.e.style.transform = `translate(${Math.round(cb.left - hb.left + 18)}px, ${Math.round(cb.top - hb.top + cb.height / 2)}px) scale(0.75)`;
+  f.t = setTimeout(() => {
+    f.busy = false;
+    f.e.style.opacity = '0';
+    inFlight = Math.max(0, inFlight - 1);
+    el.coins.classList.remove('is-bump');
+    void el.coins.offsetWidth;
+    el.coins.classList.add('is-bump');
+  }, 500);
+}
+function clearFlyers() {
+  for (const f of flyers) { clearTimeout(f.t); f.busy = false; f.e.style.opacity = '0'; }
+  inFlight = 0;
+}
 function clearBag() {
   clearTimeout(bagT);
   bagSum = 0;
@@ -397,7 +471,7 @@ const G = {
   coins: 0, gates: 0, perfects: 0, bags: 0, holding: false,
   blindUntil: 0, blindKind: '',
   why: null, nextSpeedUp: 500,
-  runs: 0, inputAt: 0,
+  runs: 0, inputAt: 0, movedAt: 0, recordAt: 0, coinRun: 0, coinAt: -9,
 };
 let track = null;
 let pending = null;   // the next row, not yet in the chute
@@ -428,9 +502,10 @@ function startRun() {
   G.paused = false;
   G.d = 0; G.t = 0; G.timeScale = 1;
   G.coins = 0; G.gates = 0; G.perfects = 0; G.holding = false; G.bags = 0;
-  G.blindUntil = 0; G.why = null; G.nextSpeedUp = 500;
+  G.blindUntil = 0; G.why = null; G.nextSpeedUp = 500; G.recordAt = 0; G.coinRun = 0; G.coinAt = -9;
   G.inputAt = performance.now() + 350;   // (GLY! tapped twice: its second tap never turns the block)
   clearBag();
+  clearFlyers();
   resetBlock();
   const seed = Number(q.get('seed')) ? Number(q.get('seed')) + G.runs - 1 : Math.floor(Math.random() * 1e9);
   track = createTrack(seed, { shape, element });
@@ -473,7 +548,11 @@ function placeRows(time) {
       c.mesh.scale.set(pulse, pulse, 1);
     }
     // (a gate sinks once it is clear of the block's back, quickly: it stands three blocks high)
-    if (r.gate) r.gate.position.set(0, y0 * 2.2 - (r.hit ? 0 : sunk(s, 1.7, 14)), -s);
+    if (r.gate) {
+      r.gate.position.set(0, y0 * 2.2 - (r.hit ? 0 : sunk(s, 1.7, 14)), -s);
+      const gu = r.gate.userData;
+      gu.field.uniforms.uHit.value = gu.flashK * Math.max(0, 1 - (time - gu.flashAt) / 0.7);
+    }
     if (r.item && !r.item.done) {
       const is = r.item.at - G.d;
       itemMesh.position.set(LX(r.item.lane), 1.5 + y0 - sunk(is, 1, 4) + Math.sin(time * 4) * 0.2, -is);
@@ -499,8 +578,11 @@ function step(dt) {
       if (taken().includes(c.lane) && G.state === 'run') {
         G.coins++;
         c.mesh.visible = false;
-        sfx('gold');
-        if (!calm) fx.sparkle(trk.localToWorld(v3.set(LX(c.lane), 1.3, 0)), 8, '#ffd46a', 4);
+        // (a row of coins climbs the scale, a pling each)
+        G.coinRun = G.t - G.coinAt < 0.6 ? G.coinRun + 1 : 0;
+        G.coinAt = G.t;
+        sfx('room', { n: G.coinRun });
+        if (!calm) { fx.sparkle(trk.localToWorld(v3.set(LX(c.lane), 1.3, 0)), 8, '#ffd46a', 4); flyCoin(toScreen(v3.set(LX(c.lane), 1.3, 0))); }
       }
     }
     if (r.item && !r.item.done && r.item.at - G.d <= 0.4) {
@@ -520,6 +602,14 @@ function step(dt) {
   }
   // rows behind the camera go back to their pools
   while (rows.length && rows[0].at - G.d < -BEHIND + 2) dropRow(rows.shift());
+  // past your best: the moment it happens
+  if (best > 0 && !G.recordAt && G.d > best) {
+    G.recordAt = G.d;
+    banner(T.record, { kind: 'is-gold', ms: 1700 });
+    sfx('record');
+    buzz('perfect');
+    if (!calm) fx.sparkle(trk.localToWorld(v3.set(G.x, 2.4, 0)), 44, '#ffe38c', 9);
+  }
   // faster: a word on it now and then
   if (G.d >= G.nextSpeedUp) {
     G.nextSpeedUp += 500;
@@ -536,6 +626,7 @@ function meet(r) {
     const fit = gateFit(shape, G.orient, G.lane, r.hole);
     if (fit === 'crash') { r.hit = true; die('gate'); return; }
     G.gates++;
+    if (r.gate) { r.gate.userData.flashAt = time; r.gate.userData.flashK = fit === 'perfect' ? 1 : 0.5; }
     if (fit === 'perfect') {
       G.perfects++;
       G.coins += 5;
@@ -574,6 +665,16 @@ function meet(r) {
       callout(T.safe, new THREE.Vector3(LX(c.lane), 2.8, -1), 'is-small');
       sfx('pop');
       if (!calm) fx.sparkle(at, 18, c.type === 'vuur' ? '#ff9a3c' : c.type === 'water' ? '#7fd8ff' : '#8bea5c', 6);
+    }
+  }
+  // (a close call: a lane over from what would have ended it, a moment after a swipe or a turn)
+  if (performance.now() - G.movedAt < 450) {
+    const lo = Math.min(...mine) - 1;
+    const hi = Math.max(...mine) + 1;
+    if (r.cells.some((c) => (c.lane === lo || c.lane === hi) && effectOf(element, c.type) === 'kill')) {
+      callout(T.close, new THREE.Vector3(G.x, 3.4, -1), 'is-gold');
+      sfx('good');
+      buzz('tap');
     }
   }
 }
@@ -650,6 +751,7 @@ function gameOver() {
 function showStart() {
   G.state = 'start';
   clearBag();
+  clearFlyers();
   clearRows();
   resetBlock();
   hud.classList.remove('is-running');
@@ -699,7 +801,9 @@ function swipe(dir) {
   G.lastDir = dir < 0 ? -1 : 1;
   if (lane === G.lane) { G.xv -= dir * 6; return; }   // (the wall: a nudge, no lane)
   G.lane = lane;
+  G.movedAt = performance.now();
   sfx('click');
+  if (!calm) fx.sparkle(trk.localToWorld(v3.set(G.x, 0.4, 0.6)), 7, TRAIL_COL[element], 3.5);
 }
 /** A tap: the block turns a quarter (the Rectangle stands up or lies down). */
 function tapTurn() {
@@ -707,6 +811,7 @@ function tapTurn() {
   const t = turn(shape, G.orient, G.lane, G.lastDir);
   G.orient = t.orient;
   G.lane = t.lane;
+  G.movedAt = performance.now();
   G.rollTo += Math.PI / 2;
   sfx('drop');
   buzz('tap');
@@ -776,6 +881,25 @@ function blockVisual(dt) {
   void h;
 }
 const upHill = new THREE.Vector3();
+/** The block's trail: sparks of its element (spray, embers, leaves) left behind as it slides, more the faster it goes. */
+const TRAIL_COL = { water: '#9fe3ff', vuur: '#ff8a2a', gras: '#8fe05a' };
+const slopeDir = new THREE.Vector3(0, 0, 1).applyQuaternion(trk.quaternion);
+const tv = new THREE.Vector3();
+let trailAcc = 0;
+function trailVisual(dt) {
+  if (calm || G.state !== 'run' || !dt) return;
+  trailAcc += dt * (60 + G.v * 2);
+  const half = sizeOf(shape, G.orient).w * LANE_W * 0.4;
+  while (trailAcc >= 1) {
+    trailAcc -= 1;
+    const p = trk.localToWorld(v3.set(G.x + (Math.random() - 0.5) * 2 * half, 0.15 + Math.random() * 0.5, 1.4));
+    tv.copy(slopeDir).multiplyScalar(G.v * 0.6);
+    tv.x += (Math.random() - 0.5) * 2;
+    tv.y += Math.random() * 1.5;
+    tv.z += (Math.random() - 0.5) * 2;
+    fx.trail(p, tv, TRAIL_COL[element]);
+  }
+}
 /**
  * (the owner, 18 Oct: "can't we make it that it slides from top to bottom"; then, of a camera looking down the chute: "That
  * will make me nausious, I meant at an angle towards me, basically at a 70 degree upwards") The camera stands down the
@@ -803,7 +927,7 @@ function cameraVisual(dt) {
 }
 function hudVisual() {
   el.m.innerHTML = metres(G.d);
-  el.coinsN.textContent = fmtInt(G.coins);
+  el.coinsN.textContent = fmtInt(Math.max(0, G.coins - inFlight));
   el.kmh.textContent = G.state === 'run' ? T.speed(Math.round(G.v * 3.6)) : '';
   el.item.dataset.on = G.holding ? '1' : '0';
 }
@@ -825,6 +949,9 @@ function frame(now) {
   hz.update(time, camera, renderer.domElement.height);
   ringMats.kill.opacity = 0.72 + 0.26 * Math.sin(time * 6);
   blockVisual(dt || raw * 0.0001);
+  trailVisual(dt);
+  streaks.uniforms.uOff.value += G.v * dt * 1.5;
+  streaks.uniforms.uK.value = G.state === 'run' && !calm ? Math.min(1, Math.max(0, (G.v - 17) / 16)) * 0.85 : 0;
   cameraVisual(raw);
   world.update(time);
   fx.update(dt || raw * 0.5);

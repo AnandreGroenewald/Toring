@@ -88,6 +88,10 @@ export function createRunFx(scene) {
         sparks.spawn(p, v, { life: 0.5 + R() * 0.6, color, g: 4, drag: 1.2 });
       }
     },
+    /** One spark of the block's trail: left behind at p, carried off with `vel` (the chute going by). */
+    trail(p, vel, color, life = 0.42) {
+      sparks.spawn(p, vel, { life: life * (0.7 + R() * 0.6), color, g: 0, drag: 0.6 });
+    },
     /** Soft puffs rising (steam white, ash grey, leaves green). */
     puff(p, n = 12, color = '#f2f5f8', up = 3) {
       for (let i = 0; i < n; i++) {

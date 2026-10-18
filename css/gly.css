@@ -78,3 +78,9 @@
 }
 .coin-ic::after { content: '★'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 0.6em; line-height: 1; color: #d39500; text-shadow: 0 0.05em 0 #fff2a8; }
 .gl-coins { display: inline-flex; align-items: center; gap: 6px; color: #ffe27a !important; }
+
+/* a coin picked up flies to the counter, and the counter jumps */
+.gl-fly { position: absolute; left: 0; top: 0; z-index: 4; font-size: 22px; margin: -0.575em 0 0 -0.575em; pointer-events: none; opacity: 0; will-change: transform; }
+.gl-coins.is-bump { animation: gl-bump 0.22s ease-out; }
+@keyframes gl-bump { 40% { transform: scale(1.18); } }
+.bt-banner.is-gold b { background-image: linear-gradient(180deg, #fffbe0, #ffd84a 55%, #f0a01a); }

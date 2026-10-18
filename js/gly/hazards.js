@@ -644,6 +644,67 @@ function rock() {
   return g;
 }
 
+// ----------------------------------------------------------------------------------------------------- the gates
+/** A Shadow Gate's wall: a shimmering field of light, a honeycomb drifting up it, waves of brightness; `uHit` flashes it
+ *  when a block goes through (gold). Its own material per gate (the flash), one program. */
+const FIELD_VERT = /* glsl */ `
+varying vec3 vPos;
+void main() { vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+const FIELD_FRAG = /* glsl */ `
+uniform float uHit;
+varying vec3 vPos;
+float hexEdge(vec2 p) {
+  vec2 r = vec2(1.0, 1.7320508);
+  vec2 h = r * 0.5;
+  vec2 a = mod(p, r) - h;
+  vec2 b = mod(p - h, r) - h;
+  vec2 g = dot(a, a) < dot(b, b) ? a : b;
+  vec2 q = abs(g);
+  return 0.5 - max(dot(q, vec2(0.5, 0.8660254)), q.x);
+}
+void main() {
+  float e = hexEdge(vPos.xy * 0.55 + vec2(0.0, uT * 0.22));
+  float line = 1.0 - smoothstep(0.0, 0.03, e);
+  float sh = vnoise(vPos.xy * 0.7 + vec2(uT * 0.5, -uT * 0.35));
+  // a band of light sweeping up the field, and its edges brighter (a field held at its rims)
+  float sweep = smoothstep(0.85, 1.0, sin(vPos.y * 0.8 - uT * 2.4 + vPos.x * 0.15));
+  float rim = smoothstep(6.0, 8.1, vPos.y) + smoothstep(0.6, 0.0, vPos.y) * 0.6;
+  vec3 col = mix(vec3(0.1, 0.04, 0.3), vec3(0.24, 0.1, 0.6), sh);
+  col += vec3(0.7, 0.55, 1.0) * line * (1.0 + 0.8 * sweep) * 1.3;
+  col += vec3(0.5, 0.35, 1.0) * (sweep * 0.35 + rim * 0.4);
+  col += vec3(1.0, 0.82, 0.45) * uHit * (0.8 + line);
+  gl_FragColor = vec4(col, min(1.0, 0.36 + 0.5 * line + 0.18 * sweep + 0.2 * rim + 0.35 * uHit));
+  ${OUT}
+}`;
+export function fieldMat() {
+  return shaderMat(FIELD_VERT, FIELD_FRAG, { side: THREE.DoubleSide, extra: { uHit: { value: 0 } } });
+}
+/** A pillar of stacked rock at the chute's side, holding a gate's field (two shapes, kept). */
+const pillarGeos = [];
+export function rockPillar(i, height) {
+  if (!pillarGeos.length) {
+    for (const seed of [31, 37]) {
+      const r = rand(seed);
+      const parts = [];
+      let y = 0;
+      while (y < height) {
+        const sz = 0.6 + r() * 0.2;
+        const g = rockGeo(r, sz, { detail: 0, squash: 0.95, rough: 0.28, light: '#857b6e', dark: '#3b3631' });
+        g.rotateY(r() * 6.28);
+        g.translate((r() - 0.5) * 0.15, y, (r() - 0.5) * 0.15);
+        parts.push(g);
+        y += sz * 1.3;
+      }
+      const geo = merge(parts);
+      geo.userData.shared = true;
+      pillarGeos.push(geo);
+    }
+  }
+  const m = new THREE.Mesh(pillarGeos[i % pillarGeos.length], rockMat);
+  m.castShadow = m.receiveShadow = true;
+  return m;
+}
+
 const MAKERS = { whirl, fall, fire, lava, vines, rock };
 
 /**
