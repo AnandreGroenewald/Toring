@@ -1241,6 +1241,11 @@ Later the owner added (decisions are final unless they say otherwise):
   - The coins sit top left, the ✨ top right and km/h under the distance; the controls line is on the start card.
   - Tests: npm test 475; qa/gly1190 ×3 ALL OK; gly_nonsense1190 22/22; gly_perf1190 60 fps; gly_webkit1190 OK. Screens:
     Previews › "1.19 Glybaan - 70 grade na jou toe (18 Oct)".
+- **18 Oct 2026 (~18:00–18:30): Glybaan, fourth round: nature, not blocks (local a756986).** The owner: "the blocks that
+  pops up ... needs to be "Cooler" ... a whirlpool, Waterfalls, Fire and Lava ... not just block, bleh." js/gly/hazards.js
+  makes each hazard a piece of nature in its own shader: water a whirlpool or a waterfall, fire a fire pit or a lava pool,
+  grass thorny vines, stone a boulder; the rules are unchanged. The ring under each shows what it does to you in true
+  red, yellow or green. Tests: npm test 475; qa/gly1190, gly_nonsense1190, gly_perf1190 (60 fps on a 4x slower phone).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
