@@ -3,7 +3,7 @@
 // and real buttons lives here, positioned exactly over the canvas by layout().
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
-import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, DUEL, computeGameHeight, IDEAS_VOTE, KASTEEL, BOTSING } from '../config.js';
+import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, DUEL, computeGameHeight, IDEAS_VOTE, KASTEEL, BOTSING, GLYBAAN } from '../config.js';
 import { WEEK } from '../core/week.js';
 
 const WEEK_COINS = WEEK.coins;
@@ -1044,7 +1044,7 @@ export function createUI(bus) {
       },
     }, coinIc(), h('b', { class: 'wallet-n', text: fmtInt(m.coins || 0) }), m.refill ? h('span', { class: 'wallet-plus', 'aria-hidden': 'true', text: '+' }) : null);
     screens.menu.replaceChildren(brand, gap,
-      h('div', { class: 'menu-stack' }, card, dorpMenuEl(m.dorp), BOTSING.on ? botsingMenuEl() : null, kasteelMenuEl(m.kasteel), slagMenuEl(m.slag), playRow, dock, adSlot), langChip, wallet);
+      h('div', { class: 'menu-stack' }, card, dorpMenuEl(m.dorp), GLYBAAN.on ? glybaanMenuEl(m.gly) : null, BOTSING.on ? botsingMenuEl() : null, kasteelMenuEl(m.kasteel), slagMenuEl(m.slag), playRow, dock, adSlot), langChip, wallet);
     // the gap shrinks when the sponsor feed adds the ad card later, so re-check whenever it resizes
     if (saying && typeof ResizeObserver === 'function') {
       if (!st.sayingRO) st.sayingRO = new ResizeObserver(() => fitSaying());
@@ -1123,7 +1123,7 @@ export function createUI(bus) {
   function renderHowTo() {
     const free = st.model?.tries?.free || 1;   // (1.13.1) the day's free tries, as on the daily card
     // (the castle's line only while the Kasteelreeks is on)
-    const steps = S.howToSteps.filter((s) => (KASTEEL.on || s.icon !== '🏰') && (BOTSING.on || s.icon !== '💥')).map((s, i) => {
+    const steps = S.howToSteps.filter((s) => (KASTEEL.on || s.icon !== '🏰') && (BOTSING.on || s.icon !== '💥') && (GLYBAAN.on || s.icon !== '🌀')).map((s, i) => {
       const c = STEP_COLORS[i % STEP_COLORS.length];
       return h('li', { class: 'step' },
         h('span', { class: 'step-ic', vars: { '--c': `var(--${c})`, '--cd': `var(--${c}-d)`, '--r': `${i % 2 ? 3 : -3}deg` } }, emo(s.icon)),
@@ -3488,6 +3488,18 @@ export function createUI(bus) {
       box.prepend(h('div', { class: 'slag-mini-head' }, h('b', { text: S.slagMiniNames[kind] }), score), h('span', { class: 'slag-mini-timer' }, bar));
       slagMode('mini', { kind, miniEl: box });
     });
+  }
+
+  /** (1.19 3D) Glybaan: its own page (glybaan.html), the downhill slide; the button shows your best once there is one. */
+  function glybaanMenuEl(v) {
+    const sub = v?.best ? S.glybaanBest(`${fmtInt(v.best)} m`) : S.glybaanMenuSub;
+    return h('button', {
+      type: 'button', class: 'kasteel-menu-btn glybaan-menu-btn', 'aria-label': `${S.glybaan}: ${sub}`,
+      onclick: () => { if (!guard()) return; audio.play('click'); bus.emit('ui:glybaan'); },
+    },
+    h('span', { class: 'kasteel-menu-ic' }, emo('🌀')),
+    h('span', { class: 'kasteel-menu-txt' }, h('b', { text: S.glybaan }), h('small', { text: sub })),
+    h('span', { class: 'btn-new-tag kasteel-new', text: S.newTag }));
   }
 
   /** (1.18 3D) Blokbotsing: its own page (botsing.html), a battle vs Robot Rikus: build or throw every block. */

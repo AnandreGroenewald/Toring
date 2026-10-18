@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.18.0';
+export const VERSION = '1.19.0';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -359,6 +359,8 @@ export const KASTEEL = Object.freeze({ on: false });
 // off: no menu button, no cards in the Uitdagersreeks, no line in "Hoe speel ek?". Its page (botsing.html) and code stay
 // (an old friend link still opens it); `on: true` brings it back.
 export const BOTSING = Object.freeze({ on: false });
+/** (1.19 3D) Glybaan, the downhill four-lane slide (its own page, glybaan.html): on the menu where Block Clash was. */
+export const GLYBAAN = Object.freeze({ on: true });
 
 // (1.18, the owner 18 Oct 2026: "for now all skins needs to be free ... For people to test it") every skin and look in the
 // Winkel costs nothing while `on`; what testers take stays theirs when the prices come back (`on: false`).

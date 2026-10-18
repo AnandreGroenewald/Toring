@@ -14,6 +14,8 @@ import { createRunFx } from './fx.js';
 import { createHazards, VARIANTS, fieldMat, rockPillar } from './hazards.js';
 import { audio, haptics } from '../audio.js';
 import { fmtInt } from '../core/format.js';
+import { EARN } from '../core/economy.js';
+import { dateKeyFor } from '../core/daily.js';
 import { T, PREFS, goBack, EMOJI } from './text.js';
 import { LANES, LANE_W, UNIT_H, ELEMENTS, SHAPES, XP_K, laneX, sizeOf, lanesOf, moveLane, turn, effectOf, gateFit, speedAt, createTrack, killerOf, victimOf } from './rules.js';
 
@@ -38,7 +40,25 @@ const saved = read(STORE_KEY) || {};
 let element = [q.get('el'), saved.element, econ?.tribes?.wear].find((e) => ELEMENTS.includes(e)) || 'water';
 let shape = [q.get('shape'), saved.shape].find((s) => SHAPES.includes(s)) || 'square';
 let best = Math.max(0, Number(saved.best) || 0);
-const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify({ element, shape, best })); } catch { /* private window */ } };
+// (merged into what's kept: the coins still on their way to the wallet stay)
+const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify({ ...(read(STORE_KEY) || {}), element, shape, best })); } catch { /* private window */ } };
+/**
+ * A run's coins for Stapel's wallet (the owner, 18 Oct 2026, of paying them like the castle's: "Yes please"): they wait in
+ * the slide's record (`pending`) until Stapel adds them when it opens (js/main.js claimPending: one place keeps the
+ * wallet), no more than today's cap leaves (Oefen's 150, the wallet's own count less what already waits). Returns
+ * { coins (what will land), capped }.
+ */
+function payCoins(n) {
+  if (n <= 0 || G.paid) return { coins: 0, capped: false };
+  G.paid = true;   // (once a run: at its end, or when you leave it halfway)
+  const v = read(STORE_KEY) || {};
+  const pending = Math.max(0, v.pending | 0);
+  const e = read('stapel.v1.econ');
+  const earned = e?.earned?.day === dateKeyFor() ? Math.max(0, e.earned.n | 0) : 0;
+  const coins = Math.max(0, Math.min(n, EARN.dayCap - earned - pending));
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ ...v, element, shape, best, pending: Math.min(5000, pending + coins) })); } catch { return { coins: 0, capped: false }; }
+  return { coins, capped: coins < n };
+}
 
 // ------------------------------------------------------------------------------------------- the stage and the world
 const stage = createStage({ fov: 60 });
@@ -501,7 +521,7 @@ function startRun() {
   G.state = 'run';
   G.paused = false;
   G.d = 0; G.t = 0; G.timeScale = 1;
-  G.coins = 0; G.gates = 0; G.perfects = 0; G.holding = false; G.bags = 0;
+  G.coins = 0; G.gates = 0; G.perfects = 0; G.holding = false; G.bags = 0; G.paid = false;
   G.blindUntil = 0; G.why = null; G.nextSpeedUp = 500; G.recordAt = 0; G.coinRun = 0; G.coinAt = -9;
   G.inputAt = performance.now() + 350;   // (GLY! tapped twice: its second tap never turns the block)
   clearBag();
@@ -736,11 +756,15 @@ function gameOver() {
   const record = dist > best;
   if (record) { best = dist; save(); }
   const xp = Math.round(dist * XP_K[shape] + G.gates * 20 + G.perfects * 30);
+  const paid = payCoins(G.coins);
+  const full = T.capHit.charAt(0).toUpperCase() + T.capHit.slice(1);
+  const wallet = paid.coins ? `${T.toWallet(fmtInt(paid.coins))}${paid.capped ? ` · ${T.capHit}` : ''}` : G.coins ? full : '';
   if (record) sfx('record'); else sfx('gameover');
   modal(`<div class="bt-res gl-res"><small>${T.title}</small><h2>${record ? T.record : T.over}</h2>
     <p>${G.why || ''}</p><p class="gl-big">${T.slid(metres(dist))}</p>
     <dl><div><dt>${T.coins}</dt><dd>${fmtInt(G.coins)}</dd></div><div><dt>${T.gates}</dt><dd>${G.gates}</dd></div>
     <div><dt>${T.perfects}</dt><dd>${G.perfects}</dd></div><div><dt>${T.xp}</dt><dd>${fmtInt(xp)}</dd></div></dl>
+    ${wallet ? `<p class="gl-wallet"><i class="coin-ic" aria-hidden="true"></i> ${wallet}</p>` : ''}
     <button class="bt-again" type="button">${T.again}</button><button class="bt-home" type="button">${T.toStapel}</button></div>`, {
     '.bt-again': () => { sfx('click'); showStart(); },
     '.bt-home': () => goBack(),
@@ -782,8 +806,9 @@ function openPause() {
   modal(`<div class="bt-pausecard"><small>${T.title}</small><h2>${T.paused}</h2>
     <button class="bt-resume" type="button">${T.resume}</button><button class="bt-restart" type="button">${T.restart}</button><button class="bt-quit" type="button">${T.toStapel}</button></div>`, {
     '.bt-resume': () => { closeModal(); G.paused = false; try { audio.resume(); } catch { /* */ } },
-    '.bt-restart': () => { G.paused = false; try { audio.resume(); } catch { /* */ } showStart(); },
-    '.bt-quit': () => goBack(),
+    // (leaving a run halfway: the coins it picked up still go to the wallet)
+    '.bt-restart': () => { payCoins(G.coins); G.paused = false; try { audio.resume(); } catch { /* */ } showStart(); },
+    '.bt-quit': () => { payCoins(G.coins); goBack(); },
   });
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) openPause(); });

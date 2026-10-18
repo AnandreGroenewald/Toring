@@ -2,7 +2,7 @@
 // the network first so a new version reaches players on their next visit.
 // Bump VERSION (and VERSION in js/config.js) when shipping; old caches are deleted on activate.
 
-const VERSION = 'stapel-v1.18.0';
+const VERSION = 'stapel-v1.19.0';
 
 const PRECACHE = [
   './',
@@ -85,16 +85,17 @@ const PRECACHE = [
   'icons/icon-192.png',
   'icons/apple-touch-icon.png',
   // the 512 px icons are only for installing; the browser fetches them itself
-  // (1.17, 1.18) the pages of their own (the castle, the battle): their pages only; their 3D files are kept on the first
-  // visit (see PAGES below)
+  // (1.17, 1.18, 1.19) the pages of their own (the castle, the battle, the slide): their pages only; their 3D files are
+  // kept on the first visit (see PAGES below)
   'kasteel.html',
   'botsing.html',
+  'glybaan.html',
 ];
 
 // (1.17, 1.18) Pages of their own: a visit to one is never answered with the game's page (offline or slow, its own kept
 // copy opens, or the browser says it's offline). Cloudflare Pages serves them without '.html' (it redirects
 // /kasteel.html to /kasteel), so a kept copy may sit under either name.
-const PAGES = ['kasteel', 'botsing'];
+const PAGES = ['kasteel', 'botsing', 'glybaan'];
 
 // On a flaky connection, don't make the player stare at a blank screen: if the
 // page itself is this slow, open the cached copy instead.
@@ -179,7 +180,7 @@ async function unredirected(res) {
   return new Response(await res.blob(), { status: res.status, statusText: res.statusText, headers: res.headers });
 }
 
-/** Which page of its own `url` is ('kasteel', 'botsing'), or null (the game). */
+/** Which page of its own `url` is ('kasteel', 'botsing', 'glybaan'), or null (the game). */
 function pageOf(url) {
   const m = /\/([a-z]+)(?:\.html)?$/.exec(url.pathname);
   return m && PAGES.includes(m[1]) ? m[1] : null;

@@ -167,6 +167,10 @@ export const S = {
   dorpRank: (r, n) => `Nommer ${r} van ${n} dorpe`,
   dorpWallHeld: 'Die muur hou!',
   // (1.18 3D) Blokbotsing (botsing.html): its menu button
+  glybaan: 'Glybaan',
+  glybaanMenuSub: 'Gly af, swiep, ontwyk die elemente',
+  glybaanBest: (m) => `Beste: ${m} · gly weer`,
+  glybaanLoot: (n) => `🌀 +${n} munte uit die Glybaan`,
   botsing: 'Blokbotsing',
   botsingMenuSub: 'Bou óf gooi: Rikus se kroon in die see',
   botsingDuelSub: 'Bou óf gooi elke blok. Gooi hulle kroon in die see.',
@@ -360,6 +364,7 @@ export const S = {
     { icon: '🏰', text: 'Die Kasteelreeks: jou Daaglikse Torings word die torings van jou kasteel. Val Robot Rikus en jou vriende se kastele aan met troepe, ’n stormram en ’n trebuchet (breek die hek, die helfte plat, hul vlag val), en beplan jou verdediging: dit veg vir jou terwyl jy weg is.' },
     // (1.13.1) with the day's free tries (from 12 Oct 2026: 3)
     // (1.18) Blokbotsing (botsing.html)
+    { icon: '🌀', text: 'Glybaan: jou blok gly al vinniger af. Swiep vir ’n baan, tik om te draai. Rooi kring: uit. Geel: jy sien sleg. Groen: jou eie, dalk met ’n sak munte.' },
     { icon: '💥', text: 'Blokbotsing: twee torings op rotse in die see. Kies elke beurt ’n blok met ’n element en bou óf gooi: slaan die ander se kroon in die see. Let op die wind!' },
     { icon: '🗓️', text: (free = 1) => (free > 1
       ? `Een Daaglikse Toring per dag, dieselfde vir almal: ${free} gratis pogings en jou beste poging tel. Daarna kos “Nog ’n kans” munte. Oefen soveel jy wil.`

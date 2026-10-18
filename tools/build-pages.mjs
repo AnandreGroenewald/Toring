@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = join(root, 'pages-dist');
 // (1.12.1) adverteer.html and terme.html stay out until sponsor sales open: terme.html is still a template
-const FILES = ['index.html', 'kasteel.html', 'botsing.html', 'admin.html', 'privaatheid.html', 'privacy.html', 'manifest.webmanifest', 'sponsors.json', 'sw.js'];   // (1.17) the Kasteelreeks, (1.18) Blokbotsing
+const FILES = ['index.html', 'kasteel.html', 'botsing.html', 'glybaan.html', 'admin.html', 'privaatheid.html', 'privacy.html', 'manifest.webmanifest', 'sponsors.json', 'sw.js'];   // (1.17) the Kasteelreeks, (1.18) Blokbotsing
 const DIRS = ['css', 'js', 'lib', 'icons', 'img', 'lewende-toring'];   // (1.15.6) the Living Tower preview
 
 rmSync(out, { recursive: true, force: true });

@@ -84,3 +84,5 @@
 .gl-coins.is-bump { animation: gl-bump 0.22s ease-out; }
 @keyframes gl-bump { 40% { transform: scale(1.18); } }
 .bt-banner.is-gold b { background-image: linear-gradient(180deg, #fffbe0, #ffd84a 55%, #f0a01a); }
+/* the end card: the coins on their way to Stapel's wallet */
+.gl-res .gl-wallet { margin: 2px 0 0 !important; font-size: 13.5px !important; font-weight: 800 !important; color: #ffe27a !important; opacity: 1 !important; }

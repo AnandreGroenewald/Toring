@@ -3884,6 +3884,8 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .kasteel-menu-go { font-size: calc(44 * var(--u)); color: #ffcf6b; }
 .kasteel-new { position: static; align-self: center; }
 /* (1.18 3D) Blokbotsing's button: the sea at sunset */
+/* (1.19 3D) Glybaan's button: the slide's deep blue with a turquoise rush */
+.glybaan-menu-btn { background: linear-gradient(160deg, #20a6c8 0%, #1f4f9c 50%, #1c1036 120%); }
 .botsing-menu-btn { background: linear-gradient(160deg, #2f74b8 0%, #26437e 48%, #1c1036 120%); }   /* (its pale gold line at 3.9:1, the title 4.9:1) */
 /* (1.17) Vrugteslag: the lobby (Rikus, a friend's room, a code) */
 .slag-lobby .slag-lobby-btns, .slag-lobby .slag-hosting { display: grid; gap: calc(12 * var(--u)); margin-top: calc(16 * var(--u)); }

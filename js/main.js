@@ -2,7 +2,7 @@
 // pause/visibility, settings, service worker and debug hooks.
 // First of all: the language, before any other module reads a string (js/core/langboot.js).
 import { SAVED_LANG, PREVIEW_LANG } from './core/langboot.js';
-import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL, TESTER_GIFT, REFILL, AUTH, VERSION, KASTEEL } from './config.js';
+import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL, TESTER_GIFT, REFILL, AUTH, VERSION, KASTEEL, GLYBAAN } from './config.js';
 import { bus } from './core/bus.js';
 import { S, POWERUP_INFO, COSMETIC_INFO, RANK_INFO } from './core/strings.js';
 import { fmtDateKey, fmtM, fmtInt } from './core/format.js';
@@ -571,6 +571,7 @@ function menuModel() {
     week: weekView(store.getWeek(), dateKey),   // the weekkis strip (js/core/week.js)
     dorp: (() => { const d = dorpView(); dorpMenuKey = JSON.stringify(d); return d; })(),   // (1.16) Jou dorp
     slag: SLAG_ON ? slagMenuView() : null,   // (1.17) Vrugteslag (set aside)
+    gly: GLYBAAN.on ? glyMenuView() : null,   // (1.19) Glybaan, the slide
     kasteel: KASTEEL.on ? kasteelMenuView() : null,   // (1.17) Die Kasteelreeks (off since 18 Oct: config KASTEEL)
   };
 }
@@ -3436,11 +3437,14 @@ function claimPending(key) {
  * by the browser's Back), each with its toast.
  */
 function claimModeCoins() {
-  const castle = claimPending(KASTEEL_KEY);
-  const battle = claimPending('stapel.v1.botsing');
   const say = (c, won) => (c.added ? won(fmtInt(c.added)) : S.modeLootFull(fmtInt(c.left)));
-  if (castle) setTimeout(() => ui.toast(say(castle, S.kasteelLoot), 4200), 1200);
-  if (battle) setTimeout(() => ui.toast(say(battle, S.botsingLoot), 4200), castle ? 5600 : 1200);
+  const toasts = [[claimPending(GLY_KEY), S.glybaanLoot], [claimPending(KASTEEL_KEY), S.kasteelLoot], [claimPending('stapel.v1.botsing'), S.botsingLoot]].filter(([c]) => c);
+  toasts.forEach(([c, won], i) => setTimeout(() => ui.toast(say(c, won), 4200), 1200 + i * 4400));
+}
+// (1.19) Glybaan, the slide (glybaan.html, js/gly/): its record keeps your best and the coins still to reach the wallet
+const GLY_KEY = 'stapel.v1.gly';
+function glyMenuView() {
+  try { return { best: Math.max(0, Math.floor(Number(JSON.parse(localStorage.getItem(GLY_KEY) || '{}')?.best) || 0)) }; } catch { return { best: 0 }; }
 }
 // (the browser's Back from the castle or the battle can bring this page back from its memory, without a new start)
 window.addEventListener('pageshow', (e) => {
@@ -3449,6 +3453,7 @@ window.addEventListener('pageshow', (e) => {
   if (screen === 'menu') showMenu();
 });
 bus.on('ui:kasteel', () => { location.href = 'kasteel.html'; });
+bus.on('ui:glybaan', () => { location.href = 'glybaan.html'; });   // (1.19 3D) Glybaan
 bus.on('ui:botsing', () => { location.href = 'botsing.html'; });   // (1.18 3D) Blokbotsing
 bus.on('ui:botsing-friend', () => { location.href = 'botsing.html?vriend=1'; });
 
