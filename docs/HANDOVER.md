@@ -1229,7 +1229,7 @@ Later the owner added (decisions are final unless they say otherwise):
   - Tests: npm test 475; qa/gly1190 (rect water, square vuur, rect gras: ALL OK; passed things sunk; a bag's coins counted
     on screen), gly_nonsense1190 20/20 (a swipe left moves the block left on the screen), gly_perf1190 60 fps on a 4x
     slower phone, gly_webkit1190 OK. Screens: Previews › "1.19 Glybaan - bo na onder (18 Oct)".
-- **18 Oct 2026 (~17:00–17:40): Glybaan, third round (local 93e9efb).** The owner on the camera looking down the chute:
+- **18 Oct 2026 (~16:55–17:20): Glybaan, third round (local 93e9efb).** The owner on the camera looking down the chute:
   "That will make me nausious, I meant at an angle towards me, basically at a 70 degree upwards."
   - The camera now stands down the chute and looks back up it at about 70° to its floor (game.js `VIEW`): the chute
     rises away to the top of the screen, the block rides high on it and slides down towards you, and what comes rises
@@ -1241,17 +1241,23 @@ Later the owner added (decisions are final unless they say otherwise):
   - The coins sit top left, the ✨ top right and km/h under the distance; the controls line is on the start card.
   - Tests: npm test 475; qa/gly1190 ×3 ALL OK; gly_nonsense1190 22/22; gly_perf1190 60 fps; gly_webkit1190 OK. Screens:
     Previews › "1.19 Glybaan - 70 grade na jou toe (18 Oct)".
-- **18 Oct 2026 (~18:00–18:30): Glybaan, fourth round: nature, not blocks (local a756986).** The owner: "the blocks that
+- **18 Oct 2026 (~17:25–18:00): Glybaan, fourth round: nature, not blocks (local a756986).** The owner: "the blocks that
   pops up ... needs to be "Cooler" ... a whirlpool, Waterfalls, Fire and Lava ... not just block, bleh." js/gly/hazards.js
   makes each hazard a piece of nature in its own shader: water a whirlpool or a waterfall, fire a fire pit or a lava pool,
   grass thorny vines, stone a boulder; the rules are unchanged. The ring under each shows what it does to you in true
   red, yellow or green. Tests: npm test 475; qa/gly1190, gly_nonsense1190, gly_perf1190 (60 fps on a 4x slower phone).
-- **18 Oct 2026 (~18:40–19:15): Glybaan, fifth round: the details (local a7415a2).** The owner: "make sure its 110%".
+- **18 Oct 2026 (~18:00–18:10): Glybaan, fifth round: the details (local a7415a2).** The owner: "make sure its 110%".
   Your block leaves a trail of its element; picked-up coins fly to the counter and a row of them climbs the scale; the
   Shadow Gate is a see-through field of light between rock pillars that flashes gold as you pass; speed lines; NUWE
   REKORD! the moment you pass your best; NET-NET! on a close call. Tests: npm test 475; qa/gly1190 ×3,
   gly_nonsense1190, gly_perf1190 (60 fps), gly_webkit1190. Before release (his word): coins into the wallet, the menu
   button, the version, the website and Play builds.
+- **18 Oct 2026 (~18:15–18:45): 1.19.0 ready for the owner's go (4cb206d; nothing pushed, deployed or uploaded).** His
+  "Yes please": the slide's coins go to the wallet like the castle's (pending in stapel.v1.gly under Oefen's day cap,
+  landing when Stapel opens, with a toast; also when a run is left halfway). The menu shows 🌀 Glybaan where Block Clash
+  was, with your best; Speelreëls has its line. VERSION 1.19.0; glybaan.html in both builds and the service worker.
+  Tests: check-all quick ALL CLEAR, smoke, lang, howto, owner18, qa/gly_wallet1190 8/8, and the built site. The app bundle
+  (1.19.0 / 11900) waits in the Play folder "Upload 1.19.0 internal" with its README (the order: Worker, website, app).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
