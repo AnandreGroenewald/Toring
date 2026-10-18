@@ -1391,5 +1391,13 @@ export function createPieces(renderer) {
   for (const g of [medalMetalGeo, medalFaceGeo]) g.userData.shared = true;
   /** (behind the loading screen) a shape's material in a skin made now, not on its first use (no stall mid-game). */
   const prepare = (shape, skin, colorIndex = null, paintK = PAINT_K) => { faceMaterials(shape, skin, colorIndex, paintK); };
-  return { M, block, crown, seam, crack, glassCrack, glassBreak, soot, vineWrap, springCoil, dropCoil, waterSkin, drySkin, tick, crane, pin, blockGeometry, cardImage, prepareCards, team, velvet, ghost, crownMark, prepare };
+  /** (1.19 Glybaan) an element's medallion on its own, as on a block's face: the gold rim and the emblem, facing +z,
+   *  radius 1 (scale it). */
+  function medallion(element) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(medalMetalGeo, medalMetal), new THREE.Mesh(medalFaceGeo, emblemMaterial(element)));
+    return g;
+  }
+
+  return { M, block, crown, seam, crack, glassCrack, glassBreak, soot, vineWrap, springCoil, dropCoil, waterSkin, drySkin, tick, crane, pin, blockGeometry, cardImage, prepareCards, team, velvet, ghost, crownMark, prepare, medallion };
 }

@@ -159,12 +159,25 @@ function rushPast(d) {
 const blockGroup = new THREE.Group();
 trk.add(blockGroup);
 let blockMesh = null;
+// (the camera looks down on the block's top, so its element's medallion lies there, and stays on top through every turn:
+// it waits out the quarter roll, then shows on the new top face; its emblem upright on the screen)
+let badge = null;
+const BADGE_Q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0)));
 function makeBlock() {
   if (blockMesh) blockGroup.remove(blockMesh);
   blockMesh = pieces.block(shape === 'rect' ? 'brick' : 'cube', 0, element, mySkin);
   blockGroup.add(blockMesh);
   blockMesh.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  if (badge) trk.remove(badge);
+  badge = pieces.medallion(element);
+  badge.quaternion.copy(BADGE_Q);
+  badge.scale.setScalar(0.74);
+  trk.add(badge);
 }
+// (the blocks' tops face the camera, where the low sunset sun only grazes: a soft light from over the camera's shoulder)
+const fill = new THREE.DirectionalLight('#fff0dc', 1.15);
+fill.position.set(0, 60, -45);
+trk.add(fill, fill.target);
 /** A hazard: a Stapel block in its element's skin (lava, ice, moss, stone) with its emblem, and its sign over it. */
 const HAZARD_SKIN = { stone: 'klip', vuur: 'lawa', water: 'ys', gras: 'mos' };
 /** What a hazard does to you, at a glance: red ends the run, amber clouds your view, green is yours (safe). */
@@ -189,7 +202,7 @@ function signMat(type, eff = null) {
   g.font = `${eff ? 70 : 96}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText(type === 'item' ? '✨' : type === 'bag' ? '💰' : EMOJI[type], 64, eff ? 68 : 70);
+  g.fillText(type === 'item' ? '✨' : EMOJI[type], 64, eff ? 68 : 70);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return (signMats[key] = new THREE.SpriteMaterial({ map: t, depthWrite: false, fog: true }));
@@ -287,9 +300,10 @@ function makeGate(hole) {
   piece(x0, hx0, 0, H);
   piece(hx1, x3, 0, H);
   piece(hx0, hx1, hh, H);
-  // the hole's outline glowing gold (the shape to fit, plain from far off), and the wall's own edges
+  // the hole's outline glowing gold (the shape to fit, plain from far off), and the wall's own edges, on the face the
+  // camera sees (it stands down the chute, looking back up at what comes)
   const e = 0.22;
-  const edge = (a, b, y0, y1, m = gateEdgeMat) => { const o = new THREE.Mesh(new THREE.BoxGeometry(b - a, y1 - y0, 0.14), m); o.position.set((a + b) / 2, (y0 + y1) / 2, D / 2 + 0.07); g.add(o); };
+  const edge = (a, b, y0, y1, m = gateEdgeMat) => { const o = new THREE.Mesh(new THREE.BoxGeometry(b - a, y1 - y0, 0.14), m); o.position.set((a + b) / 2, (y0 + y1) / 2, -D / 2 - 0.07); g.add(o); };
   edge(hx0 - e, hx0, 0, hh + e);
   edge(hx1, hx1 + e, 0, hh + e);
   edge(hx0 - e, hx1 + e, hh, hh + e);
@@ -307,42 +321,22 @@ function freeGate(g) {
   trk.remove(g);
   g.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
 }
-/** A bag of coins bursting out of a block of your own element: it pops up and fades (a few at once, pooled). */
-const bagMat = signMat('bag');
-const bags = Array.from({ length: 4 }, () => { const b = new THREE.Sprite(bagMat.clone()); b.visible = false; trk.add(b); return { b, t: 9 }; });
-function popBag(x) {
-  const q = bags.find((o) => o.t >= 1) || bags[0];
-  q.t = 0;
-  q.x = x;
-  q.b.visible = true;
-}
-function bagsVisual(dt) {
-  for (const q of bags) {
-    if (q.t >= 1) { q.b.visible = false; continue; }
-    q.t += dt * 1.1;
-    const k = q.t;
-    q.b.position.set(q.x, 2.4 + 4 * k, -1.5 - 2 * k);
-    const s = 1.4 + 1.2 * Math.sin(Math.min(1, k * 2.2) * Math.PI / 2);
-    q.b.scale.set(s, s, 1);
-    q.b.material.opacity = 1 - Math.max(0, (k - 0.6) / 0.4);
-  }
-}
-
 // ------------------------------------------------------------------------------------------- the screen
 const hud = document.getElementById('k-hud');
 hud.classList.add('bt', 'gl');
 hud.innerHTML = `
-  <div class="gl-top"><b class="gl-m">0&nbsp;m</b><span class="gl-best"></span></div>
-  <div class="gl-side"><span class="gl-coins"><i class="coin-ic" role="img" aria-label="🪙"></i><b>0</b></span><span class="gl-kmh"></span><span class="gl-item" aria-label="✨">✨</span></div>
+  <div class="gl-top"><b class="gl-m">0&nbsp;m</b><span class="gl-sub"><span class="gl-best"></span><span class="gl-kmh"></span></span></div>
+  <div class="gl-side"><span class="gl-coins"><i class="coin-ic" role="img" aria-label="🪙"></i><b>0</b></span><span class="gl-item" aria-label="✨">✨</span></div>
   <div class="gl-blind" aria-hidden="true"><i></i><i></i><i></i></div>
   <div class="bt-flash" aria-hidden="true"></div>
   <div class="bt-banner" aria-live="polite"><b></b><span></span></div>
   <div class="bt-callouts"></div>
+  <div class="gl-bag" aria-hidden="true"><i>💰</i><b></b></div>
   <div class="bt-corner"><button class="bt-back" type="button" aria-label="Stapel">‹</button><button class="bt-pause" type="button" aria-label="${T.paused}"><i></i><i></i></button></div>
-  <p class="gl-hint"></p>
   <div class="bt-modal" hidden></div>`;
 const $ = (s) => hud.querySelector(s);
-const el = { m: $('.gl-m'), best: $('.gl-best'), coins: $('.gl-coins'), coinsN: $('.gl-coins b'), kmh: $('.gl-kmh'), item: $('.gl-item'), blind: $('.gl-blind'), flash: $('.bt-flash'), banner: $('.bt-banner'), callouts: $('.bt-callouts'), modal: $('.bt-modal'), hint: $('.gl-hint') };
+const el = { m: $('.gl-m'), best: $('.gl-best'), coins: $('.gl-coins'), coinsN: $('.gl-coins b'), kmh: $('.gl-kmh'), item: $('.gl-item'), blind: $('.gl-blind'), flash: $('.bt-flash'), banner: $('.bt-banner'), callouts: $('.bt-callouts'), bag: $('.gl-bag'), bagN: $('.gl-bag b'), modal: $('.bt-modal') };
+hud.classList.toggle('is-calm', calm);
 let bannerT = null;
 function banner(text, { sub = '', kind = '', ms = 1400 } = {}) {
   el.banner.querySelector('b').textContent = text;
@@ -363,6 +357,30 @@ function callout(text, local, kind = 'is-gold') {
   c.style.transform = `translate(${Math.round(Math.max(70, Math.min(stageEl.clientWidth - 70, s.x)))}px, ${Math.round(Math.max(120, s.y))}px)`;
   el.callouts.append(c);
   setTimeout(() => c.remove(), 1300);
+}
+/**
+ * A bag of coins, the owner's surprise (Jarvis for him: "the 💰 and the +6 big enough and long enough to see at speed, with
+ * a sound and a small shake, and make sure two bags in a row don't stack into a mess"): one big 💰 and its coins over the
+ * block for a second and a half; a bag while it shows adds to it.
+ */
+let bagT = null;
+let bagSum = 0;
+function popBag(n, local) {
+  const s = toScreen(local);
+  bagSum = el.bag.classList.contains('is-on') ? bagSum + n : n;
+  el.bagN.textContent = `+${fmtInt(bagSum)}`;
+  el.bag.style.left = `${Math.round(Math.max(80, Math.min(stageEl.clientWidth - 80, s.x)))}px`;
+  el.bag.style.top = `${Math.round(Math.max(150, s.y - 24))}px`;   // (over the block and above it: what comes stays in sight)
+  el.bag.classList.remove('is-on');
+  void el.bag.offsetWidth;   // (its pop starts again)
+  el.bag.classList.add('is-on');
+  clearTimeout(bagT);
+  bagT = setTimeout(() => el.bag.classList.remove('is-on'), 1600);
+}
+function clearBag() {
+  clearTimeout(bagT);
+  bagSum = 0;
+  el.bag.classList.remove('is-on');
 }
 function flash(color, ms = 160) {
   if (calm) return;
@@ -387,7 +405,7 @@ const G = {
   d: 0, v: 0, t: 0, timeScale: 1,
   lane: 1, orient: 'flat', lastDir: -1,
   x: LX(1), xv: 0, roll: 0, rollTo: 0, tumble: null,
-  coins: 0, gates: 0, perfects: 0, holding: false,
+  coins: 0, gates: 0, perfects: 0, bags: 0, holding: false,
   blindUntil: 0, blindKind: '',
   why: null, nextSpeedUp: 500,
   runs: 0, inputAt: 0,
@@ -423,13 +441,11 @@ function startRun() {
   G.coins = 0; G.gates = 0; G.perfects = 0; G.holding = false; G.bags = 0;
   G.blindUntil = 0; G.why = null; G.nextSpeedUp = 500;
   G.inputAt = performance.now() + 350;   // (GLY! tapped twice: its second tap never turns the block)
+  clearBag();
   resetBlock();
   const seed = Number(q.get('seed')) ? Number(q.get('seed')) + G.runs - 1 : Math.floor(Math.random() * 1e9);
   track = createTrack(seed, { shape, element });
   pending = track.next();
-  el.hint.textContent = T.how;
-  el.hint.classList.add('is-on');
-  setTimeout(() => el.hint.classList.remove('is-on'), 5200);
   hud.classList.add('is-running');
   sfx('horn');
 }
@@ -557,12 +573,12 @@ function meet(r) {
     } else if (c.bag) {
       // a bag of coins in your own element's block (the owner: "it might get coins, but its random")
       G.coins += c.bag;
-      G.bags = (G.bags || 0) + 1;
-      popBag(LX(c.lane));
-      callout(T.bag(c.bag), new THREE.Vector3(LX(c.lane), 3.4, -1), 'is-gold');
+      G.bags++;
+      popBag(c.bag, new THREE.Vector3(LX(c.lane), 2.6, 0));
       sfx('gold');
-      setTimeout(() => sfx('gold'), 120);
+      setTimeout(() => sfx('pop'), 110);
       buzz('perfect');
+      stage.shake(0.18);
       if (!calm) fx.sparkle(at, 34, '#ffd46a', 8);
     } else {
       callout(T.safe, new THREE.Vector3(LX(c.lane), 2.8, -1), 'is-small');
@@ -643,6 +659,7 @@ function gameOver() {
 // ------------------------------------------------------------------------------------------- the start card
 function showStart() {
   G.state = 'start';
+  clearBag();
   clearRows();
   resetBlock();
   hud.classList.remove('is-running');
@@ -653,6 +670,7 @@ function showStart() {
   modal(`<div class="gl-start"><small>STAPEL</small><h2>${T.title}</h2>
     <p class="gl-lab">${T.element}</p><div class="gl-row">${ELEMENTS.map(elBtn).join('')}</div>
     <p class="gl-rules">${T.rules(kill, blindEl, element)}</p>
+    <p class="gl-how">${T.how}</p>
     <p class="gl-lab">${T.shape}</p><div class="gl-row">${SHAPES.map(shBtn).join('')}</div>
     ${best ? `<p class="gl-bestline">${T.best(metres(best))}</p>` : ''}
     <button class="bt-ok gl-go" type="button">${T.go}</button><button class="bt-home" type="button">${T.toStapel}</button></div>`, {
@@ -737,12 +755,12 @@ addEventListener('keydown', (e) => {
 const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
 let camX = LX(1);
-let tilt = 0;
 function blockVisual(dt) {
   const { w, h } = sizeOf(shape, G.orient);
   const target = LX(G.lane) - (w - 1) * LANE_W / 2;
   if (G.tumble) {
     const t = G.tumble;
+    if (badge) badge.visible = false;
     t.vy -= 22 * dt;
     blockGroup.position.y += t.vy * dt;
     blockGroup.position.z -= t.vz * dt;
@@ -761,32 +779,37 @@ function blockVisual(dt) {
   const half = Math.abs(ud.w / 2 * Math.sin(a)) + Math.abs(ud.h / 2 * Math.cos(a));
   blockGroup.position.set(G.x, half + 0.02 + (G.state === 'run' && !calm ? Math.sin(G.t * 11) * 0.03 : 0), 0);
   blockGroup.rotation.set(0, 0, a);
+  if (badge) {
+    badge.visible = blockGroup.visible && Math.abs(G.rollTo - G.roll) < 0.06;
+    badge.position.set(G.x, blockGroup.position.y + half + 0.03, 0);
+  }
   void h;
 }
 const upHill = new THREE.Vector3();
 /**
- * (the owner, 18 Oct: "can't we make it that it slides from top to bottom") The camera hangs high over the block, a little
- * uphill of it, looking down the chute; "up" on the screen is uphill. The block slides near the top of the screen, the
- * chute runs down to the bottom, and what comes rises from there (the bottom 30% is where it comes from: what clouds your
- * view hides it). Higher, and further ahead, as it gets faster.
+ * (the owner, 18 Oct: "can't we make it that it slides from top to bottom"; then, of a camera looking down the chute: "That
+ * will make me nausious, I meant at an angle towards me, basically at a 70 degree upwards") The camera stands down the
+ * chute from the block and looks back up it at about 70° to its floor, as you'd look at a steep slide coming towards you:
+ * the chute rises away to the top of the screen, the block rides high on it and slides down towards you, and what comes
+ * rises from the bottom (the bottom 30% that steam, ash or vines cloud). No roll and no swing; a little further back as it
+ * gets faster, to see more of what comes.
  */
+const VIEW = Object.freeze({ angle: 70 * Math.PI / 180, dist: 40, fov: 44, look: 9 });
 function cameraVisual(dt) {
   const k = Math.min(1, Math.max(0, (G.v - 15) / 25));
-  const tall = sizeOf(shape, G.orient).h === 2;
   // (the whole chute in the picture with sea on both sides: the camera follows the block only a little)
-  camX += (G.x * 0.15 - camX) * Math.min(1, dt * 6);
-  tilt += ((G.xv * 0.003) - tilt) * Math.min(1, dt * 8);
-  camPos.set(camX, 21 + 4 * k + (tall ? 0.8 : 0), 15 + 3 * k);
-  camLook.set(camX, 0, -11 - 4 * k);
+  camX += (G.x * 0.12 - camX) * Math.min(1, dt * 5);
+  const dist = VIEW.dist + 6 * k;
+  const look = VIEW.look + 2 * k;
+  camLook.set(camX, 0, -look);
+  camPos.set(camX, dist * Math.sin(VIEW.angle), -look - dist * Math.cos(VIEW.angle));
   trk.localToWorld(camPos);
   trk.localToWorld(camLook);
   upHill.set(0, 0, 1).applyQuaternion(trk.quaternion);
   camera.up.copy(upHill);
   camera.position.copy(camPos);
   camera.lookAt(camLook);
-  camera.rotateZ(calm ? 0 : tilt);
-  const fov = 62 + 4 * k;
-  if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  if (Math.abs(camera.fov - VIEW.fov) > 0.05) { camera.fov = VIEW.fov; camera.updateProjectionMatrix(); }
 }
 function hudVisual() {
   el.m.innerHTML = metres(G.d);
@@ -810,7 +833,6 @@ function frame(now) {
   rushPast(G.d);
   placeRows(time);
   blockVisual(dt || raw * 0.0001);
-  bagsVisual(dt);
   cameraVisual(raw);
   world.update(time);
   fx.update(dt || raw * 0.5);
@@ -846,4 +868,6 @@ window.__gly = {
   taken,
   /** Where the block is on the screen (CSS px). */
   blockAt: () => toScreen(blockGroup.position),
+  /** A bag's pop over the block (the bag rule itself is the track's: rules.js). */
+  popBag: (n) => popBag(n, new THREE.Vector3(G.x, 2.6, 0)),
 };

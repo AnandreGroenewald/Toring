@@ -5,11 +5,13 @@
 /* how far, how fast, the coins, the ✨ in hand (only while sliding) */
 .gl-top { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 8px); left: 0; right: 0; display: grid; justify-items: center; gap: 2px; pointer-events: none; transition: opacity 0.3s; }
 .gl-m { font-size: 46px; font-weight: 900; letter-spacing: 0.01em; line-height: 1; color: #fff; text-shadow: 0 3px 0 rgba(40, 10, 60, 0.55), 0 0 18px rgba(0, 0, 0, 0.35); font-variant-numeric: tabular-nums; }
-.gl-best { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.78); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
-.gl-side { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 128px); right: 12px; display: grid; justify-items: end; gap: 6px; pointer-events: none; transition: opacity 0.3s; }
+.gl-sub { display: flex; gap: 10px; }
+.gl-sub span { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.8); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); font-variant-numeric: tabular-nums; }
+.gl-sub span:empty { display: none; }
+/* (the coins top left, the ✨ top right, beside the distance: the block rides high on the screen and stands up into it) */
+.gl-side { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 12px); left: 10px; right: 10px; display: flex; justify-content: space-between; align-items: center; pointer-events: none; transition: opacity 0.3s; }
 .gl-side span { font-size: 15px; font-weight: 900; color: #fff; padding: 4px 10px; border-radius: 12px; background: rgba(20, 10, 40, 0.45); border: 1px solid rgba(255, 255, 255, 0.14); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); font-variant-numeric: tabular-nums; }
-.gl-kmh:empty { display: none; }
-.gl-item { font-size: 20px !important; filter: grayscale(1); opacity: 0.35; transition: opacity 0.3s, filter 0.3s; }
+.gl-item { font-size: 16px !important; padding: 3px 8px !important; filter: grayscale(1); opacity: 0.35; transition: opacity 0.3s, filter 0.3s; }
 .gl-item[data-on="1"] { filter: none; opacity: 1; box-shadow: 0 0 16px rgba(120, 230, 255, 0.75); animation: gl-glow 1.2s ease-in-out infinite; }
 @keyframes gl-glow { 50% { box-shadow: 0 0 26px rgba(150, 240, 255, 1); } }
 .gl:not(.is-running) .gl-side, .gl:not(.is-running) .gl-top .gl-m { opacity: 0; }
@@ -31,9 +33,21 @@
 .gl-blind[data-kind="vines"] i { background: radial-gradient(closest-side, rgba(70, 140, 50, 0.95), rgba(40, 96, 30, 0.7) 60%, rgba(0, 0, 0, 0)); }
 .gl-blind[data-kind="vines"]::after { content: '🌿 🍃 🌿 🍃 🌿 🍃 🌿 🍃 🌿 🍃 🌿 🍃 🌿'; position: absolute; left: -10%; right: -10%; top: 6%; font-size: 30px; letter-spacing: 6px; line-height: 1.5; white-space: normal; word-break: break-all; opacity: 0.9; filter: saturate(1.3); }
 
-/* the first run's hint at the bottom */
-.gl-hint { position: absolute; left: 14px; right: 14px; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 10px); margin: 0; text-align: center; font-size: 13px; font-weight: 800; line-height: 1.4; color: #fff; padding: 9px 12px; border-radius: 14px; background: rgba(20, 10, 40, 0.55); border: 1px solid rgba(255, 255, 255, 0.14); pointer-events: none; opacity: 0; transform: translateY(8px); transition: opacity 0.4s, transform 0.4s; z-index: 3; }
-.gl-hint.is-on { opacity: 1; transform: none; }
+/* a bag of coins: one big 💰 and its coins over the block, long enough to read at speed (a second bag adds to it) */
+.gl-bag { position: absolute; left: 50%; top: 30%; z-index: 4; display: flex; align-items: center; gap: 2px; white-space: nowrap; pointer-events: none; opacity: 0; transform: translate(-50%, -50%); }
+.gl-bag i { font-style: normal; font-size: 58px; line-height: 1; filter: drop-shadow(0 5px 6px rgba(0, 0, 0, 0.45)); }
+.gl-bag b { font-size: 42px; font-weight: 900; line-height: 1; color: #ffe066; font-variant-numeric: tabular-nums; text-shadow: 0 2px 0 #6b3f00, 2px 0 0 #6b3f00, -2px 0 0 #6b3f00, 0 -2px 0 #6b3f00, 0 5px 8px rgba(0, 0, 0, 0.5), 0 0 18px rgba(255, 196, 40, 0.8); }
+.gl-bag.is-on { animation: gl-bag 1.6s cubic-bezier(0.2, 0.9, 0.3, 1) forwards; }
+@keyframes gl-bag {
+  0% { opacity: 0; transform: translate(-50%, -20%) scale(0.35); }
+  10% { opacity: 1; transform: translate(-50%, -50%) scale(1.22); }
+  20% { transform: translate(-50%, -50%) scale(1); }
+  78% { opacity: 1; transform: translate(-50%, -78%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -92%) scale(0.96); }
+}
+.gl.is-calm .gl-bag.is-on { animation: gl-bag-calm 1.6s linear forwards; }
+@keyframes gl-bag-calm { 0%, 100% { opacity: 0; } 8%, 80% { opacity: 1; } }
+
 
 /* the start card */
 .bt-modal > .gl-start { gap: 9px; padding-top: 18px; }
@@ -50,6 +64,7 @@
 .gl-sh-rect { width: 46px; }
 .gl-rules { font-size: 12.5px !important; line-height: 1.45 !important; padding: 8px 10px; border-radius: 12px; background: rgba(0, 0, 0, 0.22); }
 .gl-bestline { font-size: 13px !important; color: var(--gold); }
+.gl-how { font-size: 12px !important; line-height: 1.4 !important; opacity: 0.85; }
 .gl-go { font-size: 22px !important; letter-spacing: 0.24em; height: 58px !important; }
 
 /* the end card's distance */
