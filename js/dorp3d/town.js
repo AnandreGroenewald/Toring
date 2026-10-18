@@ -309,10 +309,12 @@ export function buildTown({ plan, isle, pieces, renderer, cm = castleMaterials(r
     mesh.userData.list.forEach((w, i) => { if (!w.lit) mesh.setMatrixAt(i, hidden); });
     mesh.instanceMatrix.needsUpdate = true;
   }
+  let litN = lit.length;   // (people at home: the walkers follow it)
   /** A front window lit (someone home) or dark; gold: their pane glows golden. */
   function setLit(w, on, gold = w.gold) {
     const mesh = litMeshes[w.kind];
     if (!mesh) return;
+    if (w.lit !== !!on) litN += on ? 1 : -1;
     w.lit = !!on;
     w.gold = !!gold && !!on;
     mesh.setMatrixAt(w.mi, on ? mesh.userData.full[w.mi] : hidden);
@@ -458,6 +460,9 @@ export function buildTown({ plan, isle, pieces, renderer, cm = castleMaterials(r
   const wp = new THREE.Vector3();
   const ws = new THREE.Vector3(1, 1, 1);
   updaters.push((t) => {
+    // (half the people at home are out walking, up to 18: a new town with nobody in it is quiet, and the people a raid
+    // brings come out too)
+    bodies.count = heads.count = Math.min(NP, Math.ceil(litN / 2));
     walkers.forEach((w, i) => {
       const a = w.ph + t * w.sp;
       wp.set(w.cx + Math.cos(a) * w.rad, Math.abs(Math.sin(t * 7 + i)) * 0.05, w.cz + Math.sin(a) * w.rad * 0.8);
@@ -515,6 +520,8 @@ export function buildTown({ plan, isle, pieces, renderer, cm = castleMaterials(r
     group, buildings, isle,
     /** The landmarks standing (tests). */
     get marks() { return [...owned]; },
+    /** How many are out walking (tests). */
+    get walking() { return bodies.count; },
     walls: wallList,
     windows: front,
     setLit, windowAt, addMark,

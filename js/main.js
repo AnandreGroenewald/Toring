@@ -3007,7 +3007,7 @@ function enterDorp(view = 'town', { mode = view, screenExtra = {}, scene = {} } 
   }
   const bars = dorpBarsGame();
   game.scene.start('Dorp', {
-    view, me: sm.me, reducedMotion: !!settings.reducedMotion, topBar: bars.top, bottomBar: bars.bottom,
+    view, me: sm.me, reducedMotion: !!settings.reducedMotion, topBar: bars.top, bottomBar: bars.bottom, covered: dorpCovered,
     onPicture: (url) => {
       dorpPic = url;
     },
@@ -3020,6 +3020,10 @@ function enterDorp(view = 'town', { mode = view, screenExtra = {}, scene = {} } 
   }));
 }
 
+/** (18 Oct) The town can't be seen: the phone is sideways ("Draai jou foon regop" covers it) or the app is away. A raid's
+ *  aim waits meanwhile: it never throws by itself while he can't see it. */
+const dorpCovered = () => landscape() || document.hidden;
+
 /** The 3D town (js/dorp3d/view.js), loaded the first time; if this phone can't draw it, the 2D town instead. */
 async function enterDorp3D(view, sm, scene) {
   const seq = ++dorp3dSeq;
@@ -3031,7 +3035,7 @@ async function enterDorp3D(view, sm, scene) {
     dorp3d?.close();
     dorp3d = null;
     const v = await openTown3D({
-      view, me: sm.me, reducedMotion: !!settings.reducedMotion, topBar: b.top, bottomBar: b.bottom,
+      view, me: sm.me, reducedMotion: !!settings.reducedMotion, topBar: b.top, bottomBar: b.bottom, covered: dorpCovered,
       onPicture: (url) => { dorpPic = url; },
       onAimStep: (step) => ui.setDorpMode({ mode: 'aim', step }),
       ...scene,

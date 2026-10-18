@@ -1167,6 +1167,23 @@ Later the owner added (decisions are final unless they say otherwise):
     engine) for the three 3D pages, and check-all.sh full for the whole game (87 ok in the run, 11 of 14 ok re-run alone;
     the other 3 test the ideas vote, off since 16 Oct). The suite found three last things, fixed: Block Clash's English
     menu line too long for a small phone, its button's contrast, and no Blokbotsing line in "Hoe speel ek?".
+- **18 Oct 2026 (~07:30–09:00): his first play of 1.18.0 on the home server, and what changed (local 7d401a6..a01b41a;
+  nothing pushed).**
+  - "the camera went to his side without showing the impact": after any touch the camera follows where the block really
+    came down (js/botsing/game.js `cameDown`), and a Verrassing's catch is seen at the defender before the camera flies
+    home (qa/botsing_impactcam1180).
+  - "one block went from standing still to right side": Rikus's vines (Rankgryp) drag blocks to the cliff edge facing
+    the thrower, by design. His pick: keep the pull, make it obvious: "RANKGRYP! ⟵/⟶" on the pulled block every time,
+    a beat of slow motion, that edge kept in the picture, bolder vines, the card's own words.
+  - "I really do not like the Castle series": `KASTEEL.on` false in js/config.js (no menu button, help line or news;
+    kasteel.html and its code stay; `true` brings it back).
+  - "for now all skins needs to be free ... For people to test it": `SKINS_FREE.on` (js/core/economy.js `priceOf`):
+    the Winkel's skins and looks say Gratis and cost nothing; what testers take stays theirs. Rank and weekly-box looks
+    stay earned; tribes keep their 1 000-coin price (they change who beats whom in raids).
+  - "your town should only be build with the daily challenge ... it needs to take you to the daily challenge": only
+    Daily Tower tries feed the town (people, strooptogte, the day's wall: main.js `dorpGainFor`); the town's
+    "Bou jou Daaglikse Toring" opens today's Daily; only the Daily flashes "🔥 Strooptog!" and matches' jokers no longer
+    promise raids (a01b41a). Tests: qa/owner18_1180.mjs, qa/dorp1160.mjs (an Oefen tower of Perfeks sends nothing).
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order

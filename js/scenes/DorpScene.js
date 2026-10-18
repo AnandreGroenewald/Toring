@@ -738,6 +738,7 @@ export class DorpScene extends Phaser.Scene {
       const step = () => {
         const p = (this.time.now - t0) / AIM_PERIOD;
         ret.x = mid + amp * Math.sin(p * Math.PI * 2);
+        timer.paused = !!this.d.covered?.();   // (18 Oct: the phone sideways or the app away: no strike made for him)
       };
       this.events.on('update', step);
       let done = false;

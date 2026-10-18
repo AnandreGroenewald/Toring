@@ -575,12 +575,16 @@ function createView(K, d) {
       const mark = p.querySelector('.d3-pbar em');
       const num = p.querySelector('b');
       p.classList.add('on');
-      const st = { step: 'power', t: 0, power: 0, az: 0, done: false };
+      // (`left`: the throw goes by itself after AIM.autoMs of his aiming time; a phone turned sideways or an app away
+      // stops the clock (d.covered), so a throw is never made while he can't see it. 18 Oct: it fired after 14 s regardless)
+      const st = { step: 'power', t: 0, power: 0, az: 0, done: false, left: (d.autoAim != null ? d.autoAim : AIM.autoMs) / 1000 };
       aimState = st;
       const Y = new THREE.Vector3(0, 1, 0);
       const f = (t, dt) => {
-        if (st.done) return;
+        if (st.done || d.covered?.()) return;
         st.t += dt;
+        st.left -= dt;
+        if (st.left <= 0) { queueMicrotask(() => finish()); return; }   // (after this frame's updaters)
         if (st.step === 'power') {
           const v = powerAt(st.t);
           fill.style.height = `${Math.round(v * 100)}%`;
@@ -600,7 +604,6 @@ function createView(K, d) {
         st.done = true;
         updaters.splice(updaters.indexOf(f), 1);
         host.removeEventListener('pointerdown', onTap);
-        clearTimeout(timer);
         barge.arrow.visible = false;
         aimState = null;
         resolve({ power: st.power || powerAt(st.t), az: st.az, forced });
@@ -629,7 +632,6 @@ function createView(K, d) {
       st.goal = goal;
       st.solve = (want) => solve(bargeAt, u, goal, windK, want, st);
       setTimeout(() => { if (!st.done) host.addEventListener('pointerdown', onTap); }, 250);
-      const timer = setTimeout(() => finish(), d.autoAim != null ? d.autoAim : AIM.autoMs);
     });
   }
   /**
