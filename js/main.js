@@ -3444,7 +3444,10 @@ function claimModeCoins() {
 // (1.19) Glybaan, the slide (glybaan.html, js/gly/): its record keeps your best and the coins still to reach the wallet
 const GLY_KEY = 'stapel.v1.gly';
 function glyMenuView() {
-  try { return { best: Math.max(0, Math.floor(Number(JSON.parse(localStorage.getItem(GLY_KEY) || '{}')?.best) || 0)) }; } catch { return { best: 0 }; }
+  try {
+    const v = JSON.parse(localStorage.getItem(GLY_KEY) || '{}') || {};
+    return { best: Math.max(0, Math.floor(Number(v.best) || 0)), level: Math.max(1, Math.min(999, Math.floor(Number(v.level) || 1))) };
+  } catch { return { best: 0, level: 1 }; }
 }
 // (the browser's Back from the castle or the battle can bring this page back from its memory, without a new start)
 window.addEventListener('pageshow', (e) => {

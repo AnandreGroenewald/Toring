@@ -1244,6 +1244,119 @@ function stopAll() {
   voices.length = 0;
 }
 
+// ---------------------------------------------------------------------------
+// (1.19) Glybaan's music. The owner (18 Oct 2026): "It feels a little bland ... I really need it to be exceptional". A
+// little band plays along while you slide: a kick and hats from the start, then the bass, an arpeggio, a melody, as it
+// gets faster (`layers` 0-3); the tempo rises with your speed and the key turns with each world. Scheduled a moment ahead
+// on the audio clock, under the sounds; it follows the sound setting and suspend()/resume() (a pause, another app), and
+// fades out when the run ends.
+// ---------------------------------------------------------------------------
+const MUSIC_LEVEL = 0.3;
+let mus = null;              // { bus, nextT, step, timer, bpm, layers, key }
+// (in the key's minor scale: the chords i - VI - III - VII, a bar each; the melody over them, an eighth at a time)
+const M_ROOT = [0, -4, 3, -2];
+const M_CHORD = [[0, 3, 7], [-4, 0, 3], [3, 7, 10], [-2, 2, 5]];
+const M_LEAD = [[12, null, 10, 7, 10, null, 12, null], [8, null, 7, 3, 5, null, 3, null], [7, 10, 12, null, 15, null, 12, 10], [14, null, 12, 10, 7, null, null, null]];
+const mHz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+function mTone(t, freq, dur, type, peak, cutoff) {
+  const o = ctx.createOscillator();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  const f = ctx.createBiquadFilter();
+  f.type = 'lowpass';
+  f.frequency.setValueAtTime(cutoff, t);
+  f.Q.value = 0.7;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(FLOOR, t);
+  g.gain.linearRampToValueAtTime(peak, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(FLOOR, t + dur);
+  o.connect(f);
+  f.connect(g);
+  g.connect(mus.bus);
+  o.start(t);
+  o.stop(t + dur + 0.03);
+}
+function mKick(t, peak) {
+  const o = ctx.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(140, t);
+  o.frequency.exponentialRampToValueAtTime(44, t + 0.11);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(peak, t);
+  g.gain.exponentialRampToValueAtTime(FLOOR, t + 0.26);
+  o.connect(g);
+  g.connect(mus.bus);
+  o.start(t);
+  o.stop(t + 0.28);
+}
+function mNoise(t, dur, type, freq, peak, B) {
+  const s = ctx.createBufferSource();
+  s.buffer = B.white;
+  const f = ctx.createBiquadFilter();
+  f.type = type;
+  f.frequency.value = freq;
+  f.Q.value = 0.8;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(peak, t);
+  g.gain.exponentialRampToValueAtTime(FLOOR, t + dur);
+  s.connect(f);
+  f.connect(g);
+  g.connect(mus.bus);
+  s.start(t, Math.random() * 0.5);
+  s.stop(t + dur + 0.02);
+}
+/** One sixteenth of the music at time t. */
+function musicStep(step, t, B) {
+  const bar = (step >> 4) & 3;
+  const s = step & 15;
+  const L = mus.layers;
+  const key = mus.key;
+  const sixteenth = 60 / mus.bpm / 4;
+  // drums: the kick on the beat (on every beat once it's going), the snare on 2 and 4, hats on the eighths (sixteenths at full)
+  if (s % 8 === 0 || (L >= 2 && s % 4 === 0)) mKick(t, 0.85);
+  if (s === 4 || s === 12) { mNoise(t, 0.13, 'bandpass', 1900, 0.32, B); mTone(t, 190, 0.07, 'triangle', 0.18, 2000); }
+  if (s % 2 === 0 || L >= 3) mNoise(t, s % 4 === 2 ? 0.06 : 0.035, 'highpass', 8000, s % 4 === 2 ? 0.12 : 0.07, B);
+  // the bass: eighths on the chord's root, an octave up now and then
+  if (L >= 1 && s % 2 === 0) {
+    const up = s === 4 || s === 10 || s === 14 ? 12 : 0;
+    mTone(t, mHz(key - 24 + M_ROOT[bar] + up), sixteenth * 1.7, 'sawtooth', 0.3, 700 + L * 160);
+  }
+  // the arpeggio: up the chord, a sixteenth each
+  if (L >= 2) {
+    const c = M_CHORD[bar];
+    const n = [c[0], c[1], c[2], c[0] + 12][s & 3] + (s >= 8 ? 12 : 0);
+    mTone(t, mHz(key + n), sixteenth * 0.9, 'square', 0.07, 2600);
+  }
+  // the melody, over the chords
+  if (L >= 3 && s % 2 === 0) {
+    const n = M_LEAD[bar][s >> 1];
+    if (n !== null) { mTone(t, mHz(key + 12 + n), sixteenth * 3.2, 'triangle', 0.17, 3800); mTone(t, mHz(key + 12 + n) * 1.004, sixteenth * 3.2, 'square', 0.035, 2400); }
+  }
+}
+function musicTick() {
+  if (!mus || !ctx || !master) return;
+  if (!mus.bus) { mus.bus = ctx.createGain(); mus.bus.gain.value = 0; mus.bus.connect(master); mus.bus.gain.setTargetAtTime(MUSIC_LEVEL, ctx.currentTime, 0.4); }
+  // (paused, hidden, sound off or not yet running: nothing piles up; it picks up again from now)
+  if (!enabled || held || isHidden() || ctx.state !== 'running') { mus.nextT = 0; return; }
+  const now = ctx.currentTime;
+  if (!mus.nextT || mus.nextT < now) mus.nextT = now + 0.05;
+  const B = buffersFor(ctx);
+  try {
+    while (mus.nextT < now + 0.2) {
+      musicStep(mus.step, mus.nextT, B);
+      mus.nextT += 60 / mus.bpm / 4;
+      mus.step = (mus.step + 1) & 63;
+    }
+  } catch (e) { /* music is optional */ }
+}
+const musicOpts = (o = {}) => {
+  const out = {};
+  if (Number.isFinite(o.bpm)) out.bpm = clamp(o.bpm, 70, 170);
+  if (Number.isFinite(o.layers)) out.layers = clamp(Math.round(o.layers), 0, 3);
+  if (Number.isFinite(o.key)) out.key = clamp(Math.round(o.key), 40, 76);
+  return out;
+};
+
 export const audio = {
   /** Create/resume the context. Idempotent and cheap; safe to call on every pointerdown/keydown. */
   unlock() {
@@ -1303,6 +1416,33 @@ export const audio = {
     ambHold = false;
     if (enabled && !isHidden()) safeResume();
     syncAmbience();
+  },
+
+  /** (1.19) Glybaan's music: on (with { bpm, layers 0-3, key }) or off (a fade). */
+  music(on, opts = {}) {
+    if (on) {
+      if (!mus) mus = { bus: null, nextT: 0, step: 0, timer: 0, bpm: 112, layers: 0, key: 57 };
+      Object.assign(mus, musicOpts(opts));
+      if (mus.bus && ctx) mus.bus.gain.setTargetAtTime(MUSIC_LEVEL, ctx.currentTime, 0.3);
+      if (!mus.timer) mus.timer = setInterval(musicTick, 50);
+      musicTick();
+    } else if (mus) {
+      const m = mus;
+      mus = null;
+      clearInterval(m.timer);
+      if (m.bus && ctx) {
+        m.bus.gain.setTargetAtTime(0, ctx.currentTime, 0.25);
+        setTimeout(() => { try { m.bus.disconnect(); } catch (e) { /* gone */ } }, 1600);
+      }
+    }
+  },
+  /** (1.19) The music's tempo, layers or key while it plays. */
+  musicSet(opts) {
+    if (mus) Object.assign(mus, musicOpts(opts));
+  },
+  /** (tests) The music now: null when off. */
+  get musicState() {
+    return mus ? { bpm: Math.round(mus.bpm), layers: mus.layers, key: mus.key, step: mus.step, playing: !!mus.bus && !!mus.nextT } : null;
   },
 
   /**

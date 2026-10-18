@@ -3492,7 +3492,7 @@ export function createUI(bus) {
 
   /** (1.19 3D) Glybaan: its own page (glybaan.html), the downhill slide; the button shows your best once there is one. */
   function glybaanMenuEl(v) {
-    const sub = v?.best ? S.glybaanBest(`${fmtInt(v.best)} m`) : S.glybaanMenuSub;
+    const sub = v?.best ? S.glybaanBest(`${fmtInt(v.best)} m`, v.level) : S.glybaanMenuSub;
     return h('button', {
       type: 'button', class: 'kasteel-menu-btn glybaan-menu-btn', 'aria-label': `${S.glybaan}: ${sub}`,
       onclick: () => { if (!guard()) return; audio.play('click'); bus.emit('ui:glybaan'); },

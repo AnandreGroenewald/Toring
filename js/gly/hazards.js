@@ -430,6 +430,12 @@ void main() {
   gl_FragColor = vec4(vec3(1.0, 0.55, 0.14) * 3.0, a);
   ${OUT}
 }`;
+/** Flames (licking tongues of fire) from `tongues` ({ at, info: [width, height, seed, lean] }): a fire's, a fire man's hair. */
+export function flameMesh(tongues) {
+  const m = new THREE.Mesh(quads(tongues, UP_CORNERS), shaderMat(FLAME_VERT, FLAME_FRAG, { add: true, side: THREE.DoubleSide }));
+  m.renderOrder = 5;
+  return m;
+}
 function sparks(n, rise, spread, seed) {
   const r = rand(seed);
   const p = new THREE.Points(points(n, () => [(r() - 0.5) * spread, (r() - 0.5) * spread, 0.8 + r() * 1.4, r()]), shaderMat(SPARK_VERT, SPARK_FRAG, { add: true, extra: { uRise: { value: rise } } }));
@@ -652,6 +658,10 @@ varying vec3 vPos;
 void main() { vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 const FIELD_FRAG = /* glsl */ `
 uniform float uHit;
+uniform vec3 uDeep;
+uniform vec3 uGlow;
+uniform float uTop;
+uniform float uBot;
 varying vec3 vPos;
 float hexEdge(vec2 p) {
   vec2 r = vec2(1.0, 1.7320508);
@@ -668,16 +678,17 @@ void main() {
   float sh = vnoise(vPos.xy * 0.7 + vec2(uT * 0.5, -uT * 0.35));
   // a band of light sweeping up the field, and its edges brighter (a field held at its rims)
   float sweep = smoothstep(0.85, 1.0, sin(vPos.y * 0.8 - uT * 2.4 + vPos.x * 0.15));
-  float rim = smoothstep(6.0, 8.1, vPos.y) + smoothstep(0.6, 0.0, vPos.y) * 0.6;
-  vec3 col = mix(vec3(0.1, 0.04, 0.3), vec3(0.24, 0.1, 0.6), sh);
-  col += vec3(0.7, 0.55, 1.0) * line * (1.0 + 0.8 * sweep) * 1.3;
-  col += vec3(0.5, 0.35, 1.0) * (sweep * 0.35 + rim * 0.4);
+  float rim = smoothstep(uTop - 1.6, uTop, vPos.y) + smoothstep(uBot + 0.6, uBot, vPos.y) * 0.6;
+  vec3 col = mix(uDeep * 0.4, uDeep, sh);
+  col += uGlow * line * (1.0 + 0.8 * sweep) * 1.3;
+  col += uGlow * 0.7 * (sweep * 0.35 + rim * 0.4);
   col += vec3(1.0, 0.82, 0.45) * uHit * (0.8 + line);
   gl_FragColor = vec4(col, min(1.0, 0.36 + 0.5 * line + 0.18 * sweep + 0.2 * rim + 0.35 * uHit));
   ${OUT}
 }`;
-export function fieldMat() {
-  return shaderMat(FIELD_VERT, FIELD_FRAG, { side: THREE.DoubleSide, extra: { uHit: { value: 0 } } });
+/** A field in its colours (`deep` its body, `glow` its honeycomb and rims), from `bot` to `top` (m) for its brighter rims. */
+export function fieldMat({ deep = '#3d1a99', glow = '#b38cff', bot = 0, top = 8 } = {}) {
+  return shaderMat(FIELD_VERT, FIELD_FRAG, { side: THREE.DoubleSide, extra: { uHit: { value: 0 }, uDeep: { value: new THREE.Color(deep) }, uGlow: { value: new THREE.Color(glow) }, uBot: { value: bot }, uTop: { value: top } } });
 }
 /** A pillar of stacked rock at the chute's side, holding a gate's field (two shapes, kept). */
 const pillarGeos = [];

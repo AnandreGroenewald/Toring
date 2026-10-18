@@ -170,7 +170,7 @@ export const S_EN = {
   // (1.18 3D) Block Clash (botsing.html): its menu button
   glybaan: 'Slide',
   glybaanMenuSub: 'Slide down, swipe, dodge the elements',
-  glybaanBest: (m) => `Best: ${m} · slide again`,
+  glybaanBest: (m, lv = 1) => (lv > 1 ? `Level ${lv} · Best: ${m}` : `Best: ${m} · slide again`),
   glybaanLoot: (n) => `🌀 +${n} coins from the Slide`,
   botsing: 'Block Clash',
   botsingMenuSub: 'Build or throw: sink Rikus’s crown',
@@ -359,7 +359,7 @@ export const S_EN = {
     // (1.17) The Castle Series (kasteel.html)
     { icon: '🏰', text: 'The Castle Series: your Daily Towers become the towers of your castle. Attack Robot Rikus’s and your friends’ castles with troops, a ram and a trebuchet (break the gate, knock half of it down, make their flag fall), and plan your defence: it fights for you while you’re away.' },
     // (1.18) Block Clash (botsing.html)
-    { icon: '🌀', text: 'Slide: your block slides down, ever faster. Swipe for a lane, tap to turn. Red ring: out. Yellow: you can’t see well. Green: your own, maybe with a bag of coins.' },
+    { icon: '🌀', text: 'Slide: pick Fire Man, Water Man or Earth Man and run down the slide, ever faster. Swipe for a lane, tap to jump, swipe down to slide. Red ring: out. Yellow: you can’t see well. Green: your own, maybe with a bag of coins. A new world every 600 m.' },
     { icon: '💥', text: 'Block Clash: two towers on rocks in the sea. Each turn, pick a block with an element and build or throw: knock the other crown into the sea. Mind the wind!' },
     { icon: '🗓️', text: (free = 1) => (free > 1
       ? `One Daily Tower a day, the same for everyone: ${free} free tries and your best try counts. After that, “One more try” costs coins. Practise as much as you like.`

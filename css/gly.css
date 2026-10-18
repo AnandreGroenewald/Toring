@@ -59,9 +59,6 @@
 .gl-pick b { font-size: 14px; font-weight: 900; }
 .gl-pick small { font-size: 10.5px; font-weight: 700; line-height: 1.25; opacity: 0.85; padding: 0 2px; letter-spacing: 0 !important; color: #fff !important; }
 .gl-pick.is-on { background: rgba(255, 212, 106, 0.18); border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset, 0 6px 18px rgba(255, 180, 60, 0.25); transform: translateY(-1px); }
-.gl-sh { display: block; height: 22px; margin: 3px 0 2px; border-radius: 4px; background: linear-gradient(180deg, #ffe39a, #f59a2a); box-shadow: 0 2px 0 #a8621a; }
-.gl-sh-square { width: 22px; }
-.gl-sh-rect { width: 46px; }
 .gl-rules { font-size: 12.5px !important; line-height: 1.45 !important; padding: 8px 10px; border-radius: 12px; background: rgba(0, 0, 0, 0.22); }
 .gl-bestline { font-size: 13px !important; color: var(--gold); }
 .gl-how { font-size: 12px !important; line-height: 1.4 !important; opacity: 0.85; }
@@ -86,3 +83,45 @@
 .bt-banner.is-gold b { background-image: linear-gradient(180deg, #fffbe0, #ffd84a 55%, #f0a01a); }
 /* the end card: the coins on their way to Stapel's wallet */
 .gl-res .gl-wallet { margin: 2px 0 0 !important; font-size: 13.5px !important; font-weight: 800 !important; color: #ffe27a !important; opacity: 1 !important; }
+
+/* (the cards can be taller than a small phone: they scroll) */
+.bt-modal > .gl-start, .bt-modal > .gl-res { max-height: calc(100% - 24px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+/* the end card's four numbers in one row */
+.gl-res dl { grid-template-columns: repeat(4, 1fr) !important; gap: 6px !important; }
+.gl-res dl > div { padding: 6px 2px !important; }
+.gl-res dl dt { font-size: 10px !important; }
+.gl-res dl dd { font-size: 18px !important; }
+/* your level: its bar fills from where the run began */
+.gl-level { width: 100%; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; margin: 2px 0; }
+.gl-level b { font-size: 13px; font-weight: 900; color: #fff; }
+.gl-level small { font-size: 11px; font-weight: 800; color: rgba(255, 255, 255, 0.75); font-variant-numeric: tabular-nums; }
+.gl-bar { height: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.gl-bar i { display: block; height: 100%; width: var(--to); border-radius: 6px; background: linear-gradient(90deg, #ffb02e, #ffe27a); box-shadow: 0 0 10px rgba(255, 200, 60, 0.6); animation: gl-fill 1.1s 0.3s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+@keyframes gl-fill { from { width: var(--from); } to { width: var(--to); } }
+.gl-lvup { margin: 0 !important; font-size: 16px !important; font-weight: 900 !important; color: #ffe27a !important; opacity: 1 !important; animation: gl-pop 0.6s 0.9s both; }
+.gl-lvup b { color: #fff; font-weight: 900; }
+@keyframes gl-pop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+/* missions: what to do, how far along, its coins */
+.gl-missions { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; gap: 5px; }
+.gl-missions li { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 11px; background: rgba(255, 255, 255, 0.07); font-size: 12.5px; font-weight: 800; line-height: 1.3; text-align: left; }
+.gl-missions li i { font-style: normal; font-size: 16px; text-align: center; }
+.gl-missions li i .coin-ic { font-size: 15px; }
+.gl-missions li em { font-style: normal; color: rgba(255, 255, 255, 0.65); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gl-missions li b { color: #ffe27a; font-weight: 900; white-space: nowrap; }
+.gl-missions.is-done li { background: rgba(80, 220, 120, 0.16); box-shadow: inset 0 0 0 1px rgba(110, 240, 150, 0.5); }
+.gl-missions.is-done li i { color: #7dffa8; font-weight: 900; }
+/* the end card's two small buttons side by side */
+.gl-two { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gl-two button { margin: 0 !important; }
+.gl-level small { letter-spacing: 0 !important; }
+
+/* the start card: pick your man (his picture, his name) */
+.gl-man { padding: 8px 4px 9px !important; gap: 5px !important; }
+.gl-man img { display: block; width: 74px; height: 74px; border-radius: 18px; object-fit: cover; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
+.gl-man.is-on img { box-shadow: 0 0 0 2px var(--gold), 0 6px 16px rgba(255, 180, 60, 0.35); }
+.gl-man span { font-size: 40px !important; line-height: 74px !important; }
+/* the ✨ in the top corner is a button: tap it to see clearly */
+.gl-side .gl-item { pointer-events: auto; cursor: pointer; font: inherit; color: inherit; line-height: 1.2; -webkit-tap-highlight-color: transparent; }
+/* the end card's "pick another man": as its neighbour ‹ Stapel (dark glass) */
+.gl-change { width: 100%; height: 46px; border-radius: 15px; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.06); color: #fff; font: inherit; font-size: 14px !important; font-weight: 800 !important; cursor: pointer; }
+.gl-change:active, .bt-home:active { transform: translateY(1px); }
