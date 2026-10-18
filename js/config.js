@@ -355,6 +355,11 @@ export const IDEAS_VOTE = Object.freeze({ on: false, until: '2026-11-01', path: 
 // line in "Hoe speel ek?", no castle news. Its page (kasteel.html) and code stay; `on: true` brings it back.
 export const KASTEEL = Object.freeze({ on: false });
 
+// (1.18, the owner 18 Oct 2026: Block Clash "Its not working", a downhill four-lane runner takes its place) Blokbotsing is
+// off: no menu button, no cards in the Uitdagersreeks, no line in "Hoe speel ek?". Its page (botsing.html) and code stay
+// (an old friend link still opens it); `on: true` brings it back.
+export const BOTSING = Object.freeze({ on: false });
+
 // (1.18, the owner 18 Oct 2026: "for now all skins needs to be free ... For people to test it") every skin and look in the
 // Winkel costs nothing while `on`; what testers take stays theirs when the prices come back (`on: false`).
 export const SKINS_FREE = Object.freeze({ on: true });

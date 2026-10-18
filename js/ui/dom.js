@@ -3,7 +3,7 @@
 // and real buttons lives here, positioned exactly over the canvas by layout().
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
-import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, DUEL, computeGameHeight, IDEAS_VOTE, KASTEEL } from '../config.js';
+import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, DUEL, computeGameHeight, IDEAS_VOTE, KASTEEL, BOTSING } from '../config.js';
 import { WEEK } from '../core/week.js';
 
 const WEEK_COINS = WEEK.coins;
@@ -1044,7 +1044,7 @@ export function createUI(bus) {
       },
     }, coinIc(), h('b', { class: 'wallet-n', text: fmtInt(m.coins || 0) }), m.refill ? h('span', { class: 'wallet-plus', 'aria-hidden': 'true', text: '+' }) : null);
     screens.menu.replaceChildren(brand, gap,
-      h('div', { class: 'menu-stack' }, card, dorpMenuEl(m.dorp), botsingMenuEl(), kasteelMenuEl(m.kasteel), slagMenuEl(m.slag), playRow, dock, adSlot), langChip, wallet);
+      h('div', { class: 'menu-stack' }, card, dorpMenuEl(m.dorp), BOTSING.on ? botsingMenuEl() : null, kasteelMenuEl(m.kasteel), slagMenuEl(m.slag), playRow, dock, adSlot), langChip, wallet);
     // the gap shrinks when the sponsor feed adds the ad card later, so re-check whenever it resizes
     if (saying && typeof ResizeObserver === 'function') {
       if (!st.sayingRO) st.sayingRO = new ResizeObserver(() => fitSaying());
@@ -1123,7 +1123,7 @@ export function createUI(bus) {
   function renderHowTo() {
     const free = st.model?.tries?.free || 1;   // (1.13.1) the day's free tries, as on the daily card
     // (the castle's line only while the Kasteelreeks is on)
-    const steps = S.howToSteps.filter((s) => KASTEEL.on || s.icon !== '🏰').map((s, i) => {
+    const steps = S.howToSteps.filter((s) => (KASTEEL.on || s.icon !== '🏰') && (BOTSING.on || s.icon !== '💥')).map((s, i) => {
       const c = STEP_COLORS[i % STEP_COLORS.length];
       return h('li', { class: 'step' },
         h('span', { class: 'step-ic', vars: { '--c': `var(--${c})`, '--cd': `var(--${c}-d)`, '--r': `${i % 2 ? 3 : -3}deg` } }, emo(s.icon)),
@@ -1955,8 +1955,8 @@ export function createUI(bus) {
         m.live ? playCard('random', '🔍', S.duelRandom, S.duelRandomSub, 'ui:duel-random', true) : null,
         playCard('friend', '📲', S.duelFriend, S.duelFriendSub, 'ui:duel-friend', !m.live),
         playCard('bot', '🤖', S.duelBot, S.duelBotSub, 'ui:duel-bot', false)),
-      // (1.18 3D) Blokbotsing in the Uitdagersreeks (the owner: "Blok vir Blok / the Uitdagersreeks?" → "Now")
-      h('div', { class: 'ideas-box botsing-box' },
+      // (1.18 3D) Blokbotsing in the Uitdagersreeks (the owner: "Blok vir Blok / the Uitdagersreeks?" → "Now"; off since 18 Oct)
+      !BOTSING.on ? null : h('div', { class: 'ideas-box botsing-box' },
         h('div', { class: 'ideas-head' }, emo('⚔️'), h('b', { text: S.botsing }), h('span', { class: 'ideas-tag', text: S.newTag })),
         h('p', { class: 'ideas-sub', text: S.botsingDuelSub }),
         playCard('botsing-friend', '📲', S.botsingFriend, S.botsingFriendSub, 'ui:botsing-friend', false),
