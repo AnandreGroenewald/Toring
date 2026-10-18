@@ -350,6 +350,14 @@ export const REFILL = Object.freeze({ on: true, to: 4000, times: 3, per: 'day', 
 // have") the Living Tower now lives in every tower (js/game/living.js): the three separate ideas and their vote are hidden
 // (their scene stays in the code for its tribe attacks; `on: true` brings them back).
 export const IDEAS_VOTE = Object.freeze({ on: false, until: '2026-11-01', path: 'lewende-toring/' });
+
+// (1.18, the owner 18 Oct 2026: "But I really do not like the Castle series") Die Kasteelreeks is off: no menu button, no
+// line in "Hoe speel ek?", no castle news. Its page (kasteel.html) and code stay; `on: true` brings it back.
+export const KASTEEL = Object.freeze({ on: false });
+
+// (1.18, the owner 18 Oct 2026: "for now all skins needs to be free ... For people to test it") every skin and look in the
+// Winkel costs nothing while `on`; what testers take stays theirs when the prices come back (`on: false`).
+export const SKINS_FREE = Object.freeze({ on: true });
 export const TESTER_GIFT = Object.freeze({ on: true, coins: 100000, hash: '7b325f2da84141879a5a4b6ab2f0a72a0386a3d7a3519ece2f6a5a075553792d' });
 
 // (1.13) Sign in with Google (js/account.js): the web client ID from Google Cloud (Google Auth Platform >

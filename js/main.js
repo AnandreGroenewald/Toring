@@ -2,7 +2,7 @@
 // pause/visibility, settings, service worker and debug hooks.
 // First of all: the language, before any other module reads a string (js/core/langboot.js).
 import { SAVED_LANG, PREVIEW_LANG } from './core/langboot.js';
-import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL, TESTER_GIFT, REFILL, AUTH, VERSION } from './config.js';
+import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL, TESTER_GIFT, REFILL, AUTH, VERSION, KASTEEL } from './config.js';
 import { bus } from './core/bus.js';
 import { S, POWERUP_INFO, COSMETIC_INFO, RANK_INFO } from './core/strings.js';
 import { fmtDateKey, fmtM, fmtInt } from './core/format.js';
@@ -572,7 +572,7 @@ function menuModel() {
     week: weekView(store.getWeek(), dateKey),   // the weekkis strip (js/core/week.js)
     dorp: (() => { const d = dorpView(); dorpMenuKey = JSON.stringify(d); return d; })(),   // (1.16) Jou dorp
     slag: SLAG_ON ? slagMenuView() : null,   // (1.17) Vrugteslag (set aside)
-    kasteel: kasteelMenuView(),   // (1.17) Die Kasteelreeks
+    kasteel: KASTEEL.on ? kasteelMenuView() : null,   // (1.17) Die Kasteelreeks (off since 18 Oct: config KASTEEL)
   };
 }
 
@@ -3101,7 +3101,9 @@ function dorpNewsCheck() {
 function dorpGainFor(result) {
   const jokers = dorpJokers;
   dorpJokers = 0;
-  if (!dorpOn || !result?.living || !(result.blocksDropped > 0)) return null;
+  // (the owner, 18 Oct 2026: "your town should only be build with the daily challenge else the town will grow way to
+  // quick": only the Daily Tower's tries feed the town; Oefen and matches build towers, not towns)
+  if (!dorpOn || result?.mode !== 'daily' || !result?.living || !(result.blocksDropped > 0)) return null;
   const g = dorp.queue({
     people: result.living.people | 0, raids: (result.raids | 0) + jokers, gold: (result.living.gold || []).length,
     dayKey: result.blocksDropped >= 3 ? todayKey() : null,
@@ -3274,9 +3276,10 @@ bus.on('ui:dorp-home', () => {
   dorpBusy = false;
   enterDorp('town');
 });
+// (only the Daily Tower grows the town: "So it needs to take you to the daily challenge", as the menu's Daily button does)
 bus.on('ui:dorp-play', () => {
-  stopDorpScene();
-  bus.emit('ui:play-practice');
+  leaveDorp();
+  bus.emit('ui:play-daily');
 });
 bus.on('ui:dorp-tell', () => {
   if (dorpRaid?.share) ui.shareText(dorpRaid.share, 'whatsapp');
@@ -3393,7 +3396,7 @@ function kasteelMenuView() {
  */
 let kasteelUnseen = 0;
 async function kasteelNewsCheck(told = null) {
-  if (!dorpOn) return;
+  if (!dorpOn || !KASTEEL.on) return;
   // (1.18) the Worker's town answer brings the castle's count along: no second call every poll
   if (told && Number.isInteger(told.newsN) && Number.isInteger(told.seenN)) {
     const unseen = Math.max(0, told.newsN - told.seenN);

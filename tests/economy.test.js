@@ -5,7 +5,7 @@ import {
   POWERUPS, POWERUP_IDS, COSMETICS, COSMETIC_KINDS, DEFAULT_LOOK, RANKS, EARN, FOUNDATION_FREE_M, BOT_CARD,
   coinsForGame, earnCoins, buyPowerup, usePowerup, buyCosmetic, wearCosmetic, grantRankLooks, defaultEconomy,
   cleanEconomy, cleanCard, cardOf, rankAfterMatch, rolloverSeason, seasonOf, cosmetic,
-  LADDER, ladderAt, rankDelta, cleanModeRank, migrateOldRank, rankShortOf, bestTier, RANK_RULES, cardForMode,
+  LADDER, ladderAt, rankDelta, cleanModeRank, migrateOldRank, rankShortOf, bestTier, RANK_RULES, cardForMode, priceOf,
 } from '../js/core/economy.js';
 import { createStore, memoryBackend } from '../js/core/storage.js';
 import { POWERUP_INFO, COSMETIC_INFO, RANK_INFO } from '../js/core/strings.js';
@@ -64,7 +64,7 @@ test('looks: buy and wear; rank looks are never sold; you can only wear what you
   let e = earnCoins(defaultEconomy(), 1000, { capped: false }).economy;
   let r = buyCosmetic(e, 'celebration', 'braai');
   assert.ok(r.ok);
-  assert.equal(r.economy.coins, 1000 - cosmetic('celebration', 'braai').price);
+  assert.equal(r.economy.coins, 1000 - priceOf(cosmetic('celebration', 'braai')));   // (nothing while SKINS_FREE is on)
   assert.equal(buyCosmetic(r.economy, 'celebration', 'braai').ok, false, 'owned already');
   assert.equal(buyCosmetic(r.economy, 'frame', 'diamant').ok, false, 'comes with the Diamant rank');
   assert.equal(buyCosmetic(r.economy, 'badge', 's-goud').ok, false, 'a season badge');
@@ -275,7 +275,7 @@ test('two tabs, one wallet: a purchase starts from the latest coins; an older ve
   assert.equal(main.econ, undefined, 'the wallet is not in the main blob');
   backend.setItem('stapel.v1', JSON.stringify({ ...main, settings: { sound: true } }));
   const c = createStore(backend, { now: () => t });
-  assert.equal(c.getEconomy().coins, 200 - POWERUPS.slow.price - 120);
+  assert.equal(c.getEconomy().coins, 200 - POWERUPS.slow.price - priceOf(cosmetic('frame', 'see')));
   assert.equal(c.getCard().frame, 'see');
   assert.equal(c.getSettings().sound, true);
   // a broken wallet key starts a fresh wallet; the rest of the game is untouched (1.12: the ranks have a

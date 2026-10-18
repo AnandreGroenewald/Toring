@@ -124,13 +124,13 @@ export const S = {
   dorpSteal: 'Steel',
   dorpWraak: 'Wraak!',
   dorpWraakFree: 'gratis',
-  dorpNoRaids: 'Kry 3 Perfeks op ’n ry vir ’n strooptog',
+  dorpNoRaids: 'Kry 3 Perfeks op ’n ry in die Daaglikse Toring vir ’n strooptog',
   dorpHow: [
-    '🏠 Elke toring wat jy bou, stuur sy mense na jou dorp.',
-    '🔥 3 Perfeks op ’n ry = ’n strooptog: steel mense by ’n buurman, selfs as hulle nie speel nie.',
-    '🛡️ Jou eerste toring elke dag bou ’n muur. ’n Muur keer een strooptog.',
+    '🏠 Jou Daaglikse Torings stuur hul mense na jou dorp (Oefen en wedstryde bou net torings).',
+    '🔥 3 Perfeks op ’n ry in die Daaglikse Toring = ’n strooptog: steel mense by ’n buurman, selfs as hulle nie speel nie.',
+    '🛡️ Jou eerste Daaglikse Toring elke dag bou ’n muur. ’n Muur keer een strooptog.',
     '💥 Het iemand by jou gesteel? Jy kry een gratis, sterker wraak.',
-    '🎯 Mik: tik as die teiken op die gloeiende toring is. Perfek = 50% meer mense.',
+    '🎯 Mik: tik vir die krag, dan vir die rigting, en tref die gloeiende gebou. Perfek = 50% meer mense.',
     '✨ Goue mense is skaars: steel een en kry 25 munte.',
     '🏗️ Landmerke kos munte: jou bure sien hulle, en elkeen bring elke dag toeriste (mense).',
     '🤖 Robot Rikus is altyd jou buurman: oefen op hom, en pas op, hy steel terug!',
@@ -158,13 +158,13 @@ export const S = {
   dorpBuurAdded: (name) => `🏘️ Jy en ${name} is nou bure!`,
   dorpWelcome: (name) => `${name} se dorp is nou langs joune. Jy het ’n gratis strooptog: steel by hulle!`,
   dorpOffline: 'Jou dorp kan nie nou die bediener bereik nie. Probeer later weer.',
-  dorpNoRaidsLeft: 'Geen strooptogte nie: kry 3 Perfeks op ’n ry!',
+  dorpNoRaidsLeft: 'Geen strooptogte nie: kry 3 Perfeks op ’n ry in die Daaglikse Toring!',
   dorpOf: (name) => `${name} se dorp`,
   dorpNews: 'Nuus',
   dorpMore: (n) => `Nog ’n strooptog (${n})`,
   dorpGoSteal: 'Gaan steel!',
   dorpWraakOn: (name) => `Wraak op ${name}!`,
-  dorpPlayForRaids: 'Bou vir strooptogte',
+  dorpPlayForRaids: 'Bou jou Daaglikse Toring',
   dorpRank: (r, n) => `Nommer ${r} van ${n} dorpe`,
   dorpWallHeld: 'Die muur hou!',
   // (1.18 3D) Blokbotsing (botsing.html): its menu button
@@ -182,6 +182,7 @@ export const S = {
   kasteelLoot: (n) => `🏰 +${n} munte uit die Kasteelreeks`,
   botsingLoot: (n) => `⚔️ +${n} munte uit Blokbotsing`,
   dorpSoon: (name) => `🛡️ ${name ? `${name} se dorp` : 'Hulle dorp'} is hierdie uur al genoeg beroof. Jou strooptog bly joune: probeer later weer!`,
+  shopFree: 'Gratis',
   modeLootFull: (n) => `🪙 Vandag se munte is op: ${n} wag vir môre`,
   // (1.17) Vrugteslag: Ryk teen Ryk (js/scenes/SlagScene.js; the owner's fruit battle)
   slag: 'Vrugteslag',
@@ -355,7 +356,7 @@ export const S = {
     // (1.16) Die Lewende Toring
     { icon: '🏠', text: 'Lewende Toring: elke blok wat staan, word ’n vloer. Goed = 1 kamer, Perfek = 2, en elke Perfek op ’n ry een meer. Mense trek in; val ’n vloer, spring hulle met valskerms.' },
     { icon: '🔥', text: 'Gevegte in Blok vir Blok: jou joker kan jou stam stuur (Veldbrand, Waterwiel of Rankgryp) na die ander se vloere. Is jou mense op, kry jy een beurt om weer mense te kry, of jy verloor.' },
-    { icon: '🏘️', text: 'Jou dorp: elke toring stuur sy mense na jou dorp. 3 Perfeks op ’n ry gee ’n strooptog: steel mense by jou vriende, selfs as hulle nie speel nie. Jou eerste toring elke dag bou ’n muur. Is daar by jou gesteel? Neem gratis wraak.' },
+    { icon: '🏘️', text: 'Jou dorp: jou Daaglikse Torings stuur hul mense na jou dorp, en 3 Perfeks op ’n ry daarin gee ’n strooptog: steel mense by jou vriende, selfs as hulle nie speel nie. Jou eerste Daaglikse Toring elke dag bou ’n muur. Is daar by jou gesteel? Neem gratis wraak.' },
     // (1.17) Die Kasteelreeks (kasteel.html)
     { icon: '🏰', text: 'Die Kasteelreeks: jou Daaglikse Torings word die torings van jou kasteel. Val Robot Rikus en jou vriende se kastele aan met troepe, ’n stormram en ’n trebuchet (breek die hek, die helfte plat, hul vlag val), en beplan jou verdediging: dit veg vir jou terwyl jy weg is.' },
     // (1.13.1) with the day's free tries (from 12 Oct 2026: 3)

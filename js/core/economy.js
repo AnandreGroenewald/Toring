@@ -8,7 +8,7 @@
 // punishment's outfit) and ranks, never strength.
 
 import { isDateKey } from './daily.js';
-import { DUEL } from '../config.js';
+import { DUEL, SKINS_FREE } from '../config.js';
 
 export const COIN = '🪙';
 
@@ -144,6 +144,8 @@ export const DEFAULT_LOOK = Object.freeze({ frame: 'hout', badge: 'geen', title:
 
 /** One item of a kind, or null. */
 export const cosmetic = (kind, id) => (COSMETICS[kind] || []).find((c) => c.id === id) || null;
+/** (1.18) What a look or skin costs now: nothing while SKINS_FREE is on (the testers' time), else its price. */
+export const priceOf = (c) => (SKINS_FREE.on ? 0 : Math.max(0, c?.price | 0));
 
 // ------------------------------------------------------------------------------- ranks and seasons
 // 1.12 (the owner: "In CSGO you had a rank… one rank for each challenge", "Gold Nova 2 70% till next
@@ -539,8 +541,8 @@ export function usePowerup(eco, id) {
 export function buyCosmetic(eco, kind, id) {
   const e = cleanEconomy(eco);
   const c = cosmetic(kind, id);
-  if (!c || c.rank || c.week || e.owned[kind].includes(id) || e.coins < c.price) return { economy: e, ok: false };
-  e.coins -= c.price;
+  if (!c || c.rank || c.week || e.owned[kind].includes(id) || e.coins < priceOf(c)) return { economy: e, ok: false };
+  e.coins -= priceOf(c);
   e.owned[kind].push(id);
   return { economy: e, ok: true };
 }
@@ -549,8 +551,8 @@ export function buyCosmetic(eco, kind, id) {
 export function buySkin(eco, kind, id) {
   const e = cleanEconomy(eco);
   const c = skin(kind, id);
-  if (!c || !c.price || e.skins.owned[kind].includes(id) || e.coins < c.price) return { economy: e, ok: false };
-  e.coins -= c.price;
+  if (!c || !c.price || e.skins.owned[kind].includes(id) || e.coins < priceOf(c)) return { economy: e, ok: false };
+  e.coins -= priceOf(c);
   e.skins.owned[kind].push(id);
   return { economy: e, ok: true };
 }

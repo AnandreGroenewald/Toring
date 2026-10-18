@@ -3,14 +3,14 @@
 // and real buttons lives here, positioned exactly over the canvas by layout().
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
-import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, DUEL, computeGameHeight, IDEAS_VOTE } from '../config.js';
+import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, DUEL, computeGameHeight, IDEAS_VOTE, KASTEEL } from '../config.js';
 import { WEEK } from '../core/week.js';
 
 const WEEK_COINS = WEEK.coins;
 const WEEK_SHIELD_MAX = WEEK.shieldMax;
 const WEEK_SHIELD_PRICE = WEEK.shieldPrice;
 import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO, COSMETIC_INFO } from '../core/strings.js';
-import { COIN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic, SKINS, SKIN_KINDS, tierOf, shownPoints, shownDelta, TRIBE_PRICE } from '../core/economy.js';
+import { COIN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic, SKINS, SKIN_KINDS, tierOf, shownPoints, shownDelta, TRIBE_PRICE, priceOf } from '../core/economy.js';
 import * as BLOCKS from '../game/blocks.js';
 import { playCelebration, drawCelebrationIcon } from './celebrate.js';
 import { EMOTES, EMOTE_PICKS } from '../config.js';
@@ -1122,7 +1122,8 @@ export function createUI(bus) {
   // ---------------------------------------------------------------------------
   function renderHowTo() {
     const free = st.model?.tries?.free || 1;   // (1.13.1) the day's free tries, as on the daily card
-    const steps = S.howToSteps.map((s, i) => {
+    // (the castle's line only while the Kasteelreeks is on)
+    const steps = S.howToSteps.filter((s) => KASTEEL.on || s.icon !== '🏰').map((s, i) => {
       const c = STEP_COLORS[i % STEP_COLORS.length];
       return h('li', { class: 'step' },
         h('span', { class: 'step-ic', vars: { '--c': `var(--${c})`, '--cd': `var(--${c}-d)`, '--r': `${i % 2 ? 3 : -3}deg` } }, emo(s.icon)),
@@ -1567,7 +1568,7 @@ export function createUI(bus) {
     return h('button', {
       type: 'button',
       class: `shop-buy${can ? '' : ' is-poor'}`,
-      'aria-label': `${S.buy}: ${fmtInt(price)}`,
+      'aria-label': price ? `${S.buy}: ${fmtInt(price)}` : `${S.buy}: ${S.shopFree}`,
       onclick: () => {
         audio.play('click');
         if (!can) {
@@ -1576,7 +1577,7 @@ export function createUI(bus) {
         }
         onBuy();
       },
-    }, coinIc(), h('span', { text: fmtInt(price) }));
+    }, price ? coinIc() : null, h('span', { text: price ? fmtInt(price) : S.shopFree }));   // (1.18: free while the testers try them)
   }
 
   /**
@@ -1625,7 +1626,7 @@ export function createUI(bus) {
             let action;
             if (on) action = h('span', { class: 'shop-on', text: S.wearing });
             else if (owned) action = h('button', { type: 'button', class: 'shop-wear', text: S.wear, onclick: () => { audio.play('click'); bus.emit('ui:skin-wear', { kind, id: c.id }); } });
-            else action = buyBtn(c.price, m.coins, () => bus.emit('ui:skin-buy', { kind, id: c.id }));
+            else action = buyBtn(priceOf(c), m.coins, () => bus.emit('ui:skin-buy', { kind, id: c.id }));
             return h('div', { class: `shop-item skin-item tier-${tierOf(c)}${on ? ' is-on' : ''}`, 'data-skin': `${kind}:${c.id}` },
               tierTags(c, `${kind}:${c.id}`),
               h('span', { class: 'shop-prev' }, skinPreview(kind, c.id)),
@@ -1649,7 +1650,7 @@ export function createUI(bus) {
             else if (owned) action = h('button', { type: 'button', class: 'shop-wear', text: S.wear, onclick: () => { audio.play('click'); bus.emit('ui:shop-wear', { kind, id: c.id }); } });
             else if (c.rank) action = h('span', { class: 'shop-lock', text: S.lockedRank(RANK_INFO[c.rank].name) });
             else if (c.week) action = h('span', { class: 'shop-lock', text: S.lockedWeek });
-            else action = buyBtn(c.price, m.coins, () => bus.emit('ui:shop-buy', { kind, id: c.id }));
+            else action = buyBtn(priceOf(c), m.coins, () => bus.emit('ui:shop-buy', { kind, id: c.id }));
             return h('div', { class: `shop-item tier-${tierOf(c)}${on ? ' is-on' : ''}`, 'data-look': `${kind}:${c.id}` },
               tierTags(c, `${kind}:${c.id}`),
               h('span', { class: 'shop-prev' }, lookPreview(kind, c)),
@@ -1703,7 +1704,7 @@ export function createUI(bus) {
     let action;
     if (m.skins?.wear?.[kind] === item.id) action = h('span', { class: 'shop-on', text: S.wearing });
     else if (owned) action = h('button', { type: 'button', class: 'shop-wear', text: S.wear, onclick: () => { audio.play('click'); stopTry(false); bus.emit('ui:skin-wear', { kind, id: item.id }); } });
-    else action = buyBtn(item.price, m.coins, () => { stopTry(false); bus.emit('ui:skin-buy', { kind, id: item.id }); });
+    else action = buyBtn(priceOf(item), m.coins, () => { stopTry(false); bus.emit('ui:skin-buy', { kind, id: item.id }); });
     // (1.15, the owner: "can we make it that they can go next and back ... instead of clicking try then go back the try
     // then go back") ‹ and › step through this kind's styles right here
     const list = SKINS[kind] || [];

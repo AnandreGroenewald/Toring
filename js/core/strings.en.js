@@ -125,13 +125,13 @@ export const S_EN = {
   dorpSteal: 'Steal',
   dorpWraak: 'Revenge!',
   dorpWraakFree: 'free',
-  dorpNoRaids: 'Get 3 Perfects in a row for a raid',
+  dorpNoRaids: 'Get 3 Perfects in a row in the Daily Tower for a raid',
   dorpHow: [
-    '🏠 Every tower you build sends its people to your town.',
-    '🔥 3 Perfects in a row = a raid: steal people from a neighbour, even when they’re not playing.',
-    '🛡️ Your first tower each day builds a wall. A wall stops one raid.',
+    '🏠 Your Daily Towers send their people to your town (Practice and matches only build towers).',
+    '🔥 3 Perfects in a row in the Daily Tower = a raid: steal people from a neighbour, even when they’re not playing.',
+    '🛡️ Your first Daily Tower each day builds a wall. A wall stops one raid.',
     '💥 Did someone steal from you? You get one free, stronger revenge.',
-    '🎯 Aim: tap when the target is on the glowing tower. Perfect = 50% more people.',
+    '🎯 Aim: tap for the power, then for the direction, and hit the glowing building. Perfect = 50% more people.',
     '✨ Golden people are rare: steal one and get 25 coins.',
     '🏗️ Landmarks cost coins: your neighbours see them, and each one brings tourists (people) every day.',
     '🤖 Robot Rikus is always your neighbour: practise on him, and watch out, he steals back!',
@@ -159,13 +159,13 @@ export const S_EN = {
   dorpBuurAdded: (name) => `🏘️ You and ${name} are neighbours now!`,
   dorpWelcome: (name) => `${name}’s town is next to yours now. You have a free raid: steal from them!`,
   dorpOffline: 'Your town can’t reach the server right now. Try again later.',
-  dorpNoRaidsLeft: 'No raids: get 3 Perfects in a row!',
+  dorpNoRaidsLeft: 'No raids: get 3 Perfects in a row in the Daily Tower!',
   dorpOf: (name) => `${name}’s town`,
   dorpNews: 'News',
   dorpMore: (n) => `Another raid (${n})`,
   dorpGoSteal: 'Go steal!',
   dorpWraakOn: (name) => `Revenge on ${name}!`,
-  dorpPlayForRaids: 'Build for raids',
+  dorpPlayForRaids: 'Build your Daily Tower',
   dorpRank: (r, n) => `Number ${r} of ${n} towns`,
   dorpWallHeld: 'The wall holds!',
   // (1.18 3D) Block Clash (botsing.html): its menu button
@@ -183,6 +183,7 @@ export const S_EN = {
   kasteelLoot: (n) => `🏰 +${n} coins from the Castle Series`,
   botsingLoot: (n) => `⚔️ +${n} coins from Block Clash`,
   dorpSoon: (name) => `🛡️ ${name ? `${name}’s town` : 'Their town'} has been raided enough this hour. Your raid stays yours: try again later!`,
+  shopFree: 'Free',
   modeLootFull: (n) => `🪙 Today’s coins are used up: ${n} wait for tomorrow`,
   // (1.17) Fruit Battle: Empire vs Empire (js/scenes/SlagScene.js)
   slag: 'Fruit Battle',
@@ -351,7 +352,7 @@ export const S_EN = {
     // (1.16) The Living Tower
     { icon: '🏠', text: 'Living Tower: every block that stands becomes a floor. Good = 1 room, Perfect = 2, and each Perfect in a row one more. People move in; when a floor falls, they jump with parachutes.' },
     { icon: '🔥', text: 'Battles in Block by Block: your joker can send your tribe (Wildfire, Water Wheel or Vine Grab) at the other player’s floors. Lose all your people and you get one turn to win some back, or you lose.' },
-    { icon: '🏘️', text: 'Your town: every tower sends its people to your town. 3 Perfects in a row earn a raid: steal people from your friends, even when they’re not playing. Your first tower each day builds a wall. Got robbed? Take free revenge.' },
+    { icon: '🏘️', text: 'Your town: your Daily Towers send their people to your town, and 3 Perfects in a row there make a raid: steal people from your friends, even when they’re not playing. Your first Daily Tower each day builds a wall. Did someone steal from you? Take free revenge.' },
     // (1.17) The Castle Series (kasteel.html)
     { icon: '🏰', text: 'The Castle Series: your Daily Towers become the towers of your castle. Attack Robot Rikus’s and your friends’ castles with troops, a ram and a trebuchet (break the gate, knock half of it down, make their flag fall), and plan your defence: it fights for you while you’re away.' },
     // (1.18) Block Clash (botsing.html)

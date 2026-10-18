@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createStore, memoryBackend } from '../js/core/storage.js';
-import { SKINS, SKIN_KINDS, DEFAULT_SKIN, defaultEconomy, cleanEconomy, buySkin, wearSkin, earnCoins } from '../js/core/economy.js';
+import { SKINS, SKIN_KINDS, DEFAULT_SKIN, defaultEconomy, cleanEconomy, buySkin, wearSkin, earnCoins, skin, priceOf } from '../js/core/economy.js';
+import { SKINS_FREE } from '../js/config.js';
 import { S as AF } from '../js/core/strings.js';
 import { S_EN as EN } from '../js/core/strings.en.js';
 
@@ -21,23 +22,26 @@ test('a skin costs its price once, then it can be worn for free', () => {
   let e = { ...defaultEconomy(), coins: 1000 };
   let r = buySkin(e, 'crane', 'rooi');
   assert.equal(r.ok, true);
-  assert.equal(r.economy.coins, 500);
+  const left = 1000 - priceOf(skin('crane', 'rooi'));   // (500; nothing while SKINS_FREE is on, the testers' time)
+  assert.equal(r.economy.coins, left);
   assert.ok(r.economy.skins.owned.crane.includes('rooi'));
   r = buySkin(r.economy, 'crane', 'rooi');
   assert.equal(r.ok, false, 'never bought twice');
-  assert.equal(r.economy.coins, 500);
+  assert.equal(r.economy.coins, left);
   r = wearSkin(r.economy, 'crane', 'rooi');
   assert.equal(r.ok, true);
   assert.equal(r.economy.skins.wear.crane, 'rooi');
   r = wearSkin(r.economy, 'crane', 'geel');
   assert.equal(r.ok, true, 'the default can always be worn again');
-  assert.equal(r.economy.coins, 500, 'wearing costs nothing');
+  assert.equal(r.economy.coins, left, 'wearing costs nothing');
 });
 
 test('too few coins, a default, an unknown skin or one not owned: nothing changes', () => {
   const e = { ...defaultEconomy(), coins: 1999 };
-  assert.equal(buySkin(e, 'blocks', 'goud').ok, false);
-  assert.equal(buySkin(e, 'blocks', 'goud').economy.coins, 1999);
+  if (!SKINS_FREE.on) {   // (while skins are free, too few coins is never in the way)
+    assert.equal(buySkin(e, 'blocks', 'goud').ok, false);
+    assert.equal(buySkin(e, 'blocks', 'goud').economy.coins, 1999);
+  }
   assert.equal(buySkin(e, 'scene', 'dag').ok, false, 'a default is never bought');
   assert.equal(buySkin(e, 'scene', 'maan').ok, false);
   assert.equal(buySkin(e, 'hat', 'rooi').ok, false);
@@ -68,13 +72,14 @@ test('the store keeps bought skins across a reload, and the price leaves the wal
   store.refillCoins(2000, { times: 3, per: 'day' });
   assert.equal(store.getEconomy().coins, 2000);
   assert.equal(store.buySkin('scene', 'sonsondergang').ok, true);
-  assert.equal(store.getEconomy().coins, 1200);
+  const left = 2000 - priceOf(skin('scene', 'sonsondergang'));   // (1200; 2000 while skins are free)
+  assert.equal(store.getEconomy().coins, left);
   assert.equal(store.getSkins().wear.scene, 'dag', 'buying alone doesn\'t change what is worn');
   assert.equal(store.wearSkin('scene', 'sonsondergang').ok, true);
   const again = createStore(backend, { now: () => t + 3600e3 });
   assert.ok(again.getSkins().owned.scene.includes('sonsondergang'));
   assert.equal(again.getSkins().wear.scene, 'sonsondergang');
-  assert.equal(again.getEconomy().coins, 1200);
+  assert.equal(again.getEconomy().coins, left);
   // getSkins hands out copies
   const s = store.getSkins();
   s.owned.crane.push('goud');
@@ -89,4 +94,19 @@ test('every skin has a name in Afrikaans and English, and each kind a heading', 
       for (const { id } of SKINS[kind]) assert.ok(S.skinNames[kind]?.[id], `${kind}:${id} name`);
     }
   }
+});
+
+test('(1.18) while SKINS_FREE is on, every skin and look costs nothing, and stays owned', () => {
+  if (!SKINS_FREE.on) return;
+  let e = { ...defaultEconomy(), coins: 0 };
+  for (const kind of SKIN_KINDS) {
+    for (const c of SKINS[kind]) {
+      if (!c.price) continue;
+      const r = buySkin(e, kind, c.id);
+      assert.equal(r.ok, true, `${kind}:${c.id}`);
+      e = r.economy;
+    }
+  }
+  assert.equal(e.coins, 0);
+  assert.ok(SKIN_KINDS.every((k) => SKINS[k].every((c) => e.skins.owned[k].includes(c.id))));
 });
