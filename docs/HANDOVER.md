@@ -1150,7 +1150,7 @@ Later the owner added (decisions are final unless they say otherwise):
   and the Your town feels like childs play": Block Clash's blocks are now real materials (painted timber, gold, stone,
   marble, lava ...; js/botsing/materials.js), elements show in the block, engraved emblems, 3D cards (b185774); wind each
   turn and hits with weight (1e58777); Your Town 3D look test dorp3d.html (a0f2f62) — waiting for his verdict.
-- **18 Oct 2026 (~00:30–02:30): 1.18.0, ready to go live on the owner's word (local f498fb8..c053e02; nothing pushed,
+- **18 Oct 2026 (~00:30–06:30): 1.18.0, ready to go live on the owner's word (local f498fb8..08e7e61; nothing pushed,
   deployed or uploaded).** He asked to finish, be certain, and not push; his picks: the full 3D Your Town, raids aimed
   and thrown, the wind kept, and Block Clash + Your Town 3D + the Castle Series + coins for wins to go live.
   - The 3D town is in the game (js/dorp3d/view.js behind DorpScene's contract; the 2D scene stays the fallback).
@@ -1163,6 +1163,10 @@ Later the owner added (decisions are final unless they say otherwise):
     not deployed. Order to go live: server tests → `./wr.sh deploy` → (carry-over: only the real towns, and only useful
     with the phones' keys: see server/README §15) → `node tools/build-pages.mjs` + Pages → the app bundle 11800.
   - Version 1.18.0; privacy 2026-10-18.
+  - Tests: game 465, server 288 (incl. workerd), ~30 browser checks of the new parts on a clean copy, WebKit (Safari's
+    engine) for the three 3D pages, and check-all.sh full for the whole game (87 ok in the run, 11 of 14 ok re-run alone;
+    the other 3 test the ideas vote, off since 16 Oct). The suite found three last things, fixed: Block Clash's English
+    menu line too long for a small phone, its button's contrast, and no Blokbotsing line in "Hoe speel ek?".
 <!-- STATUS-END -->
 
 ## 3. Remaining work, in order
