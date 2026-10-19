@@ -6,7 +6,6 @@
 // circling him. Aardman: mossy earth, leaves and a flower growing from his head. Built from simple shapes (no model
 // files): each is one group the game moves; `update` poses him every frame.
 import * as THREE from '../../lib/three.module.min.js';
-import { flameMesh } from './hazards.js';
 
 const HIP = 0.74;   // (m) the hips' height: he stands about 2.3 m to the top of his head, his element above that
 
@@ -61,8 +60,24 @@ function rimLight(m, color, k) {
  *  owner's pick of the Gemini pictures). */
 function skinOf(element) {
   if (element === 'vuur') return new THREE.MeshStandardMaterial({ color: '#3a1006', emissive: '#ff7a24', emissiveMap: lavaCracks(), emissiveIntensity: 2.4, roughness: 0.38, metalness: 0.08 });
-  if (element === 'water') return rimLight(new THREE.MeshStandardMaterial({ color: '#2f9cff', emissive: '#1560c0', emissiveIntensity: 0.45, roughness: 0.04, metalness: 0.05, transparent: true, opacity: 0.86, envMapIntensity: 1.8 }), '#bff4ff', 1.3);
-  return new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88, metalness: 0 });
+  if (element === 'water') return rimLight(new THREE.MeshStandardMaterial({ color: '#4fb6ff', emissive: '#1a74d8', emissiveIntensity: 0.5, roughness: 0.03, metalness: 0.05, transparent: true, opacity: 0.66, envMapIntensity: 1.8 }), '#dff8ff', 1.6);
+  // (the picture's earth man: built of stacked stones, moss in their joints)
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88, metalness: 0 });
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = `varying vec3 vSP;\n${sh.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vSP = position;');
+    sh.fragmentShader = `varying vec3 vSP;\n${sh.fragmentShader}`.replace('#include <color_fragment>', `#include <color_fragment>
+      float row = vSP.y * 4.2;
+      float rid = floor(row);
+      float col = (vSP.x + vSP.z) * 3.0 + rid * 0.5;
+      float jr = smoothstep(0.0, 0.1, fract(row)) * smoothstep(1.0, 0.9, fract(row));
+      float jc = smoothstep(0.0, 0.08, fract(col)) * smoothstep(1.0, 0.92, fract(col));
+      float joint = 1.0 - jr * jc;
+      float shade = fract(sin(dot(vec2(rid, floor(col)), vec2(12.9898, 78.233))) * 43758.5453);
+      diffuseColor.rgb *= (0.8 + 0.35 * shade) * (1.0 - 0.45 * joint);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.42, 0.14), joint * 0.45 * step(0.5, fract(shade * 7.0)));`);
+  };
+  m.customProgramCacheKey = () => 'gly-stones';
+  return m;
 }
 /** The earth man's shapes: a little rocky (pushed in and out), grey stone with moss on what faces up. */
 function earthy(g, r, amt = 0.06) {
@@ -100,11 +115,118 @@ function leafGeo(len = 0.5) {
  * A runner of `element` ('vuur', 'water', 'gras'): { root (move it: x across, y up for a jump), update(dt, state),
  * dispose() }. `state`: { mode: 'run'|'jump'|'slide'|'idle'|'dead', speed (m/s), lean (sideways speed), time }.
  */
+/** A rounded block (a ball pushed out towards a box: `e` near 0 a box, 1 a ball), its vertices shared (the earth man's
+ *  rocky push keeps it whole). */
+function blockGeo(w, h, d, e = 0.34, seg = [14, 10]) {
+  const g = new THREE.SphereGeometry(1, ...seg);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    p.setXYZ(i, Math.sign(x) * Math.abs(x) ** e * w / 2, Math.sign(y) * Math.abs(y) ** e * h / 2, Math.sign(z) * Math.abs(z) ** e * d / 2);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+/** The flames of his head: yellow-hot at their foot, orange, then red at their tips (how tall they are: 0-1). */
+function fireTongue() {
+  const m = new THREE.MeshStandardMaterial({ color: '#ff6a10', emissive: '#ffffff', roughness: 0.5 });
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = `varying float vUpY;\n${sh.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vUpY = position.y;');
+    sh.fragmentShader = `varying float vUpY;\n${sh.fragmentShader}`.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      float faceK = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+      vec3 hot = mix(vec3(1.0, 0.5, 0.08), vec3(1.0, 0.22, 0.01), smoothstep(0.1, 0.45, vUpY));
+      hot = mix(hot, vec3(0.75, 0.06, 0.0), smoothstep(0.4, 0.8, vUpY));
+      totalEmissiveRadiance = hot * (0.55 + 0.4 * faceK);`);
+  };
+  m.customProgramCacheKey = () => 'gly-firetongue';
+  return m;
+}
+/** A tongue of flame: round at its foot, narrowing in a curve to a point, leaning over at the top. */
+function flameTongueGeo(h, w, lean) {
+  const pts = [];
+  for (let i = 0; i <= 12; i++) {
+    const t = i / 12;
+    pts.push(new THREE.Vector2(Math.max(0.001, w * Math.sin(Math.PI * (0.5 + 0.5 * t)) ** 0.9 * (1 - t * 0.15)), t * h));
+  }
+  const g = new THREE.LatheGeometry(pts, 20);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const y = p.getY(i) / h; p.setX(i, p.getX(i) + lean * y * y * h); }
+  g.computeVertexNormals();
+  return g;
+}
+/** The fire man's face (the owner's picture: a face of fire): yellow-white where it looks at you, orange, then red at its
+ *  edges, and brighter towards the top where it turns into his flames. */
+function fireFace() {
+  const m = new THREE.MeshStandardMaterial({ color: '#ff8a1a', emissive: '#ffffff', roughness: 0.45 });
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = `varying float vUpY;\n${sh.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vUpY = position.y;');
+    sh.fragmentShader = `varying float vUpY;\n${sh.fragmentShader}`.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      float faceK = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+      vec3 hot = mix(vec3(0.9, 0.12, 0.01), vec3(1.0, 0.42, 0.04), smoothstep(0.2, 0.7, faceK));
+      hot = mix(hot, vec3(1.0, 0.78, 0.3), smoothstep(0.8, 0.97, faceK));
+      totalEmissiveRadiance = hot * (0.62 + 0.3 * smoothstep(-0.2, 0.5, vUpY));`);
+  };
+  m.customProgramCacheKey = () => 'gly-fireface';
+  return m;
+}
+/** His element's swirl round him (the picture's three men each in a ribbon of their element): a band arcing from low
+ *  behind one side up over his head and down the other, thick in the middle, light flowing along it. */
+const RIBBON = {
+  vuur: { a: '#ff3a00', b: '#ffc040', k: 2.0 },
+  water: { a: '#2f8cff', b: '#e6fbff', k: 1.5 },
+  gras: { a: '#14c040', b: '#b4ff8a', k: 1.7 },
+};
+function ribbon(element) {
+  const N = 48;
+  const pos = [];
+  const uv = [];
+  const idx = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const a = Math.PI * (1.18 - 1.34 * t);           // (from low on his left, over, down his right)
+    const r = 1.16 + 0.12 * Math.sin(t * Math.PI);
+    const cx = Math.cos(a) * r;
+    const cy = 1.3 + Math.sin(a) * r * 1.08;
+    const cz = 0.28 - 0.42 * Math.sin(t * Math.PI * 0.9);
+    const w = 0.05 + 0.32 * Math.sin(Math.PI * Math.min(1, t * 1.15));
+    const nx = Math.cos(a);
+    const ny = Math.sin(a);
+    pos.push(cx - nx * w, cy - ny * w, cz, cx + nx * w, cy + ny * w, cz);
+    uv.push(t, 0, t, 1);
+    if (i < N) { const b = i * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  const c = RIBBON[element];
+  const m = new THREE.ShaderMaterial({
+    uniforms: { uT: { value: 0 }, uA: { value: new THREE.Color(c.a) }, uB: { value: new THREE.Color(c.b) }, uK: { value: c.k } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform float uT; uniform vec3 uA; uniform vec3 uB; uniform float uK; varying vec2 vUv;
+      void main() {
+        float across = 1.0 - abs(vUv.y * 2.0 - 1.0);
+        float flow = 0.62 + 0.38 * sin(vUv.x * 26.0 - uT * 9.0 + vUv.y * 3.0);
+        float a = smoothstep(0.0, 0.18, vUv.x) * smoothstep(1.0, 0.72, vUv.x) * smoothstep(0.0, 0.55, across) * flow * uK;
+        vec3 col = mix(uA, uB, smoothstep(0.25, 0.95, across) * (0.4 + 0.6 * vUv.x));
+        gl_FragColor = vec4(col * a, a);
+      }`,
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+  });
+  const mesh = new THREE.Mesh(g, m);
+  mesh.renderOrder = 6;
+  return mesh;
+}
+
 export function createRunner(element) {
   const r = rand(element === 'vuur' ? 3 : element === 'water' ? 5 : 9);
   const earth = element === 'gras';
+  const fire = element === 'vuur';
+  const water = element === 'water';
   const skin = skinOf(element);
-  const accent = new THREE.MeshStandardMaterial({ color: element === 'vuur' ? '#1c0b06' : element === 'water' ? '#0e4f9e' : '#4a4d52', roughness: 0.7, flatShading: earth });
+  const accent = new THREE.MeshStandardMaterial({ color: fire ? '#1c0b06' : water ? '#2a8ee8' : '#5a5d63', roughness: 0.7, flatShading: earth, transparent: water, opacity: water ? 0.8 : 1 });
   const geo = (g, amt) => (earth ? earthy(g, r, amt) : g);
   const seg = earth ? [12, 9] : [24, 18];
   const mesh = (g, m) => { const o = new THREE.Mesh(g, m); o.castShadow = true; return o; };
@@ -112,52 +234,66 @@ export function createRunner(element) {
   const body = new THREE.Group();
   body.position.y = HIP;
   root.add(body);
-  // the body: round and a little squat; a lighter belly
-  const torso = mesh(geo(new THREE.SphereGeometry(0.44, ...seg), 0.04), skin);
+  // the body: round and a little squat (the earth man a block of stone)
+  const torso = mesh(earth ? earthy(blockGeo(0.92, 0.96, 0.74), r, 0.035) : new THREE.SphereGeometry(0.44, ...seg), skin);
   torso.position.y = 0.44;
-  torso.scale.set(1, 1.1, 0.88);
+  if (!earth) torso.scale.set(1, 1.1, 0.88);
   body.add(torso);
-  // the head: big (he's little), tilted up to look at you
+  // (the fire man's heart: an ember glowing in his chest)
+  if (fire) {
+    const heart = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), new THREE.MeshBasicMaterial({ color: '#ffa63a' }));
+    heart.position.set(0, 0.52, -0.37);
+    heart.scale.set(1, 1, 0.5);
+    body.add(heart);
+  }
+  // the head: big (he's little), tilted up to look at you; the fire man's a face of fire, the water man's a drop of
+  // clear water, the earth man's a block of stone
   const head = new THREE.Group();
   head.position.y = 1.12;
   head.rotation.x = 0.22;
   head.scale.setScalar(1.1);   // (a collectible toy's big head)
   body.add(head);
-  head.add(mesh(geo(new THREE.SphereGeometry(0.53, ...seg), 0.05), skin));
-  // eyes that blink, pupils with a glint, a determined brow, a little smile
-  const white = new THREE.MeshBasicMaterial({ color: element === 'vuur' ? '#fff1c2' : '#ffffff' });
-  const black = new THREE.MeshBasicMaterial({ color: '#141018' });
+  const flick = [];   // (the fire man's flames, flickering)
+  const face = fire ? fireFace() : skin;
+  head.add(mesh(earth ? earthy(blockGeo(1.0, 0.9, 0.9), r, 0.04) : new THREE.SphereGeometry(0.53, ...seg), face));
+  if (fire) {
+    // (the picture's fire man: his head itself a flame, three tongues rising from it)
+    const tongue = fireTongue();
+    for (const [x, h, w, lean] of [[0, 1.0, 0.42, 0.1], [-0.3, 0.68, 0.3, -0.26], [0.3, 0.72, 0.3, 0.28]]) {
+      const t = mesh(flameTongueGeo(h, w, lean), tongue);
+      t.position.set(x, 0.12, 0.08);
+      head.add(t);
+      flick.push(t);
+    }
+  }
+  // eyes that blink (the picture's: dark ovals with a glint; the water man's glow), a little smile
+  const eyeMat = water ? new THREE.MeshBasicMaterial({ color: '#c8fbff' }) : new THREE.MeshBasicMaterial({ color: '#16090a' });
+  const white = new THREE.MeshBasicMaterial({ color: '#ffffff' });
   const eyes = new THREE.Group();
   head.add(eyes);
   for (const s of [-1, 1]) {
     const eye = new THREE.Group();
-    eye.position.set(s * 0.2, 0.08, -0.45);
+    eye.position.set(s * 0.19, 0.06, earth ? -0.43 : -0.47);
     eye.rotation.y = s * -0.28;
-    const w = new THREE.Mesh(new THREE.SphereGeometry(0.15, 18, 14), white);
-    w.scale.set(1, 1.18, 0.6);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.078, 14, 10), black);
-    pupil.position.set(-s * 0.012, 0.012, -0.075);
-    pupil.scale.set(1, 1.15, 0.6);
-    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.026, 8, 6), white);
-    glint.position.set(-s * 0.03 - 0.02, 0.05, -0.12);
-    eye.add(w, pupil, glint);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 12), eyeMat);
+    ball.scale.set(1, 1.35, 0.5);
+    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), white);
+    glint.position.set(-s * 0.02 - 0.02, 0.05, -0.05);
+    eye.add(ball);
+    if (!water) eye.add(glint);
     eyes.add(eye);
-    const brow = new THREE.Mesh(new THREE.CapsuleGeometry(0.032, 0.15, 3, 8), black);
-    brow.position.set(s * 0.21, 0.29, -0.43);
-    brow.rotation.set(0.1, s * -0.3, Math.PI / 2 + s * 0.32);
-    head.add(brow);
   }
-  const smile = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.022, 6, 14, Math.PI), black);
-  smile.position.set(0, -0.15, -0.49);
+  const smile = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.022, 6, 14, Math.PI), water ? eyeMat : new THREE.MeshBasicMaterial({ color: '#16090a' }));
+  smile.position.set(0, -0.15, earth ? -0.46 : -0.49);
   smile.rotation.set(0.25, 0, Math.PI);
   head.add(smile);
-  // arms (swinging from the shoulders) with round hands, legs (from the hips) with round feet
+  // arms (swinging from the shoulders) with round hands, legs (from the hips) with round feet (the earth man's blocks)
   const limb = (side, y, len, rad, hand) => {
     const pivot = new THREE.Group();
     pivot.position.set(side, y, 0);
-    const arm = mesh(geo(new THREE.CapsuleGeometry(rad, len, 4, earth ? 7 : 12), 0.02), skin);
+    const arm = mesh(earth ? earthy(blockGeo(rad * 2.3, len + rad * 2, rad * 2.3, 0.4, [8, 6]), r, 0.02) : new THREE.CapsuleGeometry(rad, len, 4, 12), skin);
     arm.position.y = -(len / 2 + rad * 0.6);
-    const end = mesh(geo(new THREE.SphereGeometry(hand, earth ? 8 : 14, earth ? 6 : 10), 0.02), accent);
+    const end = mesh(earth ? earthy(blockGeo(hand * 2.2, hand * 2, hand * 2.2, 0.4, [8, 6]), r, 0.02) : new THREE.SphereGeometry(hand, 14, 10), accent);
     end.position.y = -(len + rad * 1.4);
     pivot.add(arm, end);
     body.add(pivot);
@@ -173,19 +309,20 @@ export function createRunner(element) {
   head.add(crest);
   const orbit = [];
   const sway = [];
-  if (element === 'vuur') {
-    // (a big flame crest)
-    crest.add(flameMesh([
-      { at: [0, 0.36, 0.06], info: [0.5, 1.85, r(), 0] },
-      { at: [-0.26, 0.3, 0.12], info: [0.34, 1.2, r(), -0.14] },
-      { at: [0.26, 0.3, 0.12], info: [0.34, 1.25, r(), 0.14] },
-      { at: [0, 0.26, 0.3], info: [0.38, 1.1, r(), 0] },
-    ]));
-  } else if (element === 'water') {
-    // (his head runs up into a drop's point)
+  if (fire) {
+    // (his face runs up into a crest of flames)
+    // (his flames are his head's own tongues: they flicker as he runs)
+  } else if (water) {
+    // (his head runs up into a drop's point; bubbles rise inside him; drops circle him)
     const tip = mesh(new THREE.ConeGeometry(0.36, 0.78, 24, 1, true), skin);
     tip.position.set(0, 0.74, 0.04);
     crest.add(tip);
+    const bubble = new THREE.MeshBasicMaterial({ color: '#e8fbff', transparent: true, opacity: 0.55 });
+    for (let i = 0; i < 9; i++) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.035 + r() * 0.04, 8, 6), bubble);
+      b.position.set((r() - 0.5) * 0.5, (i < 4 ? -0.6 : 0) + r() * 0.5, (r() - 0.5) * 0.4);
+      head.add(b);
+    }
     for (let i = 0; i < 3; i++) {
       const d = mesh(new THREE.SphereGeometry(0.075, 12, 8), skin);
       d.userData.a = (i / 3) * Math.PI * 2;
@@ -193,18 +330,24 @@ export function createRunner(element) {
       orbit.push(d);
     }
   } else {
-    // (a crown of glowing leaves)
-    const green = new THREE.MeshStandardMaterial({ color: '#8dff8a', emissive: '#3dff6a', emissiveIntensity: 1.1, roughness: 0.4, side: THREE.DoubleSide });
-    for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * Math.PI * 2;
-      const leaf = new THREE.Mesh(leafGeo(0.4 + (i % 2) * 0.1), green);
-      leaf.position.set(Math.cos(a) * 0.34, 0.44, Math.sin(a) * 0.34);
+    // (a crown of glowing leaves on a ring of vine)
+    const green = new THREE.MeshStandardMaterial({ color: '#3fdc5c', emissive: '#14c83c', emissiveIntensity: 0.85, roughness: 0.4, side: THREE.DoubleSide });
+    const vineRing = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 6, 24).rotateX(Math.PI / 2), green);
+    vineRing.position.y = 0.44;
+    crest.add(vineRing);
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const leaf = new THREE.Mesh(leafGeo(0.42 + (i % 3) * 0.1), green);
+      leaf.position.set(Math.cos(a) * 0.4, 0.44, Math.sin(a) * 0.4);
       leaf.rotation.order = 'YXZ';
-      leaf.rotation.set(-0.35, -a + Math.PI / 2, 0);
+      leaf.rotation.set(-0.5 - (i % 2) * 0.25, -a + Math.PI / 2, 0);
       crest.add(leaf);
       sway.push(leaf);
     }
   }
+  // the swirl of his element round him
+  const swirl = ribbon(element);
+  root.add(swirl);
 
   // ------------------------------------------------------------------------------------------------- moving him
   let phase = r() * 6;
@@ -248,6 +391,9 @@ export function createRunner(element) {
       const a = d.userData.a + t * 2.6;
       d.position.set(Math.cos(a) * 0.78, 0.18 + Math.sin(t * 3 + d.userData.a) * 0.12, Math.sin(a) * 0.78);
     }
+    flick.forEach((f, i) => { f.rotation.z = Math.sin(t * (mode === 'run' ? 11 : 5) + i * 2.1) * 0.12; f.scale.y = 1 + Math.sin(t * 9 + i * 1.3) * 0.08; });
+    swirl.material.uniforms.uT.value = t;
+    swirl.rotation.y = Math.sin(t * 0.9) * 0.18;
     sway.forEach((leaf, i) => { leaf.rotation.x = -0.35 + Math.sin(t * (mode === 'run' ? 9 : 2.4) + i * 1.7) * (mode === 'run' ? 0.28 : 0.1); });
   }
   function dispose() {

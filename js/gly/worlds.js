@@ -9,12 +9,14 @@ import * as THREE from '../../lib/three.module.min.js';
 export const WORLD_LEN = 600;
 /** The worlds in order (names in text.js). Colours: the slide's glaze, its lines, walls, rails; the light; the haze. */
 export const WORLDS = Object.freeze([
-  // (the elemental look, 18 Oct 2026: a dark glossy slide in every world, its lines and kerbs the world's own light)
-  { id: 'sononder', floor: '#3a4462', line: '#22e3c8', wall: '#161a2a', rail: '#3ff0dc', sky: '#a796ff', ground: '#4a3040', sun: '#ffd2a1', fog: '#9a7fb8', below: 0, air: 0 },
-  { id: 'oerwoud', floor: '#2c4334', line: '#9dff5a', wall: '#111c14', rail: '#9dff5a', sky: '#c4f5a8', ground: '#203018', sun: '#fff2c0', fog: '#5f8f5f', below: 1, air: 1 },
-  { id: 'vulkaan', floor: '#43271f', line: '#ff7a2a', wall: '#170b08', rail: '#ff5a1a', sky: '#ff9a6a', ground: '#401008', sun: '#ff9a60', fog: '#6a2214', below: 2, air: 2 },
-  { id: 'ys', floor: '#36495c', line: '#7fe3ff', wall: '#131d27', rail: '#bff3ff', sky: '#d8f0ff', ground: '#4a5a6a', sun: '#eef6ff', fog: '#a9c8e4', below: 3, air: 3 },
-  { id: 'sterre', floor: '#332754', line: '#ff6bd6', wall: '#0d0a1c', rail: '#7af7ff', sky: '#8a7aff', ground: '#100820', sun: '#c0b0ff', fog: '#1d1440', below: 4, air: 4 },
+  // (the elemental look, 18 Oct 2026: a dark glossy slide in every world, its lines and kerbs the world's own light; 19 Oct,
+  // the owner's picture: a twilight over a dark sea, so each world has its own sky (zen above, hor the haze on the horizon,
+  // glow the pale light) and sea)
+  { id: 'sononder', floor: '#151a30', line: '#2ff5dc', wall: '#0c0f1e', rail: '#3ff0dc', sky: '#a8b4d8', ground: '#2a3048', sun: '#ccd6f4', fog: '#46557f', zen: '#111c48', hor: '#6e7ab0', glow: '#e4ecff', sea: '#06122a', seaHi: '#142f58', below: 0, air: 0 },
+  { id: 'oerwoud', floor: '#132219', line: '#9dff5a', wall: '#0a120c', rail: '#9dff5a', sky: '#b4f5a0', ground: '#102010', sun: '#e6ffd0', fog: '#1d3b2b', zen: '#04140c', hor: '#2c6a48', glow: '#dcffc4', sea: '#03140e', seaHi: '#0c3a26', below: 1, air: 1 },
+  { id: 'vulkaan', floor: '#24120e', line: '#ff7a2a', wall: '#140806', rail: '#ff5a1a', sky: '#ff9a6a', ground: '#300c06', sun: '#ffb27a', fog: '#3e1610', zen: '#12040a', hor: '#8a2c1a', glow: '#ffbe80', sea: '#160604', seaHi: '#3a1206', below: 2, air: 2 },
+  { id: 'ys', floor: '#1c2a3c', line: '#7fe3ff', wall: '#0f1822', rail: '#bff3ff', sky: '#d8f0ff', ground: '#34485c', sun: '#eef6ff', fog: '#4a6a8e', zen: '#0a1a33', hor: '#6390c0', glow: '#f0f8ff', sea: '#08203a', seaHi: '#1d4f7a', below: 3, air: 3 },
+  { id: 'sterre', floor: '#1a1430', line: '#ff6bd6', wall: '#0b0818', rail: '#7af7ff', sky: '#8a7aff', ground: '#100820', sun: '#c8b8ff', fog: '#160e34', zen: '#02010a', hor: '#2c1a5c', glow: '#e4ccff', sea: '#06031a', seaHi: '#1a0f44', below: 4, air: 4 },
 ]);
 /** The world at `d` metres (round and round) and how far into it (0-1). */
 export const worldAt = (d) => ({ i: Math.floor(Math.max(0, d) / WORLD_LEN) % WORLDS.length, into: (Math.max(0, d) % WORLD_LEN) / WORLD_LEN });
@@ -57,47 +59,17 @@ uniform float uA;
 uniform float uB;
 uniform float uMix;
 uniform vec2 uScroll;
+uniform vec2 uMid;
 varying vec2 vW;
 ${NOISE}
+uniform vec3 uMist;
 vec4 below(float k, vec2 w) {
-  vec2 p = w * 0.045 + uScroll;
-  if (k < 0.5) return vec4(0.0);
-  if (k < 1.5) {
-    // a jungle's canopy: round crowns of trees, lighter on top, deep shade between, a few in flower
-    vec3 c = cells(p * 2.6);
-    float crown = smoothstep(0.78, 0.1, c.x);
-    float leafy = fbm(p * 15.0 + c.z * 7.0);
-    vec3 leaf = mix(vec3(0.03, 0.16, 0.05), vec3(0.18, 0.46, 0.12), c.z);
-    vec3 col = mix(vec3(0.004, 0.025, 0.01), leaf * (0.5 + 0.8 * leafy) * (0.4 + 0.6 * crown), crown);
-    col += vec3(0.3, 0.45, 0.1) * smoothstep(0.6, 0.9, leafy) * crown * 0.35;   // (sunlit leaves)
-    col += vec3(0.9, 0.35, 0.55) * step(0.93, c.z) * smoothstep(0.3, 0.0, c.x) * 0.7;
-    return vec4(col, 1.0);
-  }
-  if (k < 2.5) {
-    // rivers of lava between plates of dark crust, breathing
-    vec3 c = cells(p * 1.2 + vec2(0.0, uT * 0.02));
-    float river = 1.0 - smoothstep(0.0, 0.09, c.y);
-    float heat = 0.65 + 0.35 * sin(uT * 1.6 + c.z * 6.28);
-    vec3 col = mix(vec3(0.04, 0.015, 0.01), vec3(0.12, 0.04, 0.02), fbm(p * 5.0));
-    col = mix(col, vec3(1.0, 0.36, 0.05) * (1.15 + 0.7 * heat), river);
-    return vec4(col, 1.0);
-  }
-  if (k < 3.5) {
-    // a field of ice and snow: pale drifts, blue cracks, glints
-    vec3 c = cells(p * 1.4);
-    float snow = fbm(p * 3.0);
-    vec3 col = mix(vec3(0.62, 0.78, 0.92), vec3(0.93, 0.97, 1.0), snow);
-    col = mix(col, vec3(0.3, 0.55, 0.85), (1.0 - smoothstep(0.0, 0.05, c.y)) * 0.8);
-    col += vec3(1.0) * step(0.985, hash12(floor(p * 40.0))) * (0.5 + 0.5 * sin(uT * 4.0 + c.z * 30.0));
-    return vec4(col, 1.0);
-  }
-  // the stars: deep space, a nebula's glow, stars twinkling
-  float neb = fbm(p * 1.3 + vec2(uT * 0.01, 0.0));
-  vec3 col = vec3(0.012, 0.008, 0.04) + vec3(0.22, 0.08, 0.38) * neb * neb + vec3(0.05, 0.12, 0.3) * fbm(p * 2.7 + 5.0) * 0.6;
-  vec2 g = floor(p * 26.0);
-  float star = step(0.975, hash12(g)) * (0.55 + 0.45 * sin(uT * 3.0 + hash12(g + 7.0) * 40.0));
-  col += vec3(0.9, 0.9, 1.0) * star * smoothstep(0.5, 0.1, length(fract(p * 26.0) - 0.5));
-  return vec4(col, 1.0);
+  // (19 Oct 2026, the owner's picture: mist lying on the sea and drifting; its colour the world's haze. The grounds that
+  // were here, a jungle's canopy, lava, ice and the stars, were for a camera looking down on them from high up.)
+  vec2 p = w * 0.03 + uScroll;
+  float m = fbm(p * 1.6 + vec2(uT * 0.02, 0.0)) * 0.65 + fbm(p * 4.1 - vec2(0.0, uT * 0.03)) * 0.35;
+  float a = smoothstep(0.38, 0.64, m) * 0.55 * smoothstep(340.0, 180.0, length(w - uMid));
+  return vec4(uMist, a);
 }
 void main() {
   vec4 c = mix(below(uA, vW), below(uB, vW), uMix);
@@ -170,14 +142,14 @@ export function createWorlds(scene, trk, mats) {
   const hemi = scene.children.find((o) => o.isHemisphereLight);
   const sun = scene.children.find((o) => o.isDirectionalLight && o.castShadow);
   const C = (h) => new THREE.Color(h);
-  const cols = WORLDS.map((w) => ({ floor: C(w.floor), line: C(w.line), wall: C(w.wall), rail: C(w.rail), sky: C(w.sky), ground: C(w.ground), sun: C(w.sun), fog: C(w.fog) }));
+  const cols = WORLDS.map((w) => ({ floor: C(w.floor), line: C(w.line), wall: C(w.wall), rail: C(w.rail), sky: C(w.sky), ground: C(w.ground), sun: C(w.sun), fog: C(w.fog), zen: C(w.zen), hor: C(w.hor), glow: C(w.glow), sea: C(w.sea), seaHi: C(w.seaHi) }));
   // the ground below: a wide plane over the sea, its picture carried along with the slide
   const belowMat = new THREE.ShaderMaterial({
-    uniforms: { uT: { value: 0 }, uA: { value: 0 }, uB: { value: 0 }, uMix: { value: 0 }, uScroll: { value: new THREE.Vector2() } },
+    uniforms: { uT: { value: 0 }, uA: { value: 0 }, uB: { value: 0 }, uMix: { value: 0 }, uScroll: { value: new THREE.Vector2() }, uMist: { value: new THREE.Color() }, uMid: { value: new THREE.Vector2(trk.position.x, trk.position.z) } },
     vertexShader: BELOW_VERT, fragmentShader: BELOW_FRAG, transparent: true, depthWrite: false,
   });
   const below = new THREE.Mesh(new THREE.PlaneGeometry(700, 700).rotateX(-Math.PI / 2), belowMat);
-  below.position.set(trk.position.x, 3, trk.position.z);   // (over the sea's waves)
+  below.position.set(trk.position.x, 1.6, trk.position.z);   // (just over the sea's waves)
   below.renderOrder = -1;
   scene.add(below);
   const down = new THREE.Vector3(0, 0, -1).applyQuaternion(trk.quaternion);   // (the slide's way down, flat)
@@ -203,6 +175,7 @@ export function createWorlds(scene, trk, mats) {
   let k = 1;
   let shown = 0;          // (the air of this world; it fades out and in at a change)
   const mixC = (a, b, t, out) => out.copy(a).lerp(b, t);
+  const white = new THREE.Color(1, 1, 1);
   function paint(t) {
     const A = cols[from];
     const B = cols[cur];
@@ -215,6 +188,10 @@ export function createWorlds(scene, trk, mats) {
     if (hemi) { mixC(A.sky, B.sky, t, hemi.color); mixC(A.ground, B.ground, t, hemi.groundColor); }
     if (sun) mixC(A.sun, B.sun, t, sun.color);
     if (scene.fog) mixC(A.fog, B.fog, t, scene.fog.color);
+    mixC(A.fog, B.fog, t, belowMat.uniforms.uMist.value).lerp(white, 0.5);   // (the mist: the haze's colour, paler)
+    // (the sky and the sea, sky.js)
+    if (mats.sky) { mixC(A.zen, B.zen, t, mats.sky.uZen.value); mixC(A.hor, B.hor, t, mats.sky.uHor.value); mixC(A.glow, B.glow, t, mats.sky.uGlow.value); }
+    if (mats.sea) { mixC(A.sea, B.sea, t, mats.sea.uDeep.value); mixC(A.seaHi, B.seaHi, t, mats.sea.uShallow.value); mixC(A.hor, B.hor, t, mats.sea.uHorizon.value).multiplyScalar(0.55); mixC(A.zen, B.zen, t, mats.sea.uZenith.value); }
     belowMat.uniforms.uA.value = WORLDS[from].below;
     belowMat.uniforms.uB.value = WORLDS[cur].below;
     belowMat.uniforms.uMix.value = t;

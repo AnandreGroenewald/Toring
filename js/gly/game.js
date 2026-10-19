@@ -14,6 +14,7 @@ import { createHazards, VARIANTS, fieldMat, rockPillar } from './hazards.js';
 import { createRunner, portraits } from './runner.js';
 import { createWorlds, WORLDS } from './worlds.js';
 import { createScenery } from './scenery.js';
+import { twilight } from './sky.js';
 import { audio, haptics } from '../audio.js';
 import { fmtInt } from '../core/format.js';
 import { EARN } from '../core/economy.js';
@@ -90,17 +91,36 @@ const world = buildWorld(stage, { stacks: false, isles: [[0, -999, 0], [0, -999,
 const fx = createRunFx(scene);
 
 // the slide: high over the sea, running down and away from the low sun
-const SLOPE = 0.2;           // (rad) its fall, about 11°
-const BEHIND = 26;           // (m) slide drawn behind the runner
-const LEN = 230;             // (m) slide drawn in all
+// (the owner's picture, 19 Oct 2026: a long glossy bridge low over the sea, running back to the horizon behind him)
+const SLOPE = 0.05;          // (rad) its fall, about 3°: the camera looks back up it, so it stays near the horizon
+const BEHIND = 240;          // (m) slide drawn behind the runner (up to the far gate at the horizon)
+const LEN = 290;             // (m) slide drawn in all
+const ROW_BEHIND = 60;       // (m) what he passed stays in sight this long, sinking away from 30 m
+// (the owner's picture: far back the slide sweeps up into the sky to its gate, coming down at you from high up)
+const BEND_FROM = 30;        // (m) behind him it starts to rise
+const BEND_RISE = 11;        // (m) how much higher its far end is
+const bend = (z) => (z > BEND_FROM ? BEND_RISE * ((z - BEND_FROM) / (BEHIND - BEND_FROM)) ** 2 : 0);
+/** A shape laid along the slide (in the slide's own metres), bent up with it. */
+function bent(geo) {
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) + bend(p.getZ(i)));
+  geo.computeVertexNormals();
+  return geo;
+}
 const AHEAD = 150;           // (m) rows come this far ahead
 const WIDTH = LANES * LANE_W;
 const trk = new THREE.Group();
 const sunH = new THREE.Vector3(SUN_DIR.x, 0, SUN_DIR.z).normalize();
 const fwd = sunH.clone().negate().applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.85);
 trk.rotation.set(-SLOPE, Math.atan2(-fwd.x, -fwd.z), 0, 'YXZ');
-trk.position.set(0, 34, 0);
+trk.position.set(0, 12, 0);
 scene.add(trk);
+// (the owner's picture, 19 Oct 2026: a twilight, its pale light high on the right of the screen; the key light from over the
+// camera's right shoulder, so what comes at him is lit from the front)
+const slideDir = (x, y, z) => new THREE.Vector3(x, y, z).normalize().applyQuaternion(trk.quaternion);
+const skySea = twilight(stage, world, slideDir(-0.22, 0.27, 1));   // (in the top right corner of the screen)
+world.sun.position.copy(trk.position).addScaledVector(slideDir(-0.5, 0.8, -0.35), 160);
+world.sun.target.position.copy(trk.position);
 
 /** The slide's floor: four lanes of glaze, glowing lines between them, cross marks that rush past (drawn in grey and white:
  *  each world tints the glaze and its lines, worlds.js). */
@@ -146,26 +166,22 @@ function floorTextures() {
   return { map, emi };
 }
 const floorTex = floorTextures();
-const floorMat = new THREE.MeshStandardMaterial({ map: floorTex.map, emissive: '#ffffff', emissiveMap: floorTex.emi, emissiveIntensity: 1.0, roughness: 0.28, metalness: 0.2 });   // (dark glossy graphite)
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(WIDTH, LEN), floorMat);
-floor.rotation.x = -Math.PI / 2;
-floor.position.set(0, 0, BEHIND - LEN / 2);
+const floorMat = new THREE.MeshStandardMaterial({ map: floorTex.map, emissive: '#ffffff', emissiveMap: floorTex.emi, emissiveIntensity: 1.0, roughness: 0.1, metalness: 0 });   // (dark glossy graphite: the twilight shines in it at a glance)
+const floor = new THREE.Mesh(bent(new THREE.PlaneGeometry(WIDTH, LEN, 1, 120).rotateX(-Math.PI / 2).translate(0, 0, BEHIND - LEN / 2)), floorMat);
 floor.receiveShadow = true;
+floor.renderOrder = -2;   // (before the things' mirror images in it: elemental.js MIRROR_ORDER)
 trk.add(floor);
 // the slide's low kerbs with a line of light along their tops (the elemental look: the world beside it stays in view),
 // and the slide's underside (it hangs in the air)
 const wallMat = new THREE.MeshStandardMaterial({ color: '#241a44', roughness: 0.45, metalness: 0.35 });
 const railMat = new THREE.MeshStandardMaterial({ color: '#ffb347', emissive: '#ff9d2e', emissiveIntensity: 1.8, roughness: 0.4 });
+// (19 Oct 2026, the owner's picture: no kerbs, rails or beacons; the slab's own dark edge and its lines of light)
 for (const s of [-1, 1]) {
-  const wall = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, LEN), wallMat);
-  wall.position.set(s * (WIDTH / 2 + 0.25), 0.05, BEHIND - LEN / 2);
-  wall.castShadow = wall.receiveShadow = true;
-  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.07, LEN), railMat);
-  rail.position.set(s * (WIDTH / 2 + 0.25), 0.33, BEHIND - LEN / 2);
-  trk.add(wall, rail);
+  const wall = new THREE.Mesh(bent(new THREE.BoxGeometry(0.3, 0.9, LEN, 1, 1, 120).translate(s * (WIDTH / 2 + 0.15), -0.43, BEHIND - LEN / 2)), wallMat);
+  wall.receiveShadow = true;
+  trk.add(wall);
 }
-const under = new THREE.Mesh(new THREE.BoxGeometry(WIDTH + 1, 0.9, LEN), wallMat);
-under.position.set(0, -0.46, BEHIND - LEN / 2);
+const under = new THREE.Mesh(bent(new THREE.BoxGeometry(WIDTH + 1, 0.9, LEN, 1, 1, 120).translate(0, -0.46, BEHIND - LEN / 2)), wallMat);
 trk.add(under);
 // lamps on the rails and the struts under the slide, rushing past (one draw each)
 const LAMP_SP = 9;
@@ -178,11 +194,12 @@ const STRUT_SP = 36;
 const STRUTS = Math.ceil(LEN / STRUT_SP) + 1;
 const struts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.55, 0.9, 60, 8), wallMat, STRUTS * 2);
 lamps.frustumCulled = posts.frustumCulled = struts.frustumCulled = false;
-trk.add(lamps, posts, struts);
+const BEACONS = false;   // (19 Oct 2026: not in the owner's picture)
+if (BEACONS) trk.add(lamps, posts, struts);
 /** The worlds (worlds.js): every 600 m another, the slide, the light, the ground below and the air turning with it. */
-const worlds = createWorlds(scene, trk, { floor: floorMat, wall: wallMat, rail: railMat, lamp: lampMat });
+const worlds = createWorlds(scene, trk, { floor: floorMat, wall: wallMat, rail: railMat, lamp: lampMat, sky: skySea.sky, sea: skySea.sea });
 /** The world beside the slide (scenery.js): floating islands of the four elements rushing past. */
-const scenery = createScenery(trk, { behind: BEHIND, len: LEN, half: WIDTH / 2 });
+const scenery = createScenery(trk, { behind: BEHIND, half: WIDTH / 2, slope: SLOPE, bend, seaY: (z) => -(trk.position.y + z * Math.sin(SLOPE)) / Math.cos(SLOPE) });
 const m4 = new THREE.Matrix4();
 const v3 = new THREE.Vector3();
 const qId = new THREE.Quaternion();
@@ -190,6 +207,8 @@ const one = new THREE.Vector3(1, 1, 1);
 const strutQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), SLOPE);   // (plumb in the world)
 const STRUT_HALF = 30;
 function rushPast(d) {
+  floorTex.map.offset.y = floorTex.emi.offset.y = (d / WIDTH) % 1;
+  if (!BEACONS) return;
   const b = d % LAMP_SP;
   for (let k = 0; k < LAMPS; k++) {
     const z = BEHIND - (k * LAMP_SP - b);
@@ -206,7 +225,6 @@ function rushPast(d) {
     for (const s of [0, 1]) struts.setMatrixAt(k * 2 + s, m4.compose(v3.set((s ? 1 : -1) * (WIDTH / 2 - 0.6), -0.9 - STRUT_HALF * Math.cos(SLOPE), z - STRUT_HALF * Math.sin(SLOPE)), strutQ, one));
   }
   struts.instanceMatrix.needsUpdate = true;
-  floorTex.map.offset.y = floorTex.emi.offset.y = (d / WIDTH) % 1;
 }
 
 /** Your best so far: a line of gold across the slide where it lies, its distance over it. Pass it: a new record. */
@@ -285,7 +303,7 @@ const streaks = (() => {
 // ------------------------------------------------------------------------------------------- the runner and the things
 /** Your man (runner.js), made again when you pick another; a soft shadow under him that stays on the slide as he jumps. */
 let runner = null;
-const MAN = 1.5;   // (his size on the slide: the hero of the picture, still well inside his lane)
+const MAN = 2.0;   // (his size on the slide: the hero of the picture, as big as in it)
 const men = {};   // (the switch test: the three men stay made, so a switch is instant)
 function makeRunner() {
   if (runner) { trk.remove(runner.root); if (!SW) runner.dispose(); }
@@ -306,8 +324,26 @@ const shadow = (() => {
   trk.add(m);
   return m;
 })();
-// (the camera sees the tops of things, where the low sunset sun only grazes: a soft light from over the camera's shoulder)
-const fill = new THREE.DirectionalLight('#fff0dc', 1.15);
+/** His glow in the glossy slide (the owner's picture: the fire man's light lies on the slide in front of him). */
+const SHINE_COL = { vuur: new THREE.Color('#ff5a0a'), water: new THREE.Color('#4fa8ff'), gras: new THREE.Color('#2dff5a') };
+const manShine = (() => {
+  const c = document.createElement('canvas');
+  c.width = 64; c.height = 128;
+  const g = c.getContext('2d');
+  for (let i = 0; i < 128; i++) {
+    const a = (i / 127) ** 1.4;   // (brightest at his feet, fading towards you)
+    const grd = g.createLinearGradient(0, 0, 64, 0);
+    grd.addColorStop(0, 'rgba(255,255,255,0)'); grd.addColorStop(0.5, `rgba(255,255,255,${a})`); grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, i, 64, 1);
+  }
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 2.6).rotateX(-Math.PI / 2).translate(0, 0, -1.3), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+  m.renderOrder = 1;
+  trk.add(m);
+  return m;
+})();
+// (a soft light from over the camera's shoulder on the fronts of things; the twilight's cool white since 19 Oct 2026)
+const fill = new THREE.DirectionalLight('#dfe6ff', 1.15);
 fill.position.set(0, 60, -45);
 trk.add(fill, fill.target);
 /** A hazard: a piece of its element's nature filling its lane (hazards.js: a whirlpool or a curtain of water, a trench of
@@ -380,7 +416,7 @@ const outcomeOf = (type) => (SW && type !== 'stone' ? SW_OUT[effectOf(element, t
 function setLook(g, type) {
   const o = outcomeOf(type);
   g.userData.outline.material = outlineMats[o];
-  g.userData.badge.material = badgeMats[o];
+  if (g.userData.badge) g.userData.badge.material = badgeMats[o];
 }
 /** (the switch test) who a tap makes you next, a small sign over your man */
 const SIGN_COL = { vuur: '#ff7a2a', water: '#3fb8ff', gras: '#5fd14a' };
@@ -416,18 +452,23 @@ function hazardMesh(type, look) {
   let g = pools.get(key)?.pop();
   if (!g) {
     g = hz.make(type, look);
+    // (19 Oct 2026, the owner's picture: no outlines or badges on the slide; the switch test keeps its badges, its rules are
+    // new to everyone)
     const outline = new THREE.Mesh(outlineGeo, outlineMats.kill);
     outline.position.y = 0.03;
     outline.renderOrder = 2;
-    g.add(outline);
+    outline.visible = false;
     g.userData.outline = outline;
-    const badge = new THREE.Sprite(badgeMats.kill);
-    badge.scale.setScalar(0.9);
-    badge.position.y = 0.5;
-    badge.renderOrder = 20;   // (over the flames' glow)
-    g.add(badge);
-    g.userData.badge = badge;
+    if (SW) {
+      const badge = new THREE.Sprite(badgeMats.kill);
+      badge.scale.setScalar(0.9);
+      badge.position.y = 0.5;
+      badge.renderOrder = 20;   // (over the flames' glow)
+      g.add(badge);
+      g.userData.badge = badge;
+    }
     g.userData.key = key;
+    g.userData.mirrors = g.children.filter((o) => o.userData.mirror);
   }
   setLook(g, type);
   g.scale.setScalar(HZ_SCALE);
@@ -610,8 +651,10 @@ function callout(text, local, kind = 'is-gold') {
   const c = document.createElement('div');
   c.className = 'bt-cow';
   c.innerHTML = `<div class="bt-co ${kind}">${text}</div>`;
-  c.style.transform = `translate(${Math.round(Math.max(70, Math.min(stageEl.clientWidth - 70, s.x)))}px, ${Math.round(Math.max(120, s.y))}px)`;
   el.callouts.append(c);
+  // (kept whole on the screen: a long one over a man in an outside lane, 19 Oct 2026)
+  const half = Math.max(70, (c.firstChild.offsetWidth || 140) / 2 + 10);
+  c.style.transform = `translate(${Math.round(Math.max(half, Math.min(stageEl.clientWidth - half, s.x)))}px, ${Math.round(Math.max(120, s.y))}px)`;
   setTimeout(() => c.remove(), 1300);
 }
 /**
@@ -784,7 +827,7 @@ function dropRow(r) {
 
 /** How far a thing he is past has sunk back into the slide (seen from high over him, what's behind him would otherwise
  *  slide up over the numbers at the top); what ended the run stays. */
-const sunk = (s, after, rate) => Math.max(0, -s - after) * rate;
+const sunk = (s, after, rate) => Math.max(0, -s - after - 28) * rate * 0.04;
 /** Where the things are this frame (they rise out of the slide as they come into view, and sink back once passed). */
 function placeRows(time) {
   for (const r of rows) {
@@ -792,32 +835,37 @@ function placeRows(time) {
     const rise = s > AHEAD - 28 ? Math.min(1, (s - (AHEAD - 28)) / 28) : 0;
     const y0 = -3.2 * rise;
     const down = r.hit ? 0 : sunk(s, 1.5, 4.5);
-    for (const c of r.cells) c.mesh.position.set(LX(c.lane), y0 - down, -s);
+    for (const c of r.cells) {
+      c.mesh.position.set(LX(c.lane), y0 - down + bend(-s), -s);
+      // (a mirror image only while it stands on the slide: not as it rises or sinks)
+      for (const m of c.mesh.userData.mirrors) m.visible = down < 0.02 && y0 > -0.02;
+    }
     // (a badge only on what is still coming: never through the floor as a row rises or sinks, nor once it is met)
     for (const c of r.cells) if (c.mesh.userData.badge) c.mesh.userData.badge.visible = !c.done && s > 2.5 && rise < 0.6;
     for (const c of r.coins) {
       const cs = c.at - G.d;
       // (coins in the air hang over something to jump: an arc over it)
       const h = c.high ? 2.1 + 0.9 * Math.max(0, 1 - Math.abs(c.at - r.at) / 3) : 1.25;
-      c.mesh.position.set(LX(c.lane), h + y0 - sunk(cs, 1, 4) + Math.sin(time * 3 + cs) * 0.12, -cs);
-      const pulse = 1.2 * (1 + 0.06 * Math.sin(time * 6 + cs));
-      c.mesh.scale.set(pulse, pulse, 1);
+      c.mesh.position.set(LX(c.lane), h + y0 - sunk(cs, 1, 4) + bend(-cs) + Math.sin(time * 3 + cs) * 0.12, -cs);
+      // (19 Oct 2026, the picture's coins: smaller, turning as they come)
+      const spin = Math.abs(Math.cos(time * 2.6 + cs * 0.35));
+      c.mesh.scale.set(0.92 * (0.28 + 0.72 * spin), 0.92, 1);
     }
     // (a barrier sinks once it is clear of him, quickly: a wall stands five metres high)
     if (r.barrier) {
-      r.barrier.position.set(0, y0 * 2.2 - (r.hit ? 0 : sunk(s, 1.4, 14)), -s);
+      r.barrier.position.set(0, y0 * 2.2 - (r.hit ? 0 : sunk(s, 1.4, 14)) + bend(-s), -s);
       const gu = r.barrier.userData;
       gu.field.uniforms.uHit.value = gu.flashK * Math.max(0, 1 - (time - gu.flashAt) / 0.7);
     }
     if (r.item && !r.item.done) {
       const is = r.item.at - G.d;
-      itemMesh.position.set(LX(r.item.lane), 1.5 + y0 - sunk(is, 1, 4) + Math.sin(time * 4) * 0.2, -is);
+      itemMesh.position.set(LX(r.item.lane), 1.5 + y0 - sunk(is, 1, 4) + bend(-is) + Math.sin(time * 4) * 0.2, -is);
       itemMesh.rotation.y = time * 2;
       itemMesh.rotation.x = time * 1.3;
     }
     if (r.gem && !r.gem.done) {
       const gs = r.gem.at - G.d;
-      gemMesh.position.set(LX(r.gem.lane), GEM_Y + y0 - sunk(gs, 1, 4) + Math.sin(time * 2.6) * 0.08, -gs);
+      gemMesh.position.set(LX(r.gem.lane), GEM_Y + y0 - sunk(gs, 1, 4) + bend(-gs) + Math.sin(time * 2.6) * 0.08, -gs);
       gemMesh.rotation.y = time * 1.7;
     }
   }
@@ -884,7 +932,7 @@ function step(dt) {
     if (G.state !== 'run') return;
   }
   // rows behind the camera go back to their pools
-  while (rows.length && rows[0].at - G.d < -BEHIND + 2) dropRow(rows.shift());
+  while (rows.length && rows[0].at - G.d < -ROW_BEHIND) dropRow(rows.shift());
   // a mission of this run reached: done at once, with its moment (and the music follows the run)
   if ((G.mcheck += dt) > 0.25) { G.mcheck = 0; missionsLive(); try { audio.musicSet(musicNow()); } catch { /* */ } }
   // past your best: the moment it happens
@@ -1352,8 +1400,11 @@ function runnerVisual(dt) {
   const sk = MAN * Math.max(0.45, 1 - h * 0.16);
   shadow.scale.set(sk, 1, sk);
   shadow.material.opacity = Math.max(0.35, 1 - h * 0.18);
+  manShine.position.set(G.x, 0.03, 0.2);
+  manShine.scale.set(MAN, 1, MAN);
+  manShine.material.color.copy(SHINE_COL[element] || SHINE_COL.vuur);
+  manShine.material.opacity = 0.85 * Math.max(0.2, 1 - h * 0.3);
 }
-const upHill = new THREE.Vector3();
 /** His trail: sparks of his element (spray, embers, leaves) left behind as he runs, more the faster he goes. */
 const TRAIL_COL = { water: '#9fe3ff', vuur: '#ff8a2a', gras: '#8fe05a' };
 const slopeDir = new THREE.Vector3(0, 0, 1).applyQuaternion(trk.quaternion);
@@ -1374,26 +1425,25 @@ function trailVisual(dt) {
   }
 }
 /**
- * (the owner, 18 Oct: "can't we make it that it slides from top to bottom"; then, of a camera looking down the slide: "That
- * will make me nausious, I meant at an angle towards me, basically at a 70 degree upwards") The camera stands down the
- * slide from the man and looks back up it at about 70° to its floor, as you'd look at a steep slide coming towards you:
- * the slide rises away to the top of the screen, he runs high on it towards you, and what comes rises from the bottom (the
- * bottom 30% that steam, ash or vines cloud). No roll and no swing; a little further back as it gets faster, to see more.
+ * (the owner, 18 Oct: "can't we make it that it slides from top to bottom", "at an angle towards me"; 19 Oct, of the game
+ * beside the picture he chose: "it doesnt look close to that image") The camera stands low on the slide ahead of him and
+ * looks back up it, as in the picture: he runs at you in the middle of the screen, the slide runs back behind him to the
+ * gate on the horizon, the world floats on both sides, and what comes rises from the bottom of the screen. No roll and no
+ * swing; a little further back as it gets faster, to see more.
  */
-// (fov 50 since the elemental look, 18 Oct 2026: the same angle, a little more of the world beside the slide)
-const VIEW = Object.freeze({ angle: 70 * Math.PI / 180, dist: 34, fov: 50, look: 8 });
+const VIEW = Object.freeze({ elev: 17 * Math.PI / 180, dist: 33, fov: 50, lookY: 0.4 });
+const slideUp = new THREE.Vector3();
 function cameraVisual(dt) {
   const k = Math.min(1, Math.max(0, (G.v - 15) / 25));
   // (the whole slide in the picture with sea on both sides: the camera follows him only a little)
   camX += (G.x * 0.12 - camX) * Math.min(1, dt * 5);
-  const dist = VIEW.dist + 6 * k;
-  const look = VIEW.look + 2 * k;
-  camLook.set(camX, 0, -look);
-  camPos.set(camX, dist * Math.sin(VIEW.angle), -look - dist * Math.cos(VIEW.angle));
+  const dist = VIEW.dist + 4 * k;
+  camLook.set(camX, VIEW.lookY, 0);
+  camPos.set(camX, VIEW.lookY + dist * Math.sin(VIEW.elev), -dist * Math.cos(VIEW.elev));
   trk.localToWorld(camPos);
   trk.localToWorld(camLook);
-  upHill.set(0, 0, 1).applyQuaternion(trk.quaternion);
-  camera.up.copy(upHill);
+  slideUp.set(0, 1, 0).applyQuaternion(trk.quaternion);
+  camera.up.copy(slideUp);
   camera.position.copy(camPos);
   camera.lookAt(camLook);
   if (Math.abs(camera.fov - VIEW.fov) > 0.05) { camera.fov = VIEW.fov; camera.updateProjectionMatrix(); }
@@ -1433,7 +1483,7 @@ function frame(now) {
     const bs = best - G.d;
     const on = G.state === 'run' && best > 0 && bs > -4 && bs < 90;
     bestMark.g.visible = on;
-    if (on) bestMark.g.position.set(0, -sunk(bs, 1, 4), -bs);
+    if (on) bestMark.g.position.set(0, -sunk(bs, 1, 4) + bend(-bs), -bs);
   }
   streaks.uniforms.uOff.value += G.v * dt * 1.5;
   streaks.uniforms.uK.value = G.state === 'run' && !calm ? Math.min(1, Math.max(0, (G.v - 17) / 16)) * 0.85 : 0;
@@ -1475,12 +1525,16 @@ window.__gly = {
   get element() { return element; },
   set: (o = {}) => { if (ELEMENTS.includes(o.element) && o.element !== element) { element = o.element; makeRunner(); } },
   start: () => { if (G.state !== 'run') startRun(); },
+  /** (pictures of the later worlds) on down the slide to `d` metres, past what lay between. */
+  jumpTo: (d) => { if (G.state !== 'run') return; clearRows(); while (pending && pending.at < d + 30) pending = track.next(); G.d = d; },
   swipe, jump, slide, up: useItem, pause: openPause, switchMan, sw: SW, sign: nextSign,
   /** A row of the test's own just ahead (the switch test's checks: one hazard of a chosen type). */
   put: (row) => { if (G.state === 'run') addRow({ at: G.d + 14, kind: 'hazards', n: -1, coins: [], cells: [], bar: null, gap: null, item: null, mine: true, ...row }); },
   air: airH,
   /** Where the man is on the screen (CSS px). */
   runnerAt: () => toScreen(v3.set(G.x, 1, 0)),
+  /** Where a spot on the slide (its own metres: x across, y up, z back up it) is on the screen (CSS px). */
+  screenOf: (x, y, z) => toScreen(new THREE.Vector3(x, y, z)),
   /** (pictures) every look side by side, still: water, fire low and tall; vines and a boulder; the three barriers. */
   showcase: () => {
     closeModal();
