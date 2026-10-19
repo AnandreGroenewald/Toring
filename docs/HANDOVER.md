@@ -1285,6 +1285,15 @@ the stapel skill's changelog. The Play bundle in the Play folder is still 687e28
 The owner's pick of the Gemini pictures, built: js/gly/elemental.js (hazards), js/gly/scenery.js (islands), the rare diamond,
 the remodelled men; uploaded to internal testing on his word. The Worker and website are untouched. Details: the stapel skill.
 
+### 19 Oct 2026 ~08:30 · Glybaan looks like his picture; 1.19.1 (11901) built, not uploaded (4191bc3, 1b2ad77)
+The owner, of 1.19.0 beside the Gemini picture he chose: "it doesnt look close to that image you've shown me. Please check";
+then "be 110% sure that I will be satisfied ... especially the graphics". Remade after the picture: the low camera looking
+back up the slide, which sweeps up to a gate on the horizon; a twilight sky, sea and mist (js/gly/sky.js); a glossy slide
+with mirror images; the four obstacles and the three men as in the pictures; the scenery beside the slide (scenery.js);
+call-outs kept on screen. Tests three times over (all Glybaan checks OK, npm 477, 60 fps on a 4x slower phone). Play folder
+"Upload 1.19.1 internal" waits for his word; pictures in Previews › "1.19.1 Glybaan - soos die prent (19 Oct)".
+Details: the stapel skill (§2, the changelog).
+
 ## 3. Remaining work, in order
 
 <!-- TODO-START -->
