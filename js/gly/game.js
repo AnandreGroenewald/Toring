@@ -646,15 +646,21 @@ const toScreen = (local) => {
   const p = trk.localToWorld(local.clone()).project(camera);
   return { x: (p.x * 0.5 + 0.5) * stageEl.clientWidth, y: (-p.y * 0.5 + 0.5) * stageEl.clientHeight };
 };
+let coShown = [];   // (when the call-outs showing now came)
 function callout(text, local, kind = 'is-gold') {
   const s = toScreen(local);
   const c = document.createElement('div');
   c.className = 'bt-cow';
   c.innerHTML = `<div class="bt-co ${kind}">${text}</div>`;
   el.callouts.append(c);
-  // (kept whole on the screen: a long one over a man in an outside lane, 19 Oct 2026)
+  // (kept whole on the screen: a long one over a man in an outside lane; two at once stack, never over each other: 19 Oct
+  // 2026)
   const half = Math.max(70, (c.firstChild.offsetWidth || 140) / 2 + 10);
-  c.style.transform = `translate(${Math.round(Math.max(half, Math.min(stageEl.clientWidth - half, s.x)))}px, ${Math.round(Math.max(120, s.y))}px)`;
+  const now = performance.now();
+  coShown = coShown.filter((t) => now - t < 1300);
+  const lift = coShown.length * 30;
+  coShown.push(now);
+  c.style.transform = `translate(${Math.round(Math.max(half, Math.min(stageEl.clientWidth - half, s.x)))}px, ${Math.round(Math.max(120 + lift, s.y) - lift)}px)`;
   setTimeout(() => c.remove(), 1300);
 }
 /**
