@@ -1340,3 +1340,6 @@ Each step should end green (`npm test`, `cd server && npm test`, a headless play
 - All player-facing text is Afrikaans and lives in `js/core/strings.js`. Numbers use `js/core/format.js` (decimal comma, non-breaking spaces).
 - The `docs/workflows/*.js` files are the multi-agent workflow scripts used so far (Claude Code Workflow tool). They're useful as prompts even if you work solo. `<SCRATCH>` in them was a temporary directory.
 - Egress in the cloud container used so far blocked paystack.com, developers.cloudflare.com, cdn.jsdelivr.net and sportscard.co.za; the npm registry and web search worked.
+
+### 20 Oct 2026 18:33 — 1.19.1 (11901) on Play internal testing
+The owner: "Please upload the latest stapel if its ready". Bundle SHA 9a60e4b7…a7f8 (from 1b2ad77), security scan clear, Play release 22 "Available to internal testers". Notes af 475 / en 497 (Play wants the tag <af>, not <af-ZA>). NOT pushed, Worker + website NOT deployed (as 1.19.0). Next: his 2-minute phone check (README in Older builds › "Upload 1.19.1 internal (DONE …)").
