@@ -58,9 +58,13 @@ function rimLight(m, color, k) {
 }
 /** The man's own skin, by element (the elemental look of 18 Oct 2026: glossy little heroes glowing from within, as in the
  *  owner's pick of the Gemini pictures). */
-function skinOf(element) {
+function skinOf(element, glass = true) {
   if (element === 'vuur') return new THREE.MeshStandardMaterial({ color: '#3a1006', emissive: '#ff7a24', emissiveMap: lavaCracks(), emissiveIntensity: 2.4, roughness: 0.38, metalness: 0.08 });
-  if (element === 'water') return rimLight(new THREE.MeshStandardMaterial({ color: '#4fb6ff', emissive: '#1a74d8', emissiveIntensity: 0.5, roughness: 0.03, metalness: 0.05, transparent: true, opacity: 0.66, envMapIntensity: 1.8 }), '#dff8ff', 1.6);
+  // (the small pictures of the start card are drawn without the sky to reflect and without a scene to look through: there the old
+  // see-through blue, which reads well that small)
+  if (element === 'water' && !glass) return rimLight(new THREE.MeshStandardMaterial({ color: '#4fb6ff', emissive: '#1a74d8', emissiveIntensity: 0.5, roughness: 0.03, metalness: 0.05, transparent: true, opacity: 0.66, envMapIntensity: 1.8 }), '#dff8ff', 1.6);
+  // (23 Oct 2026, the owner's yes: glass like the picture's, light bending through it: transmission .9, thickness .8, water's ior 1.33)
+  if (element === 'water') return rimLight(new THREE.MeshPhysicalMaterial({ color: '#bfe8ff', emissive: '#1aa8ff', emissiveIntensity: 0.75, roughness: 0.03, metalness: 0, transmission: 0.9, thickness: 0.8, ior: 1.33, attenuationColor: new THREE.Color('#0f9cff'), attenuationDistance: 0.8, envMapIntensity: 1.8 }), '#dff8ff', 1.6);
   // (the picture's earth man: built of stacked stones, moss in their joints)
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88, metalness: 0 });
   m.onBeforeCompile = (sh) => {
@@ -102,6 +106,34 @@ function earthy(g, r, amt = 0.06) {
   g.computeVertexNormals();
   return g;
 }
+/** `g` coloured one colour (per vertex: the leaves share one material and still differ). */
+function tinted(g, c) {
+  const n = g.attributes.position.count;
+  const a = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+  g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+  return g;
+}
+/** Several geometries (each with position, normal and colour) as one: one draw instead of dozens. */
+function mergeGeos(list) {
+  const pos = [];
+  const nor = [];
+  const col = [];
+  const idx = [];
+  let base = 0;
+  for (const g of list) {
+    const { position: p, normal: n, color: c } = g.attributes;
+    for (let i = 0; i < p.count; i++) { pos.push(p.getX(i), p.getY(i), p.getZ(i)); nor.push(n.getX(i), n.getY(i), n.getZ(i)); col.push(c.getX(i), c.getY(i), c.getZ(i)); }
+    if (g.index) for (let i = 0; i < g.index.count; i++) idx.push(g.index.getX(i) + base); else for (let i = 0; i < p.count; i++) idx.push(i + base);
+    base += p.count;
+  }
+  const o = new THREE.BufferGeometry();
+  o.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  o.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  o.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  o.setIndex(idx);
+  return o;
+}
 /** A leaf: a pointed oval. */
 function leafGeo(len = 0.5) {
   const s = new THREE.Shape();
@@ -138,7 +170,7 @@ function fireTongue() {
       float faceK = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
       vec3 hot = mix(vec3(1.0, 0.5, 0.08), vec3(1.0, 0.22, 0.01), smoothstep(0.1, 0.45, vUpY));
       hot = mix(hot, vec3(0.75, 0.06, 0.0), smoothstep(0.4, 0.8, vUpY));
-      totalEmissiveRadiance = hot * (0.55 + 0.4 * faceK);`);
+      totalEmissiveRadiance = hot * (0.95 + 0.45 * faceK);`);
   };
   m.customProgramCacheKey = () => 'gly-firetongue';
   return m;
@@ -164,9 +196,9 @@ function fireFace() {
     sh.vertexShader = `varying float vUpY;\n${sh.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vUpY = position.y;');
     sh.fragmentShader = `varying float vUpY;\n${sh.fragmentShader}`.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
       float faceK = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
-      vec3 hot = mix(vec3(0.9, 0.12, 0.01), vec3(1.0, 0.42, 0.04), smoothstep(0.2, 0.7, faceK));
-      hot = mix(hot, vec3(1.0, 0.78, 0.3), smoothstep(0.8, 0.97, faceK));
-      totalEmissiveRadiance = hot * (0.62 + 0.3 * smoothstep(-0.2, 0.5, vUpY));`);
+      vec3 hot = mix(vec3(0.75, 0.07, 0.0), vec3(1.0, 0.4, 0.03), smoothstep(0.3, 0.8, faceK));
+      hot = mix(hot, vec3(1.0, 0.76, 0.26), smoothstep(0.86, 0.99, faceK));
+      totalEmissiveRadiance = hot * (1.4 + 0.3 * smoothstep(-0.2, 0.5, vUpY));`);   // (the core 0.62 -> 1.4: glowing from within, 23 Oct 2026)
   };
   m.customProgramCacheKey = () => 'gly-fireface';
   return m;
@@ -220,12 +252,12 @@ function ribbon(element) {
   return mesh;
 }
 
-export function createRunner(element) {
+export function createRunner(element, { glass = true } = {}) {
   const r = rand(element === 'vuur' ? 3 : element === 'water' ? 5 : 9);
   const earth = element === 'gras';
   const fire = element === 'vuur';
   const water = element === 'water';
-  const skin = skinOf(element);
+  const skin = skinOf(element, glass);
   const accent = new THREE.MeshStandardMaterial({ color: fire ? '#1c0b06' : water ? '#2a8ee8' : '#5a5d63', roughness: 0.7, flatShading: earth, transparent: water, opacity: water ? 0.8 : 1 });
   const geo = (g, amt) => (earth ? earthy(g, r, amt) : g);
   const seg = earth ? [12, 9] : [24, 18];
@@ -267,7 +299,7 @@ export function createRunner(element) {
     }
   }
   // eyes that blink (the picture's: dark ovals with a glint; the water man's glow), a little smile
-  const eyeMat = water ? new THREE.MeshBasicMaterial({ color: '#c8fbff' }) : new THREE.MeshBasicMaterial({ color: '#16090a' });
+  const eyeMat = water ? new THREE.MeshBasicMaterial({ color: '#12d2ff' }) : new THREE.MeshBasicMaterial({ color: '#16090a' });
   const white = new THREE.MeshBasicMaterial({ color: '#ffffff' });
   const eyes = new THREE.Group();
   head.add(eyes);
@@ -317,9 +349,9 @@ export function createRunner(element) {
     const tip = mesh(new THREE.ConeGeometry(0.36, 0.78, 24, 1, true), skin);
     tip.position.set(0, 0.74, 0.04);
     crest.add(tip);
-    const bubble = new THREE.MeshBasicMaterial({ color: '#e8fbff', transparent: true, opacity: 0.55 });
+    const bubble = new THREE.MeshBasicMaterial({ color: '#e4fcff' });   // (solid: the glass draws what lies behind it, a see-through bubble inside it would vanish)
     for (let i = 0; i < 9; i++) {
-      const b = new THREE.Mesh(new THREE.SphereGeometry(0.035 + r() * 0.04, 8, 6), bubble);
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.05 + r() * 0.05, 10, 8), bubble);
       b.position.set((r() - 0.5) * 0.5, (i < 4 ? -0.6 : 0) + r() * 0.5, (r() - 0.5) * 0.4);
       head.add(b);
     }
@@ -330,20 +362,59 @@ export function createRunner(element) {
       orbit.push(d);
     }
   } else {
-    // (a crown of glowing leaves on a ring of vine)
-    const green = new THREE.MeshStandardMaterial({ color: '#3fdc5c', emissive: '#14c83c', emissiveIntensity: 0.85, roughness: 0.4, side: THREE.DoubleSide });
-    const vineRing = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 6, 24).rotateX(Math.PI / 2), green);
-    vineRing.position.y = 0.44;
-    crest.add(vineRing);
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2;
-      const leaf = new THREE.Mesh(leafGeo(0.42 + (i % 3) * 0.1), green);
-      leaf.position.set(Math.cos(a) * 0.4, 0.44, Math.sin(a) * 0.4);
-      leaf.rotation.order = 'YXZ';
-      leaf.rotation.set(-0.5 - (i % 2) * 0.25, -a + Math.PI / 2, 0);
-      crest.add(leaf);
-      sway.push(leaf);
+    // (a wreath of glowing vine and leaves, as in the picture: two vines wound round his head's top, curling tendrils, forty-four small
+    // leaves leaning out in every direction, in four clumps that flutter; one bright green bead on his brow. 23 Oct 2026: the old
+    // twelve leaves leaned in and stood up, a green spike crown from the front)
+    const wreath = new THREE.MeshStandardMaterial({ vertexColors: true, color: '#ffffff', emissive: '#15b83a', emissiveIntensity: 1.0, roughness: 0.4, side: THREE.DoubleSide });
+    const tint = new THREE.Color();
+    const ringY = (a) => 0.46 + 0.05 * Math.sin(a * 4);
+    const vines = [];
+    for (const ph of [0, Math.PI]) {
+      const pts = [];
+      for (let i = 0; i < 36; i++) {
+        const a = (i / 36) * Math.PI * 2;
+        const rr = 0.45 + 0.035 * Math.sin(a * 5 + ph);
+        pts.push(new THREE.Vector3(Math.cos(a) * rr, ringY(a + ph * 0.25) + 0.03 * Math.sin(a * 7 + ph), Math.sin(a) * rr));
+      }
+      vines.push(tinted(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 72, 0.026, 5, true), tint.set('#2fae45')));
     }
+    for (let i = 0; i < 3; i++) {
+      const a = 0.7 + i * 2.1;
+      const pts = [];
+      for (let k = 0; k <= 10; k++) {
+        const t = k / 10;
+        const rr = 0.44 - t * 0.12;
+        const w = 0.09 * Math.sin(t * 7);
+        pts.push(new THREE.Vector3(Math.cos(a) * rr + Math.cos(a + 1.57) * w, 0.5 + t * 0.4, Math.sin(a) * rr + Math.sin(a + 1.57) * w));
+      }
+      vines.push(tinted(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 20, 0.017, 4, false), tint.set('#3cc455')));
+    }
+    const clumps = [[], [], [], []];
+    const q = new THREE.Quaternion();
+    const eu = new THREE.Euler(0, 0, 0, 'YXZ');
+    const mat = new THREE.Matrix4();
+    const one = new THREE.Vector3(1, 1, 1);
+    const at = new THREE.Vector3();
+    for (let i = 0; i < 44; i++) {
+      const a = i * 2.399963;
+      const rr = 0.45 + (r() - 0.5) * 0.04;
+      const len = 0.18 + r() * 0.16;
+      eu.set(0.25 + r() * 0.95, -a + Math.PI / 2 + (r() - 0.5) * 1.3, (r() - 0.5) * 0.9);
+      q.setFromEuler(eu);
+      at.set(Math.cos(a) * rr, ringY(a) + 0.02, Math.sin(a) * rr);
+      mat.compose(at, q, one);
+      clumps[i % 4].push(tinted(leafGeo(len).applyMatrix4(mat), tint.setHSL(0.33 + (r() - 0.5) * 0.05, 0.72, 0.4 + r() * 0.22)));
+    }
+    crest.add(mesh(mergeGeos(vines), wreath));
+    for (const list of clumps) {
+      const cl = mesh(mergeGeos(list), wreath);
+      cl.castShadow = false;
+      crest.add(cl);
+      sway.push(cl);
+    }
+    const bead = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshBasicMaterial({ color: '#b9ffb4' }));
+    bead.position.set(0, 0.4, -0.45);
+    crest.add(bead);
   }
   // the swirl of his element round him
   const swirl = ribbon(element);
@@ -394,7 +465,7 @@ export function createRunner(element) {
     flick.forEach((f, i) => { f.rotation.z = Math.sin(t * (mode === 'run' ? 11 : 5) + i * 2.1) * 0.12; f.scale.y = 1 + Math.sin(t * 9 + i * 1.3) * 0.08; });
     swirl.material.uniforms.uT.value = t;
     swirl.rotation.y = Math.sin(t * 0.9) * 0.18;
-    sway.forEach((leaf, i) => { leaf.rotation.x = -0.35 + Math.sin(t * (mode === 'run' ? 9 : 2.4) + i * 1.7) * (mode === 'run' ? 0.28 : 0.1); });
+    sway.forEach((cl, i) => { const k = mode === 'run' ? 9 : 2.4; cl.rotation.x = Math.sin(t * k + i * 1.7) * (mode === 'run' ? 0.07 : 0.025); cl.rotation.z = Math.cos(t * k * 0.8 + i * 2.3) * (mode === 'run' ? 0.06 : 0.02); });
   }
   function dispose() {
     root.traverse((o) => {
@@ -431,7 +502,7 @@ export function portraits() {
     cam.position.set(0, 2.2, -5.2);
     cam.lookAt(0, 1.55, 0);
     for (const el of Object.keys(out)) {
-      const man = createRunner(el);
+      const man = createRunner(el, { glass: false });
       man.root.rotation.y = 0.3;
       man.update(1, { mode: 'idle', time: 0.4 });
       sc.add(man.root);
