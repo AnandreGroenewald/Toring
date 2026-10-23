@@ -33,7 +33,7 @@
 .bt-top[data-active="foe"] .bt-turn span { color: #ff9c8f; }
 
 .bt-corner { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 68px); left: 10px; right: 10px; display: flex; justify-content: space-between; z-index: 2; pointer-events: none; }
-.bt-corner button { pointer-events: auto; width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--glass-line); background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: 22px; font-weight: 900; line-height: 1; display: grid; place-content: center; }
+.bt-corner button { pointer-events: auto; width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--glass-line); background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: 22px; font-weight: 900; line-height: 1; display: grid; place-content: center; }
 .bt-pause { grid-auto-flow: column; gap: 4px; }
 .bt-pause i { display: block; width: 4px; height: 14px; border-radius: 2px; background: #fff; }
 
@@ -49,7 +49,7 @@
 .bt-banner.is-small b { font-size: 22px; }
 
 /* the banner and the call-outs */
-.bt-banner { position: absolute; left: 0; right: 0; top: 27%; display: grid; justify-items: center; gap: 4px; pointer-events: none; z-index: 3; opacity: 0; transform: scale(0.85); transition: opacity 0.25s, transform 0.35s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.bt-banner { position: absolute; left: 0; right: 0; top: 19%; display: grid; justify-items: center; gap: 4px; pointer-events: none; z-index: 3; opacity: 0; transform: scale(0.85); transition: opacity 0.25s, transform 0.35s cubic-bezier(0.2, 1.4, 0.4, 1); }
 .bt-banner.is-on { opacity: 1; transform: scale(1); }
 .bt-banner b { font-size: 34px; font-weight: 900; letter-spacing: 0.06em; text-align: center; padding: 0 16px;
   background: linear-gradient(180deg, #fff6d8, #ffd36b 55%, #f2a33a); -webkit-background-clip: text; background-clip: text; color: transparent;

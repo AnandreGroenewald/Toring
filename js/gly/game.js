@@ -655,12 +655,13 @@ function callout(text, local, kind = 'is-gold') {
   el.callouts.append(c);
   // (kept whole on the screen: a long one over a man in an outside lane; two at once stack, never over each other: 19 Oct
   // 2026)
-  const half = Math.max(70, (c.firstChild.offsetWidth || 140) / 2 + 10);
+  // (the pop scales it to 1.12, so the clamp counts 56 % of the width a side + 14 px, or it clips at the edge: 23 Oct 2026)
+  const half = Math.max(70, (c.firstChild.offsetWidth || 140) * 0.56 + 14);
   const now = performance.now();
   coShown = coShown.filter((t) => now - t < 1300);
   const lift = coShown.length * 30;
   coShown.push(now);
-  c.style.transform = `translate(${Math.round(Math.max(half, Math.min(stageEl.clientWidth - half, s.x)))}px, ${Math.round(Math.max(120 + lift, s.y) - lift)}px)`;
+  c.style.transform = `translate(${Math.round(Math.max(half, Math.min(stageEl.clientWidth - half, s.x)))}px, ${Math.round(Math.max(120 + lift, s.y - 60) - lift)}px)`;
   setTimeout(() => c.remove(), 1300);
 }
 /**
@@ -1161,8 +1162,9 @@ function gameOver() {
   hud.classList.remove('is-running');
   el.blind.classList.remove('is-on');
   const dist = Math.floor(G.d);
-  const record = dist > best;
-  if (record) { best = dist; save(); }
+  // ("NUWE REKORD!" only against an earlier best: the first run has nothing to beat, 23 Oct 2026)
+  const record = best > 0 && dist > best;
+  if (dist > best) { best = dist; save(); }
   const s = finishRun();
   const full = T.capHit.charAt(0).toUpperCase() + T.capHit.slice(1);
   const wallet = s.paid.coins ? `${T.toWallet(fmtInt(s.paid.coins))}${s.paid.capped ? ` · ${T.capHit}` : ''}` : G.coins ? full : '';

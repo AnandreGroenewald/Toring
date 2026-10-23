@@ -11,7 +11,7 @@
 /* (the coins top left, the ✨ top right, beside the distance: the block rides high on the screen and stands up into it) */
 .gl-side { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 12px); left: 10px; right: 10px; display: flex; justify-content: space-between; align-items: center; pointer-events: none; transition: opacity 0.3s; }
 .gl-side span { font-size: 15px; font-weight: 900; color: #fff; padding: 4px 10px; border-radius: 12px; background: rgba(20, 10, 40, 0.45); border: 1px solid rgba(255, 255, 255, 0.14); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); font-variant-numeric: tabular-nums; }
-.gl-item { font-size: 16px !important; padding: 3px 8px !important; filter: grayscale(1); opacity: 0.35; transition: opacity 0.3s, filter 0.3s; }
+.gl-item { font-size: 16px !important; padding: 3px 8px !important; filter: grayscale(1); opacity: 0.6; transition: opacity 0.3s, filter 0.3s; }
 .gl-item[data-on="1"] { filter: none; opacity: 1; box-shadow: 0 0 16px rgba(120, 230, 255, 0.75); animation: gl-glow 1.2s ease-in-out infinite; }
 @keyframes gl-glow { 50% { box-shadow: 0 0 26px rgba(150, 240, 255, 1); } }
 .gl:not(.is-running) .gl-side, .gl:not(.is-running) .gl-top .gl-m { opacity: 0; }
@@ -138,7 +138,7 @@
 .gl-missions li span { min-width: 0; overflow-wrap: anywhere; }
 /* (the test of 18 Oct 2026) the ✨ in the HUD's own dark glass and a thumb's size, so it reads as part of the game */
 .gl-side .gl-item { background: rgba(20, 10, 40, 0.45); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 12px; min-width: 44px; min-height: 44px; display: grid; place-items: center; }
-.gl-item:not([data-on="1"]) { opacity: 0.5; }
+.gl-item:not([data-on="1"]) { opacity: 0.6; }
 /* (the switch test from the app: a small pill on the start card) */
 .gl-swt { margin: 4px 0 0; text-align: center; }
-.gl-swtb { font: inherit; font-size: 13px; font-weight: 800; color: #bff7ff; background: rgba(20, 10, 40, 0.45); border: 1px solid rgba(127, 214, 255, 0.45); border-radius: 999px; padding: 8px 14px; min-height: 40px; cursor: pointer; }
+.gl-swtb { font: inherit; font-size: 13px; font-weight: 800; color: #bff7ff; background: rgba(20, 10, 40, 0.45); border: 1px solid rgba(127, 214, 255, 0.45); border-radius: 999px; padding: 8px 14px; min-height: 44px; cursor: pointer; }
