@@ -1439,7 +1439,8 @@ function trailVisual(dt) {
  * gate on the horizon, the world floats on both sides, and what comes rises from the bottom of the screen. No roll and no
  * swing; a little further back as it gets faster, to see more.
  */
-const VIEW = Object.freeze({ elev: 17 * Math.PI / 180, dist: 33, fov: 50, lookY: 0.4 });
+// (23 Oct 2026, the owner's yes after the 3D check: the camera 33 -> 42 m back, the man ~64 -> ~48 px tall and ~0.93 s of warning at 107 km/h)
+const VIEW = Object.freeze({ elev: 17 * Math.PI / 180, dist: 42, fov: 50, lookY: 0.4 });
 const slideUp = new THREE.Vector3();
 function cameraVisual(dt) {
   const k = Math.min(1, Math.max(0, (G.v - 15) / 25));
