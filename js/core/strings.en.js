@@ -358,7 +358,7 @@ export const S_EN = {
     { icon: '🛟', text: 'Ride down: after your Daily Tower your builder dives off the top and rides down the river. Swipe left and right past blocks, crocodiles, hippos and Blouaap, and scoop up your people who fell off your tower. They move into your Weekly Tower as you pass your crew’s island. The river runs on until your third knock (❤️❤️❤️): the further you ride, the better for the week.' },
     { icon: '🏗️', text: 'Weekly Tower: every Daily Tower (Monday to Saturday) gives a turn with the crane on your crew’s Weekly Tower: 10 blocks, in your own block style. A Perfect floor cracks before it breaks.' },
     { icon: '🏝️', text: 'Ons dorp: your crew is up to 3 builders (invite friends on WhatsApp). Your island shows the Weekly Tower, everyone’s latest Daily Tower and past weeks’ monuments.' },
-    { icon: '💦', text: 'Saturday Challenge: 4 crews on one river, and only the tallest tower can be blasted. Ride down with the water cannon on your shoulder: the scope locks onto the tower by itself, drag up or down to aim as you ride, and tap BLAST. Every shot that hits knocks out two floors. Your ticket: 3 Daily Towers Monday to Friday; 1 shot per 25 m. The crane closes at 12:00, and the whistle blows somewhere between 20:00 and 21:00.' },
+    { icon: '💦', text: 'Saturday Challenge: 4 crews on one river, and only the tallest tower can be blasted. Ride down with the water cannon on your shoulder: the scope locks onto the tower by itself, drag up or down to aim as you ride, and tap BLAST. Every shot that hits knocks out two floors. Your ticket: 3 Daily Towers Monday to Friday. Shots: 1 for every 25 m of your Daily Towers and 1 for every 100 m you ride down the river (10 a week at most). The crane closes at 12:00, and the whistle blows somewhere between 20:00 and 21:00.' },
     // (1.17) The Castle Series (kasteel.html)
     { icon: '🏰', text: 'The Castle Series: your Daily Towers become the towers of your castle. Attack Robot Rikus’s and your friends’ castles with troops, a ram and a trebuchet (break the gate, knock half of it down, make their flag fall), and plan your defence: it fights for you while you’re away.' },
     // (1.18) Block Clash (botsing.html)
@@ -955,7 +955,7 @@ export const S_EN = {
   twBomb: (n) => `💦 Ride down and blast them (${n})`,
   twRepair: (n) => `🛠️ Repair (${n})`,
   twYouLead: '👑 You’re the tallest: everyone’s aiming at you! Build and repair.',
-  twNoBombs: 'No shots left (1 for every 25 m of your Daily Towers).',
+  twNoBombs: 'No shots left (1 for every 25 m of your Daily Towers and every 100 m down the river).',
   twPlace: (p, of) => `🏆 You came ${p}${p === 2 ? 'nd' : p === 3 ? 'rd' : 'th'} of ${of}!`,
   twPlaceFirst: '🏆 You won Saturday!',
   nwBuilt: (who, m) => `🏗️ ${who} built: +${m}`,
@@ -1001,6 +1001,9 @@ export const S_EN = {
   rvStreak: (n) => `${n} in a row! 🛟`,
   rvRapids: 'Rapids!',
   rvWipeout: 'Wiped out!',
+  rvShots: (n) => `💦 +${n} ${n === 1 ? 'shot' : 'shots'} for Saturday`,
+  rvShotsFull: (n) => `💦 You have the week’s ${n} shots for Saturday`,
+  rvShotsNext: (m) => `💦 ${m} m more for an extra shot for Saturday`,
   twRideM: (m) => `🛟 Down the river this week: ${m} m`,
   rvIslandPass: (n, crew) => `🏝️ ${n} move into ${crew ? `${crew}’s tower` : 'your tower'}!`,
   rvDistance: 'down the river',

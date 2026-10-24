@@ -362,7 +362,7 @@ export const S = {
     { icon: '🛟', text: 'Afgly: ná jou Daaglikse Toring duik jou bouer van die top af en gly die rivier af. Swiep links en regs verby blokke, krokodille, seekoeie en Blouaap, en skep jou mense op wat van jou toring afgeval het. Hulle trek in julle Weektoring in wanneer jy by julle eiland verbygly. Die rivier hou aan tot jou derde stamp (❤️❤️❤️): hoe verder jy gly, hoe beter vir die week.' },
     { icon: '🏗️', text: 'Weektoring: elke Daaglikse Toring (Maandag tot Saterdag) gee ’n beurt met die hyskraan op julle span se Weektoring: 10 blokke, in jou eie blokstyl. ’n Perfek-vloer kraak eers voor hy breek.' },
     { icon: '🏝️', text: 'Ons dorp: julle span is tot 3 bouers (nooi vriende met WhatsApp). Julle eiland wys die Weektoring, elkeen se jongste Daaglikse Toring en vorige weke se monumente.' },
-    { icon: '💦', text: 'Saterdag-uitdaging: 4 spanne op een rivier en net die hoogste toring kan natgespuit word. Gly af met die waterkanon op jou skouer: die visier kom vanself op die toring, sleep op of af om te mik terwyl jy ry, en druk SPUIT. Elke skoot wat tref, slaan twee vloere uit. Jou kaartjie: 3 Daaglikse Torings Maandag tot Vrydag; 1 skoot per 25 m. Die kraan sluit 12:00, en die fluitjie blaas iewers tussen 20:00 en 21:00.' },
+    { icon: '💦', text: 'Saterdag-uitdaging: 4 spanne op een rivier en net die hoogste toring kan natgespuit word. Gly af met die waterkanon op jou skouer: die visier kom vanself op die toring, sleep op of af om te mik terwyl jy ry, en druk SPUIT. Elke skoot wat tref, slaan twee vloere uit. Jou kaartjie: 3 Daaglikse Torings Maandag tot Vrydag. Skote: 1 vir elke 25 m van jou Daaglikse Torings en 1 vir elke 100 m wat jy afgly (hoogstens 10 ’n week). Die kraan sluit 12:00, en die fluitjie blaas iewers tussen 20:00 en 21:00.' },
     // (1.17) Die Kasteelreeks (kasteel.html)
     { icon: '🏰', text: 'Die Kasteelreeks: jou Daaglikse Torings word die torings van jou kasteel. Val Robot Rikus en jou vriende se kastele aan met troepe, ’n stormram en ’n trebuchet (breek die hek, die helfte plat, hul vlag val), en beplan jou verdediging: dit veg vir jou terwyl jy weg is.' },
     // (1.13.1) with the day's free tries (from 12 Oct 2026: 3)
@@ -1000,7 +1000,7 @@ export const S = {
   twBomb: (n) => `💦 Gly af en spuit hulle nat (${n})`,
   twRepair: (n) => `🛠️ Herbou (${n})`,
   twYouLead: '👑 Julle is die hoogste: almal mik na julle! Bou en herbou.',
-  twNoBombs: 'Geen skote oor nie (1 vir elke 25 m van jou Daaglikse Torings).',
+  twNoBombs: 'Geen skote oor nie (1 vir elke 25 m van jou Daaglikse Torings en elke 100 m wat jy afgly).',
   twPlace: (p, of) => `🏆 Julle was ${p === 1 || p === 8 || p >= 20 ? `${p}ste` : `${p}de`} van ${of}!`,
   twPlaceFirst: '🏆 Julle het Saterdag gewen!',
   nwBuilt: (who, m) => `🏗️ ${who} het gebou: +${m}`,
@@ -1046,6 +1046,9 @@ export const S = {
   rvStreak: (n) => `${n} in ’n ry! 🛟`,
   rvRapids: 'Stroomversnelling!',
   rvWipeout: 'Omgeslaan!',
+  rvShots: (n) => `💦 +${n} ${n === 1 ? 'skoot' : 'skote'} vir Saterdag`,
+  rvShotsFull: (n) => `💦 Jy het die week se ${n} skote vir Saterdag`,
+  rvShotsNext: (m) => `💦 Nog ${m} m tot ’n ekstra skoot vir Saterdag`,
   twRideM: (m) => `🛟 Afgegly die week: ${m} m`,
   rvIslandPass: (n, crew) => `🏝️ ${n} trek in by ${crew || 'julle eiland'}!`,
   rvDistance: 'afgegly',

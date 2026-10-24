@@ -138,6 +138,8 @@ test('span server: the metres down the endless river count for the player and th
   const [s1, r1] = await h.call('POST', '/span/ride', { ...a, day: day(0), rescued: 4, metres: 1234.7 });
   assert.equal(s1, 200);
   assert.equal(r1.me.rideM[day(0)], 1234);
+  assert.equal(r1.me.bombs, SPAN.bombsMax, '1 shot per 25 m of Dailies + 1 per 100 m ridden, the week\'s 10 at most');
+  assert.equal(r1.me.river, 1234);
   const [, r2] = await h.call('POST', '/span/ride', { ...b, day: day(0), rescued: 2, metres: 9e9 });
   assert.equal(r2.crew.rideBy[a.id], 1234);
   assert.equal(r2.crew.rideBy[b.id], 40000, 'one ride counts at most 40 km');

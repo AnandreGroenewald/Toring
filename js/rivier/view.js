@@ -109,6 +109,7 @@ function makeKit() {
   background: rgba(16,30,36,.84); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 18px 50px rgba(0,0,0,.45); transition: opacity .35s, transform .45s cubic-bezier(.2,1.2,.4,1); text-align: center; }
 #rivier .rv-card.on { opacity: 1; transform: translate(-50%, 0); }
 #rivier .rv-card h2 { margin: 0 0 4px; font-size: 24px; font-weight: 900; }
+#rivier .rv-card p.rv-shots { margin: -4px 0 12px; font-size: 15px; font-weight: 900; color: #8ff4ff; }
 #rivier .rv-card .rv-dist { display: flex; align-items: baseline; justify-content: center; gap: 4px; margin: 0; line-height: 1; }
 #rivier .rv-card .rv-dist b { font-size: 46px; font-weight: 900; color: #fff3c4; text-shadow: 0 3px 0 rgba(40,24,0,.45); font-variant-numeric: tabular-nums; }
 #rivier .rv-card .rv-dist small { font-size: 20px; font-weight: 900; color: #fff3c4; opacity: .9; }
@@ -1774,6 +1775,12 @@ function createRide(K, d) {
 
   // ---------------------------------------------------------------------------------------------- the end
   let fwRide = null;
+  /** The Saturday shots this ride earns: 1 per 100 m (with the week's earlier rides), up to what the week still has room for. */
+  const shotsEarned = (m) => {
+    if (!d.shots?.day) return 0;
+    const w = d.shots.riverWeek | 0;
+    return Math.max(0, Math.min(d.shots.room | 0, Math.floor((w + m) / 100) - Math.floor(w / 100)));
+  };
   const result = () => ({ rescued: [...rescued], missed: who.filter((id) => !rescued.includes(id)), hits, all: rescued.length === who.length && who.length > 0, metres: Math.floor(dist) });
   function done() {
     if (phase === 'done') return;
@@ -1800,7 +1807,7 @@ function createRide(K, d) {
     const yours = rescued.filter((id) => who.indexOf(id) < mine).length;
     cardEl.innerHTML = `${endless ? `<div class="rv-dist"><b>${fmtInt(r.metres)}</b><small>m</small></div><p class="rv-distline">${S.rvDistance}${d.best ? ` · ${S.rvBest(fmtInt(Math.max(d.best, r.metres)))}` : ''}</p>` : ''}<h2>${r.rescued.length ? S.rvSaved(r.rescued.length, who.length) : S.rvNoneSaved}</h2>
       <p>${r.rescued.length ? S.rvMovedIn(r.rescued.length, d.crew || '') : S.rvTryTomorrow}${mine && yours < mine ? ` ${S.rvYoursLeft(mine - yours)}` : ''}</p>
-      <div class="rv-row">${who.map((id) => `<img src="${faceUrl(id, 64)}" alt="" class="${rescued.includes(id) ? '' : 'out'}">`).join('')}</div>
+      <div class="rv-row">${who.map((id) => `<img src="${faceUrl(id, 64)}" alt="" class="${rescued.includes(id) ? '' : 'out'}">`).join('')}</div>${endless && d.shots?.day ? `<p class="rv-shots">${shotsEarned(r.metres) > 0 ? S.rvShots(shotsEarned(r.metres)) : d.shots.room <= 0 ? S.rvShotsFull(d.shots.max || 10) : S.rvShotsNext(100 - ((d.shots.riverWeek + r.metres) % 100))}</p>` : ''}
       ${d.canBuild ? `<button class="rv-go">${S.rvBuild}</button><button class="rv-no">${S.rvLater}</button>` : `<button class="rv-go">${S.rvDone}</button>`}`;
     cardEl.classList.add('on');
     cardEl.querySelector('.rv-go').addEventListener('click', () => d.onDone?.(r, d.canBuild ? 'build' : 'done'));

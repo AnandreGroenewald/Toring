@@ -19,7 +19,8 @@ export const SPAN = Object.freeze({
   turnBlocks: 10,             // blocks in a build turn
   turnsMax: 2,                // build turns that can wait (a third Daily while two wait gives none)
   leaseMs: 4 * 60 * 1000,     // one builder at a time on a tower: a turn holds the crane this long at most
-  bombPerM: 25,               // 1 bomb per this many metres of your Dailies (Mon-Sat, each day's best)
+  bombPerM: 25,               // 1 bomb per this many metres of your Dailies (Mon-Sat, each day's best)...
+  rideMPerShot: 100,          // ...and 1 per this many metres down the endless river (Mon-Sat; the owner chose this, 24 Oct)
   bombsMax: 10,               // ...at most this many a week
   bombsPerRun: 3,             // a bomb run carries at most this many
   ticketDays: 3,              // finished weekday Dailies (Mon-Fri) for a Saturday ticket
@@ -112,11 +113,14 @@ export const crewLocked = (ms) => sastOf(ms).dow >= 6;
  * A player's week from their finished Dailies `days` ({ dateKey: best height in m } of that week): the Saturday ticket
  * (3 of the 5 weekdays), the bombs (1 per 25 m of Mon-Sat, at most 10) and how many weekdays count.
  */
-export function weekStats(days, weekKey) {
+export function weekStats(days, weekKey, rideM = {}) {
   let weekdays = 0;
   let metres = 0;
+  let river = 0;
   for (let k = 0; k < 6; k++) {
-    const h = Number(days?.[plusDays(weekKey, k)]);
+    const dk = plusDays(weekKey, k);
+    river += Math.max(0, Math.min(40000, Number(rideM?.[dk]) || 0));
+    const h = Number(days?.[dk]);
     if (!(h > 0)) continue;
     if (k < 5) weekdays++;
     metres += Math.min(h, 2000);
@@ -125,7 +129,8 @@ export function weekStats(days, weekKey) {
     weekdays,
     ticket: weekdays >= SPAN.ticketDays,
     metres: Math.round(metres * 10) / 10,
-    bombs: Math.min(SPAN.bombsMax, Math.floor(metres / SPAN.bombPerM)),
+    river: Math.floor(river),
+    bombs: Math.min(SPAN.bombsMax, Math.floor(metres / SPAN.bombPerM) + Math.floor(river / SPAN.rideMPerShot)),
   };
 }
 

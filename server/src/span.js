@@ -172,10 +172,10 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
 
   // ------------------------------------------------------------------------------------------- views
   function meView(p) {
-    const ws = weekStats(p.days || {}, p.week);
+    const ws = weekStats(p.days || {}, p.week, p.rideM || {});
     return {
       id: p.id, name: p.name, week: p.week, turns: turnsLeft(p), ticket: ws.ticket, weekdays: ws.weekdays, metres: ws.metres,
-      bombs: Math.max(0, ws.bombs - (p.bombsUsed | 0)), rides: p.rides || {}, rideM: p.rideM || {}, prize: p.prize || null,
+      bombs: Math.max(0, ws.bombs - (p.bombsUsed | 0)), bombsWeek: ws.bombs, river: ws.river, rides: p.rides || {}, rideM: p.rideM || {}, prize: p.prize || null,
     };
   }
   function crewView(c) {
@@ -648,7 +648,7 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
     const r = await get(rKey(c.river));
     if (!r) return [403, { error: 'river' }];
     if (phaseAt(t, r.whistle).phase !== 'uitdaging') return [403, { error: 'phase' }];
-    const ws = weekStats(p.days || {}, p.week);
+    const ws = weekStats(p.days || {}, p.week, p.rideM || {});
     if (!ws.ticket) return [403, { error: 'ticket' }];
     const hits = Array.isArray(b.hits) ? b.hits.slice(0, SPAN.bombsPerRun) : [];
     if (!hits.length || hits.length > ws.bombs - (p.bombsUsed | 0)) return [403, { error: 'bombs' }];

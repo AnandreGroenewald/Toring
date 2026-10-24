@@ -56,7 +56,7 @@ test('span: the week has three phases; the whistle is between 20:00 and 21:00, t
 
 test('span: the ticket is 3 of the 5 weekdays; bombs are 1 per 25 m of Mon-Sat, at most 10', () => {
   const d = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [plusDays(WK, Number(k)), v]));
-  assert.deepEqual(weekStats({}, WK), { weekdays: 0, ticket: false, metres: 0, bombs: 0 });
+  assert.deepEqual(weekStats({}, WK), { weekdays: 0, ticket: false, metres: 0, river: 0, bombs: 0 });
   assert.equal(weekStats(d({ 0: 40, 1: 30 }), WK).ticket, false);
   assert.equal(weekStats(d({ 0: 40, 2: 30, 4: 12 }), WK).ticket, true);
   // Saturday's Daily counts for bombs, not for the ticket; Sunday's for nothing
@@ -68,6 +68,13 @@ test('span: the ticket is 3 of the 5 weekdays; bombs are 1 per 25 m of Mon-Sat, 
   assert.equal(weekStats(d({ 0: 'x', 1: -4, 2: null }), WK).weekdays, 0);
   // a Daily from another week doesn't count
   assert.equal(weekStats({ '2026-10-19': 80 }, WK).metres, 0);
+  // the endless river (the owner's choice, 24 Oct): 1 more per 100 m ridden Mon-Sat, the week's 10 still the most
+  const r = weekStats(d({ 0: 40 }), WK, d({ 0: 250, 3: 180, 6: 5000 }));
+  assert.equal(r.river, 430, "Sunday's ride counts for no shots");
+  assert.equal(r.bombs, 1 + 4);
+  assert.equal(weekStats({}, WK, d({ 1: 99 })).bombs, 0);
+  assert.equal(weekStats(d({ 0: 100 }), WK, d({ 0: 900 })).bombs, SPAN.bombsMax);
+  assert.equal(weekStats({}, WK, d({ 0: 'x', 1: -50, 2: 1e9 })).river, 40000, 'nonsense counts as none; one ride counts 40 km at most');
 });
 
 test('span: ids, keys, invites and crew names', () => {

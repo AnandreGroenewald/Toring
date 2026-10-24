@@ -2750,6 +2750,8 @@ async function startRide() {
     const r = await mod.openRiver({
       scene: store.getSkins().wear.scene,
       seed: day, who: rd.who, mine: rd.mine, floors: v.floors, crew: v.name || '', canBuild: v.turns > 0, best: v.rideBest || 0,
+      // (the shots this ride can still earn for Saturday: 1 per 100 m, up to the week's 10; none on a Sunday)
+      shots: { max: SPAN.bombsMax, room: (v.dow | 0) <= 6 ? Math.max(0, SPAN.bombsMax - (v.bombsWeek | 0)) : 0, riverWeek: v.rideMetres | 0, day: (v.dow | 0) <= 6 },
       daily: dayLayout(day), skin: store.getSkins().wear.blocks || 'kleur',
       reducedMotion: !!settings.reducedMotion, autopilot: DEBUG && params.has('rvauto'),
       onResult: (res) => {
