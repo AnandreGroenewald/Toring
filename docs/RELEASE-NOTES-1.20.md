@@ -2,19 +2,27 @@
 
 ## Google Play "What's new" (max 500 characters each)
 
+(25 Oct 2026: the owner made it "the River run only"; Ons dorp is off for now, so these notes say nothing of crews,
+the Weekly Tower or Saturday.)
+
 <af>
-Stapel 1.20: Ons dorp! Ná jou Daaglikse Toring duik jou bouer van die top af en gly die rivier af om jou mense te red. Pasop vir krokodille, seekoeie en Blouaap! Bou saam met tot 3 vriende ’n Weektoring met die hyskraan. Saterdag kom 4 spanne op een rivier bymekaar: skiet met die bazooka op die hoogste toring. Die fluitjie blaas iewers tussen 20:00 en 21:00!
+Stapel 1.20: Afgly! Ná jou Daaglikse Toring duik jou bouer van die top af en gly die rivier af om jou mense te red. Swiep verby krokodille, seekoeie en Blouaap. Ná 1 km kom Hanswors met sy roomterte, ná 2 km spring jy oor stompe en ná 3 km koes jy onder bome deur. Die rivier hou nooit op nie: hoe ver kom jy? Elke dag ’n nuwe ranglys, en Afgly op die kieslys gly enige tyd weer.
 </af>
 
 <en-US>
-Stapel 1.20: Ons dorp! After your Daily Tower your builder dives off the top and rides down the river to rescue your people. Watch out for crocodiles, hippos and Blouaap! Build a Weekly Tower with the crane, with up to 3 friends. On Saturday 4 crews meet on one river: fire the bazooka at the tallest tower. The whistle blows somewhere between 20:00 and 21:00!
+Stapel 1.20: River run! After your Daily Tower your builder dives off the top and rides down the river to rescue your people. Swipe past crocodiles, hippos and Blouaap. After 1 km Hanswors comes with his cream pies, after 2 km you jump logs and after 3 km you duck under trees. The river never ends: how far can you go? A new ranking every day, and River run on the menu rides again any time.
 </en-US>
 
 ## What's gone (for the testers)
 
 Steel en Wraak (stealing), the Castle Series, Block Clash and Glybaan are off; the tribes (fire, water, earth) are gone.
+Ons dorp (crews, the Weekly Tower, Saturday's challenge) is built but off for now (config ONS_DORP).
 
 ## Google Play Data safety for 1.20 (draft; check against the form before sending)
+
+**With Ons dorp off (25 Oct 2026): no change to the form.** The River run sends only the random player number
+(Device or other IDs: declared) and your rides' metres for the daily ranking (App interactions: declared). The list
+below is for when Ons dorp comes back on.
 
 Already declared (12 Oct 2026, 1.14): Name (nickname), Email (ephemeral), User IDs, Device or other IDs, App
 interactions, Other actions. What Ons dorp adds, and where it goes on the form:
