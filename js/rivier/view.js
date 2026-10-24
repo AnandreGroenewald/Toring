@@ -206,7 +206,7 @@ function createTown(K, d) {
   audio.setAmbience?.(0.35);
   const wonOf = (v) => !!(v.river?.over && v.river.final?.order?.[0] && v.river.final.order[0] === v.crew?.id);
   let won = wonOf(d);
-  let fw = won ? createFireworks(scene, reduced) : null;
+  let fw = won ? createFireworks(scene, reduced, world.night) : null;
   let crownTag = null;
   function setCrown() {
     if (crownTag) { island.group.remove(crownTag); crownTag.material.map?.dispose(); crownTag.material.dispose(); crownTag = null; }
@@ -469,7 +469,7 @@ function createTown(K, d) {
       island.setFloors(v.floors || []);
       island.setPlots({ towers: v.plots || d.plots || [], monuments: v.monuments || [] });
       won = wonOf({ ...d, ...v });
-      if (won && !fw) fw = createFireworks(scene, reduced);
+      if (won && !fw) fw = createFireworks(scene, reduced, world.night);
       setCrown();
     },
   };
@@ -481,7 +481,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
  * Fireworks over the island (Saturday's winners): a rocket's trail up, a burst of coloured sparks that fall and fade,
  * one every second or so. One cloud of points (a single draw call). { update(dt, top), dispose() }.
  */
-function createFireworks(scene, reduced) {
+function createFireworks(scene, reduced, night = true) {
   const N = 900;
   const pos = new Float32Array(N * 3);
   const col = new Float32Array(N * 3);
@@ -500,7 +500,8 @@ function createFireworks(scene, reduced) {
   g.fillStyle = grd;
   g.fillRect(0, 0, 32, 32);
   const tex = new THREE.CanvasTexture(c);
-  const mat = new THREE.PointsMaterial({ size: 2.6, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+  // (glowing light at night; by day, solid colour that reads against a bright sky)
+  const mat = new THREE.PointsMaterial({ size: night ? 2.6 : 3.4, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: night ? THREE.AdditiveBlending : THREE.NormalBlending, fog: false });
   const pts = new THREE.Points(geo, mat);
   pts.frustumCulled = false;
   scene.add(pts);
@@ -527,14 +528,15 @@ function createFireworks(scene, reduced) {
     }
   }
   return {
-    update(dt, top) {
+    /** `at`: the middle of the island they go up round (the town's is at the origin). */
+    update(dt, top, at = null) {
       wait -= dt;
       if (wait <= 0) {
         wait = 0.8 + Math.random() * 0.9;
         const a = Math.random() * Math.PI * 2;
         const r = 6 + Math.random() * 14;
         const h = Math.max(24, top);
-        shells.push({ x: Math.sin(a) * r, z: Math.cos(a) * r, y: 4, vy: 30 + Math.random() * 8, at: h * (0.45 + Math.random() * 0.4) });
+        shells.push({ x: (at?.x || 0) + Math.sin(a) * r, z: (at?.z || 0) + Math.cos(a) * r, y: 4, vy: 30 + Math.random() * 8, at: h * (0.45 + Math.random() * 0.4) });
       }
       for (let s = shells.length - 1; s >= 0; s--) {
         const sh = shells[s];
@@ -559,7 +561,7 @@ function createFireworks(scene, reduced) {
         vel[i * 3] *= drag; vel[i * 3 + 2] *= drag;
         pos[i * 3] += vel[i * 3] * dt; pos[i * 3 + 1] += vel[i * 3 + 1] * dt; pos[i * 3 + 2] += vel[i * 3 + 2] * dt;
         if (life[i] <= 0) pos[i * 3 + 1] = -999;
-        else if (life[i] < 0.5) { col[i * 3] *= 0.95; col[i * 3 + 1] *= 0.95; col[i * 3 + 2] *= 0.95; }
+        else if (life[i] < 0.5 && night) { col[i * 3] *= 0.95; col[i * 3 + 1] *= 0.95; col[i * 3 + 2] *= 0.95; }   // (by day a fading spark would go dark: it just ends)
       }
       geo.attributes.position.needsUpdate = true;
       geo.attributes.color.needsUpdate = true;
@@ -1609,6 +1611,7 @@ function createRide(K, d) {
     if (phase === 'dive') world.setShadowFocus(0, START_Z * 0.5, 46);
     else world.setShadowFocus(x * 0.6, raid ? -40 : -24, raid ? 60 : 40);
     things.updateSpray(dt);
+    fwRide?.update(dt, Math.max(24, towerTop() + 6), island.group.position);
     cameraFor(dt);
   }
   // (tests: ?zoo=1, the animals side by side in front of a still camera)
@@ -1645,6 +1648,7 @@ function createRide(K, d) {
   }
 
   // ---------------------------------------------------------------------------------------------- the end
+  let fwRide = null;
   const result = () => ({ rescued: [...rescued], missed: who.filter((id) => !rescued.includes(id)), hits, all: rescued.length === who.length && who.length > 0 });
   function done() {
     if (phase === 'done') return;
@@ -1665,6 +1669,8 @@ function createRide(K, d) {
     }
     const r = result();
     if (r.all) audio.play('record'); else audio.play('banner');
+    // (everyone saved: fireworks over the island, the way the winners get them on Saturday)
+    if (r.all && !fwRide) fwRide = createFireworks(scene, reduced, world.night);
     const mine = Math.min(d.mine ?? who.length, who.length);
     const yours = rescued.filter((id) => who.indexOf(id) < mine).length;
     cardEl.innerHTML = `<h2>${r.rescued.length ? S.rvSaved(r.rescued.length, who.length) : S.rvNoneSaved}</h2>
@@ -1760,6 +1766,7 @@ function createRide(K, d) {
     for (const g of new Set(warmGeos)) g.dispose();
     burstTex.dispose();
     jetMat.dispose();
+    fwRide?.dispose();
     if (raid) setBend(1);
     camera.fov = FOV0;
     camera.updateProjectionMatrix();
