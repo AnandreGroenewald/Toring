@@ -284,6 +284,9 @@ export class HudScene extends Phaser.Scene {
 
     // --- Row 1: height (left) ----------------------------------------------------
     this.hStr = fmtM(0);
+    // (1.20) a restarted HUD (the scene object is re-used) shows the new tower's height at once: a Weektoring turn starts
+    // at the height the last one ended on, so a remembered height kept it at "0,0 m" until the tower grew
+    this.hShownM = undefined;
     this.lastHeight = 0;
     this.heightTxt = text(this, 20, y1, this.hStr, 52, { strokeMul: 0.15 }).setOrigin(0, 0.5);
     this.heightHome = { x: 20, y: y1 };
