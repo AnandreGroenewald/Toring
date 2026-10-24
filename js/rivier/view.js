@@ -10,7 +10,7 @@
 import * as THREE from '../../lib/three.module.min.js';
 import { createStage, pickQuality } from '../kasteel/stage.js';
 import { createPieces } from '../botsing/pieces.js';
-import { buildRiverWorld, bendMaterial, setBend, BANK } from './world.js';
+import { buildRiverWorld, bendMaterial, setBend, BANK, puffTexture } from './world.js';
 import { createRider } from './rider.js';
 import { createThings, createIsland, createStartTower, labelSprite, disposeTree } from './things.js';
 import { createBeasts } from './beasts.js';
@@ -70,9 +70,30 @@ function makeKit() {
 #rivier .rv-pop { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%) scale(.6); opacity: 0; font-size: 34px; font-weight: 900; color: #fff3c4; -webkit-text-stroke: 1.5px rgba(40,24,0,.75); text-shadow: 0 4px 0 rgba(40,24,0,.45), 0 8px 24px rgba(0,0,0,.4); width: max-content; max-width: 88%; text-align: center; line-height: 1.12; text-wrap: balance; transition: opacity .25s, transform .35s cubic-bezier(.2,1.4,.4,1); }
 #rivier .rv-pop.long { font-size: 26px; }
 #rivier .rv-pop.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-#rivier .rv-aim { position: absolute; left: 0; top: 0; width: 56px; height: 56px; border-radius: 50%; border: 3px solid #ffd65c; box-shadow: 0 0 0 2px rgba(40,20,0,.6), inset 0 0 0 2px rgba(40,20,0,.5); opacity: 0; pointer-events: none; }
-#rivier .rv-aim::after { content: ''; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: #ff5a3a; }
-#rivier .rv-aim.on { opacity: 1; }
+#rivier .rv-scope { position: absolute; left: 0; top: 0; width: 132px; height: 132px; margin: -66px 0 0 -66px; opacity: 0; pointer-events: none; transition: opacity .2s; --sc: #5ff2ff; }
+#rivier .rv-scope.on { opacity: 1; }
+#rivier .rv-scope.miss { --sc: #ffc24a; }
+#rivier .rv-scope svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 0 3px rgba(0,25,35,.85)) drop-shadow(0 0 10px rgba(0,25,35,.35)); }
+#rivier .rv-scope .ring { fill: rgba(150,240,255,.07); stroke: var(--sc); stroke-width: 2.5; transition: stroke .15s; }
+#rivier .rv-scope .ticks line, #rivier .rv-scope .cross line { stroke: var(--sc); stroke-width: 2; stroke-linecap: round; transition: stroke .15s; }
+#rivier .rv-scope .brk { fill: none; stroke: var(--sc); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; transform-origin: 66px 66px; transform: scale(1.5); opacity: .4; transition: transform .3s cubic-bezier(.2,1.5,.4,1), opacity .3s, stroke .15s; }
+#rivier .rv-scope.lock .brk { transform: scale(.86); opacity: 1; }
+#rivier .rv-scope .dot { fill: #ff5a3a; }
+#rivier .rv-scope .rng { position: absolute; left: 50%; top: 100%; transform: translate(-50%, 4px); padding: 2px 9px; border-radius: 999px; background: rgba(8,24,30,.72); font-weight: 900; font-size: 13px; color: #dff9ff; letter-spacing: .5px; white-space: nowrap; }
+#rivier .rv-fire { pointer-events: auto; position: absolute; right: 18px; bottom: calc(24px + var(--sab, 0px)); width: 96px; height: 96px; border-radius: 50%; border: 0; padding: 0; display: none; place-items: center; cursor: pointer; color: #fff; font: inherit; font-weight: 900; font-size: 14px; letter-spacing: .6px; text-shadow: 0 2px 0 rgba(0,40,60,.6);
+  background: radial-gradient(circle at 34% 28%, #e4fdff 0, #57def0 26%, #0d93b4 64%, #06566e 100%); box-shadow: 0 6px 0 #04394a, 0 14px 30px rgba(0,0,0,.45), inset 0 -8px 14px rgba(0,40,60,.5), inset 0 4px 8px rgba(255,255,255,.6);
+  touch-action: none; -webkit-tap-highlight-color: transparent; transition: transform .08s, box-shadow .08s, filter .2s, opacity .2s; }
+#rivier .rv-fire.show { display: grid; }
+#rivier .rv-fire.off { filter: saturate(.25) brightness(.8); opacity: .75; }
+#rivier .rv-fire.press { transform: translateY(5px) scale(.94); box-shadow: 0 1px 0 #04394a, 0 6px 16px rgba(0,0,0,.4), inset 0 -4px 10px rgba(0,40,60,.5), inset 0 4px 8px rgba(255,255,255,.6); }
+#rivier .rv-fire .in { display: grid; place-items: center; gap: 1px; margin-top: 2px; }
+#rivier .rv-fire .in svg { width: 34px; height: 34px; filter: drop-shadow(0 2px 0 rgba(0,40,60,.5)); }
+#rivier .rv-fire svg.pips { position: absolute; left: -8px; top: -8px; width: 112px; height: 112px; pointer-events: none; }
+#rivier .rv-fire svg.pips path { fill: none; stroke-width: 5; stroke-linecap: round; }
+#rivier .rv-fire svg.pips .full { stroke: #8ff4ff; filter: drop-shadow(0 0 4px rgba(120,240,255,.9)); }
+#rivier .rv-fire svg.pips .empty { stroke: rgba(10,40,52,.55); }
+#rivier .rv-fire.pulse { animation: rv-firepulse 1.1s ease-in-out infinite; }
+@keyframes rv-firepulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.18) drop-shadow(0 0 12px rgba(110,240,255,.8)); } }
 #rivier .rv-hurt { position: absolute; inset: 0; box-shadow: inset 0 0 90px 20px rgba(200,40,30,.55); opacity: 0; transition: opacity .25s; }
 #rivier .rv-hurt.on { opacity: 1; transition: none; }
 #rivier .rv-fly { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; transition: transform .55s cubic-bezier(.4,0,.6,1), opacity .55s; }
@@ -216,7 +237,7 @@ function createTown(K, d) {
   let removing = null;
   let helping = !!d.help;   // (open by itself on the first visit)
   /** How Ons dorp works: the rules screen's own four lines (the ride, the crane, the crew, Saturday). */
-  const helpHtml = () => `<ul class="tw-helpbox">${S.howToSteps.filter((s) => ['🛟', '🏗️', '🏝️', '💣'].includes(s.icon)).map((s) => `<li><span>${s.icon}</span>${esc(typeof s.text === 'function' ? s.text() : s.text)}</li>`).join('')}</ul>`;
+  const helpHtml = () => `<ul class="tw-helpbox">${S.howToSteps.filter((s) => ['🛟', '🏗️', '🏝️', '💦'].includes(s.icon)).map((s) => `<li><span>${s.icon}</span>${esc(typeof s.text === 'function' ? s.text() : s.text)}</li>`).join('')}</ul>`;
   function fold(on) {
     folded = !!on;
     ov.querySelector('.tw-panel')?.classList.toggle('min', folded);
@@ -666,42 +687,110 @@ function createRide(K, d) {
     }
   }
   let bombsLeft = raid ? Math.max(0, d.bombs | 0) : 0;
+  const bombs0 = bombsLeft;
   let thrown = 0;
   let bombHits = 0;
   let bombLost = 0;
   let bombCracked = 0;
-  let aiming = false;
-  const aimAt = { x: 0, y: 0 };
+  let aiming = false;   // (the scope is up: the tallest tower is in range and there's water left)
+  let aimV = 0;   // how high up the tower the scope sits (m from its foot): his thumb drags it up and down
+  let aimU = 0;
+  let aimVv = 0;   // (where the jet would go now: the scope with the board's sway on it)
+  let lockT = 0;
+  let onTarget = false;
   const flights = [];
   const debris = [];
-  const bombGeo = new THREE.SphereGeometry(0.62, 16, 12);
-  // the blast: a fireball that swells and fades where a bomb lands
-  const flashGeo = new THREE.SphereGeometry(1, 16, 12);
+  // the burst where a jet hits: a cloud of spray that swells and fades (a soft puff, facing you)
+  const burstTex = puffTexture(57);
   const flashes = [];
-  const bombMat = new THREE.MeshStandardMaterial({ color: '#56633a', roughness: 0.45, metalness: 0.35 });
-  const fuseMat = new THREE.MeshStandardMaterial({ color: '#ffb347', emissive: '#ff7a1a', emissiveIntensity: 2.4 });
-  const noseMat = new THREE.MeshStandardMaterial({ color: '#2a2f22', roughness: 0.4, metalness: 0.5 });
-  const rocketBody = new THREE.CylinderGeometry(0.11, 0.11, 0.62, 12);
-  rocketBody.rotateX(Math.PI / 2);
-  const rocketNose = new THREE.ConeGeometry(0.11, 0.26, 12);
-  rocketNose.rotateX(-Math.PI / 2);
-  rocketNose.translate(0, 0, -0.44);
-  const rocketFin = new THREE.BoxGeometry(0.02, 0.2, 0.16);
-  const rocketFlame = new THREE.ConeGeometry(0.09, 0.42, 10);
-  rocketFlame.rotateX(Math.PI / 2);
-  rocketFlame.translate(0, 0, 0.52);
-  /** A rocket for the bazooka (points along its local -z). */
-  function rocketMesh() {
-    const g = new THREE.Group();
-    g.add(new THREE.Mesh(rocketBody, bombMat), new THREE.Mesh(rocketNose, noseMat), new THREE.Mesh(rocketFlame, fuseMat));
-    for (let i = 0; i < 4; i++) {
-      const fin = new THREE.Mesh(rocketFin, noseMat);
-      const a = (i / 4) * Math.PI * 2;
-      fin.position.set(Math.cos(a) * 0.13, Math.sin(a) * 0.13, 0.24);
-      fin.rotation.z = a;
-      g.add(fin);
+  const drips = [];
+  // the jet: a tube along the water's arc from the nozzle to the tower, drawn between its tail and its head (both run
+  // along it: the head at the jet's speed, the tail once the burst is spent); streaks of white rush along it
+  const JET_N = 48;
+  const JET_R = 10;
+  const JET_V = 95;   // m/s
+  const jetMat = new THREE.ShaderMaterial({
+    uniforms: { uHead: { value: 0 }, uTail: { value: 0 }, uT: { value: 0 }, uTint: { value: world.fxTint }, uSoft: { value: 0 } },
+    vertexShader: `attribute float aS; varying float vS; varying vec2 vA; varying vec3 vN; varying vec3 vV;
+      void main() {
+        vS = aS; vA = uv;
+        vec4 w = modelMatrix * vec4(position, 1.0);
+        vN = normalize(mat3(modelMatrix) * normal);
+        vV = normalize(cameraPosition - w.xyz);
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`,
+    fragmentShader: `uniform float uHead; uniform float uTail; uniform float uT; uniform vec3 uTint; uniform float uSoft; varying float vS; varying vec2 vA; varying vec3 vN; varying vec3 vV;
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5); }
+      float vnoise(vec2 p) { vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
+      void main() {
+        if (vS > uHead || vS < uTail) discard;
+        float edge = 1.0 - abs(dot(normalize(vN), normalize(vV)));
+        float st = vnoise(vec2(vS * 70.0 - uT * 26.0, vA.y * 9.0)) * 0.6 + vnoise(vec2(vS * 190.0 - uT * 60.0, vA.y * 21.0)) * 0.4;
+        vec3 col = mix(vec3(0.42, 0.82, 0.95), vec3(1.0), smoothstep(0.35, 0.8, st) * 0.85 + (1.0 - edge) * 0.25);
+        float a = mix(0.92, 0.3, edge) * (0.65 + 0.45 * st);
+        // (the sleeve: a mist of spray, ragged and faint, thickest in its middle)
+        if (uSoft > 0.5) {
+          float m = vnoise(vec2(vS * 55.0 - uT * 18.0, vA.y * 12.0 + uT * 3.0));
+          a = (1.0 - edge) * smoothstep(0.35, 0.85, m) * 0.32 * smoothstep(0.0, 0.25, vS);
+          col = mix(vec3(0.78, 0.94, 1.0), vec3(1.0), m);
+        }
+        a *= smoothstep(uHead, uHead - 0.025, vS) * 0.6 + 0.4;
+        a *= smoothstep(uTail, uTail + 0.06, vS);
+        gl_FragColor = vec4(col * uTint, clamp(a, 0.0, 1.0));
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  });
+  /** The jet's path: from `a` to `b` with the water's arc over it (`s` 0..1); `out` gets the point. */
+  function jetPoint(a, b, arc, s, out) {
+    return out.lerpVectors(a, b, s).setY(out.y + arc * 4 * s * (1 - s));
+  }
+  function jetGeometry(a, b, arc, thick = 1) {
+    const pos = new Float32Array((JET_N + 1) * JET_R * 3);
+    const nrm = new Float32Array((JET_N + 1) * JET_R * 3);
+    const uv = new Float32Array((JET_N + 1) * JET_R * 2);
+    const ss = new Float32Array((JET_N + 1) * JET_R);
+    const idx = [];
+    const P = new THREE.Vector3();
+    const Q = new THREE.Vector3();
+    const T = new THREE.Vector3();
+    const N = new THREE.Vector3();
+    const B = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i <= JET_N; i++) {
+      const s = i / JET_N;
+      jetPoint(a, b, arc, s, P);
+      jetPoint(a, b, arc, Math.min(1, s + 0.01), Q);
+      if (s >= 1) { jetPoint(a, b, arc, 0.99, Q); T.copy(P).sub(Q); } else T.copy(Q).sub(P);
+      T.normalize();
+      N.crossVectors(T, up).normalize();
+      B.crossVectors(N, T).normalize();
+      // (thin at the nozzle, opening out as it flies; a little wobble)
+      const r = (0.1 + s * 0.42 + Math.sin(s * 37) * 0.02) * thick;
+      for (let j = 0; j < JET_R; j++) {
+        const ang = (j / JET_R) * Math.PI * 2;
+        const k = i * JET_R + j;
+        const nx = N.x * Math.cos(ang) + B.x * Math.sin(ang);
+        const ny = N.y * Math.cos(ang) + B.y * Math.sin(ang);
+        const nz = N.z * Math.cos(ang) + B.z * Math.sin(ang);
+        pos.set([P.x + nx * r, P.y + ny * r, P.z + nz * r], k * 3);
+        nrm.set([nx, ny, nz], k * 3);
+        uv.set([s, j / JET_R], k * 2);
+        ss[k] = s;
+        if (i < JET_N) {
+          const k2 = i * JET_R + ((j + 1) % JET_R);
+          idx.push(k, k + JET_R, k2, k2, k + JET_R, k2 + JET_R);
+        }
+      }
     }
-    g.scale.setScalar(1.6);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    g.setAttribute('aS', new THREE.BufferAttribute(ss, 1));
+    g.setIndex(idx);
     return g;
   }
   if (raid) rider.setGun(true);
@@ -734,29 +823,80 @@ function createRide(K, d) {
     const v = P.y - (isle.group.position.y + 3.0);
     return { u, v, P };
   }
+  /** (tests and the autopilot) Fires where a finger at (fx, fy) (host px) points on the tallest tower. */
   function throwBomb(fx, fy) {
     const isle = targetIsle();
-    if (!isle || bombsLeft <= 0) return;
+    if (!isle) return;
     const a = aimOnTower(isle, fx, fy);
-    if (!a) return;
+    if (a) fireAt(isle, a.u, a.v);
+  }
+  /** The heights (m) of the tallest tower that are on screen now: [low, high] (under the top bar, over the button). */
+  const _vs = new THREE.Vector3();
+  function visibleSpan(isle) {
+    const h = Math.max(2, isle.island.top - 3.6);
+    const H = host.clientHeight;
+    const yTop = 120;
+    const yBot = H - 210;
+    let lo = null;
+    let hi = null;
+    for (let i = 0; i <= 28; i++) {
+      const v = 0.3 + (h - 0.5) * (i / 28);
+      _vs.copy(towerPoint(isle, 0, v)).project(camera);
+      const y = (-_vs.y * 0.5 + 0.5) * H;
+      if (y < yBot && y > yTop) {
+        if (lo === null) lo = v;
+        hi = v;
+      }
+    }
+    if (lo === null) return [0.3, Math.min(h - 0.2, 6)];
+    return [lo, Math.max(lo, hi)];
+  }
+  /** The middle of the floor at height v on the tower (m across), so the scope rides on the stack as it leans. */
+  function floorMidU(isle, v) {
+    let best = 0;
+    let bestD = Infinity;
+    for (const f of isle.floors) {
+      const { H } = dimsOf(f);
+      const d = v < f.y ? f.y - v : v > f.y + H ? v - f.y - H : 0;
+      if (d < bestD) { bestD = d; best = f.x; }
+    }
+    return best;
+  }
+  /** The water cannon fires at (u, v) on the isle's tower: the kick, a burst at the nozzle, the jet on its way. */
+  function fireAt(isle, u, v) {
+    if (bombsLeft <= 0) return;
     bombsLeft--;
     thrown++;
     setBombs();
-    // the bazooka fires: a flash and a kick at the front, smoke out of the back; the rocket flies nearly straight
-    const from = rider.fire();
-    const back = rider.breech();
-    things.emit(back.x, back.y, back.z + 0.4, 18, 0.9, 0.6);
-    things.emit(from.x, from.y, from.z, 8, 0.5, 0.5);
-    stage.shake(reduced ? 0 : 0.25);
-    const mesh = rocketMesh();
-    mesh.position.copy(from);
+    const from = rider.fire().clone();
+    things.emit(from.x, from.y, from.z, 14, 0.7, 0.8);
+    stage.shake(reduced ? 0 : 0.18);
+    const to = towerPoint(isle, u, v);
+    const len0 = from.distanceTo(to);
+    const arc = Math.min(4, len0 * 0.028);
+    const mesh = new THREE.Mesh(jetGeometry(from, to, arc), jetMat.clone());
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 5;
+    // (the spray round it: a wider, fainter sleeve sharing the jet's run: the same head, tail and clock)
+    const sleeve = new THREE.Mesh(jetGeometry(from, to, arc, 2.6), jetMat.clone());
+    sleeve.material.uniforms = { ...mesh.material.uniforms, uSoft: { value: 1 } };
+    sleeve.frustumCulled = false;
+    sleeve.renderOrder = 4;
+    mesh.add(sleeve);
     scene.add(mesh);
-    const to0 = towerPoint(isle, a.u, a.v);
-    const dur = clamp(from.distanceTo(to0) / 55, 0.45, 1.4);
-    flights.push({ mesh, isle, u: a.u, v: a.v, from: from.clone(), t: 0, dur });
+    flights.push({ mesh, isle, u, v, from, to, arc, t: 0, dur: Math.max(0.2, len0 / JET_V), hit: false });
     hint(null);
-    audio.play('launch');
+    audio.play('jet');
     haptics.tap?.();
+  }
+  /** The fire button: at the scope's spot right now (the board's sway in it), if there's a tower and water. */
+  function fireNow() {
+    const tgt = targetIsle();
+    if (!tgt || bombsLeft <= 0 || phase !== 'run' || paused) {
+      fireEl.classList.add('off');
+      return;
+    }
+    fireAt(tgt, aimU, aimVv);
   }
   const _w = new THREE.Vector3();
   const _aimFrom = new THREE.Vector3();
@@ -769,17 +909,25 @@ function createRide(K, d) {
   function impact(f) {
     const isle = f.isle;
     const at = towerPoint(isle, f.u, f.v);
-    things.emit(at.x, at.y, at.z, 40, 3, 5);
+    // the jet bursts on the tower: a big cloud of spray, water flying off in every direction and raining down, a mist
+    // that hangs a moment, and water running down the tower's face after
+    const big = clamp(at.distanceTo(camera.position) / 30, 1, 3);
+    things.emit(at.x, at.y, at.z, 80, 3.6, 6, big);
+    things.emit(at.x, at.y + 0.5, at.z, 24, 1.8, 2.4, big * 1.3);
     if (!reduced) {
-      const fm = new THREE.MeshBasicMaterial({ color: '#ffb24a', transparent: true, opacity: 0.95, depthWrite: false, fog: false });
-      const fl = new THREE.Mesh(flashGeo, fm);
-      fl.position.copy(at);
-      fl.renderOrder = 6;
-      scene.add(fl);
-      flashes.push({ fl, t: 0 });
+      for (const [k, life, s0, s1, op] of [[0, 0.9, 2.5, 13, 0.95], [1, 1.8, 4, 17, 0.5]]) {
+        const fm = new THREE.SpriteMaterial({ map: burstTex, color: new THREE.Color(k ? '#e6f6fa' : '#f6feff').multiply(world.fxTint), transparent: true, opacity: op, depthWrite: false, fog: true });
+        fm.rotation = Math.random() * 6.28;
+        const fl = new THREE.Sprite(fm);
+        fl.position.copy(at);
+        fl.renderOrder = 6;
+        scene.add(fl);
+        flashes.push({ fl, t: 0, life, s0, s1, op, sink: k ? 1.6 : 0 });
+      }
     }
-    stage.shake(reduced ? 0 : 0.6);
-    audio.play('boom', { intensity: 1 });
+    drips.push({ at: at.clone(), t: 0, big });
+    stage.shake(reduced ? 0 : 0.45);
+    audio.play('splat', { intensity: 1 });
     haptics.lost?.();
     const i = floorAt(isle.floors, f.u, f.v);
     let mine = { hit: false, lost: 0 };   // (what this side counted: the server's word corrects it)
@@ -843,33 +991,50 @@ function createRide(K, d) {
       }
     });
   }
+  const _jp = new THREE.Vector3();
   function stepBombs(dt) {
     for (let k = flights.length - 1; k >= 0; k--) {
       const f = flights[k];
       f.t += dt;
-      const q = Math.min(1, f.t / f.dur);
-      const to = towerPoint(f.isle, f.u, f.v);
-      const prev = f.mesh.position.clone();
-      f.mesh.position.lerpVectors(f.from, to, q);
-      f.mesh.position.y += Math.sin(q * Math.PI) * 1.2;
-      // (nose first, along its path; a trail of smoke so the eye can follow the shot)
-      const ahead = f.mesh.position.clone().multiplyScalar(2).sub(prev);
-      if (ahead.distanceToSquared(f.mesh.position) > 1e-6) f.mesh.lookAt(ahead);
-      f.mesh.rotateY(Math.PI);
-      things.emit(prev.x, prev.y, prev.z, 3, 0.25, 0.3);
-      if (q >= 1) {
-        scene.remove(f.mesh);
-        flights.splice(k, 1);
+      // (the head runs out at the jet's speed; the tail leaves the nozzle once the 0.35 s burst is spent)
+      const head = Math.min(1, f.t / f.dur);
+      const tail = clamp((f.t - 0.35) / f.dur, 0, 1);
+      const U = f.mesh.material.uniforms;
+      U.uHead.value = head;
+      U.uTail.value = tail;
+      U.uT.value = f.t;
+      // spray off the jet: at its head while it flies, and here and there along it
+      jetPoint(f.from, f.to, f.arc, head, _jp);
+      if (head < 1) things.emit(_jp.x, _jp.y, _jp.z, 2, 0.5, 0.6);
+      if (Math.random() < 0.5 && head > tail) {
+        jetPoint(f.from, f.to, f.arc, tail + Math.random() * (head - tail), _jp);
+        things.emit(_jp.x, _jp.y, _jp.z, 1, 0.4, 0.2);
+      }
+      if (head >= 1 && !f.hit) {
+        f.hit = true;
         impact(f);
       }
+      if (tail >= 1) {
+        scene.remove(f.mesh);
+        for (const m of [f.mesh, ...f.mesh.children]) { m.geometry.dispose(); m.material.dispose(); }
+        flights.splice(k, 1);
+      }
+    }
+    // (the water running down the tower after a hit: drips off its face for a moment)
+    for (let k = drips.length - 1; k >= 0; k--) {
+      const dr = drips[k];
+      dr.t += dt;
+      if (Math.random() < 0.8) things.emit(dr.at.x + (Math.random() - 0.5) * 1.6, dr.at.y - Math.random() * 2, dr.at.z + 0.6, 2, 0.15, -0.5, dr.big);
+      if (dr.t > 1.6) drips.splice(k, 1);
     }
     for (let k = flashes.length - 1; k >= 0; k--) {
       const fx = flashes[k];
       fx.t += dt;
-      const q = fx.t / 0.45;
-      fx.fl.scale.setScalar(1.2 + q * 5.5);
-      fx.fl.material.opacity = Math.max(0, 0.95 * (1 - q));
-      fx.fl.material.color.lerpColors(new THREE.Color('#fff1b0'), new THREE.Color('#d2451e'), Math.min(1, q * 1.4));
+      const q = fx.t / fx.life;
+      fx.fl.scale.setScalar(fx.s0 + Math.sqrt(Math.min(1, q)) * (fx.s1 - fx.s0));
+      fx.fl.material.opacity = Math.max(0, fx.op * (q < 0.25 ? 1 : 1 - (q - 0.25) / 0.75));
+      fx.fl.material.rotation += dt * 0.4;
+      fx.fl.position.y -= fx.sink * dt;
       if (q >= 1) {
         scene.remove(fx.fl);
         fx.fl.material.dispose();
@@ -894,7 +1059,7 @@ function createRide(K, d) {
   // ---------------------------------------------------------------------------------------------- the overlay
   ov.innerHTML = `<div class="rv-top"><div class="rv-count"><span class="rv-ring"></span><b>0</b><small>/ ${who.length}</small></div><div class="rv-bar"><i></i></div><button class="rv-pause" aria-label="${S.pause}">❚❚</button></div>
     <div class="rv-faces"></div><div class="rv-hint"></div><div class="rv-pop"></div><div class="rv-hurt"></div>
-    <div class="rv-card"></div><div class="rv-aim"></div><div class="rv-paused"><div><h2>${S.rvPaused}</h2><button class="rv-on">${S.rvResume}</button><button class="rv-off">${S.rvQuit}</button></div></div>`;
+    <div class="rv-card"></div><div class="rv-scope"><svg viewBox="0 0 132 132" aria-hidden="true"><circle class="ring" cx="66" cy="66" r="54"/><g class="ticks">${Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; const r1 = i % 3 ? 49 : 44; return `<line x1="${(66 + Math.cos(a) * r1).toFixed(1)}" y1="${(66 + Math.sin(a) * r1).toFixed(1)}" x2="${(66 + Math.cos(a) * 54).toFixed(1)}" y2="${(66 + Math.sin(a) * 54).toFixed(1)}"/>`; }).join('')}</g><g class="cross"><line x1="66" y1="24" x2="66" y2="57"/><line x1="66" y1="75" x2="66" y2="108"/><line x1="24" y1="66" x2="57" y2="66"/><line x1="75" y1="66" x2="108" y2="66"/></g><path class="brk" d="M10 32 V10 H32 M100 10 H122 V32 M122 100 V122 H100 M32 122 H10 V100"/><circle class="dot" cx="66" cy="66" r="3.5"/></svg><div class="rng"></div></div><button class="rv-fire" aria-label="${S.rvFire}"><svg class="pips" viewBox="0 0 112 112"></svg><span class="in"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2.5c-.4 0-.7.2-.9.5C9.4 5.6 5.5 10.9 5.5 14.6a6.5 6.5 0 0 0 13 0c0-3.7-3.9-9-5.6-11.6-.2-.3-.5-.5-.9-.5z"/><path fill="#9feaf5" d="M9.2 14.4c.3 1.6 1.4 2.7 3 3" stroke="#0b6f8a" stroke-width="1.6" stroke-linecap="round"/></svg><span>${S.rvFire}</span></span></button><div class="rv-paused"><div><h2>${S.rvPaused}</h2><button class="rv-on">${S.rvResume}</button><button class="rv-off">${S.rvQuit}</button></div></div>`;
   const countEl = ov.querySelector('.rv-count');
   const countB = countEl.querySelector('b');
   const barEl = ov.querySelector('.rv-bar i');
@@ -905,12 +1070,26 @@ function createRide(K, d) {
   const cardEl = ov.querySelector('.rv-card');
   const pausedEl = ov.querySelector('.rv-paused');
   const faceUrl = (id, n = 96) => portraitDataUrl(id, n) || '';
-  const aimEl = ov.querySelector('.rv-aim');
+  const scopeEl = ov.querySelector('.rv-scope');
+  const scopeRng = scopeEl.querySelector('.rng');
+  const fireEl = ov.querySelector('.rv-fire');
   function setBombs() {
     if (!raid) return;
     countB.textContent = S.rvBombsLeft(bombsLeft);
     countEl.querySelector('small').textContent = '';
     countEl.querySelector('.rv-ring').style.display = 'none';
+    // (the fire button's ring: one bead of water for each shot, lit while it's still yours)
+    const n = Math.max(1, bombs0);
+    const gap = n > 1 ? 0.16 : 0;
+    let arcs = '';
+    for (let i = 0; i < n; i++) {
+      const a0 = -Math.PI / 2 + (i / n) * Math.PI * 2 + gap / 2;
+      const a1 = -Math.PI / 2 + ((i + 1) / n) * Math.PI * 2 - gap / 2;
+      const P = (a) => `${(56 + Math.cos(a) * 52).toFixed(1)} ${(56 + Math.sin(a) * 52).toFixed(1)}`;
+      arcs += `<path class="${i < bombsLeft ? 'full' : 'empty'}" d="M${P(a0)} A52 52 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${P(a1)}"/>`;
+    }
+    fireEl.querySelector('.pips').innerHTML = arcs;
+    rider.setWater?.(bombs0 ? bombsLeft / bombs0 : 0);
   }
   facesEl.innerHTML = who.map((id, i) => `<img src="${faceUrl(id, 64)}" alt="" data-i="${i}" class="out">`).join('');
   let popT = 0;
@@ -982,32 +1161,30 @@ function createRide(K, d) {
     down = { x: e.clientX, y: e.clientY, hx: hp.x, hy: hp.y, t: performance.now(), used: false };
   };
   const hostXY = (e) => { const r = host.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-  function showAim(on) {
-    aimEl.classList.toggle('on', !!on);
-    if (on) aimEl.style.transform = `translate(${aimAt.x - 28}px, ${aimAt.y - 28}px)`;
-  }
+  let aimPerPx = 0.05;   // (m of tower a pixel of thumb is worth: from the tower's size on screen, each frame)
   const onMoveP = (e) => {
-    if (aiming) {
-      Object.assign(aimAt, hostXY(e));
-      showAim(true);
+    if (!down) return;
+    const dx = e.clientX - down.x;
+    const dy = e.clientY - down.y;
+    if (down.used === 'aim') {
+      // dragging the scope up or down the tower: it follows the thumb at the tower's own scale on the screen
+      aimV -= (e.clientY - down.ly) * aimPerPx;
+      down.ly = e.clientY;
       return;
     }
-    if (!down || down.used) return;
-    const dx = e.clientX - down.x;
-    if (Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(e.clientY - down.y)) {
+    if (down.used) return;
+    // (Saturday, the scope up: up and down aims, left and right still steers)
+    if (aiming && Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx) * 1.1) {
+      down.used = 'aim';
+      down.ly = e.clientY;
+      return;
+    }
+    if (Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy)) {
       down.used = true;
       move(dx > 0 ? 1 : -1);
     }
   };
   const onUp = (e) => {
-    if (aiming) {
-      Object.assign(aimAt, hostXY(e));
-      aiming = false;
-      showAim(false);
-      throwBomb(aimAt.x, aimAt.y);
-      down = null;
-      return;
-    }
     if (!down) return;
     const dx = e.clientX - down.x;
     if (!down.used && Math.abs(dx) < 14 && performance.now() - down.t < 350) {
@@ -1016,6 +1193,17 @@ function createRide(K, d) {
     }
     down = null;
   };
+  // the fire button: fires on the touch (no wait for the finger to lift), pressed in while held
+  const onFire = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    fireEl.classList.add('press');
+    fireNow();
+  };
+  const onFireUp = () => fireEl.classList.remove('press');
+  fireEl.addEventListener('pointerdown', onFire);
+  fireEl.addEventListener('pointerup', onFireUp);
+  fireEl.addEventListener('pointerleave', onFireUp);
   const onKey = (e) => {
     if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') move(-1);
     else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') move(1);
@@ -1024,13 +1212,10 @@ function createRide(K, d) {
   host.addEventListener('pointerdown', onDown);
   host.addEventListener('pointermove', onMoveP);
   host.addEventListener('pointerup', onUp);
-  // (the phone took the touch away, e.g. a notification: no throw, the aim ends)
+  // (the phone took the touch away, e.g. a notification: the drag ends)
   const onCancel = () => {
     down = null;
-    if (aiming) {
-      aiming = false;
-      showAim(false);
-    }
+    fireEl.classList.remove('press');
   };
   host.addEventListener('pointercancel', onCancel);
   addEventListener('keydown', onKey);
@@ -1180,6 +1365,12 @@ function createRide(K, d) {
     } else if (d.debugCam === 'back') {
       p = new THREE.Vector3(x + 0.6, 1.9, 4.2);
       l = new THREE.Vector3(x, 0.9, 0);
+    } else if (d.debugCam === 'side') {   // (tests: his gear from his right, close)
+      p = new THREE.Vector3(x + 1.9, 1.75, -1.1);
+      l = new THREE.Vector3(x, 1.35, 0);
+    } else if (d.debugCam === 'left') {
+      p = new THREE.Vector3(x - 1.9, 1.75, -0.6);
+      l = new THREE.Vector3(x, 1.35, 0);
     }
     const a = phase === 'run' ? 1 - Math.exp(-dt * 9) : phase === 'dive' ? 1 - Math.exp(-dt * 14) : 1 - Math.exp(-dt * 4);
     cam.pos.lerp(p, a);
@@ -1240,28 +1431,24 @@ function createRide(K, d) {
       if (pilotOn) pilot();
       if (raid) {
         const tgt = targetIsle();
-        if (tgt && bombsLeft > 0 && !aimHintSaid) {
+        const can = !!tgt && bombsLeft > 0;
+        if (can && !aimHintSaid) {
           aimHintSaid = true;
           if (!thrown) hint(S.rvAimHint);
-        } else if (!tgt && aimHintSaid && !aiming) hint(null);
-        if (!tgt && aiming) {
-          aiming = false;
-          showAim(false);
-        }
-        if (tgt && bombsLeft > 0 && down && !down.used && !aiming && performance.now() - down.t > 160) {
+        } else if (!tgt && aimHintSaid) hint(null);
+        // the scope comes up on the tallest tower by itself, two thirds of the way up it (his thumb moves it from there)
+        if (can && !aiming) {
           aiming = true;
-          down.used = true;
-          aimAt.x = down.hx;
-          aimAt.y = down.hy;
-          showAim(true);
+          lockT = 0;
+          audio.play('click');
         }
-        if (pilotOn && tgt && bombsLeft > 0 && tgt.z - dist < AIM_FAR - 25 - bombsLeft * 12 && !pilotThrew.has(`${tgt.crew}${bombsLeft}`)) {
-          // (tests: the autopilot throws at the tower's middle)
+        if (!can && aiming) aiming = false;
+        if (pilotOn && can && tgt.z - dist < AIM_FAR - 25 - bombsLeft * 12 && !pilotThrew.has(`${tgt.crew}${bombsLeft}`)) {
+          // (tests: the autopilot fires at the tower's middle)
           pilotThrew.add(`${tgt.crew}${bombsLeft}`);
           const h = Math.max(4, tgt.island.top - 3.6);
-          const pt = towerPoint(tgt, 0, h * (0.3 + 0.2 * bombsLeft));
-          const v3 = pt.clone().project(camera);
-          throwBomb((v3.x * 0.5 + 0.5) * host.clientWidth, (-v3.y * 0.5 + 0.5) * host.clientHeight);
+          const v = h * (0.3 + 0.2 * bombsLeft);
+          fireAt(tgt, floorMidU(tgt, v), v);
         }
       }
       const rap = course.rapids && dist > course.rapids.from && dist < course.rapids.to;
@@ -1374,10 +1561,38 @@ function createRide(K, d) {
     }
     if (raid) {
       stepBombs(dt);
-      // the bazooka points where he aims (or at the tallest tower coming up; else down the river, a little up)
+      // the scope: on the tower where his thumb put it, with the board's sway on it (it drifts as he bobs and swings as
+      // he carves: aim while you surf); the cannon points there (else at the tower coming up, else down the river)
       const tgt = targetIsle();
       let P = null;
-      if (tgt && aiming) P = aimOnTower(tgt, aimAt.x, aimAt.y)?.P || null;
+      if (tgt && aiming) {
+        lockT += dt;
+        // (only the part of the tower on the screen: under the top bar, over the fire button)
+        const [vLo, vHi] = visibleSpan(tgt);
+        if (lockT === dt) aimV = vLo + (vHi - vLo) * 0.6;
+        aimV = clamp(aimV, vLo, vHi);
+        const su = Math.sin(t * 1.7) * 0.32 + Math.sin(t * 3.3 + 1) * 0.1 + leanV * 1.4;
+        const sv = Math.sin(t * 2.2 + 0.7) * 0.28 + rapK * Math.sin(t * 9) * 0.35;
+        aimU = floorMidU(tgt, aimV) + su;
+        aimVv = aimV + sv;
+        P = towerPoint(tgt, aimU, aimVv);
+        onTarget = floorAt(tgt.floors, aimU, aimVv) >= 0;
+        const s0 = P.clone().project(camera);
+        const s1 = towerPoint(tgt, aimU, aimVv + 1).project(camera);
+        const W = host.clientWidth;
+        const Hh = host.clientHeight;
+        aimPerPx = 1 / Math.max(3, Math.abs(s1.y - s0.y) * 0.5 * Hh);
+        scopeEl.style.transform = `translate(${((s0.x * 0.5 + 0.5) * W).toFixed(1)}px, ${((-s0.y * 0.5 + 0.5) * Hh).toFixed(1)}px)`;
+        scopeEl.classList.add('on');
+        scopeEl.classList.toggle('lock', lockT > 0.12);
+        scopeEl.classList.toggle('miss', !onTarget);
+        scopeRng.textContent = `${Math.round(tgt.z - dist)} m`;
+      } else {
+        scopeEl.classList.remove('on', 'lock');
+      }
+      fireEl.classList.toggle('show', phase === 'run');
+      fireEl.classList.toggle('off', !aiming);
+      fireEl.classList.toggle('pulse', aiming && !thrown);
       if (tgt && !P) P = towerPoint(tgt, 0, Math.max(2, Math.min(18, (tgt.island.top - 3.6) * 0.5)));
       rider.aim(P ? P.clone().sub(rider.muzzle(_aimFrom)) : _ahead);
     }
@@ -1419,8 +1634,7 @@ function createRide(K, d) {
     raf = requestAnimationFrame(loop);
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    // (aiming: time slows, so a throw and a dodge both fit)
-    if (!paused) step(aiming ? dt * 0.25 : dt);
+    if (!paused) step(dt);
     world.reflect(stage.renderer, camera);
     stage.render(dt);
   }
@@ -1508,13 +1722,9 @@ function createRide(K, d) {
     for (const f of flights) { scene.remove(f.mesh); disposeTree(f.mesh, done); }
     for (const b of debris) { scene.remove(b.g); disposeTree(b.g, done); }
     for (const root of [rider.group, start.group, island.group]) disposeTree(root, done);
-    bombGeo.dispose();
     for (const fx of flashes) { scene.remove(fx.fl); fx.fl.material.dispose(); }
-    flashGeo.dispose();
-    bombMat.dispose();
-    fuseMat.dispose();
-    noseMat.dispose();
-    for (const g of [rocketBody, rocketNose, rocketFin, rocketFlame]) g.dispose();
+    burstTex.dispose();
+    jetMat.dispose();
     if (raid) setBend(1);
     camera.fov = FOV0;
     camera.updateProjectionMatrix();
@@ -1533,7 +1743,7 @@ function createRide(K, d) {
     pause: () => setPaused(true),
     resume: () => setPaused(false),
     /** For tests: where the ride stands. */
-    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })) }),
+    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })) }),
     autopilot(on) { pilotOn = !!on; },
     /** For tests (Saturday): where on screen (host px) the tallest tower stands at a share of its height, or null. */
     towerScreen(frac = 0.5) {

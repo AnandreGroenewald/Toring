@@ -156,11 +156,12 @@ export function createRider(bend = (m) => m, model = null) {
   torso.rotation.y = 0.75;
   head.rotation.y = 0.8;
 
-  // (Saturday) the bazooka on his right shoulder: an olive tube with a flared back, a sight, a grip and a warning band;
-  // it turns to where he aims, kicks back when it fires (a flash at the front, smoke out of the back)
-  const gunMat = bend(std('#6f7f45', { roughness: 0.5, metalness: 0.25 }));
-  const gunDark = bend(std('#2a2f22', { roughness: 0.5, metalness: 0.4 }));
-  const gunBand = bend(std('#ffc21a', { roughness: 0.4 }));
+  // (Saturday) the water cannon on his right shoulder (the Blender one when it's loaded; this simple one else): it turns
+  // to where he aims and kicks back when it fires (a burst of spray at the nozzle); its tank rides on his back, a hose
+  // between them, the water in the tank going down as he fires
+  const gunMat = bend(std('#f2f5f7', { roughness: 0.25 }));
+  const gunDark = bend(std('#c9d3dc', { roughness: 0.2, metalness: 0.85 }));
+  const gunBand = bend(std('#0fa3bd', { roughness: 0.2 }));
   const gun = new THREE.Group();   // (its own pivot on the shoulder: yaw on the group, pitch on the tube)
   gun.position.set(0.02, 0.76, 0.27);   // (on top of his back shoulder, in the chest's own turn)
   gun.scale.setScalar(1.2);
@@ -189,17 +190,83 @@ export function createRider(bend = (m) => m, model = null) {
   grip.position.set(0, -0.13, -0.12);
   grip.rotation.x = 0.25;
   tube.add(grip);
-  const flash = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), new THREE.MeshBasicMaterial({ color: '#ffd27a', transparent: true, opacity: 0, depthWrite: false, fog: false }));
-  flash.position.z = -0.78;
+  const flash = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), new THREE.MeshBasicMaterial({ color: '#d9f7ff', transparent: true, opacity: 0, depthWrite: false, fog: false }));
+  flash.position.z = -0.74;   // (the nozzle's mouth)
   tube.add(flash);
   gun.visible = false;
   torso.add(gun);
+  // the hose from the tank's top to the cannon's back: a tube redrawn each frame between the two (as the cannon turns)
+  const HOSE_N = 14;
+  const HOSE_R = 6;
+  const hoseGeo = new THREE.BufferGeometry();
+  const hosePos = new Float32Array((HOSE_N + 1) * HOSE_R * 3);
+  const hoseNrm = new Float32Array((HOSE_N + 1) * HOSE_R * 3);
+  const hoseIdx = [];
+  for (let i = 0; i < HOSE_N; i++) {
+    for (let j = 0; j < HOSE_R; j++) {
+      const a = i * HOSE_R + j;
+      const b = i * HOSE_R + ((j + 1) % HOSE_R);
+      const c = a + HOSE_R;
+      const d = b + HOSE_R;
+      hoseIdx.push(a, c, b, b, c, d);
+    }
+  }
+  hoseGeo.setIndex(hoseIdx);
+  hoseGeo.setAttribute('position', new THREE.BufferAttribute(hosePos, 3));
+  hoseGeo.setAttribute('normal', new THREE.BufferAttribute(hoseNrm, 3));
+  const hoseMat = bend(std('#1d2c36', { roughness: 0.45, metalness: 0.1 }));
+  const hose = new THREE.Mesh(hoseGeo, hoseMat);
+  hose.visible = false;
+  hose.frustumCulled = false;
+  torso.add(hose);
+  const HOSE_FROM = new THREE.Vector3(-0.15, 0.7, 0.07);   // (the tank's top, in the chest's frame)
+  const _h = { a: new THREE.Vector3(), b: new THREE.Vector3(), c1: new THREE.Vector3(), c2: new THREE.Vector3(), p: new THREE.Vector3(), d: new THREE.Vector3(), n: new THREE.Vector3(), m: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0), port: new THREE.Vector3() };
+  function drawHose() {
+    const H = _h;
+    H.a.copy(HOSE_FROM);
+    // (the cannon's back port, in the chest's frame)
+    H.port.set(0, 0, 0.45);
+    tube.updateWorldMatrix(true, false);
+    tube.localToWorld(H.port);
+    torso.worldToLocal(H.b.copy(H.port));
+    H.c1.copy(H.a).add(H.d.set(-0.06, 0.12, 0.05));
+    H.c2.copy(H.b).add(H.d.set(0, -0.06, 0.16));
+    for (let i = 0; i <= HOSE_N; i++) {
+      const s = i / HOSE_N;
+      const u = 1 - s;
+      H.p.copy(H.a).multiplyScalar(u * u * u).addScaledVector(H.c1, 3 * u * u * s).addScaledVector(H.c2, 3 * u * s * s).addScaledVector(H.b, s * s * s);
+      H.d.copy(H.c1).sub(H.a).multiplyScalar(3 * u * u).addScaledVector(H.m.copy(H.c2).sub(H.c1), 6 * u * s).addScaledVector(H.n.copy(H.b).sub(H.c2), 3 * s * s).normalize();
+      H.n.crossVectors(H.d, H.up);
+      if (H.n.lengthSq() < 1e-6) H.n.set(1, 0, 0);
+      H.n.normalize();
+      H.m.crossVectors(H.n, H.d).normalize();
+      for (let j = 0; j < HOSE_R; j++) {
+        const ang = (j / HOSE_R) * Math.PI * 2;
+        const cx = Math.cos(ang);
+        const sy = Math.sin(ang);
+        const k = (i * HOSE_R + j) * 3;
+        const nx = H.n.x * cx + H.m.x * sy;
+        const ny = H.n.y * cx + H.m.y * sy;
+        const nz = H.n.z * cx + H.m.z * sy;
+        hoseNrm[k] = nx;
+        hoseNrm[k + 1] = ny;
+        hoseNrm[k + 2] = nz;
+        hosePos[k] = H.p.x + nx * 0.022;
+        hosePos[k + 1] = H.p.y + ny * 0.022;
+        hosePos[k + 2] = H.p.z + nz * 0.022;
+      }
+    }
+    hoseGeo.attributes.position.needsUpdate = true;
+    hoseGeo.attributes.normal.needsUpdate = true;
+  }
+  let tank = null;   // (the Blender tank on his back and its water)
+  let tankWater = null;
   let kick = 0;
   let flashT = 0;
   const aimYaw = { v: 0, to: 0 };
   const aimPitch = { v: 0.08, to: 0.08 };
 
-  const mats = [skin, vest, shirt, jeans, boot, hat, boardM, glove, gunMat, gunDark, gunBand];
+  const mats = [skin, vest, shirt, jeans, boot, hat, boardM, glove, gunMat, gunDark, gunBand, hoseMat];
   // (the Blender builder when it's there: each joint keeps its place and its turn; its simple shape gives way to the
   // model's part, made in the same frame: art/blender/builder.py)
   if (model) {
@@ -237,11 +304,19 @@ export function createRider(bend = (m) => m, model = null) {
     board.geometry = EMPTY;
     const bp = part('board');
     if (bp) tilt.add(bp);
-    const gp = part('bazooka');
+    const gp = part('cannon');
     if (gp) {
       for (const m of [barrel, muzzleRing, sight, grip, ...tube.children.filter((c) => c.isMesh && c.geometry.type === 'CylinderGeometry' && c !== barrel)]) m.visible = false;
-      bell.visible = false;   // (kept: where the back-blast comes out)
+      bell.visible = false;
       tube.add(gp);
+    }
+    tank = part('tank');
+    const tw = model.getObjectByName('tankwater');
+    if (tank && tw) {
+      tankWater = tw.clone(true);   // (keeps its place: its pivot is the tank's floor)
+      tankWater.traverse((o) => { if (o.isMesh && !mats.includes(o.material)) mats.push(o.material); });
+      tank.visible = tankWater.visible = false;
+      torso.add(tank, tankWater);
     }
   }
   group.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; } });
@@ -292,24 +367,30 @@ export function createRider(bend = (m) => m, model = null) {
         armF.rotation.x = -1.45 + aimPitch.v * 0.4;
         armF.rotation.z = 0.9;
         flashT = Math.max(0, flashT - dt);
-        flash.material.opacity = flashT > 0 ? Math.min(1, flashT / 0.06) : 0;
-        flash.scale.setScalar(1 + (0.12 - flashT) * 8);
+        flash.material.opacity = flashT > 0 ? Math.min(0.85, flashT / 0.08) : 0;
+        flash.scale.setScalar(1 + (0.16 - flashT) * 7);
+        drawHose();
       }
     },
-    /** (Saturday) the bazooka on his shoulder, or not. */
+    /** (Saturday) the water cannon on his shoulder and its tank on his back, or not. */
     setGun(on) {
-      gun.visible = !!on;
+      gun.visible = hose.visible = !!on;
+      if (tank) tank.visible = tankWater.visible = !!on;
     },
-    /** Points the bazooka along `dir` (a world direction; the rider's group isn't turned). */
+    /** How full the tank is (0..1): the water in it drops as he fires. */
+    setWater(k) {
+      if (tankWater) tankWater.scale.y = Math.max(0.03, Math.min(1, k));
+    },
+    /** Points the cannon along `dir` (a world direction; the rider's group isn't turned). */
     aim(dir) {
       const h = Math.hypot(dir.x, dir.z) || 1;
       aimYaw.to = Math.atan2(-dir.x, -dir.z);
       aimPitch.to = Math.max(-0.2, Math.min(1.1, Math.atan2(dir.y, h)));
     },
-    /** Fires: the flash, the kick. Returns where the shot leaves the tube (world). */
+    /** Fires: the burst at the nozzle, the kick. Returns where the jet leaves the nozzle (world). */
     fire() {
       kick = 1;
-      flashT = 0.12;
+      flashT = 0.16;
       return this.muzzle();
     },
     /** The tube's front and back ends (world): where a shot leaves, where the back-blast comes out. */

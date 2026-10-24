@@ -26,7 +26,7 @@ const THROTTLE = {
   monkey: 300, shoo: 250, clown: 250, thief: 300, escape: 400, caught: 400,
   room: 45, chute: 160, milestone: 500, gold: 250, board: 120, pop: 120,
   horn: 1000, drum: 150, clash: 120, fling: 400,
-  launch: 250, boom: 120,
+  jet: 250, splat: 120,
 };
 // At the per-name limit these steal the oldest voice; all others skip the new one.
 const STEAL = new Set([
@@ -42,7 +42,7 @@ const LEVEL = {
   monkey: 0.85, shoo: 0.75, clown: 0.55, thief: 0.62, escape: 0.34, caught: 0.5,
   room: 0.85, chute: 0.55, milestone: 0.6, gold: 0.7, board: 0.75, pop: 0.5,
   horn: 0.38, drum: 0.48, clash: 0.5, fling: 2.2,
-  launch: 0.9, boom: 0.8,
+  jet: 0.95, splat: 0.85,
 };
 
 const PENTA = [0, 2, 4, 7, 9];   // major pentatonic (semitones)
@@ -338,32 +338,34 @@ const SOUNDS = {
     v.noise(B.white, t + 0.42, 0.07, bp);
   },
 
-  // (1.20) Saturday's bazooka: the launch (a hollow thump, the rocket's hiss leaving, its whoosh away) and the blast on
-  // the tower (a deep boom, a crack on top, debris rattling after)
-  launch(v, t, o, B) {
-    const th = v.osc('sine', 120, t, 0.22, v.env(v.out, t, 0.9, 0.002, 0.16));
-    th.frequency.exponentialRampToValueAtTime(48, t + 0.18);
-    const pop = v.filter('bandpass', 900, 1.2, v.env(v.out, t, 0.55, 0.001, 0.05));
-    v.noise(B.white, t, 0.07, pop);
-    const hiss = v.filter('highpass', 3000, 0.6, v.envHold(v.out, t + 0.02, 0.32, 0.01, 0.2, 0.35));
-    v.noise(B.white, t + 0.02, 0.58, hiss);
-    whoosh(v, B, t + 0.05, 0.7, 1800, 380, 1.1, 0.5, 0.1);
+  // (1.20) Saturday's water cannon: the blast (the pump's thunk, a hard hiss of water under pressure leaving the
+  // nozzle and tearing away down the jet) and its hit on the tower (a heavy wet slap, the spray, water raining after)
+  jet(v, t, o, B) {
+    const th = v.osc('sine', 150, t, 0.16, v.env(v.out, t, 0.8, 0.002, 0.12));
+    th.frequency.exponentialRampToValueAtTime(60, t + 0.12);
+    const clack = v.filter('bandpass', 1300, 2.5, v.env(v.out, t, 0.4, 0.001, 0.03));
+    v.noise(B.white, t, 0.04, clack);
+    const hiss = v.filter('bandpass', 4200, 0.8, v.envHold(v.out, t + 0.01, 0.75, 0.008, 0.32, 0.4));
+    hiss.frequency.setValueAtTime(5200, t + 0.01);
+    hiss.frequency.exponentialRampToValueAtTime(2600, t + 0.7);
+    v.noise(B.white, t + 0.01, 0.75, hiss);
+    const roar = v.filter('lowpass', 900, 0.7, v.envHold(v.out, t + 0.02, 0.35, 0.02, 0.3, 0.3));
+    v.noise(B.white, t + 0.02, 0.64, roar);
+    whoosh(v, B, t + 0.08, 0.6, 2400, 600, 1.0, 0.35, 0.08);
   },
-  boom(v, t, o, B) {
+  splat(v, t, o, B) {
     const I = clamp(num(o.intensity, 1), 0, 1);
     v.out.gain.value *= 0.5 + 0.5 * I;
-    const body = v.osc('sine', 85, t, 0.75, v.env(v.out, t, 1.0, 0.003, 0.6));
-    body.frequency.exponentialRampToValueAtTime(32, t + 0.6);
-    const sub = v.osc('triangle', 55, t, 0.5, v.env(v.out, t, 0.6, 0.005, 0.4));
-    sub.frequency.exponentialRampToValueAtTime(28, t + 0.45);
-    const crack = v.filter('bandpass', 1800, 0.8, v.env(v.out, t, 0.9, 0.001, 0.09));
-    v.noise(B.white, t, 0.12, crack);
-    const rumble = v.filter('lowpass', 520, 0.7, v.envHold(v.out, t + 0.02, 0.55, 0.02, 0.25, 0.7));
-    v.noise(B.white, t + 0.02, 1.0, rumble);
-    for (let i = 0; i < 6; i++) {
-      const dt = 0.25 + i * rand(0.07, 0.13);
-      const bp = v.filter('bandpass', rand(1400, 3200), 3, v.env(v.out, t + dt, rand(0.08, 0.18), 0.001, 0.03));
-      v.noise(B.white, t + dt, 0.04, bp);
+    const body = v.osc('sine', 110, t, 0.35, v.env(v.out, t, 0.9, 0.002, 0.28));
+    body.frequency.exponentialRampToValueAtTime(42, t + 0.3);
+    const slap = v.filter('bandpass', 700, 0.9, v.env(v.out, t, 1.0, 0.001, 0.12));
+    v.noise(B.white, t, 0.14, slap);
+    whoosh(v, B, t + 0.01, 0.65, 3600, 420, 0.9, 0.85, 0.01);
+    for (let i = 0; i < 9; i++) {
+      const st = t + 0.12 + i * rand(0.04, 0.09);
+      const f = rand(900, 2300);
+      const d = v.osc('sine', f, st, 0.06, v.env(v.out, st, rand(0.06, 0.13), 0.002, 0.045));
+      d.frequency.exponentialRampToValueAtTime(f * 1.7, st + 0.03);
     }
   },
 

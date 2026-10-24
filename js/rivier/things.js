@@ -283,7 +283,8 @@ export function createThings(scene, pieces) {
   scene.add(spray);
   let next = 0;
   for (let i = 0; i < N; i++) pos[i * 3 + 1] = -50;
-  function emit(x, y, z, n, spread = 1.4, up = 2.6) {
+  /** Spray: `n` drops from (x, y, z), `spread` sideways, `up` upward (m/s); `big` scales them (far-off splashes read). */
+  function emit(x, y, z, n, spread = 1.4, up = 2.6, big = 1) {
     busy = 2;
     for (let k = 0; k < n; k++) {
       const i = next++ % N;
@@ -298,7 +299,7 @@ export function createThings(scene, pieces) {
       vel[i * 3 + 1] = up * (0.6 + Math.random() * 0.7) * (p ? 0.5 : 1);
       vel[i * 3 + 2] = (1 + Math.random() * 2.5) * s;
       life[i] = life0[i] = p ? 0.7 + Math.random() * 0.6 : 0.5 + Math.random() * 0.5;
-      size[i] = p ? (0.6 + Math.random() * 0.5) * Math.min(1.6, 0.5 + spread * 0.5) : 0.07 + Math.random() ** 2 * 0.22;
+      size[i] = (p ? (0.6 + Math.random() * 0.5) * Math.min(1.6, 0.5 + spread * 0.5) : 0.07 + Math.random() ** 2 * 0.22) * big;
     }
   }
   let busy = 0;   // (frames left to upload: none once every drop has gone)

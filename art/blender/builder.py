@@ -1,9 +1,9 @@
 # (1.20) The rider: Stapel's builder on his surfboard (yellow hard hat, orange hi-vis vest with silver stripes and the
-# X on the back, navy shirt, jeans, brown work boots, yellow gloves), and his bazooka. Each part is its own object at
+# X on the back, navy shirt, jeans, brown work boots, yellow gloves), and his water cannon with its tank. Each part is its own object at
 # the world's origin, made in the frame of the joint js/rivier/rider.js turns it by (three's axes: x = his front,
 # y = up, z = his left/right; a limb hangs from its joint down three's -y). Blender's (x, y, z) = three's (x, -z, y).
 # Parts: thigh, shin (with the boot), pelvis, torso (vest, stripes), head (face, hard hat), upperarm, forearm (glove),
-# board, bazooka. usage: Blender -b -P art/blender/builder.py -- img/models/builder.glb
+# board, cannon (the water cannon), tank (on his back), tankwater. usage: Blender -b -P art/blender/builder.py -- img/models/builder.glb
 import sys, os, math
 sys.path.insert(0, os.path.dirname(__file__))
 from common import reset, out_path, material, skin_body, apply, prim, join, pivot, export, detail, bake_set, high_copy
@@ -25,9 +25,6 @@ board_white = material('b_board', '#f6f1e6', rough=0.3)
 board_yellow = material('b_boardstripe', '#ffbf1a', rough=0.3)
 board_navy = material('b_boardnavy', '#1d2b45', rough=0.3)
 board_red = material('b_boardred', '#e8462f', rough=0.3)
-gun_olive = material('b_gun', '#6f7f45', rough=0.5, metal=0.25)
-gun_dark = material('b_gundark', '#2a2f22', rough=0.45, metal=0.4)
-gun_band = material('b_gunband', '#ffc21a', rough=0.4)
 
 def T(x, y, z):
     """three's (x, y, z) as Blender's."""
@@ -124,19 +121,85 @@ for p in board.data.polygons:
         p.material_index = 3
 fin = prim('cube', 'fin', loc=T(0, -0.03, 0.95), scale=(0.012, 0.09, 0.08), rot=(0.3, 0, 0), mat=board_navy)
 BASE.append(('board', board, [fin]))
-# --- the bazooka: along three's -z (the muzzle), its pivot at the shoulder rest
-G = [prim('cyl', 'barrel', loc=(0, 0, 0), scale=(0.085, 0.085, 0.6), rot=(math.pi / 2, 0, 0), mat=gun_olive, vertices=18)]
-G.append(prim('cone', 'bell', loc=T(0, 0, 0.7), scale=(0.135, 0.135, 0.11), rot=(-math.pi / 2, 0, 0), mat=gun_dark, vertices=18, radius1=1, radius2=0.63, depth=2))
-G.append(prim('torus', 'muzzle', loc=T(0, 0, -0.6), scale=(0.09, 0.09, 0.09), rot=(math.pi / 2, 0, 0), mat=gun_dark, major_radius=1, minor_radius=0.25, major_segments=18, minor_segments=6))
-for z in (-0.18, -0.08):
-    G.append(prim('cyl', 'band', loc=T(0, 0, z), scale=(0.089, 0.089, 0.025), rot=(math.pi / 2, 0, 0), mat=gun_band, vertices=18))
-G.append(prim('cube', 'sight', loc=T(0.0, 0.11, -0.25), scale=(0.015, 0.045, 0.04), mat=gun_dark))
-G.append(prim('cube', 'grip', loc=T(0, -0.13, -0.12), scale=(0.025, 0.08, 0.03), rot=(0.25, 0, 0), mat=gun_dark))
-G.append(prim('cube', 'trigger', loc=T(0, -0.08, -0.02), scale=(0.02, 0.05, 0.03), mat=gun_dark))
-G.append(prim('cube', 'rest', loc=T(0, -0.09, 0.22), scale=(0.03, 0.05, 0.1), mat=gun_dark))
-gun = join(G, 'bazooka')
-pivot(gun, (0, 0, 0))
-parts.append(gun)
+# --- the water cannon (Saturday): along three's -z (the nozzle), its pivot at the shoulder rest. A glossy white
+# shell with a clear pressure chamber you can see the water in (teal collars, brass rings), a chrome barrel and a brass
+# nozzle, an orange pump grip (his vest's colour), a scope on top with a cyan lens, a pressure gauge on its right side,
+# the hose's port at the back. (Blender's (x, y, z) = three's (x, -z, y); a cylinder stands along Blender's z.)
+import bpy
+cn_white = material('c_white', '#f2f5f7', rough=0.22)
+cn_teal = material('c_teal', '#0fa3bd', rough=0.18, metal=0.05)
+cn_chrome = material('c_chrome', '#dfe7ee', rough=0.16, metal=0.95)
+cn_brass = material('c_brass', '#e2aa3c', rough=0.22, metal=0.85)
+cn_black = material('c_black', '#16191e', rough=0.45, metal=0.2)
+cn_orange = material('c_orange', '#ff6a10', rough=0.4)
+cn_lens = material('c_lens', '#5ff2ff', rough=0.05, emit='#38e8ff', emit_k=2.0)
+cn_glass = material('c_glass', '#9feef7', rough=0.04)
+cn_glass.node_tree.nodes.get('Principled BSDF').inputs['Alpha'].default_value = 0.35
+cn_glass.blend_method = 'BLEND'
+cn_water = material('c_water', '#16c4e8', rough=0.08, emit='#0a9cc4', emit_k=0.4)
+cn_red = material('c_red', '#e3262b', rough=0.4)
+ALONG = (math.pi / 2, 0, 0)   # (a cylinder or ring along three's z)
+C = [apply(skin_body('cshell', [(*T(0, 0, 0.44), 0.07, 0.07), (*T(0, 0, 0.32), 0.12, 0.115), (*T(0, 0, 0.27), 0.122, 0.118)], [(0, 1), (1, 2)], smooth=2), tris=700)]
+C[0].data.materials.append(cn_white)
+C.append(apply(skin_body('cfront', [(*T(0, 0, 0.07), 0.122, 0.118), (*T(0, -0.005, -0.12), 0.095, 0.09), (*T(0, -0.01, -0.22), 0.06, 0.06)], [(0, 1), (1, 2)], smooth=2), tris=700))
+C[-1].data.materials.append(cn_white)
+# (the pressure chamber: teal collars at its ends, clear glass between with the water in it)
+for z in (0.085, 0.255):
+    C.append(prim('cyl', 'collar', loc=T(0, 0, z), scale=(0.13, 0.13, 0.018), rot=ALONG, mat=cn_teal, vertices=28))
+C.append(prim('cyl', 'window', loc=T(0, 0, 0.17), scale=(0.124, 0.124, 0.068), rot=ALONG, mat=cn_glass, vertices=28))
+C.append(prim('cyl', 'water', loc=T(0, -0.012, 0.17), scale=(0.108, 0.108, 0.066), rot=ALONG, mat=cn_water, vertices=24))
+for z in (0.06, 0.28):
+    C.append(prim('torus', 'ring', loc=T(0, 0, z), scale=(0.124, 0.124, 0.124), rot=ALONG, mat=cn_brass, major_radius=1, minor_radius=0.06, major_segments=28, minor_segments=6))
+# the barrel and the nozzle
+C.append(prim('cyl', 'barrel', loc=T(0, -0.01, -0.4), scale=(0.048, 0.048, 0.2), rot=ALONG, mat=cn_chrome, vertices=20))
+for z in (-0.3, -0.42, -0.54):
+    C.append(prim('torus', 'rib', loc=T(0, -0.01, z), scale=(0.05, 0.05, 0.05), rot=ALONG, mat=cn_chrome, major_radius=1, minor_radius=0.18, major_segments=20, minor_segments=6))
+C.append(prim('cone', 'nozzle', loc=T(0, -0.01, -0.65), scale=(0.07, 0.07, 0.06), rot=(-math.pi / 2, 0, 0), mat=cn_brass, vertices=20, radius1=0.62, radius2=1.0, depth=2))
+C.append(prim('torus', 'tip', loc=T(0, -0.01, -0.71), scale=(0.07, 0.07, 0.07), rot=ALONG, mat=cn_brass, major_radius=1, minor_radius=0.2, major_segments=20, minor_segments=6))
+C.append(prim('cyl', 'bore', loc=T(0, -0.01, -0.712), scale=(0.035, 0.035, 0.004), rot=ALONG, mat=cn_black, vertices=16))
+# the pump grip under the barrel (orange, ribbed) and the pistol grip
+C.append(prim('cyl', 'pump', loc=T(0, -0.1, -0.33), scale=(0.042, 0.042, 0.11), rot=ALONG, mat=cn_orange, vertices=16))
+for z in (-0.26, -0.3, -0.34, -0.38):
+    C.append(prim('torus', 'pumprib', loc=T(0, -0.1, z), scale=(0.044, 0.044, 0.044), rot=ALONG, mat=cn_orange, major_radius=1, minor_radius=0.15, major_segments=16, minor_segments=5))
+C.append(prim('cube', 'grip', loc=T(0, -0.15, 0.05), scale=(0.03, 0.075, 0.036), rot=(0.3, 0, 0), mat=cn_black))
+C.append(prim('cube', 'trigger', loc=T(0, -0.1, -0.03), scale=(0.012, 0.035, 0.012), mat=cn_orange))
+# the scope: a tube on two mounts, a cyan lens at the front
+C.append(prim('cyl', 'scope', loc=T(0, 0.17, -0.02), scale=(0.034, 0.034, 0.15), rot=ALONG, mat=cn_black, vertices=18))
+C.append(prim('cyl', 'scopebell', loc=T(0, 0.17, -0.17), scale=(0.045, 0.045, 0.03), rot=ALONG, mat=cn_black, vertices=18))
+C.append(prim('cyl', 'lens', loc=T(0, 0.17, -0.2), scale=(0.038, 0.038, 0.004), rot=ALONG, mat=cn_lens, vertices=18))
+C.append(prim('cyl', 'eyepiece', loc=T(0, 0.17, 0.14), scale=(0.03, 0.03, 0.02), rot=ALONG, mat=cn_black, vertices=16))
+for z in (-0.08, 0.06):
+    C.append(prim('cube', 'mount', loc=T(0, 0.125, z), scale=(0.018, 0.03, 0.016), mat=cn_black))
+# the pressure gauge on three's +x side of the chamber: a white face, a chrome rim, a red needle
+SIDE = (0, math.pi / 2, 0)   # (a disc facing three's +x)
+C.append(prim('cyl', 'gaugeface', loc=(0.137, -0.17, 0.0), scale=(0.045, 0.045, 0.01), rot=SIDE, mat=cn_white, vertices=20))
+C.append(prim('torus', 'gaugerim', loc=(0.139, -0.17, 0.0), scale=(0.046, 0.046, 0.046), rot=SIDE, mat=cn_chrome, major_radius=1, minor_radius=0.12, major_segments=20, minor_segments=5))
+C.append(prim('cube', 'needle', loc=(0.149, -0.17, 0.01), scale=(0.002, 0.004, 0.03), rot=(0.6, 0, 0), mat=cn_red))
+# the hose's port at the back
+C.append(prim('torus', 'port', loc=T(0, 0, 0.45), scale=(0.045, 0.045, 0.045), rot=ALONG, mat=cn_chrome, major_radius=1, minor_radius=0.3, major_segments=18, minor_segments=6))
+cannon = join(C, 'cannon')
+pivot(cannon, (0, 0, 0))
+parts.append(cannon)
+# --- the tank on his back (in the torso's frame: its middle a little behind his back, between the shoulders): a
+# clear shell (teal domes at its ends, black bands), a black frame against his back, straps over his shoulders, a
+# chrome cap; the water inside is its own part (the game lowers it as he fires)
+TX, TY = -0.2, 0.42
+K = [prim('cyl', 'tankshell', loc=T(TX, TY, 0), scale=(0.13, 0.13, 0.2), mat=cn_glass, vertices=28)]
+for dy in (-0.2, 0.2):
+    K.append(prim('sphere', 'tankend', loc=T(TX, TY + dy, 0), scale=(0.131, 0.131, 0.065), mat=cn_teal, segments=24, ring_count=10))
+for dy in (-0.12, 0.0, 0.12):
+    K.append(prim('torus', 'tankband', loc=T(TX, TY + dy, 0), scale=(0.134, 0.134, 0.134), mat=cn_black, major_radius=1, minor_radius=0.05, major_segments=28, minor_segments=5))
+K.append(prim('cyl', 'cap', loc=T(TX, TY + 0.28, 0), scale=(0.04, 0.04, 0.025), mat=cn_chrome, vertices=16))
+K.append(prim('cube', 'frame', loc=T(TX + 0.13, TY, 0), scale=(0.02, 0.2, 0.11), mat=cn_black))
+for s in (-1, 1):
+    K.append(prim('torus', 'strap', loc=T(-0.06, 0.5, s * 0.12), scale=(0.15, 0.15, 0.15), rot=ALONG, mat=cn_black, major_radius=1, minor_radius=0.09, major_segments=20, minor_segments=4))
+tank = join(K, 'tank')
+pivot(tank, (0, 0, 0))
+parts.append(tank)
+# (its pivot at its bottom: the game scales it down to the water that's left)
+tw = prim('cyl', 'tankwater', loc=T(TX, TY, 0), scale=(0.12, 0.12, 0.19), mat=cn_water, vertices=24)
+pivot(tw, T(TX, TY - 0.19, 0))
+parts.append(tw)
 # the bases baked into one texture set: denim weave on the jeans, a fabric grain on the vest and shirt, scuffed
 # leather, warm skin, a glossy board; soft shadows in every fold; the weave and grain in the normal map
 detail(jeans, 'stripes', scale=160, mix=0.22, color2='#3a5280')
