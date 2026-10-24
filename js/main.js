@@ -2757,7 +2757,7 @@ async function startRide() {
       },
       onDone: (res, next) => {
         closeRide();
-        if (next === 'build') startWeekTurn();
+        if (next === 'build') startWeekTurn({ from: 'ride' });
         else openSpanTown();
       },
     });
@@ -2775,7 +2775,7 @@ async function startRide() {
 let weekLease = null;      // the crane's lease for this build turn (with the server)
 let weekTurnBusy = false;
 const TURN_ERRORS = { busy: (r) => S.twBusy(r.by), noturn: () => S.twNoTurn, ticket: () => S.twTicketNeeded, kroning: () => S.twKroning, norepair: () => S.twNoRepair, crane: () => S.twCraneShut };
-async function startWeekTurn({ repair = false } = {}) {
+async function startWeekTurn({ repair = false, from = 'menu' } = {}) {
   if (weekTurnBusy) return;
   weekTurnBusy = true;
   let tt;
@@ -2786,7 +2786,9 @@ async function startWeekTurn({ repair = false } = {}) {
   }
   if (!tt || tt.error) {
     ui.toast((TURN_ERRORS[tt?.error] || (() => S.twOffline))(tt || {}), 3200);
-    if (screen !== 'menu') {
+    // (from the town or the ride's card: back to the town, not the menu)
+    if (from === 'town' || from === 'ride') openSpanTown();
+    else if (screen !== 'menu') {
       startIdle();
       showMenu();
     }
@@ -2804,7 +2806,12 @@ async function spanStart() {
   const code = params.get('span');
   if (/^[A-HJ-NP-Z2-9]{6}$/.test(code || '')) {
     spanLinkCode = code;
-    try { history.replaceState(history.state, '', location.pathname + location.hash); } catch { /* the address stays */ }
+    // (only the invite leaves the address: anything else in it stays)
+    try {
+      const q = new URLSearchParams(location.search);
+      q.delete('span');
+      history.replaceState(history.state, '', location.pathname + (q.toString() ? `?${q}` : '') + location.hash);
+    } catch { /* the address stays */ }
   }
   const ok = await span.start();
   if (screen === 'menu') ui.showMenu(menuModel());
@@ -2877,8 +2884,8 @@ async function openSpanTown() {
       scene: store.getSkins().wear.scene,
       ...v, myId: span.id, reducedMotion: !!settings.reducedMotion, clock: await spanTestClock(), plots: spanPlots(v),
       onRide: () => { closeRide(); startRide(); },
-      onBuild: () => { closeRide(); startWeekTurn(); },
-      onRepair: () => { closeRide(); startWeekTurn({ repair: true }); },
+      onBuild: () => { closeRide(); startWeekTurn({ from: 'town' }); },
+      onRepair: () => { closeRide(); startWeekTurn({ repair: true, from: 'town' }); },
       onBomb: () => { closeRide(); startRaid(); },
       onInvite: () => shareInvite(),
       onShareWin: () => {
