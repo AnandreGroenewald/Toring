@@ -1386,5 +1386,10 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
   `~/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P art/blender/<m>.py -- img/models/<m>.glb`;
   raise MODEL_V in js/rivier/models.js when a .glb changes). Every model has its code fallback. Plus the bazooka,
   fireworks for winners, background-skin skies, rushing water, speed feel. A 46 s video sent to his Telegram.
+- **AAA graphics pass (24 Oct evening, his "i really need it to be a AAA game"):** real sun shadows (a shadow catcher
+  over the custom water), planar water reflections on high quality, lacy foam, river mist / sun shafts / dust, splash
+  droplets with mist puffs, rebuilt sandstone (strata broken into blocks, crags, wet foot, dusty ledges), waterfalls with
+  foot mist, layered rondavels with bushy crowns, faceted boulders. npm 501/501, leak test flat, raid OK, mid 60 fps.
+  Asked him on Telegram whether the main stacking screen gets the same 3D look.
 - **Next:** his feedback; his play of checkpoints 1+2 at home:
   http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1; the release on his word (plan §8).
