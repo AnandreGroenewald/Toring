@@ -1414,5 +1414,8 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
   server (a forged ride can't top the ranking), a resent ride counts once, last week's rides don't spill into the new
   week, the ranking's "hide me" works for Afgly too, and graphics memory stays level over many rides. Blouaap's bandana
   and the hippo refined. Full test suite green.
+- **His verdict (25 Oct ~00:15):** "I think we have a winner ... I'm actually speechless". His one note — it began very
+  slow and then stayed the same speed — is fixed: Afgly starts brisk and never stops getting faster (19 → 40 m/s),
+  rows come closer in time further down, the music speeds up with it.
 - **Next:** his feedback; his play of checkpoints 1+2 at home:
   http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1; the release on his word (plan §8).
