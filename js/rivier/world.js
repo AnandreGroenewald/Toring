@@ -896,6 +896,7 @@ export function buildRiverWorld(stage, lookId = 'dag') {
       noise.dispose();
       envRT.dispose();
       reflRT?.dispose();
+      sun.dispose();   // (its shadow map too)
       scene.environment = null;
       scene.fog = null;
       renderer.toneMappingExposure = exposure;
