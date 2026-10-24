@@ -1423,5 +1423,8 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
   first log and tree slow the river nearly still and show how, once per phone. Code: js/core/rivier.js RIVER.unlock,
   js/rivier/hazards.js, art/blender/hazards.py → img/models/hazards.glb. Fixed: hints after the opening tip were
   wiped by a 7-second rule. Tests: npm 504, qa later1200 18/18 and the river suite.
+- **Hanswors fixed frame by frame (25 Oct ~02:30, his "look at it frame by frame"):** the pie now shows in the air
+  and flies into the screen on a hit (it was never drawn before: a NaN from a shared arm line); the cream is big,
+  centred and gone in ~2 s; he rides closer and bigger, three-quarters on, on a real rubber duck with foam and spray.
 - **Next:** his feedback; his play of checkpoints 1+2 at home:
   http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1; the release on his word (plan §8).
