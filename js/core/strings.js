@@ -1005,6 +1005,8 @@ export const S = {
   rvMissed: 'Mis!',
   rvRaidTitle: (h, n) => `💥 ${h} van ${n} raak!`,
   rvRaidLost: (m) => `Hul toring is ${m} laer.`,
+  rvRaidNoShot: 'Nie geskiet nie',
+  rvRaidKept: (n) => (n === 1 ? 'Jou bom is nog joune vir later vandag.' : `Jou ${n} bomme is nog joune vir later vandag.`),
   rvRaidNone: 'Geen skade nie: volgende keer!',
   rvRaidCracked: (n) => (n === 1 ? '1 vloer gekraak.' : `${n} vloere gekraak.`),
   rvLeadChanged: 'Die leier het verander!',

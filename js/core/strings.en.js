@@ -960,6 +960,8 @@ export const S_EN = {
   rvMissed: 'Missed!',
   rvRaidTitle: (h, n) => `💥 ${h} of ${n} hit!`,
   rvRaidLost: (m) => `Their tower is ${m} lower.`,
+  rvRaidNoShot: 'Nothing fired',
+  rvRaidKept: (n) => (n === 1 ? 'Your bomb is still yours for later today.' : `Your ${n} bombs are still yours for later today.`),
   rvRaidNone: 'No damage: next time!',
   rvRaidCracked: (n) => (n === 1 ? '1 floor cracked.' : `${n} floors cracked.`),
   rvLeadChanged: 'The lead changed!',

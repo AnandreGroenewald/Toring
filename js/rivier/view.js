@@ -1348,7 +1348,7 @@ function createRide(K, d) {
       // what the bombs did, and the river's standings as they are now (the tallest is the one everyone aims at)
       const said = [bombLost > 0 ? S.rvRaidLost(fmtM(bombLost)) : '', bombCracked ? S.rvRaidCracked(bombCracked) : ''].filter(Boolean).join(' ');
       const stand = isles.map((i) => ({ i, h: Math.max(0, i.island.top - 3.6), name: R?.rows?.find((x) => x.id === i.crew)?.name || '' })).sort((a, b) => b.h - a.h);
-      cardEl.innerHTML = `<h2>${S.rvRaidTitle(bombHits, thrown)}</h2><p>${said || S.rvRaidNone}</p>
+      cardEl.innerHTML = `<h2>${thrown ? S.rvRaidTitle(bombHits, thrown) : S.rvRaidNoShot}</h2><p>${thrown ? said || S.rvRaidNone : S.rvRaidKept(bombsLeft)}</p>
         <ol class="rv-stand">${stand.map((s, k) => `<li class="${s.i.mine ? 'me' : ''}${k === 0 ? ' lead' : ''}"><span>${k === 0 ? '👑 ' : `${k + 1}. `}${esc(s.name)}${s.i.mine ? ` <i>(${S.twYou})</i>` : ''}</span><b>${fmtM(s.h)}</b></li>`).join('')}</ol>
         <button class="rv-go">${S.rvDone}</button>`;
       cardEl.classList.add('on');
