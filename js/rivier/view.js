@@ -649,11 +649,14 @@ function createRide(K, d) {
   const start = createStartTower(things, d.daily || [], d.skin || 'kleur');
   scene.add(start.group);
   const diveTop = Math.max(6, start.top);
-  const DIVE = clamp(1.3 + diveTop / 70, 1.5, 2.6);
   const raid = d.mode === 'raid';
   const R = d.river || null;
   if (raid) setBend(0);   // (a straight river: a bomb's aim lands where the tower is drawn)
   const who = (d.who || []).filter((id) => CAST[id]).slice(0, 24);
+  // (the dive off the tower is the day's rescue ride, after the people who fell; a ride with no one to rescue (Afgly
+  // from the menu, Gly weer) drops you straight onto the water behind him: a quick go again)
+  const quick = !raid && (!!d.extra || who.length === 0);
+  const DIVE = quick ? 0.5 : clamp(1.3 + diveTop / 70, 1.5, 2.6);
   // (Saturday: the other crews' islands first, the tallest tower last, the run's big moment)
   const crewIds = (R?.rows || []).map((x) => x.id);
   const isleOrder = [...crewIds.filter((id) => id !== R?.leader), ...crewIds.filter((id) => id === R?.leader)];
@@ -1685,12 +1688,16 @@ function createRide(K, d) {
   }
 
   // ---------------------------------------------------------------------------------------------- the camera
-  const cam = { pos: new THREE.Vector3(0, 30, 30), look: new THREE.Vector3(0, 0, -20) };
+  const cam = quick ? { pos: new THREE.Vector3(0, 6.4, 11.5), look: new THREE.Vector3(0, 0.4, -22) } : { pos: new THREE.Vector3(0, 30, 30), look: new THREE.Vector3(0, 0, -20) };
   const towerTop = () => island.top;
   function cameraFor(dt) {
     let p;
     let l;
-    if (phase === 'dive') {
+    if (phase === 'dive' && quick) {
+      // (dropped in: the riding camera from the start)
+      p = new THREE.Vector3(x * 0.82, 6.4, 11.5);
+      l = new THREE.Vector3(x * 0.62, 0.4, -22);
+    } else if (phase === 'dive') {
       const k = ease(clamp(phaseT / DIVE, 0, 1));
       // out in front of your tower and to the side, watching him jump off its top and fall; round to behind him as he lands
       const y = rider.group.position.y;
@@ -1803,11 +1810,18 @@ function createRide(K, d) {
     if (phase === 'dive') {
       // he falls from the top into the river: a splash, and he's up on his board
       const k = clamp(phaseT / DIVE, 0, 1);
-      // off the top: a little hop up, then the fall (a flip on the way), into the river ahead of the tower
-      const hop = Math.sin(Math.min(1, k * 3) * Math.PI) * 1.2 * (1 - k);
-      rider.group.position.y = Math.max(0, (diveTop + 0.6) * (1 - k * k) + hop - 0.2);
-      rider.group.position.z = START_Z * (1 - k);
-      rider.group.rotation.x = -Math.PI * 2 * ease(k);
+      if (quick) {
+        // (dropped in: onto the water from just above it, right where he rides)
+        rider.group.position.y = 2.2 * (1 - k * k);
+        rider.group.position.z = 0;
+        rider.group.rotation.x = 0;
+      } else {
+        // off the top: a little hop up, then the fall (a flip on the way), into the river ahead of the tower
+        const hop = Math.sin(Math.min(1, k * 3) * Math.PI) * 1.2 * (1 - k);
+        rider.group.position.y = Math.max(0, (diveTop + 0.6) * (1 - k * k) + hop - 0.2);
+        rider.group.position.z = START_Z * (1 - k);
+        rider.group.rotation.x = -Math.PI * 2 * ease(k);
+      }
       if (k >= 1) {
         phase = 'run';
         phaseT = 0;
@@ -2092,7 +2106,7 @@ function createRide(K, d) {
     }
     world.update(dist, t, phase === 'dive' ? null : x);
     // (the shadows follow the action: your tower while you dive, the river just ahead while you ride)
-    if (phase === 'dive') world.setShadowFocus(0, START_Z * 0.5, 46);
+    if (phase === 'dive' && !quick) world.setShadowFocus(0, START_Z * 0.5, 46);
     else world.setShadowFocus(x * 0.6, raid ? -40 : -24, raid ? 60 : 40);
     things.updateSpray(dt);
     fwRide?.update(dt, Math.max(24, towerTop() + 6), island.group.position);
