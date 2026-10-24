@@ -28,6 +28,7 @@ export const TOWER = Object.freeze({
   climbMax: 75,         // m: a build turn's floors end at most this far above the tower's top
   stackTol: 0.35,       // m: a floor whose bottom is this close under another's top rests on it
   blast: 2,             // floors a bomb knocks out: the one it hits and the one on top of it (a Perfek cracks instead)
+  restTol: 1.0,         // m: a new floor's foot may be at most this far above what's under it (else it floats: dropped)
 });
 
 const round = (v, d = 100) => Math.round(v * d) / d;
@@ -209,7 +210,15 @@ export function addFloors(floors, list, { max, by, day, skin, ids = null } = {})
     if (topOf(f) > top + TOWER.climbMax) return null;
     add.push(f);
   }
-  return withAdds([...floors, ...add]);
+  // (a turn's floors rest on the tower and on each other: one floating in the air, as no real turn leaves it, is dropped)
+  let reach = top;
+  const resting = [];
+  for (const f of [...add].sort((a, b) => bottomOf(a) - bottomOf(b))) {
+    if (bottomOf(f) > reach + TOWER.restTol) continue;
+    reach = Math.max(reach, topOf(f));
+    resting.push(f);
+  }
+  return withAdds([...floors, ...add.filter((f) => resting.includes(f))]);
 }
 
 /** The tower's people (the floors' rooms). */

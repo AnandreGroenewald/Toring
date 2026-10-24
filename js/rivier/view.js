@@ -12,7 +12,7 @@ import { createStage, pickQuality } from '../kasteel/stage.js';
 import { createPieces } from '../botsing/pieces.js';
 import { buildRiverWorld, bendMaterial, setBend, BANK } from './world.js';
 import { createRider } from './rider.js';
-import { createThings, createIsland, createStartTower } from './things.js';
+import { createThings, createIsland, createStartTower, labelSprite } from './things.js';
 import { createBeasts } from './beasts.js';
 import { RIVER, rescueCourse, raidCourse, speedAt, laneX } from '../core/rivier.js';
 import { floorAt, hit as hitFloor, dimsOf } from '../core/weektower.js';
@@ -425,29 +425,7 @@ function createRide(K, d) {
   let rowI = 0;
 
   // ---------------------------------------------------------------------------------------------- Saturday: the islands
-  /** A sprite with words (the crew's name and height over its tower; a 👑 over the tallest). */
-  function label(text, gold) {
-    const c = document.createElement('canvas');
-    c.width = 512;
-    c.height = 128;
-    const g = c.getContext('2d');
-    g.font = 'bold 54px "Trebuchet MS", system-ui, sans-serif';
-    const w = Math.min(500, g.measureText(text).width + 60);
-    g.fillStyle = gold ? 'rgba(90,60,0,0.85)' : 'rgba(13,34,40,0.75)';
-    g.beginPath();
-    g.roundRect((512 - w) / 2, 18, w, 92, 46);
-    g.fill();
-    g.fillStyle = gold ? '#ffd65c' : '#ffffff';
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.fillText(text, 256, 66);
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-    s.scale.set(12, 3, 1);
-    s.renderOrder = 10;
-    return s;
-  }
+  const label = (text, gold) => labelSprite(text, { gold });   // (the crew's name and height; gold over the tallest)
   const isles = [];
   function setIsleFloors(isle, floors) {
     isle.floors = floors || [];

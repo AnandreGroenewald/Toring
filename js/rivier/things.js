@@ -343,7 +343,13 @@ export function labelSprite(text, { gold = false, small = false } = {}) {
   c.width = 512;
   c.height = 128;
   const g = c.getContext('2d');
-  g.font = 'bold 54px "Trebuchet MS", system-ui, sans-serif';
+  // (a long name gets smaller letters: it always fits, never cut off)
+  let px = 54;
+  g.font = `bold ${px}px "Trebuchet MS", system-ui, sans-serif`;
+  while (px > 26 && g.measureText(text).width > 440) {
+    px -= 2;
+    g.font = `bold ${px}px "Trebuchet MS", system-ui, sans-serif`;
+  }
   const w = Math.min(500, g.measureText(text).width + 60);
   g.fillStyle = gold ? 'rgba(90,60,0,0.85)' : 'rgba(13,34,40,0.75)';
   g.beginPath();
