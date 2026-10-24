@@ -212,6 +212,9 @@ function createTown(K, d) {
   let folded = false;
   let renaming = false;
   let removing = null;
+  let helping = false;
+  /** How Ons dorp works: the rules screen's own four lines (the ride, the crane, the crew, Saturday). */
+  const helpHtml = () => `<ul class="tw-helpbox">${S.howToSteps.filter((s) => ['🛟', '🏗️', '🏝️', '💣'].includes(s.icon)).map((s) => `<li><span>${s.icon}</span>${esc(typeof s.text === 'function' ? s.text() : s.text)}</li>`).join('')}</ul>`;
   function fold(on) {
     folded = !!on;
     ov.querySelector('.tw-panel')?.classList.toggle('min', folded);
@@ -248,13 +251,14 @@ function createTown(K, d) {
     const place = over && r?.final ? r.final.order.indexOf(mine) + 1 : 0;
     if (place === 1) btns.unshift(`<button class="tw-share">${S.twShareWin}</button>`);
     if (!btns.length) btns.push(`<p class="tw-none">${over ? S.twKroning : v.craneShut ? S.twCraneShut : S.twNoTurn}</p>`);
-    ov.innerHTML = `<div class="tw-top"><button class="tw-back">${S.twBack}</button><div class="tw-card"><b>🏝️ ${esc(v.name || S.spanMenu)}${boss ? `<button class="tw-rename" aria-label="${S.twRename}">✏️</button>` : ''}</b>
+    ov.innerHTML = `<div class="tw-top"><button class="tw-back">${S.twBack}</button><div class="tw-card"><b>🏝️ ${esc(v.name || S.spanMenu)}${boss ? `<button class="tw-rename" aria-label="${S.twRename}">✏️</button>` : ''}<button class="tw-help" aria-label="${S.howTo}">?</button></b>
         <span>${S.twHeight} <em>${fmtM(v.heightM || 0)}</em> · ${S.twPeople} <em>${fmtInt(v.people | 0)}</em></span></div></div>
-      <div class="tw-panel${folded ? ' min' : ''}"><button class="tw-fold" aria-label="${S.twFold}"></button>${renameForm}${river}${over || v.phase === 'kroning' ? '' : `<p>${v.ticket ? S.twTicketOk : S.twTicket(v.weekdays | 0, 3)}</p><p>${S.twBombs(v.bombs | 0)}</p>`}${r ? '' : `<p class="tw-sat">${S.twSat}</p>`}
+      <div class="tw-panel${folded ? ' min' : ''}"><button class="tw-fold" aria-label="${S.twFold}"></button>${renameForm}${helping ? helpHtml() : ''}${river}${over || v.phase === 'kroning' ? '' : `<p>${v.ticket ? S.twTicketOk : S.twTicket(v.weekdays | 0, 3)}</p><p>${S.twBombs(v.bombs | 0)}</p>`}${r ? '' : `<p class="tw-sat">${S.twSat}</p>`}
         ${members}${news ? `<ul class="tw-news">${news}</ul>` : ''}
         <div class="tw-btns">${btns.join('')}</div>${crew && crew.members.length > 1 && !weekend ? `<button class="tw-leave">${S.spanLeave}</button>` : ''}${clockRow(v.clock)}</div>`;
     const on = (sel, fn) => ov.querySelector(sel)?.addEventListener('click', fn);
     on('.tw-fold', () => fold(!folded));
+    on('.tw-help', () => { helping = !helping; fold(false); paint(v); });
     on('.tw-rename', () => { renaming = true; fold(false); paint(v); ov.querySelector('.tw-name')?.focus(); });
     on('.tw-cancel', () => { renaming = false; paint(v); });
     ov.querySelector('.tw-rename-form')?.addEventListener('submit', (e) => {
@@ -314,6 +318,9 @@ function createTown(K, d) {
 #rivier .tw-invite { min-height: 40px; padding: 0 12px; border-radius: 12px; border: 0; background: #25d366; color: #05300f; font: inherit; font-weight: 900; font-size: 15px; }
 #rivier .tw-news { margin: 0 0 6px; padding: 0; list-style: none; font-size: 13px; font-weight: 700; color: #cfe3ea; display: grid; gap: 3px; }
 #rivier .tw-btns { display: grid; gap: 8px; margin-top: 10px; }
+#rivier .tw-help { pointer-events: auto; margin-left: 6px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid rgba(255,255,255,.4); background: rgba(255,255,255,.12); color: #fff; font: inherit; font-weight: 900; font-size: 14px; line-height: 1; padding: 0; vertical-align: middle; }
+#rivier .tw-helpbox { list-style: none; margin: 0 0 10px; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.08); display: grid; gap: 8px; font-size: 13px; font-weight: 700; color: #e3f6f1; }
+#rivier .tw-helpbox li { display: grid; grid-template-columns: 22px 1fr; gap: 6px; }
 #rivier .tw-rename { pointer-events: auto; margin-left: 8px; border: 0; background: none; font-size: 15px; padding: 0 4px; min-height: 30px; }
 #rivier .tw-rename-form { display: flex; gap: 6px; margin: 0 0 10px; }
 #rivier .tw-name { flex: 1; min-width: 0; min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.1); color: #fff; font: inherit; font-weight: 800; font-size: 16px; }
