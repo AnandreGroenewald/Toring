@@ -103,8 +103,8 @@ function makeKit() {
 #rivier .rv-card.on { opacity: 1; transform: translate(-50%, 0); }
 #rivier .rv-card h2 { margin: 0 0 4px; font-size: 24px; font-weight: 900; }
 #rivier .rv-card p { margin: 0 0 12px; font-size: 15px; color: #d9ecf0; }
-#rivier .rv-card .rv-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px; margin: 0 0 14px; }
-#rivier .rv-card .rv-row img { width: 34px; height: 34px; border-radius: 50%; }
+#rivier .rv-card .rv-row { display: flex; justify-content: center; flex-wrap: nowrap; gap: 4px; margin: 0 0 14px; }
+#rivier .rv-card .rv-row img { flex: 0 1 34px; min-width: 0; width: 34px; height: auto; aspect-ratio: 1; border-radius: 50%; }
 #rivier .rv-card .rv-row img.out { opacity: .3; filter: grayscale(1); }
 #rivier .rv-card ol.rv-stand { list-style: none; margin: 0 0 14px; padding: 0; text-align: left; font-size: 15px; }
 #rivier .rv-card ol.rv-stand li { display: flex; justify-content: space-between; padding: 5px 10px; border-radius: 10px; }
@@ -840,8 +840,9 @@ function createRide(K, d) {
   function visibleSpan(isle) {
     const h = Math.max(2, isle.island.top - 3.6);
     const H = host.clientHeight;
-    const yTop = 120;
-    const yBot = H - 210;
+    // (under the top bar, and under the hint while it shows; the scope's ring is 66 px round its middle)
+    const yTop = hintEl.classList.contains('on') ? 230 : 150;
+    const yBot = H - 200;
     let lo = null;
     let hi = null;
     for (let i = 0; i <= 28; i++) {
@@ -1557,7 +1558,6 @@ function createRide(K, d) {
       isle.group.position.set(isle.side * 22, 0, -(isle.z - dist));
       isle.group.rotation.y = -isle.side * Math.PI / 2;
       isle.island.update(t);
-      isle.tag.material.opacity = 1;
     }
     // (the river's own sound under the music: louder in the rapids, quieter out on the lake)
     {
