@@ -119,13 +119,15 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
           try { earn(r.me.prize.coins, { prize: true }); } catch { /* the wallet's own business */ }
           d.prizeSeen = r.me.prize;
         }
-        // rides made while the server couldn't be reached
+        // rides and turns' floors made while the server couldn't be reached
         const q = d.queue;
         d.queue = [];
         for (const item of q) {
           const a = await call('POST', item.path, item.body).catch(() => null);
-          if (a?.status === 200 && a.crew) d.srv.crew = a.crew;
-          else if (!a || a.status >= 500) d.queue.push(item);
+          if (a?.status === 200 && a.crew) {
+            d.srv.crew = a.crew;
+            if (a.me) d.srv.me = { ...d.srv.me, ...a.me };
+          } else if (!a || a.status >= 500) d.queue.push(item);
         }
         save();
         return d.srv;
@@ -259,6 +261,12 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
           if (r.me) d.srv.me = r.me;
           save();
           return { added: r.added | 0, heightM: Math.round(heightOf(r.crew.floors) * 10) / 10, gain: r.gain || 0 };
+        }
+        // (no connection at the end of a turn: the floors wait on this phone and go with the next sync, on the same lease)
+        if (!r || r.status >= 500) {
+          d.queue.push({ path: '/span/build', body: { lease, floors: list } });
+          save();
+          return { queued: true, added: list.length };
         }
         return { error: r?.error || 'offline' };
       }

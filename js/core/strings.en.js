@@ -910,6 +910,8 @@ export const S_EN = {
   twTicketNeeded: 'On Saturday only players with a ticket build and bomb (3 Daily Towers Monday to Friday).',
   twKroning: 'The whistle has blown: a new Weekly Tower starts on Monday.',
   twOffline: 'No connection: try again when you’re online.',
+  twQueued: 'No connection: your floors wait on your phone and go as soon as you’re online again.',
+  twLeaseGone: 'Someone else took the crane meanwhile: this turn’s floors didn’t go up. Your turn is still yours.',
   twNoRepair: 'No repair blocks: you get one for every bomb that hits your tower.',
   spanJoinTitle: (name) => `Join ${name}?`,
   spanJoinSub: (n, of) => `${n} of ${of} builders. You build one Weekly Tower together and play together on Saturday.`,

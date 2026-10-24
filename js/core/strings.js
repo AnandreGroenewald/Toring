@@ -955,6 +955,8 @@ export const S = {
   twTicketNeeded: 'Saterdag bou en bombardeer net wie ’n kaartjie het (3 Daaglikse Torings Maandag tot Vrydag).',
   twKroning: 'Die fluitjie het geblaas: Maandag begin ’n nuwe Weektoring.',
   twOffline: 'Geen verbinding nie: probeer weer as jy aanlyn is.',
+  twQueued: 'Geen verbinding nie: jou vloere wag op jou foon en gaan sodra jy weer aanlyn is.',
+  twLeaseGone: 'Iemand anders het intussen die hyskraan gevat: hierdie beurt se vloere het nie gegaan nie. Jou beurt is nog joune.',
   twNoRepair: 'Geen herbou-blokke nie: julle kry een vir elke bom wat julle toring tref.',
   spanJoinTitle: (name) => `Sluit aan by ${name}?`,
   spanJoinSub: (n, of) => `${n} van ${of} bouers. Julle bou saam een Weektoring en speel saam Saterdag.`,

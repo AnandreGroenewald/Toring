@@ -224,3 +224,25 @@ test('span client + server: a bombed crew repairs with its blocks; Saturday noon
   assert.equal(a.s.view().turns, 0);
   assert.equal((await a.s.turn()).error, 'crane');
 });
+
+test('span client + server: a turn\'s floors wait on the phone without a connection and go up with the next sync', async () => {
+  const clock = { t: sastAt('2026-10-28', 9) };
+  const store = { data: new Map() };
+  const dayKey = { v: '2026-10-28' };
+  const a = online(clock, store, dayKey, 'Anna');
+  await a.s.start();
+  a.s.dailyDone('2026-10-28', 50, []);
+  await a.s.sync();
+  const tt = await a.s.turn();
+  assert.ok(tt.lease);
+  // the connection drops right at the end of the turn
+  const srv = store.srv;
+  const real = srv.handle;
+  srv.handle = async () => { throw new Error('offline'); };
+  const out = await a.s.turnDone([plank(0), plank(1.6)], { lease: tt.lease });
+  assert.equal(out.queued, true);
+  srv.handle = real;
+  await a.s.sync();
+  assert.equal(a.s.view().floors.length, 2, 'the floors went up with the sync');
+  assert.equal(a.s.view().turns, 0, 'the turn is used once');
+});

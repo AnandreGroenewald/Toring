@@ -3011,7 +3011,8 @@ bus.on('game:over', (result) => {
     // (1.20) the Weektoring's turn: its sheet over the tower's reveal, once the floors are in (the server's answer)
     screen = 'results';
     f.weekOut.then((o) => {
-      if (o?.error) ui.toast(S.twOffline, 3600);
+      if (o?.error) ui.toast(o.error === 'lease' ? S.twLeaseGone : S.twOffline, 3600);
+      else if (o?.queued) ui.toast(S.twQueued, 3600);
       const v = span.view();
       ui.showWeekResult({ heightM: o?.heightM ?? v.heightM, gain: o?.gain || 0, added: o?.added || 0, people: v.people, perfects: f.result.perfects | 0, turns: v.turns });
       sleepLoop(RESULTS_SLEEP_MS);
