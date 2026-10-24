@@ -43,6 +43,7 @@ import { createLewendeUi } from './ui/lewendeUi.js';
 import { createLivingStore, CAST_IDS } from './core/living.js';
 import { createDorpClient } from './dorp.js';
 import { createSpan } from './span.js';
+import { SPAN } from './core/span.js';
 import { DORP, RIKUS_ID, markOf, isTownId, isRaidId } from './core/dorp.js';
 import { castOf, portraitDataUrl } from './game/residents.js';
 import { setBlockSkin } from './game/blocks.js';
@@ -1613,7 +1614,10 @@ function reminderList(time, now = new Date()) {
     // it only fires if the game wasn't opened since (that plans again): the box waiting that day, as is
     const day = weekView(week, dateKeyFor(at)).day;
     const n = Math.floor(at.getTime() / 86400000);   // the day's number: the same text for the same day
-    list.push({ id: REMIND_ID + k, at: at.getTime(), title: 'Stapel', body: texts(day, WEEK_COINS[day - 1], n) });
+    // (1.20) Ons dorp's week has its own big days: Saturday's challenge, Sunday's result, Monday's new Weektoring
+    const dow = at.getDay();
+    const body = dow === 6 ? (hh < SPAN.craneClose ? S.remindSat : S.remindSatLate) : dow === 0 ? S.remindSun : dow === 1 ? S.remindMon : texts(day, WEEK_COINS[day - 1], n);
+    list.push({ id: REMIND_ID + k, at: at.getTime(), title: 'Stapel', body });
   }
   return list;
 }
