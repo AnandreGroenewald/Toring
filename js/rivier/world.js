@@ -110,7 +110,7 @@ function rockDetail(m, noise, bank, { tri = false, wet = 1.15 } = {}) {
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>
 varying vec3 vRkL; varying vec3 vRkN;
-uniform float uPoolTo; uniform float uLakeFrom; uniform float uLakeTo;
+uniform float uPoolTo; uniform float uLakeFrom; uniform float uLakeTo; uniform float uLakeW;
 float rkOpen(float z) {
   float k = clamp((z - uLakeFrom) / 40.0, 0.0, 1.0) * (1.0 - clamp((z - uLakeTo) / 30.0, 0.0, 1.0));
   k = max(k, 1.0 - clamp((z - uPoolTo) / 40.0, 0.0, 1.0));
@@ -120,7 +120,7 @@ float rkOpen(float z) {
   {
     vec4 rkW0 = modelMatrix * vec4(transformed, 1.0);
     float rkK = rkOpen(uDist - rkW0.z);
-    transformed.x += sign(modelMatrix[3][0]) * ${(BANK.lake - BANK.half).toFixed(2)} * rkK;
+    transformed.x += sign(modelMatrix[3][0]) * uLakeW * rkK;
     transformed.y *= 1.0 - 0.78 * rkK;
   }
   vRkL = transformed;
@@ -726,7 +726,7 @@ void main() {
 }`;
 const WATER_FRAG = `uniform float uT; uniform sampler2D uNoise; uniform vec3 uSun; uniform vec3 uSunCol; uniform vec3 uDeep; uniform vec3 uShallow;
 uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSkyRefl; uniform vec3 uFoam; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar;
-uniform float uHalf; uniform float uLakeFrom; uniform float uLakeTo; uniform float uDetail; uniform vec2 uRapids; uniform float uPoolTo;
+uniform float uHalf; uniform float uLakeHalf; uniform float uLakeFrom; uniform float uLakeTo; uniform float uDetail; uniform vec2 uRapids; uniform float uPoolTo;
 uniform vec3 uWall; uniform vec2 uRider; uniform sampler2D uRefl; uniform float uReflK;
 varying vec3 vWorld; varying vec2 vRiver; varying float vAhead; varying vec4 vRefl;
 float h(vec2 p) {
@@ -744,7 +744,7 @@ void main() {
   vec3 v = normalize(cameraPosition - vWorld);
   float lake = smoothstep(uLakeFrom, uLakeFrom + 40.0, p.y) * (1.0 - smoothstep(uLakeTo, uLakeTo + 30.0, p.y));
   lake = max(lake, 1.0 - smoothstep(uPoolTo, uPoolTo + 40.0, p.y));
-  float half_ = mix(uHalf, 46.0, lake);
+  float half_ = mix(uHalf, uLakeHalf, lake);
   float edge = clamp(abs(p.x) / half_, 0.0, 1.2);
   // the water's own colour: deep green-blue in the middle, lighter and clearer towards the banks; darker in the troughs
   vec3 base = mix(uDeep, uShallow, smoothstep(0.45, 1.0, edge) * 0.85);
@@ -798,7 +798,10 @@ void main() {
 /**
  * The world: { group, water, update(dist, t, camera), setLake(fromZ, toZ), dispose() }. `quality` from the stage.
  */
-export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
+export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = BANK.lake, town = false } = {}) {
+  // (`town`: the crew's island alone in a wide lake, the camera going right round it: water all round, fading into the
+  // haze; sandstone buttes in a ring on the horizon; no canyon)
+  if (town) lakeHalf = 2000;
   const { scene, renderer, quality } = stage;
   const L = LOOKS[lookId] || LOOKS.dag;
   const sunDir = new THREE.Vector3(...L.sunDir).normalize();
@@ -889,7 +892,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
       uT: { value: 0 }, uDist: { value: 0 }, uNoise: { value: noise }, uSun: { value: sunDir.clone() }, uSunCol: { value: lin(L.sun) },
       uDeep: { value: lin(L.deep) }, uShallow: { value: lin(L.shallow) }, uZenith: { value: lin(L.zenith) },
       uHorizon: { value: lin(L.horizon) }, uSkyRefl: { value: lin(L.skyRefl) }, uFoam: { value: lin(COLORS.foam).multiply(fxTint) }, uFog: { value: fog },
-      uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uHalf: { value: BANK.half },
+      uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uHalf: { value: BANK.half }, uLakeHalf: { value: lakeHalf },
       uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uDetail: { value: quality.name === 'low' ? 0 : 1 },
       uBendA: { value: 0 }, uBendB: { value: 0 }, uBendK: bendUniforms.uBendK, uRapids: { value: new THREE.Vector2(-1e6, -1e6) }, uPoolTo: { value: -1e6 },
       uWall: { value: lin(L.wall) }, uRider: { value: new THREE.Vector2(0, -1e6) },
@@ -898,9 +901,10 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
     vertexShader: WATER_VERT, fragmentShader: WATER_FRAG,
   });
   const seg = quality.name === 'high' ? [24, 220] : [16, 150];
-  const wgeo = new THREE.PlaneGeometry(120, 640, seg[0], seg[1]);
+  // (as wide as the lake, with water under its shores; the town's lake all round its island)
+  const wgeo = town ? new THREE.PlaneGeometry(1800, 1800, 30, 30) : new THREE.PlaneGeometry(Math.max(120, (lakeHalf + 16) * 2), 640, seg[0] + Math.round(Math.max(0, lakeHalf - 46) / 6), seg[1]);
   wgeo.rotateX(-Math.PI / 2);
-  wgeo.translate(0, 0, -640 / 2 + 40);   // from 40 m behind to 600 m ahead
+  if (!town) wgeo.translate(0, 0, -640 / 2 + 40);   // from 40 m behind to 600 m ahead
   const waterMesh = new THREE.Mesh(wgeo, water);
   waterMesh.frustumCulled = false;
   group.add(waterMesh);
@@ -976,9 +980,9 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   }
   // the shadows on the water: a see-through layer just over it that shows only shade (the water's own shader stays)
   if (shadows) {
-    const cg = new THREE.PlaneGeometry(140, 260, 28, 52);
+    const cg = town ? new THREE.PlaneGeometry(200, 200, 20, 20) : new THREE.PlaneGeometry(140, 260, 28, 52);
     cg.rotateX(-Math.PI / 2);
-    cg.translate(0, 0.05, -100);
+    cg.translate(0, 0.05, town ? 0 : -100);
     const catcher = new THREE.Mesh(cg, bendMaterial(new THREE.ShadowMaterial({ color: '#06262a', opacity: 0.42, depthWrite: false })));
     catcher.receiveShadow = true;
     catcher.frustumCulled = false;
@@ -989,10 +993,10 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
 
   // the canyon: cliff walls in pieces along both banks, re-used as you go; bush and boulders on them
   const rockTex = rockTextures();
-  const bankU = { uPoolTo: { value: -1e6 }, uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 } };
+  const bankU = { uPoolTo: { value: -1e6 }, uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uLakeW: { value: lakeHalf - BANK.half } };
   // (the stones in the river: the same sandstone, wrapped round them, wet to just over the water, never moved by the
   // banks' opening)
-  const stoneMat = rockDetail(bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, roughness: 0.82, metalness: 0, color: '#e6c3a0', flatShading: true })), noise, { uPoolTo: { value: -1e6 }, uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 } }, { tri: true, wet: 0.18 });
+  const stoneMat = rockDetail(bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, roughness: 0.82, metalness: 0, color: '#e6c3a0', flatShading: true })), noise, { uPoolTo: { value: -1e6 }, uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uLakeW: { value: 0 } }, { tri: true, wet: 0.18 });
   stoneMat.userData.shared = true;
   const rockMat = rockDetail(bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, bumpMap: rockTex.bump, bumpScale: 2.2, roughness: 0.9, metalness: 0, vertexColors: true, side: THREE.DoubleSide })), noise, bankU);
   const SEG_L = 48;
@@ -1171,6 +1175,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
       segs.push({ m, fall, side, i, r, bushes: Array.from({ length: BUSH_PER }, (_, k) => [r(k) * SEG_L - SEG_L / 2, 0.9 + r(k + 40) * 1.7, r(k + 80)]), rocks: Array.from({ length: ROCK_PER }, (_, k) => [r(k + 120) * SEG_L - SEG_L / 2, 0.5 + r(k + 160) * 0.9]), trees: Array.from({ length: TREE_PER }, (_, k) => [r(k + 200) * SEG_L - SEG_L / 2, 4 + r(k + 220) * 3.5, r(k + 240)]) });
     }
   }
+  if (town) for (const o of [bushes, boulders, trunks, crowns, ...segs.map((s) => s.m)]) o.visible = false;
   // far off in the haze: rondavels (round sandstone peaks with grassy tops) and a long ridge
   // (the wall's own rock picture, tiled small enough round the drums for the layers to read)
   const farMap = rockTex.map.clone();
@@ -1183,7 +1188,17 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   const screeMat = new THREE.MeshStandardMaterial({ color: '#a8826a', roughness: 1, flatShading: true, map: farMap });
   const hills = new THREE.Group();
   // (three together, like the real ones, and a few more along the far rim; warm enough to read through the haze)
-  for (const [x, z, r, h, s] of [[-120, -330, 22, 44, 1], [-78, -350, 18, 52, 2], [-38, -338, 20, 40, 3], [96, -300, 24, 36, 4], [190, -360, 28, 46, 5], [-230, -360, 30, 42, 6], [300, -320, 22, 30, 7]]) {
+  // (the town: a ring of them all round the horizon, some in threes, at 300-460 m)
+  const ringSpots = [];
+  if (town) {
+    for (let k = 0; k < 14; k++) {
+      const a = (k / 14) * Math.PI * 2 + Math.sin(k * 2.3) * 0.12;
+      const d = 420 + ((k * 53) % 130);
+      ringSpots.push([Math.sin(a) * d, Math.cos(a) * d, 18 + (k * 7) % 14, 30 + (k * 11) % 26, k + 1]);
+      if (k % 4 === 1) ringSpots.push([Math.sin(a + 0.07) * (d + 30), Math.cos(a + 0.07) * (d + 30), 16, 44, k + 21]);
+    }
+  }
+  for (const [x, z, r, h, s] of town ? ringSpots : [[-120, -330, 22, 44, 1], [-78, -350, 18, 52, 2], [-38, -338, 20, 40, 3], [96, -300, 24, 36, 4], [190, -360, 28, 46, 5], [-230, -360, 30, 42, 6], [300, -320, 22, 30, 7]]) {
     const geo = rondavelGeometry(r, h, s);
     const drum = new THREE.Mesh(geo.drum, mesaMat);
     drum.position.set(x, h / 2 + 6, z);
@@ -1194,10 +1209,36 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
     cap.rotation.y = s;
     hills.add(drum, scree, cap);
   }
-  // the far rim of the plateau they stand on
-  const ridge = new THREE.Mesh(new THREE.BoxGeometry(1400, 30, 120), new THREE.MeshStandardMaterial({ color: '#9a6a52', roughness: 1, map: ridgeMap }));
-  ridge.position.set(0, -6, -380);
-  hills.add(ridge);
+  // the far rim of the plateau they stand on (the town: a low shore of red rock and grass all the way round)
+  if (town) {
+    // (from the water at 360 m up a short beach and a red rock step to the grassland behind, facing the island)
+    const prof = [[360, -3], [372, 0.8], [382, 3], [392, 7.5], [405, 9], [470, 10.5], [700, 12]].map(([r, y]) => new THREE.Vector2(r, y));
+    const shoreGeo = new THREE.LatheGeometry(prof, 120);
+    const col = [];
+    const sp = shoreGeo.attributes.position;
+    for (let i = 0; i < sp.count; i++) {
+      const x = sp.getX(i);
+      const z = sp.getZ(i);
+      const a = Math.atan2(z, x);
+      const k = 1 + Math.sin(a * 7) * 0.04 + Math.sin(a * 17 + 1) * 0.02;
+      const y = sp.getY(i);
+      sp.setXYZ(i, x * k, y * (1 + Math.sin(a * 5 + 2) * 0.35), z * k);
+      // (the beach pale, the rock step red, the grassland behind green-gold)
+      const r = Math.hypot(x, z);
+      const c = r < 376 ? [0.86, 0.78, 0.62] : r < 400 ? [0.72, 0.42, 0.28] : [0.45, 0.5, 0.25];
+      col.push(...c);
+    }
+    shoreGeo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    shoreGeo.computeVertexNormals();
+    const shoreMap = rockTex.map.clone();
+    shoreMap.repeat.set(60, 0.6);
+    const shore = new THREE.Mesh(shoreGeo, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, map: shoreMap, vertexColors: true, side: THREE.DoubleSide }));
+    hills.add(shore);
+  } else {
+    const ridge = new THREE.Mesh(new THREE.BoxGeometry(1400, 30, 120), new THREE.MeshStandardMaterial({ color: '#9a6a52', roughness: 1, map: ridgeMap }));
+    ridge.position.set(0, -6, -380);
+    hills.add(ridge);
+  }
   group.add(hills);
   // ---- the air: mist drifting low over the water (patches you ride through), shafts of sun slanting down through the
   // canyon, and dust glinting in the light near you (not on the lowest quality)
@@ -1333,7 +1374,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   const halfAt = (z) => {
     let k = Math.min(1, Math.max(0, (z - lake.from) / 40)) * (1 - Math.min(1, Math.max(0, (z - lake.to) / 30)));
     k = Math.max(k, 1 - Math.min(1, Math.max(0, (z - poolTo) / 40)));
-    return BANK.half + (BANK.lake - BANK.half) * k * k * (3 - 2 * k);
+    return BANK.half + (lakeHalf - BANK.half) * k * k * (3 - 2 * k);
   };
 
   function update(dist, t, riderX = null) {
@@ -1391,7 +1432,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
       const ahead = zc - dist;
       // (the wall's shader opens it out and lowers it vertex by vertex; the things on it follow the same curve)
       s.m.position.set(s.side * BANK.half, 0, -ahead);
-      const lowAt = (z) => (halfAt(z) - BANK.half) / (BANK.lake - BANK.half);   // (0 in the canyon, 1 at the lake)
+      const lowAt = (z) => (halfAt(z) - BANK.half) / (lakeHalf - BANK.half);   // (0 in the canyon, 1 at the lake)
       if (s.fall) s.fall.visible = Math.max(lowAt(zc - SEG_L / 2), lowAt(zc + SEG_L / 2)) < 0.02;
       for (const [u, sc, kk] of s.bushes) {
         const half = halfAt(zc + u);

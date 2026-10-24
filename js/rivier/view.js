@@ -192,7 +192,10 @@ function createTown(K, d) {
   const { scene, camera } = stage;
   const reduced = !!d.reducedMotion;
   const gameCanvas = document.querySelector('#game > canvas');
-  const world = buildRiverWorld(stage, d.scene, { air: false });   // (the sky of his background skin; no river mist round the island)
+  // (the sky of his background skin; no river mist round the island; the island alone in a wide lake, water all round,
+  // buttes on the far horizon: the camera goes right round it. Nothing bends here.)
+  setBend(0);
+  const world = buildRiverWorld(stage, d.scene, { air: false, town: true });
   world.setPool(1e6);   // (all lake: the canyon is far off)
   const things = createThings(scene, pieces);
   things.tint(world.fxTint);
@@ -407,7 +410,8 @@ function createTown(K, d) {
     if (Math.floor(t * 2) !== Math.floor((t - dt) * 2)) measure();
     const half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     // (the tower fills the free band: its middle sits at the band's middle)
-    const D = Math.max(46, (h / room.f) / (2 * half));
+    // (never further than 250 m: the lake's far shore is at 360 m)
+    const D = Math.min(250, Math.max(46, (h / room.f) / (2 * half)));
     const a = 0.5 + (reduced ? 0 : t * 0.045);
     const bandMid = room.top + room.f / 2;   // (from the top, 0..1)
     const mid = h * 0.5 + (bandMid - 0.5) * (h / room.f);
@@ -451,6 +455,7 @@ function createTown(K, d) {
     audio.setAmbience?.(ambBefore);
     fw?.dispose();
     setCrownOff();
+    setBend(1);
     scene.remove(island.group, things.spray);
     disposeTree(island.group);
     island.dispose();
