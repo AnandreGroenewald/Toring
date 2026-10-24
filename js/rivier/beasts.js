@@ -218,6 +218,23 @@ export function createBeasts(bend = (m) => m, models = {}) {
     const g = new THREE.Group();
     const inner = new THREE.Group();
     g.add(inner);
+    // (the Blender hippo when it's there: its body turns a little, its own jaw yawns)
+    let head;
+    let jaw;
+    if (models.hippo) {
+      const m = models.hippo.clone(true);
+      m.scale.setScalar(1.3);
+      m.position.y = 0.05;
+      inner.add(m);
+      head = m;
+      jaw = m.getObjectByName('jaw') || new THREE.Group();
+    } else {
+      ({ head, jaw } = hippoShapes(inner));
+    }
+    return hippoLife(g, inner, head, jaw);
+  }
+  /** The simple hippo (no model): body, head, jaw from spheres. */
+  function hippoShapes(inner) {
     const body = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), M.hippo);
     body.scale.set(1.25, 0.8, 1.55);
     body.position.set(0, -0.35, -0.6);
@@ -258,6 +275,10 @@ export function createBeasts(bend = (m) => m, models = {}) {
       nos.position.set(s * 0.18, 0.17, 0.95);
       head.add(nos);
     }
+    return { head, jaw };
+  }
+  /** The hippo's life in the river: under the water, bubbles, up in your lane, a yawn as you come. */
+  function hippoLife(g, inner, head, jaw) {
     // its bubbles
     const bubbles = [];
     for (let i = 0; i < 10; i++) {
@@ -300,6 +321,7 @@ export function createBeasts(bend = (m) => m, models = {}) {
    * `paddleDir` -1 / 1 is the way he goes (the block drifts; the game moves it). He chatters as you come.
    */
   function monkeyOn(blockObj, paddleDir = 1, top = 1.2) {
+    if (models.monkey) return monkeyModelOn(blockObj, paddleDir, top);
     const g = new THREE.Group();
     g.add(blockObj);
     const mk = new THREE.Group();
@@ -385,6 +407,33 @@ export function createBeasts(bend = (m) => m, models = {}) {
         head.rotation.y = ahead < 30 ? 0 : Math.sin(t * 1.2) * 0.5;
         head.rotation.z = Math.sin(t * 3.2) * 0.1;
         // he's cheeky: a little jump of joy when you're close
+        jumped = ahead < 9 && ahead > 0 ? Math.abs(Math.sin((9 - ahead) * 0.7)) * 0.35 : 0;
+        mk.rotation.y = Math.PI * (ahead < 30 ? 0 : 0.15);
+      },
+    };
+    return g;
+  }
+
+  /** The Blender Blouaap (img/models/monkey.glb) on his block: the paddle rocks with each stroke; he looks at you. */
+  function monkeyModelOn(blockObj, paddleDir, top) {
+    const g = new THREE.Group();
+    g.add(blockObj);
+    const mk = models.monkey.clone(true);
+    mk.scale.setScalar(1.0);
+    mk.position.y = top;
+    g.add(mk);
+    const head = mk.getObjectByName('head') || new THREE.Group();
+    const arms = mk.getObjectByName('arms') || new THREE.Group();
+    let jumped = 0;
+    g.userData = {
+      ...blockObj.userData, kind: 'monkey', block: blockObj.userData.block,
+      update(t, ahead) {
+        const stroke = Math.sin(t * 6.5);
+        arms.rotation.z = stroke * 0.45 * paddleDir;
+        arms.rotation.x = 0.12 + Math.abs(stroke) * 0.12;
+        mk.position.y = top + Math.abs(stroke) * 0.04 + jumped;
+        head.rotation.y = ahead < 30 ? 0 : Math.sin(t * 1.2) * 0.5;
+        head.rotation.z = Math.sin(t * 3.2) * 0.1;
         jumped = ahead < 9 && ahead > 0 ? Math.abs(Math.sin((9 - ahead) * 0.7)) * 0.35 : 0;
         mk.rotation.y = Math.PI * (ahead < 30 ? 0 : 0.15);
       },
