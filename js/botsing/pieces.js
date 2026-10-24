@@ -415,7 +415,8 @@ export function createPieces(renderer) {
       }
     } else {
       const art = blockFaceCanvas({ shape, color }, skin, 3);
-      const wall = blockPanelCanvas(shape, skin, color, D, D, 3);
+      // (1.20, the river and the Weektoring: an arch, L, J or T's walls are a plain panel in its skin; its face is drawn from its cells)
+      const wall = blockPanelCanvas(['arch', 'L', 'J', 'T'].includes(shape) ? 'slab' : shape, skin, color, D, D, 3);
       if (art && wall) {
         const t = new THREE.CanvasTexture(art.canvas);
         t.colorSpace = THREE.SRGBColorSpace;

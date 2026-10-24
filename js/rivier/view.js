@@ -12,7 +12,8 @@ import { createStage, pickQuality } from '../kasteel/stage.js';
 import { createPieces } from '../botsing/pieces.js';
 import { buildRiverWorld, bendMaterial, BANK } from './world.js';
 import { createRider } from './rider.js';
-import { createThings, createIsland } from './things.js';
+import { createThings, createIsland, createStartTower } from './things.js';
+import { createBeasts } from './beasts.js';
 import { RIVER, rescueCourse, speedAt, laneX } from '../core/rivier.js';
 import { portraitDataUrl, portraitsReady, CAST } from '../game/residents.js';
 import { S } from '../core/strings.js';
@@ -20,10 +21,11 @@ import { audio, haptics } from '../audio.js';
 
 const AHEAD = 230;       // m: things are made this far ahead...
 const BEHIND = 14;       // ...and taken away this far behind
-const DIVE_S = 1.5;      // the dive off the tower into the river
+
 const FINISH_S = 2.6;    // the ride in to the jetty
 const HIT_R = 0.62;      // m: the rider's half width for a knock (smaller than he looks: Game Brain, "hitboxes smaller than the art")
-const GRAB_R = 1.55;     // m: how near a person must be to be scooped up (more than he looks: generous)
+const GRAB_R = 1.55;
+const START_Z = 18;      // m: your tower stands this far upstream of where you land (the camera rides between)     // m: how near a person must be to be scooped up (more than he looks: generous)
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const ease = (k) => k * k * (3 - 2 * k);
 
@@ -57,7 +59,7 @@ function makeKit() {
 #rivier .rv-faces { position: absolute; left: 12px; top: calc(62px + var(--sat, 0px)); display: flex; flex-wrap: wrap; gap: 4px; max-width: 70%; }
 #rivier .rv-faces img { width: 30px; height: 30px; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
 #rivier .rv-faces img.out { opacity: .25; filter: grayscale(1); }
-#rivier .rv-hint { position: absolute; left: 50%; bottom: calc(18% + var(--sab, 0px)); transform: translateX(-50%); padding: 10px 18px; border-radius: 16px; background: rgba(13,34,40,.66); font-weight: 900; font-size: 18px; white-space: nowrap; opacity: 0; transition: opacity .3s; }
+#rivier .rv-hint { position: absolute; left: 50%; top: calc(104px + var(--sat, 0px)); transform: translateX(-50%); padding: 10px 18px; border-radius: 16px; background: rgba(13,34,40,.66); font-weight: 900; font-size: 18px; white-space: nowrap; opacity: 0; transition: opacity .3s; }
 #rivier .rv-hint.on { opacity: 1; }
 #rivier .rv-pop { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%) scale(.6); opacity: 0; font-size: 34px; font-weight: 900; color: #fff3c4; -webkit-text-stroke: 1.5px rgba(40,24,0,.75); text-shadow: 0 4px 0 rgba(40,24,0,.45), 0 8px 24px rgba(0,0,0,.4); white-space: nowrap; transition: opacity .25s, transform .35s cubic-bezier(.2,1.4,.4,1); }
 #rivier .rv-pop.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
@@ -88,7 +90,7 @@ function makeKit() {
   (document.getElementById('game') || document.body).appendChild(host);
   const quality = pickQuality();
   if (quality.name === 'mid' && !quality.forced) Object.assign(quality, { dpr: 1.35 });
-  const stage = createStage({ fov: 64, quality, canvas, stageEl: host });
+  const stage = createStage({ fov: 58, quality, canvas, stageEl: host });
   const pieces = createPieces(stage.renderer);
   return { host, ov, stage, pieces };
 }
@@ -119,11 +121,18 @@ function createRide(K, d) {
   const things = createThings(scene, pieces);
   const rider = createRider(bendMaterial);
   scene.add(rider.group);
+  const beasts = createBeasts(bendMaterial);
+  // the tower you just built stands at the river's head: you dive off its top (none: a jump from a rock)
+  const start = createStartTower(things, d.daily || [], d.skin || 'kleur');
+  scene.add(start.group);
+  const diveTop = Math.max(6, start.top);
+  const DIVE = clamp(1.3 + diveTop / 70, 1.5, 2.6);
   const who = (d.who || []).filter((id) => CAST[id]).slice(0, 24);
   const course = rescueCourse(String(d.seed || 'rivier'), who);
   const len = course.len;
   // the lake at the end, with your island and its Weektoring
   world.setLake(len - 110);
+  world.setPool(18);   // (open water round your tower at the river's head, the canyon from ~40 m)
   const island = createIsland(things, { radius: 22 });
   scene.add(island.group);
   island.setFloors(d.floors || []);
@@ -147,6 +156,23 @@ function createRide(K, d) {
   let hits = 0;
   const rescued = [];
   const lostAgain = [];
+  let closeAt = -9;
+  let streak = 0;
+  /** The animals' moments, once each: Blouaap chatters, the hippo grunts as it surfaces, a crocodile snaps near you. */
+  function cues(l, ahead) {
+    const k = l.it.kind;
+    if (k === 'monkey' && !l.said && ahead < 30) {
+      l.said = true;
+      audio.play('monkey');
+    } else if (k === 'hippo' && !l.said && ahead < 33) {
+      l.said = true;
+      audio.play('hippo');
+      things.emit(l.x, 0.2, -ahead, 30, 1.8, 4.5);
+    } else if (k === 'croc' && !l.said && l.obj.userData.snapped?.() && Math.abs(l.x - x) < 4.5) {
+      l.said = true;
+      audio.play('snap');
+    }
+  }
   const live = [];   // { it, row, obj, z, x, done }
   let rowI = 0;
 
@@ -228,7 +254,7 @@ function createRide(K, d) {
     laneT = 0;
     leanV = dir;
     haptics.tap?.();
-    if (rowI < 6) hint(null);
+    hint(null);
   }
   const onDown = (e) => {
     if (e.target.closest?.('button')) return;
@@ -281,7 +307,12 @@ function createRide(K, d) {
         let obj;
         if (it.kind === 'block') obj = things.floating({ ...it, skin: 'kleur' });
         else if (it.kind === 'rock') obj = things.rock();
-        else obj = things.person(it.who, who.indexOf(it.who));
+        else if (it.kind === 'croc') obj = beasts.croc(it.drift ? Math.sign(it.drift) : (rowI % 2 ? 1 : -1));
+        else if (it.kind === 'hippo') obj = beasts.hippo();
+        else if (it.kind === 'monkey') {
+          const blk = things.floating({ ...it, skin: 'kleur', spin: 0 });
+          obj = beasts.monkeyOn(blk, Math.sign(-(it.drift || 1)), blk.userData.top);
+        } else obj = things.person(it.who, who.indexOf(it.who));
         scene.add(obj);
         live.push({ it, row, obj, z: row.z, x: laneX(it.lane), done: false, drift: it.drift || 0 });
       }
@@ -310,15 +341,15 @@ function createRide(K, d) {
     haptics.lost?.();
     hurtEl.classList.add('on');
     setTimeout(() => hurtEl.classList.remove('on'), 120);
+    streak = 0;
     const back = rescued.pop();
     if (back) {
       lostAgain.push(back);
       setCount();
       pop(S.rvSlipped(CAST[back]?.name || ''), 1400);
     } else {
-      pop(S.rvOuch, 900);
+      pop(({ croc: S.rvCroc, hippo: S.rvHippo, monkey: S.rvMonkey })[l.it.kind] || S.rvOuch, 1000);
     }
-    void l;
   }
   function grab(l) {
     l.done = true;
@@ -330,7 +361,9 @@ function createRide(K, d) {
     l.obj.visible = false;
     things.emit(l.x, 0.5, -(l.z - dist), 14, 1.2, 3);
     setCount();
+    streak++;
     if (k === who.length && who.length > 1) pop(S.rvAll, 1400);
+    else if (streak === 3 || streak === 5 || streak === 8) pop(S.rvStreak(streak), 900);
   }
 
   // ---------------------------------------------------------------------------------------------- the autopilot (tests)
@@ -351,25 +384,44 @@ function createRide(K, d) {
     let p;
     let l;
     if (phase === 'dive') {
-      const k = ease(clamp(phaseT / DIVE_S, 0, 1));
-      // from high over the river, looking down at the splash, round to behind him
-      p = new THREE.Vector3(x * 0.5, 22 - 17.6 * k, 4 + 3.6 * k);
-      l = new THREE.Vector3(x * 0.3, 2 - 0.8 * k, -6 - 8 * k);
+      const k = ease(clamp(phaseT / DIVE, 0, 1));
+      // out in front of your tower and to the side, watching him jump off its top and fall; round to behind him as he lands
+      const y = rider.group.position.y;
+      const back = Math.max(14, diveTop * 0.75);
+      const front = new THREE.Vector3(7, y * 0.75 + 3, START_Z - back);
+      const behind = new THREE.Vector3(x * 0.82, 6.4, 11.5);
+      p = front.lerp(behind, ease(clamp((k - 0.45) / 0.55, 0, 1)));
+      l = new THREE.Vector3(0, y * 0.95 + 0.5, START_Z * (1 - k)).lerp(new THREE.Vector3(x * 0.62, 0.4, -22), ease(clamp((k - 0.55) / 0.45, 0, 1)));
     } else if (phase === 'finish' || phase === 'done') {
-      // up and back from him until the whole Weektoring stands in the picture, above the card
+      // up and back until the whole Weektoring and its island stand in the top part of the picture (the card has the
+      // bottom third): the camera's distance from the tower's height and the lens
       const k = ease(clamp(phaseT / FINISH_S, 0, 1));
       const iz = -(islandZ - dist);
-      const h = Math.max(14, towerTop());
-      const back = Math.max(30, h * 0.95);
-      const from = new THREE.Vector3(x * 0.55, 4.4, 7.6);
-      const to = new THREE.Vector3(10, h * 0.42 + 6, iz + back);
+      const h = Math.max(16, towerTop()) + 6;
+      const half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+      const back = Math.max(40, (h / 0.62) / (2 * half));
+      const mid = h * 0.5 - (h / 0.62) * 0.19;   // (the picture's middle sits lower: the tower fills its top 62 %)
+      const from = new THREE.Vector3(x * 0.82, 6.4, 11.5);
+      const to = new THREE.Vector3(back * 0.32, mid + back * 0.08, iz + back);
       p = from.lerp(to, k);
-      l = new THREE.Vector3(x * 0.3, 1, -14).lerp(new THREE.Vector3(0, h * 0.36 + 2, iz), k);
+      l = new THREE.Vector3(x * 0.62, 0.4, -22).lerp(new THREE.Vector3(0, mid, iz), k);
     } else {
-      p = new THREE.Vector3(x * 0.55, 4.4, 7.6);
-      l = new THREE.Vector3(x * 0.3, 1.0, -14);
+      // behind and above him, the river ahead filling the screen; he rides in the lower third, near the middle (the camera
+      // follows most of a lane change, so the move still shows)
+      p = new THREE.Vector3(x * 0.82, 6.4, 11.5);
+      l = new THREE.Vector3(x * 0.62, 0.4, -22);
     }
-    const a = phase === 'run' ? 1 - Math.exp(-dt * 9) : 1 - Math.exp(-dt * 4);
+    if (phase === 'zoo') {
+      p = new THREE.Vector3(Number(d.zooCam?.[0] ?? 0), Number(d.zooCam?.[1] ?? 3.2), Number(d.zooCam?.[2] ?? 2));
+      l = new THREE.Vector3(0, 0.6, -12);
+    } else if (d.debugCam === 'rider') {   // (tests: a close look at the rider)
+      p = new THREE.Vector3(x + 2.6, 1.7, 3.4);
+      l = new THREE.Vector3(x, 0.9, 0);
+    } else if (d.debugCam === 'back') {
+      p = new THREE.Vector3(x + 0.6, 1.9, 4.2);
+      l = new THREE.Vector3(x, 0.9, 0);
+    }
+    const a = phase === 'run' ? 1 - Math.exp(-dt * 9) : phase === 'dive' ? 1 - Math.exp(-dt * 14) : 1 - Math.exp(-dt * 4);
     cam.pos.lerp(p, a);
     cam.look.lerp(l, a);
     camera.position.copy(cam.pos);
@@ -378,29 +430,49 @@ function createRide(K, d) {
 
   // ---------------------------------------------------------------------------------------------- the loop
   let pilotOn = !!d.autopilot;
+  let rapK = 0;
+  let startGone = 0;
+  let rapSaid = false;
+  if (course.rapids) world.setRapids(course.rapids.from, course.rapids.to);
   function step(dt) {
     t += dt;
     phaseT += dt;
     if (phase === 'dive') {
       // he falls from the top into the river: a splash, and he's up on his board
-      const k = clamp(phaseT / DIVE_S, 0, 1);
-      rider.group.position.y = Math.max(0, 16 * (1 - k * k) - 0.2);
-      rider.group.rotation.x = -Math.PI * 1.2 * (1 - k);
+      const k = clamp(phaseT / DIVE, 0, 1);
+      // off the top: a little hop up, then the fall (a flip on the way), into the river ahead of the tower
+      const hop = Math.sin(Math.min(1, k * 3) * Math.PI) * 1.2 * (1 - k);
+      rider.group.position.y = Math.max(0, (diveTop + 0.6) * (1 - k * k) + hop - 0.2);
+      rider.group.position.z = START_Z * (1 - k);
+      rider.group.rotation.x = -Math.PI * 2 * ease(k);
       if (k >= 1) {
         phase = 'run';
         phaseT = 0;
-        things.emit(0, 0.2, 0, 50, 2.4, 6);
+        rider.group.position.z = 0;
+        rider.group.rotation.x = 0;
+        startGone = t;
+        things.emit(0, 0.2, 0, 60, 2.6, 7);
+        stage.shake(reduced ? 0 : 0.5);
         audio.play('splash');
         audio.music?.(true, { bpm: 104, layers: 1, key: 2 });
         hint(S.rvHint);
       }
     } else if (phase === 'run') {
       if (pilotOn) pilot();
-      const sp = speedAt(dist, len) * (slowT > 0 ? RIVER.hitSlowK : 1);
+      const rap = course.rapids && dist > course.rapids.from && dist < course.rapids.to;
+      if (rap && !rapSaid) {
+        rapSaid = true;
+        pop(S.rvRapids, 1100);
+        audio.play('splash');
+      }
+      rapK += ((rap ? 1 : 0) - rapK) * Math.min(1, dt * 2.5);
+      if (rapK > 0.3) stage.shake(reduced ? 0 : 0.04 * rapK);
+      const sp = speedAt(dist, len) * (slowT > 0 ? RIVER.hitSlowK : 1) * (1 + 0.24 * rapK);
       dist += sp * dt;
       slowT = Math.max(0, slowT - dt);
       graceT = Math.max(0, graceT - dt);
       rider.setBlink(graceT > 0 && Math.floor(t * 10) % 2 === 0);
+      if (phaseT > 7) hint(null);
       if (dist > len * 0.4) audio.musicSet?.({ layers: 2, bpm: 112 });
       if (dist >= len - RIVER.finishRun + 10) {
         phase = 'finish';
@@ -422,30 +494,42 @@ function createRide(K, d) {
     rider.group.position.x = x;
     rider.update(dt, { lean: leanV, crouch: slowT > 0 ? slowT / RIVER.hitSlowS : 0, speed: speedAt(dist, len) });
     // spray off the board's tail
-    if (phase === 'run' && Math.random() < 0.85) things.emit(x - leanV * 0.3, 0.12, 0.9, 1, 0.6, 1.4 + Math.abs(leanV) * 2);
+    if (phase === 'run' && Math.random() < 0.85) things.emit(x - leanV * 0.3, 0.12, 0.9, 1 + Math.round(rapK * 2), 0.6 + rapK, 1.4 + Math.abs(leanV) * 2 + rapK * 1.5);
 
-    spawn();
+    if (phase !== 'zoo') spawn();
     for (const l of live) {
-      const ahead = l.z - dist;
+      const ahead = phase === 'zoo' ? 12 - (t % 14) : l.z - dist;
       // a drifting block crosses as you come (it's in its own lane when it's level with you)
-      let lx = laneX(l.it.lane);
+      let lx = l.zooX ?? laneX(l.it.lane);
       if (l.drift) lx = laneX(l.it.lane) + l.drift * RIVER.laneW * ease(clamp((ahead - 4) / 46, 0, 1));
       l.x = lx;
       const u = l.obj.userData;
-      l.obj.position.set(lx, Math.sin(t * 1.9 + u.phase) * 0.08, -ahead);
-      if (u.block) {
+      l.obj.position.set(lx, u.kind === 'croc' || u.kind === 'hippo' ? 0 : Math.sin(t * 1.9 + (u.phase || 0)) * 0.08, phase === 'zoo' ? -12 : -ahead);
+      if (u.block && u.kind !== 'monkey') {
         u.block.rotation.y += dt * 0.2;
         u.block.rotation.z = Math.sin(t * 1.3 + u.phase) * 0.05;
       }
       if (u.arm) u.arm.rotation.z = -0.4 + Math.sin(t * 9 + u.phase) * 0.7;
+      u.update?.(t, ahead, dt);
+      if (phase === 'run') cues(l, ahead);
       if (l.done || phase !== 'run') continue;
       if (Math.abs(ahead) < (u.d || 1.4) / 2 + 0.5) {
         const dx = Math.abs(l.x - x);
+        const reach = (u.w || 2.4) / 2 + HIT_R;
         if (l.it.kind === 'person') {
           if (dx < GRAB_R) grab(l);
-        } else if (graceT <= 0 && dx < (u.w || 2.4) / 2 + HIT_R) {
+        } else if (graceT <= 0 && dx < reach && (l.it.kind !== 'hippo' || u.surfaced?.())) {
           l.done = true;
           knock(l);
+        } else if (dx < reach + 0.7 && dx >= reach) {
+          l.close = true;   // (it went by within a hand's width: "Amper!" once it's behind you)
+        }
+      } else if (l.close && ahead < 0 && !l.done) {
+        l.done = true;
+        if (t - closeAt > 3) {
+          closeAt = t;
+          pop(S.rvClose, 700);
+          audio.play('fling');
         }
       }
     }
@@ -455,12 +539,30 @@ function createRide(K, d) {
         live.splice(i, 1);
       }
     }
-    // the island ahead, in the lake
+    // the island ahead, in the lake; your tower behind, at the river's head
     island.group.position.set(0, -0.6, -(islandZ - dist));
+    // (your tower stays upstream: behind the camera once you ride)
+    start.group.position.set(0, -0.6, dist + START_Z);
     barEl.style.width = `${clamp(dist / (len - RIVER.finishRun), 0, 1) * 100}%`;
     world.update(dist, t);
     things.updateSpray(dt);
     cameraFor(dt);
+  }
+  // (tests: ?zoo=1, the animals side by side in front of a still camera)
+  if (d.zoo) {
+    phase = 'zoo';
+    rider.group.visible = false;
+    start.group.visible = false;
+    const kinds = [['croc', -3.4], ['hippo', 0], ['monkey', 3.4]];
+    for (const [k, lx] of kinds) {
+      const it = k === 'monkey' ? { kind: k, lane: 1, shape: 'crate', color: 3, scale: 1, drift: 0 } : { kind: k, lane: 1 };
+      let obj;
+      if (k === 'croc') obj = beasts.croc(1);
+      else if (k === 'hippo') obj = beasts.hippo();
+      else { const blk = things.floating({ ...it, skin: 'kleur', spin: 0 }); obj = beasts.monkeyOn(blk, 1, blk.userData.top); }
+      scene.add(obj);
+      live.push({ it, row: { z: 12 }, obj, z: 12, x: lx, done: true, drift: 0, zooX: lx });
+    }
   }
   function loop(now) {
     if (!alive) return;
@@ -507,7 +609,7 @@ function createRide(K, d) {
   // ---------------------------------------------------------------------------------------------- open / close
   host.style.display = 'block';
   place();
-  cameraFor(1);
+  for (let i = 0; i < 30; i++) cameraFor(0.1);   // (the first frame already looks at the tower top)
   const ready = (async () => {
     // a first frame before it shows (the shaders compile behind Stapel's page)
     stage.render(0);
@@ -529,7 +631,8 @@ function createRide(K, d) {
     host.removeEventListener('pointerup', onUp);
     for (const l of live) despawn(l);
     live.length = 0;
-    scene.remove(rider.group, island.group, things.spray);
+    scene.remove(rider.group, island.group, start.group, things.spray);
+    beasts.dispose();
     things.dispose();
     world.dispose();
     ov.innerHTML = '';
@@ -544,6 +647,23 @@ function createRide(K, d) {
     /** For tests: where the ride stands. */
     state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, lane, rescued: [...rescued], hits, who: [...who], live: live.length, paused }),
     autopilot(on) { pilotOn = !!on; },
+    /** For tests: the ride jumps to course z (what's before it is gone; the dive is skipped). */
+    jumpTo(z) {
+      for (const l of live) despawn(l);
+      live.length = 0;
+      dist = Math.max(0, z);
+      rowI = course.rows.findIndex((r) => r.z > dist);
+      if (rowI < 0) rowI = course.rows.length;
+      if (phase === 'dive') {
+        phase = 'run';
+        phaseT = 8;
+        rider.group.position.set(x, 0, 0);
+        rider.group.rotation.set(0, 0, 0);
+        hint(null);
+      }
+    },
+    /** For tests: where the course's rows and kinds are. */
+    course: () => course,
     move,
     skip: finishNow,
   };

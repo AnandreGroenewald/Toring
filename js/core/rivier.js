@@ -61,6 +61,11 @@ function buildCourse(key, len, who, crews) {
   const people = who.slice(0, 24);
   let pi = 0;
   const person = (lane) => (pi < people.length ? { lane, kind: 'person', who: people[pi++] } : null);
+  const addPerson = (items, lane, p = 1) => {
+    if (!rng.chance(p)) return;
+    const it = person(lane);
+    if (it) items.push(it);
+  };
   const rows = [];
   const islands = [];
   // the islands first: their stretch of river is kept calmer (you look at the tower, not at your feet)
@@ -70,8 +75,13 @@ function buildCourse(key, len, who, crews) {
     });
   }
   const nearIsland = (z) => islands.some((i) => Math.abs(i.z - z) < 40);
+  // the rapids: white water a little past halfway, faster (only single obstacles in it)
+  const rapids = { from: Math.round(len * 0.58), to: Math.round(len * 0.58) + 90 };
+  const inRapids = (z) => z >= rapids.from && z <= rapids.to;
+  // each new kind is met alone first (introduce, then develop, then mix): where each first comes
+  const FIRST = { croc: 0.27, monkey: 0.44, hippo: 0.7 };
+  const met = { croc: false, monkey: false, hippo: false };
   let z = 30;
-  let free = 1;   // the lane the row before left open
   // the intro: people only, from the middle out (swipe to scoop them up)
   for (const lane of [1, 0, 2, 1]) {
     z += 18;
@@ -79,69 +89,74 @@ function buildCourse(key, len, who, crews) {
     rows.push({ z, items: p ? [p] : [], intro: true });
   }
   z = Math.max(z, RIVER.introLen);
-  let n = 0;
   while (z < len - RIVER.finishRun) {
     z += rng.int(RIVER.gapMin, RIVER.gapMax);
     if (z >= len - RIVER.finishRun) break;
-    n++;
     const t = z / len;   // how far along: harder further on
-    const calm = nearIsland(z);
     const items = [];
-    // the lane left open this row: next to the last open one at most... (two lane changes always fit: gapMin)
     const open = rng.pick(ALL);
-    if (calm) {
-      // by an island: one block at most, and often a person
-      if (rng.chance(0.5)) items.push({ lane: (open + 1) % 3, ...block() });
-      const p = rng.chance(0.6) ? person(open) : null;
-      if (p) items.push(p);
-    } else if (t < 0.3) {
+    const shut = ALL.filter((l) => l !== open);
+    // a new kind, alone, the first time (a person in another lane: the way past it is plain)
+    const fresh = Object.keys(FIRST).find((k) => !met[k] && t >= FIRST[k]);
+    if (fresh && !nearIsland(z) && !inRapids(z)) {
+      met[fresh] = true;
+      const lane = 1;
+      if (fresh === 'monkey') items.push({ lane, ...block(), kind: 'monkey', drift: rng.chance(0.5) ? 1 : -1 });
+      else items.push({ lane, kind: fresh });
+      addPerson(items, rng.pick([0, 2]), 0.9);
+      rows.push({ z, items, teach: fresh });
+      continue;
+    }
+    if (nearIsland(z) || inRapids(z)) {
+      // by an island or in the rapids: one obstacle at most, often a person
+      if (rng.chance(inRapids(z) ? 0.8 : 0.5)) items.push({ lane: shut[0], ...(rng.chance(0.75) ? block() : { kind: 'rock' }) });
+      addPerson(items, open, 0.6);
+      rows.push({ z, items, rapids: inRapids(z) });
+      continue;
+    }
+    const roll = rng.next();
+    if (t < 0.27) {
       // single blocks; a person in another lane now and then
-      const bl = ALL.filter((l) => l !== open);
-      items.push({ lane: rng.pick(bl), ...block() });
-      if (rng.chance(0.45)) {
-        const p = person(open);
-        if (p) items.push(p);
-      }
+      items.push({ lane: rng.pick(shut), ...block() });
+      addPerson(items, open, 0.45);
+    } else if (met.hippo && roll < 0.14) {
+      // a hippo in one lane, something in another
+      items.push({ lane: shut[0], kind: 'hippo' }, { lane: shut[1], ...(rng.chance(0.5) ? block() : { kind: 'croc' }) });
+      addPerson(items, open, 0.5);
+    } else if (met.monkey && roll < 0.3) {
+      // Blouaap paddles a block across, from a shut lane into the other one (the open lane stays open)
+      items.push({ lane: shut[1], ...block(), kind: 'monkey', drift: shut[0] - shut[1] });
+      addPerson(items, open, 0.6);
+    } else if (met.croc && roll < 0.5) {
+      // crocodiles: one, or one swimming across when you're further along
+      const swim = t > 0.5 && rng.chance(0.4);
+      items.push(swim ? { lane: shut[1], kind: 'croc', drift: shut[0] - shut[1] } : { lane: rng.pick(shut), kind: 'croc' });
+      if (!swim && rng.chance(0.4)) items.push({ lane: shut.find((l) => !items.some((it) => it.lane === l)), ...block() });
+      addPerson(items, open, 0.5);
+    } else if (roll < 0.66) {
+      // two blocks: one lane free (a person waits in it, half the time)
+      for (const l of shut) items.push({ lane: l, ...block() });
+      addPerson(items, open, 0.5);
+    } else if (roll < 0.8) {
+      // a narrow: rocks on both sides, the middle open
+      items.push({ lane: 0, kind: 'rock' }, { lane: 2, kind: 'rock' });
+      addPerson(items, 1, 0.55);
+    } else if (roll < 0.9 && t > 0.45) {
+      // a drifting block: it floats across into the open lane's neighbour as you come (watch which way)
+      items.push({ lane: shut[1], ...block(), drift: shut[0] - shut[1] });
+      addPerson(items, open, 0.7);
     } else {
-      const roll = rng.next();
-      const shut = ALL.filter((l) => l !== open);
-      if (roll < 0.34) {
-        // two blocks: one lane free (a person waits in it, half the time)
-        for (const l of shut) items.push({ lane: l, ...block() });
-        if (rng.chance(0.5)) {
-          const p = person(open);
-          if (p) items.push(p);
-        }
-      } else if (roll < 0.52) {
-        // a narrow: rocks on both sides, the middle open
-        items.push({ lane: 0, kind: 'rock' }, { lane: 2, kind: 'rock' });
-        const p = rng.chance(0.55) ? person(1) : null;
-        if (p) items.push(p);
-        rows.push({ z, items, narrow: true });
-        free = 1;
+      // a block in your way, a person behind it in the next row (a choice: safe or brave)
+      items.push({ lane: shut[0], ...block() });
+      const p = rng.chance(0.6) ? person(shut[0]) : null;
+      if (p) {
+        rows.push({ z, items });
+        z += RIVER.gapMin;
+        rows.push({ z, items: [p] });
         continue;
-      } else if (roll < 0.72 && t > 0.45) {
-        // a drifting block: it floats across into the open lane's neighbour as you come (watch which way)
-        const from = shut[0];
-        const to = shut[1];
-        items.push({ lane: to, ...block(), drift: from - to });
-        const p = person(open);
-        if (p) items.push(p);
-      } else {
-        // a block in the lane you're likely in, a person behind it in the next row (a choice: safe or brave)
-        items.push({ lane: shut[0], ...block() });
-        const p = rng.chance(0.6) ? person(shut[0]) : null;
-        if (p) {
-          rows.push({ z, items });
-          z += RIVER.gapMin;
-          rows.push({ z, items: [p] });
-          free = open;
-          continue;
-        }
       }
     }
     rows.push({ z, items });
-    free = open;
   }
   // people left over (a long list): along the calm finish stretch, lane by lane
   let fz = len - RIVER.finishRun + 8;
@@ -150,9 +165,7 @@ function buildCourse(key, len, who, crews) {
     rows.push({ z: fz, items: [p], finish: true });
     fz += 9;
   }
-  void free;
-  void n;
-  return { len, rows, islands, people: people.slice(0, pi) };
+  return { len, rows, islands, rapids, people: people.slice(0, pi) };
 }
 
 /**
@@ -160,7 +173,7 @@ function buildCourse(key, len, who, crews) {
  * that lane can be reached in time (the gap at full speed holds two lane changes and a moment to react).
  */
 export function passable(course) {
-  const hard = (it) => it.kind === 'block' || it.kind === 'rock';
+  const hard = (it) => it.kind !== 'person';
   let prevZ = -Infinity;
   for (const row of course.rows) {
     const shut = new Set();

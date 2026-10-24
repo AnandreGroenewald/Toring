@@ -55,3 +55,26 @@ test('rivier: speed rises along the course; lanes sit either side of the middle'
   assert.equal(laneX(0), -RIVER.laneW);
   assert.equal(passable({ rows: [{ z: 10, items: [0, 1, 2].map((lane) => ({ lane, kind: 'block' })) }] }), false);
 });
+
+test('rivier: crocodiles, Blouaap on his block and hippos come in, each met alone first; the rapids are calmer', () => {
+  let seen = { croc: 0, monkey: 0, hippo: 0 };
+  for (let d = 0; d < 120; d++) {
+    const c = rescueCourse(`dag-${d}`, WHO);
+    const order = [];
+    for (const r of c.rows) {
+      for (const it of r.items) {
+        if (seen[it.kind] !== undefined) seen[it.kind]++;
+        if (['croc', 'monkey', 'hippo'].includes(it.kind) && !order.includes(it.kind)) {
+          order.push(it.kind);
+          assert.equal(r.teach, it.kind, `${d}: the first ${it.kind} is a lesson row`);
+          assert.equal(r.items.filter((x) => x.kind !== 'person').length, 1, 'alone');
+        }
+        if (it.kind === 'monkey') assert.ok(it.shape && Math.abs(it.drift) >= 1, 'Blouaap sits on a block and paddles it across');
+      }
+      if (r.rapids) assert.ok(r.items.filter((x) => x.kind !== 'person').length <= 1);
+    }
+    assert.deepEqual(order, ['croc', 'monkey', 'hippo'].filter((k) => order.includes(k)), 'in that order');
+    assert.ok(c.rapids.to > c.rapids.from);
+  }
+  assert.ok(seen.croc > 120 && seen.monkey > 60 && seen.hippo > 60, JSON.stringify(seen));
+});

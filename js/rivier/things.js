@@ -125,7 +125,7 @@ export function createThings(scene, pieces) {
     const f = foam(Math.max(W, H) * k * 1.7);
     f.position.y = 0.04;
     root.add(f);
-    root.userData = { block: g, w: W * k * 0.82, d: 3.2 * k * 0.8, phase: (it.spin || 0) * 10 };
+    root.userData = { block: g, w: W * k * 0.82, d: 3.2 * k * 0.8, phase: (it.spin || 0) * 10, top: H * k * 0.68 };
     return root;
   }
   function rock() {
@@ -271,23 +271,56 @@ export function createIsland(things, { radius = 26 } = {}) {
 
   function setFloors(floors) {
     for (const c of [...towerG.children]) towerG.remove(c);
-    height = 0;
-    for (const f of floors || []) {
-      const g = things.riverBlock(f.s, f.sk || 'kleur', f.c | 0);
-      const k = f.k || 1;
-      g.scale.setScalar(k);
-      // the 3D block is centred on the shape's centroid; the floor is kept by its bottom edge's middle (turned by r)
-      const geo = getGeometry({ shape: f.s, scale: 1 });
-      const u = ((geo.w / 2 - geo.cx) / PX) * k;
-      const v = (-(geo.h - geo.cy) / PX) * k;
-      const c = Math.cos(f.r || 0);
-      const s = Math.sin(f.r || 0);
-      g.position.set(f.x - (u * c - v * s), f.y - (u * s + v * c), 0);
-      g.rotation.z = f.r || 0;
-      g.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
-      towerG.add(g);
-      height = Math.max(height, f.y + dimsOf(f).H);
-    }
+    height = addTower(things, towerG, floors);
   }
   return { group, setFloors, get top() { return height + 3.6; }, radius };
+}
+
+/** Floors (js/core/weektower.js) as 3D blocks into `group`, each in its own skin; returns the tower's height (m). */
+export function addTower(things, group, floors, skin = null) {
+  let height = 0;
+  for (const f of floors || []) {
+    const g = things.riverBlock(f.s, skin || f.sk || 'kleur', Number.isInteger(f.c) ? f.c : 0);
+    const k = f.k || 1;
+    g.scale.setScalar(k);
+    // the 3D block is centred on the shape's centroid; the floor is kept by its bottom edge's middle (turned by r)
+    const geo = getGeometry({ shape: f.s, scale: 1 });
+    const u = ((geo.w / 2 - geo.cx) / PX) * k;
+    const v = (-(geo.h - geo.cy) / PX) * k;
+    const c = Math.cos(f.r || 0);
+    const s = Math.sin(f.r || 0);
+    g.position.set(f.x - (u * c - v * s), f.y - (u * s + v * c), 0);
+    g.rotation.z = f.r || 0;
+    g.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
+    group.add(g);
+    height = Math.max(height, f.y + dimsOf(f).H);
+  }
+  return height;
+}
+
+/**
+ * The tower you just built in the Daily, at the river's head on its own rock: you dive off its top. `layout`: the Daily's
+ * blocks as they stood (GameScene.castleLayout: { s, k, x, y, r, c }), drawn in your skin. { group, top }.
+ */
+export function createStartTower(things, layout, skin = 'kleur') {
+  const group = new THREE.Group();
+  const rockMat = bendMaterial(new THREE.MeshStandardMaterial({ color: '#a77d58', roughness: 0.9, flatShading: true }));
+  const geo = new THREE.CylinderGeometry(6.5, 8, 4, 10, 2);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const a = Math.atan2(p.getZ(i), p.getX(i));
+    const k = 1 + Math.sin(a * 4 + 2) * 0.1;
+    p.setXYZ(i, p.getX(i) * k, p.getY(i), p.getZ(i) * k);
+  }
+  geo.computeVertexNormals();
+  const rock = new THREE.Mesh(geo, rockMat);
+  rock.position.y = 0.4;
+  group.add(rock);
+  const towerG = new THREE.Group();
+  towerG.position.y = 2.4;
+  group.add(towerG);
+  const floors = (Array.isArray(layout) ? layout : []).filter((f) => f && typeof f.s === 'string').slice(0, 400);
+  const h = addTower(things, towerG, floors, skin);
+  group.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
+  return { group, top: (floors.length ? h : 0) + 2.4 };
 }

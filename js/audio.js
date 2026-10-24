@@ -336,6 +336,28 @@ const SOUNDS = {
     v.noise(B.white, t + 0.42, 0.07, bp);
   },
 
+  // (1.20) Die Rivier: a crocodile's jaws clacking shut, and a hippo's grunt as it surfaces
+  snap(v, t, o, B) {
+    for (const [dt, f, pk] of [[0, 480, 0.7], [0.075, 560, 0.55]]) {
+      const k = v.osc('triangle', f, t + dt, 0.09, v.env(v.out, t + dt, pk, 0.001, 0.06));
+      k.frequency.exponentialRampToValueAtTime(f * 0.4, t + dt + 0.05);
+      const bp = v.filter('bandpass', 2100, 1.4, v.env(v.out, t + dt, pk * 0.6, 0.001, 0.025));
+      v.noise(B.white, t + dt, 0.04, bp);
+    }
+  },
+  hippo(v, t, o, B) {
+    const g = v.envHold(v.out, t, 0.55, 0.05, 0.35, 0.3);
+    const lp = v.filter('lowpass', 380, 3, g);
+    lp.frequency.setValueAtTime(320, t);
+    lp.frequency.linearRampToValueAtTime(950, t + 0.18);
+    lp.frequency.exponentialRampToValueAtTime(260, t + 0.65);
+    const s = v.osc('sawtooth', 74, t, 0.72, lp);
+    s.frequency.linearRampToValueAtTime(92, t + 0.2);
+    s.frequency.exponentialRampToValueAtTime(58, t + 0.68);
+    const n = v.filter('lowpass', 700, 0.6, v.env(v.out, t, 0.18, 0.04, 0.5));
+    v.noise(B.white, t, 0.55, n);
+  },
+
   click(v, t) {
     const o = v.osc('triangle', 1500, t, 0.06, v.env(v.out, t, 0.6, 0.001, 0.045));
     o.frequency.exponentialRampToValueAtTime(1050, t + 0.025);

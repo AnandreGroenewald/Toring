@@ -10,8 +10,8 @@ import * as THREE from '../../lib/three.module.min.js';
 export const SUN = new THREE.Vector3(-0.45, 0.34, -0.83).normalize();   // low, ahead and a little left: rim light on what comes
 const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
 export const COLORS = {
-  zenith: '#4f86c6', horizon: '#f2d3a7', haze: '#e6c9a1', sun: '#ffe3b8',
-  deep: '#0f3b3a', shallow: '#2e7a6b', foam: '#f4f1e8',
+  zenith: '#3f7fc4', horizon: '#e9dcc3', haze: '#dcd2bd', sun: '#fff0d2', skyRefl: '#8fb8dc',
+  deep: '#2a8a88', shallow: '#56bba8', foam: '#f6f8f4',
   rock: ['#c9824f', '#e0b27a', '#a85f3c', '#d99b62', '#8e4f33', '#e8c592'],
   bush: '#4d6b2f', bushL: '#6f8f3a', grass: '#8a9a4a',
 };
@@ -165,34 +165,46 @@ void main() {
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 const WATER_FRAG = `uniform float uT; uniform sampler2D uNoise; uniform vec3 uSun; uniform vec3 uSunCol; uniform vec3 uDeep; uniform vec3 uShallow;
-uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uFoam; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar;
-uniform float uHalf; uniform float uLakeFrom; uniform float uLakeTo; uniform float uDetail;
+uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSkyRefl; uniform vec3 uFoam; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar;
+uniform float uHalf; uniform float uLakeFrom; uniform float uLakeTo; uniform float uDetail; uniform vec2 uRapids; uniform float uPoolTo;
 varying vec3 vWorld; varying vec2 vRiver; varying float vAhead;
+float h(vec2 p) {
+  // the surface's height: long swells across, ripples and chop running with the current (stretched along it)
+  float a = texture2D(uNoise, vec2(p.x * 0.07, p.y * 0.022 - uT * 0.05)).r;
+  float b = texture2D(uNoise, vec2(p.x * 0.23, p.y * 0.075 - uT * 0.16)).b;
+  float c = texture2D(uNoise, vec2(p.x * 0.61, p.y * 0.21 - uT * 0.42)).r;
+  return a * 0.55 + b * 0.32 + c * 0.13 * uDetail;
+}
 void main() {
   vec2 p = vRiver;
-  float flow = uT * 2.4;
-  vec2 a = texture2D(uNoise, p * vec2(0.055, 0.032) + vec2(0.0, -flow * 0.018)).rg;
-  vec2 b = texture2D(uNoise, p * vec2(0.17, 0.09) + vec2(uT * 0.013, -flow * 0.05)).rg;
-  vec2 c = texture2D(uNoise, p * vec2(0.42, 0.24) + vec2(-uT * 0.03, -flow * 0.11)).rg;
-  vec2 n2 = (a - 0.5) * 0.8 + (b - 0.5) * 0.55 + (c - 0.5) * 0.35 * uDetail;
-  vec3 n = normalize(vec3(n2.x, 1.0, n2.y));
+  float e = 0.35;
+  float h0 = h(p);
+  vec3 n = normalize(vec3((h0 - h(p + vec2(e, 0.0))) * 2.4, 1.0, (h0 - h(p + vec2(0.0, e))) * 2.4));
   vec3 v = normalize(cameraPosition - vWorld);
-  // the banks (and the lake's wider shore): shallow, foamy water near them
   float lake = smoothstep(uLakeFrom, uLakeFrom + 40.0, p.y) * (1.0 - smoothstep(uLakeTo, uLakeTo + 30.0, p.y));
+  lake = max(lake, 1.0 - smoothstep(uPoolTo, uPoolTo + 40.0, p.y));
   float half_ = mix(uHalf, 46.0, lake);
-  float edge = abs(p.x) / half_;
-  vec3 base = mix(uDeep, uShallow, smoothstep(0.35, 1.0, edge) * 0.8 + 0.12 * (b.x - 0.5));
-  float fres = 0.04 + 0.96 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
+  float edge = clamp(abs(p.x) / half_, 0.0, 1.2);
+  // the water's own colour: deep green-blue in the middle, lighter and clearer towards the banks; darker in the troughs
+  vec3 base = mix(uDeep, uShallow, smoothstep(0.45, 1.0, edge) * 0.85);
+  base *= 0.9 + h0 * 0.36;
+  // the sky in it: more at a glancing look (Fresnel), never more than half
+  float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
   vec3 r = reflect(-v, n);
-  vec3 sky = mix(uHorizon, uZenith, smoothstep(0.0, 0.5, r.y));
-  vec3 col = mix(base, sky, clamp(fres * 0.85, 0.0, 0.8));
-  float sp = pow(max(dot(r, uSun), 0.0), 140.0);
-  col += uSunCol * sp * 2.6;
-  col += uSunCol * pow(max(dot(r, uSun), 0.0), 12.0) * 0.08;
-  // white water: along the banks, and streaks where the current breaks
-  float bankFoam = smoothstep(0.86, 1.0, edge) * smoothstep(0.35, 0.75, a.x + b.y * 0.6);
-  float streak = smoothstep(0.78, 0.92, b.x * 0.6 + c.y * 0.6) * 0.35 * (1.0 - lake);
-  col = mix(col, uFoam, clamp(bankFoam + streak, 0.0, 0.85));
+  vec3 sky = mix(uHorizon, uSkyRefl, smoothstep(0.0, 0.35, r.y));
+  vec3 col = mix(base, sky, clamp(fres, 0.0, 0.5));
+  // light in the water itself (it's never black, even looking straight down into it)
+  col += uShallow * 0.18 * (1.0 - fres);
+  // the low sun ahead: a path of glitter down the river
+  float s = max(dot(r, uSun), 0.0);
+  col += uSunCol * (pow(s, 260.0) * 3.2 + pow(s, 40.0) * 0.22);
+  // white water: foam along the banks and streaks where the current breaks (thin, along the flow)
+  float streak = texture2D(uNoise, vec2(p.x * 0.9, p.y * 0.02 - uT * 0.11)).b;
+  float rap = smoothstep(uRapids.x - 12.0, uRapids.x + 8.0, p.y) * (1.0 - smoothstep(uRapids.y - 8.0, uRapids.y + 12.0, p.y));
+  float foamLine = smoothstep(0.66 - rap * 0.2, 0.74, streak) * (1.0 - smoothstep(0.74, 0.86 + rap * 0.1, streak)) * (0.55 + rap * 0.4) * (1.0 - lake);
+  foamLine += rap * smoothstep(0.55, 0.85, h0) * 0.6;
+  float bankFoam = smoothstep(0.82, 1.0, edge) * (0.55 + 0.45 * smoothstep(0.4, 0.7, h0));
+  col = mix(col, uFoam, clamp(foamLine * smoothstep(0.3, 0.6, h0) + bankFoam, 0.0, 0.9));
   float f = smoothstep(uFogNear, uFogFar, length(vWorld - cameraPosition));
   col = mix(col, uFog, f);
   gl_FragColor = vec4(col, 1.0);
@@ -243,10 +255,10 @@ export function buildRiverWorld(stage) {
     uniforms: {
       uT: { value: 0 }, uDist: { value: 0 }, uNoise: { value: noise }, uSun: { value: SUN.clone() }, uSunCol: { value: lin(COLORS.sun) },
       uDeep: { value: lin(COLORS.deep) }, uShallow: { value: lin(COLORS.shallow) }, uZenith: { value: lin(COLORS.zenith) },
-      uHorizon: { value: lin(COLORS.horizon) }, uFoam: { value: lin(COLORS.foam) }, uFog: { value: fog },
+      uHorizon: { value: lin(COLORS.horizon) }, uSkyRefl: { value: lin(COLORS.skyRefl) }, uFoam: { value: lin(COLORS.foam) }, uFog: { value: fog },
       uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uHalf: { value: BANK.half },
       uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uDetail: { value: quality.name === 'low' ? 0 : 1 },
-      uBendA: { value: 0 }, uBendB: { value: 0 },
+      uBendA: { value: 0 }, uBendB: { value: 0 }, uRapids: { value: new THREE.Vector2(-1e6, -1e6) }, uPoolTo: { value: -1e6 },
     },
     vertexShader: WATER_VERT, fragmentShader: WATER_FRAG,
   });
@@ -321,9 +333,11 @@ export function buildRiverWorld(stage) {
 
   const tmp = new THREE.Object3D();
   let lake = { from: 1e6, to: 1e6 };
-  /** The bank's distance from the middle at course z (it opens out into the lake). */
+  let poolTo = -1e6;
+  /** The bank's distance from the middle at course z (it opens out into the lake, and the pool at the river's head). */
   const halfAt = (z) => {
-    const k = Math.min(1, Math.max(0, (z - lake.from) / 40)) * (1 - Math.min(1, Math.max(0, (z - lake.to) / 30)));
+    let k = Math.min(1, Math.max(0, (z - lake.from) / 40)) * (1 - Math.min(1, Math.max(0, (z - lake.to) / 30)));
+    k = Math.max(k, 1 - Math.min(1, Math.max(0, (z - poolTo) / 40)));
     return BANK.half + (BANK.lake - BANK.half) * k * k * (3 - 2 * k);
   };
 
@@ -365,6 +379,15 @@ export function buildRiverWorld(stage) {
 
   return {
     group, water, sun, update, halfAt,
+    /** Open water at the river's head, up to course z `to` (where your tower stands). */
+    setPool(to) {
+      poolTo = to;
+      water.uniforms.uPoolTo.value = to;
+    },
+    /** White water from course z `from` to `to`. */
+    setRapids(from, to) {
+      water.uniforms.uRapids.value.set(from, to);
+    },
     /** The river opens into a lake from course z `from` (and narrows again after `to`). */
     setLake(from, to = 1e6) {
       lake = { from, to };

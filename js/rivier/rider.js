@@ -1,151 +1,199 @@
-// (1.20) Die Rivier's rider: the builder (hard hat, hi-vis vest, work boots) standing on a board, surfing down the river
-// side-on like a surfer, arms out. He leans into every lane change, crouches when he hits something, and throws spray
-// off the board's tail. Built from simple shapes (it reads at phone size from behind, and costs a few draw calls).
+// (1.20) Die Rivier's rider: the builder (yellow hard hat, orange hi-vis vest with its silver stripes, jeans, work boots)
+// surfing the river on a long board, side-on like a surfer with his upper body turned down the river, arms out for
+// balance. He carves into every lane change (board tilts, knees bend, spray), crouches and wobbles after a knock, and
+// rides the swell. Built from simple shapes (it reads at phone size from behind and costs a few draw calls).
 import * as THREE from '../../lib/three.module.min.js';
 
-const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0, ...o });
+const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.72, metalness: 0, ...o });
 
+/** The vest: orange with the reflective silver stripes (an X on the back, bands round the middle). */
 function vestTexture() {
   const c = document.createElement('canvas');
-  c.width = 64;
-  c.height = 64;
+  c.width = 128;
+  c.height = 128;
   const g = c.getContext('2d');
-  g.fillStyle = '#ff7417';
-  g.fillRect(0, 0, 64, 64);
-  g.fillStyle = '#e9edf0';
-  g.fillRect(0, 26, 64, 6);
-  g.fillRect(0, 42, 64, 6);
-  g.fillStyle = 'rgba(0,0,0,0.12)';
-  for (let i = 0; i < 64; i += 4) g.fillRect(i, 0, 1, 64);
+  g.fillStyle = '#ff6f12';
+  g.fillRect(0, 0, 128, 128);
+  g.fillStyle = 'rgba(0,0,0,0.08)';
+  for (let i = 0; i < 128; i += 6) g.fillRect(0, i, 128, 2);
+  g.fillStyle = '#dfe6ec';
+  g.fillRect(0, 70, 128, 10);
+  g.fillRect(0, 92, 128, 10);
+  // (the back's X: the capsule's UV runs round it; the back is the middle of the picture)
+  g.save();
+  g.translate(64, 40);
+  g.rotate(0.6);
+  g.fillRect(-4, -34, 8, 68);
+  g.rotate(-1.2);
+  g.fillRect(-4, -34, 8, 68);
+  g.restore();
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 function boardTexture() {
   const c = document.createElement('canvas');
-  c.width = 32;
-  c.height = 128;
+  c.width = 64;
+  c.height = 256;
   const g = c.getContext('2d');
-  g.fillStyle = '#f4efe6';
-  g.fillRect(0, 0, 32, 128);
-  g.fillStyle = '#ffc21a';
-  g.fillRect(13, 0, 6, 128);
+  const grad = g.createLinearGradient(0, 0, 64, 0);
+  grad.addColorStop(0, '#e9e2d4');
+  grad.addColorStop(0.5, '#fbf7ef');
+  grad.addColorStop(1, '#e9e2d4');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 256);
+  g.fillStyle = '#ffbf1a';
+  g.fillRect(26, 0, 12, 256);
   g.fillStyle = '#1d2b45';
-  g.fillRect(12, 0, 1, 128);
-  g.fillRect(19, 0, 1, 128);
+  g.fillRect(24, 0, 2, 256);
+  g.fillRect(38, 0, 2, 256);
+  g.fillStyle = '#e8462f';
+  g.fillRect(0, 214, 64, 10);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 
-/** A capsule from a to b (limbs). */
+/** A limb (capsule) hanging from its top end: a joint to turn it by. */
 function limb(r, len, mat) {
-  const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 4, 8), mat);
-  m.geometry.translate(0, -len / 2, 0);   // (it hangs from its top end: a joint)
+  const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 4, 10), mat);
+  m.geometry.translate(0, -len / 2 - r * 0.5, 0);
   return m;
 }
 
 /**
- * The rider: { group, update(dt, { lean (-1..1), crouch (0..1), speed, t }), setTint(on) }. `bend(mat)` patches each
- * material so the rider winds with the river like everything else (he stands at its start: barely moves).
+ * The rider: { group, update(dt, { lean -1..1, crouch 0..1, speed }), setBlink(on) }. `bend(mat)` patches each material
+ * so the rider winds with the river like everything else (he stands at its start: he barely moves).
  */
 export function createRider(bend = (m) => m) {
   const group = new THREE.Group();
-  const skin = bend(std('#c08a63', { roughness: 0.6 }));
+  const skin = bend(std('#b98159', { roughness: 0.6 }));
   const vest = bend(std('#ffffff', { map: vestTexture(), roughness: 0.55 }));
-  const shirt = bend(std('#2d4a6b', { roughness: 0.8 }));
-  const pants = bend(std('#33383f', { roughness: 0.85 }));
-  const boot = bend(std('#5a3a20', { roughness: 0.7 }));
-  const hat = bend(std('#ffc21a', { roughness: 0.35, metalness: 0.05 }));
-  const boardM = bend(std('#ffffff', { map: boardTexture(), roughness: 0.3, metalness: 0.05 }));
+  const shirt = bend(std('#2b3f5c', { roughness: 0.8 }));
+  const jeans = bend(std('#3a4f73', { roughness: 0.85 }));
+  const boot = bend(std('#4a2f1a', { roughness: 0.75 }));
+  const hat = bend(std('#ffc21a', { roughness: 0.32, metalness: 0.08 }));
+  const boardM = bend(std('#ffffff', { map: boardTexture(), roughness: 0.28, metalness: 0.05 }));
+  const glove = bend(std('#e7c35a', { roughness: 0.7 }));
 
-  // the board: a long rounded slab along the river
-  const board = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 1.5, 4, 12), boardM);
+  // the board: long, slim, its nose up a little
+  const tilt = new THREE.Group();   // (the carve: the board and everything on it roll together)
+  group.add(tilt);
+  const board = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.55, 6, 16), boardM);
   board.rotation.x = Math.PI / 2;
-  board.scale.set(1, 1, 0.16);
-  board.position.y = 0.06;
-  group.add(board);
+  board.scale.set(1, 1, 0.13);
+  board.position.y = 0.07;
+  tilt.add(board);
 
-  // the body stands side-on (chest towards +x), facing down the river with his head
+  // the stance: feet along the board, knees bent; hips square to the side (+x), the chest turned down the river
   const body = new THREE.Group();
-  body.position.y = 0.14;
-  group.add(body);
+  body.position.y = 0.12;
+  tilt.add(body);
   const hips = new THREE.Group();
-  hips.position.y = 0.95;
   body.add(hips);
-  const legL = limb(0.11, 0.78, pants);
-  const legR = limb(0.11, 0.78, pants);
-  legL.position.set(0, 0, -0.32);
-  legR.position.set(0, 0, 0.3);
-  hips.add(legL, legR);
-  for (const leg of [legL, legR]) {
-    const b = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.3), boot);
-    b.position.set(0.02, -0.98, 0);
-    leg.add(b);
+  const legF = limb(0.105, 0.42, jeans);
+  const legB = limb(0.105, 0.42, jeans);
+  const shinF = limb(0.09, 0.4, jeans);
+  const shinB = limb(0.09, 0.4, jeans);
+  legF.add(shinF);
+  legB.add(shinB);
+  shinF.position.y = -0.56;
+  shinB.position.y = -0.56;
+  for (const s of [shinF, shinB]) {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.3), boot);
+    b.position.set(0, -0.56, 0.04);
+    s.add(b);
   }
+  hips.add(legF, legB);
+  legF.position.set(0, 0, -0.2);
+  legB.position.set(0, 0, 0.2);
+  const pelvis = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.22, 4, 8), jeans);
+  pelvis.rotation.x = Math.PI / 2;
+  hips.add(pelvis);
   const torso = new THREE.Group();
+  torso.position.y = 0.08;
   hips.add(torso);
-  const chest = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.42, 4, 10), vest);
-  chest.position.y = 0.38;
-  chest.scale.set(0.82, 1, 1);
+  const chest = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.38, 6, 12), vest);
+  chest.position.y = 0.36;
+  chest.scale.set(0.78, 1, 1.05);
+  chest.rotation.y = Math.PI;   // (the picture's middle, the X, on his back)
   torso.add(chest);
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.12, 8), skin);
-  neck.position.y = 0.76;
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.1, 8), skin);
+  neck.position.y = 0.72;
   torso.add(neck);
   const head = new THREE.Group();
-  head.position.y = 0.92;
+  head.position.y = 0.86;
   torso.add(head);
-  head.add(new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 10), skin));
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), hat);
-  dome.position.y = 0.04;
+  head.add(new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 12), skin));
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.175, 18, 9, 0, Math.PI * 2, 0, Math.PI / 2), hat);
+  dome.position.y = 0.035;
+  dome.scale.set(1, 0.92, 1.08);
   head.add(dome);
-  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.03, 18), hat);
-  brim.position.set(-0.03, 0.05, -0.02);
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.23, 0.025, 20), hat);
+  brim.position.set(0.03, 0.04, 0);
   head.add(brim);
-  const armL = limb(0.07, 0.5, shirt);
-  const armR = limb(0.07, 0.5, shirt);
-  armL.position.set(0, 0.62, -0.26);
-  armR.position.set(0, 0.62, 0.26);
-  torso.add(armL, armR);
-  for (const a of [armL, armR]) {
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), skin);
-    hand.position.y = -0.62;
-    a.add(hand);
+  const ridge = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.3), hat);
+  ridge.position.set(0, 0.19, 0);
+  head.add(ridge);
+  const armF = limb(0.065, 0.24, shirt);
+  const armB = limb(0.065, 0.24, shirt);
+  const foreF = limb(0.055, 0.22, skin);
+  const foreB = limb(0.055, 0.22, skin);
+  armF.add(foreF);
+  armB.add(foreB);
+  foreF.position.y = -0.33;
+  foreB.position.y = -0.33;
+  for (const f of [foreF, foreB]) {
+    const h = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 6), glove);
+    h.position.y = -0.33;
+    f.add(h);
   }
-  // he rides with his chest to the right and looks down the river
-  body.rotation.y = -Math.PI / 2;
-  head.rotation.y = Math.PI / 2 - 0.15;
+  armF.position.set(0, 0.62, -0.22);
+  armB.position.set(0, 0.62, 0.22);
+  torso.add(armF, armB);
+  // he faces the side (+x); the chest turns down the river (-z), the head further, looking where he goes
+  body.rotation.y = 0;
+  torso.rotation.y = 0.75;
+  head.rotation.y = 0.8;
 
   group.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
+  const mats = [skin, vest, shirt, jeans, boot, hat, boardM, glove];
 
   let t0 = 0;
-  const flash = [];
-  group.traverse((o) => { if (o.isMesh) flash.push(o.material); });
-
   return {
     group,
-    /** `lean`: -1 (moving left) .. 1 (right); `crouch` 0..1 (a knock); `bob` the water's swell. */
+    /** `lean`: -1 (carving left) .. 1 (right); `crouch` 0..1 (a knock); `speed` m/s. */
     update(dt, { lean = 0, crouch = 0, speed = 15 } = {}) {
       t0 += dt;
-      const sway = Math.sin(t0 * 2.3) * 0.04;
-      group.rotation.z = -lean * 0.32 + sway * 0.5;
-      group.rotation.x = -0.06 - crouch * 0.12;
-      group.position.y = Math.sin(t0 * 3.1) * 0.05 + 0.02;
-      // knees bend with the speed and a knock; arms out for balance, the leading arm higher in a lean
-      const knee = 0.25 + crouch * 0.5 + Math.min(0.15, speed / 160);
-      hips.position.y = 0.95 - knee * 0.45;
-      legL.rotation.x = knee * 0.6;
-      legR.rotation.x = -knee * 0.5;
-      torso.rotation.z = -0.1 - crouch * 0.4 + lean * 0.12;
-      armL.rotation.x = -1.2 - lean * 0.5 + Math.sin(t0 * 2.1) * 0.08;
-      armR.rotation.x = 1.2 - lean * 0.5 + Math.sin(t0 * 2.4) * 0.08;
-      head.rotation.z = lean * 0.15;
+      const swell = Math.sin(t0 * 2.6) * 0.045 + Math.sin(t0 * 4.3) * 0.02;
+      // the carve: the board rolls into the turn, the nose lifts a little with speed
+      tilt.rotation.z = -lean * 0.38 + Math.sin(t0 * 1.7) * 0.03;
+      tilt.rotation.x = -0.04 - Math.min(0.06, speed / 400) + crouch * 0.08;
+      tilt.position.y = swell + 0.03;   // (the group's own place is the ride's: the dive moves it)
+      // knees bend with the speed, more in a carve and after a knock
+      const knee = 0.45 + Math.abs(lean) * 0.25 + crouch * 0.5 + Math.min(0.15, speed / 140);
+      hips.position.y = 1.0 - knee * 0.38;
+      legF.rotation.x = knee * 0.55;
+      legB.rotation.x = -knee * 0.45;
+      shinF.rotation.x = -knee * 1.0;
+      shinB.rotation.x = knee * 0.85;
+      // upper body: leans into the carve, ducks after a knock, breathes with the swell
+      torso.rotation.z = -0.16 - crouch * 0.45 + lean * 0.22;
+      torso.rotation.x = Math.sin(t0 * 2.6) * 0.03;
+      // arms out for balance: the front one forward and low, the back one up behind; they swing with the carve
+      armF.rotation.x = -1.25 - lean * 0.35 + Math.sin(t0 * 2.1) * 0.06;
+      armF.rotation.z = 0.35 + crouch * 0.4;
+      foreF.rotation.x = -0.35;
+      armB.rotation.x = 1.15 - lean * 0.35 + Math.sin(t0 * 2.4) * 0.07;
+      armB.rotation.z = 0.5 + crouch * 0.3;
+      foreB.rotation.x = 0.45;
+      head.rotation.z = lean * 0.18 - (torso.rotation.z + 0.16) * 0.6;
     },
-    /** A knock: he blinks for the grace time (the meshes fade a little). */
+    /** A knock: he blinks while he can't be knocked again. */
     setBlink(on) {
-      for (const m of flash) {
+      for (const m of mats) {
         m.transparent = on;
-        m.opacity = on ? 0.45 : 1;
+        m.opacity = on ? 0.5 : 1;
       }
     },
   };
