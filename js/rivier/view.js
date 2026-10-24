@@ -115,7 +115,17 @@ let current = null;
  * yours), floors (the Weektoring on the island), crew (its name), skin, reducedMotion, autopilot (tests),
  * onDone({ rescued, missed, hits, all }, next: 'build' | 'done'), onQuit(partial) }. Resolves its controller.
  */
+/** Can this phone draw these screens (WebGL 2)? (no: nothing is downloaded or built; the game's fallbacks take over) */
+let webgl2 = null;
+function need3d() {
+  if (webgl2 === null) {
+    try { webgl2 = !!document.createElement('canvas').getContext('webgl2'); } catch { webgl2 = false; }
+  }
+  if (!webgl2) throw new Error('no WebGL 2');
+}
+
 export async function openRiver(d) {
+  need3d();
   current?.close();
   await portraitsReady;   // (the faces on the rings)
   // (the Blender models: the animals; a ride never waits long for them, and works without)
@@ -144,6 +154,7 @@ export async function openRaid(d) {
  * weekdays, bombs, reducedMotion, onRide, onBuild, onBack }. Resolves its controller ({ close }).
  */
 export async function openTown(d) {
+  need3d();
   current?.close();
   await portraitsReady;
   const models = await loadModels(['dorp', 'island', 'props']);

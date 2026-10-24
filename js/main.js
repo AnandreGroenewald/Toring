@@ -2875,7 +2875,7 @@ bus.on('ui:rivier', startRide);
 /** (the results card offers the ride: its 3D code and models start downloading now, quietly, so the ride opens at once) */
 let riverPrefetched = false;
 function prefetchRiver() {
-  if (riverPrefetched) return;
+  if (riverPrefetched || !has3d()) return;
   riverPrefetched = true;
   const go = () => import('./rivier/models.js').then((m) => m.loadModels(['croc', 'hippo', 'monkey', 'builder', 'dorp', 'island', 'props'])).catch(() => {});
   if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 3000 });
