@@ -115,9 +115,9 @@ for s in (1, -1):
 neck = prim('cyl', 'neck', loc=T(0, 0.74, 0), scale=(0.065, 0.065, 0.07), mat=skin, vertices=12)
 BASE.append(('torso', join([tor, neck], 'torso'), T_[1:]))
 # --- the head: face toward three's +x; the hard hat on top
-HB = [prim('sphere', 'skull', loc=(0, 0, 0), scale=(0.15, 0.145, 0.16), mat=skin, segments=20, ring_count=12)]
+HB = [prim('sphere', 'skull', loc=(0, 0, 0), scale=(0.15, 0.145, 0.16), mat=skin, segments=30, ring_count=18)]
 HB.append(prim('sphere', 'nose', loc=T(0.15, -0.01, 0), scale=(0.03, 0.025, 0.035), mat=skin, segments=10, ring_count=6))
-HB.append(prim('sphere', 'jaw', loc=T(0.05, -0.07, 0), scale=(0.12, 0.12, 0.09), mat=skin, segments=14, ring_count=8))
+HB.append(prim('sphere', 'jaw', loc=T(0.05, -0.07, 0), scale=(0.12, 0.12, 0.09), mat=skin, segments=26, ring_count=14))
 H = []
 lipm = material('b_lip', '#7a3a2c', rough=0.4)
 teeth = material('b_teeth', '#fbf7ee', rough=0.25)
@@ -140,9 +140,16 @@ _bm.ops.delete(_b, geom=[v for v in _b.verts if v.co.z < 0.035], context='VERTS'
 _b.to_mesh(dome.data)
 _b.free()
 brim = prim('cyl', 'brim', loc=T(0.03, 0.05, 0), scale=(0.235, 0.22, 0.013), mat=hat, vertices=28)
-ridge = prim('cyl', 'ridge', loc=T(0.0, 0.205, 0), scale=(0.022, 0.032, 0.15), rot=(0, math.pi / 2, 0), mat=hat, vertices=14)
+# (the hat's ridge: a raised rib following the dome's curve from front to back)
+ridge = prim('torus', 'ridge', loc=T(0, 0.04, 0), scale=(0.172, 0.172, 0.172), rot=(math.pi / 2, 0, 0), mat=hat, major_radius=1, minor_radius=0.12, major_segments=40, minor_segments=8)
+_b = _bm.new()
+_b.from_mesh(ridge.data)
+_bm.ops.delete(_b, geom=[v for v in _b.verts if v.co.z < 0.07], context='VERTS')
+_b.to_mesh(ridge.data)
+_b.free()
 H += [dome, brim, ridge]
-BASE.append(('head', join(HB, 'head'), H))
+# (the head isn't baked: clean smooth skin and crisp colours, all in one palette)
+HEAD = HB + H
 # --- the arms: a sleeve (shoulder to elbow), the forearm and a glove
 up = apply(skin_body('upperarm', [(*T(0, 0, 0), 0.088, 0.088), (*T(0, -0.33, 0), 0.07, 0.07)], [(0, 1)], smooth=2), tris=300)
 up.data.materials.append(shirt)
@@ -274,6 +281,9 @@ highs = [high_copy(b, 1, {'kind': 'STUCCI', 'scale': 0.004, 'strength': 0.003}) 
 bake_set(objs, 'builder', size=512, highs=highs)
 # (one palette for all the small parts' colours: two draw calls a part on the phone)
 palettize([d_ for _, _, det in BASE for d_ in det], 'builderdet', rough=0.4)
+palettize(HEAD, 'builderhead', rough=0.42)
+head = join(HEAD, 'head')
+pivot(head, (0, 0, 0))
 for n, b, det in BASE:
     o = join([b] + det, n) if det else b
     o.name = n

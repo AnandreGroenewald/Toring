@@ -10,7 +10,7 @@ const TEX_SLOTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissive
  * Each model's version: raise it when its .glb changes (the website's service worker keeps a model until its name,
  * with this number, changes: sw.js MODELS).
  */
-export const MODEL_V = { croc: 6, hippo: 5, monkey: 5, builder: 7, dorp: 3, island: 2, props: 4 };
+export const MODEL_V = { croc: 6, hippo: 5, monkey: 5, builder: 8, dorp: 3, island: 2, props: 4 };
 const WAIT_MS = 4000;      // (a ride never waits longer than this for its models)
 
 function load(name) {
