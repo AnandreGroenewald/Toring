@@ -36,25 +36,29 @@ def T(x, y, z):
 BASE = []   # (name, base mesh, details): the bases are baked into one texture set, then the details joined on
 parts = []
 # --- the thigh: from the hip down to the knee (0.56 m), jeans, a seam
-thigh = apply(skin_body('thigh', [(*T(0, 0, 0), 0.12, 0.12), (*T(0, -0.3, 0.01), 0.11, 0.11), (*T(0, -0.56, 0), 0.092, 0.092)], [(0, 1), (1, 2)], smooth=2), tris=500)
+thigh = apply(skin_body('thigh', [(*T(0, 0, 0), 0.14, 0.14), (*T(0, -0.3, 0.01), 0.125, 0.125), (*T(0, -0.56, 0), 0.1, 0.1)], [(0, 1), (1, 2)], smooth=2), tris=500)
 thigh.data.materials.append(jeans)
 BASE.append(('thigh', thigh, []))
 # --- the shin: knee to ankle, then the boot (toe toward three's +z, the way rider.js puts it)
-shin = apply(skin_body('shin', [(*T(0, 0, 0), 0.095, 0.095), (*T(0, -0.3, 0), 0.085, 0.085), (*T(0, -0.5, 0), 0.075, 0.075)], [(0, 1), (1, 2)], smooth=2), tris=420)
+shin = apply(skin_body('shin', [(*T(0, 0, 0), 0.105, 0.105), (*T(0, -0.3, 0), 0.095, 0.095), (*T(0, -0.5, 0), 0.088, 0.088)], [(0, 1), (1, 2)], smooth=2), tris=420)
 shin.data.materials.append(jeans)
-cuff = prim('cyl', 'cuff', loc=T(0, -0.47, 0), scale=(0.088, 0.088, 0.04), mat=jeansDark, vertices=14)
-bt = apply(skin_body('boot', [(*T(0, -0.52, -0.02), 0.085, 0.085), (*T(0, -0.6, 0.05), 0.085, 0.075), (*T(0, -0.62, 0.17), 0.075, 0.06)], [(0, 1), (1, 2)], smooth=2), tris=420)
+cuff = prim('cyl', 'cuff', loc=T(0, -0.47, 0), scale=(0.1, 0.1, 0.045), mat=jeansDark, vertices=16)
+bt = apply(skin_body('boot', [(*T(0, -0.5, -0.03), 0.1, 0.1), (*T(0, -0.6, 0.05), 0.1, 0.085), (*T(0, -0.62, 0.21), 0.09, 0.07)], [(0, 1), (1, 2)], smooth=2), tris=480)
 bt.data.materials.append(boot)
-solep = prim('cube', 'sole', loc=T(0, -0.665, 0.06), scale=(0.085, 0.16, 0.02), mat=sole)
+solep = prim('cube', 'sole', loc=T(0, -0.68, 0.08), scale=(0.1, 0.2, 0.025), mat=sole)
 BASE.append(('shin', join([shin, bt], 'shin'), [cuff, solep]))
 # --- the pelvis: across (three's z), jeans with a belt
-pel = apply(skin_body('pelvis', [(*T(0, 0, -0.2), 0.15, 0.14), (*T(0, 0.02, 0), 0.17, 0.15), (*T(0, 0, 0.2), 0.15, 0.14)], [(0, 1), (1, 2)], smooth=2), tris=500)
+pel = apply(skin_body('pelvis', [(*T(0, 0, -0.21), 0.16, 0.15), (*T(0, 0.02, 0), 0.18, 0.16), (*T(0, 0, 0.21), 0.16, 0.15)], [(0, 1), (1, 2)], smooth=2), tris=500)
 pel.data.materials.append(jeans)
-bel = prim('torus', 'belt', loc=T(0, 0.09, 0), scale=(0.152, 0.205, 0.12), rot=(0, 0, 0), mat=belt, major_radius=1, minor_radius=0.14, major_segments=24, minor_segments=6)
-buckle = prim('cube', 'buckle', loc=T(0.155, 0.09, 0), scale=(0.01, 0.035, 0.025), mat=silver)
-BASE.append(('pelvis', pel, [bel, buckle]))
+bel = prim('torus', 'belt', loc=T(0, 0.09, 0), scale=(0.168, 0.222, 0.12), rot=(0, 0, 0), mat=belt, major_radius=1, minor_radius=0.14, major_segments=24, minor_segments=6)
+buckle = prim('cube', 'buckle', loc=T(0.17, 0.09, 0), scale=(0.012, 0.04, 0.03), mat=silver)
+wood = material('b_wood', '#9a6a3c', rough=0.6)
+handle = prim('cyl', 'hammerhandle', loc=T(0.06, -0.08, -0.25), scale=(0.018, 0.018, 0.16), rot=(0, 0, 0), mat=wood, vertices=8)
+hhead = prim('cube', 'hammerhead', loc=T(0.06, 0.08, -0.25), scale=(0.075, 0.022, 0.026), mat=steelish if False else silver)
+loop_ = prim('torus', 'hammerloop', loc=T(0.06, 0.06, -0.25), scale=(0.035, 0.035, 0.04), mat=belt, major_radius=1, minor_radius=0.25, major_segments=12, minor_segments=4)
+BASE.append(('pelvis', pel, [bel, buckle, handle, hhead, loop_]))
 # --- the torso: waist to shoulders under the vest (front = three's +x, shoulders at three's z = ±0.22)
-tor = apply(skin_body('torso', [(*T(0, 0.02, 0), 0.17, 0.19), (*T(0.01, 0.32, 0), 0.19, 0.22), (*T(0, 0.58, 0), 0.17, 0.26), (*T(0, 0.7, 0), 0.08, 0.08)], [(0, 1), (1, 2), (2, 3)], smooth=2), tris=900)
+tor = apply(skin_body('torso', [(*T(0, 0.02, 0), 0.18, 0.21), (*T(0.015, 0.32, 0), 0.21, 0.25), (*T(0, 0.58, 0), 0.19, 0.3), (*T(0, 0.7, 0), 0.09, 0.09)], [(0, 1), (1, 2), (2, 3)], smooth=2), tris=900)
 tor.data.materials.append(vest)
 tor.data.materials.append(shirt)
 for p in tor.data.polygons:
@@ -62,10 +66,10 @@ for p in tor.data.polygons:
     p.material_index = 1 if p.center.z > 0.66 else 0
 T_ = [tor]
 for y in (0.16, 0.27):
-    T_.append(prim('torus', 'band', loc=T(0, y, 0), scale=(0.185, 0.215, 0.5), mat=silver, major_radius=1, minor_radius=0.05, major_segments=28, minor_segments=4))
+    T_.append(prim('torus', 'band', loc=T(0, y, 0), scale=(0.2, 0.24, 0.5), mat=silver, major_radius=1, minor_radius=0.05, major_segments=28, minor_segments=4))
 # the X on his back (three's -x side)
 for s in (1, -1):
-    T_.append(prim('cube', 'x', loc=T(-0.185, 0.46, 0), scale=(0.008, 0.02, 0.2), rot=(s * 0.62, 0, 0), mat=silver))
+    T_.append(prim('cube', 'x', loc=T(-0.2, 0.46, 0), scale=(0.008, 0.02, 0.2), rot=(s * 0.62, 0, 0), mat=silver))
 neck = prim('cyl', 'neck', loc=T(0, 0.74, 0), scale=(0.065, 0.065, 0.07), mat=skin, vertices=12)
 BASE.append(('torso', join([tor, neck], 'torso'), T_[1:]))
 # --- the head: face toward three's +x; the hard hat on top
@@ -85,14 +89,14 @@ ridge = prim('cube', 'ridge', loc=T(0.0, 0.2, 0), scale=(0.15, 0.025, 0.025), ma
 H += [dome, brim, ridge]
 BASE.append(('head', join(HB, 'head'), H))
 # --- the arms: a sleeve (shoulder to elbow), the forearm and a glove
-up = apply(skin_body('upperarm', [(*T(0, 0, 0), 0.075, 0.075), (*T(0, -0.33, 0), 0.06, 0.06)], [(0, 1)], smooth=2), tris=300)
+up = apply(skin_body('upperarm', [(*T(0, 0, 0), 0.088, 0.088), (*T(0, -0.33, 0), 0.07, 0.07)], [(0, 1)], smooth=2), tris=300)
 up.data.materials.append(shirt)
 BASE.append(('upperarm', up, []))
-fa = apply(skin_body('forearm', [(*T(0, 0, 0), 0.058, 0.058), (*T(0, -0.3, 0), 0.046, 0.046)], [(0, 1)], smooth=2), tris=260)
+fa = apply(skin_body('forearm', [(*T(0, 0, 0), 0.068, 0.068), (*T(0, -0.3, 0), 0.054, 0.054)], [(0, 1)], smooth=2), tris=260)
 fa.data.materials.append(skin)
-gl = prim('sphere', 'glove', loc=T(0, -0.35, 0), scale=(0.06, 0.075, 0.05), mat=glove, segments=12, ring_count=8)
+gl = prim('sphere', 'glove', loc=T(0, -0.36, 0), scale=(0.072, 0.088, 0.06), mat=glove, segments=12, ring_count=8)
 thumb = prim('sphere', 'thumb', loc=T(0.04, -0.33, 0.03), scale=(0.022, 0.035, 0.022), mat=glove, segments=8, ring_count=6)
-cuffg = prim('cyl', 'glovecuff', loc=T(0, -0.29, 0), scale=(0.055, 0.055, 0.03), mat=glove, vertices=12)
+cuffg = prim('cyl', 'glovecuff', loc=T(0, -0.29, 0), scale=(0.066, 0.066, 0.035), mat=glove, vertices=12)
 BASE.append(('forearm', fa, [gl, thumb, cuffg]))
 # --- the surfboard: nose toward three's -z (down the river), a rounded tail, a fin under it; stripes
 B = []
