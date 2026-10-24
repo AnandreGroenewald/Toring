@@ -3,6 +3,7 @@
 // Bump VERSION (and VERSION in js/config.js) when shipping; old caches are deleted on activate.
 
 const VERSION = 'stapel-v1.19.2';
+const MODELS = 'stapel-models';   // (1.20) the 3D models' own cache: kept when VERSION changes
 
 const PRECACHE = [
   './',
@@ -131,7 +132,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys
-      .filter((key) => key.startsWith('stapel-') && key !== VERSION)
+      .filter((key) => key.startsWith('stapel-') && key !== VERSION && key !== MODELS)
       .map((key) => caches.delete(key)));
     await self.clients.claim();
   })());
@@ -146,6 +147,18 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   // (1.15.6) the Living Tower preview is a page of its own: never answered with the game's cached page
   if (url.pathname.includes('/lewende-toring/')) return;
+  // (1.20) the 3D models (img/models/*.glb, ~2.6 MB): downloaded once and kept across versions (mobile data); a new
+  // model gets a new name (models.js asks for `name.glb?v=N`), so a kept one is never stale
+  if (url.pathname.includes('/img/models/')) {
+    event.respondWith(caches.open(MODELS).then(async (c) => {
+      const hit = await c.match(req);
+      if (hit) return hit;
+      const res = await fetch(req);
+      if (res.ok && res.status === 200) c.put(req, res.clone()).catch(() => {});
+      return res;
+    }));
+    return;
+  }
 
   if (req.mode === 'navigate') {
     event.respondWith(navigate(event));

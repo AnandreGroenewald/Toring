@@ -5,11 +5,16 @@ import { GLTFLoader } from '../../lib/three-addons/loaders/GLTFLoader.js';
 import { bendMaterial } from './world.js';
 
 const cache = new Map();   // name -> Promise<scene | null>
+/**
+ * Each model's version: raise it when its .glb changes (the website's service worker keeps a model until its name,
+ * with this number, changes: sw.js MODELS).
+ */
+export const MODEL_V = { croc: 3, hippo: 2, monkey: 2, builder: 3, dorp: 2, island: 1, props: 1 };
 const WAIT_MS = 4000;      // (a ride never waits longer than this for its models)
 
 function load(name) {
   if (!cache.has(name)) {
-    const url = new URL(`../../img/models/${name}.glb`, import.meta.url).href;
+    const url = new URL(`../../img/models/${name}.glb?v=${MODEL_V[name] || 1}`, import.meta.url).href;
     cache.set(name, new GLTFLoader().loadAsync(url).then((g) => {
       g.scene.traverse((o) => {
         if (!o.isMesh) return;
