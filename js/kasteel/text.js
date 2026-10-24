@@ -2,12 +2,18 @@
 // (`stapel.v1.lang`, or `?lang=` for one visit); Afrikaans when nobody has chosen.
 import { setNumberStyle, fmtM, dayName } from '../core/format.js';
 
+// (1.20) inside Stapel's own page (the river and Ons dorp borrow the 3D stage): the game has set the language already
+// (its <html lang>, its number style); this module follows it and leaves the number style alone
+const inGame = typeof window !== 'undefined' && !!window.__stapel;
 let lang = 'af';
-try {
-  const q = new URLSearchParams(location.search).get('lang');
-  const v = q || localStorage.getItem('stapel.v1.lang');
-  if (v === 'en' || v === 'af') lang = v;
-} catch { /* Afrikaans */ }
+if (inGame) lang = document.documentElement?.lang === 'en' ? 'en' : 'af';
+else {
+  try {
+    const q = new URLSearchParams(location.search).get('lang');
+    const v = q || localStorage.getItem('stapel.v1.lang');
+    if (v === 'en' || v === 'af') lang = v;
+  } catch { /* Afrikaans */ }
+}
 export const LANG = lang;
 
 /** Stapel's own Instellings (its 'stapel.v1' record, read only): sound, vibration, and less motion (the phone's wish by default). */
@@ -17,7 +23,7 @@ export const PREFS = (() => {
   const calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   return { sound: v.sound !== false, vibration: v.vibration !== false, reducedMotion: typeof v.reducedMotion === 'boolean' ? v.reducedMotion : calm };
 })();
-setNumberStyle(lang);   // (Stapel's own: "37,5 m" in Afrikaans, "37.5 m" in English, and the day names to match)
+if (!inGame) setNumberStyle(lang);   // (Stapel's own: "37,5 m" in Afrikaans, "37.5 m" in English, and the day names to match)
 export { fmtM, dayName };
 
 const AF = {
