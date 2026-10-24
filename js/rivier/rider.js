@@ -244,7 +244,7 @@ export function createRider(bend = (m) => m, model = null) {
       tube.add(gp);
     }
   }
-  group.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
+  group.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; } });
 
   let t0 = 0;
   return {

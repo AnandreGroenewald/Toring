@@ -383,8 +383,8 @@ void main() {
 }`;
 
 // ------------------------------------------------------------------------------------------------ the water
-const WATER_VERT = `uniform float uDist; uniform float uBendA; uniform float uBendB; uniform float uBendK;
-varying vec3 vWorld; varying vec2 vRiver; varying float vAhead;
+const WATER_VERT = `uniform float uDist; uniform float uBendA; uniform float uBendB; uniform float uBendK; uniform mat4 uReflMat;
+varying vec3 vWorld; varying vec2 vRiver; varying float vAhead; varying vec4 vRefl;
 float bendX(float d, float z) { float a = max(0.0, d) / 160.0; return uBendK * (sin(z * 0.0042 + 0.6) * 9.0 * a * a + sin(z * 0.011 + 2.1) * 2.2 * a); }
 void main() {
   vec3 p = position;
@@ -395,13 +395,14 @@ void main() {
   vAhead = ahead;
   vec4 w = modelMatrix * vec4(p, 1.0);
   vWorld = w.xyz;
+  vRefl = uReflMat * w;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 const WATER_FRAG = `uniform float uT; uniform sampler2D uNoise; uniform vec3 uSun; uniform vec3 uSunCol; uniform vec3 uDeep; uniform vec3 uShallow;
 uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSkyRefl; uniform vec3 uFoam; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar;
 uniform float uHalf; uniform float uLakeFrom; uniform float uLakeTo; uniform float uDetail; uniform vec2 uRapids; uniform float uPoolTo;
-uniform vec3 uWall; uniform vec2 uRider;
-varying vec3 vWorld; varying vec2 vRiver; varying float vAhead;
+uniform vec3 uWall; uniform vec2 uRider; uniform sampler2D uRefl; uniform float uReflK;
+varying vec3 vWorld; varying vec2 vRiver; varying float vAhead; varying vec4 vRefl;
 float h(vec2 p) {
   // the surface's height: long swells across, ripples and chop running with the current (stretched along it)
   float a = texture2D(uNoise, vec2(p.x * 0.07, p.y * 0.022 - uT * 0.05)).r;
@@ -426,11 +427,17 @@ void main() {
   float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
   vec3 r = reflect(-v, n);
   vec3 sky = mix(uHorizon, uSkyRefl, smoothstep(0.0, 0.35, r.y));
-  vec3 col = mix(base, sky, clamp(fres, 0.0, 0.5));
+  // (strong phones: the real mirror image, the canyon, the towers and the sky, rippled by the waves)
+  if (uReflK > 0.0) {
+    vec2 ruv = vRefl.xy / vRefl.w + n.xz * 0.05;
+    vec3 rc = texture2D(uRefl, clamp(ruv, 0.001, 0.999)).rgb;
+    sky = mix(sky, rc, uReflK);
+  }
+  vec3 col = mix(base, sky, clamp(fres, 0.0, 0.5 + 0.22 * uReflK));
   // light in the water itself (it's never black, even looking straight down into it)
   col += uShallow * 0.18 * (1.0 - fres);
-  // the sandstone walls mirrored near the banks: warmer and darker there (not in the open lake)
-  float wall = smoothstep(0.42, 0.95, edge) * (1.0 - lake);
+  // the sandstone walls mirrored near the banks: warmer and darker there (not in the open lake; less with the real one)
+  float wall = smoothstep(0.42, 0.95, edge) * (1.0 - lake) * (1.0 - 0.75 * uReflK);
   col = mix(col, uWall, wall * (0.22 + 0.4 * fres));
   // the low sun ahead: a path of glitter down the river
   float s = max(dot(r, uSun), 0.0);
@@ -503,6 +510,37 @@ export function buildRiverWorld(stage, lookId = 'dag') {
   const sun = new THREE.DirectionalLight(L.sun, L.sunI);
   sun.position.copy(sunDir).multiplyScalar(120);
   group.add(sun, sun.target);
+  // real shadows from the sun (not on the lowest quality): a box of light that follows where you look (the ride: the
+  // river just ahead of you; the town: the island), its own shadow map
+  const shadows = quality.name !== 'low';
+  if (shadows) {
+    sun.castShadow = true;
+    const ms = Math.min(quality.shadow || 2048, quality.name === 'high' ? 4096 : 2048);
+    sun.shadow.mapSize.set(ms, ms);
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.05;
+    sun.shadow.radius = 3;
+    const sc = sun.shadow.camera;
+    sc.near = 1;
+    sc.far = 420;
+  }
+  let shadowR = 0;
+  /** Where the shadows are drawn: round (x, z) on the water, `r` metres either way (the box of light follows it). */
+  function setShadowFocus(x, z, r = 42) {
+    if (!shadows) return;
+    sun.target.position.set(x, 0, z);
+    sun.position.set(x, 0, z).addScaledVector(sunDir, 200);
+    if (r !== shadowR) {
+      shadowR = r;
+      const sc = sun.shadow.camera;
+      sc.left = -r;
+      sc.right = r;
+      sc.top = r;
+      sc.bottom = -r;
+      sc.updateProjectionMatrix();
+    }
+  }
+  setShadowFocus(0, -28);
   const fill = new THREE.DirectionalLight(L.fill, L.fillI);   // (from behind the camera: what comes at you is lit)
   fill.position.set(6, 10, 30);
   group.add(fill);
@@ -518,6 +556,7 @@ export function buildRiverWorld(stage, lookId = 'dag') {
       uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uDetail: { value: quality.name === 'low' ? 0 : 1 },
       uBendA: { value: 0 }, uBendB: { value: 0 }, uBendK: bendUniforms.uBendK, uRapids: { value: new THREE.Vector2(-1e6, -1e6) }, uPoolTo: { value: -1e6 },
       uWall: { value: lin(L.wall) }, uRider: { value: new THREE.Vector2(0, -1e6) },
+      uRefl: { value: null }, uReflK: { value: 0 }, uReflMat: { value: new THREE.Matrix4() },
     },
     vertexShader: WATER_VERT, fragmentShader: WATER_FRAG,
   });
@@ -528,6 +567,88 @@ export function buildRiverWorld(stage, lookId = 'dag') {
   const waterMesh = new THREE.Mesh(wgeo, water);
   waterMesh.frustumCulled = false;
   group.add(waterMesh);
+  // ---- the mirror (strong phones and computers: the quality 'high'): the scene drawn again from under the water into a
+  // half-size picture each frame, which the water samples where it looks (three's Reflector, by hand: the water has its
+  // own shader). The shadows aren't drawn twice (last frame's serve).
+  let reflOn = quality.name === 'high';
+  let reflRT = null;
+  const vcam = new THREE.PerspectiveCamera();
+  const _rp = new THREE.Vector3();
+  const _cp = new THREE.Vector3();
+  const _rm = new THREE.Matrix4();
+  const _la = new THREE.Vector3();
+  const _tg = new THREE.Vector3();
+  const _n = new THREE.Vector3(0, 1, 0);
+  const _pl = new THREE.Plane();
+  const _clip = new THREE.Vector4();
+  const _q = new THREE.Vector4();
+  const _sz = new THREE.Vector2();
+  stage.onQuality?.((q) => { reflOn = q.name === 'high'; if (!reflOn) water.uniforms.uReflK.value = 0; });
+  let catcherMesh = null;
+  function reflect(renderer, camera) {
+    if (!reflOn) return;
+    renderer.getDrawingBufferSize(_sz);
+    const w = Math.max(64, Math.round(_sz.x * 0.5));
+    const h = Math.max(64, Math.round(_sz.y * 0.5));
+    if (!reflRT || reflRT.width !== w || reflRT.height !== h) {
+      reflRT?.dispose();
+      reflRT = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType });
+      water.uniforms.uRefl.value = reflRT.texture;
+    }
+    camera.updateMatrixWorld();
+    _cp.setFromMatrixPosition(camera.matrixWorld);
+    if (_cp.y <= 0.05) { water.uniforms.uReflK.value = 0; return; }
+    // the camera mirrored in the plane y = 0
+    _rp.set(_cp.x, -_cp.y, _cp.z);
+    _rm.extractRotation(camera.matrixWorld);
+    _la.set(0, 0, -1).applyMatrix4(_rm).add(_cp);
+    _tg.set(_la.x, -_la.y, _la.z);
+    vcam.position.copy(_rp);
+    vcam.up.set(0, 1, 0).applyMatrix4(_rm).reflect(_n);
+    vcam.lookAt(_tg);
+    vcam.far = camera.far;
+    vcam.updateMatrixWorld();
+    vcam.projectionMatrix.copy(camera.projectionMatrix);
+    // (only what is above the water: an oblique near plane on the water's surface)
+    _pl.setFromNormalAndCoplanarPoint(_n, _cp.set(0, 0, 0));
+    _pl.applyMatrix4(vcam.matrixWorldInverse);
+    _clip.set(_pl.normal.x, _pl.normal.y, _pl.normal.z, _pl.constant);
+    const pm = vcam.projectionMatrix.elements;
+    _q.set((Math.sign(_clip.x) + pm[8]) / pm[0], (Math.sign(_clip.y) + pm[9]) / pm[5], -1, (1 + pm[10]) / pm[14]);
+    _clip.multiplyScalar(2 / _clip.dot(_q));
+    pm[2] = _clip.x;
+    pm[6] = _clip.y;
+    pm[10] = _clip.z + 1;
+    pm[14] = _clip.w;
+    vcam.projectionMatrixInverse.copy(vcam.projectionMatrix).invert();
+    water.uniforms.uReflMat.value.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(vcam.projectionMatrix).multiply(vcam.matrixWorldInverse);
+    // draw it (without the water, its shadow layer and the spray; shadows as they are)
+    waterMesh.visible = false;
+    if (catcherMesh) catcherMesh.visible = false;
+    const auto = renderer.shadowMap.autoUpdate;
+    renderer.shadowMap.autoUpdate = false;
+    const before = renderer.getRenderTarget();
+    renderer.setRenderTarget(reflRT);
+    renderer.clear();
+    renderer.render(scene, vcam);
+    renderer.setRenderTarget(before);
+    renderer.shadowMap.autoUpdate = auto;
+    waterMesh.visible = true;
+    if (catcherMesh) catcherMesh.visible = true;
+    water.uniforms.uReflK.value = 0.85;
+  }
+  // the shadows on the water: a see-through layer just over it that shows only shade (the water's own shader stays)
+  if (shadows) {
+    const cg = new THREE.PlaneGeometry(140, 260, 28, 52);
+    cg.rotateX(-Math.PI / 2);
+    cg.translate(0, 0.05, -100);
+    const catcher = new THREE.Mesh(cg, bendMaterial(new THREE.ShadowMaterial({ color: '#06262a', opacity: 0.42, depthWrite: false })));
+    catcher.receiveShadow = true;
+    catcher.frustumCulled = false;
+    catcher.renderOrder = 1;
+    group.add(catcher);
+    catcherMesh = catcher;
+  }
 
   // the canyon: cliff walls in pieces along both banks, re-used as you go; bush and boulders on them
   const rockTex = rockTextures();
@@ -616,12 +737,14 @@ export function buildRiverWorld(stage, lookId = 'dag') {
   group.add(trunks, crowns);
   const boulders = new THREE.InstancedMesh(boulderGeo, boulderMat, N_SEG * 2 * ROCK_PER);
   bushes.frustumCulled = boulders.frustumCulled = false;
+  boulders.castShadow = boulders.receiveShadow = shadows;
   group.add(bushes, boulders);
   for (let i = 0; i < N_SEG; i++) {
     for (const side of [-1, 1]) {
       const gi = (i + (side > 0 ? 1 : 0)) % 3;
       const m = new THREE.Mesh(cliffGeos[side][gi], rockMat);
       m.frustumCulled = false;
+      m.receiveShadow = shadows;
       group.add(m);
       // a waterfall down every few pieces, the sides taking turns
       if (i % 4 === (side < 0 ? 1 : 3)) {
@@ -747,7 +870,7 @@ export function buildRiverWorld(stage, lookId = 'dag') {
   }
 
   return {
-    group, water, sun, update, halfAt, night: L.stars > 0 && L.sunI < 1.5,
+    group, water, sun, update, halfAt, setShadowFocus, shadows, reflect, night: L.stars > 0 && L.sunI < 1.5,
     /** Open water at the river's head, up to course z `to` (where your tower stands). */
     setPool(to) {
       poolTo = to;
@@ -772,6 +895,7 @@ export function buildRiverWorld(stage, lookId = 'dag') {
       });
       noise.dispose();
       envRT.dispose();
+      reflRT?.dispose();
       scene.environment = null;
       scene.fog = null;
       renderer.toneMappingExposure = exposure;

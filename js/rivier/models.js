@@ -23,6 +23,7 @@ function load(name) {
       g.scene.traverse((o) => {
         if (!o.isMesh) return;
         o.frustumCulled = false;
+        o.castShadow = o.receiveShadow = true;
         o.material = bendMaterial(o.material);
         // (kept for every ride: a screen's clean-up passes these by)
         o.geometry.userData.model = true;

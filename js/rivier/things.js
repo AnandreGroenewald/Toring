@@ -15,34 +15,49 @@ function canvas(w, h) {
   c.height = h;
   return c;
 }
-/** A soft white ring of foam (the water round a floating thing). */
+/**
+ * The foam round a floating thing: lace, not a ring of dots — thousands of tiny bubbles, thick at the waterline and
+ * thinning outwards, on a soft milky band; a faint shade under it (the sun's real shadow does the rest).
+ */
 function foamTexture() {
-  const c = canvas(128, 128);
+  const N = 256;
+  const C = N / 2;
+  const c = canvas(N, N);
   const g = c.getContext('2d');
-  // (a soft shadow on the water under the thing first: it sits in the river, not on top of it)
-  const sh = g.createRadialGradient(64, 64, 4, 64, 64, 44);
-  sh.addColorStop(0, 'rgba(6,26,30,0.42)');
+  const sh = g.createRadialGradient(C, C, 8, C, C, 84);
+  sh.addColorStop(0, 'rgba(6,26,30,0.2)');
   sh.addColorStop(1, 'rgba(6,26,30,0)');
   g.fillStyle = sh;
-  g.fillRect(0, 0, 128, 128);
-  const grad = g.createRadialGradient(64, 64, 20, 64, 64, 64);
-  grad.addColorStop(0, 'rgba(255,255,255,0)');
-  grad.addColorStop(0.55, 'rgba(255,255,255,0.55)');
-  grad.addColorStop(0.75, 'rgba(255,255,255,0.25)');
-  grad.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 128, 128);
+  g.fillRect(0, 0, N, N);
+  const band = g.createRadialGradient(C, C, 46, C, C, 122);
+  band.addColorStop(0, 'rgba(255,255,255,0)');
+  band.addColorStop(0.18, 'rgba(240,250,250,0.42)');
+  band.addColorStop(0.45, 'rgba(240,250,250,0.16)');
+  band.addColorStop(1, 'rgba(240,250,250,0)');
+  g.fillStyle = band;
+  g.fillRect(0, 0, N, N);
   let s = 7;
   const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  g.globalCompositeOperation = 'destination-out';
-  for (let i = 0; i < 160; i++) {
-    g.fillStyle = `rgba(0,0,0,${0.3 + rnd() * 0.5})`;
+  const gauss = () => (rnd() + rnd() + rnd() - 1.5) / 1.5;
+  for (let i = 0; i < 3200; i++) {
+    const a = rnd() * Math.PI * 2;
+    // (most bubbles hug the waterline at ~56 px; the rest drift out in patches)
+    const k = Math.abs(gauss());
+    const r = 54 + k * k * 64 + Math.sin(a * 5 + k * 3) * 4;
+    if (r > 124) continue;
+    const x = C + Math.cos(a) * r;
+    const y = C + Math.sin(a) * r;
+    const br = 0.5 + rnd() * (r < 70 ? 2.2 : 1.4);
+    const al = (0.25 + rnd() * 0.55) * (1 - (r - 54) / 80);
+    g.strokeStyle = `rgba(255,255,255,${Math.max(0.05, al)})`;
+    g.lineWidth = 0.6 + rnd() * 0.6;
     g.beginPath();
-    g.arc(rnd() * 128, rnd() * 128, 2 + rnd() * 6, 0, Math.PI * 2);
-    g.fill();
+    g.arc(x, y, br, 0, Math.PI * 2);
+    if (rnd() < 0.35) { g.fillStyle = g.strokeStyle; g.fill(); } else g.stroke();
   }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
   return t;
 }
 function ringTexture() {
@@ -104,7 +119,7 @@ export function createThings(scene, pieces) {
         blockMats.set(key, Array.isArray(src) ? src.map((m) => bendMaterial(m.clone())) : bendMaterial(src.clone()));
       }
       o.material = blockMats.get(key);
-      o.castShadow = o.receiveShadow = false;
+      o.castShadow = o.receiveShadow = true;
       o.frustumCulled = false;
     });
     return g;
@@ -745,6 +760,7 @@ function instancesOf(src, at, parent) {
     at.forEach((m, i) => im.setMatrixAt(i, tmp.multiplyMatrices(m, local)));
     im.instanceMatrix.needsUpdate = true;
     im.frustumCulled = false;
+    im.castShadow = im.receiveShadow = true;
     im.userData.shared = true;   // (the geometry and materials are the model's: not disposed with the island)
     parent.add(im);
     out.push(im);

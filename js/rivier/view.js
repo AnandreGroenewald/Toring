@@ -176,6 +176,7 @@ function createTown(K, d) {
   things.models = d.models || {};   // (the Blender models, for the island's town)
   const island = createIsland(things, { radius: 22, plots: true });
   scene.add(island.group);
+  world.setShadowFocus(0, 0, 62);   // (the island's own shadows: the towers', the houses', the trees')
   // (Saturday won: fireworks over the island and a gold crown on the Weektoring, until the new week)
   // (the lake's gentle sound round the island; the game's own level back on leaving)
   const ambBefore = audio.ambience ?? 0;
@@ -403,6 +404,7 @@ function createTown(K, d) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     frame(dt);
+    world.reflect(stage.renderer, camera);
     stage.render(dt);
   }
   host.style.display = 'block';
@@ -1375,6 +1377,9 @@ function createRide(K, d) {
     start.group.position.set(0, -0.6, dist + START_Z);
     barEl.style.width = `${clamp(dist / (len - RIVER.finishRun), 0, 1) * 100}%`;
     world.update(dist, t, phase === 'dive' ? null : x);
+    // (the shadows follow the action: your tower while you dive, the river just ahead while you ride)
+    if (phase === 'dive') world.setShadowFocus(0, START_Z * 0.5, 46);
+    else world.setShadowFocus(x * 0.6, raid ? -40 : -24, raid ? 60 : 40);
     things.updateSpray(dt);
     cameraFor(dt);
   }
@@ -1408,6 +1413,7 @@ function createRide(K, d) {
     last = now;
     // (aiming: time slows, so a throw and a dodge both fit)
     if (!paused) step(aiming ? dt * 0.25 : dt);
+    world.reflect(stage.renderer, camera);
     stage.render(dt);
   }
 
