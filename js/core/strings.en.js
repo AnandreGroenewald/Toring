@@ -925,6 +925,7 @@ export const S_EN = {
   spanInvite: '📲 Invite a friend',
   spanInviteText: (name, h, url) => `Come build with us on "${name}" in Stapel! Our Weekly Tower already stands ${h}. On Saturday we play against other crews. ${url}`,
   spanMembers: (n, of) => `Builders ${n}/${of}`,
+  spanPrize: (place, coins) => `🏆 Saturday: your crew came ${place === 1 ? '1st!' : place === 2 ? '2nd' : place === 3 ? '3rd' : `${place}th`} · +${coins} 🪙 in your wallet`,
   spanLeave: 'Leave the crew',
   spanLeft: 'You left the crew. You have your own island again.',
   twRiver: '⚔️ Saturday’s river',

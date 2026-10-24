@@ -117,7 +117,7 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
         d.srv = { me: r.me, crew: r.crew, river: r.river || null, phase: r.phase, crane: r.crane, today: r.today, at: Date.now() };
         if (r.me?.prize && r.me.prize.coins > 0) {
           try { earn(r.me.prize.coins, { prize: true }); } catch { /* the wallet's own business */ }
-          d.prizeSeen = r.me.prize;
+          d.prizeSeen = { ...r.me.prize, shown: false };
         }
         // rides and turns' floors made while the server couldn't be reached
         const q = d.queue;
@@ -173,6 +173,14 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
         turns: turnsLeft(), ticket: ws.ticket, weekdays: ws.weekdays, bombs: ws.bombs, metres: ws.metres,
         monuments: d.monuments, crew: null, river: null, phase: null, me: null, inRiver: 0, repair: 0, news: [],
       };
+    },
+    /** Saturday's prize, once, for the screen to celebrate ({ place, coins, week }); null when there's none new. */
+    prizeNew() {
+      const pz = d.prizeSeen;
+      if (!pz || pz.shown) return null;
+      pz.shown = true;
+      save();
+      return { place: pz.place | 0, coins: pz.coins | 0, week: pz.week };
     },
     /** The town was opened: its news so far is seen. */
     newsSeen() {

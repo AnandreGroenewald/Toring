@@ -970,6 +970,7 @@ export const S = {
   spanInvite: '📲 Nooi ’n maat',
   spanInviteText: (name, h, url) => `Kom bou saam met ons aan "${name}" in Stapel! Ons Weektoring staan al ${h}. Saterdag speel ons teen ander spanne. ${url}`,
   spanMembers: (n, of) => `Bouers ${n}/${of}`,
+  spanPrize: (place, coins) => `🏆 Saterdag: julle was ${place === 1 ? '1ste!' : `${place}de`} · +${coins} 🪙 in jou beursie`,
   spanLeave: 'Klim uit die span',
   spanLeft: 'Jy het uit die span geklim. Jy het weer ’n eie eiland.',
   twRiver: '⚔️ Saterdag se rivier',

@@ -2802,6 +2802,7 @@ async function spanStart() {
   }
   const ok = await span.start();
   if (screen === 'menu') ui.showMenu(menuModel());
+  spanPrize();
   if (DEBUG && params.get('town') === '1' && !spanLinkCode) openSpanTown();   // (after a test-clock jump)
   if (spanLinkCode) {
     const c = spanLinkCode;
@@ -2832,8 +2833,16 @@ bus.on('ui:span-join', async (code) => {
   openSpanTown();
 });
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && span.online) span.sync().then(() => { if (screen === 'menu') ui.showMenu(menuModel()); });
+  if (!document.hidden && span.online) span.sync().then(() => { if (screen === 'menu') ui.showMenu(menuModel()); spanPrize(); });
 });
+/** Saturday's prize landed in the wallet: say so once, with its place (on the menu or the town, not in the middle of a game). */
+function spanPrize() {
+  if (screen !== 'menu' && screen !== 'rivier') return;
+  const pz = span.prizeNew();
+  if (!pz || !(pz.coins > 0)) return;
+  audio.play(pz.place === 1 ? 'record' : 'banner');
+  ui.toast(S.spanPrize(pz.place, pz.coins), 5200);
+}
 bus.on('ui:rivier', startRide);
 bus.on('ui:week-build', startWeekTurn);
 /** Ons dorp's own screen: your crew's island and its Weektoring in 3D (js/rivier/view.js openTown), your week. */
