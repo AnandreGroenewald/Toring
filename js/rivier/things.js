@@ -441,7 +441,15 @@ export function labelSprite(text, { gold = false, small = false } = {}) {
   const w = Math.min(500, g.measureText(text).width + 60);
   g.fillStyle = gold ? 'rgba(90,60,0,0.85)' : 'rgba(13,34,40,0.75)';
   g.beginPath();
-  g.roundRect((512 - w) / 2, 18, w, 92, 46);
+  // (older Android WebViews have no roundRect: a pill drawn from two arcs)
+  if (g.roundRect) g.roundRect((512 - w) / 2, 18, w, 92, 46);
+  else {
+    const x0 = (512 - w) / 2;
+    g.moveTo(x0 + 46, 18);
+    g.arc(x0 + w - 46, 64, 46, -Math.PI / 2, Math.PI / 2);
+    g.arc(x0 + 46, 64, 46, Math.PI / 2, Math.PI * 1.5);
+    g.closePath();
+  }
   g.fill();
   g.fillStyle = gold ? '#ffd65c' : '#ffffff';
   g.textAlign = 'center';
