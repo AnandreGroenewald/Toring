@@ -127,6 +127,32 @@ test('span server: today\'s ride, once: people move in; a ride for another day i
   assert.equal((await h.call('POST', '/span/ride', { ...a, day: '2026-10-01', rescued: 5 }))[0], 400);
 });
 
+test('span server: the metres down the endless river count for the player and the crew this week (capped, a new week clears them)', async () => {
+  const h = harness();
+  const a = player('Anna');
+  const b = player('Bennie');
+  await sync(h, a, { days: { [day(0)]: 40 } });
+  const [, ca] = await h.call('POST', '/span/sync', { ...a, name: 'Anna', days: { [day(0)]: 40 } });
+  await sync(h, b, { days: { [day(0)]: 30 } });
+  await h.call('POST', '/span/join', { ...b, invite: ca.crew.invite });
+  const [s1, r1] = await h.call('POST', '/span/ride', { ...a, day: day(0), rescued: 4, metres: 1234.7 });
+  assert.equal(s1, 200);
+  assert.equal(r1.me.rideM[day(0)], 1234);
+  const [, r2] = await h.call('POST', '/span/ride', { ...b, day: day(0), rescued: 2, metres: 9e9 });
+  assert.equal(r2.crew.rideBy[a.id], 1234);
+  assert.equal(r2.crew.rideBy[b.id], 40000, 'one ride counts at most 40 km');
+  assert.equal(r2.crew.rideM, 41234);
+  const c = player('Carla');
+  await sync(h, c, { days: { [day(0)]: 20 } });
+  await h.call('POST', '/span/join', { ...c, invite: ca.crew.invite });
+  const [s3, r3] = await h.call('POST', '/span/ride', { ...c, day: day(0), rescued: 0, metres: 'x' });
+  assert.equal(s3, 200);
+  assert.equal(r3.crew.rideBy[c.id], 0, 'nonsense metres count as none');
+  h.clock.t = sastAt('2026-11-02', 9);
+  const [, nx] = await h.call('POST', '/span/sync', { ...a, name: 'Anna', days: {} });
+  assert.equal(nx.crew.rideM, 0, 'a new week starts at nothing');
+});
+
 /** Five crews over a week: four with a ticket (towers 16, 11.2, 8, 4.8 m), one without. */
 async function week5(h) {
   h.clock.t = sastAt(day(2), 8);   // (Wednesday: Monday's to Wednesday's Dailies are in)

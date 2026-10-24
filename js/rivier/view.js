@@ -280,6 +280,10 @@ function createTown(K, d) {
     const canRemove = boss && !weekend;
     const memberHtml = (m) => `<span class="tw-m">${esc(m.name || '?')}${canRemove && m.id !== v.myId ? `<button class="tw-rm${removing === m.id ? ' ask' : ''}" data-id="${esc(m.id)}" aria-label="${S.twRemoveAsk(esc(m.name || '?'))}">${removing === m.id ? S.twRemoveAsk(esc(m.name || '?')) : '✕'}</button>` : ''}</span>`;
     const members = crew ? `<div class="tw-crew"><span>${S.spanMembers(crew.members.length, 3)}: </span>${crew.members.map(memberHtml).join('<span class="tw-dot">·</span>')}${crew.members.length < 3 ? `<button class="tw-invite">${S.spanInvite}</button>` : ''}</div>` : '';
+    // (the endless river: the crew's metres down it this week, each builder's too, furthest first)
+    const rideTot = crew ? crew.rideM | 0 : v.rideMetres | 0;
+    const rideRank = crew && crew.members.length > 1 ? [...crew.members].map((m) => ({ name: m.name || '?', m: (crew.rideBy || {})[m.id] | 0 })).sort((a, b) => b.m - a.m) : [];
+    const rideLine = rideTot > 0 ? `<p class="tw-ridem">${S.twRideM(fmtInt(rideTot))}${rideRank.length ? `<span>${rideRank.map((x, k) => `${k === 0 && x.m ? '🥇 ' : ''}${esc(x.name)} ${fmtInt(x.m)}`).join(' · ')}</span>` : ''}</p>` : '';
     const renameForm = renaming ? `<form class="tw-rename-form"><input class="tw-name" maxlength="18" value="${esc(crew?.name || '')}" aria-label="${S.twRename}"><button type="submit" class="tw-save">${S.twRenameSave}</button><button type="button" class="tw-cancel">${S.twCancel}</button></form>` : '';
     const btns = [];
     if (v.rideToday) btns.push(`<button class="tw-ride">${S.rvResGo}</button>`);
@@ -293,7 +297,7 @@ function createTown(K, d) {
     ov.innerHTML = `<div class="tw-top"><button class="tw-back">${S.twBack}</button><div class="tw-card"><b>🏝️ ${esc(v.name || S.spanMenu)}${boss ? `<button class="tw-rename" aria-label="${S.twRename}">✏️</button>` : ''}<button class="tw-help" aria-label="${S.howTo}">?</button></b>
         <span>${S.twHeight} <em>${fmtM(v.heightM || 0)}</em> · ${S.twPeople} <em>${fmtInt(v.people | 0)}</em></span></div></div>
       <div class="tw-panel${folded ? ' min' : ''}"><button class="tw-fold" aria-label="${S.twFold}"></button>${renameForm}${helping ? helpHtml() : ''}${river}${over || v.phase === 'kroning' ? '' : `<p>${v.ticket ? S.twTicketOk : S.twTicket(v.weekdays | 0, 3)}</p><p>${S.twBombs(v.bombs | 0)}</p>`}${r ? '' : `<p class="tw-sat">${S.twSat}</p>`}
-        ${members}${news ? `<ul class="tw-news">${news}</ul>` : ''}
+        ${rideLine}${members}${news ? `<ul class="tw-news">${news}</ul>` : ''}
         <div class="tw-btns">${btns.join('')}</div>${crew && crew.members.length > 1 && !weekend ? `<button class="tw-leave">${S.spanLeave}</button>` : ''}${clockRow(v.clock)}</div>`;
     const on = (sel, fn) => ov.querySelector(sel)?.addEventListener('click', fn);
     on('.tw-fold', () => fold(!folded));
@@ -353,6 +357,8 @@ function createTown(K, d) {
 #rivier .tw-river li.lead b { color: #ffd65c; }
 #rivier .tw-river li i { font-style: normal; color: #9fe8d3; }
 #rivier .tw-place { font-size: 17px !important; color: #ffd65c !important; }
+#rivier .tw-ridem { margin: 2px 0 6px; font-size: 14px; font-weight: 900; color: #fff3c4; }
+#rivier .tw-ridem span { display: block; margin-top: 2px; font-size: 12px; font-weight: 800; color: #bfe3e8; }
 #rivier .tw-crew { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: 13px; font-weight: 800; color: #d4f3ec; }
 #rivier .tw-invite { min-height: 40px; padding: 0 12px; border-radius: 12px; border: 0; background: #25d366; color: #05300f; font: inherit; font-weight: 900; font-size: 15px; }
 #rivier .tw-news { margin: 0 0 6px; padding: 0; list-style: none; font-size: 13px; font-weight: 700; color: #cfe3ea; display: grid; gap: 3px; }

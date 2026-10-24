@@ -1046,6 +1046,7 @@ export const S = {
   rvStreak: (n) => `${n} in ’n ry! 🛟`,
   rvRapids: 'Stroomversnelling!',
   rvWipeout: 'Omgeslaan!',
+  twRideM: (m) => `🛟 Afgegly die week: ${m} m`,
   rvIslandPass: (n, crew) => `🏝️ ${n} trek in by ${crew || 'julle eiland'}!`,
   rvDistance: 'afgegly',
   rvBest: (m) => `jou beste die week: ${m} m`,

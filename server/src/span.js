@@ -13,7 +13,8 @@
 //   POST /span/rename  {id, key, name}          -> the founder names the crew
 //   POST /span/lease   {id, key, repair?}       -> {lease, floors, seed, blocks}: the crane, one builder at a time
 //   POST /span/build   {id, key, lease, floors} -> the turn's floors join the tower
-//   POST /span/ride    {id, key, day, rescued, fromRiver}  -> today's ride (once a day): people home
+//   POST /span/ride    {id, key, day, rescued, fromRiver, metres}  -> today's ride (once a day): people home; the metres
+//                      ridden down the endless river count for the player's and the crew's week
 //   POST /span/bomb    {id, key, target, hits: [{x, y}]}    -> Saturday: bombs on the tallest tower of your river
 //   GET  /span/river/<id>                       -> the Saturday standings
 //   GET  /span/invite/<code>                    -> the crew an invite link is for (its name, how many)
@@ -38,6 +39,7 @@ const MONUMENT_FLOORS = 3;      // ...the newest this many keep their floors (to
 const MONUMENT_MAX = 160;       // ...this many floors each
 const DAILY_MAX = 90;           // a member's latest Daily tower on the island: at most this many blocks
 const BOT_NAMES = ['Robot Rikus se Span', 'Rikus se Rowers', 'Die Blik-Bouers', 'Rikus en Kie'];
+const RIDE_M_MAX = 40000;        // m: the most one ride can count (27 m/s for about 25 minutes)
 const BOT_ACTS = 6;              // a Rikus crew acts this many times through Saturday...
 /** A player's name as other crews see it on Saturday: kid-clean (js/core/nameRules.js), else none. */
 const cleanName = (s) => { const r = checkName(String(s ?? '').slice(0, 40), { max: 22 }); return r.ok ? r.value : ''; };
@@ -86,7 +88,7 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
   function rollPlayer(p, t) {
     const wk = weekOf(sastOf(t).key);
     if (p.week === wk) return p;
-    Object.assign(p, { week: wk, days: {}, granted: {}, used: 0, rides: {}, bombsUsed: 0 });
+    Object.assign(p, { week: wk, days: {}, granted: {}, used: 0, rides: {}, rideM: {}, bombsUsed: 0 });
     return p;
   }
   const turnsLeft = (p) => Math.max(0, Object.values(p.granted || {}).reduce((s, n) => s + n, 0) - (p.used | 0));
@@ -145,7 +147,7 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
       c.monuments = [{ week: c.week, h: heightOf(c.floors), n: c.floors.length, place, floors: compact(c.floors, MONUMENT_MAX) }, ...(c.monuments || [])]
         .slice(0, MONUMENTS).map((m, i) => (i < MONUMENT_FLOORS ? m : { ...m, floors: undefined }));
     }
-    Object.assign(c, { week: wk, floors: [], repair: 0, lease: null, river: null });
+    Object.assign(c, { week: wk, floors: [], repair: 0, lease: null, river: null, rideBy: {} });
     return c;
   }
   async function crewOf(p) {
@@ -173,13 +175,15 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
     const ws = weekStats(p.days || {}, p.week);
     return {
       id: p.id, name: p.name, week: p.week, turns: turnsLeft(p), ticket: ws.ticket, weekdays: ws.weekdays, metres: ws.metres,
-      bombs: Math.max(0, ws.bombs - (p.bombsUsed | 0)), rides: p.rides || {}, prize: p.prize || null,
+      bombs: Math.max(0, ws.bombs - (p.bombsUsed | 0)), rides: p.rides || {}, rideM: p.rideM || {}, prize: p.prize || null,
     };
   }
   function crewView(c) {
     return {
       id: c.id, name: c.name, invite: c.invite, founder: c.founder, members: c.members, week: c.week, floors: c.floors,
       heightM: heightOf(c.floors), people: c.people | 0, inRiver: c.inRiver | 0, repair: c.repair | 0,
+      // (this week's metres down the river, each member's and all together)
+      rideBy: c.rideBy || {}, rideM: Object.values(c.rideBy || {}).reduce((s, v) => s + (v | 0), 0),
       lease: c.lease && c.lease.until > now() ? { by: c.lease.by, name: c.members.find((m) => m.id === c.lease.by)?.name || '' } : null,
       monuments: c.monuments || [], news: (c.news || []).slice(-12), newsN: c.newsN | 0, river: c.river || null,
     };
@@ -622,6 +626,10 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
     const c = await crewOf(p);
     const fromRiver = Math.max(0, Math.min(c.inRiver | 0, b.fromRiver | 0, n));
     p.rides = { ...(p.rides || {}), [b.day]: n || -1 };
+    // (the metres down the endless river: no more than its top speed could ride in 25 minutes)
+    const m = Math.max(0, Math.min(RIDE_M_MAX, Math.floor(Number(b.metres) || 0)));
+    p.rideM = { ...(p.rideM || {}), [b.day]: m };
+    c.rideBy = { ...(c.rideBy || {}), [p.id]: ((c.rideBy || {})[p.id] | 0) + m };
     const r = moveIn(c.floors, n);
     c.floors = r.floors;
     c.people = (c.people | 0) + n;

@@ -1001,6 +1001,7 @@ export const S_EN = {
   rvStreak: (n) => `${n} in a row! 🛟`,
   rvRapids: 'Rapids!',
   rvWipeout: 'Wiped out!',
+  twRideM: (m) => `🛟 Down the river this week: ${m} m`,
   rvIslandPass: (n, crew) => `🏝️ ${n} move into ${crew ? `${crew}’s tower` : 'your tower'}!`,
   rvDistance: 'down the river',
   rvBest: (m) => `your best this week: ${m} m`,
