@@ -94,17 +94,18 @@ export function bendMaterial(m) {
  * little grass, the stone's tone drifts in big soft patches (no two walls alike), and the foot is wet, dark and glossy
  * up to a wavy tide line. Works in the wall's own coordinates (x out, y up from the water, z along the river).
  */
-function rockDetail(m, noise, bank) {
+function rockDetail(m, noise, bank, { tri = false, wet = 1.15 } = {}) {
   const bend = m.onBeforeCompile;
   m.onBeforeCompile = (sh, r) => {
     bend(sh, r);
     sh.uniforms.uRkNoise = { value: noise };
+    sh.uniforms.uRkWet = { value: wet };
     Object.assign(sh.uniforms, bank);
     // (the walls follow the bank smoothly, vertex by vertex: out to the pool and the lake and low there, no steps
     // between the pieces; the same curve as halfAt() below)
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>
-varying vec3 vRkL;
+varying vec3 vRkL; varying vec3 vRkN;
 uniform float uPoolTo; uniform float uLakeFrom; uniform float uLakeTo;
 float rkOpen(float z) {
   float k = clamp((z - uLakeFrom) / 40.0, 0.0, 1.0) * (1.0 - clamp((z - uLakeTo) / 30.0, 0.0, 1.0));
@@ -118,9 +119,18 @@ float rkOpen(float z) {
     transformed.x += sign(modelMatrix[3][0]) * ${(BANK.lake - BANK.half).toFixed(2)} * rkK;
     transformed.y *= 1.0 - 0.78 * rkK;
   }
-  vRkL = transformed;`);
+  vRkL = transformed;
+  vRkN = objectNormal;`);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRkL;\nuniform sampler2D uRkNoise;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRkL;\nvarying vec3 vRkN;\nuniform sampler2D uRkNoise;\nuniform float uRkWet;')
+      // (a stone in the river: the picture wrapped round it from three sides, no seams)
+      .replace('#include <map_fragment>', tri ? `#ifdef USE_MAP
+  vec3 rkB = pow(abs(normalize(vRkN)), vec3(4.0));
+  rkB /= (rkB.x + rkB.y + rkB.z);
+  vec2 rkS = vec2(0.42, 0.3);
+  vec4 sampledDiffuseColor = texture2D(map, vRkL.zy * rkS) * rkB.x + texture2D(map, vRkL.xz * rkS * 1.3) * rkB.y + texture2D(map, vRkL.xy * rkS) * rkB.z;
+  diffuseColor *= sampledDiffuseColor;
+#endif` : '#include <map_fragment>')
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   {
     vec3 rkUp = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
@@ -130,13 +140,13 @@ float rkOpen(float z) {
     diffuseColor.rgb *= 0.88 + rkN * 0.26;
     vec3 rkDust = mix(vec3(0.5, 0.27, 0.13), vec3(0.2, 0.25, 0.07), smoothstep(0.5, 0.68, rkN2));
     diffuseColor.rgb = mix(diffuseColor.rgb, rkDust * (0.8 + rkN2 * 0.4), rkFlat * 0.7);
-    float rkLine = 1.15 + (rkN2 - 0.5) * 1.4;
+    float rkLine = uRkWet + (rkN2 - 0.5) * min(1.4, uRkWet * 1.2 + 0.2);
     float rkWet = 1.0 - smoothstep(rkLine - 0.35, rkLine + 0.2, vRkL.y);
     diffuseColor.rgb *= 1.0 - rkWet * 0.32;
     roughnessFactor = mix(roughnessFactor, 0.3, rkWet);
   }`);
   };
-  m.customProgramCacheKey = () => 'rivier-bend-rock';
+  m.customProgramCacheKey = () => (tri ? 'rivier-bend-rock-tri' : 'rivier-bend-rock');
   return m;
 }
 
@@ -846,6 +856,10 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   // the canyon: cliff walls in pieces along both banks, re-used as you go; bush and boulders on them
   const rockTex = rockTextures();
   const bankU = { uPoolTo: { value: -1e6 }, uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 } };
+  // (the stones in the river: the same sandstone, wrapped round them, wet to just over the water, never moved by the
+  // banks' opening)
+  const stoneMat = rockDetail(bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, roughness: 0.82, metalness: 0, color: '#e6c3a0', flatShading: true })), noise, { uPoolTo: { value: -1e6 }, uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 } }, { tri: true, wet: 0.18 });
+  stoneMat.userData.shared = true;
   const rockMat = rockDetail(bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, bumpMap: rockTex.bump, bumpScale: 2.2, roughness: 0.9, metalness: 0, vertexColors: true, side: THREE.DoubleSide })), noise, bankU);
   const SEG_L = 48;
   const N_SEG = 13;
@@ -979,7 +993,6 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   const bushMat = bendMaterial(new THREE.MeshStandardMaterial({ color: COLORS.bushL, roughness: 0.92, vertexColors: true }));
   const bushGeo = shrubGeometry();
   const boulderGeo = boulderGeometry();
-  const boulderMat = bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, bumpMap: rockTex.bump, bumpScale: 1.6, color: '#d6b08e', roughness: 0.85, vertexColors: true, flatShading: true }));
   const segs = [];
   const BUSH_PER = quality.name === 'low' ? 6 : 12;
   const ROCK_PER = 5;
@@ -994,7 +1007,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   const crowns = new THREE.InstancedMesh(crownGeo, bendMaterial(new THREE.MeshStandardMaterial({ color: '#6d8a3c', roughness: 0.9, vertexColors: true })), N_SEG * 2 * TREE_PER);
   trunks.frustumCulled = crowns.frustumCulled = false;
   group.add(trunks, crowns);
-  const boulders = new THREE.InstancedMesh(boulderGeo, boulderMat, N_SEG * 2 * ROCK_PER);
+  const boulders = new THREE.InstancedMesh(boulderGeo, stoneMat, N_SEG * 2 * ROCK_PER);   // (the river stones' own sandstone)
   bushes.frustumCulled = boulders.frustumCulled = false;
   boulders.castShadow = boulders.receiveShadow = shadows;
   group.add(bushes, boulders);
@@ -1286,7 +1299,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   }
 
   return {
-    group, water, sun, update, halfAt, setShadowFocus, shadows, reflect, fxTint, night: L.stars > 0 && L.sunI < 1.5,
+    group, water, sun, update, halfAt, setShadowFocus, shadows, reflect, fxTint, stoneMat, night: L.stars > 0 && L.sunI < 1.5,
     /** Open water at the river's head, up to course z `to` (where your tower stands). */
     setPool(to) {
       poolTo = to;
@@ -1316,6 +1329,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
       envRT.dispose();
       reflRT?.dispose();
       sun.dispose();   // (its shadow map too)
+      stoneMat.dispose();
       for (const x of [...cliffGeos[-1], ...cliffGeos[1], mistTex, rayTex, dustTex, fallPuff, mistGeo, mistMat, rayMat, dustGeo, dustMat, fallMistGeo, fallFoamGeo, fallMistMat, fallFoamMat]) x.dispose();
       scene.environment = null;
       scene.fog = null;

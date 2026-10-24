@@ -235,9 +235,10 @@ export function createThings(scene, pieces) {
     const bo = props?.getObjectByName(`boulder${(rockN++ % 3) + 1}`);
     const m = bo ? bo.clone(true) : new THREE.Mesh(rockGeo, rockMat);
     if (bo) {
-      // (the Blender boulders: about 3 m across, sitting in the water)
+      // (the Blender boulders: about 3 m across, sitting in the water; dressed in the canyon's own sandstone)
       m.position.y = 0.15;
       m.rotation.y = rockN * 2.3;
+      if (api.stoneMat) m.traverse((o) => { if (o.isMesh) o.material = api.stoneMat; });
     } else {
       m.scale.set(1.5, 1.3, 1.4);
       m.position.y = 0.3;
@@ -426,7 +427,7 @@ export function createThings(scene, pieces) {
     sprayMat.uniforms.diffuse.value.set('#f4fbfa').multiply(c);
   }
 
-  const api = { floating, rock, person, foam, riverBlock, emit, updateSpray, spray, tint, dispose, models: {} };
+  const api = { floating, rock, person, foam, riverBlock, emit, updateSpray, spray, tint, dispose, models: {}, stoneMat: null };
   return api;
 }
 

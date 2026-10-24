@@ -4,7 +4,7 @@
 # usage: Blender -b -P art/blender/props.py -- img/models/props.glb
 import sys, os, math, random
 sys.path.insert(0, os.path.dirname(__file__))
-from common import reset, out_path, material, skin_body, apply, prim, join, pivot, export, detail, bake_set, high_copy, palettize
+from common import reset, out_path, material, skin_body, apply, prim, join, pivot, export, detail, bake_set, high_copy, palettize, gradient, bands
 import bpy
 
 reset()
@@ -18,7 +18,7 @@ buckle = material('p_buckle', '#1c1f24', rough=0.4)
 silverp = material('p_silver', '#dfe6ec', rough=0.25, metal=0.4, emit='#9aa3aa', emit_k=0.2)
 shirt = material('swim_shirt', '#2f6db5', rough=0.7)
 skin = material('p_skin', '#c99773', rough=0.6)
-rockm = material('p_rock', '#a98564', rough=0.9)
+rockm = material('p_rock', '#a98564', rough=0.72)
 wood = material('p_wood', '#8a5d3b', rough=0.75)
 woodDark = material('p_wooddark', '#5e3e26', rough=0.8)
 boatWhite = material('p_boat', '#f2efe8', rough=0.45)
@@ -112,24 +112,44 @@ palettize([arm, hand, thumb], 'swimarm', rough=0.55)
 swimarm = join([arm, hand, thumb], 'swimarm')
 pivot(swimarm, (0.22, 0, 0.56))
 
-# --- three river boulders: lumpy, flat-bottomed, in the canyon's sandstone
+# --- three river boulders: the canyon's sandstone, rough and faceted with a broken face or two, flat where they sit;
+# layered, dry and pale on top, dark and wet at the waterline, a little moss where the top faces the sky
+from mathutils import Vector
 boulders = []
 for k in range(3):
-    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=3, radius=1)
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=4, radius=1)
     o = bpy.context.active_object
     o.name = f'boulder{k + 1}'
     tex = bpy.data.textures.new(f'b{k}', 'CLOUDS')
-    tex.noise_scale = 0.6
+    tex.noise_scale = 0.55
     d = o.modifiers.new('Displace', 'DISPLACE')
     d.texture = tex
-    d.strength = 0.35
+    d.strength = 0.3
+    tex2 = bpy.data.textures.new(f'bv{k}', 'VORONOI')
+    tex2.noise_scale = 0.35
+    d2 = o.modifiers.new('Displace2', 'DISPLACE')
+    d2.texture = tex2
+    d2.strength = 0.12
     o.scale = (1.5 + k * 0.2, 1.3 - k * 0.1, 1.0 + k * 0.15)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    o = apply(o, tris=900)
+    o = apply(o, tris=1400)
+    # (broken faces: flat planes sliced off; the foot flattened where it sits in the river)
+    rnd = random.Random(k * 17 + 3)
+    cuts = []
+    for _ in range(3):
+        n = Vector((rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd.uniform(0.1, 0.9))).normalized()
+        cuts.append((n, rnd.uniform(0.62, 0.8) * (1.4 + k * 0.1)))
     for v in o.data.vertices:
+        for n, dd in cuts:
+            kk = v.co.dot(n)
+            if kk > dd:
+                v.co -= n * (kk - dd)
         if v.co.z < -0.35:
             v.co.z = -0.35 + (v.co.z + 0.35) * 0.2
+    o.data.update()
     o.data.materials.append(rockm)
+    for p in o.data.polygons:
+        p.use_smooth = False
     boulders.append(o)
 
 # --- the jetty: planks across two beams, posts into the water
@@ -164,7 +184,31 @@ for s in (1, -1):
 boat = join(B, 'boat')
 
 # the boulders and the jetty baked (stone grain, weathered planks, soft shadows)
-detail(rockm, 'stripes', scale=4, mix=0.3, color2='#86603f')
+gradient(rockm, '#cfa37a', '#4f3526', -0.25, 0.35)
+bands(rockm, scale=3.5, mix=0.28, color2='#7a5236', axis='Z', distort=2.5)
+# (moss where the top faces the sky, broken up by noise)
+_nt = rockm.node_tree
+_b = _nt.nodes.get('Principled BSDF')
+_src = _b.inputs['Base Color'].links[0].from_socket
+_geo = _nt.nodes.new('ShaderNodeNewGeometry')
+_sep = _nt.nodes.new('ShaderNodeSeparateXYZ')
+_nt.links.new(_geo.outputs['Normal'], _sep.inputs['Vector'])
+_mr = _nt.nodes.new('ShaderNodeMapRange')
+_mr.inputs['From Min'].default_value = 0.55
+_mr.inputs['From Max'].default_value = 0.9
+_nt.links.new(_sep.outputs['Z'], _mr.inputs['Value'])
+_nz = _nt.nodes.new('ShaderNodeTexNoise')
+_nz.inputs['Scale'].default_value = 3.0
+_mul = _nt.nodes.new('ShaderNodeMath')
+_mul.operation = 'MULTIPLY'
+_nt.links.new(_mr.outputs['Result'], _mul.inputs[0])
+_nt.links.new(_nz.outputs['Fac'], _mul.inputs[1])
+_mix = _nt.nodes.new('ShaderNodeMix')
+_mix.data_type = 'RGBA'
+_nt.links.new(_src, _mix.inputs['A'])
+_mix.inputs['B'].default_value = (0.16, 0.22, 0.06, 1)
+_nt.links.new(_mul.outputs['Value'], _mix.inputs['Factor'])
+_nt.links.new(_mix.outputs['Result'], _b.inputs['Base Color'])
 detail(wood, 'stripes', scale=30, mix=0.3, color2='#6b4529')
 bake_set(boulders + [jetty], 'props', size=512, highs=[high_copy(b, 1, {'kind': 'CLOUDS', 'scale': 0.15, 'strength': 0.06}) for b in boulders] + [None], ao_dist=0.4, ao_k=0.45)
 export(out_path(os.path.join(os.path.dirname(__file__), '..', '..', 'img', 'models', 'props.glb')))
