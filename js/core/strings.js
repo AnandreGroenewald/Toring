@@ -358,8 +358,11 @@ export const S = {
     { icon: '🤝', text: 'Blok vir Blok: een toring saam, om die beurt ’n blok, 10 sekondes om te mik. Val jou blok of gooi jy blokke af, kos dit ’n hartjie. 3 Perfeks op ’n ry stuur ’n sabotasie, en die hyskraan swaai al vinniger.' },
     // (1.16) Die Lewende Toring
     { icon: '🏠', text: 'Lewende Toring: elke blok wat staan, word ’n vloer. Goed = 1 kamer, Perfek = 2, en elke Perfek op ’n ry een meer. Mense trek in; val ’n vloer, spring hulle met valskerms.' },
-    { icon: '🔥', text: 'Gevegte in Blok vir Blok: jou joker kan jou stam stuur (Veldbrand, Waterwiel of Rankgryp) na die ander se vloere. Is jou mense op, kry jy een beurt om weer mense te kry, of jy verloor.' },
-    { icon: '🏘️', text: 'Jou dorp: jou Daaglikse Torings stuur hul mense na jou dorp, en 3 Perfeks op ’n ry daarin gee ’n strooptog: steel mense by jou vriende, selfs as hulle nie speel nie. Jou eerste Daaglikse Toring elke dag bou ’n muur. Is daar by jou gesteel? Neem gratis wraak.' },
+    // (1.20) Ons dorp, die rivier en Saterdag (the owner, 24 Oct 2026)
+    { icon: '🛟', text: 'Afgly: ná jou Daaglikse Toring duik jou bouer van die top af en gly die rivier af. Swiep links en regs verby blokke, krokodille, seekoeie en Blouaap, en skep jou mense op wat van jou toring afgeval het. Hulle trek in julle Weektoring in.' },
+    { icon: '🏗️', text: 'Weektoring: elke Daaglikse Toring (Maandag tot Saterdag) gee ’n beurt met die hyskraan op julle span se Weektoring: 10 blokke, in jou eie blokstyl. ’n Perfek-vloer kraak eers voor hy breek.' },
+    { icon: '🏝️', text: 'Ons dorp: julle span is tot 3 bouers (nooi vriende met WhatsApp). Julle eiland wys die Weektoring, elkeen se jongste Daaglikse Toring en vorige weke se monumente.' },
+    { icon: '💣', text: 'Saterdag-uitdaging: 4 spanne op een rivier en net die hoogste toring kan gebombardeer word. Gly af, hou vas om te mik (die tyd gaan stadiger), sleep en los. Elke bom wat tref, slaan twee vloere uit. Jou kaartjie: 3 Daaglikse Torings Maandag tot Vrydag; 1 bom per 25 m. Die kraan sluit 12:00, en die fluitjie blaas iewers tussen 20:00 en 21:00.' },
     // (1.17) Die Kasteelreeks (kasteel.html)
     { icon: '🏰', text: 'Die Kasteelreeks: jou Daaglikse Torings word die torings van jou kasteel. Val Robot Rikus en jou vriende se kastele aan met troepe, ’n stormram en ’n trebuchet (breek die hek, die helfte plat, hul vlag val), en beplan jou verdediging: dit veg vir jou terwyl jy weg is.' },
     // (1.13.1) with the day's free tries (from 12 Oct 2026: 3)

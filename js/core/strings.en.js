@@ -354,8 +354,11 @@ export const S_EN = {
     { icon: '🤝', text: 'Block by Block: one tower together, a block each in turn, 10 seconds to aim. Drop your block or knock blocks off and it costs a heart. 3 Perfects in a row send a sabotage, and the crane keeps swinging faster.' },
     // (1.16) The Living Tower
     { icon: '🏠', text: 'Living Tower: every block that stands becomes a floor. Good = 1 room, Perfect = 2, and each Perfect in a row one more. People move in; when a floor falls, they jump with parachutes.' },
-    { icon: '🔥', text: 'Battles in Block by Block: your joker can send your tribe (Wildfire, Water Wheel or Vine Grab) at the other player’s floors. Lose all your people and you get one turn to win some back, or you lose.' },
-    { icon: '🏘️', text: 'Your town: your Daily Towers send their people to your town, and 3 Perfects in a row there make a raid: steal people from your friends, even when they’re not playing. Your first Daily Tower each day builds a wall. Did someone steal from you? Take free revenge.' },
+    // (1.20) Ons dorp, the river and Saturday (the owner, 24 Oct 2026)
+    { icon: '🛟', text: 'Ride down: after your Daily Tower your builder dives off the top and rides down the river. Swipe left and right past blocks, crocodiles, hippos and Blouaap, and scoop up your people who fell off your tower. They move into your Weekly Tower.' },
+    { icon: '🏗️', text: 'Weekly Tower: every Daily Tower (Monday to Saturday) gives a turn with the crane on your crew’s Weekly Tower: 10 blocks, in your own block style. A Perfect floor cracks before it breaks.' },
+    { icon: '🏝️', text: 'Ons dorp: your crew is up to 3 builders (invite friends on WhatsApp). Your island shows the Weekly Tower, everyone’s latest Daily Tower and past weeks’ monuments.' },
+    { icon: '💣', text: 'Saturday Challenge: 4 crews on one river, and only the tallest tower can be bombed. Ride down, hold to aim (time slows down), drag and let go. Every bomb that hits knocks out two floors. Your ticket: 3 Daily Towers Monday to Friday; 1 bomb per 25 m. The crane closes at 12:00, and the whistle blows somewhere between 20:00 and 21:00.' },
     // (1.17) The Castle Series (kasteel.html)
     { icon: '🏰', text: 'The Castle Series: your Daily Towers become the towers of your castle. Attack Robot Rikus’s and your friends’ castles with troops, a ram and a trebuchet (break the gate, knock half of it down, make their flag fall), and plan your defence: it fights for you while you’re away.' },
     // (1.18) Block Clash (botsing.html)
