@@ -1402,6 +1402,7 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
 - **The endless river (24 Oct ~20:00, his "make it that it doesnt end, the more meters you get the better for the
   week"):** three hearts, a metre counter, your island in a lake at ~700 m, faster after; the card leads with the
   metres. The town's island now sits in an open lake (his photos: the camera had ended up inside the canyon's rim).
-  Waiting for his pick of what the metres give for the week.
+  His pick (A): every 100 m ridden Mon-Sat earns a Saturday shot (the week's 10 still the most); Ons dorp shows the
+  crew's river metres and each builder's.
 - **Next:** his feedback; his play of checkpoints 1+2 at home:
   http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1; the release on his word (plan §8).
