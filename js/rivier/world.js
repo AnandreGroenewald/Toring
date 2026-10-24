@@ -486,14 +486,14 @@ function boulderGeometry() {
 }
 
 /** A shrub: a lumpy ball of leaves, flat at its foot, darker inside and below (smooth, not faceted). */
-function shrubGeometry() {
-  const g = new THREE.IcosahedronGeometry(1, 2);
+function shrubGeometry(seed = 0) {
+  const g = new THREE.IcosahedronGeometry(1, 3);
   const p = g.attributes.position;
   const col = [];
   const v = new THREE.Vector3();
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i);
-    const n = Math.sin(v.x * 5.1 + v.y * 2.3) * 0.5 + Math.sin(v.z * 6.7 - v.x * 1.9) * 0.35 + Math.sin(v.y * 9.3 + v.z * 3.1) * 0.2;
+    const n = Math.sin(v.x * 5.1 + v.y * 2.3 + seed) * 0.5 + Math.sin(v.z * 6.7 - v.x * 1.9 + seed * 1.7) * 0.35 + Math.sin(v.y * 9.3 + v.z * 3.1 + seed * 0.6) * 0.2;
     v.multiplyScalar(1 + n * 0.16);
     v.y = Math.max(v.y, -0.38);
     p.setXYZ(i, v.x, v.y, v.z);
@@ -503,6 +503,72 @@ function shrubGeometry() {
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.computeVertexNormals();
   return g;
+}
+
+/**
+ * An umbrella thorn's crown: a wide flat canopy in tiers, made of overlapping flattened lumps (a layered, cloudy
+ * silhouette, not one blob), darker underneath. About 1 across, 0.35 high; its foot at y 0.
+ */
+function acaciaCrownGeometry() {
+  const parts = [];
+  const lumps = [[0, 0.12, 0, 0.62], [0.42, 0.08, 0.18, 0.48], [-0.38, 0.06, 0.26, 0.5], [0.14, 0.05, -0.44, 0.5], [-0.3, 0.1, -0.3, 0.44], [0.18, 0.2, 0.08, 0.4], [-0.08, 0.22, -0.1, 0.36]];
+  lumps.forEach(([x, y, z, r], i) => {
+    const g = shrubGeometry(i * 3.7 + 1);
+    g.scale(r, r * 0.38, r);
+    g.translate(x, y, z);
+    parts.push(g);
+  });
+  const m = mergeGeometries(parts);
+  for (const g of parts) g.dispose();
+  return m;
+}
+/** An acacia's trunk: a crooked stem that forks into three limbs reaching out under the canopy. 1 high; its foot at 0. */
+function acaciaTrunkGeometry() {
+  const seg = (a, b, r0, r1) => {
+    const d = new THREE.Vector3().subVectors(b, a);
+    const g = new THREE.CylinderGeometry(r1, r0, d.length(), 7, 1);
+    g.translate(0, d.length() / 2, 0);
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize());
+    g.applyQuaternion(q);
+    g.translate(a.x, a.y, a.z);
+    return g;
+  };
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const fork = V(0.06, 0.55, 0.02);
+  const parts = [
+    seg(V(0, 0, 0), V(0.03, 0.3, 0), 0.34, 0.27), seg(V(0.03, 0.3, 0), fork, 0.27, 0.22),
+    seg(fork, V(0.9, 1.0, 0.3), 0.17, 0.08), seg(fork, V(-0.8, 1.0, 0.45), 0.16, 0.07), seg(fork, V(-0.1, 1.02, -0.85), 0.15, 0.07),
+  ];
+  const m = mergeGeometries(parts.map((g) => g.toNonIndexed()));
+  for (const g of parts) g.dispose();
+  m.computeVertexNormals();
+  return m;
+}
+/**
+ * Leaves on a bent material (the bushes, the acacias' crowns): clumps of light and shade broken up by noise in the
+ * world, warmer and lighter where the clumps catch the sun, deep green in the gaps.
+ */
+function foliageMaterial(m, noise) {
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    prev(sh, r);
+    sh.uniforms.uLeafNoise = { value: noise };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vLeafW;')
+      .replace('#include <fog_vertex>', '#include <fog_vertex>\nvLeafW = rvW.xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vLeafW;\nuniform sampler2D uLeafNoise;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+  {
+    float l1 = texture2D(uLeafNoise, vLeafW.xz * 0.21 + vLeafW.y * 0.13).r;
+    float l2 = texture2D(uLeafNoise, vLeafW.xy * 0.73 + vLeafW.z * 0.31).g;
+    float leaf = smoothstep(0.32, 0.78, l1 * 0.55 + l2 * 0.45);
+    diffuseColor.rgb *= 0.62 + 0.62 * leaf;
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.18, 1.1, 0.72), leaf * 0.5);
+  }`);
+  };
+  m.customProgramCacheKey = () => 'rivier-bend-leaf';
+  return m;
 }
 
 /**
@@ -1059,7 +1125,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   const fallFoamGeo = new THREE.PlaneGeometry(7, 6);
   fallFoamGeo.rotateX(-Math.PI / 2);
   const fallGeos = { '-1': cliffGeos['-1'].map((g) => fallGeometry(g, -1)), 1: cliffGeos[1].map((g) => fallGeometry(g, 1)) };
-  const bushMat = bendMaterial(new THREE.MeshStandardMaterial({ color: COLORS.bushL, roughness: 0.92, vertexColors: true }));
+  const bushMat = foliageMaterial(bendMaterial(new THREE.MeshStandardMaterial({ color: COLORS.bushL, roughness: 0.92, vertexColors: true })), noise);
   const bushGeo = shrubGeometry();
   const boulderGeo = boulderGeometry();
   const segs = [];
@@ -1068,12 +1134,10 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   const bushes = new THREE.InstancedMesh(bushGeo, bushMat, N_SEG * 2 * BUSH_PER);
   // acacias on the rim: a thin crooked trunk and a wide flat crown, a couple to each piece of wall
   const TREE_PER = quality.name === 'low' ? 1 : 2;
-  const trunkGeo = new THREE.CylinderGeometry(0.22, 0.38, 1, 6);
-  trunkGeo.translate(0, 0.5, 0);
-  const crownGeo = shrubGeometry();
-  crownGeo.scale(1, 0.32, 1);
+  const trunkGeo = acaciaTrunkGeometry();
+  const crownGeo = acaciaCrownGeometry();
   const trunks = new THREE.InstancedMesh(trunkGeo, bendMaterial(new THREE.MeshStandardMaterial({ color: '#4a3526', roughness: 0.9 })), N_SEG * 2 * TREE_PER);
-  const crowns = new THREE.InstancedMesh(crownGeo, bendMaterial(new THREE.MeshStandardMaterial({ color: '#6d8a3c', roughness: 0.9, vertexColors: true })), N_SEG * 2 * TREE_PER);
+  const crowns = new THREE.InstancedMesh(crownGeo, foliageMaterial(bendMaterial(new THREE.MeshStandardMaterial({ color: '#6d8a3c', roughness: 0.9, vertexColors: true })), noise), N_SEG * 2 * TREE_PER);
   trunks.frustumCulled = crowns.frustumCulled = false;
   group.add(trunks, crowns);
   const boulders = new THREE.InstancedMesh(boulderGeo, stoneMat, N_SEG * 2 * ROCK_PER);   // (the river stones' own sandstone)
@@ -1343,7 +1407,8 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
         const by = (34 + kk * 2) * (1 - 0.78 * lowAt(zc + u));
         tmp.position.set(s.side * (half + 9 + kk * 6), by - 0.6, -(ahead + u));
         tmp.rotation.set(0.05 * (kk - 0.5), kk * 6, 0.12 * (kk - 0.5));
-        tmp.scale.set(1, th, 1);
+        const tw = (3.2 + kk * 2.4) * 0.32;   // (the limbs reach out under the canopy)
+        tmp.scale.set(tw, th, tw);
         tmp.updateMatrix();
         trunks.setMatrixAt(ti, tmp.matrix);
         tmp.position.y = by - 0.6 + th;
