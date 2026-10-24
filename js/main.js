@@ -2881,6 +2881,11 @@ async function openSpanTown() {
       onRepair: () => { closeRide(); startWeekTurn({ repair: true }); },
       onBomb: () => { closeRide(); startRaid(); },
       onInvite: () => shareInvite(),
+      onShareWin: () => {
+        const nv = span.view();
+        const url = nv.crew?.invite ? `${siteUrl()}?span=${nv.crew.invite}` : siteUrl();
+        ui.shareText(S.spanWinText(nv.crew?.name || '', fmtM(nv.river?.final?.heights?.[nv.crew?.id] ?? nv.heightM ?? 0), url), 'whatsapp');
+      },
       onRename: async (name) => {
         const res = await span.rename(name);
         ui.toast(res.error ? (res.error === 'name' ? S.spanNameBad : S.spanOffline) : S.spanRenamed(res.crew?.name || name), 3200);

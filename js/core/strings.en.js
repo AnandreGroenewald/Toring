@@ -944,6 +944,8 @@ export const S_EN = {
   spanRenamed: (n) => `Your crew is now called ${n}.`,
   spanNameBad: 'Choose another name (clean, up to 18 letters).',
   spanRemoved: 'That builder is out of the crew. They get their own island.',
+  twShareWin: '📲 Tell your friends',
+  spanWinText: (name, h, url) => `🏆 ${name} won Saturday with a Weekly Tower of ${h} in Stapel! Come build with us: ${url}`,
   twFold: 'Fold the panel up or down',
   twWhistle: 'The whistle blows somewhere between 20:00 and 21:00. Nobody knows exactly when!',
   twBomb: (n) => `💣 Ride down and bomb (${n})`,

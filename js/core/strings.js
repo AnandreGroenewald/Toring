@@ -989,6 +989,8 @@ export const S = {
   spanRenamed: (n) => `Julle span heet nou ${n}.`,
   spanNameBad: 'Kies ’n ander naam (netjies, tot 18 letters).',
   spanRemoved: 'Die bouer is uit die span. Hulle kry hul eie eiland.',
+  twShareWin: '📲 Vertel jou vriende',
+  spanWinText: (name, h, url) => `🏆 ${name} het Saterdag gewen met ’n Weektoring van ${h} in Stapel! Kom bou saam met ons: ${url}`,
   twFold: 'Vou die paneel op of oop',
   twWhistle: 'Die fluitjie blaas iewers tussen 20:00 en 21:00. Niemand weet presies wanneer nie!',
   twBomb: (n) => `💣 Gly af en bombardeer (${n})`,

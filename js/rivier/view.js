@@ -221,8 +221,11 @@ function createTown(K, d) {
     }
     const news = (crew?.news || []).slice(-3).reverse().map(newsLine).filter(Boolean).map((s) => `<li>${s}</li>`).join('');
     // (the founder may rename the crew and remove a member: a ✕ that asks once more before it acts)
+    // (crews are locked on Saturday and Sunday: no leaving or removing then)
+    const weekend = (v.dow | 0) >= 6;
     const boss = !!(crew && v.myId && crew.founder === v.myId && !sat);
-    const memberHtml = (m) => `<span class="tw-m">${esc(m.name || '?')}${boss && m.id !== v.myId ? `<button class="tw-rm${removing === m.id ? ' ask' : ''}" data-id="${esc(m.id)}" aria-label="${S.twRemoveAsk(esc(m.name || '?'))}">${removing === m.id ? S.twRemoveAsk(esc(m.name || '?')) : '✕'}</button>` : ''}</span>`;
+    const canRemove = boss && !weekend;
+    const memberHtml = (m) => `<span class="tw-m">${esc(m.name || '?')}${canRemove && m.id !== v.myId ? `<button class="tw-rm${removing === m.id ? ' ask' : ''}" data-id="${esc(m.id)}" aria-label="${S.twRemoveAsk(esc(m.name || '?'))}">${removing === m.id ? S.twRemoveAsk(esc(m.name || '?')) : '✕'}</button>` : ''}</span>`;
     const members = crew ? `<div class="tw-crew"><span>${S.spanMembers(crew.members.length, 3)}: </span>${crew.members.map(memberHtml).join('<span class="tw-dot">·</span>')}${crew.members.length < 3 ? `<button class="tw-invite">${S.spanInvite}</button>` : ''}</div>` : '';
     const renameForm = renaming ? `<form class="tw-rename-form"><input class="tw-name" maxlength="18" value="${esc(crew?.name || '')}" aria-label="${S.twRename}"><button type="submit" class="tw-save">${S.twRenameSave}</button><button type="button" class="tw-cancel">${S.twCancel}</button></form>` : '';
     const btns = [];
@@ -230,12 +233,15 @@ function createTown(K, d) {
     if (sat && !iLead && v.ticket && v.bombs > 0) btns.push(`<button class="tw-bomb">${S.twBomb(v.bombs)}</button>`);
     if (sat && v.ticket && v.repair > 0) btns.push(`<button class="tw-repair">${S.twRepair(v.repair)}</button>`);
     if (v.turns > 0 && !over) btns.push(`<button class="tw-build">${S.twBuild(v.turns)}</button>`);
+    // (Saturday won: tell your friends, with the crew's invite)
+    const place = over && r?.final ? r.final.order.indexOf(mine) + 1 : 0;
+    if (place === 1) btns.unshift(`<button class="tw-share">${S.twShareWin}</button>`);
     if (!btns.length) btns.push(`<p class="tw-none">${over ? S.twKroning : v.craneShut ? S.twCraneShut : S.twNoTurn}</p>`);
     ov.innerHTML = `<div class="tw-top"><button class="tw-back">${S.twBack}</button><div class="tw-card"><b>🏝️ ${esc(v.name || S.spanMenu)}${boss ? `<button class="tw-rename" aria-label="${S.twRename}">✏️</button>` : ''}</b>
         <span>${S.twHeight} <em>${fmtM(v.heightM || 0)}</em> · ${S.twPeople} <em>${fmtInt(v.people | 0)}</em></span></div></div>
       <div class="tw-panel${folded ? ' min' : ''}"><button class="tw-fold" aria-label="${S.twFold}"></button>${renameForm}${river}${over || v.phase === 'kroning' ? '' : `<p>${v.ticket ? S.twTicketOk : S.twTicket(v.weekdays | 0, 3)}</p><p>${S.twBombs(v.bombs | 0)}</p>`}${r ? '' : `<p class="tw-sat">${S.twSat}</p>`}
         ${members}${news ? `<ul class="tw-news">${news}</ul>` : ''}
-        <div class="tw-btns">${btns.join('')}</div>${crew && crew.members.length > 1 && !sat ? `<button class="tw-leave">${S.spanLeave}</button>` : ''}${clockRow(v.clock)}</div>`;
+        <div class="tw-btns">${btns.join('')}</div>${crew && crew.members.length > 1 && !weekend ? `<button class="tw-leave">${S.spanLeave}</button>` : ''}${clockRow(v.clock)}</div>`;
     const on = (sel, fn) => ov.querySelector(sel)?.addEventListener('click', fn);
     on('.tw-fold', () => fold(!folded));
     on('.tw-rename', () => { renaming = true; fold(false); paint(v); ov.querySelector('.tw-name')?.focus(); });
@@ -260,6 +266,7 @@ function createTown(K, d) {
     on('.tw-repair', () => d.onRepair?.());
     on('.tw-bomb', () => d.onBomb?.());
     on('.tw-invite', () => d.onInvite?.());
+    on('.tw-share', () => d.onShareWin?.());
     on('.tw-leave', () => d.onLeave?.());
     ov.querySelectorAll('.tw-clock button').forEach((b) => b.addEventListener('click', () => v.clock.jump(b.dataset.at)));
   }
@@ -317,6 +324,7 @@ function createTown(K, d) {
 #rivier .tw-ride { background: linear-gradient(180deg, #8ff0d8, #2fb59c); color: #062b25; box-shadow: 0 4px 0 #18806c; }
 #rivier .tw-build { background: linear-gradient(180deg, #ffd65c, #f0a81c); color: #2b1a00; box-shadow: 0 4px 0 #a86e00; }
 #rivier .tw-bomb { background: linear-gradient(180deg, #ff8a6b, #e0442a); color: #2b0700; box-shadow: 0 4px 0 #8f2412; }
+#rivier .tw-share { background: linear-gradient(180deg, #4ee28a, #25b864); color: #052b14; box-shadow: 0 4px 0 #157a3f; }
 #rivier .tw-repair { background: linear-gradient(180deg, #b7d3ff, #5b8fe0); color: #071a3a; box-shadow: 0 4px 0 #2e5da8; }
 #rivier .tw-leave { display: block; margin: 10px auto 0; min-height: 36px; padding: 0 12px; border: 0; background: none; color: #9fb6c0; font: inherit; font-weight: 800; font-size: 13px; text-decoration: underline; }
 #rivier .tw-none { text-align: center; color: #b9d6e3 !important; font-size: 14px !important; }`;
