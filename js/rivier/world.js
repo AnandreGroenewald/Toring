@@ -94,12 +94,16 @@ export function bendMaterial(m) {
  * little grass, the stone's tone drifts in big soft patches (no two walls alike), and the foot is wet, dark and glossy
  * up to a wavy tide line. Works in the wall's own coordinates (x out, y up from the water, z along the river).
  */
+const rkClock = { value: 0 };   // (the walls' and stones' own clock: the light dancing off the water)
+const rkSun = { value: 1 };     // (how strong that light is: the look's sun)
 function rockDetail(m, noise, bank, { tri = false, wet = 1.15 } = {}) {
   const bend = m.onBeforeCompile;
   m.onBeforeCompile = (sh, r) => {
     bend(sh, r);
     sh.uniforms.uRkNoise = { value: noise };
     sh.uniforms.uRkWet = { value: wet };
+    sh.uniforms.uRkT = rkClock;
+    sh.uniforms.uRkSun = rkSun;
     Object.assign(sh.uniforms, bank);
     // (the walls follow the bank smoothly, vertex by vertex: out to the pool and the lake and low there, no steps
     // between the pieces; the same curve as halfAt() below)
@@ -122,7 +126,7 @@ float rkOpen(float z) {
   vRkL = transformed;
   vRkN = objectNormal;`);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRkL;\nvarying vec3 vRkN;\nuniform sampler2D uRkNoise;\nuniform float uRkWet;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRkL;\nvarying vec3 vRkN;\nuniform sampler2D uRkNoise;\nuniform float uRkWet;\nuniform float uRkT;\nuniform float uRkSun;')
       // (a stone in the river: the picture wrapped round it from three sides, no seams)
       .replace('#include <map_fragment>', tri ? `#ifdef USE_MAP
   vec3 rkB = pow(abs(normalize(vRkN)), vec3(4.0));
@@ -144,7 +148,20 @@ float rkOpen(float z) {
     float rkWet = 1.0 - smoothstep(rkLine - 0.35, rkLine + 0.2, vRkL.y);
     diffuseColor.rgb *= 1.0 - rkWet * 0.32;
     roughnessFactor = mix(roughnessFactor, 0.3, rkWet);
-  }`);
+  }`)
+      // the sunlight thrown up off the water: bright wavy lines dancing on the rock just above the river
+      .replace('#include <opaque_fragment>', `{
+    float rkH = vRkL.y - uRkWet;
+    float rkBand = smoothstep(-0.3, 0.4, rkH) * (1.0 - smoothstep(1.0, 4.5 + uRkWet * 0.5, rkH));
+    if (rkBand > 0.001) {
+      vec2 cp = vec2(vRkL.z + vRkL.x, vRkL.y * 1.6) * 0.13;
+      float c1 = texture2D(uRkNoise, cp + vec2(uRkT * 0.045, uRkT * 0.02)).r;
+      float c2 = texture2D(uRkNoise, cp * 1.37 + vec2(-uRkT * 0.035, uRkT * 0.03) + 0.41).g;
+      float ca = pow(max(0.0, 1.0 - abs(c1 - c2) * 2.2), 5.0);
+      outgoingLight += vec3(1.0, 0.92, 0.74) * ca * rkBand * 0.2 * uRkSun * (1.0 - 0.6 * step(uRkWet, 0.5));
+    }
+  }
+  #include <opaque_fragment>`);
   };
   m.customProgramCacheKey = () => (tri ? 'rivier-bend-rock-tri' : 'rivier-bend-rock');
   return m;
@@ -169,6 +186,26 @@ export function rimMaterial(m) {
   #include <opaque_fragment>`);
   };
   m.customProgramCacheKey = () => 'rivier-bend-rim';
+  return m;
+}
+
+/**
+ * Wet to just over the water: whatever floats (a block in the river) is darker and glossy where the river washes it,
+ * fading out above. On a bent material; by the thing's height in the world.
+ */
+export function wetMaterial(m) {
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    prev?.(sh, r);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vWetY;')
+      .replace('#include <fog_vertex>', '#include <fog_vertex>\nvWetY = (modelMatrix * vec4(transformed, 1.0)).y;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vWetY;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\nfloat wetK = 1.0 - smoothstep(0.08, 0.55, vWetY);\ndiffuseColor.rgb *= 1.0 - 0.3 * wetK;')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, wetK);');
+  };
+  m.customProgramCacheKey = () => 'rivier-bend-wet';
   return m;
 }
 
@@ -697,6 +734,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   const group = new THREE.Group();
   scene.add(group);
   const fog = lin(L.haze);
+  rkSun.value = Math.min(1, L.sunI / 2.6);
   rimUniform.value.copy(lin(L.sun).multiplyScalar(0.22 * Math.min(1, L.sunI / 2.6))).add(lin(L.hemiSky).multiplyScalar(0.05));
   // the light on things that draw themselves unlit (foam, spray, falling water, mist): full white by day, warm and
   // dimmer at sunset, cool and dark at night
@@ -1228,6 +1266,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
 
   function update(dist, t, riderX = null) {
     water.uniforms.uT.value = t;
+    rkClock.value = t;
     water.uniforms.uDist.value = dist;
     skyMat.uniforms.uT.value = t;
     fallMat.uniforms.uT.value = t;

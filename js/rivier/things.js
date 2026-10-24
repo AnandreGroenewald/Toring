@@ -2,7 +2,7 @@
 // fell off your tower, the white water round all of them, the spray, and your crew's island with its Weektoring (every
 // floor in the skin of whoever stacked it). Kept in pools: the river re-uses them as it goes.
 import * as THREE from '../../lib/three.module.min.js';
-import { bendMaterial, puffTexture } from './world.js';
+import { bendMaterial, puffTexture, wetMaterial } from './world.js';
 import { portraitDataUrl } from '../game/residents.js';
 import { dimsOf, PX } from '../core/weektower.js';
 import { getGeometry } from '../game/blocks.js';
@@ -195,7 +195,8 @@ export function createThings(scene, pieces) {
       const key = `${shape}|${skin}|${color}|${o.material?.uuid || ''}`;
       if (!blockMats.has(key)) {
         const src = o.material;
-        blockMats.set(key, Array.isArray(src) ? src.map((m) => bendMaterial(m.clone())) : bendMaterial(src.clone()));
+        // (wet and glossy where the river washes them)
+        blockMats.set(key, Array.isArray(src) ? src.map((m) => wetMaterial(bendMaterial(m.clone()))) : wetMaterial(bendMaterial(src.clone())));
       }
       o.material = blockMats.get(key);
       o.castShadow = o.receiveShadow = true;
