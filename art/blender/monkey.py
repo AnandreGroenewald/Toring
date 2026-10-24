@@ -5,7 +5,7 @@
 # usage: Blender -b -P art/blender/monkey.py -- img/models/monkey.glb
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
-from common import reset, out_path, material, skin_body, apply, prim, join, pivot, export
+from common import reset, out_path, material, skin_body, apply, prim, join, pivot, export, detail, bake_set, high_copy
 
 reset()
 fur = material('mk_fur', '#7d6a52', rough=0.85)
@@ -33,10 +33,11 @@ for p in body.data.polygons:
     c = p.center
     # (a lighter belly and chest in front)
     p.material_index = 1 if (c.y < -0.12 and 0.2 < c.z < 0.62 and abs(c.x) < 0.16) else 0
-body = join([body, prim('sphere', 'tailtip', loc=(0, 0.42, 0.6), scale=(0.035, 0.035, 0.035), mat=furDark, segments=8, ring_count=6)], 'body')
+bodyDetails = [prim('sphere', 'tailtip', loc=(0, 0.42, 0.6), scale=(0.035, 0.035, 0.035), mat=furDark, segments=8, ring_count=6)]
 
 # the head: round skull, a tan face mask and muzzle, big eyes, ears, the blue bandana knotted at the back
-H = [prim('sphere', 'skull', loc=(0, -0.04, 1.0), scale=(0.25, 0.24, 0.24), mat=fur, segments=20, ring_count=12)]
+skull = prim('sphere', 'skull', loc=(0, -0.04, 1.0), scale=(0.25, 0.24, 0.24), mat=fur, segments=20, ring_count=12)
+H = []
 H.append(prim('sphere', 'mask', loc=(0, -0.2, 0.97), scale=(0.2, 0.1, 0.17), mat=face, segments=18, ring_count=10))
 H.append(prim('sphere', 'muzzle', loc=(0, -0.29, 0.9), scale=(0.11, 0.08, 0.08), mat=face, segments=14, ring_count=8))
 H.append(prim('sphere', 'nose', loc=(0, -0.36, 0.93), scale=(0.035, 0.02, 0.022), mat=black, segments=8, ring_count=6))
@@ -50,8 +51,7 @@ H.append(prim('torus', 'bandana', loc=(0, 0.0, 1.12), scale=(0.25, 0.25, 0.25), 
 H.append(prim('sphere', 'knot', loc=(0, 0.25, 1.08), scale=(0.06, 0.05, 0.05), mat=band, segments=10, ring_count=6))
 for s in (1, -1):
     H.append(prim('cone', 'bandtail', loc=(s * 0.07, 0.33, 0.98), scale=(0.05, 0.02, 0.13), rot=(-0.6, s * 0.3, 0), mat=band, vertices=8, radius1=1, depth=1))
-head = join(H, 'head')
-pivot(head, (0, -0.03, 0.8))
+
 
 # the arms and the paddle: shoulders to elbows to the hands on the shaft; a blade at each end
 A = [(s * 0.22, -0.04, 0.62) for s in (1, -1)]
@@ -63,12 +63,19 @@ for s in (1, -1):
     arm_edges += [(b, b + 1), (b + 1, b + 2)]
 arms = apply(skin_body('arms', arms_pts, arm_edges, smooth=1), tris=700)
 arms.data.materials.append(fur)
-AP = [arms]
+AP = []
 for s in (1, -1):
     AP.append(prim('sphere', 'hand', loc=(s * 0.14, -0.44, 0.53), scale=(0.055, 0.05, 0.05), mat=face, segments=10, ring_count=6))
 AP.append(prim('cyl', 'shaft', loc=(0, -0.45, 0.53), scale=(0.028, 0.028, 0.8), rot=(0, 1.5708, 0), mat=wood, vertices=10))
 for s in (1, -1):
     AP.append(prim('cube', 'blade', loc=(s * 0.82, -0.45, 0.53), scale=(0.03, 0.1, 0.17), mat=wood))
-arms = join(AP, 'arms')
+# the fur baked: streaky brown-grey, lighter in front, soft shadows; fine fur in the normal map
+detail(fur, 'stripes', scale=26, mix=0.25, color2='#5a4a38')
+highs = [high_copy(o, 1, {'kind': 'STUCCI', 'scale': 0.01, 'strength': 0.012}) for o in (body, skull, arms)]
+bake_set([body, skull, arms], 'monkey', size=1024, highs=highs)
+body = join([body] + bodyDetails, 'body')
+head = join([skull] + H, 'head')
+pivot(head, (0, -0.03, 0.8))
+arms = join([arms] + AP, 'arms')
 pivot(arms, (0, -0.04, 0.6))
 export(out_path(os.path.join(os.path.dirname(__file__), '..', '..', 'img', 'models', 'monkey.glb')))

@@ -4,10 +4,11 @@
 # usage: Blender -b -P art/blender/croc.py -- img/models/croc.glb
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
-from common import reset, out_path, material, skin_body, apply, prim, join, pivot, export
+from common import reset, out_path, material, skin_body, apply, prim, join, pivot, export, detail, bake_set, high_copy
 
 reset()
 skin = material('croc_skin', '#5b7a3a', rough=0.55)
+skinPlain = material('croc_skin_plain', '#557236', rough=0.55)
 belly = material('croc_belly', '#b4ad83', rough=0.7)
 scute = material('croc_scute', '#34431f', rough=0.5)
 eye = material('croc_eye', '#d8c23a', rough=0.25, emit='#8a7a10', emit_k=0.6)
@@ -34,13 +35,13 @@ body.data.materials.append(belly)
 for p in body.data.polygons:
     p.material_index = 1 if p.normal.z < -0.35 else 0
 
-parts = [body]
+parts = []   # (the details: joined to the body after its skin is baked, so they keep their own crisp colours)
 # eyes on top of the head: a bump, the eye, a slit
 for s in (1, -1):
-    parts.append(prim('sphere', 'brow', loc=(0.84, s * 0.12, 0.29), scale=(0.07, 0.06, 0.05), mat=skin, segments=12, ring_count=6))
+    parts.append(prim('sphere', 'brow', loc=(0.84, s * 0.12, 0.29), scale=(0.07, 0.06, 0.05), mat=skinPlain, segments=12, ring_count=6))
     parts.append(prim('sphere', 'eye', loc=(0.87, s * 0.125, 0.31), scale=(0.045, 0.04, 0.035), mat=eye, segments=12, ring_count=6))
     parts.append(prim('sphere', 'pupil', loc=(0.905, s * 0.127, 0.315), scale=(0.008, 0.012, 0.03), mat=pupil, segments=8, ring_count=6))
-    parts.append(prim('sphere', 'nostril', loc=(1.58, s * 0.03, 0.2), scale=(0.025, 0.02, 0.02), mat=skin, segments=8, ring_count=6))
+    parts.append(prim('sphere', 'nostril', loc=(1.58, s * 0.03, 0.2), scale=(0.025, 0.02, 0.02), mat=skinPlain, segments=8, ring_count=6))
 # scutes down the back: two rows, one on the tail, getting smaller
 x = 0.5
 while x > -1.9:
@@ -57,7 +58,6 @@ while x < 1.56:
     for s in (1, -1):
         parts.append(prim('cone', 'tooth', loc=(x, s * w, 0.085), scale=(0.014, 0.014, 0.045), rot=(3.14159, 0, 0), mat=tooth, vertices=6, radius1=1, depth=1))
     x += 0.075
-body = join(parts, 'body')
 
 # the lower jaw: its own part, hinged under the eyes
 J = [(0.74, 0, 0.1, 0.17, 0.06), (1.05, 0, 0.08, 0.13, 0.045), (1.35, 0, 0.075, 0.1, 0.035), (1.6, 0, 0.08, 0.065, 0.03)]
@@ -66,13 +66,20 @@ jaw.data.materials.append(skin)
 jaw.data.materials.append(belly)
 for p in jaw.data.polygons:
     p.material_index = 1 if p.normal.z < -0.3 else 0
-jparts = [jaw, prim('sphere', 'tongue', loc=(1.05, 0, 0.115), scale=(0.3, 0.09, 0.02), mat=mouth, segments=12, ring_count=6)]
+jparts = [prim('sphere', 'tongue', loc=(1.05, 0, 0.115), scale=(0.3, 0.09, 0.02), mat=mouth, segments=12, ring_count=6)]
 x = 1.0
 while x < 1.56:
     w = 0.1 - (x - 1.0) * 0.08
     for s in (1, -1):
         jparts.append(prim('cone', 'tooth', loc=(x + 0.035, s * w, 0.125), scale=(0.012, 0.012, 0.04), mat=tooth, vertices=6, radius1=1, depth=1))
     x += 0.075
-jaw = join(jparts, 'jaw')
+# the skin baked into one texture set: a darker, mottled back, lines across the belly, soft shadow in the folds; the
+# scales pressed into the normal map from a finer, bumpier copy
+detail(skin, 'noise', scale=7, mix=0.22, color2='#33461f')
+detail(belly, 'stripes', scale=9, mix=0.12)
+highs = [high_copy(body, 2, {'kind': 'VORONOI', 'scale': 0.028, 'strength': 0.03}), high_copy(jaw, 2, {'kind': 'VORONOI', 'scale': 0.024, 'strength': 0.022})]
+bake_set([body, jaw], 'croc', size=1024, highs=highs)
+body = join([body] + parts, 'body')
+jaw = join([jaw] + jparts, 'jaw')
 pivot(jaw, (0.74, 0, 0.11))
 export(out_path(os.path.join(os.path.dirname(__file__), '..', '..', 'img', 'models', 'croc.glb')))

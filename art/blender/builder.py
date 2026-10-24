@@ -6,10 +6,10 @@
 # board, bazooka. usage: Blender -b -P art/blender/builder.py -- img/models/builder.glb
 import sys, os, math
 sys.path.insert(0, os.path.dirname(__file__))
-from common import reset, out_path, material, skin_body, apply, prim, join, pivot, export
+from common import reset, out_path, material, skin_body, apply, prim, join, pivot, export, detail, bake_set, high_copy
 
 reset()
-jeans = material('b_jeans', '#3d5379', rough=0.85)
+jeans = material('b_jeans', '#4a6494', rough=0.85)
 jeansDark = material('b_jeansdark', '#2b3b58', rough=0.85)
 shirt = material('b_shirt', '#2b3f5c', rough=0.8)
 vest = material('b_vest', '#ff6a10', rough=0.55)
@@ -33,11 +33,12 @@ def T(x, y, z):
     """three's (x, y, z) as Blender's."""
     return (x, -z, y)
 
+BASE = []   # (name, base mesh, details): the bases are baked into one texture set, then the details joined on
 parts = []
 # --- the thigh: from the hip down to the knee (0.56 m), jeans, a seam
 thigh = apply(skin_body('thigh', [(*T(0, 0, 0), 0.12, 0.12), (*T(0, -0.3, 0.01), 0.11, 0.11), (*T(0, -0.56, 0), 0.092, 0.092)], [(0, 1), (1, 2)], smooth=2), tris=500)
 thigh.data.materials.append(jeans)
-parts.append(thigh)
+BASE.append(('thigh', thigh, []))
 # --- the shin: knee to ankle, then the boot (toe toward three's +z, the way rider.js puts it)
 shin = apply(skin_body('shin', [(*T(0, 0, 0), 0.095, 0.095), (*T(0, -0.3, 0), 0.085, 0.085), (*T(0, -0.5, 0), 0.075, 0.075)], [(0, 1), (1, 2)], smooth=2), tris=420)
 shin.data.materials.append(jeans)
@@ -45,17 +46,13 @@ cuff = prim('cyl', 'cuff', loc=T(0, -0.47, 0), scale=(0.088, 0.088, 0.04), mat=j
 bt = apply(skin_body('boot', [(*T(0, -0.52, -0.02), 0.085, 0.085), (*T(0, -0.6, 0.05), 0.085, 0.075), (*T(0, -0.62, 0.17), 0.075, 0.06)], [(0, 1), (1, 2)], smooth=2), tris=420)
 bt.data.materials.append(boot)
 solep = prim('cube', 'sole', loc=T(0, -0.665, 0.06), scale=(0.085, 0.16, 0.02), mat=sole)
-shin = join([shin, cuff, bt, solep], 'shin')
-pivot(shin, (0, 0, 0))
-parts.append(shin)
+BASE.append(('shin', join([shin, bt], 'shin'), [cuff, solep]))
 # --- the pelvis: across (three's z), jeans with a belt
 pel = apply(skin_body('pelvis', [(*T(0, 0, -0.2), 0.15, 0.14), (*T(0, 0.02, 0), 0.17, 0.15), (*T(0, 0, 0.2), 0.15, 0.14)], [(0, 1), (1, 2)], smooth=2), tris=500)
 pel.data.materials.append(jeans)
 bel = prim('torus', 'belt', loc=T(0, 0.09, 0), scale=(0.152, 0.205, 0.12), rot=(0, 0, 0), mat=belt, major_radius=1, minor_radius=0.14, major_segments=24, minor_segments=6)
 buckle = prim('cube', 'buckle', loc=T(0.155, 0.09, 0), scale=(0.01, 0.035, 0.025), mat=silver)
-pelvis = join([pel, bel, buckle], 'pelvis')
-pivot(pelvis, (0, 0, 0))
-parts.append(pelvis)
+BASE.append(('pelvis', pel, [bel, buckle]))
 # --- the torso: waist to shoulders under the vest (front = three's +x, shoulders at three's z = ±0.22)
 tor = apply(skin_body('torso', [(*T(0, 0.02, 0), 0.17, 0.19), (*T(0.01, 0.32, 0), 0.19, 0.22), (*T(0, 0.58, 0), 0.17, 0.26), (*T(0, 0.7, 0), 0.08, 0.08)], [(0, 1), (1, 2), (2, 3)], smooth=2), tris=900)
 tor.data.materials.append(vest)
@@ -70,39 +67,33 @@ for y in (0.16, 0.27):
 for s in (1, -1):
     T_.append(prim('cube', 'x', loc=T(-0.185, 0.46, 0), scale=(0.008, 0.02, 0.2), rot=(s * 0.62, 0, 0), mat=silver))
 neck = prim('cyl', 'neck', loc=T(0, 0.74, 0), scale=(0.065, 0.065, 0.07), mat=skin, vertices=12)
-T_.append(neck)
-torso = join(T_, 'torso')
-pivot(torso, (0, 0, 0))
-parts.append(torso)
+BASE.append(('torso', join([tor, neck], 'torso'), T_[1:]))
 # --- the head: face toward three's +x; the hard hat on top
-H = [prim('sphere', 'skull', loc=(0, 0, 0), scale=(0.15, 0.145, 0.16), mat=skin, segments=20, ring_count=12)]
-H.append(prim('sphere', 'nose', loc=T(0.15, -0.01, 0), scale=(0.03, 0.025, 0.035), mat=skin, segments=10, ring_count=6))
-H.append(prim('sphere', 'jaw', loc=T(0.05, -0.07, 0), scale=(0.12, 0.12, 0.09), mat=skin, segments=14, ring_count=8))
+HB = [prim('sphere', 'skull', loc=(0, 0, 0), scale=(0.15, 0.145, 0.16), mat=skin, segments=20, ring_count=12)]
+HB.append(prim('sphere', 'nose', loc=T(0.15, -0.01, 0), scale=(0.03, 0.025, 0.035), mat=skin, segments=10, ring_count=6))
+HB.append(prim('sphere', 'jaw', loc=T(0.05, -0.07, 0), scale=(0.12, 0.12, 0.09), mat=skin, segments=14, ring_count=8))
+H = []
 for s in (1, -1):
     H.append(prim('sphere', 'eye', loc=T(0.135, 0.03, s * 0.055), scale=(0.012, 0.016, 0.016), mat=dark, segments=8, ring_count=6))
     H.append(prim('sphere', 'brow', loc=T(0.14, 0.065, s * 0.055), scale=(0.012, 0.035, 0.01), mat=dark, segments=8, ring_count=6))
-    H.append(prim('sphere', 'ear', loc=T(0, 0.0, s * 0.15), scale=(0.025, 0.035, 0.045), mat=skin, segments=10, ring_count=6))
+    HB.append(prim('sphere', 'ear', loc=T(0, 0.0, s * 0.15), scale=(0.025, 0.035, 0.045), mat=skin, segments=10, ring_count=6))
 H.append(prim('torus', 'smile', loc=T(0.135, -0.06, 0), scale=(0.035, 0.012, 0.03), rot=(0, 1.5708, 0), mat=dark, major_radius=1, minor_radius=0.3, major_segments=12, minor_segments=4))
 dome = prim('sphere', 'dome', loc=T(0, 0.04, 0), scale=(0.18, 0.175, 0.17), mat=hat, segments=24, ring_count=12)
 # (only the top half of the dome: the lower half sinks into the skull, hidden)
 brim = prim('cyl', 'brim', loc=T(0.03, 0.05, 0), scale=(0.235, 0.22, 0.013), mat=hat, vertices=28)
 ridge = prim('cube', 'ridge', loc=T(0.0, 0.2, 0), scale=(0.15, 0.025, 0.025), mat=hat)
 H += [dome, brim, ridge]
-head = join(H, 'head')
-pivot(head, (0, 0, 0))
-parts.append(head)
+BASE.append(('head', join(HB, 'head'), H))
 # --- the arms: a sleeve (shoulder to elbow), the forearm and a glove
 up = apply(skin_body('upperarm', [(*T(0, 0, 0), 0.075, 0.075), (*T(0, -0.33, 0), 0.06, 0.06)], [(0, 1)], smooth=2), tris=300)
 up.data.materials.append(shirt)
-parts.append(up)
+BASE.append(('upperarm', up, []))
 fa = apply(skin_body('forearm', [(*T(0, 0, 0), 0.058, 0.058), (*T(0, -0.3, 0), 0.046, 0.046)], [(0, 1)], smooth=2), tris=260)
 fa.data.materials.append(skin)
 gl = prim('sphere', 'glove', loc=T(0, -0.35, 0), scale=(0.06, 0.075, 0.05), mat=glove, segments=12, ring_count=8)
 thumb = prim('sphere', 'thumb', loc=T(0.04, -0.33, 0.03), scale=(0.022, 0.035, 0.022), mat=glove, segments=8, ring_count=6)
 cuffg = prim('cyl', 'glovecuff', loc=T(0, -0.29, 0), scale=(0.055, 0.055, 0.03), mat=glove, vertices=12)
-forearm = join([fa, gl, thumb, cuffg], 'forearm')
-pivot(forearm, (0, 0, 0))
-parts.append(forearm)
+BASE.append(('forearm', fa, [gl, thumb, cuffg]))
 # --- the surfboard: nose toward three's -z (down the river), a rounded tail, a fin under it; stripes
 B = []
 outline = []
@@ -128,9 +119,7 @@ for p in board.data.polygons:
     elif -0.82 < tz < -0.72:
         p.material_index = 3
 fin = prim('cube', 'fin', loc=T(0, -0.03, 0.95), scale=(0.012, 0.09, 0.08), rot=(0.3, 0, 0), mat=board_navy)
-board = join([board, fin], 'board')
-pivot(board, (0, 0, 0))
-parts.append(board)
+BASE.append(('board', board, [fin]))
 # --- the bazooka: along three's -z (the muzzle), its pivot at the shoulder rest
 G = [prim('cyl', 'barrel', loc=(0, 0, 0), scale=(0.085, 0.085, 0.6), rot=(math.pi / 2, 0, 0), mat=gun_olive, vertices=18)]
 G.append(prim('cone', 'bell', loc=T(0, 0, 0.7), scale=(0.135, 0.135, 0.11), rot=(-math.pi / 2, 0, 0), mat=gun_dark, vertices=18, radius1=1, radius2=0.63, depth=2))
@@ -144,4 +133,18 @@ G.append(prim('cube', 'rest', loc=T(0, -0.09, 0.22), scale=(0.03, 0.05, 0.1), ma
 gun = join(G, 'bazooka')
 pivot(gun, (0, 0, 0))
 parts.append(gun)
+# the bases baked into one texture set: denim weave on the jeans, a fabric grain on the vest and shirt, scuffed
+# leather, warm skin, a glossy board; soft shadows in every fold; the weave and grain in the normal map
+detail(jeans, 'stripes', scale=160, mix=0.22, color2='#3a5280')
+detail(vest, 'noise', scale=60, mix=0.12, color2='#e65a08')
+detail(shirt, 'noise', scale=50, mix=0.15)
+detail(boot, 'noise', scale=14, mix=0.3, color2='#3c2614')
+detail(skin, 'noise', scale=20, mix=0.08)
+objs = [b for _, b, _ in BASE]
+highs = [high_copy(b, 1, {'kind': 'STUCCI', 'scale': 0.004, 'strength': 0.003}) if n in ('thigh', 'shin', 'torso', 'upperarm', 'pelvis') else None for n, b, _ in BASE]
+bake_set(objs, 'builder', size=1024, highs=highs)
+for n, b, det in BASE:
+    o = join([b] + det, n) if det else b
+    o.name = n
+    pivot(o, (0, 0, 0))
 export(out_path(os.path.join(os.path.dirname(__file__), '..', '..', 'img', 'models', 'builder.glb')))
