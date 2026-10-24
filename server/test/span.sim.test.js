@@ -161,3 +161,55 @@ test('span sim: Saturday is contested, settles, pays once, and waiting for the l
   assert.ok(contested >= runs.length * 0.75, `the lead changes hands on most Saturdays (${contested}/${runs.length})`);
   assert.ok(sniper <= runs.length / 2, `the last-minute crew wins at most half (${sniper}/${runs.length})`);
 });
+
+/** One player alone on Saturday's river with three Rikus crews: plays most Dailies, builds, bombs, repairs. */
+async function solo(seed) {
+  const rng = createRng(`solo/${seed}`);
+  const data = new Map();
+  const store = { get: async (k) => (data.has(k) ? structuredClone(data.get(k)) : undefined), put: async (k, v) => { data.set(k, structuredClone(v)); } };
+  const clock = { t: sastAt(DAYS[0], 8) };
+  const s = createSpanServer(store, { now: () => clock.t });
+  const p = { id: newSpanId(), key: newSpanKey(), name: 'Solo' };
+  const days = {};
+  const call = async (path, body) => s.handle('POST', path, { ...p, days, ...body });
+  const build = async (repair = false) => {
+    const [st, L] = await call('/span/lease', { repair });
+    if (st !== 200) return false;
+    return (await call('/span/build', { lease: L.lease, floors: turnFloors(rng, heightOf(L.floors), L.blocks) }))[0] === 200;
+  };
+  for (const [i, day] of DAYS.entries()) {
+    clock.t = sastAt(day, i === 5 ? 8 : 18);
+    if (rng.next() < 0.8) days[day] = Math.round(rng.float(20, 70) * 10) / 10;
+    await call('/span/sync');
+    while (await build());
+  }
+  let lead = 0;
+  for (const hr of [10, 14, 17, 19]) {
+    clock.t = sastAt(DAYS[5], hr, rng.int(0, 59));
+    const [, me] = await call('/span/sync');
+    if (!me.river || me.river.over) break;
+    if (me.river.leader === me.crew.id) {
+      lead++;
+      while (me.crew.repair > 0 && await build(true)) me.crew.repair = 0;
+    } else if (me.me.bombs > 0) {
+      const h = me.river.rows.find((x) => x.leader)?.h || 0;
+      const hits = Array.from({ length: Math.min(3, me.me.bombs) }, () => (rng.next() < 0.66 ? { x: 0, y: rng.float(0.5, Math.max(1, h - 0.5)) } : { x: 30, y: 2 }));
+      await call('/span/bomb', { target: me.river.leader, hits });
+    }
+  }
+  clock.t = sastAt(DAYS[5], 21, 5);
+  const [, end] = await call('/span/sync');
+  if (!end.river) return { place: 0 };
+  return { place: end.river.final.order.indexOf(end.crew.id) + 1, rows: end.river.rows.map((x) => [x.bot ? 'R' : 'me', Math.round(x.h)]) };
+}
+
+test('span sim: one player against three Rikus crews places well when they play, and can still lose', async () => {
+  const runs = [];
+  for (let i = 0; i < 16; i++) runs.push(await solo(i));
+  const inRiver = runs.filter((r) => r.place > 0);
+  const firsts = inRiver.filter((r) => r.place === 1).length;
+  console.log(`[sim solo] in a river ${inRiver.length}/16; places ${JSON.stringify(inRiver.map((r) => r.place))}; e.g. ${JSON.stringify(inRiver[0]?.rows)}`);
+  assert.ok(inRiver.length >= 10, 'a player with a ticket gets a river');
+  assert.ok(firsts >= inRiver.length * 0.3, `Rikus is beatable (${firsts}/${inRiver.length} firsts)`);
+  assert.ok(firsts < inRiver.length, 'and not a walkover every time');
+});

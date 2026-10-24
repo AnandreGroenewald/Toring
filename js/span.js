@@ -6,7 +6,7 @@
 // keeps a copy (the last answer) and its own id + key. Without it (an older Worker, or no internet at the start) it plays
 // as a crew of one on this phone alone, as checkpoint 1 did. The ride's gate (once a day) and who fell off your Daily are
 // always this phone's.
-import { SPAN, weekOf, dowOf, weekStats, isSpanId, isSpanKey, newSpanId, newSpanKey, sastOf } from './core/span.js';
+import { SPAN, weekOf, dowOf, weekStats, isSpanId, isSpanKey, newSpanId, newSpanKey } from './core/span.js';
 import { addFloors, heightOf, moveIn, peopleIn, cleanFloor } from './core/weektower.js';
 import { createRng } from './core/rng.js';
 import { safeLocalStorage } from './core/storage.js';
@@ -114,7 +114,7 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
         const r = await call('POST', '/span/sync', { name: w.name || '', skin: w.skin || 'kleur', days: d.days });
         if (r.status !== 200 || !r.crew) return null;
         online = true;
-        d.srv = { me: r.me, crew: r.crew, river: r.river || null, phase: r.phase, today: r.today, at: Date.now() };
+        d.srv = { me: r.me, crew: r.crew, river: r.river || null, phase: r.phase, crane: r.crane, today: r.today, at: Date.now() };
         if (r.me?.prize && r.me.prize.coins > 0) {
           try { earn(r.me.prize.coins, { prize: true }); } catch { /* the wallet's own business */ }
           d.prizeSeen = r.me.prize;
@@ -156,8 +156,8 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
       const base = { rideToday: d.rides[day] === 0, rodeToday: day in d.rides && d.rides[day] !== 0, dow: dowOf(day), online: !!sv };
       if (sv) {
         const c = sv.crew;
-        // (Saturday from noon the crane builds no new floors: turns wait for nothing; repairs go on)
-        const craneShut = sv.phase === 'kroning' || (sv.phase === 'uitdaging' && sastOf(Date.now()).h >= SPAN.craneClose);
+        // (Saturday from noon the crane builds no new floors: turns wait for nothing; repairs go on. The server says.)
+        const craneShut = sv.crane === false;
         return {
           ...base, week: c.week, floors: c.floors, heightM: heightOf(c.floors), people: c.people | 0, name: c.name, craneShut,
           turns: craneShut ? 0 : sv.me.turns | 0, ticket: !!sv.me.ticket, weekdays: sv.me.weekdays | 0, bombs: sv.me.bombs | 0, metres: sv.me.metres || 0,
@@ -240,7 +240,10 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
       if (online) {
         const r = await call('POST', '/span/lease', { repair }).catch(() => null);
         if (!r) return { error: 'offline' };
-        if (r.status !== 200) return { error: r.error || 'server', by: r.by || '' };
+        if (r.status !== 200) {
+          if (r.error === 'crane' && d.srv) d.srv.crane = false;
+          return { error: r.error || 'server', by: r.by || '' };
+        }
         return { floors: r.floors, seed: r.seed, blocks: r.blocks, lease: r.lease, repair: !!r.repair };
       }
       if (turnsLeft() <= 0) return { error: 'noturn' };

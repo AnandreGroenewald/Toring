@@ -173,3 +173,54 @@ test('span client + server: two phones in one crew build one Weektoring; Saturda
   await a.s.sync();
   assert.equal(a.coins.n, before, 'once');
 });
+
+test('span client + server: a bombed crew repairs with its blocks; Saturday noon shuts the crane for turns', async () => {
+  const clock = { t: sastAt('2026-10-28', 9) };
+  const store = { data: new Map() };
+  const dayKey = { v: '2026-10-28' };
+  const a = online(clock, store, dayKey, 'Anna');
+  const b = online(clock, store, dayKey, 'Ben');
+  await a.s.start();
+  await b.s.start();
+  for (const ph of [a, b]) {
+    ph.s.debugSet({ days: { '2026-10-26': 60, '2026-10-27': 60 } });
+    ph.s.dailyDone('2026-10-28', 60, []);
+    await ph.s.sync();
+  }
+  // Anna's crew builds tall; Ben's a little
+  for (let k = 0; k < 2; k++) {
+    const ta = await a.s.turn();
+    await a.s.turnDone(Array.from({ length: 10 }, (_, i) => plank((k * 10 + i) * 1.6)), { lease: ta.lease });
+  }
+  const tb = await b.s.turn();
+  await b.s.turnDone([plank(0)], { lease: tb.lease });
+  // Saturday morning: Ben bombs the tallest (Anna's); her crew gets a repair block
+  clock.t = sastAt('2026-10-31', 9);
+  dayKey.v = '2026-10-31';
+  await a.s.sync();
+  await b.s.sync();
+  const target = b.s.view().river.leader;
+  assert.equal(target, a.s.view().crew.id);
+  const hitR = await b.s.bomb(target, [{ x: 0, y: 0.8 }]);
+  assert.ok(!hitR.error, hitR.error);
+  assert.equal(hitR.hits[0].lost, 3.2, 'the blast took two planks');
+  await a.s.sync();
+  const va = a.s.view();
+  assert.ok(va.repair >= 1, 'a repair block for each hit (Rikus may have thrown one too)');
+  assert.ok(va.heightM <= 32 - 3.2);
+  assert.equal(va.craneShut, false);
+  // the repair turn: its blocks, then none left
+  const tr = await a.s.turn(dayKey.v, { repair: true });
+  assert.equal(tr.blocks, va.repair);
+  assert.equal(tr.repair, true);
+  const h0 = va.heightM;
+  const dr = await a.s.turnDone(Array.from({ length: tr.blocks }, (_, i) => plank(h0 + i * 1.6)), { lease: tr.lease });
+  assert.equal(dr.heightM, Math.round((h0 + tr.blocks * 1.6) * 10) / 10);
+  assert.equal((await a.s.turn(dayKey.v, { repair: true })).error, 'norepair');
+  // noon: no more build turns (the server says; the view hides them), repairs would still go
+  clock.t = sastAt('2026-10-31', 12, 5);
+  await a.s.sync();
+  assert.equal(a.s.view().craneShut, true);
+  assert.equal(a.s.view().turns, 0);
+  assert.equal((await a.s.turn()).error, 'crane');
+});

@@ -919,6 +919,7 @@ export const S = {
   boardTitleYesterday: 'Gister se ranglys',
   turnLooseFree: 'Nie jou skuld nie: dié blok was al los',
   weekTowerName: 'Weektoring',
+  weekRepairName: 'Herbou',
   // --- (1.20) Ons dorp: the menu, the results card's ride, the Weektoring's result, the town ---
   spanMenu: 'Ons dorp',
   spanMenuSub: (h, people) => `Weektoring ${h} · ${people} mense`,

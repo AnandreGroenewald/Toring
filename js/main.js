@@ -2788,7 +2788,7 @@ async function startWeekTurn({ repair = false } = {}) {
   }
   weekLease = tt.lease || null;
   resetRun('week');
-  startGame({ mode: 'week', seed: tt.seed, autoplay: AUTO, week: { floors: tt.floors, blocks: tt.blocks, title: S.weekTowerName } });
+  startGame({ mode: 'week', seed: tt.seed, autoplay: AUTO, week: { floors: tt.floors, blocks: tt.blocks, title: tt.repair ? S.weekRepairName : S.weekTowerName } });
   screen = 'game';
   ui.showInGame();
 }

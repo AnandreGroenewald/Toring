@@ -874,6 +874,7 @@ export const S_EN = {
   boardTitleYesterday: 'Yesterday’s leaderboard',
   turnLooseFree: 'Not your fault: that block was already loose',
   weekTowerName: 'Weekly Tower',
+  weekRepairName: 'Repair',
   // --- (1.20) Ons dorp: the menu, the results card's ride, the Weekly Tower's result, the town ---
   spanMenu: 'Ons dorp',
   spanMenuSub: (h, people) => `Weekly Tower ${h} · ${people} people`,

@@ -262,26 +262,23 @@ export function createSpanServer(store, { now = () => Date.now() } = {}) {
         b.acts++;
         const rng = createRng(`${r.id}/${id}/act${b.acts}`);
         await standings(r, at);
-        if (r.leader && r.leader !== id) {
-          // two bombs at the tallest tower (a robot's aim: anywhere on it)
+        // (Rikus is the weaker crew: every second turn one bomb at the tallest, landing three times in five, anywhere
+        // on it; a few floors of its own while the crane is open)
+        if (b.acts % 2 === 0 && r.leader && r.leader !== id && rng.next() < 0.6) {
           const tw = await towerOf(r, r.leader);
-          let floors = tw.floors;
-          let lost = 0;
-          for (let k = 0; k < 2 && floors.length; k++) {
-            const f = floors[rng.int(0, floors.length - 1)];
-            const res = hit(floors, floors.indexOf(f));
-            floors = res.floors;
-            lost += res.lost;
+          if (tw.floors.length) {
+            const res = hit(tw.floors, rng.int(0, tw.floors.length - 1));
             if (!res.cracked && res.removed.length) await landed(r, r.leader, res, b.name, at);
+            await setFloors(r, r.leader, res.floors);
+            if (res.lost > 0) r.log.push({ at, kind: 'bomb', by: id, on: r.leader, lost: Math.round(res.lost * 10) / 10 });
           }
-          await setFloors(r, r.leader, floors);
-          if (lost > 0) r.log.push({ at, kind: 'bomb', by: id, on: r.leader, lost: Math.round(lost * 10) / 10 });
         }
-        // and a few floors of its own
-        const add = botTower(`${r.id}/${id}/bou${b.acts}`, rng.float(5, 12)).map((f) => ({ ...f }));
-        const top = heightOf(b.floors);
-        const maxId = b.floors.reduce((m, f) => Math.max(m, f.id | 0), 0);
-        b.floors = withAdds([...b.floors, ...add.map((f, i) => ({ ...f, id: maxId + i + 1, y: Math.round((f.y + top) * 100) / 100 }))]);
+        if (sastOf(at).h < SPAN.craneClose) {
+          const add = botTower(`${r.id}/${id}/bou${b.acts}`, rng.float(3, 7)).map((f) => ({ ...f }));
+          const top = heightOf(b.floors);
+          const maxId = b.floors.reduce((m, f) => Math.max(m, f.id | 0), 0);
+          b.floors = withAdds([...b.floors, ...add.map((f, i) => ({ ...f, id: maxId + i + 1, y: Math.round((f.y + top) * 100) / 100 }))]);
+        }
       }
     }
   }
@@ -399,7 +396,9 @@ export function createSpanServer(store, { now = () => Date.now() } = {}) {
       p.prize.paid = true;
     }
     put(pKey(p.id), p);
-    return [200, { me: { ...meView(p), prize }, crew: crewView(fresh), river, phase: ph.phase, today }];
+    // (whether a build turn may start now: Saturday noon closes the crane)
+    const crane = craneOpen(t, fresh.river ? (await get(rKey(fresh.river)))?.whistle : null);
+    return [200, { me: { ...meView(p), prize }, crew: crewView(fresh), river, phase: ph.phase, crane, today }];
   }
   async function make(b) {
     const p = await open(b);
