@@ -1410,5 +1410,9 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
 - **Afgly's daily ranking (24 Oct ~22:15, his "There should be a daily rank for gly as well"):** your furthest ride of
   the day against everyone's: the card says your place (Ranglys › shows the top 10), the menu's Afgly button too. It
   lives in the Ons dorp server; a ride faster than the river doesn't count.
+- **Error-free pass (24 Oct ~23:30):** an independent code review's findings all fixed — rides are timed by the
+  server (a forged ride can't top the ranking), a resent ride counts once, last week's rides don't spill into the new
+  week, the ranking's "hide me" works for Afgly too, and graphics memory stays level over many rides. Blouaap's bandana
+  and the hippo refined. Full test suite green.
 - **Next:** his feedback; his play of checkpoints 1+2 at home:
   http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1; the release on his word (plan §8).
