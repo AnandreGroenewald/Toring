@@ -1361,5 +1361,16 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
   main.js (Daily → results "🛟 Gly af" → ride → "Bou aan die Weektoring" → turn → sheet), the menu's Ons dorp button.
   Tribes, tribe missions, Glybaan's button and Steel en Wraak are switched off. Tests: npm 496; qa/dayloop1200.mjs,
   rivier_shots.mjs, rivier_perf1200.mjs (59 fps avg on a 4x slowed CPU), bvb_loose1200.mjs, smoke, daily, living1160.
-- **Next:** his play of checkpoint 1 (home Wi-Fi http://192.168.1.225:8500/?nosw=1); then checkpoint 2 (crews on the server,
-  the Saturday challenge with 4 crews, the bomb run, Rikus crews); then the look pass and the release.
+- **Checkpoint 2 built (later, 24 Oct; rivier/1.20, local):** server/src/span.js in the TownHall DO (crews of 3 by
+  invite, the crane lease, rides, Saturday's rivers of 4 with Rikus filling, bombs on the tallest only, repairs, the hidden
+  whistle, prizes once, monuments; old rivers deleted after 6 weeks); js/span.js server mode; the town screen (crew, river
+  standings, news, invite via WhatsApp `?span=CODE` → join sheet, leave); Saturday's bomb run (js/rivier/view.js openRaid:
+  four crews' islands, the tallest last, hold → time ×0.25 → drag → let go, the server's answer corrects the count, the
+  card with standings); fresh crew news on the menu's button. Balance from a 16-Saturday simulation
+  (server/test/span.sim.test.js): a bomb's blast takes two floors (a whole Perfek cracks instead), the crane closes
+  Saturday 12:00 (repairs go on), Rikus is weaker (one bomb every 2nd turn, builds only before noon). Privacy pages
+  describe Ons dorp's server data. Home play: play-home.sh runs Ons dorp on a test clock (Mon 26 Oct 08:00 first; the
+  town's 🕒 row jumps through the week with ?debug=1&meter=0). Tests: npm 498, server 298 (+2 sims), qa/rivier_raid.mjs
+  14/14, span1200.mjs 18/18 (two browsers, Monday → Saturday's bomb run), span_clock1200.mjs 5/5.
+- **Next:** his play of checkpoints 1+2 at home: http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1;
+  then checkpoint 3 (the look pass, both languages, small phones, release notes) and the release on his word.
