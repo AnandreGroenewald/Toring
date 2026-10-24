@@ -995,7 +995,7 @@ export const S = {
   rvAimHint: 'Hou vas om te mik, sleep, los om te gooi!',
   rvBombsLeft: (n) => `💣 ${n}`,
   rvHitFloor: (m) => `💥 Raak! -${m}`,
-  rvCracked: 'Gekraak! (Perfek-vloer: nog een)',
+  rvCracked: 'Gekraak! Nog een hou',
   rvMissed: 'Mis!',
   rvRaidTitle: (h, n) => `💥 ${h} van ${n} raak!`,
   rvRaidLost: (m) => `Hul toring is ${m} laer.`,

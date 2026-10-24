@@ -462,7 +462,10 @@ function createRide(K, d) {
   const aimAt = { x: 0, y: 0 };
   const flights = [];
   const debris = [];
-  const bombGeo = new THREE.SphereGeometry(0.42, 14, 10);
+  const bombGeo = new THREE.SphereGeometry(0.62, 16, 12);
+  // the blast: a fireball that swells and fades where a bomb lands
+  const flashGeo = new THREE.SphereGeometry(1, 16, 12);
+  const flashes = [];
   const bombMat = new THREE.MeshStandardMaterial({ color: '#1c1c22', roughness: 0.35, metalness: 0.4 });
   const fuseMat = new THREE.MeshStandardMaterial({ color: '#ffb347', emissive: '#ff7a1a', emissiveIntensity: 2 });
   const AIM_FAR = 115;   // m ahead: the tallest tower can be aimed at from here...
@@ -523,6 +526,14 @@ function createRide(K, d) {
     const isle = f.isle;
     const at = towerPoint(isle, f.u, f.v);
     things.emit(at.x, at.y, at.z, 40, 3, 5);
+    if (!reduced) {
+      const fm = new THREE.MeshBasicMaterial({ color: '#ffb24a', transparent: true, opacity: 0.95, depthWrite: false, fog: false });
+      const fl = new THREE.Mesh(flashGeo, fm);
+      fl.position.copy(at);
+      fl.renderOrder = 6;
+      scene.add(fl);
+      flashes.push({ fl, t: 0 });
+    }
     stage.shake(reduced ? 0 : 0.6);
     audio.play('land', { intensity: 1, size: 1 });
     const i = floorAt(isle.floors, f.u, f.v);
@@ -589,11 +600,25 @@ function createRide(K, d) {
       f.mesh.position.lerpVectors(f.from, to, q);
       f.mesh.position.y += Math.sin(q * Math.PI) * 5;
       f.mesh.rotation.x += dt * 9;
-      if (Math.random() < 0.6) things.emit(f.mesh.position.x, f.mesh.position.y + 0.4, f.mesh.position.z, 1, 0.4, 0.6);
+      // (its trail: puffs of smoke behind it, so the eye can follow the throw)
+      things.emit(f.mesh.position.x, f.mesh.position.y + 0.5, f.mesh.position.z, 2, 0.3, 0.4);
       if (q >= 1) {
         scene.remove(f.mesh);
         flights.splice(k, 1);
         impact(f);
+      }
+    }
+    for (let k = flashes.length - 1; k >= 0; k--) {
+      const fx = flashes[k];
+      fx.t += dt;
+      const q = fx.t / 0.45;
+      fx.fl.scale.setScalar(1.2 + q * 5.5);
+      fx.fl.material.opacity = Math.max(0, 0.95 * (1 - q));
+      fx.fl.material.color.lerpColors(new THREE.Color('#fff1b0'), new THREE.Color('#d2451e'), Math.min(1, q * 1.4));
+      if (q >= 1) {
+        scene.remove(fx.fl);
+        fx.fl.material.dispose();
+        flashes.splice(k, 1);
       }
     }
     for (let k = debris.length - 1; k >= 0; k--) {
@@ -1174,6 +1199,8 @@ function createRide(K, d) {
     for (const f of flights) scene.remove(f.mesh);
     for (const b of debris) scene.remove(b.g);
     bombGeo.dispose();
+    for (const fx of flashes) { scene.remove(fx.fl); fx.fl.material.dispose(); }
+    flashGeo.dispose();
     bombMat.dispose();
     fuseMat.dispose();
     if (raid) setBend(1);

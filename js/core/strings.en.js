@@ -950,7 +950,7 @@ export const S_EN = {
   rvAimHint: 'Hold to aim, drag, let go to throw!',
   rvBombsLeft: (n) => `💣 ${n}`,
   rvHitFloor: (m) => `💥 Hit! -${m}`,
-  rvCracked: 'Cracked! (A Perfect floor: one more)',
+  rvCracked: 'Cracked! One more hit',
   rvMissed: 'Missed!',
   rvRaidTitle: (h, n) => `💥 ${h} of ${n} hit!`,
   rvRaidLost: (m) => `Their tower is ${m} lower.`,
