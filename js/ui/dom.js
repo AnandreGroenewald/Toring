@@ -3248,13 +3248,16 @@ export function createUI(bus) {
   }
 
   /** A friend's invite link (?span=CODE): join their crew? */
-  function showSpanJoin({ code, name = '', n = 1, of = 3, names = [] } = {}) {
+  function showSpanJoin({ code, name = '', n = 1, of = 3, names = [], mineM = 0, alone = true } = {}) {
     modals.spanjoin.replaceChildren(h('div', { class: 'card sheet week-sheet' },
       closeX(() => closeModal()),
       h('div', { class: 'sheet-head' }, emo('🏝️'), h('h2', { id: 'stapel-spanjoin-title', text: S.spanJoinTitle(name) })),
       h('div', { class: 'sheet-body' },
         h('p', { class: 'week-line', text: S.spanJoinSub(n, of) }),
         names.length ? h('p', { class: 'week-line', text: names.filter(Boolean).join(' · ') }) : null,
+        // (your own Weektoring this week stays behind on your old island; in a crew of more, you leave your friends)
+        mineM > 0 && alone ? h('p', { class: 'week-line week-warn', text: S.spanJoinLeaves(fmtM(mineM)) }) : null,
+        !alone ? h('p', { class: 'week-line week-warn', text: S.spanJoinLeavesCrew }) : null,
         button('btn-big btn-green', [h('span', { text: S.spanJoinYes })], () => { closeModal(); bus.emit('ui:span-join', code); }),
         button('btn-white', [h('span', { text: S.spanJoinNo })], () => closeModal()))));
     openModal('spanjoin');

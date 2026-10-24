@@ -3903,6 +3903,7 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .span-btn:active { box-shadow: 0 calc(2 * var(--u)) 0 #082427, inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
 .span-btn.has-go { box-shadow: 0 calc(6 * var(--u)) 0 #082427, 0 0 0 calc(3 * var(--u)) #ffd23f; }
 .span-btn .dorp-btn-sub { color: #c9efe7; }
+.week-sheet .week-warn { color: #8a4b00; font-weight: 800; }
 .span-btn .dorp-btn-txt { min-width: 0; }
 .span-btn.has-news .dorp-btn-sub { color: #ffe08a; overflow: hidden; text-overflow: ellipsis; }
 .span-btn.has-news .span-btn-ic { position: relative; }

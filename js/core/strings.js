@@ -964,6 +964,8 @@ export const S = {
   twNoRepair: 'Geen herbou-blokke nie: julle kry een vir elke bom wat julle toring tref.',
   spanJoinTitle: (name) => `Sluit aan by ${name}?`,
   spanJoinSub: (n, of) => `${n} van ${of} bouers. Julle bou saam een Weektoring en speel saam Saterdag.`,
+  spanJoinLeaves: (m) => `Jou eie Weektoring van hierdie week (${m}) bly agter op jou ou eiland.`,
+  spanJoinLeavesCrew: 'Jy gaan uit jou huidige span uit.',
   spanJoinYes: 'Ja, sluit aan',
   spanJoinNo: 'Nee dankie',
   spanJoined: (name) => `Welkom by ${name}!`,

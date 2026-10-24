@@ -919,6 +919,8 @@ export const S_EN = {
   twNoRepair: 'No repair blocks: you get one for every bomb that hits your tower.',
   spanJoinTitle: (name) => `Join ${name}?`,
   spanJoinSub: (n, of) => `${n} of ${of} builders. You build one Weekly Tower together and play together on Saturday.`,
+  spanJoinLeaves: (m) => `Your own Weekly Tower this week (${m}) stays behind on your old island.`,
+  spanJoinLeavesCrew: 'You leave your current crew.',
   spanJoinYes: 'Yes, join',
   spanJoinNo: 'No thanks',
   spanJoined: (name) => `Welcome to ${name}!`,

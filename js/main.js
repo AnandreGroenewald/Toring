@@ -2826,7 +2826,8 @@ async function spanStart() {
       ui.toast(S.spanJoinFull, 3200);
       return;
     }
-    ui.showSpanJoin({ code: c, name: inv.name, n: inv.n, of: 3, names: inv.names || [] });
+    const mine = span.view();
+    ui.showSpanJoin({ code: c, name: inv.name, n: inv.n, of: 3, names: inv.names || [], mineM: mine.heightM || 0, alone: !(mine.crew?.members?.length > 1) });
   }
 }
 bus.on('ui:span-join', async (code) => {
