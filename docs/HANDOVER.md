@@ -1398,6 +1398,6 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
   swimmers in life vests with glossy face badges, the rider with a real face; stones in the canyon's sandstone.
 - **Polish pass (24 Oct night, his "leave nothing behind"):** clean model bakes, acacias and leafy bushes, savanna
   plateau, fireworks when every person is saved, a clean Saturday scope on small phones, the aimed tower's tag hidden.
-  Full regression green. Open: his choice whether the main 2D stacking screen gets the 3D look.
+  Full regression green. His choice (Telegram 18:53): "Keep cartoon" — the main stacking screen stays 2D.
 - **Next:** his feedback; his play of checkpoints 1+2 at home:
   http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1; the release on his word (plan §8).
