@@ -342,7 +342,13 @@ export function createThings(scene, pieces) {
     for (const g of [foamGeo, rockGeo, ringGeo, shirtGeo, armGeo, sprayGeo]) g.dispose();
   }
 
-  const api = { floating, rock, person, foam, riverBlock, emit, updateSpray, spray, dispose, models: {} };
+  /** The scene's light on the unlit foam and spray (the world's fxTint): white by day, dim and cool at night. */
+  function tint(c) {
+    foamMat.color.copy(c);
+    sprayMat.uniforms.diffuse.value.set('#f4fbfa').multiply(c);
+  }
+
+  const api = { floating, rock, person, foam, riverBlock, emit, updateSpray, spray, tint, dispose, models: {} };
   return api;
 }
 

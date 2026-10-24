@@ -173,6 +173,7 @@ function createTown(K, d) {
   const world = buildRiverWorld(stage, d.scene, { air: false });   // (the sky of his background skin; no river mist round the island)
   world.setPool(1e6);   // (all lake: the canyon is far off)
   const things = createThings(scene, pieces);
+  things.tint(world.fxTint);
   things.models = d.models || {};   // (the Blender models, for the island's town)
   const island = createIsland(things, { radius: 22, plots: true });
   scene.add(island.group);
@@ -557,6 +558,7 @@ function createRide(K, d) {
   const gameCanvas = document.querySelector('#game > canvas');
   const world = buildRiverWorld(stage, d.scene);   // (the sky of his background skin)
   const things = createThings(scene, pieces);
+  things.tint(world.fxTint);
   things.models = d.models || {};   // (the Blender models, for the island's town)
   const rider = createRider(bendMaterial, d.models?.builder || null);
   scene.add(rider.group);
@@ -1556,6 +1558,7 @@ function createRide(K, d) {
     /** For tests: the 3D scene and camera. */
     get scene() { return scene; },
     get camera() { return camera; },
+    get stage() { return stage; },
     /** For tests: what the graphics chip holds now ({ geometries, textures, programs }). */
     gpu: () => ({ ...stage.renderer.info.memory, programs: stage.renderer.info.programs?.length | 0 }),
   };

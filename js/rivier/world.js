@@ -524,7 +524,7 @@ void main() {
   vDepth = -mv.z;
   gl_Position = projectionMatrix * mv;
 }`;
-const FALL_FRAG = `uniform sampler2D uNoise; uniform float uT; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar;
+const FALL_FRAG = `uniform sampler2D uNoise; uniform float uT; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar; uniform vec3 uTint;
 varying vec2 vUv; varying float vDepth;
 void main() {
   float x = vUv.x;
@@ -541,6 +541,7 @@ void main() {
   float foot = smoothstep(0.14, 0.0, vUv.y);
   col = mix(col, vec3(1.0), foot);
   a = max(a, foot * edge * 0.9);
+  col *= uTint;
   col = mix(col, uFog, smoothstep(uFogNear, uFogFar, vDepth));
   gl_FragColor = vec4(col, a * 0.9);
   #include <tonemapping_fragment>
@@ -612,7 +613,9 @@ void main() {
   float rap = smoothstep(uRapids.x - 12.0, uRapids.x + 8.0, p.y) * (1.0 - smoothstep(uRapids.y - 8.0, uRapids.y + 12.0, p.y));
   float foamLine = smoothstep(0.66 - rap * 0.2, 0.74, streak) * (1.0 - smoothstep(0.74, 0.86 + rap * 0.1, streak)) * (0.55 + rap * 0.4) * (1.0 - lake);
   foamLine += rap * smoothstep(0.55, 0.85, h0) * 0.6;
-  float bankFoam = smoothstep(0.94, 1.0, edge) * (1.0 - smoothstep(1.0, 1.08, edge)) * smoothstep(0.35, 0.7, h0) * 0.7;
+  // (lace, not a solid band: broken up by fast noise running with the current)
+  float lace = smoothstep(0.42, 0.72, texture2D(uNoise, vec2(p.x * 1.3, p.y * 0.16 - uT * 0.5)).g * 0.6 + h0 * 0.4);
+  float bankFoam = smoothstep(0.95, 1.0, edge) * (1.0 - smoothstep(1.0, 1.06, edge)) * lace * 0.6;
   col = mix(col, uFoam, clamp(foamLine * smoothstep(0.3, 0.6, h0) + bankFoam, 0.0, 0.9));
   // his wake: two lines of foam opening out behind the board, and the churned water right behind it
   float back = uRider.y - p.y;
@@ -644,6 +647,13 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   const group = new THREE.Group();
   scene.add(group);
   const fog = lin(L.haze);
+  // the light on things that draw themselves unlit (foam, spray, falling water, mist): full white by day, warm and
+  // dimmer at sunset, cool and dark at night
+  const lightOf = (o) => lin(o.sun).multiplyScalar(o.sunI * 0.29).add(lin(o.hemiSky).multiplyScalar(o.hemiI * 0.35));
+  const dayLight = lightOf(DAY);
+  const fxTint = lightOf(L);
+  fxTint.setRGB(Math.min(1, fxTint.r / dayLight.r), Math.min(1, fxTint.g / dayLight.g), Math.min(1, fxTint.b / dayLight.b));
+  { const g = (fxTint.r + fxTint.g + fxTint.b) / 3; fxTint.lerp(new THREE.Color(g, g, g), 0.55); }   // (moonlight greys things more than it blues them)
   scene.fog = new THREE.Fog(fog, BANK.fogNear, BANK.fogFar);
   scene.background = null;
 
@@ -716,7 +726,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
     uniforms: {
       uT: { value: 0 }, uDist: { value: 0 }, uNoise: { value: noise }, uSun: { value: sunDir.clone() }, uSunCol: { value: lin(L.sun) },
       uDeep: { value: lin(L.deep) }, uShallow: { value: lin(L.shallow) }, uZenith: { value: lin(L.zenith) },
-      uHorizon: { value: lin(L.horizon) }, uSkyRefl: { value: lin(L.skyRefl) }, uFoam: { value: lin(COLORS.foam) }, uFog: { value: fog },
+      uHorizon: { value: lin(L.horizon) }, uSkyRefl: { value: lin(L.skyRefl) }, uFoam: { value: lin(COLORS.foam).multiply(fxTint) }, uFog: { value: fog },
       uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uHalf: { value: BANK.half },
       uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uDetail: { value: quality.name === 'low' ? 0 : 1 },
       uBendA: { value: 0 }, uBendB: { value: 0 }, uBendK: bendUniforms.uBendK, uRapids: { value: new THREE.Vector2(-1e6, -1e6) }, uPoolTo: { value: -1e6 },
@@ -865,7 +875,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   }
   const cliffGeos = { '-1': [0, 1, 2].map((k) => cliffGeometry(-1, k + 1)), 1: [0, 1, 2].map((k) => cliffGeometry(1, k + 4)) };
   const fallMat = new THREE.ShaderMaterial({
-    uniforms: { uDist: bendUniforms.uDist, uBendK: bendUniforms.uBendK, uNoise: { value: noise }, uT: { value: 0 }, uFog: { value: fog }, uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar } },
+    uniforms: { uDist: bendUniforms.uDist, uBendK: bendUniforms.uBendK, uNoise: { value: noise }, uT: { value: 0 }, uFog: { value: fog }, uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uTint: { value: fxTint } },
     vertexShader: FALL_VERT, fragmentShader: FALL_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
   });
   /** A strip of falling water on the wall `geo` (side ±1), 2.8 m wide, from the rim to the river, a little off the rock. */
@@ -909,8 +919,8 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   }
   // the mist where a fall lands (a soft cloud standing up, facing down the river at you) and white water round it
   const fallPuff = puffTexture(23);
-  const fallMistMat = bendMaterial(new THREE.MeshBasicMaterial({ map: fallPuff, color: '#f2f7f6', transparent: true, opacity: 0.6, depthWrite: false, fog: true }));
-  const fallFoamMat = bendMaterial(new THREE.MeshBasicMaterial({ map: fallPuff, color: '#ffffff', transparent: true, opacity: 0.75, depthWrite: false, fog: true }));
+  const fallMistMat = bendMaterial(new THREE.MeshBasicMaterial({ map: fallPuff, color: new THREE.Color('#f2f7f6').multiply(fxTint), transparent: true, opacity: 0.6, depthWrite: false, fog: true }));
+  const fallFoamMat = bendMaterial(new THREE.MeshBasicMaterial({ map: fallPuff, color: fxTint.clone(), transparent: true, opacity: 0.75, depthWrite: false, fog: true }));
   const fallMistGeo = new THREE.PlaneGeometry(8, 5.5);
   fallMistGeo.translate(0, 2.2, 0);
   const fallFoamGeo = new THREE.PlaneGeometry(7, 6);
@@ -1220,7 +1230,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   }
 
   return {
-    group, water, sun, update, halfAt, setShadowFocus, shadows, reflect, night: L.stars > 0 && L.sunI < 1.5,
+    group, water, sun, update, halfAt, setShadowFocus, shadows, reflect, fxTint, night: L.stars > 0 && L.sunI < 1.5,
     /** Open water at the river's head, up to course z `to` (where your tower stands). */
     setPool(to) {
       poolTo = to;
