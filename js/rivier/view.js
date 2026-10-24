@@ -633,6 +633,13 @@ function createRide(K, d) {
           is.target = rv.leader === is.crew && is.crew !== d.crewId;
           if (rv.towers[is.crew]) setIsleFloors(is, rv.towers[is.crew]);
         }
+      } else if (r.error === 'leader' && r.leader) {
+        // (the lead changed while he rode: the crown moves to the new tallest; aim there now)
+        for (const is of isles) {
+          const was = is.target;
+          is.target = r.leader === is.crew && is.crew !== d.crewId;
+          if (was !== is.target) setIsleFloors(is, is.floors);
+        }
       }
     });
   }
