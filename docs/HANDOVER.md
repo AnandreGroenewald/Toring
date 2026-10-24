@@ -1407,5 +1407,8 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
 - **Afgly at all times (24 Oct ~21:30, his "The game mode needs to be available at all times"):** an Afgly button on the
   menu beside Ons dorp; ride whenever you like (the first ride after a Daily brings your people, the rest are free rides
   for metres and Saturday shots); "Gly weer" on the card; the menu fits a 360x640 phone in full.
+- **Afgly's daily ranking (24 Oct ~22:15, his "There should be a daily rank for gly as well"):** your furthest ride of
+  the day against everyone's: the card says your place (Ranglys › shows the top 10), the menu's Afgly button too. It
+  lives in the Ons dorp server; a ride faster than the river doesn't count.
 - **Next:** his feedback; his play of checkpoints 1+2 at home:
   http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1; the release on his word (plan §8).
