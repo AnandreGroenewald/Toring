@@ -6,6 +6,7 @@
 // Course space: z = metres downstream from the start, x = metres across (0 = the middle lane). The rider stays at the
 // world's origin looking down -z; a thing `d` metres ahead stands at world z = -d, moved across by bendX(d).
 import * as THREE from '../../lib/three.module.min.js';
+import { mergeGeometries } from '../../lib/three-addons/utils/BufferGeometryUtils.js';
 
 export const SUN = new THREE.Vector3(-0.45, 0.34, -0.83).normalize();   // low, ahead and a little left: rim light on what comes
 const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
@@ -93,14 +94,31 @@ export function bendMaterial(m) {
  * little grass, the stone's tone drifts in big soft patches (no two walls alike), and the foot is wet, dark and glossy
  * up to a wavy tide line. Works in the wall's own coordinates (x out, y up from the water, z along the river).
  */
-function rockDetail(m, noise) {
+function rockDetail(m, noise, bank) {
   const bend = m.onBeforeCompile;
   m.onBeforeCompile = (sh, r) => {
     bend(sh, r);
     sh.uniforms.uRkNoise = { value: noise };
+    Object.assign(sh.uniforms, bank);
+    // (the walls follow the bank smoothly, vertex by vertex: out to the pool and the lake and low there, no steps
+    // between the pieces; the same curve as halfAt() below)
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRkL;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRkL = position;');
+      .replace('#include <common>', `#include <common>
+varying vec3 vRkL;
+uniform float uPoolTo; uniform float uLakeFrom; uniform float uLakeTo;
+float rkOpen(float z) {
+  float k = clamp((z - uLakeFrom) / 40.0, 0.0, 1.0) * (1.0 - clamp((z - uLakeTo) / 30.0, 0.0, 1.0));
+  k = max(k, 1.0 - clamp((z - uPoolTo) / 40.0, 0.0, 1.0));
+  return k * k * (3.0 - 2.0 * k);
+}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+  {
+    vec4 rkW0 = modelMatrix * vec4(transformed, 1.0);
+    float rkK = rkOpen(uDist - rkW0.z);
+    transformed.x += sign(modelMatrix[3][0]) * ${(BANK.lake - BANK.half).toFixed(2)} * rkK;
+    transformed.y *= 1.0 - 0.78 * rkK;
+  }
+  vRkL = transformed;`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vRkL;\nuniform sampler2D uRkNoise;')
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
@@ -363,7 +381,7 @@ function rockTextures() {
   for (const tx of [map, bump]) {
     tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
     tx.anisotropy = 8;
-    tx.repeat.set(1.2, 0.75);
+    tx.repeat.set(2, 0.75);   // (a whole number along a 48 m piece: the picture runs on across the joins)
   }
   return { map, bump };
 }
@@ -827,7 +845,8 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
 
   // the canyon: cliff walls in pieces along both banks, re-used as you go; bush and boulders on them
   const rockTex = rockTextures();
-  const rockMat = rockDetail(bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, bumpMap: rockTex.bump, bumpScale: 2.2, roughness: 0.9, metalness: 0, vertexColors: true, side: THREE.DoubleSide })), noise);
+  const bankU = { uPoolTo: { value: -1e6 }, uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 } };
+  const rockMat = rockDetail(bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, bumpMap: rockTex.bump, bumpScale: 2.2, roughness: 0.9, metalness: 0, vertexColors: true, side: THREE.DoubleSide })), noise, bankU);
   const SEG_L = 48;
   const N_SEG = 13;
   function cliffGeometry(side, seed) {
@@ -853,15 +872,19 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
       const v = pos.getY(i) + 17;   // height 0..34
       // the face leans back as it climbs, in steps: layers that stand out and undercut feet (the sandstone's ledges)
       const step = (v % 7.5) / 7.5;
-      const ledge = (step < 0.18 ? -0.7 * (1 - step / 0.18) : 0) + Math.sin(Math.floor(v / 7.5) * 2.7 + seed) * 0.35;
-      let out = Math.pow(v / 34, 1.6) * 7 + Math.sin(u * 0.21 + seed) * 0.9 + Math.sin(v * 0.6 + u * 0.05) * 0.45 + ledge + Math.sin(u * 0.83 + v * 0.31 + seed) * 0.22;
-      for (const [bu, bv, br] of bumps) out -= Math.exp(-((u - bu) ** 2 + (v - bv) ** 2) / (br * br * 2)) * 1.6;
-      const ends = Math.min(1, (SEG_L / 2 - Math.abs(u)) / 4);
-      if (v > 1.4) out += (fbm(u * 0.14 + 3, v * 0.2) - 0.5) * 2.6 * ends;
+      // (every piece shares one profile at its two ends, so the pieces join without a slit; their own shape grows in
+      // over the last 7 m)
+      const e0 = Math.min(1, Math.max(0, (SEG_L / 2 - Math.abs(u)) / 7));
+      const ends = e0 * e0 * (3 - 2 * e0);
+      const common = Math.pow(v / 34, 1.6) * 7 + (step < 0.18 ? -0.7 * (1 - step / 0.18) : 0) + Math.sin(Math.floor(v / 7.5) * 2.7) * 0.35 + Math.sin(v * 0.6) * 0.45;
+      let own = Math.sin(Math.floor(v / 7.5) * 2.7 + seed) * 0.35 - Math.sin(Math.floor(v / 7.5) * 2.7) * 0.35 + Math.sin(u * 0.21 + seed) * 0.9 + (Math.sin(v * 0.6 + u * 0.05) - Math.sin(v * 0.6)) * 0.45 + Math.sin(u * 0.83 + v * 0.31 + seed) * 0.22;
+      for (const [bu, bv, br] of bumps) own -= Math.exp(-((u - bu) ** 2 + (v - bv) ** 2) / (br * br * 2)) * 1.6;
+      if (v > 1.4) own += (fbm(u * 0.14 + 3, v * 0.2) - 0.5) * 2.6;
+      let out = common + own * ends;
       const shelf = v < 1.2 ? (1.2 - v) * 1.4 : 0;   // (a ledge at the water)
       pos.setXYZ(i, side * (out + shelf), v - 1.1, u);
       // light varies along the wall; the foot is wet and dark, the rim sun-bleached
-      const k = (0.78 + fbm(u * 0.09 + 11, v * 0.12) * 0.26) * (v < 2.2 ? 0.55 + v * 0.16 : 1) * (v > 29 ? 1.06 : 1);
+      const k = (0.91 + (fbm(u * 0.09 + 11, v * 0.12) - 0.5) * 0.26 * ends) * (v < 2.2 ? 0.55 + v * 0.16 : 1) * (v > 29 ? 1.06 : 1);
       col.push(k, k * 0.96, k * 0.92);
     }
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -874,6 +897,33 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
     return g;
   }
   const cliffGeos = { '-1': [0, 1, 2].map((k) => cliffGeometry(-1, k + 1)), 1: [0, 1, 2].map((k) => cliffGeometry(1, k + 4)) };
+  /** The ground on top: the plateau running back from the rim (dusty scrub), so no gap shows behind the walls. */
+  function plateauGeometry(side, seed) {
+    const g = new THREE.PlaneGeometry(170, SEG_L, 10, 8);
+    g.rotateX(-Math.PI / 2);
+    const pos = g.attributes.position;
+    const uv = g.attributes.uv;
+    const col = [];
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      const lx = side * (5.2 + 85 + x);
+      const y = 32.4 + Math.sin(x * 0.07) * 0.8 + Math.sin((z / SEG_L) * Math.PI * 2 + x * 0.03) * 0.5 + Math.max(0, (Math.abs(lx) - 40) * 0.04);
+      pos.setXYZ(i, lx, y, z);
+      uv.setXY(i, lx / 37, z / 53);
+      const k = 0.78 + Math.sin(x * 0.13 + (z / SEG_L) * Math.PI * 4) * 0.08;
+      col.push(k, k * 0.97, k * 0.86);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    // (the left side's faces turned to face up after its x was mirrored)
+    if (side < 0) {
+      const idx = g.index.array;
+      for (let i = 0; i < idx.length; i += 3) [idx[i + 1], idx[i + 2]] = [idx[i + 2], idx[i + 1]];
+    }
+    g.computeVertexNormals();
+    return g;
+  }
+  const wallGeos = { '-1': cliffGeos['-1'].map((g, k) => mergeGeometries([g, plateauGeometry(-1, k + 1)])), 1: cliffGeos[1].map((g, k) => mergeGeometries([g, plateauGeometry(1, k + 4)])) };
   const fallMat = new THREE.ShaderMaterial({
     uniforms: { uDist: bendUniforms.uDist, uBendK: bendUniforms.uBendK, uNoise: { value: noise }, uT: { value: 0 }, uFog: { value: fog }, uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uTint: { value: fxTint } },
     vertexShader: FALL_VERT, fragmentShader: FALL_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
@@ -951,25 +1001,28 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   for (let i = 0; i < N_SEG; i++) {
     for (const side of [-1, 1]) {
       const gi = (i + (side > 0 ? 1 : 0)) % 3;
-      const m = new THREE.Mesh(cliffGeos[side][gi], rockMat);
+      const m = new THREE.Mesh(wallGeos[side][gi], rockMat);
       m.frustumCulled = false;
       m.receiveShadow = shadows;
       group.add(m);
-      // a waterfall down every few pieces, the sides taking turns
+      // a waterfall down every few pieces, the sides taking turns (only where the canyon is narrow: see update)
+      let fall = null;
       if (i % 4 === (side < 0 ? 1 : 3)) {
+        fall = new THREE.Group();
+        m.add(fall);
         const f = new THREE.Mesh(fallGeos[side][gi], fallMat);
         f.frustumCulled = false;
         f.renderOrder = 2;
-        m.add(f);
+        fall.add(f);
         const foot = fallGeos[side][gi].userData.foot;
         const mist = new THREE.Mesh(fallMistGeo, fallMistMat);
         mist.position.set(foot.x - side * 1.6, 0, foot.z);
         const foam = new THREE.Mesh(fallFoamGeo, fallFoamMat);
         foam.position.set(foot.x - side * 2.2, 0.08, foot.z);
-        for (const o of [mist, foam]) { o.frustumCulled = false; o.renderOrder = 3; m.add(o); }
+        for (const o of [mist, foam]) { o.frustumCulled = false; o.renderOrder = 3; fall.add(o); }
       }
       const r = (k) => { const x = Math.sin((i * 2 + (side > 0 ? 1 : 0)) * 91.7 + k * 13.1) * 43758.5; return x - Math.floor(x); };
-      segs.push({ m, side, i, r, bushes: Array.from({ length: BUSH_PER }, (_, k) => [r(k) * SEG_L - SEG_L / 2, 0.9 + r(k + 40) * 1.7, r(k + 80)]), rocks: Array.from({ length: ROCK_PER }, (_, k) => [r(k + 120) * SEG_L - SEG_L / 2, 0.5 + r(k + 160) * 0.9]), trees: Array.from({ length: TREE_PER }, (_, k) => [r(k + 200) * SEG_L - SEG_L / 2, 4 + r(k + 220) * 3.5, r(k + 240)]) });
+      segs.push({ m, fall, side, i, r, bushes: Array.from({ length: BUSH_PER }, (_, k) => [r(k) * SEG_L - SEG_L / 2, 0.9 + r(k + 40) * 1.7, r(k + 80)]), rocks: Array.from({ length: ROCK_PER }, (_, k) => [r(k + 120) * SEG_L - SEG_L / 2, 0.5 + r(k + 160) * 0.9]), trees: Array.from({ length: TREE_PER }, (_, k) => [r(k + 200) * SEG_L - SEG_L / 2, 4 + r(k + 220) * 3.5, r(k + 240)]) });
     }
   }
   // far off in the haze: rondavels (round sandstone peaks with grassy tops) and a long ridge
@@ -1189,12 +1242,13 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
       const slot = first + ((s.i - first) % N_SEG + N_SEG) % N_SEG;
       const zc = slot * SEG_L + SEG_L / 2;   // course z of the piece's middle
       const ahead = zc - dist;
-      const half = halfAt(zc);
-      const low = (half - BANK.half) / (BANK.lake - BANK.half);   // (0 in the canyon, 1 at the lake: low shores)
-      const hy = 1 - 0.78 * low;
-      s.m.position.set(s.side * half, 0, -ahead);
-      s.m.scale.set(1, hy, 1);
+      // (the wall's shader opens it out and lowers it vertex by vertex; the things on it follow the same curve)
+      s.m.position.set(s.side * BANK.half, 0, -ahead);
+      const lowAt = (z) => (halfAt(z) - BANK.half) / (BANK.lake - BANK.half);   // (0 in the canyon, 1 at the lake)
+      if (s.fall) s.fall.visible = Math.max(lowAt(zc - SEG_L / 2), lowAt(zc + SEG_L / 2)) < 0.02;
       for (const [u, sc, kk] of s.bushes) {
+        const half = halfAt(zc + u);
+        const hy = 1 - 0.78 * lowAt(zc + u);
         tmp.position.set(s.side * (half + 6.5 + kk * 3), (33 + kk * 2) * hy - sc * 0.4, -(ahead + u));
         tmp.scale.set(sc * 1.4, sc, sc * 1.4);
         tmp.rotation.set(kk, kk * 3, 0);
@@ -1202,7 +1256,8 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
         bushes.setMatrixAt(bi++, tmp.matrix);
       }
       for (const [u, th, kk] of s.trees) {
-        const by = (34 + kk * 2) * hy;
+        const half = halfAt(zc + u);
+        const by = (34 + kk * 2) * (1 - 0.78 * lowAt(zc + u));
         tmp.position.set(s.side * (half + 9 + kk * 6), by - 0.6, -(ahead + u));
         tmp.rotation.set(0.05 * (kk - 0.5), kk * 6, 0.12 * (kk - 0.5));
         tmp.scale.set(1, th, 1);
@@ -1216,6 +1271,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
         crowns.setMatrixAt(ti++, tmp.matrix);
       }
       for (const [u, sc] of s.rocks) {
+        const half = halfAt(zc + u);
         tmp.position.set(s.side * (half - 0.3 - sc * 0.4), sc * 0.25 - 0.2, -(ahead + u));
         tmp.scale.set(sc * 1.3, sc * 0.8, sc);
         tmp.rotation.set(sc, u, 0);
@@ -1235,6 +1291,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
     setPool(to) {
       poolTo = to;
       water.uniforms.uPoolTo.value = to;
+      bankU.uPoolTo.value = to;
     },
     /** White water from course z `from` to `to`. */
     setRapids(from, to) {
@@ -1245,6 +1302,8 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
       lake = { from, to };
       water.uniforms.uLakeFrom.value = from;
       water.uniforms.uLakeTo.value = to;
+      bankU.uLakeFrom.value = from;
+      bankU.uLakeTo.value = to;
     },
     dispose() {
       group.removeFromParent();
@@ -1257,7 +1316,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
       envRT.dispose();
       reflRT?.dispose();
       sun.dispose();   // (its shadow map too)
-      for (const x of [mistTex, rayTex, dustTex, fallPuff, mistGeo, mistMat, rayMat, dustGeo, dustMat, fallMistGeo, fallFoamGeo, fallMistMat, fallFoamMat]) x.dispose();
+      for (const x of [...cliffGeos[-1], ...cliffGeos[1], mistTex, rayTex, dustTex, fallPuff, mistGeo, mistMat, rayMat, dustGeo, dustMat, fallMistGeo, fallFoamGeo, fallMistMat, fallFoamMat]) x.dispose();
       scene.environment = null;
       scene.fog = null;
       renderer.toneMappingExposure = exposure;

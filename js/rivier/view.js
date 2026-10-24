@@ -602,9 +602,13 @@ function createRide(K, d) {
   let paused = false;
   let lane = 1;
   let x = laneX(1);
-  let laneFrom = x;
-  let laneT = 1;
+  // the glide across: a spring on his x (critically damped, so a quick change of mind flows on without a jerk); the
+  // carve's lean and the board's heading come from how fast he's moving across
+  let vx = 0;
+  let aimX = x;   // (the spring's target eases toward the lane first: the glide starts softly, no kick)
   let leanV = 0;
+  const LANE_W0 = 15;   // the spring's stiffness (rad/s): ~0.3 s across a lane
+  const LANE_Z = 0.95;
   let slowT = 0;
   let graceT = 0;
   let hits = 0;
@@ -965,13 +969,10 @@ function createRide(K, d) {
     const to = clamp(lane + dir, 0, RIVER.lanes - 1);
     if (to === lane) {
       // (against the bank: a little bump, so the thumb knows)
-      leanV = dir * 0.4;
+      vx += dir * 3.5;
       return;
     }
-    laneFrom = x;
     lane = to;
-    laneT = 0;
-    leanV = dir;
     haptics.tap?.();
     hint(null);
   }
@@ -1116,7 +1117,7 @@ function createRide(K, d) {
 
   // ---------------------------------------------------------------------------------------------- the autopilot (tests)
   function pilot() {
-    if (phase !== 'run' || laneT < 1) return;
+    if (phase !== 'run' || Math.abs(laneX(lane) - x) > 0.3) return;   // (tests' autopilot: one glide at a time)
     const ahead = live.filter((l) => !l.done && l.z > dist + 1 && l.z < dist + 22);
     const blocked = (ln) => ahead.some((l) => l.it.kind !== 'person' && (l.it.lane === ln || l.it.lane + l.drift === ln) && l.z < dist + 18);
     const want = ahead.find((l) => l.it.kind === 'person' && !blocked(l.it.lane));
@@ -1295,14 +1296,19 @@ function createRide(K, d) {
       dist = Math.min(islandZ - 22 - 16, dist + sp * dt);
       if (k >= 1) done();
     }
-    // the lane: an eased glide across
-    laneT = Math.min(1, laneT + dt / RIVER.laneS);
-    x = laneFrom + (laneX(lane) - laneFrom) * ease(laneT);
-    leanV *= Math.exp(-dt * 6);
+    // the lane: the spring glides him across (small steps: steady on a slow phone too)
+    for (let left = dt; left > 1e-6;) {
+      const h = Math.min(left, 1 / 120);
+      aimX += (laneX(lane) - aimX) * (1 - Math.exp(-h * 20));
+      vx += (LANE_W0 * LANE_W0 * (aimX - x) - 2 * LANE_Z * LANE_W0 * vx) * h;
+      x += vx * h;
+      left -= h;
+    }
+    leanV += (clamp(vx / 13, -1, 1) - leanV) * (1 - Math.exp(-dt * 14));
     rider.group.position.x = x;
     riderFoam.position.set(x, 0.03, 0.05);
     riderFoam.visible = phase !== 'dive' || rider.group.position.y < 0.3;
-    rider.update(dt, { lean: leanV, crouch: slowT > 0 ? slowT / RIVER.hitSlowS : 0, speed: speedAt(dist, len) });
+    rider.update(dt, { lean: leanV, yaw: Math.atan2(-vx, Math.max(4, speedAt(dist, len))) * 0.8, crouch: slowT > 0 ? slowT / RIVER.hitSlowS : 0, speed: speedAt(dist, len) });
     // spray off the board's tail
     if (phase === 'run' && Math.random() < 0.85) things.emit(x - leanV * 0.3, 0.12, 0.9, 1 + Math.round(rapK * 2), 0.6 + rapK, 1.4 + Math.abs(leanV) * 2 + rapK * 1.5);
 
@@ -1527,7 +1533,7 @@ function createRide(K, d) {
     pause: () => setPaused(true),
     resume: () => setPaused(false),
     /** For tests: where the ride stands. */
-    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, lane, rescued: [...rescued], hits, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })) }),
+    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })) }),
     autopilot(on) { pilotOn = !!on; },
     /** For tests (Saturday): where on screen (host px) the tallest tower stands at a share of its height, or null. */
     towerScreen(frac = 0.5) {

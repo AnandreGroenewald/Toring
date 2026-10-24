@@ -249,12 +249,13 @@ export function createRider(bend = (m) => m, model = null) {
   let t0 = 0;
   return {
     group,
-    /** `lean`: -1 (carving left) .. 1 (right); `crouch` 0..1 (a knock); `speed` m/s. */
-    update(dt, { lean = 0, crouch = 0, speed = 15 } = {}) {
+    /** `lean`: -1 (carving left) .. 1 (right); `yaw`: the board's heading (rad, + = nose left); `crouch` 0..1 (a knock); `speed` m/s. */
+    update(dt, { lean = 0, yaw = 0, crouch = 0, speed = 15 } = {}) {
       t0 += dt;
       const swell = Math.sin(t0 * 2.6) * 0.045 + Math.sin(t0 * 4.3) * 0.02;
       // the carve: the board rolls into the turn, the nose lifts a little with speed
       tilt.rotation.z = -lean * 0.38 + Math.sin(t0 * 1.7) * 0.03;
+      tilt.rotation.y = yaw;
       tilt.rotation.x = -0.04 - Math.min(0.06, speed / 400) + crouch * 0.08;
       tilt.position.y = swell + 0.03;   // (the group's own place is the ride's: the dive moves it)
       // knees bend with the speed, more in a carve and after a knock
