@@ -199,6 +199,8 @@ function createTown(K, d) {
   const newsLine = (n) => spanNewsLine(n);
   // (the panel folds down to its buttons: a tap on the island or its handle; the town fills the screen)
   let folded = false;
+  let renaming = false;
+  let removing = null;
   function fold(on) {
     folded = !!on;
     ov.querySelector('.tw-panel')?.classList.toggle('min', folded);
@@ -218,20 +220,40 @@ function createTown(K, d) {
       river = `<div class="tw-river"><h3>${S.twRiver}</h3><ol>${rows}</ol>${over ? `<p class="tw-place">${place === 1 ? S.twPlaceFirst : place ? S.twPlace(place, r.rows.length) : ''}</p>` : `<p class="tw-sat">${iLead ? S.twYouLead : S.twWhistle}${v.craneShut ? '' : ` ${S.twCraneNoon}`}</p>`}</div>`;
     }
     const news = (crew?.news || []).slice(-3).reverse().map(newsLine).filter(Boolean).map((s) => `<li>${s}</li>`).join('');
-    const members = crew ? `<div class="tw-crew"><span>${S.spanMembers(crew.members.length, 3)}: ${crew.members.map((m) => esc(m.name || '?')).join(' · ')}</span>${crew.members.length < 3 ? `<button class="tw-invite">${S.spanInvite}</button>` : ''}</div>` : '';
+    // (the founder may rename the crew and remove a member: a ✕ that asks once more before it acts)
+    const boss = !!(crew && v.myId && crew.founder === v.myId && !sat);
+    const memberHtml = (m) => `<span class="tw-m">${esc(m.name || '?')}${boss && m.id !== v.myId ? `<button class="tw-rm${removing === m.id ? ' ask' : ''}" data-id="${esc(m.id)}" aria-label="${S.twRemoveAsk(esc(m.name || '?'))}">${removing === m.id ? S.twRemoveAsk(esc(m.name || '?')) : '✕'}</button>` : ''}</span>`;
+    const members = crew ? `<div class="tw-crew"><span>${S.spanMembers(crew.members.length, 3)}: </span>${crew.members.map(memberHtml).join('<span class="tw-dot">·</span>')}${crew.members.length < 3 ? `<button class="tw-invite">${S.spanInvite}</button>` : ''}</div>` : '';
+    const renameForm = renaming ? `<form class="tw-rename-form"><input class="tw-name" maxlength="18" value="${esc(crew?.name || '')}" aria-label="${S.twRename}"><button type="submit" class="tw-save">${S.twRenameSave}</button><button type="button" class="tw-cancel">${S.twCancel}</button></form>` : '';
     const btns = [];
     if (v.rideToday) btns.push(`<button class="tw-ride">${S.rvResGo}</button>`);
     if (sat && !iLead && v.ticket && v.bombs > 0) btns.push(`<button class="tw-bomb">${S.twBomb(v.bombs)}</button>`);
     if (sat && v.ticket && v.repair > 0) btns.push(`<button class="tw-repair">${S.twRepair(v.repair)}</button>`);
     if (v.turns > 0 && !over) btns.push(`<button class="tw-build">${S.twBuild(v.turns)}</button>`);
     if (!btns.length) btns.push(`<p class="tw-none">${over ? S.twKroning : v.craneShut ? S.twCraneShut : S.twNoTurn}</p>`);
-    ov.innerHTML = `<div class="tw-top"><button class="tw-back">${S.twBack}</button><div class="tw-card"><b>🏝️ ${esc(v.name || S.spanMenu)}</b>
+    ov.innerHTML = `<div class="tw-top"><button class="tw-back">${S.twBack}</button><div class="tw-card"><b>🏝️ ${esc(v.name || S.spanMenu)}${boss ? `<button class="tw-rename" aria-label="${S.twRename}">✏️</button>` : ''}</b>
         <span>${S.twHeight} <em>${fmtM(v.heightM || 0)}</em> · ${S.twPeople} <em>${fmtInt(v.people | 0)}</em></span></div></div>
-      <div class="tw-panel${folded ? ' min' : ''}"><button class="tw-fold" aria-label="${S.twFold}"></button>${river}${over || v.phase === 'kroning' ? '' : `<p>${v.ticket ? S.twTicketOk : S.twTicket(v.weekdays | 0, 3)}</p><p>${S.twBombs(v.bombs | 0)}</p>`}${r ? '' : `<p class="tw-sat">${S.twSat}</p>`}
+      <div class="tw-panel${folded ? ' min' : ''}"><button class="tw-fold" aria-label="${S.twFold}"></button>${renameForm}${river}${over || v.phase === 'kroning' ? '' : `<p>${v.ticket ? S.twTicketOk : S.twTicket(v.weekdays | 0, 3)}</p><p>${S.twBombs(v.bombs | 0)}</p>`}${r ? '' : `<p class="tw-sat">${S.twSat}</p>`}
         ${members}${news ? `<ul class="tw-news">${news}</ul>` : ''}
         <div class="tw-btns">${btns.join('')}</div>${crew && crew.members.length > 1 && !sat ? `<button class="tw-leave">${S.spanLeave}</button>` : ''}${clockRow(v.clock)}</div>`;
     const on = (sel, fn) => ov.querySelector(sel)?.addEventListener('click', fn);
     on('.tw-fold', () => fold(!folded));
+    on('.tw-rename', () => { renaming = true; fold(false); paint(v); ov.querySelector('.tw-name')?.focus(); });
+    on('.tw-cancel', () => { renaming = false; paint(v); });
+    ov.querySelector('.tw-rename-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = ov.querySelector('.tw-name')?.value || '';
+      renaming = false;
+      paint(v);
+      d.onRename?.(name);
+    });
+    ov.querySelectorAll('.tw-rm').forEach((b) => b.addEventListener('click', () => {
+      const id = b.dataset.id;
+      if (removing !== id) { removing = id; paint(v); return; }
+      removing = null;
+      paint(v);
+      d.onRemove?.(id);
+    }));
     on('.tw-back', () => d.onBack?.());
     on('.tw-ride', () => d.onRide?.());
     on('.tw-build', () => d.onBuild?.());
@@ -274,6 +296,16 @@ function createTown(K, d) {
 #rivier .tw-invite { min-height: 40px; padding: 0 12px; border-radius: 12px; border: 0; background: #25d366; color: #05300f; font: inherit; font-weight: 900; font-size: 15px; }
 #rivier .tw-news { margin: 0 0 6px; padding: 0; list-style: none; font-size: 13px; font-weight: 700; color: #cfe3ea; display: grid; gap: 3px; }
 #rivier .tw-btns { display: grid; gap: 8px; margin-top: 10px; }
+#rivier .tw-rename { pointer-events: auto; margin-left: 8px; border: 0; background: none; font-size: 15px; padding: 0 4px; min-height: 30px; }
+#rivier .tw-rename-form { display: flex; gap: 6px; margin: 0 0 10px; }
+#rivier .tw-name { flex: 1; min-width: 0; min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.1); color: #fff; font: inherit; font-weight: 800; font-size: 16px; }
+#rivier .tw-save, #rivier .tw-cancel { min-height: 40px; padding: 0 10px; border-radius: 10px; border: 0; font: inherit; font-weight: 900; }
+#rivier .tw-save { background: #ffd65c; color: #2b1a00; }
+#rivier .tw-cancel { background: rgba(255,255,255,.12); color: #fff; }
+#rivier .tw-m { display: inline-flex; align-items: center; gap: 2px; }
+#rivier .tw-dot { opacity: .6; margin: 0 2px; }
+#rivier .tw-rm { min-height: 28px; min-width: 28px; padding: 0 6px; border-radius: 8px; border: 0; background: rgba(255,255,255,.1); color: #ffb3a6; font: inherit; font-weight: 900; font-size: 13px; }
+#rivier .tw-rm.ask { background: #e0442a; color: #fff; }
 #rivier .tw-fold { display: block; width: 64px; height: 22px; margin: -8px auto 4px; border: 0; background: none; position: relative; }
 #rivier .tw-fold::before { content: ''; position: absolute; left: 14px; right: 14px; top: 9px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.35); }
 #rivier .tw-panel.min > :not(.tw-btns):not(.tw-fold) { display: none; }

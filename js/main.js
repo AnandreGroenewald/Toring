@@ -2880,6 +2880,16 @@ async function openSpanTown() {
       onRepair: () => { closeRide(); startWeekTurn({ repair: true }); },
       onBomb: () => { closeRide(); startRaid(); },
       onInvite: () => shareInvite(),
+      onRename: async (name) => {
+        const res = await span.rename(name);
+        ui.toast(res.error ? (res.error === 'name' ? S.spanNameBad : S.spanOffline) : S.spanRenamed(res.crew?.name || name), 3200);
+        if (!res.error && ride?.refresh) { const nv = span.view(); ride.refresh({ ...nv, plots: spanPlots(nv) }); }
+      },
+      onRemove: async (id) => {
+        const res = await span.remove(id);
+        ui.toast(res.error ? (res.error === 'locked' ? S.spanJoinLocked : S.spanOffline) : S.spanRemoved, 3200);
+        if (!res.error && ride?.refresh) { const nv = span.view(); ride.refresh({ ...nv, plots: spanPlots(nv) }); }
+      },
       onLeave: async () => {
         const res = await span.leave();
         ui.toast(res.error ? (res.error === 'locked' ? S.spanJoinLocked : S.spanOffline) : S.spanLeft, 3200);
