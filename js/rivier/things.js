@@ -19,6 +19,12 @@ function canvas(w, h) {
 function foamTexture() {
   const c = canvas(128, 128);
   const g = c.getContext('2d');
+  // (a soft shadow on the water under the thing first: it sits in the river, not on top of it)
+  const sh = g.createRadialGradient(64, 64, 4, 64, 64, 44);
+  sh.addColorStop(0, 'rgba(6,26,30,0.42)');
+  sh.addColorStop(1, 'rgba(6,26,30,0)');
+  g.fillStyle = sh;
+  g.fillRect(0, 0, 128, 128);
   const grad = g.createRadialGradient(64, 64, 20, 64, 64, 64);
   grad.addColorStop(0, 'rgba(255,255,255,0)');
   grad.addColorStop(0.55, 'rgba(255,255,255,0.55)');

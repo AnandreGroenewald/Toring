@@ -368,6 +368,10 @@ function createRide(K, d) {
   const things = createThings(scene, pieces);
   const rider = createRider(bendMaterial);
   scene.add(rider.group);
+  // (the board's own foam and shadow on the water, under him)
+  const riderFoam = things.foam(2.6);
+  riderFoam.scale.set(1.9, 1, 3.6);
+  scene.add(riderFoam);
   const beasts = createBeasts(bendMaterial);
   // the tower you just built stands at the river's head: you dive off its top (none: a jump from a rock)
   const start = createStartTower(things, d.daily || [], d.skin || 'kleur');
@@ -1066,6 +1070,8 @@ function createRide(K, d) {
     x = laneFrom + (laneX(lane) - laneFrom) * ease(laneT);
     leanV *= Math.exp(-dt * 6);
     rider.group.position.x = x;
+    riderFoam.position.set(x, 0.03, 0.05);
+    riderFoam.visible = phase !== 'dive' || rider.group.position.y < 0.3;
     rider.update(dt, { lean: leanV, crouch: slowT > 0 ? slowT / RIVER.hitSlowS : 0, speed: speedAt(dist, len) });
     // spray off the board's tail
     if (phase === 'run' && Math.random() < 0.85) things.emit(x - leanV * 0.3, 0.12, 0.9, 1 + Math.round(rapK * 2), 0.6 + rapK, 1.4 + Math.abs(leanV) * 2 + rapK * 1.5);
@@ -1242,7 +1248,7 @@ function createRide(K, d) {
     host.removeEventListener('pointerup', onUp);
     for (const l of live) despawn(l);
     live.length = 0;
-    scene.remove(rider.group, island.group, start.group, things.spray);
+    scene.remove(rider.group, riderFoam, island.group, start.group, things.spray);
     for (const isle of isles) {
       scene.remove(isle.group);
       isle.island.dispose();
