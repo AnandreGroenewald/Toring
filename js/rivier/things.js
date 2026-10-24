@@ -134,13 +134,22 @@ export function createThings(scene, pieces) {
     root.userData = { block: g, w: W * k * 0.82, d: 3.2 * k * 0.8, phase: (it.spin || 0) * 10, top: H * k * 0.68 };
     return root;
   }
+  let rockN = 0;
   function rock() {
     const root = new THREE.Group();
-    const m = new THREE.Mesh(rockGeo, rockMat);
-    m.scale.set(1.5, 1.3, 1.4);
-    m.position.y = 0.3;
-    m.rotation.set(0.4, 1.1, 0.2);
-    m.frustumCulled = false;
+    const props = api.models.props;
+    const bo = props?.getObjectByName(`boulder${(rockN++ % 3) + 1}`);
+    const m = bo ? bo.clone(true) : new THREE.Mesh(rockGeo, rockMat);
+    if (bo) {
+      // (the Blender boulders: about 3 m across, sitting in the water)
+      m.position.y = 0.15;
+      m.rotation.y = rockN * 2.3;
+    } else {
+      m.scale.set(1.5, 1.3, 1.4);
+      m.position.y = 0.3;
+      m.rotation.set(0.4, 1.1, 0.2);
+    }
+    m.traverse((o) => { o.frustumCulled = false; });
     root.add(m);
     const f = foam(4.2);
     f.position.y = 0.05;
@@ -149,20 +158,47 @@ export function createThings(scene, pieces) {
     return root;
   }
   /** A person on a rubber ring, waving, their face (the Living Tower's portrait) always towards you. */
+  const swimShirts = new Map();   // (the Blender swimmer's shirt, one material for each colour)
   function person(who, i = 0) {
     const root = new THREE.Group();
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.position.y = 0.12;
-    ring.frustumCulled = false;
-    root.add(ring);
-    const shirt = new THREE.Mesh(shirtGeo, shirtMats[i % shirtMats.length]);
-    shirt.position.y = 0.42;
-    shirt.frustumCulled = false;
-    root.add(shirt);
-    const arm = new THREE.Mesh(armGeo, skinMat);
-    arm.position.set(0.22, 0.55, 0);
-    arm.frustumCulled = false;
-    root.add(arm);
+    const props = api.models.props;
+    let arm;
+    if (props?.getObjectByName('ring')) {
+      // (the Blender life ring and swimmer; the shirt in this person's colour, one arm waving)
+      const ring = props.getObjectByName('ring').clone(true);
+      ring.position.y = 0.12;
+      root.add(ring);
+      const body = props.getObjectByName('swimmer').clone(true);
+      const col = SHIRTS[i % SHIRTS.length];
+      body.traverse((o) => {
+        if (!o.isMesh || o.material?.name !== 'swim_shirt') return;
+        if (!swimShirts.has(col)) {
+          const m = o.material.clone();
+          m.color.set(col);
+          swimShirts.set(col, m);
+        }
+        o.material = swimShirts.get(col);
+      });
+      body.position.y = 0.12;
+      root.add(body);
+      arm = props.getObjectByName('swimarm').clone(true);
+      arm.position.set(0.2, 0.67, 0);
+      root.add(arm);
+      root.traverse((o) => { o.frustumCulled = false; });
+    } else {
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.y = 0.12;
+      ring.frustumCulled = false;
+      root.add(ring);
+      const shirt = new THREE.Mesh(shirtGeo, shirtMats[i % shirtMats.length]);
+      shirt.position.y = 0.42;
+      shirt.frustumCulled = false;
+      root.add(shirt);
+      arm = new THREE.Mesh(armGeo, skinMat);
+      arm.position.set(0.22, 0.55, 0);
+      arm.frustumCulled = false;
+      root.add(arm);
+    }
     let tex = faceTex.get(who);
     if (!tex) {
       const url = portraitDataUrl(who, 128);
@@ -232,7 +268,8 @@ export function createThings(scene, pieces) {
     for (const g of [foamGeo, rockGeo, ringGeo, shirtGeo, armGeo, sprayGeo]) g.dispose();
   }
 
-  return { floating, rock, person, foam, riverBlock, emit, updateSpray, spray, dispose };
+  const api = { floating, rock, person, foam, riverBlock, emit, updateSpray, spray, dispose, models: {} };
+  return api;
 }
 
 /**
@@ -271,8 +308,21 @@ export function createIsland(things, { radius = 26, jetty: withJetty = true, plo
   }
   const jetty = new THREE.Mesh(new THREE.BoxGeometry(3, 0.4, 16), woodMat);
   jetty.position.set(0, 1.4, radius + 6);
-  if (withJetty) group.add(jetty);
-  for (const z of withJetty ? [radius + 1, radius + 5, radius + 9, radius + 13] : []) {
+  const mJetty = withJetty ? things.models?.props?.getObjectByName('jetty') : null;
+  if (mJetty) {
+    // (the Blender jetty: planks on beams and posts, 16 m out from the shore; a rowing boat tied alongside)
+    const j = mJetty.clone(true);
+    j.position.set(0, -0.05, radius + 6);
+    group.add(j);
+    const bt = things.models.props.getObjectByName('boat');
+    if (bt) {
+      const b = bt.clone(true);
+      b.position.set(2.9, -0.25, radius + 9);
+      b.rotation.y = 0.12;
+      group.add(b);
+    }
+  } else if (withJetty) group.add(jetty);
+  for (const z of withJetty && !mJetty ? [radius + 1, radius + 5, radius + 9, radius + 13] : []) {
     for (const x of [-1.3, 1.3]) {
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 3, 6), woodMat);
       post.position.set(x, 0.2, z);
