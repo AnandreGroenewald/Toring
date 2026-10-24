@@ -355,7 +355,7 @@ export const S_EN = {
     // (1.16) The Living Tower
     { icon: '🏠', text: 'Living Tower: every block that stands becomes a floor. Good = 1 room, Perfect = 2, and each Perfect in a row one more. People move in; when a floor falls, they jump with parachutes.' },
     // (1.20) Ons dorp, the river and Saturday (the owner, 24 Oct 2026)
-    { icon: '🛟', text: 'Ride down: after your Daily Tower your builder dives off the top and rides down the river. Swipe left and right past blocks, crocodiles, hippos and Blouaap, and scoop up your people who fell off your tower. They move into your Weekly Tower.' },
+    { icon: '🛟', text: 'Ride down: after your Daily Tower your builder dives off the top and rides down the river. Swipe left and right past blocks, crocodiles, hippos and Blouaap, and scoop up your people who fell off your tower. They move into your Weekly Tower as you pass your crew’s island. The river runs on until your third knock (❤️❤️❤️): the further you ride, the better for the week.' },
     { icon: '🏗️', text: 'Weekly Tower: every Daily Tower (Monday to Saturday) gives a turn with the crane on your crew’s Weekly Tower: 10 blocks, in your own block style. A Perfect floor cracks before it breaks.' },
     { icon: '🏝️', text: 'Ons dorp: your crew is up to 3 builders (invite friends on WhatsApp). Your island shows the Weekly Tower, everyone’s latest Daily Tower and past weeks’ monuments.' },
     { icon: '💦', text: 'Saturday Challenge: 4 crews on one river, and only the tallest tower can be blasted. Ride down with the water cannon on your shoulder: the scope locks onto the tower by itself, drag up or down to aim as you ride, and tap BLAST. Every shot that hits knocks out two floors. Your ticket: 3 Daily Towers Monday to Friday; 1 shot per 25 m. The crane closes at 12:00, and the whistle blows somewhere between 20:00 and 21:00.' },
@@ -1000,6 +1000,10 @@ export const S_EN = {
   rvClose: 'Close one!',
   rvStreak: (n) => `${n} in a row! 🛟`,
   rvRapids: 'Rapids!',
+  rvWipeout: 'Wiped out!',
+  rvIslandPass: (n, crew) => `🏝️ ${n} move into ${crew ? `${crew}’s tower` : 'your tower'}!`,
+  rvDistance: 'down the river',
+  rvBest: (m) => `your best this week: ${m} m`,
   rvBuild: '🏗️ Build on the Weekly Tower',
   rvLater: 'Later',
   rvDone: 'Done',

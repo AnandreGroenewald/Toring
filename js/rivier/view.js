@@ -15,7 +15,7 @@ import { createRider } from './rider.js';
 import { createThings, createIsland, createStartTower, labelSprite, disposeTree } from './things.js';
 import { createBeasts } from './beasts.js';
 import { loadModels } from './models.js';
-import { RIVER, rescueCourse, raidCourse, speedAt, laneX } from '../core/rivier.js';
+import { RIVER, rescueCourse, raidCourse, speedAt, laneX, inRapids, rapidsWindow } from '../core/rivier.js';
 import { floorAt, hit as hitFloor, dimsOf } from '../core/weektower.js';
 import { weekOf, plusDays } from '../core/span.js';
 import { portraitDataUrl, portraitsReady, CAST } from '../game/residents.js';
@@ -58,6 +58,13 @@ function makeKit() {
 #rivier .rv-count small { font-size: 13px; opacity: .8; font-weight: 800; }
 #rivier .rv-count.bump { animation: rv-bump .32s ease-out; }
 @keyframes rv-bump { 40% { transform: scale(1.18); } }
+#rivier .rv-metres { flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 3px; padding: 5px 12px; border-radius: 999px; background: rgba(13,34,40,.62); border: 1px solid rgba(255,255,255,.28); font-weight: 900; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); font-variant-numeric: tabular-nums; }
+#rivier .rv-metres b { font-size: 20px; color: #fff3c4; }
+#rivier .rv-metres small { font-size: 13px; opacity: .85; }
+#rivier .rv-hearts { display: flex; gap: 3px; padding: 6px 9px; border-radius: 999px; background: rgba(13,34,40,.62); border: 1px solid rgba(255,255,255,.28); }
+#rivier .rv-hearts i { width: 18px; height: 16px; background: #ff4d5e; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 22'%3E%3Cpath d='M12 21.5 10.3 20C4.2 14.6.2 11 .2 6.6.2 3 3 .2 6.6.2c2 0 4 1 5.4 2.5C13.4 1.2 15.4.2 17.4.2 21 .2 23.8 3 23.8 6.6c0 4.4-4 8-10.1 13.4z'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 22'%3E%3Cpath d='M12 21.5 10.3 20C4.2 14.6.2 11 .2 6.6.2 3 3 .2 6.6.2c2 0 4 1 5.4 2.5C13.4 1.2 15.4.2 17.4.2 21 .2 23.8 3 23.8 6.6c0 4.4-4 8-10.1 13.4z'/%3E%3C/svg%3E") center / contain no-repeat; transition: background .2s, transform .2s; }
+#rivier .rv-hearts i.gone { background: rgba(255,255,255,.25); transform: scale(.85); }
+#rivier .rv-hearts.hit { animation: rv-bump .32s ease-out; }
 #rivier .rv-bar { flex: 1; height: 8px; border-radius: 6px; background: rgba(13,34,40,.45); overflow: hidden; border: 1px solid rgba(255,255,255,.22); }
 #rivier .rv-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #8fe3d3, #fff3c4); }
 #rivier .rv-pause { pointer-events: auto; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.35); background: rgba(13,34,40,.62); color: #fff; font-size: 18px; font-weight: 900; }
@@ -102,6 +109,10 @@ function makeKit() {
   background: rgba(16,30,36,.84); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 18px 50px rgba(0,0,0,.45); transition: opacity .35s, transform .45s cubic-bezier(.2,1.2,.4,1); text-align: center; }
 #rivier .rv-card.on { opacity: 1; transform: translate(-50%, 0); }
 #rivier .rv-card h2 { margin: 0 0 4px; font-size: 24px; font-weight: 900; }
+#rivier .rv-card .rv-dist { display: flex; align-items: baseline; justify-content: center; gap: 4px; margin: 0; line-height: 1; }
+#rivier .rv-card .rv-dist b { font-size: 46px; font-weight: 900; color: #fff3c4; text-shadow: 0 3px 0 rgba(40,24,0,.45); font-variant-numeric: tabular-nums; }
+#rivier .rv-card .rv-dist small { font-size: 20px; font-weight: 900; color: #fff3c4; opacity: .9; }
+#rivier .rv-card p.rv-distline { margin: 2px 0 10px; font-size: 14px; color: #bfe3e8; }
 #rivier .rv-card p { margin: 0 0 12px; font-size: 15px; color: #d9ecf0; }
 #rivier .rv-card .rv-row { display: flex; justify-content: center; flex-wrap: nowrap; gap: 4px; margin: 0 0 14px; }
 #rivier .rv-card .rv-row img { flex: 0 1 34px; min-width: 0; width: 34px; height: auto; aspect-ratio: 1; border-radius: 50%; }
@@ -610,18 +621,24 @@ function createRide(K, d) {
   // (Saturday: the other crews' islands first, the tallest tower last, the run's big moment)
   const crewIds = (R?.rows || []).map((x) => x.id);
   const isleOrder = [...crewIds.filter((id) => id !== R?.leader), ...crewIds.filter((id) => id === R?.leader)];
-  const course = raid ? raidCourse(String(d.seed || 'aanval'), isleOrder, []) : rescueCourse(String(d.seed || 'rivier'), who);
+  // (the rescue ride never ends: it runs till your third knock; Saturday's run is the fixed course past the islands)
+  const course = raid ? raidCourse(String(d.seed || 'aanval'), isleOrder, []) : rescueCourse(String(d.seed || 'rivier'), who, { endless: true });
+  const endless = !!course.endless;
   const len = course.len;
-  // the lake at the end, with your island and its Weektoring (Saturday: open water all the way, the islands in it)
+  // the lake with your island and its Weektoring beside the river (Saturday: open water all the way, the islands in it)
   if (raid) world.setPool(1e6);
   else {
-    world.setLake(len - 110);
+    world.setLake(course.lake.from, course.lake.to);
     world.setPool(18);   // (open water round your tower at the river's head, the canyon from ~40 m)
   }
-  const island = createIsland(things, { radius: 22 });
+  const island = createIsland(things, { radius: endless ? 18 : 22 });
   scene.add(island.group);
   island.setFloors(d.floors || []);
-  const islandZ = len + 34;   // (course z of the island's middle)
+  const islandZ = endless ? course.island.z : len + 34;   // (course z of the island's middle)
+  const islandX = endless ? course.island.side * 27 : 0;
+  if (endless) island.group.rotation.y = -course.island.side * Math.PI / 2;   // (its jetty to the river)
+  let hearts = RIVER.hearts;
+  let islandSaid = false;
 
   let alive = true;
   let raf = 0;
@@ -1068,12 +1085,20 @@ function createRide(K, d) {
   }
 
   // ---------------------------------------------------------------------------------------------- the overlay
-  ov.innerHTML = `<div class="rv-top"><div class="rv-count"><span class="rv-ring"></span><b>0</b><small>/ ${who.length}</small></div><div class="rv-bar"><i></i></div><button class="rv-pause" aria-label="${S.pause}">❚❚</button></div>
+  ov.innerHTML = `<div class="rv-top"><div class="rv-count"><span class="rv-ring"></span><b>0</b><small>/ ${who.length}</small></div>${endless ? `<div class="rv-metres"><b>0</b><small>m</small></div><div class="rv-hearts">${'<i></i>'.repeat(RIVER.hearts)}</div>` : '<div class="rv-bar"><i></i></div>'}<button class="rv-pause" aria-label="${S.pause}">❚❚</button></div>
     <div class="rv-faces"></div><div class="rv-hint"></div><div class="rv-pop"></div><div class="rv-hurt"></div>
     <div class="rv-card"></div><div class="rv-scope"><svg viewBox="0 0 132 132" aria-hidden="true"><circle class="ring" cx="66" cy="66" r="54"/><g class="ticks">${Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; const r1 = i % 3 ? 49 : 44; return `<line x1="${(66 + Math.cos(a) * r1).toFixed(1)}" y1="${(66 + Math.sin(a) * r1).toFixed(1)}" x2="${(66 + Math.cos(a) * 54).toFixed(1)}" y2="${(66 + Math.sin(a) * 54).toFixed(1)}"/>`; }).join('')}</g><g class="cross"><line x1="66" y1="24" x2="66" y2="57"/><line x1="66" y1="75" x2="66" y2="108"/><line x1="24" y1="66" x2="57" y2="66"/><line x1="75" y1="66" x2="108" y2="66"/></g><path class="brk" d="M10 32 V10 H32 M100 10 H122 V32 M122 100 V122 H100 M32 122 H10 V100"/><circle class="dot" cx="66" cy="66" r="3.5"/></svg><div class="rng"></div></div><button class="rv-fire" aria-label="${S.rvFire}"><svg class="pips" viewBox="0 0 112 112"></svg><span class="in"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2.5c-.4 0-.7.2-.9.5C9.4 5.6 5.5 10.9 5.5 14.6a6.5 6.5 0 0 0 13 0c0-3.7-3.9-9-5.6-11.6-.2-.3-.5-.5-.9-.5z"/><path fill="#9feaf5" d="M9.2 14.4c.3 1.6 1.4 2.7 3 3" stroke="#0b6f8a" stroke-width="1.6" stroke-linecap="round"/></svg><span>${S.rvFire}</span></span></button><div class="rv-paused"><div><h2>${S.rvPaused}</h2><button class="rv-on">${S.rvResume}</button><button class="rv-off">${S.rvQuit}</button></div></div>`;
   const countEl = ov.querySelector('.rv-count');
   const countB = countEl.querySelector('b');
   const barEl = ov.querySelector('.rv-bar i');
+  const metresEl = ov.querySelector('.rv-metres b');
+  const heartsEl = ov.querySelector('.rv-hearts');
+  function setHearts() {
+    heartsEl?.querySelectorAll('i').forEach((h, k) => h.classList.toggle('gone', k >= hearts));
+    heartsEl?.classList.remove('hit');
+    void heartsEl?.offsetWidth;
+    heartsEl?.classList.add('hit');
+  }
   const facesEl = ov.querySelector('.rv-faces');
   const hintEl = ov.querySelector('.rv-hint');
   const popEl = ov.querySelector('.rv-pop');
@@ -1244,6 +1269,7 @@ function createRide(K, d) {
 
   // ---------------------------------------------------------------------------------------------- the river's things
   function spawn() {
+    if (endless && course.rows.at(-1).z < dist + AHEAD + 300) course.extend(dist + AHEAD + 1500);
     while (rowI < course.rows.length && course.rows[rowI].z < dist + AHEAD) {
       const row = course.rows[rowI++];
       for (const it of row.items) {
@@ -1277,6 +1303,14 @@ function createRide(K, d) {
 
   function knock(l) {
     hits++;
+    if (endless) {
+      hearts = Math.max(0, hearts - 1);
+      setHearts();
+      if (hearts <= 0) {
+        wipeout(l);
+        return;
+      }
+    }
     slowT = RIVER.hitSlowS;
     graceT = RIVER.graceS;
     stage.shake(reduced ? 0 : 0.35);
@@ -1287,7 +1321,8 @@ function createRide(K, d) {
     hurtEl.classList.add('on');
     setTimeout(() => hurtEl.classList.remove('on'), 120);
     streak = 0;
-    const back = rescued.pop();
+    // (once they've gone ashore at your island they're home: a knock after that costs only the heart)
+    const back = endless && islandSaid ? null : rescued.pop();
     if (back) {
       lostAgain.push(back);
       setCount();
@@ -1295,6 +1330,22 @@ function createRide(K, d) {
     } else {
       pop(({ croc: S.rvCroc, hippo: S.rvHippo, monkey: S.rvMonkey })[l.it.kind] || S.rvOuch, 1000);
     }
+  }
+  /** The third knock: he goes head over heels into the river, and the ride is over (the card after a moment). */
+  function wipeout(l) {
+    phase = 'wipe';
+    phaseT = 0;
+    for (const x2 of live) x2.done = true;
+    stage.shake(reduced ? 0 : 0.7);
+    things.emit(x, 0.5, -0.6, 70, 3, 6, 1.4);
+    audio.play('splash');
+    audio.play('lost');
+    audio.music?.(false);
+    haptics.lost?.();
+    hurtEl.classList.add('on');
+    setTimeout(() => hurtEl.classList.remove('on'), 220);
+    hint(null);
+    pop(({ croc: S.rvCroc, hippo: S.rvHippo, monkey: S.rvMonkey })[l?.it?.kind] || S.rvWipeout, 1300);
   }
   function grab(l) {
     l.done = true;
@@ -1312,8 +1363,11 @@ function createRide(K, d) {
   }
 
   // ---------------------------------------------------------------------------------------------- the autopilot (tests)
+  // (tests: on the endless river the autopilot stops steering this far down, so a ride ends)
+  const pilotStop = Number(d.pilotMetres) || 900;
   function pilot() {
     if (phase !== 'run' || Math.abs(laneX(lane) - x) > 0.3) return;   // (tests' autopilot: one glide at a time)
+    if (endless && dist > pilotStop) return;
     const ahead = live.filter((l) => !l.done && l.z > dist + 1 && l.z < dist + 22);
     const blocked = (ln) => ahead.some((l) => l.it.kind !== 'person' && (l.it.lane === ln || l.it.lane + l.drift === ln) && l.z < dist + 18);
     const want = ahead.find((l) => l.it.kind === 'person' && !blocked(l.it.lane));
@@ -1337,6 +1391,11 @@ function createRide(K, d) {
       const behind = new THREE.Vector3(x * 0.82, 6.4, 11.5);
       p = front.lerp(behind, ease(clamp((k - 0.45) / 0.55, 0, 1)));
       l = new THREE.Vector3(0, y * 0.95 + 0.5, START_Z * (1 - k)).lerp(new THREE.Vector3(x * 0.62, 0.4, -22), ease(clamp((k - 0.55) / 0.45, 0, 1)));
+    } else if (endless && (phase === 'wipe' || phase === 'done')) {
+      // the wipeout: the camera stops and rises, looking down at the splash, the river running on ahead
+      const k = ease(clamp(phaseT / 1.6, 0, 1));
+      p = new THREE.Vector3(x * 0.82, 6.4 + k * 7, 11.5 + k * 6);
+      l = new THREE.Vector3(x * 0.8, 0.4 - k * 0.4, -22 + k * 16);
     } else if ((phase === 'finish' || phase === 'done') && !raid) {
       // up and back until the whole Weektoring and its island stand in the top part of the picture (the card has the
       // bottom third): the camera's distance from the tower's height and the lens
@@ -1358,6 +1417,15 @@ function createRide(K, d) {
       // Saturday: the tallest tower coming by turns the camera halfway towards it (a little more while you aim), still
       // looking down a little, so he and the tower's lower part are both in the picture (a phone held upright is narrow)
       const tgt = raid ? targetIsle() : null;
+      // (the endless ride: your crew's island coming by turns the camera a little towards it, so you see your tower)
+      if (endless && phase === 'run') {
+        const ahead = islandZ - dist;
+        const k = clamp((150 - ahead) / 40, 0, 1) * clamp((ahead + 10) / 40, 0, 1) * 0.28;
+        if (k > 0) {
+          const far = 11.5 + ahead;
+          l.lerp(new THREE.Vector3(islandX, 6.4 - 0.1 * far + Math.min(18, towerTop() * 0.3), -ahead), k);
+        }
+      }
       if (tgt) {
         const ahead = tgt.z - dist;
         const k = clamp((AIM_FAR + 8 - ahead) / 20, 0, 1) * clamp((ahead - AIM_NEAR + 6) / 12, 0, 1) * (aiming ? 0.6 : 0.42);
@@ -1417,6 +1485,7 @@ function createRide(K, d) {
   let rapK = 0;
   let startGone = 0;
   let rapSaid = false;
+  let rapNow = null;
   if (course.rapids) world.setRapids(course.rapids.from, course.rapids.to);
   function step(dt) {
     t += dt;
@@ -1465,11 +1534,29 @@ function createRide(K, d) {
           fireAt(tgt, floorMidU(tgt, v), v);
         }
       }
-      const rap = course.rapids && dist > course.rapids.from && dist < course.rapids.to;
+      const rap = endless ? inRapids(course, dist) : course.rapids && dist > course.rapids.from && dist < course.rapids.to;
       if (rap && !rapSaid) {
         rapSaid = true;
         pop(S.rvRapids, 1100);
         audio.play('splash');
+      }
+      if (endless) {
+        // (the next stretch of white water ahead: the water shows it; said again each time)
+        const w = rapidsWindow(course, dist - 20);
+        if (w && (w.from !== rapNow?.from)) {
+          rapNow = w;
+          world.setRapids(w.from, w.to);
+          rapSaid = false;
+        }
+        // your crew's island: the people you've saved go ashore as you pass it
+        if (!islandSaid && dist > islandZ - 18) {
+          islandSaid = true;
+          if (rescued.length) {
+            pop(S.rvIslandPass(rescued.length, d.crew || ''), 1800);
+            audio.play('record');
+            if (rescued.length === who.length && !fwRide) fwRide = createFireworks(scene, reduced, world.night);
+          }
+        }
       }
       rapK += ((rap ? 1 : 0) - rapK) * Math.min(1, dt * 2.5);
       if (rapK > 0.3) stage.shake(reduced ? 0 : 0.04 * rapK);
@@ -1479,7 +1566,10 @@ function createRide(K, d) {
       graceT = Math.max(0, graceT - dt);
       rider.setBlink(graceT > 0 && Math.floor(t * 10) % 2 === 0);
       if (phaseT > 7) hint(null);
-      if (dist > len * 0.4) audio.musicSet?.({ layers: 2, bpm: 112 });
+      if (endless) {
+        if (dist > 300) audio.musicSet?.({ layers: 2, bpm: 112 });
+        if (dist > 1000) audio.musicSet?.({ layers: 3, bpm: 120 });
+      } else if (dist > len * 0.4) audio.musicSet?.({ layers: 2, bpm: 112 });
       if (dist >= len - RIVER.finishRun + 10) {
         phase = 'finish';
         phaseT = 0;
@@ -1487,6 +1577,14 @@ function createRide(K, d) {
         audio.musicSet?.({ layers: 3 });
         if (raid && !flights.length) done();
       }
+    } else if (phase === 'wipe') {
+      // head over heels off the board and under; the board bobs on, slowing
+      const k = clamp(phaseT / 1.2, 0, 1);
+      dist += speedAt(dist, len) * dt * Math.max(0, 0.6 - k) * 0.5;
+      rider.group.rotation.x = -k * Math.PI * 1.6;
+      rider.group.position.y = Math.sin(k * Math.PI) * 1.4 - k * 1.6;
+      if (phaseT > 0.25 && phaseT - dt <= 0.25) things.emit(x, 0.3, 0, 50, 2.4, 5, 1.3);
+      if (phaseT > 1.5) done();
     } else if (phase === 'finish' && raid) {
       dist += speedAt(dist, len) * dt * 0.5;
       if (!flights.length && phaseT > 0.8) done();
@@ -1557,7 +1655,7 @@ function createRide(K, d) {
       }
     }
     // the island ahead, in the lake; your tower behind, at the river's head (Saturday: the four crews' islands)
-    island.group.position.set(0, -0.6, -(islandZ - dist));
+    island.group.position.set(islandX, -0.6, -(islandZ - dist));
     island.update(t);
     for (const isle of isles) {
       isle.group.position.set(isle.side * 22, 0, -(isle.z - dist));
@@ -1622,7 +1720,11 @@ function createRide(K, d) {
     }
     // (your tower stays upstream: behind the camera once you ride)
     start.group.position.set(0, -0.6, dist + START_Z);
-    barEl.style.width = `${clamp(dist / (len - RIVER.finishRun), 0, 1) * 100}%`;
+    if (barEl) barEl.style.width = `${clamp(dist / (len - RIVER.finishRun), 0, 1) * 100}%`;
+    if (metresEl) {
+      const m = Math.floor(dist);
+      if (metresEl.textContent !== String(m)) metresEl.textContent = fmtInt(m);
+    }
     world.update(dist, t, phase === 'dive' ? null : x);
     // (the shadows follow the action: your tower while you dive, the river just ahead while you ride)
     if (phase === 'dive') world.setShadowFocus(0, START_Z * 0.5, 46);
@@ -1666,7 +1768,7 @@ function createRide(K, d) {
 
   // ---------------------------------------------------------------------------------------------- the end
   let fwRide = null;
-  const result = () => ({ rescued: [...rescued], missed: who.filter((id) => !rescued.includes(id)), hits, all: rescued.length === who.length && who.length > 0 });
+  const result = () => ({ rescued: [...rescued], missed: who.filter((id) => !rescued.includes(id)), hits, all: rescued.length === who.length && who.length > 0, metres: Math.floor(dist) });
   function done() {
     if (phase === 'done') return;
     phase = 'done';
@@ -1690,7 +1792,7 @@ function createRide(K, d) {
     if (r.all && !fwRide) fwRide = createFireworks(scene, reduced, world.night);
     const mine = Math.min(d.mine ?? who.length, who.length);
     const yours = rescued.filter((id) => who.indexOf(id) < mine).length;
-    cardEl.innerHTML = `<h2>${r.rescued.length ? S.rvSaved(r.rescued.length, who.length) : S.rvNoneSaved}</h2>
+    cardEl.innerHTML = `${endless ? `<div class="rv-dist"><b>${fmtInt(r.metres)}</b><small>m</small></div><p class="rv-distline">${S.rvDistance}${d.best ? ` · ${S.rvBest(fmtInt(Math.max(d.best, r.metres)))}` : ''}</p>` : ''}<h2>${r.rescued.length ? S.rvSaved(r.rescued.length, who.length) : S.rvNoneSaved}</h2>
       <p>${r.rescued.length ? S.rvMovedIn(r.rescued.length, d.crew || '') : S.rvTryTomorrow}${mine && yours < mine ? ` ${S.rvYoursLeft(mine - yours)}` : ''}</p>
       <div class="rv-row">${who.map((id) => `<img src="${faceUrl(id, 64)}" alt="" class="${rescued.includes(id) ? '' : 'out'}">`).join('')}</div>
       ${d.canBuild ? `<button class="rv-go">${S.rvBuild}</button><button class="rv-no">${S.rvLater}</button>` : `<button class="rv-go">${S.rvDone}</button>`}`;
@@ -1705,6 +1807,11 @@ function createRide(K, d) {
     paused = false;
     audio.resume?.();
     for (const l of live) l.done = true;
+    if (endless && (phase === 'dive' || phase === 'run' || phase === 'wipe')) {
+      phaseT = 2;
+      done();
+      return;
+    }
     if (phase === 'dive' || phase === 'run') {
       phase = 'finish';
       phaseT = 0;
@@ -1802,7 +1909,7 @@ function createRide(K, d) {
     pause: () => setPaused(true),
     resume: () => setPaused(false),
     /** For tests: where the ride stands. */
-    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })) }),
+    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, endless, hearts, lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })) }),
     autopilot(on) { pilotOn = !!on; },
     /** For tests (Saturday): where on screen (host px) the tallest tower stands at a share of its height, or null. */
     towerScreen(frac = 0.5) {
@@ -1816,6 +1923,7 @@ function createRide(K, d) {
       for (const l of live) despawn(l);
       live.length = 0;
       dist = Math.max(0, z);
+      if (endless) course.extend(dist + 1600);
       rowI = course.rows.findIndex((r) => r.z > dist);
       if (rowI < 0) rowI = course.rows.length;
       if (phase === 'dive') {

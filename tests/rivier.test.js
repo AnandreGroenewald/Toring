@@ -2,7 +2,7 @@
 // to rescue in the order given (yours first), Saturday's islands along the way.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RIVER, rescueCourse, raidCourse, passable, speedAt, laneX } from '../js/core/rivier.js';
+import { RIVER, rescueCourse, raidCourse, passable, speedAt, laneX, inRapids } from '../js/core/rivier.js';
 
 const WHO = ['boer', 'haai', 'bytjie', 'klippie', 'rissie', 'seekat', 'braai', 'duiker'];
 
@@ -77,4 +77,30 @@ test('rivier: crocodiles, Blouaap on his block and hippos come in, each met alon
     assert.ok(c.rapids.to > c.rapids.from);
   }
   assert.ok(seen.croc > 120 && seen.monkey > 60 && seen.hippo > 60, JSON.stringify(seen));
+});
+
+test('rivier (endless): the river never ends — always passable at its speed, everyone placed before the lake, faster and busier further down', () => {
+  for (let d = 0; d < 60; d++) {
+    const c = rescueCourse(`end-${d}`, WHO, { endless: true });
+    assert.equal(c.len, Infinity);
+    c.extend(8000);
+    assert.ok(c.rows.at(-1).z > 7900, 'rows as far as asked');
+    assert.ok(passable(c), `end-${d}`);
+    const got = c.rows.flatMap((r) => r.items.filter((it) => it.kind === 'person').map((it) => ({ who: it.who, z: r.z })));
+    assert.deepEqual(got.map((g) => g.who), WHO, 'everyone, in order');
+    assert.ok(got.every((g) => g.z < RIVER.lakeFrom), 'all before the lake');
+    const zs = c.rows.map((r) => r.z);
+    assert.deepEqual(zs, [...zs].sort((x, y) => x - y), 'rows in order');
+    for (const r of c.rows) {
+      if (r.z > c.lake.from - 20 && r.z < c.lake.to) assert.ok(r.items.filter((it) => it.kind !== 'person').length <= 1, 'calm by your island');
+      if (inRapids(c, r.z)) assert.ok(r.items.filter((it) => it.kind !== 'person').length <= 1, 'one at a time in the rapids');
+    }
+    // (the same day: the same river, however far it's made)
+    const c2 = rescueCourse(`end-${d}`, WHO, { endless: true });
+    c2.extend(3000);
+    assert.deepEqual(c2.rows, c.rows.filter((r) => r.z <= c2.rows.at(-1).z));
+  }
+  assert.ok(speedAt(RIVER.rampLen, Infinity) === RIVER.speedMax && speedAt(10000, Infinity) === RIVER.speedMax);
+  assert.ok(speedAt(1200, Infinity) > RIVER.speed1 && speedAt(300, Infinity) < RIVER.speed1);
+  assert.ok(inRapids(rescueCourse('x', WHO, { endless: true }), 400) && inRapids(rescueCourse('x', WHO, { endless: true }), 400 + 2 * RIVER.rapidsEvery));
 });

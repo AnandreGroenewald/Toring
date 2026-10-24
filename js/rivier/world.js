@@ -1089,12 +1089,14 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     const rows = [];
     for (let r = 0; r < pos.count / cols; r++) rows.push(new THREE.Vector3().fromBufferAttribute(pos, r * cols + k));
     rows.sort((a, b) => a.y - b.y);
-    // (the water falls clear of the crags: the riverward-most rock near each row, then smoothed)
-    const clear = rows.map((_, r) => {
-      let x = rows[r].x;
-      for (let d = -2; d <= 2; d++) { const q = rows[r + d]; if (q) x = side < 0 ? Math.max(x, q.x) : Math.min(x, q.x); }
-      return x;
-    });
+    // (the water falls straight from the lip: it only moves out where rock lower down sticks out further than anything
+    // above it, then smoothed)
+    const clear = rows.map((q) => q.x);
+    let acc = rows[rows.length - 1].x;
+    for (let r = rows.length - 1; r >= 0; r--) {
+      acc = side < 0 ? Math.max(acc, rows[r].x) : Math.min(acc, rows[r].x);
+      clear[r] = acc;
+    }
     rows.forEach((p, r) => {
       let sum = 0;
       let n = 0;

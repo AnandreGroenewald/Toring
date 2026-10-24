@@ -359,7 +359,7 @@ export const S = {
     // (1.16) Die Lewende Toring
     { icon: '🏠', text: 'Lewende Toring: elke blok wat staan, word ’n vloer. Goed = 1 kamer, Perfek = 2, en elke Perfek op ’n ry een meer. Mense trek in; val ’n vloer, spring hulle met valskerms.' },
     // (1.20) Ons dorp, die rivier en Saterdag (the owner, 24 Oct 2026)
-    { icon: '🛟', text: 'Afgly: ná jou Daaglikse Toring duik jou bouer van die top af en gly die rivier af. Swiep links en regs verby blokke, krokodille, seekoeie en Blouaap, en skep jou mense op wat van jou toring afgeval het. Hulle trek in julle Weektoring in.' },
+    { icon: '🛟', text: 'Afgly: ná jou Daaglikse Toring duik jou bouer van die top af en gly die rivier af. Swiep links en regs verby blokke, krokodille, seekoeie en Blouaap, en skep jou mense op wat van jou toring afgeval het. Hulle trek in julle Weektoring in wanneer jy by julle eiland verbygly. Die rivier hou aan tot jou derde stamp (❤️❤️❤️): hoe verder jy gly, hoe beter vir die week.' },
     { icon: '🏗️', text: 'Weektoring: elke Daaglikse Toring (Maandag tot Saterdag) gee ’n beurt met die hyskraan op julle span se Weektoring: 10 blokke, in jou eie blokstyl. ’n Perfek-vloer kraak eers voor hy breek.' },
     { icon: '🏝️', text: 'Ons dorp: julle span is tot 3 bouers (nooi vriende met WhatsApp). Julle eiland wys die Weektoring, elkeen se jongste Daaglikse Toring en vorige weke se monumente.' },
     { icon: '💦', text: 'Saterdag-uitdaging: 4 spanne op een rivier en net die hoogste toring kan natgespuit word. Gly af met die waterkanon op jou skouer: die visier kom vanself op die toring, sleep op of af om te mik terwyl jy ry, en druk SPUIT. Elke skoot wat tref, slaan twee vloere uit. Jou kaartjie: 3 Daaglikse Torings Maandag tot Vrydag; 1 skoot per 25 m. Die kraan sluit 12:00, en die fluitjie blaas iewers tussen 20:00 en 21:00.' },
@@ -1045,6 +1045,10 @@ export const S = {
   rvClose: 'Amper!',
   rvStreak: (n) => `${n} in ’n ry! 🛟`,
   rvRapids: 'Stroomversnelling!',
+  rvWipeout: 'Omgeslaan!',
+  rvIslandPass: (n, crew) => `🏝️ ${n} trek in by ${crew || 'julle eiland'}!`,
+  rvDistance: 'afgegly',
+  rvBest: (m) => `jou beste die week: ${m} m`,
   rvBuild: '🏗️ Bou aan die Weektoring',
   rvLater: 'Later',
   rvDone: 'Klaar',
