@@ -16,3 +16,4 @@ pages-dist/
 !.env.example
 # Claude Code's own folder (agent worktrees): never committed
 .claude/
+art/blender/__pycache__/

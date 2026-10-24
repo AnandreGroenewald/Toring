@@ -14,6 +14,7 @@ import { buildRiverWorld, bendMaterial, setBend, BANK } from './world.js';
 import { createRider } from './rider.js';
 import { createThings, createIsland, createStartTower, labelSprite } from './things.js';
 import { createBeasts } from './beasts.js';
+import { loadModels } from './models.js';
 import { RIVER, rescueCourse, raidCourse, speedAt, laneX } from '../core/rivier.js';
 import { floorAt, hit as hitFloor, dimsOf } from '../core/weektower.js';
 import { weekOf, plusDays } from '../core/span.js';
@@ -116,8 +117,10 @@ let current = null;
 export async function openRiver(d) {
   current?.close();
   await portraitsReady;   // (the faces on the rings)
+  // (the Blender models: the animals; a ride never waits long for them, and works without)
+  const models = await loadModels(['croc']);
   if (!kit) kit = makeKit();
-  const view = createRide(kit, d);
+  const view = createRide(kit, { ...d, models });
   current = view;
   await view.ready;
   return view;
@@ -372,7 +375,7 @@ function createRide(K, d) {
   const riderFoam = things.foam(2.6);
   riderFoam.scale.set(1.9, 1, 3.6);
   scene.add(riderFoam);
-  const beasts = createBeasts(bendMaterial);
+  const beasts = createBeasts(bendMaterial, d.models || {});
   // the tower you just built stands at the river's head: you dive off its top (none: a jump from a rock)
   const start = createStartTower(things, d.daily || [], d.skin || 'kleur');
   scene.add(start.group);

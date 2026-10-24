@@ -19,7 +19,7 @@ function eye(white, pupil, r = 0.07) {
 }
 
 /** The animals' kit: materials made once for a ride (each bent with the river by `bend`). */
-export function createBeasts(bend = (m) => m) {
+export function createBeasts(bend = (m) => m, models = {}) {
   const M = {
     croc: bend(std('#5a8a37', { roughness: 0.5 })),
     crocDark: bend(std('#2b3a1b', { roughness: 0.7 })),
@@ -45,6 +45,7 @@ export function createBeasts(bend = (m) => m) {
   // ------------------------------------------------------------------------------------------- the crocodile
   /** Lies low in the water facing you, tail swishing; its jaws open and snap when you are close. w across, d along. */
   function croc(side = 1) {
+    if (models.croc) return crocModel(side);
     const g = new THREE.Group();
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.46, 2.3, 6, 12), M.croc);
     body.rotation.x = Math.PI / 2;
@@ -170,6 +171,41 @@ export function createBeasts(bend = (m) => m) {
         }
         upper.rotation.x = -open;
         head.rotation.y = Math.sin(t * 1.3 + g.id) * 0.08;
+      },
+      snapped: () => snapT >= 0,
+    };
+    return holder;
+  }
+
+  /** The Blender crocodile (img/models/croc.glb): low in the water, the back and eyes out, its lower jaw opening. */
+  function crocModel(side) {
+    const m = models.croc.clone(true);
+    const jaw = m.getObjectByName('jaw');
+    const g = new THREE.Group();
+    g.add(m);
+    // (3.7 m long in the model; 3 m here, across its lane, snout to the side it came from; the waterline just under
+    // the scutes)
+    // (a little taller than life: a flat crocodile reads at a glance from 40 m too)
+    m.scale.set(0.84, 1.45, 0.95);
+    m.position.y = -0.04;
+    m.rotation.y = side > 0 ? 0 : Math.PI;
+    const holder = new THREE.Group();
+    holder.add(g);
+    let snapT = -1;
+    holder.userData = {
+      w: 3.0, d: 1.5, kind: 'croc',
+      update(t, ahead, dt) {
+        // the tail end swings, the body rocks a little on the current
+        m.rotation.y = (side > 0 ? 0 : Math.PI) + Math.sin(t * 2.3 + g.id) * 0.07;
+        g.position.y = Math.sin(t * 1.7 + g.id) * 0.03;
+        let open = 0;
+        if (ahead < 16 && ahead > 2) open = Math.min(1, (16 - ahead) / 8) * 0.42;
+        if (ahead <= 2 && snapT < 0) snapT = 0;
+        if (snapT >= 0) {
+          snapT += dt;
+          open = snapT < 0.08 ? 0.48 : Math.max(0, 0.48 - (snapT - 0.08) * 6);
+        }
+        if (jaw) jaw.rotation.z = -open;
       },
       snapped: () => snapT >= 0,
     };

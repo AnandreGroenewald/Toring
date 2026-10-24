@@ -15,7 +15,7 @@ reproduced here, as the MIT License requires.
 | [EventEmitter3](https://github.com/primus/eventemitter3) (bundled in Phaser) | 5.x | © 2014 Arnout Kazemier | MIT |
 | [three.js](https://threejs.org) | r170 (0.170.0) | © 2010-2024 three.js authors | MIT (`LICENSE-three.md`) |
 | [cannon-es](https://github.com/pmndrs/cannon-es) | 0.20.0 | © 2015 cannon.js authors | MIT (`LICENSE-cannon-es.md`) |
-| three.js add-ons in `lib/three-addons/` (EffectComposer, RenderPass, ShaderPass, MaskPass, UnrealBloomPass, OutputPass and their shaders), from the same three.js package | r170 (0.170.0) | © 2010-2024 three.js authors | MIT (`LICENSE-three.md`) |
+| three.js add-ons in `lib/three-addons/` (EffectComposer, RenderPass, ShaderPass, MaskPass, UnrealBloomPass, OutputPass and their shaders; GLTFLoader and BufferGeometryUtils for the 1.20 models), from the same three.js package | r170 (0.170.0) | © 2010-2024 three.js authors | MIT (`LICENSE-three.md`) |
 
 Emoji are drawn by the player's own device font; the game ships no emoji images or font files.
 
