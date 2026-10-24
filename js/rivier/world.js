@@ -150,6 +150,28 @@ float rkOpen(float z) {
   return m;
 }
 
+/**
+ * The rim light on the characters and creatures: a glow along their edges in the low sun's colour (they're mostly seen
+ * against the light), so they stand out from the water and the rock. One colour for all, set by each world's look.
+ */
+export const rimUniform = { value: new THREE.Color(0, 0, 0) };
+export function rimMaterial(m) {
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    prev?.(sh, r);
+    sh.uniforms.uRim = rimUniform;
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uRim;')
+      .replace('#include <opaque_fragment>', `{
+    float rimK = 1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0);
+    outgoingLight += uRim * (pow(rimK, 4.0) * 0.7 + pow(rimK, 10.0) * 1.1);
+  }
+  #include <opaque_fragment>`);
+  };
+  m.customProgramCacheKey = () => 'rivier-bend-rim';
+  return m;
+}
+
 // ------------------------------------------------------------------------------------------------ textures
 function canvas(w, h) {
   const c = document.createElement('canvas');
@@ -675,6 +697,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   const group = new THREE.Group();
   scene.add(group);
   const fog = lin(L.haze);
+  rimUniform.value.copy(lin(L.sun).multiplyScalar(0.22 * Math.min(1, L.sunI / 2.6))).add(lin(L.hemiSky).multiplyScalar(0.05));
   // the light on things that draw themselves unlit (foam, spray, falling water, mist): full white by day, warm and
   // dimmer at sunset, cool and dark at night
   const lightOf = (o) => lin(o.sun).multiplyScalar(o.sunI * 0.29).add(lin(o.hemiSky).multiplyScalar(o.hemiI * 0.35));

@@ -2,7 +2,7 @@
 // river like everything else, cloned for each use (the geometry and materials are shared). A model that can't be had
 // (no connection, an old browser) is simply left out: the animals fall back to their simple shapes.
 import { GLTFLoader } from '../../lib/three-addons/loaders/GLTFLoader.js';
-import { bendMaterial } from './world.js';
+import { bendMaterial, rimMaterial } from './world.js';
 
 const cache = new Map();   // name -> Promise<scene | null>
 const TEX_SLOTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'bumpMap', 'aoMap', 'alphaMap'];
@@ -12,6 +12,10 @@ const TEX_SLOTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissive
  */
 export const MODEL_V = { croc: 6, hippo: 5, monkey: 5, builder: 8, dorp: 3, island: 2, props: 4 };
 const WAIT_MS = 4000;      // (a ride never waits longer than this for its models)
+// (the characters and creatures get the rim light: the people in the rings, not the rocks, boats or town)
+const RIM_MODELS = new Set(['croc', 'monkey', 'builder']);   // (not the hippo: so much of it faces sideways that it washes out)
+const RIM_PARTS = new Set(['ring', 'swimmer', 'swimarm']);
+const partOf = (o) => { for (let p = o; p; p = p.parent) if (RIM_PARTS.has(p.name)) return true; return false; };
 
 function load(name) {
   if (!cache.has(name)) {
@@ -25,6 +29,7 @@ function load(name) {
         o.frustumCulled = false;
         o.castShadow = o.receiveShadow = true;
         o.material = bendMaterial(o.material);
+        if (RIM_MODELS.has(name) || (name === 'props' && partOf(o))) rimMaterial(o.material);
         // (kept for every ride: a screen's clean-up passes these by)
         o.geometry.userData.model = true;
         o.material.userData.model = true;
