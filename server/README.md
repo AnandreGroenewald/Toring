@@ -555,3 +555,32 @@ doesn't count), 3 000 people an hour from reports, 20 new towns an hour per addr
 address, the body sizes. What a raid's aim was (`hit`) and what a game brought are still the phone's word (the game runs
 on the phone); the caps bound what a cheat can do. Raid records (`raid:<id>`, about 200 bytes each) are kept for the
 links; the free plan's 5 GB lasts for years of them.
+
+## 16. Ons dorp (1.20): crews, the Weektoring and Saturday
+
+`src/span.js` (`createSpanServer`) lives in the same `TownHall` object as the towns (`/span/*` goes there; its calls
+run one after the other). The front door says `span: 1`, which is what turns Ons dorp's server side on in the game
+(without it the game plays Ons dorp on the phone alone). Built and tested, **not deployed**.
+
+| Route | What |
+|---|---|
+| `POST /span/sync` | `{ id, key, name, skin, days, tower }`: the player (a random id; the key kept as a hash), the week's Daily heights (ticket, bombs, turns), the latest Daily tower for the island → `{ me, crew, river, phase, crane, today }` |
+| `POST /span/make` · `join` · `leave` · `remove` · `rename` | crews of up to 3 by invite code; locked Saturday and Sunday |
+| `POST /span/lease` · `/span/build` | the crane, one builder at a time (4-minute lease); a turn's floors (cleaned, floating ones dropped); `repair: true` for Saturday's repair blocks |
+| `POST /span/ride` | today's rescue: people move into the Weektoring |
+| `POST /span/bomb` | Saturday: up to 3 hits on the tallest tower of the river (two floors a hit; a Perfek cracks first) |
+| `GET /span/river/<id>`, `/span/invite/<code>`, `/span/ping` | the river's standings; a crew by its invite; alive |
+
+Records: `spanp:<id>` (player), `spanc:<id>` (crew, its tower, members' latest Daily towers, news, 8 monuments),
+`spani:<code>` (invite), `spanw:<week>` (the week's crews and rivers), `spanr:<id>` (a river: four crews, Rikus's
+bots, the hidden whistle, the log, the final order). Rivers and week lists are deleted six weeks on.
+
+Rules worth knowing: rivers are grouped at the first call after Saturday 06:00 (crews with a ticket, tallest together,
+Rikus filling); a ticket that arrives later takes a Rikus crew's place; the crane closes Saturday 12:00 (repairs go
+on); the whistle is hidden between 20:00 and 21:00; a Saturday nobody looked at settles at the new week; new players
+are limited per address an hour like new towns. The balance came from `test/span.sim.test.js` (16 Saturdays of four
+crews; a lone player against Rikus).
+
+**Going live** (on the owner's word only): `npm test`, `./wr.sh deploy` (the first deploy also brings the TownHall
+and SlagRoom objects, migration `v2-dorp-kasteel-kamers`), check `GET /` says `span: 1` and `/span/ping` answers;
+then the website and the app.
