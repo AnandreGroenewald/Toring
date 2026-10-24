@@ -174,6 +174,7 @@ export function createThings(scene, pieces) {
         if (!o.isMesh || o.material?.name !== 'swim_shirt') return;
         if (!swimShirts.has(col)) {
           const m = o.material.clone();
+          delete m.userData.model;   // (this ride's own: freed with it)
           m.color.set(col);
           swimShirts.set(col, m);
         }
@@ -403,6 +404,27 @@ export function createIsland(things, { radius = 26, jetty: withJetty = true, plo
 }
 
 /** Floors (js/core/weektower.js) as 3D blocks into `group`, each in its own skin; returns the tower's height (m). */
+const TEX_SLOTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'bumpMap', 'aoMap', 'alphaMap'];
+const kept = (x) => !x || x.userData?.model || x.userData?.shared;
+/**
+ * Frees what the graphics chip holds for everything under `root` (geometries, materials, their pictures), except what
+ * the loaded models and the shared block pieces keep for the next screen. Each thing once, even when shared within.
+ */
+export function disposeTree(root, done = new Set()) {
+  if (!root) return;
+  root.traverse((o) => {
+    const g = o.geometry;
+    if (g && !kept(g) && !done.has(g)) { done.add(g); g.dispose(); }
+    const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+    for (const m of ms) {
+      if (kept(m) || done.has(m)) continue;
+      done.add(m);
+      for (const k of TEX_SLOTS) { const tx = m[k]; if (tx && !kept(tx) && !done.has(tx)) { done.add(tx); tx.dispose(); } }
+      m.dispose();
+    }
+  });
+}
+
 /** Words on a dark rounded tag, as a sprite (names over towers; `gold` for the tallest). Always readable, never hidden. */
 export function labelSprite(text, { gold = false, small = false } = {}) {
   const c = document.createElement('canvas');

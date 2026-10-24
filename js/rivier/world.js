@@ -490,11 +490,14 @@ export function buildRiverWorld(stage, lookId = 'dag') {
   group.add(sky);
   // what metal and gloss reflect: the same sky
   const envScene = new THREE.Scene();
-  envScene.add(new THREE.Mesh(new THREE.SphereGeometry(100, 24, 12), skyMat.clone()));
+  envScene.add(new THREE.Mesh(new THREE.SphereGeometry(100, 24, 12), skyMat));   // (the sky's own material: a copy would copy its noise picture too)
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(envScene, 0.04).texture;
+  const envRT = pmrem.fromScene(envScene, 0.04);
+  scene.environment = envRT.texture;
   scene.environmentIntensity = L.envI;
   pmrem.dispose();
+  // (the little scene it was made from is done with)
+  envScene.traverse((o) => { o.geometry?.dispose(); });
 
   // light: the low sun ahead-left, the sky's blue from above, warm ground bounce
   const sun = new THREE.DirectionalLight(L.sun, L.sunI);
@@ -765,10 +768,10 @@ export function buildRiverWorld(stage, lookId = 'dag') {
       group.traverse((o) => {
         o.geometry?.dispose?.();
         const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
-        for (const m of ms) { m.map?.dispose?.(); m.dispose?.(); }
+        for (const m of ms) { m.map?.dispose?.(); m.bumpMap?.dispose?.(); m.dispose?.(); }
       });
       noise.dispose();
-      scene.environment?.dispose?.();
+      envRT.dispose();
       scene.environment = null;
       scene.fog = null;
       renderer.toneMappingExposure = exposure;

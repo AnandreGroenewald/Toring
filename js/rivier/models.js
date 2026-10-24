@@ -5,6 +5,7 @@ import { GLTFLoader } from '../../lib/three-addons/loaders/GLTFLoader.js';
 import { bendMaterial } from './world.js';
 
 const cache = new Map();   // name -> Promise<scene | null>
+const TEX_SLOTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'bumpMap', 'aoMap', 'alphaMap'];
 /**
  * Each model's version: raise it when its .glb changes (the website's service worker keeps a model until its name,
  * with this number, changes: sw.js MODELS).
@@ -23,6 +24,10 @@ function load(name) {
         if (!o.isMesh) return;
         o.frustumCulled = false;
         o.material = bendMaterial(o.material);
+        // (kept for every ride: a screen's clean-up passes these by)
+        o.geometry.userData.model = true;
+        o.material.userData.model = true;
+        for (const k of TEX_SLOTS) if (o.material[k]) o.material[k].userData.model = true;
       });
       return g.scene;
     }).catch(() => {

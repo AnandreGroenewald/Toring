@@ -12,7 +12,7 @@ import { createStage, pickQuality } from '../kasteel/stage.js';
 import { createPieces } from '../botsing/pieces.js';
 import { buildRiverWorld, bendMaterial, setBend, BANK } from './world.js';
 import { createRider } from './rider.js';
-import { createThings, createIsland, createStartTower, labelSprite } from './things.js';
+import { createThings, createIsland, createStartTower, labelSprite, disposeTree } from './things.js';
 import { createBeasts } from './beasts.js';
 import { loadModels } from './models.js';
 import { RIVER, rescueCourse, raidCourse, speedAt, laneX } from '../core/rivier.js';
@@ -135,7 +135,7 @@ export const river = () => current;
  * { river (the server's view), crewId, bombs, skin, reducedMotion, autopilot, onBomb(target, { x, y }) → Promise, onDone() }.
  */
 export async function openRaid(d) {
-  return openRiver({ ...d, mode: 'raid', who: [], seed: `${d.river?.id || 'R'}/${Date.now()}` });
+  return openRiver({ ...d, mode: 'raid', who: [], seed: d.seed || `${d.river?.id || 'R'}/${Date.now()}` });
 }
 
 /**
@@ -408,6 +408,7 @@ function createTown(K, d) {
     fw?.dispose();
     setCrownOff();
     scene.remove(island.group, things.spray);
+    disposeTree(island.group);
     island.dispose();
     things.dispose();
     world.dispose();
@@ -417,6 +418,7 @@ function createTown(K, d) {
   }
   const api = {
     ready, close, state: () => ({ phase: 'town', h: Math.max(16, island.top, island.plotTop) + 6, rescued: [] }),
+    gpu: () => ({ ...stage.renderer.info.memory, programs: stage.renderer.info.programs?.length | 0 }),
     /** The server's newer answer: the panel again, the tower as it stands now. */
     refresh(v) {
       if (!alive) return;
@@ -1043,6 +1045,8 @@ function createRide(K, d) {
   function despawn(l) {
     scene.remove(l.obj);
     l.obj.traverse((o) => { if (o.isSprite) o.material.dispose(); });
+    // (an animal's own shapes and materials, not the shared kit's)
+    disposeTree(l.obj);
   }
   const _v = new THREE.Vector3();
   function screenOf(obj) {
@@ -1462,13 +1466,16 @@ function createRide(K, d) {
     for (const l of live) despawn(l);
     live.length = 0;
     scene.remove(rider.group, riderFoam, island.group, start.group, things.spray);
+    // (everything this ride made goes from the graphics chip; the models and block pieces stay for the next)
+    const done = new Set();
     for (const isle of isles) {
       scene.remove(isle.group);
       isle.island.dispose();
-      isle.tag.material.map?.dispose();
+      disposeTree(isle.group, done);
     }
-    for (const f of flights) scene.remove(f.mesh);
-    for (const b of debris) scene.remove(b.g);
+    for (const f of flights) { scene.remove(f.mesh); disposeTree(f.mesh, done); }
+    for (const b of debris) { scene.remove(b.g); disposeTree(b.g, done); }
+    for (const root of [rider.group, start.group, island.group]) disposeTree(root, done);
     bombGeo.dispose();
     for (const fx of flashes) { scene.remove(fx.fl); fx.fl.material.dispose(); }
     flashGeo.dispose();
@@ -1525,6 +1532,8 @@ function createRide(K, d) {
     /** For tests: the 3D scene and camera. */
     get scene() { return scene; },
     get camera() { return camera; },
+    /** For tests: what the graphics chip holds now ({ geometries, textures, programs }). */
+    gpu: () => ({ ...stage.renderer.info.memory, programs: stage.renderer.info.programs?.length | 0 }),
   };
   return api;
 }
