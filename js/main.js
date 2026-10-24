@@ -126,8 +126,11 @@ const store = createStore(undefined, DEBUG ? { key: `${STORAGE_KEY}.debug` } : {
 const span = createSpan({
   debug: DEBUG,   // (a debug session keeps its own week)
   castIds: CAST_IDS,
-  earn: (n) => store.earnCoins(n, { capped: true }).added,
+  // (rescued people count towards the day's coin cap; Saturday's prize doesn't)
+  earn: (n, o) => store.earnCoins(n, { capped: !o?.prize }).added,
   today: () => todayKey(),
+  api: () => matchApiUrl(),
+  who: () => ({ name: duelNick(), skin: store.getSkins().wear.blocks || 'kleur' }),
 });
 let settings = store.getSettings();
 // (1.16) Die Lewende Toring in every tower: the player's tribe, record and the people they have met (its own store)
@@ -2604,8 +2607,10 @@ function finalize(result) {
   // (1.20) a Weektoring turn: its floors join the tower (a turn left before its first drop is still there)
   if (result.mode === 'week') {
     const aborted = !(result.blocksDropped > 0);
-    const out = aborted ? null : span.turnDone(result.week || [], { skin: store.getSkins().wear.blocks || 'kleur', day: todayKey() });
-    run.final = { result: { ...result, weekOut: out }, stats: null, isNewBest: false, aborted };
+    const lease = weekLease;
+    weekLease = null;
+    const out = aborted ? null : span.turnDone(result.week || [], { skin: store.getSkins().wear.blocks || 'kleur', day: todayKey(), lease });
+    run.final = { result, weekOut: Promise.resolve(out), stats: null, isNewBest: false, aborted };
     return run.final;
   }
   const town = result.living ? recordTown(result.living) : null;
@@ -2742,8 +2747,7 @@ async function startRide() {
       daily: dayLayout(day), skin: store.getSkins().wear.blocks || 'kleur',
       reducedMotion: !!settings.reducedMotion, autopilot: DEBUG && params.has('rvauto'),
       onResult: (res) => {
-        const out = span.rideDone(day, res.rescued || []);
-        if (out.coins) coinsChanged();
+        span.rideDone(day, res.rescued || [], rd.fromRiver || 0).then((out) => { if (out.coins) coinsChanged(); });
       },
       onDone: (res, next) => {
         closeRide();
@@ -2762,19 +2766,73 @@ async function startRide() {
     showMenu();
   }
 }
-function startWeekTurn() {
-  const tt = span.turn(todayKey());
-  if (!tt) {
-    ui.toast(S.twNoTurn, 2600);
-    startIdle();
-    showMenu();
+let weekLease = null;      // the crane's lease for this build turn (with the server)
+let weekTurnBusy = false;
+const TURN_ERRORS = { busy: (r) => S.twBusy(r.by), noturn: () => S.twNoTurn, ticket: () => S.twTicketNeeded, kroning: () => S.twKroning, norepair: () => S.twNoRepair };
+async function startWeekTurn({ repair = false } = {}) {
+  if (weekTurnBusy) return;
+  weekTurnBusy = true;
+  let tt;
+  try {
+    tt = await span.turn(todayKey(), { repair });
+  } finally {
+    weekTurnBusy = false;
+  }
+  if (!tt || tt.error) {
+    ui.toast((TURN_ERRORS[tt?.error] || (() => S.twOffline))(tt || {}), 3200);
+    if (screen !== 'menu') {
+      startIdle();
+      showMenu();
+    }
     return;
   }
+  weekLease = tt.lease || null;
   resetRun('week');
   startGame({ mode: 'week', seed: tt.seed, autoplay: AUTO, week: { floors: tt.floors, blocks: tt.blocks, title: S.weekTowerName } });
   screen = 'game';
   ui.showInGame();
 }
+let spanLinkCode = null;
+/** (1.20) The server's Ons dorp (if it's there), then a friend's invite link (?span=CODE). */
+async function spanStart() {
+  const code = params.get('span');
+  if (/^[A-HJ-NP-Z2-9]{6}$/.test(code || '')) {
+    spanLinkCode = code;
+    try { history.replaceState(history.state, '', location.pathname + location.hash); } catch { /* the address stays */ }
+  }
+  const ok = await span.start();
+  if (screen === 'menu') ui.showMenu(menuModel());
+  if (spanLinkCode) {
+    const c = spanLinkCode;
+    spanLinkCode = null;
+    if (!ok) {
+      ui.toast(S.spanOffline, 3200);
+      return;
+    }
+    const inv = await span.invite(c);
+    if (inv.error) {
+      ui.toast(S.spanJoinGone, 3200);
+      return;
+    }
+    if (inv.full) {
+      ui.toast(S.spanJoinFull, 3200);
+      return;
+    }
+    ui.showSpanJoin({ code: c, name: inv.name, n: inv.n, of: 3, names: inv.names || [] });
+  }
+}
+bus.on('ui:span-join', async (code) => {
+  const r = await span.join(code);
+  if (r.error) {
+    ui.toast(r.error === 'full' ? S.spanJoinFull : r.error === 'locked' ? S.spanJoinLocked : r.error === 'crew' ? S.spanJoinGone : S.spanOffline, 3600);
+    return;
+  }
+  ui.toast(S.spanJoined(r.crew?.name || ''), 3000);
+  openSpanTown();
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && span.online) span.sync().then(() => { if (screen === 'menu') ui.showMenu(menuModel()); });
+});
 bus.on('ui:rivier', startRide);
 bus.on('ui:week-build', startWeekTurn);
 /** Ons dorp's own screen: your crew's island and its Weektoring in 3D (js/rivier/view.js openTown), your week. */
@@ -2787,10 +2845,19 @@ async function openSpanTown() {
     const mod = await import('./rivier/view.js');
     if (seq !== rideSeq) return;
     const v = span.view();
+    if (span.online) span.sync().then(() => { if (ride?.refresh && screen === 'rivier') ride.refresh(span.view()); });
     const r = await mod.openTown({
-      ...v, reducedMotion: !!settings.reducedMotion,
+      ...v, myId: span.id, reducedMotion: !!settings.reducedMotion,
       onRide: () => { closeRide(); startRide(); },
       onBuild: () => { closeRide(); startWeekTurn(); },
+      onRepair: () => { closeRide(); startWeekTurn({ repair: true }); },
+      onBomb: () => { closeRide(); startRaid(); },
+      onInvite: () => shareInvite(),
+      onLeave: async () => {
+        const res = await span.leave();
+        ui.toast(res.error ? (res.error === 'locked' ? S.spanJoinLocked : S.spanOffline) : S.spanLeft, 3200);
+        if (!res.error) { closeRide(); openSpanTown(); }
+      },
       onBack: () => { closeRide(); startIdle(); showMenu(); },
     });
     if (seq !== rideSeq) { r.close(); return; }
@@ -2804,6 +2871,49 @@ async function openSpanTown() {
   }
 }
 bus.on('ui:span', openSpanTown);
+/** The crew's invite link on WhatsApp (or the phone's share sheet): the crew's name, the tower's height, ?span=CODE. */
+function shareInvite() {
+  const v = span.view();
+  if (!v.crew?.invite) {
+    ui.toast(S.spanOffline, 3000);
+    return;
+  }
+  const url = `${siteUrl()}?span=${v.crew.invite}`;
+  ui.shareText(S.spanInviteText(v.crew.name, fmtM(v.heightM || 0), url), 'whatsapp');
+}
+/** (1.20) Saturday's bomb run: down the river past the four islands; bombs on the tallest tower. */
+async function startRaid() {
+  const v = span.view();
+  if (!v.river || v.phase !== 'uitdaging') {
+    ui.toast(S.twKroning, 3000);
+    openSpanTown();
+    return;
+  }
+  if (!v.ticket) { ui.toast(S.twTicketNeeded, 3600); openSpanTown(); return; }
+  if (!(v.bombs > 0)) { ui.toast(S.twNoBombs, 3600); openSpanTown(); return; }
+  if (v.river.leader === v.crew?.id) { ui.toast(S.twYouLead, 3600); openSpanTown(); return; }
+  const seq = ++rideSeq;
+  screen = 'rivier';
+  ui.hideAll();
+  wakeLoop();
+  try {
+    const mod = await import('./rivier/view.js');
+    if (seq !== rideSeq) return;
+    const r = await mod.openRaid({
+      river: v.river, crewId: v.crew.id, bombs: Math.min(v.bombs, 3), skin: store.getSkins().wear.blocks || 'kleur',
+      reducedMotion: !!settings.reducedMotion, autopilot: DEBUG && params.has('rvauto'),
+      onBomb: (target, hit) => span.bomb(target, [hit]),
+      onDone: () => { closeRide(); openSpanTown(); },
+    });
+    if (seq !== rideSeq) { r.close(); return; }
+    ride = r;
+    if (!loopAsleep && game.loop?.running) { loopAsleep = true; game.loop.sleep(); }
+  } catch (e) {
+    console.error('[aanval]', e);
+    closeRide();
+    openSpanTown();
+  }
+}
 // (Android's Back during a ride: its pause card, with "Klim uit")
 window.addEventListener('stapel:back', (e) => {
   if (!ride) return;
@@ -2853,12 +2963,14 @@ bus.on('game:over', (result) => {
     return;
   }
   if (result.mode === 'week') {
-    // (1.20) the Weektoring's turn: its sheet over the tower's reveal
-    const o = f.result.weekOut || {};
-    const v = span.view();
+    // (1.20) the Weektoring's turn: its sheet over the tower's reveal, once the floors are in (the server's answer)
     screen = 'results';
-    ui.showWeekResult({ heightM: o.heightM ?? v.heightM, gain: o.gain || 0, added: o.added || 0, people: v.people, perfects: f.result.perfects | 0, turns: v.turns });
-    sleepLoop(RESULTS_SLEEP_MS);
+    f.weekOut.then((o) => {
+      if (o?.error) ui.toast(S.twOffline, 3600);
+      const v = span.view();
+      ui.showWeekResult({ heightM: o?.heightM ?? v.heightM, gain: o?.gain || 0, added: o?.added || 0, people: v.people, perfects: f.result.perfects | 0, turns: v.turns });
+      sleepLoop(RESULTS_SLEEP_MS);
+    });
     return;
   }
   if (f.isNewBest) audio.play('record');
@@ -3841,6 +3953,7 @@ function onReady() {
   claimModeCoins();   // (before the menu: its wallet shows them)
   showMenu();
   dorpStart();   // (1.16) Jou dorp: only where the server knows the towns
+  spanStart();   // (1.20) Ons dorp: the crew on the server (a crew of one on this phone without it)
   if (SLAG_ON) {
     // (1.17) a friend's Vrugteslag link (?slag=CODE): into their room
     const code = new URLSearchParams(location.search).get('slag');

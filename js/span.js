@@ -1,19 +1,23 @@
-// (1.20) Ons dorp on the phone: your crew's week as this phone keeps it — the Weektoring's floors, your build turns, the
-// Dailies that count (ticket and bombs), today's rescue ride and the town's people. The rules are js/core/span.js and
-// js/core/weektower.js; the screens are js/ui/dom.js; js/main.js runs the day (Daily → the river → the Weektoring).
-// Checkpoint 1 (24 Oct 2026) keeps it all on the phone: a crew of one. Checkpoint 2 moves the crew and its tower to the
-// server (server/src/span.js) behind the same calls.
-import { SPAN, weekOf, dowOf, weekStats, plusDays } from './core/span.js';
+// (1.20) Ons dorp on the phone: your crew's week — the Weektoring, your build turns, the Dailies that count (ticket and
+// bombs), today's rescue ride, the town's people, Saturday's river. The rules are js/core/span.js and js/core/weektower.js;
+// the screens js/ui/dom.js and js/rivier/view.js; js/main.js runs the day (Daily → the river → the Weektoring).
+//
+// With the server (server/src/span.js; its front door says `span`) the crew, its tower and Saturday live there: this phone
+// keeps a copy (the last answer) and its own id + key. Without it (an older Worker, or no internet at the start) it plays
+// as a crew of one on this phone alone, as checkpoint 1 did. The ride's gate (once a day) and who fell off your Daily are
+// always this phone's.
+import { SPAN, weekOf, dowOf, weekStats, isSpanId, isSpanKey, newSpanId, newSpanKey } from './core/span.js';
 import { addFloors, heightOf, moveIn, peopleIn, cleanFloor } from './core/weektower.js';
 import { createRng } from './core/rng.js';
 import { safeLocalStorage } from './core/storage.js';
 
 const KEY = 'stapel.v1.span';
-const MONUMENTS = 8;       // past weeks' towers kept (height and the tower itself, newest first)
+const MONUMENTS = 8;       // past weeks' towers kept here (height and the tower itself, newest first)
 const RIDE_MIN = 6;        // people on a ride at least (strays make up the rest)...
 const RIDE_MAX = 12;       // ...and at most
+const TIMEOUT_MS = 9000;
 
-const blank = (week) => ({ v: 1, week, floors: [], people: 0, days: {}, granted: {}, used: 0, rides: {}, monuments: [], name: '' });
+const blank = (week) => ({ v: 1, week, floors: [], people: 0, days: {}, granted: {}, used: 0, rides: {}, monuments: [], name: '', id: '', key: '', srv: null, queue: [] });
 
 function clean(raw, week) {
   const d = blank(week);
@@ -27,13 +31,25 @@ function clean(raw, week) {
   d.used = Math.max(0, Math.min(99, raw.used | 0));
   if (Array.isArray(raw.monuments)) d.monuments = raw.monuments.filter((m) => m && typeof m.week === 'string').slice(0, MONUMENTS);
   d.name = typeof raw.name === 'string' ? raw.name.slice(0, 18) : '';
+  if (isSpanId(raw.id) && isSpanKey(raw.key)) {
+    d.id = raw.id;
+    d.key = raw.key;
+  }
+  if (raw.srv && typeof raw.srv === 'object' && raw.srv.crew && Array.isArray(raw.srv.crew.floors)) d.srv = raw.srv;
+  if (Array.isArray(raw.queue)) d.queue = raw.queue.filter((q) => q && typeof q.path === 'string').slice(-20);
+  if (raw.fell && typeof raw.fell === 'object') d.fell = raw.fell;
   return d;
 }
 
-/** `castIds`: everyone who can be in the river; `earn(n)`: coins into the wallet (returns what was added). */
-export function createSpan({ backend = safeLocalStorage(), debug = false, castIds = [], earn = () => 0, today = () => new Date().toISOString().slice(0, 10) } = {}) {
+/**
+ * `castIds`: everyone who can be in the river; `earn(n, {prize})`: coins into the wallet (returns what was added);
+ * `api()`: the server's address ('' without one); `who()`: { name, skin } now. `fetchImpl` for tests.
+ */
+export function createSpan({ backend = safeLocalStorage(), debug = false, castIds = [], earn = () => 0, today = () => new Date().toISOString().slice(0, 10), api = () => '', who = () => ({ name: '', skin: 'kleur' }), fetchImpl = (...a) => fetch(...a) } = {}) {
   const key = debug ? `${KEY}.debug` : KEY;
   let d = null;
+  let online = false;      // the server answered with `span` and a sync went through
+  let busy = null;          // (one sync at a time)
   const save = () => { try { backend?.setItem(key, JSON.stringify(d)); } catch { /* private window: this visit only */ } };
   function load() {
     const wk = weekOf(today());
@@ -43,80 +59,196 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
     } catch {
       d = blank(wk);
     }
+    if (!d.id) {
+      d.id = newSpanId();
+      d.key = newSpanKey();
+    }
     roll(wk);
   }
-  /** A new week: last week's tower becomes a monument, a new Weektoring starts (the town's people stay). */
+  /** A new week (this phone's own copy): last week's tower becomes a monument, a new Weektoring starts. */
   function roll(wk) {
     if (d.week === wk) return;
     if (d.floors.length) d.monuments = [{ week: d.week, h: heightOf(d.floors), n: d.floors.length, floors: d.floors }, ...d.monuments].slice(0, MONUMENTS);
     Object.assign(d, { week: wk, floors: [], days: {}, granted: {}, used: 0, rides: {} });
+    if (d.srv && d.srv.crew?.week !== wk) d.srv = null;   // (the server's last answer was last week's)
     save();
   }
   load();
 
-  /** Build turns waiting: one per finished Daily (Mon-Sat), at most SPAN.turnsMax at a time. */
+  // ---------------------------------------------------------------------------------------------------- the server
+  async function call(method, path, body = null) {
+    const base = api();
+    if (!base) throw new Error('offline');
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), TIMEOUT_MS) : 0;
+    try {
+      const res = await fetchImpl(`${base.replace(/\/$/, '')}${path}`, {
+        method, headers: method === 'POST' ? { 'Content-Type': 'application/json' } : undefined,
+        body: method === 'POST' ? JSON.stringify({ id: d.id, key: d.key, ...(body || {}) }) : undefined, signal: ctl?.signal,
+      });
+      const out = await res.json().catch(() => ({}));
+      return { ...out, status: res.status };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  /** Is the server's Ons dorp there? (its front door says `span`) Then a first sync. */
+  async function start() {
+    try {
+      const base = api();
+      if (!base) return false;
+      const res = await fetchImpl(`${base.replace(/\/$/, '')}/`, { method: 'GET' });
+      const j = await res.json().catch(() => ({}));
+      if (!j || !j.span) return false;
+      return !!(await sync());
+    } catch {
+      return false;
+    }
+  }
+  /** Everything this phone knows that the server should, and the server's answer kept (the crew, Saturday, a prize). */
+  async function sync() {
+    if (busy) return busy;
+    busy = (async () => {
+      try {
+        const w = who();
+        const r = await call('POST', '/span/sync', { name: w.name || '', skin: w.skin || 'kleur', days: d.days });
+        if (r.status !== 200 || !r.crew) return null;
+        online = true;
+        d.srv = { me: r.me, crew: r.crew, river: r.river || null, phase: r.phase, today: r.today, at: Date.now() };
+        if (r.me?.prize && r.me.prize.coins > 0) {
+          try { earn(r.me.prize.coins, { prize: true }); } catch { /* the wallet's own business */ }
+          d.prizeSeen = r.me.prize;
+        }
+        // rides made while the server couldn't be reached
+        const q = d.queue;
+        d.queue = [];
+        for (const item of q) {
+          const a = await call('POST', item.path, item.body).catch(() => null);
+          if (a?.status === 200 && a.crew) d.srv.crew = a.crew;
+          else if (!a || a.status >= 500) d.queue.push(item);
+        }
+        save();
+        return d.srv;
+      } catch {
+        return null;
+      } finally {
+        busy = null;
+      }
+    })();
+    return busy;
+  }
+
+  /** Build turns this phone counts itself (no server): one per finished Daily (Mon-Sat), at most SPAN.turnsMax. */
   const turnsLeft = () => Math.max(0, Object.values(d.granted).reduce((s, n) => s + n, 0) - d.used);
+  const S = () => (online && d.srv?.crew ? d.srv : null);
 
   return {
+    start,
+    sync,
+    get online() { return online; },
+    get id() { return d.id; },
     /** What the screens show. */
     view() {
       roll(weekOf(today()));
       const day = today();
       const ws = weekStats(d.days, d.week);
+      const sv = S();
+      const base = { rideToday: d.rides[day] === 0, rodeToday: day in d.rides && d.rides[day] !== 0, dow: dowOf(day), online: !!sv };
+      if (sv) {
+        const c = sv.crew;
+        return {
+          ...base, week: c.week, floors: c.floors, heightM: heightOf(c.floors), people: c.people | 0, name: c.name,
+          turns: sv.me.turns | 0, ticket: !!sv.me.ticket, weekdays: sv.me.weekdays | 0, bombs: sv.me.bombs | 0, metres: sv.me.metres || 0,
+          monuments: c.monuments || [], crew: c, river: sv.river, phase: sv.phase, me: sv.me, inRiver: c.inRiver | 0, repair: c.repair | 0,
+        };
+      }
       return {
-        week: d.week, floors: d.floors, heightM: heightOf(d.floors), people: d.people, name: d.name,
+        ...base, week: d.week, floors: d.floors, heightM: heightOf(d.floors), people: d.people, name: d.name,
         turns: turnsLeft(), ticket: ws.ticket, weekdays: ws.weekdays, bombs: ws.bombs, metres: ws.metres,
-        rideToday: d.rides[day] === 0, rodeToday: day in d.rides && d.rides[day] !== 0, monuments: d.monuments,
-        dow: dowOf(day),
+        monuments: d.monuments, crew: null, river: null, phase: null, me: null, inRiver: 0, repair: 0,
       };
     },
     /**
      * A Daily was finished (`fell`: who jumped out of its floors). It counts for the week (its best height), gives a build
-     * turn (Mon-Sat, once a day, while fewer than SPAN.turnsMax wait) and opens today's ride (once a day).
+     * turn (Mon-Sat, once a day, while fewer than SPAN.turnsMax wait) and opens today's ride (once a day). The server hears it.
      */
     dailyDone(dateKey, heightM, fell = []) {
       roll(weekOf(today()));
       if (weekOf(dateKey) !== d.week) return null;
       d.days[dateKey] = Math.max(d.days[dateKey] || 0, Math.round((Number(heightM) || 0) * 10) / 10);
       if (dowOf(dateKey) <= 6 && !d.granted[dateKey] && turnsLeft() < SPAN.turnsMax) d.granted[dateKey] = 1;
-      if (!(dateKey in d.rides)) d.rides[dateKey] = 0;   // (0: today's ride waits; >0: ridden)
+      if (!(dateKey in d.rides)) d.rides[dateKey] = 0;   // (0: today's ride waits; else: ridden)
       d.fell = { day: dateKey, who: [...new Set(fell)].filter((id) => castIds.includes(id)).slice(0, RIDE_MAX) };
       save();
+      if (online) sync();
       return this.view();
     },
-    /** Today's ride: who's in the river (yours first, then strays to make up a ride) and how many are yours; null if done. */
+    /**
+     * Today's ride: who's in the river (yours first, then strays — a crew's people that bombs knocked in come along as
+     * `fromRiver`) and how many are yours; null when it's done.
+     */
     ride(dateKey = today()) {
       if (d.rides[dateKey] !== 0) return null;
       const mine = d.fell?.day === dateKey ? d.fell.who : [];
       const rng = createRng(`ry/${dateKey}`);
       const others = castIds.filter((id) => !mine.includes(id));
-      const want = Math.max(RIDE_MIN, Math.min(RIDE_MAX, mine.length + 3)) - mine.length;
+      const fromRiver = Math.min(Math.max(0, RIDE_MAX - mine.length), S()?.crew?.inRiver | 0);
+      const want = Math.max(RIDE_MIN, Math.min(RIDE_MAX, mine.length + Math.max(3, fromRiver))) - mine.length;
       const strays = [];
       while (strays.length < want && others.length) strays.push(others.splice(Math.floor(rng.next() * others.length), 1)[0]);
-      return { who: [...mine, ...strays], mine: mine.length };
+      return { who: [...mine, ...strays], mine: mine.length, fromRiver };
     },
     /** The ride is over: whoever was saved moves into the Weektoring (its free rooms first) and the town; coins for each. */
-    rideDone(dateKey, rescued = []) {
+    async rideDone(dateKey, rescued = [], fromRiver = 0) {
       if (d.rides[dateKey] !== 0) return { placed: 0, coins: 0 };
       const n = Math.max(0, rescued.length | 0);
       d.rides[dateKey] = n || -1;
-      const r = moveIn(d.floors, n);
-      d.floors = r.floors;
-      d.people += n;
       const coins = n ? earn(n * SPAN.coinsPerRescue) : 0;
+      if (online) {
+        const body = { day: dateKey, rescued: n, fromRiver: Math.min(fromRiver | 0, n) };
+        const r = await call('POST', '/span/ride', body).catch(() => null);
+        if (r?.status === 200 && r.crew && d.srv) d.srv.crew = r.crew;
+        else if (!r || r.status >= 500) d.queue.push({ path: '/span/ride', body });
+        save();
+        return { placed: n, coins };
+      }
+      const m = moveIn(d.floors, n);
+      d.floors = m.floors;
+      d.people += n;
       save();
-      return { placed: r.placed, coins };
+      return { placed: m.placed, coins };
     },
-    /** A build turn on the Weektoring: the floors to build on, the turn's seed (everyone's the same that day) and blocks. */
-    turn(dateKey = today()) {
-      if (turnsLeft() <= 0) return null;
+    /**
+     * A build turn on the Weektoring: { floors, seed, blocks, lease } or { error } ('busy' with who's building, 'noturn',
+     * 'ticket', 'kroning', 'offline'). With the server: the crane is leased (one builder at a time). `repair`: Saturday's
+     * repair blocks instead of a turn.
+     */
+    async turn(dateKey = today(), { repair = false } = {}) {
+      if (online) {
+        const r = await call('POST', '/span/lease', { repair }).catch(() => null);
+        if (!r) return { error: 'offline' };
+        if (r.status !== 200) return { error: r.error || 'server', by: r.by || '' };
+        return { floors: r.floors, seed: r.seed, blocks: r.blocks, lease: r.lease, repair: !!r.repair };
+      }
+      if (turnsLeft() <= 0) return { error: 'noturn' };
       return { floors: d.floors, seed: `${dateKey}/${d.used + 1}`, blocks: SPAN.turnBlocks };
     },
-    /** A build turn ended: its new floors join the tower (cleaned), the turn is used. Returns { added, heightM, gain }. */
-    turnDone(newFloors, { by = 'me', skin = 'kleur', day = today() } = {}) {
+    /** A build turn ended: its new floors join the tower (cleaned), the turn is used. { added, heightM, gain } or { error }. */
+    async turnDone(newFloors, { skin = 'kleur', day = today(), lease = null } = {}) {
+      const list = (newFloors || []).slice(0, SPAN.turnBlocks);
+      if (online && lease) {
+        const r = await call('POST', '/span/build', { lease, floors: list }).catch(() => null);
+        if (r?.status === 200 && r.crew) {
+          d.srv.crew = r.crew;
+          if (r.me) d.srv.me = r.me;
+          save();
+          return { added: r.added | 0, heightM: Math.round(heightOf(r.crew.floors) * 10) / 10, gain: r.gain || 0 };
+        }
+        return { error: r?.error || 'offline' };
+      }
       if (turnsLeft() <= 0) return null;
       const before = heightOf(d.floors);
-      const next = addFloors(d.floors, (newFloors || []).slice(0, SPAN.turnBlocks), { max: SPAN.turnBlocks, by, day, skin });
+      const next = addFloors(d.floors, list, { max: SPAN.turnBlocks, by: 'me', day, skin });
       d.used += 1;
       if (next) {
         const peopleBefore = peopleIn(d.floors);
@@ -126,14 +258,43 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
       save();
       // (both to a tenth first: the sheet shows "20,6 m" and "+20,6 m", never "+20,7 m" beside "20,6 m")
       const h = Math.round(heightOf(d.floors) * 10) / 10;
-      return { added: next ? newFloors.length : 0, heightM: h, gain: Math.round((h - Math.round(before * 10) / 10) * 10) / 10 };
+      return { added: next ? list.length : 0, heightM: h, gain: Math.round((h - Math.round(before * 10) / 10) * 10) / 10 };
+    },
+    // -------------------------------------------------------------------------------------------- the crew (server only)
+    async crewCall(path, body = {}) {
+      if (!online) return { error: 'offline' };
+      const r = await call('POST', path, body).catch(() => null);
+      if (!r) return { error: 'offline' };
+      if (r.status !== 200) return { ...r, error: r.error || 'server' };
+      await sync();
+      return r;
+    },
+    make(name, force = false) { return this.crewCall('/span/make', { name, force }); },
+    join(invite) { return this.crewCall('/span/join', { invite }); },
+    leave() { return this.crewCall('/span/leave'); },
+    remove(whoId) { return this.crewCall('/span/remove', { who: whoId }); },
+    rename(name) { return this.crewCall('/span/rename', { name }); },
+    /** The crew an invite code is for (its name, how many): { name, n, full, names } or { error }. */
+    async invite(code) {
+      const r = await call('GET', `/span/invite/${encodeURIComponent(code)}`).catch(() => null);
+      return r && r.status === 200 ? r : { error: r?.error || 'offline' };
+    },
+    /** Saturday: bombs on the tallest tower of your river: { hits, river, me } or { error, leader }. */
+    async bomb(target, hits) {
+      const r = await call('POST', '/span/bomb', { target, hits }).catch(() => null);
+      if (!r) return { error: 'offline' };
+      if (r.status !== 200) return { error: r.error || 'server', leader: r.leader || null };
+      if (d.srv) {
+        if (r.river) d.srv.river = r.river;
+        if (r.me) d.srv.me = r.me;
+        save();
+      }
+      return r;
     },
     /** Tests (?debug=1): a week's worth of floors, turns and days at once. */
     debugSet(patch) {
       Object.assign(d, patch);
       save();
     },
-    weekOf: () => d.week,
-    plusDays,
   };
 }

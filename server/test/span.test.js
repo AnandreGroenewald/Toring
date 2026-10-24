@@ -244,3 +244,20 @@ test('span server: floors built while a bomb landed come down with the tower; no
   assert.equal((await h.call('GET', '/span/river/NOPE1234'))[0], 404);
   assert.equal((await h.call('GET', '/span/nothing'))[0], 404);
 });
+
+test('span server: old weeks\' rivers are deleted six weeks on; last week\'s stay', async () => {
+  const h = harness();
+  const a = player('Anna');
+  await sync(h, a, { days: { [day(0)]: 40, [day(1)]: 30, [day(2)]: 30 } });
+  h.data.set('spanw:2026-09-14', { crews: [], rivers: ['ROLD'], grouped: true });
+  h.data.set('spanr:ROLD', { id: 'ROLD', week: '2026-09-14', crews: [], bots: {}, log: [] });
+  h.data.set('spanw:2026-10-19', { crews: [], rivers: ['RNEW'], grouped: true });
+  h.data.set('spanr:RNEW', { id: 'RNEW', week: '2026-10-19', crews: [], bots: {}, log: [] });
+  h.clock.t = sastAt(day(5), 9);   // Saturday: this week's rivers are grouped
+  const [st, r] = await sync(h, a, { days: { [day(0)]: 40, [day(1)]: 30, [day(2)]: 30 } });
+  assert.equal(st, 200);
+  assert.ok(r.crew.river, 'a river this Saturday');
+  assert.ok(!h.data.get('spanr:ROLD'), 'the six-week-old river is gone');
+  assert.ok(!h.data.get('spanw:2026-09-14'));
+  assert.ok(h.data.get('spanr:RNEW'), 'last week\'s river stays');
+});

@@ -55,6 +55,10 @@ export function storeOn(storage, max = CACHE_MAX) {
       await storage.put(k, copy);
       remember(k, structuredClone(copy));
     },
+    async del(k) {
+      await storage.delete(k);
+      remember(k, NONE);
+    },
     forget: () => cache.clear(),
   };
 }

@@ -233,7 +233,7 @@ export function createThings(scene, pieces) {
  * Your crew's island in the lake with its Weektoring: { group, top (m), setFloors(floors) }. Floors in course metres
  * from the tower's foot (js/core/weektower.js); every floor drawn in its own skin.
  */
-export function createIsland(things, { radius = 26 } = {}) {
+export function createIsland(things, { radius = 26, jetty: withJetty = true } = {}) {
   const group = new THREE.Group();
   const rockMat = bendMaterial(new THREE.MeshStandardMaterial({ color: '#b58a63', roughness: 0.92, flatShading: true }));
   const grassMat = bendMaterial(new THREE.MeshStandardMaterial({ color: '#7d8f43', roughness: 0.95, flatShading: true }));
@@ -255,8 +255,8 @@ export function createIsland(things, { radius = 26 } = {}) {
   group.add(top);
   const jetty = new THREE.Mesh(new THREE.BoxGeometry(3, 0.4, 16), woodMat);
   jetty.position.set(0, 1.4, radius + 6);
-  group.add(jetty);
-  for (const z of [radius + 1, radius + 5, radius + 9, radius + 13]) {
+  if (withJetty) group.add(jetty);
+  for (const z of withJetty ? [radius + 1, radius + 5, radius + 9, radius + 13] : []) {
     for (const x of [-1.3, 1.3]) {
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 3, 6), woodMat);
       post.position.set(x, 0.2, z);
@@ -269,7 +269,7 @@ export function createIsland(things, { radius = 26 } = {}) {
   const ground = new THREE.Group();
   ground.position.y = 3.6;
   group.add(ground);
-  const village = addVillage(ground, { inner: 8.5, outer: radius * 0.86, people: 10 });
+  const village = addVillage(ground, { inner: Math.min(8.5, radius * 0.6), outer: radius * 0.86, people: 10 });
   group.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
   let height = 0;
 

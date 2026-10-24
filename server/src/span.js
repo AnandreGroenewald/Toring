@@ -60,9 +60,12 @@ export function createSpanServer(store, { now = () => Date.now() } = {}) {
     return loaded.get(k);
   }
   const put = (k, v) => { dirty.set(k, v); };
+  const del = (k) => { dirty.set(k, undefined); };
   async function flush() {
     for (const [k, v] of dirty) {
-      if (orig.get(k) !== sig(v)) await store.put(k, v);
+      if (v === undefined) {
+        if (orig.get(k) !== undefined || !orig.has(k)) await (store.del ? store.del(k) : store.put(k, null));
+      } else if (orig.get(k) !== sig(v)) await store.put(k, v);
     }
     dirty.clear();
     loaded.clear();
@@ -213,6 +216,14 @@ export function createSpanServer(store, { now = () => Date.now() } = {}) {
     }
     idx.grouped = true;
     put(wKey(wk), idx);
+    // (privacy) old weeks' rivers go: standings, bombs and news of six weeks back and before (a few weeks, in case none looked)
+    for (let k = SPAN.keepWeeks; k < SPAN.keepWeeks + 5; k++) {
+      const old = plusDays(wk, -7 * k);
+      const oi = await get(wKey(old));
+      if (!oi) continue;
+      for (const rid of oi.rivers || []) del(rKey(rid));
+      del(wKey(old));
+    }
     return idx;
   }
   async function towerOf(r, id) {

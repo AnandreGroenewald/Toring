@@ -193,6 +193,7 @@ export function createUI(bus) {
     tribe: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-tribe-title', tabindex: '-1' }),   // (1.16) the Living Tower's tribe
     album: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-album-title', tabindex: '-1' }),   // (1.16) its residents album
     week: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-week-title', tabindex: '-1' }),   // (1.20) a Weektoring turn's result
+    spanjoin: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-spanjoin-title', tabindex: '-1' }),   // (1.20) a friend's invite
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -233,7 +234,7 @@ export function createUI(bus) {
   // buttons take taps: a tap anywhere else still drops a block)
   const emoteBar = h('div', { class: 'emote-bar', role: 'group', 'aria-label': S.emoteLabel, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, screens.dorp, screens.slag, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, modals.tribe, modals.album, modals.week, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, screens.dorp, screens.slag, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, modals.tribe, modals.album, modals.week, modals.spanjoin, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // (1.15, the owner: "We need a better way to display the coins please") every 🪙 the UI shows becomes the game's own
@@ -3243,6 +3244,19 @@ export function createUI(bus) {
     openModal('week');
   }
 
+  /** A friend's invite link (?span=CODE): join their crew? */
+  function showSpanJoin({ code, name = '', n = 1, of = 3, names = [] } = {}) {
+    modals.spanjoin.replaceChildren(h('div', { class: 'card sheet week-sheet' },
+      closeX(() => closeModal()),
+      h('div', { class: 'sheet-head' }, emo('🏝️'), h('h2', { id: 'stapel-spanjoin-title', text: S.spanJoinTitle(name) })),
+      h('div', { class: 'sheet-body' },
+        h('p', { class: 'week-line', text: S.spanJoinSub(n, of) }),
+        names.length ? h('p', { class: 'week-line', text: names.filter(Boolean).join(' · ') }) : null,
+        button('btn-big btn-green', [h('span', { text: S.spanJoinYes })], () => { closeModal(); bus.emit('ui:span-join', code); }),
+        button('btn-white', [h('span', { text: S.spanJoinNo })], () => closeModal()))));
+    openModal('spanjoin');
+  }
+
   function dorpResEl(d) {
     if (!d || !(d.people || d.raids || d.walls)) return null;
     return h('div', { class: 'res-dorp' },
@@ -4021,6 +4035,7 @@ export function createUI(bus) {
     showAlbum,
     showDorpScreen,
     showWeekResult,
+    showSpanJoin,
     showSlagScreen,
     slagMode,
     slagCounts,

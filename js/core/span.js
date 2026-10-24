@@ -33,6 +33,7 @@ export const SPAN = Object.freeze({
   riverPeopleMax: 60,         // a crew's people still in the river (from bombs) at most
   coinsPerRescue: 1,
   prize: Object.freeze([150, 80, 40, 20]),   // coins each for 1st..4th on Saturday
+  keepWeeks: 6,        // a week's rivers (standings, the bomb log) are deleted this many weeks later
 });
 
 const SAST_MS = 2 * 60 * 60 * 1000;

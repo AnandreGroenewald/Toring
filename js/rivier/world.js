@@ -18,7 +18,13 @@ export const COLORS = {
 export const BANK = { half: 8.2, lake: 46, fogNear: 90, fogFar: 520 };
 
 /** How far across the world bends `d` metres ahead (m): a gentle winding that changes with the course. */
+export let bendK = 1;   // (Saturday's run: 0, so a bomb's aim lands where the tower is drawn)
+export function setBend(k) {
+  bendK = k;
+  bendUniforms.uBendK.value = k;
+}
 export function bendX(d, z) {
+  if (!bendK) return 0;
   const a = Math.max(0, d) / 160;
   return Math.sin(z * 0.0042 + 0.6) * 9 * a * a + Math.sin(z * 0.011 + 2.1) * 2.2 * a;
 }
@@ -26,12 +32,14 @@ export function bendX(d, z) {
  * The same bend for every lit thing in the river: its material's vertex shader moves each vertex across by bendX (from
  * its world position: `ahead` = -z), so what's placed straight in course space winds with the water. One shared clock.
  */
-export const bendUniforms = { uDist: { value: 0 } };
+export const bendUniforms = { uDist: { value: 0 }, uBendK: { value: 1 } };
 const BEND_GLSL = `uniform float uDist;
-float rvBend(float d, float z) { float a = max(0.0, d) / 160.0; return sin(z * 0.0042 + 0.6) * 9.0 * a * a + sin(z * 0.011 + 2.1) * 2.2 * a; }`;
+uniform float uBendK;
+float rvBend(float d, float z) { float a = max(0.0, d) / 160.0; return uBendK * (sin(z * 0.0042 + 0.6) * 9.0 * a * a + sin(z * 0.011 + 2.1) * 2.2 * a); }`;
 export function bendMaterial(m) {
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uDist = bendUniforms.uDist;
+    sh.uniforms.uBendK = bendUniforms.uBendK;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>\n${BEND_GLSL}`)
       .replace('#include <project_vertex>', `vec4 mvPosition = vec4(transformed, 1.0);
@@ -150,9 +158,9 @@ void main() {
 }`;
 
 // ------------------------------------------------------------------------------------------------ the water
-const WATER_VERT = `uniform float uDist; uniform float uBendA; uniform float uBendB;
+const WATER_VERT = `uniform float uDist; uniform float uBendA; uniform float uBendB; uniform float uBendK;
 varying vec3 vWorld; varying vec2 vRiver; varying float vAhead;
-float bendX(float d, float z) { float a = max(0.0, d) / 160.0; return sin(z * 0.0042 + 0.6) * 9.0 * a * a + sin(z * 0.011 + 2.1) * 2.2 * a; }
+float bendX(float d, float z) { float a = max(0.0, d) / 160.0; return uBendK * (sin(z * 0.0042 + 0.6) * 9.0 * a * a + sin(z * 0.011 + 2.1) * 2.2 * a); }
 void main() {
   vec3 p = position;
   float ahead = -p.z;
@@ -258,7 +266,7 @@ export function buildRiverWorld(stage) {
       uHorizon: { value: lin(COLORS.horizon) }, uSkyRefl: { value: lin(COLORS.skyRefl) }, uFoam: { value: lin(COLORS.foam) }, uFog: { value: fog },
       uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uHalf: { value: BANK.half },
       uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uDetail: { value: quality.name === 'low' ? 0 : 1 },
-      uBendA: { value: 0 }, uBendB: { value: 0 }, uRapids: { value: new THREE.Vector2(-1e6, -1e6) }, uPoolTo: { value: -1e6 },
+      uBendA: { value: 0 }, uBendB: { value: 0 }, uBendK: bendUniforms.uBendK, uRapids: { value: new THREE.Vector2(-1e6, -1e6) }, uPoolTo: { value: -1e6 },
     },
     vertexShader: WATER_VERT, fragmentShader: WATER_FRAG,
   });

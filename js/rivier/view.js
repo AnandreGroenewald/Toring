@@ -10,11 +10,12 @@
 import * as THREE from '../../lib/three.module.min.js';
 import { createStage, pickQuality } from '../kasteel/stage.js';
 import { createPieces } from '../botsing/pieces.js';
-import { buildRiverWorld, bendMaterial, BANK } from './world.js';
+import { buildRiverWorld, bendMaterial, setBend, BANK } from './world.js';
 import { createRider } from './rider.js';
 import { createThings, createIsland, createStartTower } from './things.js';
 import { createBeasts } from './beasts.js';
-import { RIVER, rescueCourse, speedAt, laneX } from '../core/rivier.js';
+import { RIVER, rescueCourse, raidCourse, speedAt, laneX } from '../core/rivier.js';
+import { floorAt, hit as hitFloor, dimsOf } from '../core/weektower.js';
 import { portraitDataUrl, portraitsReady, CAST } from '../game/residents.js';
 import { S } from '../core/strings.js';
 import { fmtM, fmtInt } from '../core/format.js';
@@ -64,6 +65,9 @@ function makeKit() {
 #rivier .rv-hint.on { opacity: 1; }
 #rivier .rv-pop { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%) scale(.6); opacity: 0; font-size: 34px; font-weight: 900; color: #fff3c4; -webkit-text-stroke: 1.5px rgba(40,24,0,.75); text-shadow: 0 4px 0 rgba(40,24,0,.45), 0 8px 24px rgba(0,0,0,.4); white-space: nowrap; transition: opacity .25s, transform .35s cubic-bezier(.2,1.4,.4,1); }
 #rivier .rv-pop.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+#rivier .rv-aim { position: absolute; left: 0; top: 0; width: 56px; height: 56px; border-radius: 50%; border: 3px solid #ffd65c; box-shadow: 0 0 0 2px rgba(40,20,0,.6), inset 0 0 0 2px rgba(40,20,0,.5); opacity: 0; pointer-events: none; }
+#rivier .rv-aim::after { content: ''; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: #ff5a3a; }
+#rivier .rv-aim.on { opacity: 1; }
 #rivier .rv-hurt { position: absolute; inset: 0; box-shadow: inset 0 0 90px 20px rgba(200,40,30,.55); opacity: 0; transition: opacity .25s; }
 #rivier .rv-hurt.on { opacity: 1; transition: none; }
 #rivier .rv-fly { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; transition: transform .55s cubic-bezier(.4,0,.6,1), opacity .55s; }
@@ -75,6 +79,10 @@ function makeKit() {
 #rivier .rv-card .rv-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px; margin: 0 0 14px; }
 #rivier .rv-card .rv-row img { width: 34px; height: 34px; border-radius: 50%; }
 #rivier .rv-card .rv-row img.out { opacity: .3; filter: grayscale(1); }
+#rivier .rv-card ol.rv-stand { list-style: none; margin: 0 0 14px; padding: 0; text-align: left; font-size: 15px; }
+#rivier .rv-card ol.rv-stand li { display: flex; justify-content: space-between; padding: 5px 10px; border-radius: 10px; }
+#rivier .rv-card ol.rv-stand li.me { background: rgba(255,255,255,.1); }
+#rivier .rv-card ol.rv-stand li.lead b { color: #ffd65c; }
 #rivier .rv-card button { display: block; width: 100%; min-height: 50px; margin-top: 8px; border-radius: 14px; border: 0; font: inherit; font-weight: 900; font-size: 18px; cursor: pointer; }
 #rivier .rv-card .rv-go { background: linear-gradient(180deg, #ffd65c, #f0a81c); color: #2b1a00; box-shadow: 0 4px 0 #a86e00; }
 #rivier .rv-card .rv-no { background: rgba(255,255,255,.12); color: #fff; }
@@ -114,6 +122,16 @@ export async function openRiver(d) {
 export const river = () => current;
 
 /**
+ * (1.20) Saturday's bomb run (the owner, 24 Oct 2026: "the weekly is also on a river but then you damage the openents towers
+ * while you go down with bombs ... as you press to confirm the power and direction then it slows down"): down the river
+ * past the four crews' islands; when the tallest tower 👑 comes by, hold (time slows), drag to aim, let go to throw. `d`:
+ * { river (the server's view), crewId, bombs, skin, reducedMotion, autopilot, onBomb(target, { x, y }) → Promise, onDone() }.
+ */
+export async function openRaid(d) {
+  return openRiver({ ...d, mode: 'raid', who: [], seed: `${d.river?.id || 'R'}/${Date.now()}` });
+}
+
+/**
  * (1.20) Ons dorp: your crew's island in the lake, its Weektoring (every floor in its builder's skin) and the week: the
  * ticket, the bombs, the build turns, today's ride. `d`: { name, floors, heightM, people, turns, rideToday, ticket,
  * weekdays, bombs, reducedMotion, onRide, onBuild, onBack }. Resolves its controller ({ close }).
@@ -144,10 +162,53 @@ function createTown(K, d) {
   let raf = 0;
   let last = performance.now();
   let t = 0;
-  ov.innerHTML = `<div class="tw-top"><button class="tw-back">${S.twBack}</button><div class="tw-card"><b>🏝️ ${esc(d.name || S.spanMenu)}</b>
-      <span>${S.twHeight} <em>${fmtM(d.heightM || 0)}</em> · ${S.twPeople} <em>${fmtInt(d.people | 0)}</em></span></div></div>
-    <div class="tw-panel"><p>${d.ticket ? S.twTicketOk : S.twTicket(d.weekdays | 0, 3)}</p><p>${S.twBombs(d.bombs | 0)}</p><p class="tw-sat">${S.twSat}</p>
-      <div class="tw-btns">${d.rideToday ? `<button class="tw-ride">${S.rvResGo}</button>` : ''}${d.turns > 0 ? `<button class="tw-build">${S.twBuild(d.turns)}</button>` : `<p class="tw-none">${S.twNoTurn}</p>`}</div></div>`;
+  /** The screen over the island: the crew and its tower; Saturday's river; the week; the news; what you can do now. */
+  function newsLine(n) {
+    const who = esc(n.who || '');
+    if (n.kind === 'built') return S.nwBuilt(who, fmtM(n.gain || 0));
+    if (n.kind === 'repaired') return S.nwRepaired(who, fmtM(n.gain || 0));
+    if (n.kind === 'bombed') return S.nwBombed(who, fmtM(n.lost || 0), n.people | 0);
+    if (n.kind === 'rescued') return S.nwRescued(who, n.n | 0);
+    if (n.kind === 'joined') return S.nwJoined(who);
+    if (n.kind === 'left' || n.kind === 'removed') return S.nwLeft(who);
+    if (n.kind === 'saturday') return S.nwSaturday(n.place, n.of);
+    return '';
+  }
+  function paint(v) {
+    const crew = v.crew;
+    const r = v.river;
+    const mine = crew?.id;
+    const iLead = !!(r && r.leader && r.leader === mine);
+    const over = !!r?.over;
+    const sat = !!(r && v.phase === 'uitdaging' && !over);
+    let river = '';
+    if (r) {
+      const rows = [...r.rows].sort((a, b) => b.h - a.h).map((x) => `<li class="${x.id === mine ? 'me' : ''}${x.leader ? ' lead' : ''}"><span>${x.leader ? '👑 ' : ''}${esc(x.name)}${x.id === mine ? ` <i>(${S.twYou})</i>` : ''}</span><b>${fmtM(x.h)}</b></li>`).join('');
+      const place = over && r.final ? r.final.order.indexOf(mine) + 1 : 0;
+      river = `<div class="tw-river"><h3>${S.twRiver}</h3><ol>${rows}</ol>${over ? `<p class="tw-place">${place === 1 ? S.twPlaceFirst : place ? S.twPlace(place, r.rows.length) : ''}</p>` : `<p class="tw-sat">${iLead ? S.twYouLead : S.twWhistle}</p>`}</div>`;
+    }
+    const news = (crew?.news || []).slice(-3).reverse().map(newsLine).filter(Boolean).map((s) => `<li>${s}</li>`).join('');
+    const members = crew ? `<div class="tw-crew"><span>${S.spanMembers(crew.members.length, 3)}: ${crew.members.map((m) => esc(m.name || '?')).join(' · ')}</span>${crew.members.length < 3 ? `<button class="tw-invite">${S.spanInvite}</button>` : ''}</div>` : '';
+    const btns = [];
+    if (v.rideToday) btns.push(`<button class="tw-ride">${S.rvResGo}</button>`);
+    if (sat && !iLead && v.ticket && v.bombs > 0) btns.push(`<button class="tw-bomb">${S.twBomb(v.bombs)}</button>`);
+    if (sat && v.ticket && v.repair > 0) btns.push(`<button class="tw-repair">${S.twRepair(v.repair)}</button>`);
+    if (v.turns > 0 && !over) btns.push(`<button class="tw-build">${S.twBuild(v.turns)}</button>`);
+    if (!btns.length) btns.push(`<p class="tw-none">${over ? S.twKroning : S.twNoTurn}</p>`);
+    ov.innerHTML = `<div class="tw-top"><button class="tw-back">${S.twBack}</button><div class="tw-card"><b>🏝️ ${esc(v.name || S.spanMenu)}</b>
+        <span>${S.twHeight} <em>${fmtM(v.heightM || 0)}</em> · ${S.twPeople} <em>${fmtInt(v.people | 0)}</em></span></div></div>
+      <div class="tw-panel">${river}<p>${v.ticket ? S.twTicketOk : S.twTicket(v.weekdays | 0, 3)}</p><p>${S.twBombs(v.bombs | 0)}</p>${r ? '' : `<p class="tw-sat">${S.twSat}</p>`}
+        ${members}${news ? `<ul class="tw-news">${news}</ul>` : ''}
+        <div class="tw-btns">${btns.join('')}</div>${crew && crew.members.length > 1 && !sat ? `<button class="tw-leave">${S.spanLeave}</button>` : ''}</div>`;
+    const on = (sel, fn) => ov.querySelector(sel)?.addEventListener('click', fn);
+    on('.tw-back', () => d.onBack?.());
+    on('.tw-ride', () => d.onRide?.());
+    on('.tw-build', () => d.onBuild?.());
+    on('.tw-repair', () => d.onRepair?.());
+    on('.tw-bomb', () => d.onBomb?.());
+    on('.tw-invite', () => d.onInvite?.());
+    on('.tw-leave', () => d.onLeave?.());
+  }
   if (!document.getElementById('tw-style')) {
     const st = document.createElement('style');
     st.id = 'tw-style';
@@ -158,20 +219,31 @@ function createTown(K, d) {
 #rivier .tw-card b { font-size: 19px; font-weight: 900; }
 #rivier .tw-card span { font-size: 13px; font-weight: 800; color: #d4f3ec; }
 #rivier .tw-card em { font-style: normal; color: #fff3c4; }
-#rivier .tw-panel { pointer-events: auto; position: absolute; left: 50%; bottom: calc(14px + var(--sab, 0px)); transform: translateX(-50%); width: min(92%, 420px); padding: 14px 16px; border-radius: 22px;
-  background: rgba(16,30,36,.84); border: 1px solid rgba(255,255,255,.2); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 18px 50px rgba(0,0,0,.4); }
+#rivier .tw-panel { pointer-events: auto; position: absolute; left: 50%; bottom: calc(14px + var(--sab, 0px)); transform: translateX(-50%); width: min(92%, 420px); max-height: 56%; overflow-y: auto; padding: 14px 16px; border-radius: 22px;
+  background: rgba(16,30,36,.86); border: 1px solid rgba(255,255,255,.2); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 18px 50px rgba(0,0,0,.4); }
 #rivier .tw-panel p { margin: 0 0 6px; font-weight: 800; font-size: 15px; color: #e3f6f1; }
 #rivier .tw-panel .tw-sat { font-size: 13px; color: #b9d6e3; }
+#rivier .tw-river h3 { margin: 0 0 6px; font-size: 16px; }
+#rivier .tw-river ol { margin: 0 0 6px; padding: 0; list-style: none; display: grid; gap: 4px; }
+#rivier .tw-river li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,.07); font-weight: 800; font-size: 14px; }
+#rivier .tw-river li.me { background: rgba(143,240,216,.18); }
+#rivier .tw-river li.lead b { color: #ffd65c; }
+#rivier .tw-river li i { font-style: normal; color: #9fe8d3; }
+#rivier .tw-place { font-size: 17px !important; color: #ffd65c !important; }
+#rivier .tw-crew { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: 13px; font-weight: 800; color: #d4f3ec; }
+#rivier .tw-invite { min-height: 40px; padding: 0 12px; border-radius: 12px; border: 0; background: #25d366; color: #05300f; font: inherit; font-weight: 900; font-size: 15px; }
+#rivier .tw-news { margin: 0 0 6px; padding: 0; list-style: none; font-size: 13px; font-weight: 700; color: #cfe3ea; display: grid; gap: 3px; }
 #rivier .tw-btns { display: grid; gap: 8px; margin-top: 10px; }
 #rivier .tw-btns button { min-height: 52px; border-radius: 14px; border: 0; font: inherit; font-weight: 900; font-size: 18px; }
 #rivier .tw-ride { background: linear-gradient(180deg, #8ff0d8, #2fb59c); color: #062b25; box-shadow: 0 4px 0 #18806c; }
 #rivier .tw-build { background: linear-gradient(180deg, #ffd65c, #f0a81c); color: #2b1a00; box-shadow: 0 4px 0 #a86e00; }
+#rivier .tw-bomb { background: linear-gradient(180deg, #ff8a6b, #e0442a); color: #2b0700; box-shadow: 0 4px 0 #8f2412; }
+#rivier .tw-repair { background: linear-gradient(180deg, #b7d3ff, #5b8fe0); color: #071a3a; box-shadow: 0 4px 0 #2e5da8; }
+#rivier .tw-leave { display: block; margin: 10px auto 0; min-height: 36px; padding: 0 12px; border: 0; background: none; color: #9fb6c0; font: inherit; font-weight: 800; font-size: 13px; text-decoration: underline; }
 #rivier .tw-none { text-align: center; color: #b9d6e3 !important; font-size: 14px !important; }`;
     document.head.appendChild(st);
   }
-  ov.querySelector('.tw-back').addEventListener('click', () => d.onBack?.());
-  ov.querySelector('.tw-ride')?.addEventListener('click', () => d.onRide?.());
-  ov.querySelector('.tw-build')?.addEventListener('click', () => d.onBuild?.());
+  paint(d);
   function place() {
     const r = gameCanvas?.getBoundingClientRect() || { left: 0, top: 0, width: innerWidth, height: innerHeight };
     Object.assign(host.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
@@ -221,7 +293,15 @@ function createTown(K, d) {
     host.style.display = 'none';
     if (current === api) current = null;
   }
-  const api = { ready, close, state: () => ({ phase: 'town', h }) };
+  const api = {
+    ready, close, state: () => ({ phase: 'town', h }),
+    /** The server's newer answer: the panel again, the tower as it stands now. */
+    refresh(v) {
+      if (!alive) return;
+      paint({ ...d, ...v });
+      island.setFloors(v.floors || []);
+    },
+  };
   return api;
 }
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -241,12 +321,21 @@ function createRide(K, d) {
   scene.add(start.group);
   const diveTop = Math.max(6, start.top);
   const DIVE = clamp(1.3 + diveTop / 70, 1.5, 2.6);
+  const raid = d.mode === 'raid';
+  const R = d.river || null;
+  if (raid) setBend(0);   // (a straight river: a bomb's aim lands where the tower is drawn)
   const who = (d.who || []).filter((id) => CAST[id]).slice(0, 24);
-  const course = rescueCourse(String(d.seed || 'rivier'), who);
+  // (Saturday: the other crews' islands first, the tallest tower last, the run's big moment)
+  const crewIds = (R?.rows || []).map((x) => x.id);
+  const isleOrder = [...crewIds.filter((id) => id !== R?.leader), ...crewIds.filter((id) => id === R?.leader)];
+  const course = raid ? raidCourse(String(d.seed || 'aanval'), isleOrder, []) : rescueCourse(String(d.seed || 'rivier'), who);
   const len = course.len;
-  // the lake at the end, with your island and its Weektoring
-  world.setLake(len - 110);
-  world.setPool(18);   // (open water round your tower at the river's head, the canyon from ~40 m)
+  // the lake at the end, with your island and its Weektoring (Saturday: open water all the way, the islands in it)
+  if (raid) world.setPool(1e6);
+  else {
+    world.setLake(len - 110);
+    world.setPool(18);   // (open water round your tower at the river's head, the canyon from ~40 m)
+  }
   const island = createIsland(things, { radius: 22 });
   scene.add(island.group);
   island.setFloors(d.floors || []);
@@ -257,7 +346,7 @@ function createRide(K, d) {
   let last = performance.now();
   let t = 0;
   let dist = 0;
-  let phase = 'dive';   // dive → run → finish → done
+  let phase = raid ? 'run' : 'dive';   // dive → run → finish → done
   let phaseT = 0;
   let paused = false;
   let lane = 1;
@@ -290,10 +379,206 @@ function createRide(K, d) {
   const live = [];   // { it, row, obj, z, x, done }
   let rowI = 0;
 
+  // ---------------------------------------------------------------------------------------------- Saturday: the islands
+  /** A sprite with words (the crew's name and height over its tower; a 👑 over the tallest). */
+  function label(text, gold) {
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 128;
+    const g = c.getContext('2d');
+    g.font = 'bold 54px "Trebuchet MS", system-ui, sans-serif';
+    const w = Math.min(500, g.measureText(text).width + 60);
+    g.fillStyle = gold ? 'rgba(90,60,0,0.85)' : 'rgba(13,34,40,0.75)';
+    g.beginPath();
+    g.roundRect((512 - w) / 2, 18, w, 92, 46);
+    g.fill();
+    g.fillStyle = gold ? '#ffd65c' : '#ffffff';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(text, 256, 66);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+    s.scale.set(12, 3, 1);
+    s.renderOrder = 10;
+    return s;
+  }
+  const isles = [];
+  function setIsleFloors(isle, floors) {
+    isle.floors = floors || [];
+    isle.island.setFloors(isle.floors);
+    const h = isle.island.top;
+    const row = R?.rows?.find((x) => x.id === isle.crew);
+    isle.tag.material.map?.dispose();
+    isle.tag.material.dispose();
+    isle.group.remove(isle.tag);
+    isle.tag = label(`${isle.target ? '👑 ' : ''}${row?.name || ''} · ${fmtM(Math.max(0, h - 3.6))}`, isle.target);
+    // (over the top of a short tower; on a tall one, low enough to stay in the picture)
+    isle.tag.position.set(0, Math.min(h + 5, 24), 0);
+    isle.group.add(isle.tag);
+  }
+  if (raid && R) {
+    for (const spot of course.islands) {
+      const island2 = createIsland(things, { radius: 12, jetty: false });
+      island2.group.position.y = -0.6;
+      const group = new THREE.Group();
+      group.add(island2.group);
+      scene.add(group);
+      const isle = { crew: spot.crew, side: spot.side, z: spot.z, island: island2, group, floors: [], target: spot.crew === R.leader && spot.crew !== d.crewId, mine: spot.crew === d.crewId, tag: new THREE.Sprite() };
+      group.add(isle.tag);
+      setIsleFloors(isle, R.towers?.[spot.crew] || []);
+      isles.push(isle);
+    }
+  }
+  let bombsLeft = raid ? Math.max(0, d.bombs | 0) : 0;
+  let thrown = 0;
+  let bombHits = 0;
+  let bombLost = 0;
+  let bombCracked = 0;
+  let aiming = false;
+  const aimAt = { x: 0, y: 0 };
+  const flights = [];
+  const debris = [];
+  const bombGeo = new THREE.SphereGeometry(0.42, 14, 10);
+  const bombMat = new THREE.MeshStandardMaterial({ color: '#1c1c22', roughness: 0.35, metalness: 0.4 });
+  const fuseMat = new THREE.MeshStandardMaterial({ color: '#ffb347', emissive: '#ff7a1a', emissiveIntensity: 2 });
+  const AIM_FAR = 115;   // m ahead: the tallest tower can be aimed at from here...
+  const AIM_NEAR = 34;   // ...until it's this close (then it's beside you, out of the picture)
+  /** The tallest tower, while it's ahead of you in the picture (you can aim at it): its isle, else null. */
+  function targetIsle() {
+    for (const isle of isles) {
+      if (!isle.target) continue;
+      const ahead = isle.z - dist;
+      if (ahead > AIM_NEAR && ahead < AIM_FAR) return isle;
+    }
+    return null;
+  }
+  const _ray = new THREE.Raycaster();
+  const _ndc = new THREE.Vector2();
+  /** Where a finger at (fx, fy) (host px) aims on the tower's face: { u, v } in the tower's metres, or null. */
+  function aimOnTower(isle, fx, fy) {
+    const rect = host.getBoundingClientRect();
+    _ndc.set((fx / rect.width) * 2 - 1, -(fy / rect.height) * 2 + 1);
+    _ray.setFromCamera(_ndc, camera);
+    const O = _ray.ray.origin;
+    const D = _ray.ray.direction;
+    const gx = isle.group.position.x;
+    if (Math.abs(D.x) < 1e-4) return null;
+    const s = (gx - O.x) / D.x;
+    if (!(s > 0)) return null;
+    const P = O.clone().addScaledVector(D, s);
+    const u = (P.z - isle.group.position.z) * (isle.side === 1 ? 1 : -1);
+    const v = P.y - (isle.group.position.y + 3.0);
+    return { u, v, P };
+  }
+  function throwBomb(fx, fy) {
+    const isle = targetIsle();
+    if (!isle || bombsLeft <= 0) return;
+    const a = aimOnTower(isle, fx, fy);
+    if (!a) return;
+    bombsLeft--;
+    thrown++;
+    setBombs();
+    const mesh = new THREE.Group();
+    mesh.add(new THREE.Mesh(bombGeo, bombMat));
+    const fuse = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 6), fuseMat);
+    fuse.position.y = 0.45;
+    mesh.add(fuse);
+    scene.add(mesh);
+    flights.push({ mesh, isle, u: a.u, v: a.v, from: new THREE.Vector3(x, 1.6, -0.5), t: 0, dur: 0.75 });
+    hint(null);
+    audio.play('fling');
+    haptics.tap?.();
+  }
+  const _w = new THREE.Vector3();
+  function towerPoint(isle, u, v) {
+    _w.set(u, 3.6 + v, 0);
+    isle.island.group.updateWorldMatrix(true, false);
+    return isle.island.group.localToWorld(_w.clone());
+  }
+  function impact(f) {
+    const isle = f.isle;
+    const at = towerPoint(isle, f.u, f.v);
+    things.emit(at.x, at.y, at.z, 40, 3, 5);
+    stage.shake(reduced ? 0 : 0.6);
+    audio.play('land', { intensity: 1, size: 1 });
+    const i = floorAt(isle.floors, f.u, f.v);
+    if (i < 0) {
+      pop(S.rvMissed, 900);
+      audio.play('splash');
+    } else {
+      const res = hitFloor(isle.floors, i);
+      bombHits++;
+      if (res.cracked) {
+        bombCracked++;
+        pop(S.rvCracked, 1200);
+        audio.play('land', { intensity: 0.6, size: 0.6 });
+      } else {
+        // the floors knocked out fly off; the tower above drops into their place
+        for (const id of res.removed) {
+          const fl = isle.floors.find((x) => x.id === id);
+          if (!fl) continue;
+          const g = things.riverBlock(fl.s, fl.sk || 'kleur', fl.c | 0);
+          g.scale.setScalar(fl.k || 1);
+          const wp = towerPoint(isle, fl.x, fl.y + dimsOf(fl).H / 2);
+          g.position.copy(wp);
+          scene.add(g);
+          debris.push({ g, v: new THREE.Vector3((Math.random() - 0.5) * 8, 6 + Math.random() * 6, (Math.random() - 0.5) * 8), w: new THREE.Vector3(Math.random() * 4, Math.random() * 4, Math.random() * 4), t: 0 });
+        }
+        bombLost += res.lost;
+        setIsleFloors(isle, res.floors);
+        pop(S.rvHitFloor(fmtM(res.lost)), 1200);
+        audio.play('lost');
+      }
+    }
+    // the server's word: the hit as it counts (another crew's bombs, a lead that changed)
+    Promise.resolve(d.onBomb?.(isle.crew, { x: Math.round(f.u * 100) / 100, y: Math.round(f.v * 100) / 100 })).then((r) => {
+      if (!alive || !r) return;
+      if (r.error === 'leader' || r.error === 'phase') pop(S.rvLeadChanged, 1400);
+      const rv = r.river;
+      if (rv?.towers) {
+        for (const is of isles) {
+          is.target = rv.leader === is.crew && is.crew !== d.crewId;
+          if (rv.towers[is.crew]) setIsleFloors(is, rv.towers[is.crew]);
+        }
+      }
+    });
+  }
+  function stepBombs(dt) {
+    for (let k = flights.length - 1; k >= 0; k--) {
+      const f = flights[k];
+      f.t += dt;
+      const q = Math.min(1, f.t / f.dur);
+      const to = towerPoint(f.isle, f.u, f.v);
+      f.mesh.position.lerpVectors(f.from, to, q);
+      f.mesh.position.y += Math.sin(q * Math.PI) * 5;
+      f.mesh.rotation.x += dt * 9;
+      if (Math.random() < 0.6) things.emit(f.mesh.position.x, f.mesh.position.y + 0.4, f.mesh.position.z, 1, 0.4, 0.6);
+      if (q >= 1) {
+        scene.remove(f.mesh);
+        flights.splice(k, 1);
+        impact(f);
+      }
+    }
+    for (let k = debris.length - 1; k >= 0; k--) {
+      const b = debris[k];
+      b.t += dt;
+      b.v.y -= 14 * dt;
+      b.g.position.addScaledVector(b.v, dt);
+      b.g.rotation.x += b.w.x * dt;
+      b.g.rotation.y += b.w.y * dt;
+      if (b.t > 2.2 || b.g.position.y < -3) {
+        if (b.g.position.y < 0.5 && b.t < 2.2) things.emit(b.g.position.x, 0.2, b.g.position.z, 16, 2, 3);
+        scene.remove(b.g);
+        debris.splice(k, 1);
+      }
+    }
+  }
+
   // ---------------------------------------------------------------------------------------------- the overlay
   ov.innerHTML = `<div class="rv-top"><div class="rv-count"><span class="rv-ring"></span><b>0</b><small>/ ${who.length}</small></div><div class="rv-bar"><i></i></div><button class="rv-pause" aria-label="${S.pause}">❚❚</button></div>
     <div class="rv-faces"></div><div class="rv-hint"></div><div class="rv-pop"></div><div class="rv-hurt"></div>
-    <div class="rv-card"></div><div class="rv-paused"><div><h2>${S.rvPaused}</h2><button class="rv-on">${S.rvResume}</button><button class="rv-off">${S.rvQuit}</button></div></div>`;
+    <div class="rv-card"></div><div class="rv-aim"></div><div class="rv-paused"><div><h2>${S.rvPaused}</h2><button class="rv-on">${S.rvResume}</button><button class="rv-off">${S.rvQuit}</button></div></div>`;
   const countEl = ov.querySelector('.rv-count');
   const countB = countEl.querySelector('b');
   const barEl = ov.querySelector('.rv-bar i');
@@ -304,6 +589,13 @@ function createRide(K, d) {
   const cardEl = ov.querySelector('.rv-card');
   const pausedEl = ov.querySelector('.rv-paused');
   const faceUrl = (id, n = 96) => portraitDataUrl(id, n) || '';
+  const aimEl = ov.querySelector('.rv-aim');
+  function setBombs() {
+    if (!raid) return;
+    countB.textContent = S.rvBombsLeft(bombsLeft);
+    countEl.querySelector('small').textContent = '';
+    countEl.querySelector('.rv-ring').style.display = 'none';
+  }
   facesEl.innerHTML = who.map((id, i) => `<img src="${faceUrl(id, 64)}" alt="" data-i="${i}" class="out">`).join('');
   let popT = 0;
   function pop(text, ms = 1200) {
@@ -372,9 +664,20 @@ function createRide(K, d) {
   }
   const onDown = (e) => {
     if (e.target.closest?.('button')) return;
-    down = { x: e.clientX, y: e.clientY, t: performance.now(), used: false };
+    const hp = hostXY(e);
+    down = { x: e.clientX, y: e.clientY, hx: hp.x, hy: hp.y, t: performance.now(), used: false };
   };
+  const hostXY = (e) => { const r = host.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  function showAim(on) {
+    aimEl.classList.toggle('on', !!on);
+    if (on) aimEl.style.transform = `translate(${aimAt.x - 28}px, ${aimAt.y - 28}px)`;
+  }
   const onMoveP = (e) => {
+    if (aiming) {
+      Object.assign(aimAt, hostXY(e));
+      showAim(true);
+      return;
+    }
     if (!down || down.used) return;
     const dx = e.clientX - down.x;
     if (Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(e.clientY - down.y)) {
@@ -383,6 +686,14 @@ function createRide(K, d) {
     }
   };
   const onUp = (e) => {
+    if (aiming) {
+      Object.assign(aimAt, hostXY(e));
+      aiming = false;
+      showAim(false);
+      throwBomb(aimAt.x, aimAt.y);
+      down = null;
+      return;
+    }
     if (!down) return;
     const dx = e.clientX - down.x;
     if (!down.used && Math.abs(dx) < 14 && performance.now() - down.t < 350) {
@@ -506,7 +817,7 @@ function createRide(K, d) {
       const behind = new THREE.Vector3(x * 0.82, 6.4, 11.5);
       p = front.lerp(behind, ease(clamp((k - 0.45) / 0.55, 0, 1)));
       l = new THREE.Vector3(0, y * 0.95 + 0.5, START_Z * (1 - k)).lerp(new THREE.Vector3(x * 0.62, 0.4, -22), ease(clamp((k - 0.55) / 0.45, 0, 1)));
-    } else if (phase === 'finish' || phase === 'done') {
+    } else if ((phase === 'finish' || phase === 'done') && !raid) {
       // up and back until the whole Weektoring and its island stand in the top part of the picture (the card has the
       // bottom third): the camera's distance from the tower's height and the lens
       const k = ease(clamp(phaseT / FINISH_S, 0, 1));
@@ -524,6 +835,17 @@ function createRide(K, d) {
       // follows most of a lane change, so the move still shows)
       p = new THREE.Vector3(x * 0.82, 6.4, 11.5);
       l = new THREE.Vector3(x * 0.62, 0.4, -22);
+      // Saturday: the tallest tower coming by turns the camera halfway towards it (a little more while you aim), still
+      // looking down a little, so he and the tower's lower part are both in the picture (a phone held upright is narrow)
+      const tgt = raid ? targetIsle() : null;
+      if (tgt) {
+        const ahead = tgt.z - dist;
+        const k = clamp((AIM_FAR + 8 - ahead) / 20, 0, 1) * clamp((ahead - AIM_NEAR + 6) / 12, 0, 1) * (aiming ? 0.6 : 0.42);
+        const far = 11.5 + ahead;
+        const turned = new THREE.Vector3(tgt.group.position.x, 6.4 - 0.1 * far, tgt.group.position.z);
+        l.lerp(turned, k);
+        p.z += 2 * k;
+      }
     }
     if (phase === 'zoo') {
       p = new THREE.Vector3(Number(d.zooCam?.[0] ?? 0), Number(d.zooCam?.[1] ?? 3.2), Number(d.zooCam?.[2] ?? 2));
@@ -544,6 +866,8 @@ function createRide(K, d) {
 
   // ---------------------------------------------------------------------------------------------- the loop
   let pilotOn = !!d.autopilot;
+  let aimHintSaid = false;
+  const pilotThrew = new Set();
   let rapK = 0;
   let startGone = 0;
   let rapSaid = false;
@@ -573,6 +897,32 @@ function createRide(K, d) {
       }
     } else if (phase === 'run') {
       if (pilotOn) pilot();
+      if (raid) {
+        const tgt = targetIsle();
+        if (tgt && bombsLeft > 0 && !aimHintSaid) {
+          aimHintSaid = true;
+          if (!thrown) hint(S.rvAimHint);
+        } else if (!tgt && aimHintSaid && !aiming) hint(null);
+        if (!tgt && aiming) {
+          aiming = false;
+          showAim(false);
+        }
+        if (tgt && bombsLeft > 0 && down && !down.used && !aiming && performance.now() - down.t > 160) {
+          aiming = true;
+          down.used = true;
+          aimAt.x = down.hx;
+          aimAt.y = down.hy;
+          showAim(true);
+        }
+        if (pilotOn && tgt && bombsLeft > 0 && tgt.z - dist < AIM_FAR - 25 - bombsLeft * 12 && !pilotThrew.has(`${tgt.crew}${bombsLeft}`)) {
+          // (tests: the autopilot throws at the tower's middle)
+          pilotThrew.add(`${tgt.crew}${bombsLeft}`);
+          const h = Math.max(4, tgt.island.top - 3.6);
+          const pt = towerPoint(tgt, 0, h * (0.3 + 0.2 * bombsLeft));
+          const v3 = pt.clone().project(camera);
+          throwBomb((v3.x * 0.5 + 0.5) * host.clientWidth, (-v3.y * 0.5 + 0.5) * host.clientHeight);
+        }
+      }
       const rap = course.rapids && dist > course.rapids.from && dist < course.rapids.to;
       if (rap && !rapSaid) {
         rapSaid = true;
@@ -593,7 +943,11 @@ function createRide(K, d) {
         phaseT = 0;
         hint(null);
         audio.musicSet?.({ layers: 3 });
+        if (raid && !flights.length) done();
       }
+    } else if (phase === 'finish' && raid) {
+      dist += speedAt(dist, len) * dt * 0.5;
+      if (!flights.length && phaseT > 0.8) done();
     } else if (phase === 'finish') {
       // in to the jetty, slowing down
       const k = clamp(phaseT / FINISH_S, 0, 1);
@@ -653,9 +1007,16 @@ function createRide(K, d) {
         live.splice(i, 1);
       }
     }
-    // the island ahead, in the lake; your tower behind, at the river's head
+    // the island ahead, in the lake; your tower behind, at the river's head (Saturday: the four crews' islands)
     island.group.position.set(0, -0.6, -(islandZ - dist));
     island.update(t);
+    for (const isle of isles) {
+      isle.group.position.set(isle.side * 22, 0, -(isle.z - dist));
+      isle.group.rotation.y = -isle.side * Math.PI / 2;
+      isle.island.update(t);
+      isle.tag.material.opacity = 1;
+    }
+    if (raid) stepBombs(dt);
     // (your tower stays upstream: behind the camera once you ride)
     start.group.position.set(0, -0.6, dist + START_Z);
     barEl.style.width = `${clamp(dist / (len - RIVER.finishRun), 0, 1) * 100}%`;
@@ -679,12 +1040,20 @@ function createRide(K, d) {
       live.push({ it, row: { z: 12 }, obj, z: 12, x: lx, done: true, drift: 0, zooX: lx });
     }
   }
+  if (raid) {
+    start.group.visible = false;
+    island.group.visible = false;
+    setBombs();
+    facesEl.innerHTML = '';
+    audio.music?.(true, { bpm: 112, layers: 2, key: 5 });
+  }
   function loop(now) {
     if (!alive) return;
     raf = requestAnimationFrame(loop);
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    if (!paused) step(dt);
+    // (aiming: time slows, so a throw and a dodge both fit)
+    if (!paused) step(aiming ? dt * 0.25 : dt);
     stage.render(dt);
   }
 
@@ -694,6 +1063,19 @@ function createRide(K, d) {
     if (phase === 'done') return;
     phase = 'done';
     audio.music?.(false);
+    if (raid) {
+      audio.play(bombHits ? 'record' : 'banner');
+      // what the bombs did, and the river's standings as they are now (the tallest is the one everyone aims at)
+      const said = [bombLost > 0 ? S.rvRaidLost(fmtM(bombLost)) : '', bombCracked ? S.rvRaidCracked(bombCracked) : ''].filter(Boolean).join(' ');
+      const stand = isles.map((i) => ({ i, h: Math.max(0, i.island.top - 3.6), name: R?.rows?.find((x) => x.id === i.crew)?.name || '' })).sort((a, b) => b.h - a.h);
+      cardEl.innerHTML = `<h2>${S.rvRaidTitle(bombHits, thrown)}</h2><p>${said || S.rvRaidNone}</p>
+        <ol class="rv-stand">${stand.map((s, k) => `<li class="${s.i.mine ? 'me' : ''}${k === 0 ? ' lead' : ''}"><span>${k === 0 ? '👑 ' : `${k + 1}. `}${esc(s.name)}${s.i.mine ? ` <i>(${S.twYou})</i>` : ''}</span><b>${fmtM(s.h)}</b></li>`).join('')}</ol>
+        <button class="rv-go">${S.rvDone}</button>`;
+      cardEl.classList.add('on');
+      cardEl.querySelector('.rv-go').addEventListener('click', () => d.onDone?.({ thrown, hits: bombHits, lost: bombLost }));
+      d.onResult?.({ thrown, hits: bombHits, lost: bombLost });
+      return;
+    }
     const r = result();
     if (r.all) audio.play('record'); else audio.play('banner');
     const mine = Math.min(d.mine ?? who.length, who.length);
@@ -747,6 +1129,17 @@ function createRide(K, d) {
     for (const l of live) despawn(l);
     live.length = 0;
     scene.remove(rider.group, island.group, start.group, things.spray);
+    for (const isle of isles) {
+      scene.remove(isle.group);
+      isle.island.dispose();
+      isle.tag.material.map?.dispose();
+    }
+    for (const f of flights) scene.remove(f.mesh);
+    for (const b of debris) scene.remove(b.g);
+    bombGeo.dispose();
+    bombMat.dispose();
+    fuseMat.dispose();
+    if (raid) setBend(1);
     island.dispose();
     beasts.dispose();
     things.dispose();
@@ -761,8 +1154,15 @@ function createRide(K, d) {
     pause: () => setPaused(true),
     resume: () => setPaused(false),
     /** For tests: where the ride stands. */
-    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, lane, rescued: [...rescued], hits, who: [...who], live: live.length, paused }),
+    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, lane, rescued: [...rescued], hits, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })) }),
     autopilot(on) { pilotOn = !!on; },
+    /** For tests (Saturday): where on screen (host px) the tallest tower stands at a share of its height, or null. */
+    towerScreen(frac = 0.5) {
+      const isle = targetIsle();
+      if (!isle) return null;
+      const v3 = towerPoint(isle, 0, Math.max(2, isle.island.top - 3.6) * frac).project(camera);
+      return { x: (v3.x * 0.5 + 0.5) * host.clientWidth, y: (-v3.y * 0.5 + 0.5) * host.clientHeight, ahead: isle.z - dist };
+    },
     /** For tests: the ride jumps to course z (what's before it is gone; the dive is skipped). */
     jumpTo(z) {
       for (const l of live) despawn(l);

@@ -32,22 +32,22 @@ test('span client: a Daily gives a turn and today\'s ride; a second Daily the sa
   assert.equal(new Set(r.who).size, r.who.length, 'nobody twice');
 });
 
-test('span client: who fell is on the ride first; rescued people move in and pay a coin each; the ride is once', () => {
+test('span client: who fell is on the ride first; rescued people move in and pay a coin each; the ride is once', async () => {
   const { s, coins } = make();
   s.dailyDone('2026-10-27', 40, ['haai', 'boer', 'haai', 'nobody']);
   const r = s.ride();
   assert.deepEqual(r.who.slice(0, 2), ['haai', 'boer']);
   assert.equal(r.mine, 2);
-  const out = s.rideDone('2026-10-27', ['haai', 'bytjie', 'boer']);
+  const out = await s.rideDone('2026-10-27', ['haai', 'bytjie', 'boer']);
   assert.equal(out.coins, 3 * SPAN.coinsPerRescue);
   assert.equal(coins.n, 3);
   assert.equal(s.view().people, 3);
   assert.equal(s.ride(), null);
-  assert.equal(s.rideDone('2026-10-27', ['seekat']).coins, 0, 'no second ride');
+  assert.equal((await s.rideDone('2026-10-27', ['seekat'])).coins, 0, 'no second ride');
   assert.equal(s.view().rodeToday, true);
 });
 
-test('span client: a turn\'s floors join the tower; two turns wait at most; the turn is used', () => {
+test('span client: a turn\'s floors join the tower; two turns wait at most; the turn is used', async () => {
   const { s, day } = make();
   s.dailyDone('2026-10-27', 40, []);
   day.v = '2026-10-28';
@@ -55,9 +55,9 @@ test('span client: a turn\'s floors join the tower; two turns wait at most; the 
   day.v = '2026-10-29';
   s.dailyDone('2026-10-29', 40, []);
   assert.equal(s.view().turns, SPAN.turnsMax, 'a third Daily while two wait gives none');
-  const t = s.turn('2026-10-29');
+  const t = await s.turn('2026-10-29');
   assert.equal(t.blocks, SPAN.turnBlocks);
-  const out = s.turnDone([plank(0, 'P'), plank(1.6)], { skin: 'goud' });
+  const out = await s.turnDone([plank(0, 'P'), plank(1.6)], { skin: 'goud' });
   assert.equal(out.added, 2);
   assert.equal(out.heightM, 3.2);
   assert.equal(out.gain, 3.2);
@@ -66,18 +66,18 @@ test('span client: a turn\'s floors join the tower; two turns wait at most; the 
   assert.equal(v.floors.length, 2);
   assert.equal(v.floors[0].sk, 'goud');
   assert.equal(v.people, 2, 'the floors\' people count in the town');
-  assert.equal(s.turnDone([{ s: 'house' }]).added, 0, 'nonsense adds nothing (the turn is still used)');
-  assert.equal(s.turnDone([plank(3.2)]), null, 'no turn left');
+  assert.equal((await s.turnDone([{ s: 'house' }])).added, 0, 'nonsense adds nothing (the turn is still used)');
+  assert.equal(await s.turnDone([plank(3.2)]), null, 'no turn left');
 });
 
-test('span client: Sunday gives no turn; a new week makes last week\'s tower a monument and starts again', () => {
+test('span client: Sunday gives no turn; a new week makes last week\'s tower a monument and starts again', async () => {
   const { s, day, backend } = make({ v: '2026-11-01' });   // a Sunday
   s.dailyDone('2026-11-01', 40, []);
   assert.equal(s.view().turns, 0);
   day.v = '2026-10-30';
   const b2 = make({ v: '2026-10-30' }, backend);
   b2.s.dailyDone('2026-10-30', 30, []);
-  b2.s.turnDone([plank(0), plank(1.6)]);
+  await b2.s.turnDone([plank(0), plank(1.6)]);
   b2.day.v = '2026-11-02';   // the next Monday
   const v = b2.s.view();
   assert.equal(v.week, '2026-11-02');
@@ -94,4 +94,82 @@ test('span client: a debug session keeps its own week', () => {
   b.dailyDone('2026-10-27', 40, []);
   assert.equal(b.view().turns, 1);
   assert.equal(a.view().turns, 0);
+});
+
+// ------------------------------------------------------------------------------------------- the phone and the server
+import { createSpanServer } from '../server/src/span.js';
+import { sastAt } from '../js/core/span.js';
+
+/** The phone's client talking to the real server code in memory (its fetch goes straight to the handler). */
+function online(clock, store, dayKey, name) {
+  const srv = store.srv || (store.srv = createSpanServer({ get: async (k) => (store.data.has(k) ? structuredClone(store.data.get(k)) : undefined), put: async (k, v) => { store.data.set(k, structuredClone(v)); } }, { now: () => clock.t }));
+  const fetchImpl = async (url, o = {}) => {
+    const path = new URL(url).pathname;
+    if (path === '/') return { status: 200, json: async () => ({ ok: true, span: 1 }) };
+    const [status, out] = await srv.handle(o.method || 'GET', path, o.body ? JSON.parse(o.body) : null);
+    return { status, json: async () => out };
+  };
+  const coins = { n: 0 };
+  const s = createSpan({ backend: memoryBackend(), castIds: CAST, earn: (n) => { coins.n += n; return n; }, today: () => dayKey.v, api: () => 'http://srv', who: () => ({ name, skin: 'goud' }), fetchImpl });
+  return { s, coins };
+}
+
+test('span client + server: two phones in one crew build one Weektoring; Saturday\'s prize lands in the wallet', async () => {
+  const clock = { t: sastAt('2026-10-28', 9) };
+  const store = { data: new Map() };
+  const dayKey = { v: '2026-10-28' };
+  const a = online(clock, store, dayKey, 'Anna');
+  const b = online(clock, store, dayKey, 'Ben');
+  assert.equal(await a.s.start(), true);
+  assert.equal(await b.s.start(), true);
+  assert.equal(a.s.view().online, true);
+  const made = await a.s.make('Die Bouers');
+  assert.equal(made.crew.name, 'Die Bouers');
+  const joined = await b.s.join(made.crew.invite);
+  assert.equal(joined.crew.members.length, 2);
+  // the week's Dailies (Mon-Wed) on both phones: a turn each, both with a ticket
+  for (const ph of [a, b]) {
+    ph.s.debugSet({ days: { '2026-10-26': 50, '2026-10-27': 50 } });
+    ph.s.dailyDone('2026-10-28', 50, ['boer']);
+    await ph.s.sync();
+  }
+  assert.equal(a.s.view().turns, 2);
+  assert.equal(a.s.view().ticket, true);
+  // Anna has the crane: Ben is told who
+  const ta = await a.s.turn();
+  assert.ok(ta.lease);
+  const tb = await b.s.turn();
+  assert.equal(tb.error, 'busy');
+  assert.equal(tb.by, 'Anna');
+  const da = await a.s.turnDone([plank(0, 'P'), plank(1.6), plank(3.2)], { lease: ta.lease });
+  assert.equal(da.added, 3);
+  assert.equal(da.heightM, 4.8);
+  const tb2 = await b.s.turn();
+  const db = await b.s.turnDone([plank(4.8)], { lease: tb2.lease });
+  assert.equal(db.heightM, 6.4);
+  await a.s.sync();
+  const va = a.s.view();
+  assert.equal(va.floors.length, 4, 'both phones see one tower');
+  assert.equal(va.crew.members.length, 2);
+  assert.equal(va.floors[0].sk, 'goud');
+  // the ride: rescued people go to the crew
+  const r = a.s.ride('2026-10-28');
+  assert.equal(r.who[0], 'boer');
+  await a.s.rideDone('2026-10-28', ['boer', 'haai']);
+  await b.s.sync();
+  assert.equal(b.s.view().people >= 2, true);
+  // Saturday: a river (with Rikus); after the whistle, the prize in both wallets, once
+  clock.t = sastAt('2026-10-31', 9);
+  dayKey.v = '2026-10-31';
+  await a.s.sync();
+  const v = a.s.view();
+  assert.equal(v.phase, 'uitdaging');
+  assert.equal(v.river.rows.length, 4);
+  clock.t = sastAt('2026-10-31', 21, 5);
+  await a.s.sync();
+  await b.s.sync();
+  assert.ok(a.coins.n > 0 && b.coins.n > 0, 'the prize');
+  const before = a.coins.n;
+  await a.s.sync();
+  assert.equal(a.coins.n, before, 'once');
 });
