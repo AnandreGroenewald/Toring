@@ -1391,5 +1391,10 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
   droplets with mist puffs, rebuilt sandstone (strata broken into blocks, crags, wet foot, dusty ledges), waterfalls with
   foot mist, layered rondavels with bushy crowns, faceted boulders. npm 501/501, leak test flat, raid OK, mid 60 fps.
   Asked him on Telegram whether the main stacking screen gets the same 3D look.
+- **His 4 notes (24 Oct late evening):** the canyon's start without gaps (wall pieces share their end profiles, the
+  walls follow the bank vertex by vertex, a plateau behind every rim); a smooth spring glide between lanes; Saturday's
+  bazooka became a high-pressure water cannon with a scope that locks onto the tallest tower by itself (drag up/down to
+  aim while surfing, the SPUIT / BLAST button; words: shots / skote); premium Blender crocodile, hippo, Blouaap,
+  swimmers in life vests with glossy face badges, the rider with a real face; stones in the canyon's sandstone.
 - **Next:** his feedback; his play of checkpoints 1+2 at home:
   http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1; the release on his word (plan §8).
