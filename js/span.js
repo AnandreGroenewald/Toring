@@ -40,6 +40,7 @@ function clean(raw, week) {
   if (raw.fell && typeof raw.fell === 'object') d.fell = raw.fell;
   // (the crew's news seen so far, and the last Saturday prize and whether it was said: kept across restarts)
   d.seenN = Math.max(0, raw.seenN | 0);
+  d.townSeen = !!raw.townSeen;
   if (raw.prizeSeen && typeof raw.prizeSeen === 'object') d.prizeSeen = { place: raw.prizeSeen.place | 0, coins: raw.prizeSeen.coins | 0, week: String(raw.prizeSeen.week || ''), shown: !!raw.prizeSeen.shown };
   return d;
 }
@@ -187,6 +188,13 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
       pz.shown = true;
       save();
       return { place: pz.place | 0, coins: pz.coins | 0, week: pz.week };
+    },
+    /** Is this the phone's first visit to the town? (true once; after that false) */
+    firstTown() {
+      if (d.townSeen) return false;
+      d.townSeen = true;
+      save();
+      return true;
     },
     /** The town was opened: its news so far is seen. */
     newsSeen() {

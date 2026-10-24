@@ -2896,7 +2896,7 @@ async function openSpanTown() {
     if (span.online) span.sync().then(() => { if (ride?.refresh && screen === 'rivier') { const nv = span.view(); ride.refresh({ ...nv, plots: spanPlots(nv) }); } span.newsSeen(); });
     const r = await mod.openTown({
       scene: store.getSkins().wear.scene,
-      ...v, myId: span.id, reducedMotion: !!settings.reducedMotion, clock: await spanTestClock(), plots: spanPlots(v),
+      ...v, myId: span.id, reducedMotion: !!settings.reducedMotion, clock: await spanTestClock(), plots: spanPlots(v), help: span.firstTown(),
       onRide: () => { closeRide(); startRide(); },
       onBuild: () => { closeRide(); startWeekTurn({ from: 'town' }); },
       onRepair: () => { closeRide(); startWeekTurn({ repair: true, from: 'town' }); },

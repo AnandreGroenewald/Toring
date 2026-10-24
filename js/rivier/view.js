@@ -212,7 +212,7 @@ function createTown(K, d) {
   let folded = false;
   let renaming = false;
   let removing = null;
-  let helping = false;
+  let helping = !!d.help;   // (open by itself on the first visit)
   /** How Ons dorp works: the rules screen's own four lines (the ride, the crane, the crew, Saturday). */
   const helpHtml = () => `<ul class="tw-helpbox">${S.howToSteps.filter((s) => ['🛟', '🏗️', '🏝️', '💣'].includes(s.icon)).map((s) => `<li><span>${s.icon}</span>${esc(typeof s.text === 'function' ? s.text() : s.text)}</li>`).join('')}</ul>`;
   function fold(on) {
