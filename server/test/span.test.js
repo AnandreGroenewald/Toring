@@ -280,3 +280,23 @@ test('span server: Saturday noon closes the crane for new floors; repairs go on 
   h.clock.t = sastAt(day(5), SPAN.craneClose - 1, 59);
   assert.equal((await h.call('POST', '/span/lease', crews[1].p))[0] === 403 && (await h.call('POST', '/span/lease', crews[1].p))[1].error === 'crane', false, 'before noon the crane is open');
 });
+
+test('span server: a member\'s latest Daily tower stands on the island; nonsense towers are refused; monuments keep floors', async () => {
+  const h = harness();
+  const a = player('Anna');
+  const tower = { day: day(0), h: 4.8, b: [{ s: 'plank', k: 1, c: 2, x: 0, y: 0, r: 0, q: 'P' }, { s: 'brick', k: 1, c: 1, x: 0.2, y: 1.6, r: 0.01, q: 'G' }] };
+  const [, r1] = await sync(h, a, { days: { [day(0)]: 40 }, tower });
+  assert.equal(r1.crew.members[0].tower.b.length, 2);
+  assert.equal(r1.crew.members[0].tower.h, 4.8);
+  for (const bad of [{ ...tower, b: [{ s: 'rocket', x: 0, y: 0 }] }, { ...tower, day: 'x' }, { ...tower, b: Array(91).fill(tower.b[0]) }, { ...tower, b: [{ ...tower.b[0], x: 1e9 }] }]) {
+    const [, r] = await sync(h, a, { tower: bad });
+    assert.equal(r.crew.members[0].tower.b.length, 2, 'the old tower stays');
+  }
+  // the week's Weektoring becomes a monument with its floors
+  const [, l] = await h.call('POST', '/span/lease', a);
+  await h.call('POST', '/span/build', { ...a, lease: l.lease, floors: planks(0, 3) });
+  h.clock.t = sastAt('2026-11-02', 9);
+  const [, r2] = await sync(h, a);
+  assert.equal(r2.crew.monuments[0].floors.length, 3);
+  assert.equal(r2.crew.monuments[0].floors[0].s, 'plank');
+});

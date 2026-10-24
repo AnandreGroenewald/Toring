@@ -12,8 +12,8 @@ const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
 export const COLORS = {
   zenith: '#3f7fc4', horizon: '#e9dcc3', haze: '#dcd2bd', sun: '#fff0d2', skyRefl: '#8fb8dc',
   deep: '#2a8a88', shallow: '#56bba8', foam: '#f6f8f4',
-  rock: ['#c9824f', '#e0b27a', '#a85f3c', '#d99b62', '#8e4f33', '#e8c592'],
-  bush: '#4d6b2f', bushL: '#6f8f3a', grass: '#8a9a4a',
+  rock: ['#b9693f', '#cc8452', '#d9a06c', '#a35a36', '#e2bb8a', '#c27548', '#8f4d31'],
+  bush: '#3f5a2a', bushL: '#5f7a35', grass: '#8a9a4a', wall: '#6b4430', mesa: '#a9705a', mesaTop: '#6f7d4f', bird: '#241d1a',
 };
 export const BANK = { half: 8.2, lake: 46, fogNear: 90, fogFar: 520 };
 
@@ -104,52 +104,196 @@ function noiseTexture(n = 128) {
   t.generateMipmaps = true;
   return t;
 }
-/** Sandstone in layers (the cliffs' picture): bands of warm colour, grain and cracks. */
-function rockTexture() {
-  const c = canvas(256, 256);
+/**
+ * Sandstone in layers, the way the Blyde River Canyon looks (the cliffs' picture and its bumps): wavy strata of warm
+ * orange and cream with thin dark seams, dark "desert varnish" streaks running down from the ledges, grey-green lichen,
+ * grain and cracks. Tiles both ways. { map, bump }.
+ */
+function rockTextures() {
+  const N = 512;
+  const c = canvas(N, N);
   const g = c.getContext('2d');
+  const b = canvas(N, N);
+  const gb = b.getContext('2d');
   let s = 99;
   const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  let y = 0;
-  while (y < 256) {
-    const h = 8 + rnd() * 26;
-    g.fillStyle = COLORS.rock[Math.floor(rnd() * COLORS.rock.length)];
-    g.fillRect(0, y, 256, h + 1);
+  const wave = (x) => Math.sin((x / N) * Math.PI * 4 + 0.7) * 5 + Math.sin((x / N) * Math.PI * 10) * 2;   // (tiles across)
+  const bands = [];
+  for (let y = 0; y < N;) {
+    const h = Math.min(N - y, 26 + rnd() * 70);
+    // (each layer's colour pulled toward the stone's middle tone: layers, not stripes)
+    const cc = new THREE.Color(COLORS.rock[Math.floor(rnd() * COLORS.rock.length)]).lerp(new THREE.Color('#c27a4b'), 0.45);
+    bands.push({ y, h, c: `#${cc.getHexString()}`, k: rnd() });
     y += h;
   }
-  for (let i = 0; i < 2600; i++) {
-    g.fillStyle = `rgba(${rnd() < 0.5 ? '60,30,15' : '255,240,210'},${0.05 + rnd() * 0.12})`;
-    g.fillRect(rnd() * 256, rnd() * 256, 1 + rnd() * 3, 1 + rnd() * 2);
+  gb.fillStyle = '#808080';
+  gb.fillRect(0, 0, N, N);
+  for (let x = 0; x < N; x += 2) {
+    const off = wave(x);
+    for (const bd of bands) {
+      for (const dy of [-N, 0, N]) {
+        const y0 = bd.y + off + dy;
+        if (y0 > N || y0 + bd.h < 0) continue;
+        g.fillStyle = bd.c;
+        g.fillRect(x, y0, 2, bd.h + 1);
+        // (each layer a little ledge: its top stands out, its foot is undercut)
+        const gr = gb.createLinearGradient(0, y0, 0, y0 + bd.h);
+        const hi = 150 + Math.round(bd.k * 50);
+        gr.addColorStop(0, `rgb(${hi},${hi},${hi})`);
+        gr.addColorStop(0.75, 'rgb(118,118,118)');
+        gr.addColorStop(1, 'rgb(60,60,60)');
+        gb.fillStyle = gr;
+        gb.fillRect(x, y0, 2, bd.h + 1);
+        // the seam between layers: a thin dark line with light just under it
+        g.fillStyle = 'rgba(70,34,18,0.22)';
+        g.fillRect(x, y0, 2, 2);
+        g.fillStyle = 'rgba(255,232,196,0.09)';
+        g.fillRect(x, y0 + 2, 2, 2);
+      }
+    }
   }
-  g.strokeStyle = 'rgba(55,25,12,0.35)';
-  for (let i = 0; i < 26; i++) {
-    g.lineWidth = 0.6 + rnd();
+  // soft light and shade across each layer (no flat paint)
+  for (let i = 0; i < 160; i++) {
+    const x = rnd() * N;
+    const y = rnd() * N;
+    const r = 20 + rnd() * 60;
+    for (const dx of [-N, 0, N]) {
+      for (const dy of [-N, 0, N]) {
+        const rg = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
+        rg.addColorStop(0, rnd() < 0.5 ? 'rgba(255,225,185,0.10)' : 'rgba(80,38,20,0.10)');
+        rg.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = rg;
+        g.fillRect(x + dx - r, y + dy - r, r * 2, r * 2);
+      }
+    }
+  }
+  // desert varnish: dark streaks running down the face from where water spills over
+  for (let i = 0; i < 70; i++) {
+    const x = rnd() * N;
+    const y = rnd() * N;
+    const w = 2 + rnd() * 9;
+    const len = 50 + rnd() * 220;
+    const a = 0.12 + rnd() * 0.22;
+    for (const dx of [-N, 0, N]) {
+      for (const dy of [-N, 0]) {
+        const gr = g.createLinearGradient(0, y + dy, 0, y + dy + len);
+        gr.addColorStop(0, `rgba(40,24,18,${a})`);
+        gr.addColorStop(1, 'rgba(40,24,18,0)');
+        g.fillStyle = gr;
+        g.fillRect(x + dx, y + dy, w, len);
+        g.fillRect(x + dx + w * 0.3, y + dy + len * 0.2, w * 0.4, len * 0.9);
+      }
+    }
+  }
+  // lichen: grey-green patches
+  for (let i = 0; i < 140; i++) {
+    const x = rnd() * N;
+    const y = rnd() * N;
+    const r = 3 + rnd() * 12;
+    for (const dx of [-N, 0, N]) {
+      const rg = g.createRadialGradient(x + dx, y, 0, x + dx, y, r);
+      rg.addColorStop(0, `rgba(${rnd() < 0.6 ? '128,140,108' : '196,190,150'},0.26)`);
+      rg.addColorStop(1, 'rgba(128,140,108,0)');
+      g.fillStyle = rg;
+      g.fillRect(x + dx - r, y - r, r * 2, r * 2);
+    }
+  }
+  // grain
+  for (let i = 0; i < 16000; i++) {
+    const x = rnd() * N;
+    const y = rnd() * N;
+    const dark = rnd() < 0.5;
+    g.fillStyle = dark ? `rgba(60,30,15,${0.05 + rnd() * 0.1})` : `rgba(255,240,210,${0.04 + rnd() * 0.08})`;
+    g.fillRect(x, y, 1 + rnd() * 2, 1 + rnd() * 1.5);
+    gb.fillStyle = dark ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)';
+    gb.fillRect(x, y, 1 + rnd() * 2, 1 + rnd() * 1.5);
+  }
+  // cracks: mostly down the face
+  for (let i = 0; i < 40; i++) {
+    let x = rnd() * N;
+    let y = rnd() * N;
+    const lw = 0.6 + rnd() * 1.2;
+    g.strokeStyle = 'rgba(52,24,12,0.42)';
+    gb.strokeStyle = 'rgba(20,20,20,0.7)';
+    g.lineWidth = gb.lineWidth = lw;
     g.beginPath();
-    let x = rnd() * 256;
-    let yy = rnd() * 256;
-    g.moveTo(x, yy);
-    for (let k = 0; k < 4; k++) {
-      x += (rnd() - 0.5) * 18;
-      yy += 6 + rnd() * 16;
-      g.lineTo(x, yy);
+    gb.beginPath();
+    g.moveTo(x, y);
+    gb.moveTo(x, y);
+    for (let k = 0; k < 5; k++) {
+      x += (rnd() - 0.5) * 16;
+      y += 6 + rnd() * 18;
+      g.lineTo(x, y);
+      gb.lineTo(x, y);
     }
     g.stroke();
+    gb.stroke();
   }
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
+  const map = new THREE.CanvasTexture(c);
+  map.colorSpace = THREE.SRGBColorSpace;
+  const bump = new THREE.CanvasTexture(b);
+  bump.colorSpace = THREE.NoColorSpace;
+  for (const tx of [map, bump]) {
+    tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
+    tx.anisotropy = 4;
+    tx.repeat.set(1.2, 0.75);
+  }
+  return { map, bump };
+}
+
+/** A shrub: a lumpy ball of leaves, flat at its foot, darker inside and below (smooth, not faceted). */
+function shrubGeometry() {
+  const g = new THREE.IcosahedronGeometry(1, 2);
+  const p = g.attributes.position;
+  const col = [];
+  const v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const n = Math.sin(v.x * 5.1 + v.y * 2.3) * 0.5 + Math.sin(v.z * 6.7 - v.x * 1.9) * 0.35 + Math.sin(v.y * 9.3 + v.z * 3.1) * 0.2;
+    v.multiplyScalar(1 + n * 0.16);
+    v.y = Math.max(v.y, -0.38);
+    p.setXYZ(i, v.x, v.y, v.z);
+    const k = 0.55 + 0.45 * Math.min(1, Math.max(0, (v.y + 0.4) / 1.3)) + n * 0.08;
+    col.push(k * 0.92, k, k * 0.86);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+/** A rondavel: the round flat-topped sandstone peaks of the Blyde canyon (a drum with a grassy dome), far off. */
+function rondavelGeometry(r, h, seed) {
+  const g = new THREE.CylinderGeometry(r * 0.86, r * 1.12, h, 18, 6);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    const a = Math.atan2(z, x);
+    const k = 1 + Math.sin(a * 3 + seed) * 0.05 + Math.sin(a * 7 + seed * 2) * 0.03 + Math.sin(y * 0.15 + a * 2) * 0.02;
+    p.setXYZ(i, x * k, y, z * k);
+  }
+  g.computeVertexNormals();
+  return g;
 }
 
 // ------------------------------------------------------------------------------------------------ the sky
 const SKY_VERT = `varying vec3 vDir; void main() { vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w; }`;
-const SKY_FRAG = `uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSun; uniform vec3 uSunCol; varying vec3 vDir;
+const SKY_FRAG = `uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSun; uniform vec3 uSunCol; uniform sampler2D uNoise; uniform float uT; varying vec3 vDir;
 void main() {
   vec3 d = normalize(vDir);
   float h = clamp(d.y, -0.2, 1.0);
   vec3 col = mix(uHorizon, uZenith, pow(smoothstep(-0.02, 0.62, h), 0.7));
   float s = max(dot(d, uSun), 0.0);
+  // high soft clouds drifting, lit warm on the sun's side (none straight up, thinning to the horizon)
+  if (d.y > 0.0) {
+    vec2 cp = d.xz / (d.y + 0.16) * 0.16 + vec2(uT * 0.0015, uT * 0.0004);
+    float n = texture2D(uNoise, cp).r * 0.62 + texture2D(uNoise, cp * 2.7 + 0.37).b * 0.38;
+    float cl = smoothstep(0.5, 0.74, n) * smoothstep(0.02, 0.2, d.y) * (1.0 - smoothstep(0.5, 0.85, d.y));
+    vec3 lit = mix(vec3(1.0, 0.95, 0.88), uSunCol, 0.35) * (0.95 + 0.5 * pow(s, 5.0));
+    vec3 shade = mix(uHorizon, uZenith, 0.35) * 0.92;
+    col = mix(col, mix(shade, lit, smoothstep(0.52, 0.82, n)), cl * 0.8);
+  }
   col += uSunCol * (pow(s, 900.0) * 6.0 + pow(s, 24.0) * 0.32 + pow(s, 4.0) * 0.12);
   col = mix(col, uHorizon * 0.92, smoothstep(0.05, -0.2, d.y));
   gl_FragColor = vec4(col, 1.0);
@@ -175,6 +319,7 @@ void main() {
 const WATER_FRAG = `uniform float uT; uniform sampler2D uNoise; uniform vec3 uSun; uniform vec3 uSunCol; uniform vec3 uDeep; uniform vec3 uShallow;
 uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSkyRefl; uniform vec3 uFoam; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar;
 uniform float uHalf; uniform float uLakeFrom; uniform float uLakeTo; uniform float uDetail; uniform vec2 uRapids; uniform float uPoolTo;
+uniform vec3 uWall; uniform vec2 uRider;
 varying vec3 vWorld; varying vec2 vRiver; varying float vAhead;
 float h(vec2 p) {
   // the surface's height: long swells across, ripples and chop running with the current (stretched along it)
@@ -203,6 +348,9 @@ void main() {
   vec3 col = mix(base, sky, clamp(fres, 0.0, 0.5));
   // light in the water itself (it's never black, even looking straight down into it)
   col += uShallow * 0.18 * (1.0 - fres);
+  // the sandstone walls mirrored near the banks: warmer and darker there (not in the open lake)
+  float wall = smoothstep(0.42, 0.95, edge) * (1.0 - lake);
+  col = mix(col, uWall, wall * (0.22 + 0.4 * fres));
   // the low sun ahead: a path of glitter down the river
   float s = max(dot(r, uSun), 0.0);
   col += uSunCol * (pow(s, 260.0) * 3.2 + pow(s, 40.0) * 0.22);
@@ -211,8 +359,19 @@ void main() {
   float rap = smoothstep(uRapids.x - 12.0, uRapids.x + 8.0, p.y) * (1.0 - smoothstep(uRapids.y - 8.0, uRapids.y + 12.0, p.y));
   float foamLine = smoothstep(0.66 - rap * 0.2, 0.74, streak) * (1.0 - smoothstep(0.74, 0.86 + rap * 0.1, streak)) * (0.55 + rap * 0.4) * (1.0 - lake);
   foamLine += rap * smoothstep(0.55, 0.85, h0) * 0.6;
-  float bankFoam = smoothstep(0.82, 1.0, edge) * (0.55 + 0.45 * smoothstep(0.4, 0.7, h0));
+  float bankFoam = smoothstep(0.94, 1.0, edge) * (1.0 - smoothstep(1.0, 1.08, edge)) * smoothstep(0.35, 0.7, h0) * 0.7;
   col = mix(col, uFoam, clamp(foamLine * smoothstep(0.3, 0.6, h0) + bankFoam, 0.0, 0.9));
+  // his wake: two lines of foam opening out behind the board, and the churned water right behind it
+  float back = uRider.y - p.y;
+  if (back > 0.2 && back < 9.0) {
+    float spread = 0.4 + back * 0.2;
+    float dx = abs(abs(p.x - uRider.x) - spread);
+    float fade = 1.0 - back / 9.0;
+    float wk = (1.0 - smoothstep(0.0, 0.14 + back * 0.02, dx)) * fade * fade;
+    wk *= smoothstep(0.3, 0.75, texture2D(uNoise, vec2(p.x * 0.8, p.y * 0.6 - uT * 0.6)).r);
+    float tr = (1.0 - smoothstep(0.1, 0.5, abs(p.x - uRider.x))) * (1.0 - smoothstep(0.0, 5.0, back));
+    col = mix(col, uFoam, clamp(wk * 0.5 + tr * 0.25, 0.0, 0.6));
+  }
   float f = smoothstep(uFogNear, uFogFar, length(vWorld - cameraPosition));
   col = mix(col, uFog, f);
   gl_FragColor = vec4(col, 1.0);
@@ -231,9 +390,10 @@ export function buildRiverWorld(stage) {
   scene.fog = new THREE.Fog(fog, BANK.fogNear, BANK.fogFar);
   scene.background = null;
 
+  const noise = noiseTexture(quality.name === 'low' ? 96 : 128);
   // sky dome
   const skyMat = new THREE.ShaderMaterial({
-    uniforms: { uZenith: { value: lin(COLORS.zenith) }, uHorizon: { value: lin(COLORS.horizon) }, uSun: { value: SUN.clone() }, uSunCol: { value: lin(COLORS.sun) } },
+    uniforms: { uZenith: { value: lin(COLORS.zenith) }, uHorizon: { value: lin(COLORS.horizon) }, uSun: { value: SUN.clone() }, uSunCol: { value: lin(COLORS.sun) }, uNoise: { value: noise }, uT: { value: 0 } },
     vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false, fog: false,
   });
   const sky = new THREE.Mesh(new THREE.SphereGeometry(1800, 32, 16), skyMat);
@@ -258,7 +418,6 @@ export function buildRiverWorld(stage) {
   group.add(new THREE.HemisphereLight('#bcd6ff', '#7a5a3a', 0.75));
 
   // the water: a long strip that rides with the camera; its ripples run in course space
-  const noise = noiseTexture(quality.name === 'low' ? 96 : 128);
   const water = new THREE.ShaderMaterial({
     uniforms: {
       uT: { value: 0 }, uDist: { value: 0 }, uNoise: { value: noise }, uSun: { value: SUN.clone() }, uSunCol: { value: lin(COLORS.sun) },
@@ -267,6 +426,7 @@ export function buildRiverWorld(stage) {
       uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uHalf: { value: BANK.half },
       uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uDetail: { value: quality.name === 'low' ? 0 : 1 },
       uBendA: { value: 0 }, uBendB: { value: 0 }, uBendK: bendUniforms.uBendK, uRapids: { value: new THREE.Vector2(-1e6, -1e6) }, uPoolTo: { value: -1e6 },
+      uWall: { value: lin(COLORS.wall) }, uRider: { value: new THREE.Vector2(0, -1e6) },
     },
     vertexShader: WATER_VERT, fragmentShader: WATER_FRAG,
   });
@@ -279,11 +439,12 @@ export function buildRiverWorld(stage) {
   group.add(waterMesh);
 
   // the canyon: cliff walls in pieces along both banks, re-used as you go; bush and boulders on them
-  const rockMat = bendMaterial(new THREE.MeshStandardMaterial({ map: rockTexture(), roughness: 0.92, metalness: 0, vertexColors: true, side: THREE.DoubleSide }));
+  const rockTex = rockTextures();
+  const rockMat = bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, bumpMap: rockTex.bump, bumpScale: 2.2, roughness: 0.9, metalness: 0, vertexColors: true, side: THREE.DoubleSide }));
   const SEG_L = 48;
   const N_SEG = 13;
   function cliffGeometry(side, seed) {
-    const g = new THREE.PlaneGeometry(SEG_L, 34, 14, 10);
+    const g = new THREE.PlaneGeometry(SEG_L, 34, 22, 16);
     const pos = g.attributes.position;
     const col = [];
     let s = seed * 7919 + 13;
@@ -292,12 +453,16 @@ export function buildRiverWorld(stage) {
     for (let i = 0; i < pos.count; i++) {
       const u = pos.getX(i);   // along the river
       const v = pos.getY(i) + 17;   // height 0..34
-      let out = Math.pow(v / 34, 1.6) * 7 + Math.sin(u * 0.21 + seed) * 0.9 + Math.sin(v * 0.6 + u * 0.05) * 0.6;
+      // the face leans back as it climbs, in steps: layers that stand out and undercut feet (the sandstone's ledges)
+      const step = (v % 7.5) / 7.5;
+      const ledge = (step < 0.18 ? -0.7 * (1 - step / 0.18) : 0) + Math.sin(Math.floor(v / 7.5) * 2.7 + seed) * 0.35;
+      let out = Math.pow(v / 34, 1.6) * 7 + Math.sin(u * 0.21 + seed) * 0.9 + Math.sin(v * 0.6 + u * 0.05) * 0.45 + ledge + Math.sin(u * 0.83 + v * 0.31 + seed) * 0.22;
       for (const [bu, bv, br] of bumps) out -= Math.exp(-((u - bu) ** 2 + (v - bv) ** 2) / (br * br * 2)) * 1.6;
       const shelf = v < 1.2 ? (1.2 - v) * 1.4 : 0;   // (a ledge at the water)
       pos.setXYZ(i, side * (out + shelf), v - 1.1, u);
-      const k = 0.78 + rnd() * 0.3 - (v < 2 ? 0.25 : 0);
-      col.push(k, k * 0.97, k * 0.94);
+      // light varies along the wall; the foot is wet and dark, the rim sun-bleached
+      const k = (0.8 + rnd() * 0.16) * (v < 2.2 ? 0.55 + v * 0.16 : 1) * (v > 29 ? 1.06 : 1);
+      col.push(k, k * 0.96, k * 0.92);
     }
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     // (a wall facing the river: the left one faces +x, the right one -x)
@@ -309,10 +474,10 @@ export function buildRiverWorld(stage) {
     return g;
   }
   const cliffGeos = { '-1': [0, 1, 2].map((k) => cliffGeometry(-1, k + 1)), 1: [0, 1, 2].map((k) => cliffGeometry(1, k + 4)) };
-  const bushMat = bendMaterial(new THREE.MeshStandardMaterial({ color: COLORS.bush, roughness: 0.95, flatShading: true }));
-  const bushGeo = new THREE.IcosahedronGeometry(1, 0);
-  const boulderGeo = new THREE.DodecahedronGeometry(1, 0);
-  const boulderMat = bendMaterial(new THREE.MeshStandardMaterial({ map: rockMat.map, color: '#c99a72', roughness: 0.85, flatShading: true }));
+  const bushMat = bendMaterial(new THREE.MeshStandardMaterial({ color: COLORS.bushL, roughness: 0.92, vertexColors: true }));
+  const bushGeo = shrubGeometry();
+  const boulderGeo = new THREE.DodecahedronGeometry(1, 1);
+  const boulderMat = bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, bumpMap: rockTex.bump, bumpScale: 1.4, color: '#b98c6a', roughness: 0.85 }));
   const segs = [];
   const BUSH_PER = quality.name === 'low' ? 6 : 12;
   const ROCK_PER = 5;
@@ -329,15 +494,41 @@ export function buildRiverWorld(stage) {
       segs.push({ m, side, i, r, bushes: Array.from({ length: BUSH_PER }, (_, k) => [r(k) * SEG_L - SEG_L / 2, 0.9 + r(k + 40) * 1.7, r(k + 80)]), rocks: Array.from({ length: ROCK_PER }, (_, k) => [r(k + 120) * SEG_L - SEG_L / 2, 0.5 + r(k + 160) * 0.9]) });
     }
   }
-  // far hills in the haze, beyond the canyon
-  const hillMat = new THREE.MeshBasicMaterial({ color: lin('#c79f86'), fog: true });
+  // far off in the haze: rondavels (round sandstone peaks with grassy tops) and a long ridge
+  const mesaMat = new THREE.MeshStandardMaterial({ color: COLORS.mesa, roughness: 1, map: rockTex.map });
+  const mesaTopMat = new THREE.MeshStandardMaterial({ color: COLORS.mesaTop, roughness: 1 });
   const hills = new THREE.Group();
-  for (let k = 0; k < 9; k++) {
-    const h = new THREE.Mesh(new THREE.ConeGeometry(70 + (k % 3) * 30, 70 + (k % 4) * 26, 7, 1), hillMat);
-    h.position.set((k - 4) * 95 + (k % 2) * 30, 10, -470 - (k % 3) * 40);
-    hills.add(h);
+  for (const [x, z, r, h, s] of [[-150, -430, 42, 88, 1], [-62, -500, 34, 120, 2], [44, -470, 38, 96, 3], [138, -420, 46, 76, 4], [232, -520, 52, 110, 5], [-250, -520, 56, 100, 6], [-330, -380, 40, 70, 7], [320, -390, 44, 84, 8]]) {
+    const drum = new THREE.Mesh(rondavelGeometry(r, h, s), mesaMat);
+    drum.position.set(x, h / 2 - 8, z);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(r * 0.88, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), mesaTopMat);
+    cap.scale.y = 0.32;
+    cap.position.set(x, h - 8.5, z);
+    hills.add(drum, cap);
   }
+  const ridge = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 8), new THREE.MeshStandardMaterial({ color: '#8f6a58', roughness: 1 }));
+  ridge.scale.set(900, 60, 80);
+  ridge.position.set(0, -20, -600);
+  hills.add(ridge);
   group.add(hills);
+  // birds: a few dark shapes gliding and flapping high over the canyon ahead
+  const birdMat = new THREE.MeshBasicMaterial({ color: lin(COLORS.bird), side: THREE.DoubleSide, fog: true });
+  const wingGeo = new THREE.BufferGeometry();
+  wingGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.32, 0, 0, -0.3, 1.5, 0.05, 0.05, 1.5, 0.05, 0.05, 0, 0, -0.3, 0.9, 0.0, -0.32], 3));
+  wingGeo.computeVertexNormals();
+  const birds = [];
+  for (let k = 0; k < 7; k++) {
+    const b = new THREE.Group();
+    const l = new THREE.Mesh(wingGeo, birdMat);
+    const r = new THREE.Mesh(wingGeo, birdMat);
+    r.scale.x = -1;
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 4), birdMat);
+    body.scale.set(0.8, 0.7, 2.2);
+    b.add(l, r, body);
+    b.scale.setScalar(1.6 + (k % 3) * 0.4);
+    group.add(b);
+    birds.push({ b, l, r, cx: (k % 2 ? 1 : -1) * (8 + k * 3), cy: 34 + (k * 7) % 16, cz: -110 - k * 22, rad: 14 + (k * 5) % 18, w: (k % 2 ? 1 : -1) * (0.16 + (k % 3) * 0.04), ph: k * 1.7 });
+  }
 
   const tmp = new THREE.Object3D();
   let lake = { from: 1e6, to: 1e6 };
@@ -349,9 +540,20 @@ export function buildRiverWorld(stage) {
     return BANK.half + (BANK.lake - BANK.half) * k * k * (3 - 2 * k);
   };
 
-  function update(dist, t) {
+  function update(dist, t, riderX = null) {
     water.uniforms.uT.value = t;
     water.uniforms.uDist.value = dist;
+    skyMat.uniforms.uT.value = t;
+    water.uniforms.uRider.value.set(riderX ?? 0, riderX === null ? -1e6 : dist);
+    for (const bd of birds) {
+      const a = bd.ph + t * bd.w;
+      bd.b.position.set(bd.cx + Math.cos(a) * bd.rad, bd.cy + Math.sin(t * 0.4 + bd.ph) * 2, bd.cz + Math.sin(a) * bd.rad);
+      bd.b.rotation.set(0, -a + (bd.w > 0 ? 0 : Math.PI), Math.sin(t * 0.7 + bd.ph) * 0.25);
+      // (glide, then a few beats)
+      const beat = Math.sin(t * 1.3 + bd.ph) > 0.35 ? Math.sin(t * 11 + bd.ph) * 0.65 : 0.12;
+      bd.l.rotation.z = beat;
+      bd.r.rotation.z = -beat;
+    }
     bendUniforms.uDist.value = dist;
     // the cliff pieces: each takes its slot ahead of the camera (SEG_L apart), from 40 m behind (the shader bends them)
     const first = Math.floor((dist - 40) / SEG_L);

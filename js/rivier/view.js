@@ -156,9 +156,10 @@ function createTown(K, d) {
   const world = buildRiverWorld(stage);
   world.setPool(1e6);   // (all lake: the canyon is far off)
   const things = createThings(scene, pieces);
-  const island = createIsland(things, { radius: 22 });
+  const island = createIsland(things, { radius: 22, plots: true });
   scene.add(island.group);
   island.setFloors(d.floors || []);
+  island.setPlots({ towers: d.plots || [], monuments: d.monuments || [] });
   const IZ = 0;   // (the island at the world's middle: nothing bends)
   let alive = true;
   let raf = 0;
@@ -254,9 +255,10 @@ function createTown(K, d) {
     stage.resize();
   }
   addEventListener('resize', place);
-  // the camera drifts slowly round the island; the whole tower fits the top 60 % (the panel has the rest)
-  const h = Math.max(16, island.top) + 6;
+  // the camera drifts slowly round the island; the whole tower (and the towers round it) fit the top 60 % (the panel has
+  // the rest)
   function frame(dt) {
+    const h = Math.max(16, island.top, island.plotTop) + 6;
     t += dt;
     const half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const D = Math.max(46, (h / 0.6) / (2 * half));
@@ -298,12 +300,13 @@ function createTown(K, d) {
     if (current === api) current = null;
   }
   const api = {
-    ready, close, state: () => ({ phase: 'town', h }),
+    ready, close, state: () => ({ phase: 'town', h: Math.max(16, island.top, island.plotTop) + 6, rescued: [] }),
     /** The server's newer answer: the panel again, the tower as it stands now. */
     refresh(v) {
       if (!alive) return;
       paint({ ...d, ...v });
       island.setFloors(v.floors || []);
+      island.setPlots({ towers: v.plots || d.plots || [], monuments: v.monuments || [] });
     },
   };
   return api;
@@ -1037,7 +1040,7 @@ function createRide(K, d) {
     // (your tower stays upstream: behind the camera once you ride)
     start.group.position.set(0, -0.6, dist + START_Z);
     barEl.style.width = `${clamp(dist / (len - RIVER.finishRun), 0, 1) * 100}%`;
-    world.update(dist, t);
+    world.update(dist, t, phase === 'dive' ? null : x);
     things.updateSpray(dt);
     cameraFor(dt);
   }

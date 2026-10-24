@@ -21,7 +21,7 @@
 // host keeps one queue: a bomb and a build on the same tower never cross). Robot Rikus's crews fill a river and act by
 // catch-up: every call works out what they did since the last one. Writes only when a record changed.
 import {
-  SPAN, sastOf, weekOf, dowOf, plusDays, saturdayOf, sastAt, whistleAt, phaseAt, crewLocked, weekStats, craneOpen,
+  SPAN, sastOf, weekOf, dowOf, plusDays, saturdayOf, sastAt, whistleAt, phaseAt, crewLocked, weekStats, craneOpen, isDayKey,
   isSpanId, isSpanKey, isInvite, newSpanId, newInvite, cleanCrewName, cleanSkin,
 } from '../../js/core/span.js';
 import { addFloors, heightOf, hit, floorAt, moveIn, peopleIn, cleanFloor, withAdds, SHAPE_PX } from '../../js/core/weektower.js';
@@ -34,6 +34,9 @@ async function sha256(text) {
 }
 const NEWS_MAX = 30;
 const MONUMENTS = 8;
+const MONUMENT_FLOORS = 3;      // ...the newest this many keep their floors (to stand on the island), at most...
+const MONUMENT_MAX = 160;       // ...this many floors each
+const DAILY_MAX = 90;           // a member's latest Daily tower on the island: at most this many blocks
 const BOT_NAMES = ['Robot Rikus se Span', 'Rikus se Rowers', 'Die Blik-Bouers', 'Rikus en Kie'];
 const BOT_ACTS = 6;              // a Rikus crew acts this many times through Saturday...
 /** A player's name as other crews see it on Saturday: kid-clean (js/core/nameRules.js), else none. */
@@ -106,6 +109,23 @@ export function createSpanServer(store, { now = () => Date.now() } = {}) {
     p.crew = id;
     return c;
   }
+  /** Floors kept small (a monument, a Daily tower): only what drawing them needs, rounded. */
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const compact = (list, max) => list.slice(0, max).map((f) => ({ s: f.s, k: r2(f.k || 1), c: f.c | 0, x: r2(f.x), y: r2(f.y), r: Math.round((f.r || 0) * 1000) / 1000, q: f.q, sk: f.sk || undefined }));
+  /** A member's latest Daily tower from their phone ({ day, h, b: blocks }), checked; null when it isn't one. */
+  function cleanDaily(raw) {
+    if (!raw || typeof raw !== 'object' || !isDayKey(raw.day) || !Array.isArray(raw.b) || !raw.b.length || raw.b.length > DAILY_MAX) return null;
+    const h = Number(raw.h);
+    if (!Number.isFinite(h) || h < 0 || h > 2000) return null;
+    const b = [];
+    for (const f of raw.b) {
+      if (!f || typeof f !== 'object' || !SHAPE_PX[f.s]) return null;
+      const n = { s: f.s, k: Number(f.k ?? 1), c: Number(f.c ?? 0), x: Number(f.x), y: Number(f.y), r: Number(f.r ?? 0), q: ['P', 'G', 'S'].includes(f.q) ? f.q : 'G' };
+      if (![n.k, n.c, n.x, n.y, n.r].every(Number.isFinite) || n.k < 0.4 || n.k > 2.5 || Math.abs(n.x) > 30 || n.y < -1 || n.y > 2000 || Math.abs(n.r) > 7) return null;
+      b.push(n);
+    }
+    return { day: raw.day, h: r2(h), b: compact(b, DAILY_MAX) };
+  }
   /** A crew's new week: last week's tower is a monument (and its Saturday place), a new Weektoring starts. */
   async function rollCrew(c, t) {
     const wk = weekOf(sastOf(t).key);
@@ -116,7 +136,8 @@ export function createSpanServer(store, { now = () => Date.now() } = {}) {
         const r = await get(rKey(c.river));
         place = r?.final ? r.final.order.indexOf(c.id) + 1 || null : null;
       }
-      c.monuments = [{ week: c.week, h: heightOf(c.floors), n: c.floors.length, place }, ...(c.monuments || [])].slice(0, MONUMENTS);
+      c.monuments = [{ week: c.week, h: heightOf(c.floors), n: c.floors.length, place, floors: compact(c.floors, MONUMENT_MAX) }, ...(c.monuments || [])]
+        .slice(0, MONUMENTS).map((m, i) => (i < MONUMENT_FLOORS ? m : { ...m, floors: undefined }));
     }
     Object.assign(c, { week: wk, floors: [], repair: 0, lease: null, river: null });
     return c;
@@ -375,9 +396,12 @@ export function createSpanServer(store, { now = () => Date.now() } = {}) {
     }
     const c = await crewOf(p);
     const me = c.members.find((m) => m.id === p.id);
-    if (me && (me.name !== p.name || me.skin !== p.skin)) {
+    // (your latest Daily tower stands on the crew's island)
+    const tower = b.tower ? cleanDaily(b.tower) : null;
+    if (me && (me.name !== p.name || me.skin !== p.skin || (tower && JSON.stringify(tower) !== JSON.stringify(me.tower)))) {
       me.name = p.name;
       me.skin = p.skin;
+      if (tower) me.tower = tower;
       put(cKey(c.id), c);
     }
     // the week's crews (Saturday's grouping looks here)

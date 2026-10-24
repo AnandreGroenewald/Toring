@@ -130,7 +130,7 @@ const span = createSpan({
   earn: (n, o) => store.earnCoins(n, { capped: !o?.prize }).added,
   today: () => todayKey(),
   api: () => matchApiUrl(),
-  who: () => ({ name: duelNick(), skin: store.getSkins().wear.blocks || 'kleur' }),
+  who: () => ({ name: duelNick(), skin: store.getSkins().wear.blocks || 'kleur', tower: latestDailyTower() }),
 });
 let settings = store.getSettings();
 // (1.16) Die Lewende Toring in every tower: the player's tribe, record and the people they have met (its own store)
@@ -2847,9 +2847,9 @@ async function openSpanTown() {
     if (seq !== rideSeq) return;
     const v = span.view();
     span.newsSeen();
-    if (span.online) span.sync().then(() => { if (ride?.refresh && screen === 'rivier') ride.refresh(span.view()); span.newsSeen(); });
+    if (span.online) span.sync().then(() => { if (ride?.refresh && screen === 'rivier') { const nv = span.view(); ride.refresh({ ...nv, plots: spanPlots(nv) }); } span.newsSeen(); });
     const r = await mod.openTown({
-      ...v, myId: span.id, reducedMotion: !!settings.reducedMotion, clock: await spanTestClock(),
+      ...v, myId: span.id, reducedMotion: !!settings.reducedMotion, clock: await spanTestClock(), plots: spanPlots(v),
       onRide: () => { closeRide(); startRide(); },
       onBuild: () => { closeRide(); startWeekTurn(); },
       onRepair: () => { closeRide(); startWeekTurn({ repair: true }); },
@@ -2873,6 +2873,24 @@ async function openSpanTown() {
   }
 }
 bus.on('ui:span', openSpanTown);
+/** This phone's latest Daily tower ({ day, h, b: its blocks as they stood }), for the crew's island; null if none. */
+function latestDailyTower() {
+  try {
+    const all = JSON.parse(localStorage.getItem('stapel.v1.kasteeldae') || '{}') || {};
+    const day = Object.keys(all).filter((k) => k <= todayKey() && Array.isArray(all[k]?.b) && all[k].b.length).sort().pop();
+    if (!day) return null;
+    const e = all[day];
+    return { day, h: Math.round((Number(e.h) || 0) * 10) / 10, b: e.b.slice(0, 90).map(({ s, k, c, x, y, r, q }) => ({ s, k, c, x, y, r, q })) };
+  } catch {
+    return null;
+  }
+}
+/** The towers round the Weektoring: each member's latest Daily (the server's), or only this phone's own without one. */
+function spanPlots(v) {
+  if (v.crew?.members) return v.crew.members.filter((m) => m.tower).map((m) => ({ name: m.name, skin: m.skin, h: m.tower.h, b: m.tower.b }));
+  const mine = latestDailyTower();
+  return mine ? [{ name: duelNick(), skin: store.getSkins().wear.blocks || 'kleur', h: mine.h, b: mine.b }] : [];
+}
 /**
  * (tests and his home play) ?debug=1 against a home server with a test clock (play-home.sh): the town shows the server's
  * time and jumps through the week; a jump moves the server's clock, then the page comes back on that day with the town.

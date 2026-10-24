@@ -111,7 +111,7 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
     busy = (async () => {
       try {
         const w = who();
-        const r = await call('POST', '/span/sync', { name: w.name || '', skin: w.skin || 'kleur', days: d.days });
+        const r = await call('POST', '/span/sync', { name: w.name || '', skin: w.skin || 'kleur', days: d.days, tower: w.tower || undefined });
         if (r.status !== 200 || !r.crew) return null;
         online = true;
         d.srv = { me: r.me, crew: r.crew, river: r.river || null, phase: r.phase, crane: r.crane, today: r.today, at: Date.now() };

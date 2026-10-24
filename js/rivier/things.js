@@ -233,7 +233,7 @@ export function createThings(scene, pieces) {
  * Your crew's island in the lake with its Weektoring: { group, top (m), setFloors(floors) }. Floors in course metres
  * from the tower's foot (js/core/weektower.js); every floor drawn in its own skin.
  */
-export function createIsland(things, { radius = 26, jetty: withJetty = true } = {}) {
+export function createIsland(things, { radius = 26, jetty: withJetty = true, plots: withPlots = false } = {}) {
   const group = new THREE.Group();
   const rockMat = bendMaterial(new THREE.MeshStandardMaterial({ color: '#b58a63', roughness: 0.92, flatShading: true }));
   const grassMat = bendMaterial(new THREE.MeshStandardMaterial({ color: '#7d8f43', roughness: 0.95, flatShading: true }));
@@ -269,18 +269,109 @@ export function createIsland(things, { radius = 26, jetty: withJetty = true } = 
   const ground = new THREE.Group();
   ground.position.y = 3.6;
   group.add(ground);
-  const village = addVillage(ground, { inner: Math.min(8.5, radius * 0.6), outer: radius * 0.86, people: 10 });
+  // (the crew's island) plots round the Weektoring: each member's latest Daily tower, and the monuments of past weeks
+  const PLOTS = withPlots ? [
+    ...[2.2, 4.25, 5.55].map((a) => ({ kind: 'member', a, r: radius * 0.6, sc: 0.42 })),
+    ...[1.05, 2.95, 3.65].map((a) => ({ kind: 'monument', a, r: radius * 0.76, sc: 0.3 })),
+  ].map((pl) => ({ ...pl, x: Math.sin(pl.a) * pl.r, z: Math.cos(pl.a) * pl.r })) : [];
+  const village = addVillage(ground, { inner: Math.min(8.5, radius * 0.6), outer: radius * 0.86, people: 10, avoid: PLOTS.map((pl) => ({ x: pl.x, z: pl.z, r: pl.kind === 'member' ? 3.4 : 2.6 })) });
+  const plotsG = new THREE.Group();
+  plotsG.position.y = 3.6;
+  group.add(plotsG);
+  const plinthMat = bendMaterial(new THREE.MeshStandardMaterial({ color: '#b9a48a', roughness: 0.85 }));
   group.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
   let height = 0;
+  let plotTop = 0;
 
   function setFloors(floors) {
     for (const c of [...towerG.children]) towerG.remove(c);
     height = addTower(things, towerG, floors);
   }
-  return { group, setFloors, get top() { return height + 3.6; }, radius, update: (tt) => village.update(tt), dispose: () => village.dispose() };
+  /**
+   * The plots: `towers` [{ name, skin, h, b }] (members' latest Daily towers, as built, in their skins) and `monuments`
+   * [{ week, place, h, floors }] (past Weektorings, smaller). A name or the week stands over each.
+   */
+  function setPlots({ towers = [], monuments = [] } = {}) {
+    for (const c of [...plotsG.children]) {
+      plotsG.remove(c);
+      c.traverse((o) => { if (o.isSprite) { o.material.map?.dispose(); o.material.dispose(); } });
+    }
+    plotTop = 0;
+    const fill = (kind, list) => {
+      const spots = PLOTS.filter((pl) => pl.kind === kind);
+      list.slice(0, spots.length).forEach((it, i) => {
+        const pl = spots[i];
+        const g = new THREE.Group();
+        g.position.set(pl.x, 0, pl.z);
+        g.rotation.y = pl.a + Math.PI;
+        const plinth = new THREE.Mesh(new THREE.CylinderGeometry(kind === 'member' ? 2.6 : 2, kind === 'member' ? 2.9 : 2.3, 0.6, 16), plinthMat);
+        plinth.position.y = 0.3;
+        g.add(plinth);
+        const tg = new THREE.Group();
+        tg.position.y = 0.6;
+        tg.scale.setScalar(pl.sc);
+        g.add(tg);
+        const floors = (kind === 'member' ? it.b : it.floors) || [];
+        const hh = addTower(things, tg, floors, kind === 'member' ? it.skin || 'kleur' : null) * pl.sc + 0.6;
+        const text = kind === 'member' ? `${it.name || '?'} · ${fmtMShort(it.h)}` : `${weekLabel(it.week)}${it.place ? ` · ${['🥇', '🥈', '🥉'][it.place - 1] || `#${it.place}`}` : ''}`;
+        const tag = labelSprite(text, { small: true });
+        tag.position.set(0, hh + 2.2, 0);
+        g.add(tag);
+        g.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
+        plotsG.add(g);
+        plotTop = Math.max(plotTop, hh + 3.2);
+      });
+    };
+    fill('member', towers.filter((x) => x && Array.isArray(x.b) && x.b.length));
+    fill('monument', monuments.filter((x) => x && Array.isArray(x.floors) && x.floors.length));
+  }
+  return {
+    group, setFloors, setPlots, get top() { return height + 3.6; }, get plotTop() { return plotTop + 3.6; }, radius,
+    update: (tt) => village.update(tt),
+    dispose: () => {
+      setPlots({});
+      plinthMat.dispose();
+      village.dispose();
+    },
+  };
 }
 
 /** Floors (js/core/weektower.js) as 3D blocks into `group`, each in its own skin; returns the tower's height (m). */
+/** Words on a dark rounded tag, as a sprite (names over towers; `gold` for the tallest). Always readable, never hidden. */
+export function labelSprite(text, { gold = false, small = false } = {}) {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 128;
+  const g = c.getContext('2d');
+  g.font = 'bold 54px "Trebuchet MS", system-ui, sans-serif';
+  const w = Math.min(500, g.measureText(text).width + 60);
+  g.fillStyle = gold ? 'rgba(90,60,0,0.85)' : 'rgba(13,34,40,0.75)';
+  g.beginPath();
+  g.roundRect((512 - w) / 2, 18, w, 92, 46);
+  g.fill();
+  g.fillStyle = gold ? '#ffd65c' : '#ffffff';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, 256, 66);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  s.scale.set(small ? 11 : 12, small ? 2.75 : 3, 1);
+  s.renderOrder = 10;
+  return s;
+}
+const fmtMShort = (m) => `${Math.round(Number(m) || 0)} m`;
+/** "Week 44" from a week's Monday (ISO week number). */
+function weekLabel(monday) {
+  const d = new Date(`${monday}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return '';
+  const th = new Date(d);
+  th.setUTCDate(d.getUTCDate() + 3);
+  const jan4 = new Date(Date.UTC(th.getUTCFullYear(), 0, 4));
+  const wn = 1 + Math.round(((th - jan4) / 86400000 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+  return `Week ${wn}`;
+}
+
 export function addTower(things, group, floors, skin = null) {
   let height = 0;
   for (const f of floors || []) {
@@ -386,7 +477,7 @@ function roofTexture() {
  * church with its steeple, flat-topped acacias, street lamps, a boat at the jetty, and the town's people walking. Ring
  * between `inner` and `outer` (m) round the middle. Returns { group, update(t) }.
  */
-export function addVillage(parent, { inner = 9, outer = 18, seed = 7, people = 10 } = {}) {
+export function addVillage(parent, { inner = 9, outer = 18, seed = 7, people = 10, avoid = [] } = {}) {
   const group = new THREE.Group();
   parent.add(group);
   let s = seed * 9301 + 49297;
@@ -414,6 +505,7 @@ export function addVillage(parent, { inner = 9, outer = 18, seed = 7, people = 1
     const dd = 3 + rnd() * 1.2;
     const x = Math.sin(a) * r;
     const z = Math.cos(a) * r;
+    if (avoid.some((v) => Math.hypot(v.x - x, v.z - z) < v.r + 2.6)) continue;   // (a plot for a tower)
     m.position.set(x, hh / 2, z);
     m.rotation.set(0, a + Math.PI, 0);
     m.scale.set(w, hh, dd);
@@ -465,6 +557,7 @@ export function addVillage(parent, { inner = 9, outer = 18, seed = 7, people = 1
     const a = rnd() * Math.PI * 2;
     const r = inner * 0.75 + rnd() * (outer + 1 - inner * 0.75);
     if (spots.some((sp) => Math.hypot(sp.x - Math.sin(a) * r, sp.z - Math.cos(a) * r) < 3.6)) continue;
+    if (avoid.some((v) => Math.hypot(v.x - Math.sin(a) * r, v.z - Math.cos(a) * r) < v.r + 1.5)) continue;
     const th = 2.6 + rnd() * 1.6;
     m.rotation.set(0, rnd() * 3, 0.08);
     m.position.set(Math.sin(a) * r, th / 2, Math.cos(a) * r);
