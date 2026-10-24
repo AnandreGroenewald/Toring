@@ -989,6 +989,8 @@ function createRide(K, d) {
 
   // ---------------------------------------------------------------------------------------------- the loop
   let pilotOn = !!d.autopilot;
+  let ambNow = -1;
+  const ambBefore = audio.ambience ?? 0;   // (the game's own level, back when the ride closes)
   let aimHintSaid = false;
   const pilotThrew = new Set();
   let rapK = 0;
@@ -1141,6 +1143,14 @@ function createRide(K, d) {
       isle.island.update(t);
       isle.tag.material.opacity = 1;
     }
+    // (the river's own sound under the music: louder in the rapids, quieter out on the lake)
+    {
+      const want = phase === 'done' ? 0.25 : phase === 'dive' ? 0.35 : 0.55 + rapK * 0.4;
+      if (Math.abs(want - ambNow) > 0.04) {
+        ambNow = want;
+        audio.setAmbience?.(ambNow);
+      }
+    }
     if (raid) {
       stepBombs(dt);
       // the bazooka points where he aims (or at the tallest tower coming up; else down the river, a little up)
@@ -1277,6 +1287,7 @@ function createRide(K, d) {
     noseMat.dispose();
     for (const g of [rocketBody, rocketNose, rocketFin, rocketFlame]) g.dispose();
     if (raid) setBend(1);
+    audio.setAmbience?.(ambBefore);
     island.dispose();
     beasts.dispose();
     things.dispose();
