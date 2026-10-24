@@ -3236,7 +3236,8 @@ export function createUI(bus) {
   }
   function rivierMenuEl(v, can3d) {
     if (!v || can3d === false) return null;
-    const sub = v.rideBest > 0 ? S.afglyBest(fmtInt(v.rideBest)) : S.afglyMenuSub;
+    // (today's place in Afgly's ranking first; else your best this week)
+    const sub = v.rideRank ? S.afglyRank(v.rideRank.rank, fmtInt(v.rideRank.m)) : v.rideBest > 0 ? S.afglyBest(fmtInt(v.rideBest)) : S.afglyMenuSub;
     return h('button', {
       type: 'button', class: 'kasteel-menu-btn rivier-menu-btn', 'aria-label': `${S.afgly}: ${sub}`,
       onclick: () => { if (!guard()) return; audio.play('click'); bus.emit('ui:rivier', { from: 'menu' }); },

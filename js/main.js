@@ -2763,8 +2763,13 @@ async function startRide(opts = {}) {
       daily: dayLayout(day), skin: store.getSkins().wear.blocks || 'kleur',
       reducedMotion: !!settings.reducedMotion, autopilot: DEBUG && params.has('rvauto'), pilotMetres: DEBUG ? Number(params.get('rvm')) || undefined : undefined,
       onResult: (res) => {
-        span.rideDone(day, res.rescued || [], rd.fromRiver || 0, res.metres || 0, !!rd.extra).then((out) => { if (out.coins) coinsChanged(); });
+        span.rideDone(day, res.rescued || [], rd.fromRiver || 0, res.metres || 0, !!rd.extra, { durationMs: res.durationMs || 0, hidden: store.getBoardHidden() }).then((out) => {
+          if (out.coins) coinsChanged();
+          // (Afgly's daily ranking: your place on the card as soon as the server says it)
+          if (out.board) ride?.setRank?.(out.board);
+        });
       },
+      getBoard: () => span.rideBoard(day),
       onDone: (res, next) => {
         closeRide();
         if (next === 'build') startWeekTurn({ from: 'ride' });

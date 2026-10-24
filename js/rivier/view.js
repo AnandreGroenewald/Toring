@@ -110,6 +110,21 @@ function makeKit() {
 #rivier .rv-card.on { opacity: 1; transform: translate(-50%, 0); }
 #rivier .rv-card h2 { margin: 0 0 4px; font-size: 24px; font-weight: 900; }
 #rivier .rv-card .rv-link { background: none; color: #8ff4ff; min-height: 40px; font-size: 16px; text-decoration: underline; text-underline-offset: 3px; }
+#rivier .rv-card p.rv-rank { display: none; margin: -4px 0 10px; font-size: 15px; font-weight: 900; color: #ffe08a; }
+#rivier .rv-card p.rv-rank.on { display: block; }
+#rivier .rv-card .rv-ranklist { display: inline; width: auto; min-height: 0; margin: 0 0 0 6px; padding: 3px 10px; border-radius: 999px; background: rgba(255,224,138,.16); color: #ffe08a; font-size: 13px; }
+#rivier .rv-board { pointer-events: auto; position: absolute; inset: 0; display: none; place-items: center; background: rgba(8,20,24,.6); z-index: 5; }
+#rivier .rv-board.on { display: grid; }
+#rivier .rv-board > div { width: min(88%, 380px); max-height: 80%; overflow: auto; padding: 18px; border-radius: 22px; background: rgba(16,30,36,.94); border: 1px solid rgba(255,255,255,.2); box-shadow: 0 18px 50px rgba(0,0,0,.45); text-align: center; }
+#rivier .rv-board h3 { margin: 0 0 10px; font-size: 20px; font-weight: 900; color: #fff3c4; }
+#rivier .rv-board ol { list-style: none; margin: 0 0 8px; padding: 0; text-align: left; font-size: 15px; }
+#rivier .rv-board li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 10px; border-radius: 10px; }
+#rivier .rv-board li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#rivier .rv-board li.me { background: rgba(143,244,255,.14); }
+#rivier .rv-board li.gap { margin-top: 6px; border-top: 1px dashed rgba(255,255,255,.25); }
+#rivier .rv-board li b { color: #fff3c4; font-variant-numeric: tabular-nums; }
+#rivier .rv-board .rv-board-n, #rivier .rv-board .rv-board-wait { margin: 0 0 12px; font-size: 13px; color: #bfe3e8; }
+#rivier .rv-board button { display: block; width: 100%; min-height: 46px; border-radius: 14px; border: 0; font: inherit; font-weight: 900; font-size: 17px; background: rgba(255,255,255,.14); color: #fff; cursor: pointer; }
 #rivier .rv-card p.rv-shots { margin: -4px 0 12px; font-size: 15px; font-weight: 900; color: #8ff4ff; }
 #rivier .rv-card .rv-dist { display: flex; align-items: baseline; justify-content: center; gap: 4px; margin: 0; line-height: 1; }
 #rivier .rv-card .rv-dist b { font-size: 46px; font-weight: 900; color: #fff3c4; text-shadow: 0 3px 0 rgba(40,24,0,.45); font-variant-numeric: tabular-nums; }
@@ -647,6 +662,7 @@ function createRide(K, d) {
   const islandX = endless ? course.island.side * 27 : 0;
   if (endless) island.group.rotation.y = -course.island.side * Math.PI / 2;   // (its jetty to the river)
   let hearts = RIVER.hearts;
+  let runS = 0;   // (the seconds riding: the server checks no ride is faster than the river)
   let islandSaid = false;
 
   let alive = true;
@@ -1096,7 +1112,7 @@ function createRide(K, d) {
   // ---------------------------------------------------------------------------------------------- the overlay
   ov.innerHTML = `<div class="rv-top"><div class="rv-count"><span class="rv-ring"></span><b>0</b><small>/ ${who.length}</small></div>${endless ? `<div class="rv-metres"><b>0</b><small>m</small></div><div class="rv-hearts">${'<i></i>'.repeat(RIVER.hearts)}</div>` : '<div class="rv-bar"><i></i></div>'}<button class="rv-pause" aria-label="${S.pause}">❚❚</button></div>
     <div class="rv-faces"></div><div class="rv-hint"></div><div class="rv-pop"></div><div class="rv-hurt"></div>
-    <div class="rv-card"></div><div class="rv-scope"><svg viewBox="0 0 132 132" aria-hidden="true"><circle class="ring" cx="66" cy="66" r="54"/><g class="ticks">${Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; const r1 = i % 3 ? 49 : 44; return `<line x1="${(66 + Math.cos(a) * r1).toFixed(1)}" y1="${(66 + Math.sin(a) * r1).toFixed(1)}" x2="${(66 + Math.cos(a) * 54).toFixed(1)}" y2="${(66 + Math.sin(a) * 54).toFixed(1)}"/>`; }).join('')}</g><g class="cross"><line x1="66" y1="24" x2="66" y2="57"/><line x1="66" y1="75" x2="66" y2="108"/><line x1="24" y1="66" x2="57" y2="66"/><line x1="75" y1="66" x2="108" y2="66"/></g><path class="brk" d="M10 32 V10 H32 M100 10 H122 V32 M122 100 V122 H100 M32 122 H10 V100"/><circle class="dot" cx="66" cy="66" r="3.5"/></svg><div class="rng"></div></div><button class="rv-fire" aria-label="${S.rvFire}"><svg class="pips" viewBox="0 0 112 112"></svg><span class="in"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2.5c-.4 0-.7.2-.9.5C9.4 5.6 5.5 10.9 5.5 14.6a6.5 6.5 0 0 0 13 0c0-3.7-3.9-9-5.6-11.6-.2-.3-.5-.5-.9-.5z"/><path fill="#9feaf5" d="M9.2 14.4c.3 1.6 1.4 2.7 3 3" stroke="#0b6f8a" stroke-width="1.6" stroke-linecap="round"/></svg><span>${S.rvFire}</span></span></button><div class="rv-paused"><div><h2>${S.rvPaused}</h2><button class="rv-on">${S.rvResume}</button><button class="rv-off">${S.rvQuit}</button></div></div>`;
+    <div class="rv-card"></div><div class="rv-scope"><svg viewBox="0 0 132 132" aria-hidden="true"><circle class="ring" cx="66" cy="66" r="54"/><g class="ticks">${Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; const r1 = i % 3 ? 49 : 44; return `<line x1="${(66 + Math.cos(a) * r1).toFixed(1)}" y1="${(66 + Math.sin(a) * r1).toFixed(1)}" x2="${(66 + Math.cos(a) * 54).toFixed(1)}" y2="${(66 + Math.sin(a) * 54).toFixed(1)}"/>`; }).join('')}</g><g class="cross"><line x1="66" y1="24" x2="66" y2="57"/><line x1="66" y1="75" x2="66" y2="108"/><line x1="24" y1="66" x2="57" y2="66"/><line x1="75" y1="66" x2="108" y2="66"/></g><path class="brk" d="M10 32 V10 H32 M100 10 H122 V32 M122 100 V122 H100 M32 122 H10 V100"/><circle class="dot" cx="66" cy="66" r="3.5"/></svg><div class="rng"></div></div><button class="rv-fire" aria-label="${S.rvFire}"><svg class="pips" viewBox="0 0 112 112"></svg><span class="in"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2.5c-.4 0-.7.2-.9.5C9.4 5.6 5.5 10.9 5.5 14.6a6.5 6.5 0 0 0 13 0c0-3.7-3.9-9-5.6-11.6-.2-.3-.5-.5-.9-.5z"/><path fill="#9feaf5" d="M9.2 14.4c.3 1.6 1.4 2.7 3 3" stroke="#0b6f8a" stroke-width="1.6" stroke-linecap="round"/></svg><span>${S.rvFire}</span></span></button><div class="rv-board"></div><div class="rv-paused"><div><h2>${S.rvPaused}</h2><button class="rv-on">${S.rvResume}</button><button class="rv-off">${S.rvQuit}</button></div></div>`;
   const countEl = ov.querySelector('.rv-count');
   const countB = countEl.querySelector('b');
   const barEl = ov.querySelector('.rv-bar i');
@@ -1573,6 +1589,7 @@ function createRide(K, d) {
       }
       rapK += ((rap ? 1 : 0) - rapK) * Math.min(1, dt * 2.5);
       if (rapK > 0.3) stage.shake(reduced ? 0 : 0.04 * rapK);
+      runS += dt;
       const sp = speedAt(dist, len) * (slowT > 0 ? RIVER.hitSlowK : 1) * (1 + 0.24 * rapK);
       dist += sp * dt;
       slowT = Math.max(0, slowT - dt);
@@ -1781,13 +1798,37 @@ function createRide(K, d) {
 
   // ---------------------------------------------------------------------------------------------- the end
   let fwRide = null;
+  let rankNow = null;
+  /** Afgly's daily ranking on the card: your place today and a way to the list (it comes when the server answers). */
+  function setRank(board) {
+    if (!endless || !board?.you) return;
+    rankNow = board;
+    const el = cardEl.querySelector('.rv-rank');
+    if (!el) return;
+    el.innerHTML = `${S.rvRank(board.you.rank, board.players)} <button class="rv-ranklist">${S.rvRankList}</button>`;
+    el.classList.add('on');
+    el.querySelector('.rv-ranklist').addEventListener('click', openBoard);
+  }
+  /** Today's top ten down the river, your own place under it when you're not in it. */
+  async function openBoard() {
+    const panel = ov.querySelector('.rv-board');
+    panel.innerHTML = `<div><h3>${S.rvBoardTitle}</h3><p class="rv-board-wait">…</p><button class="rv-board-x">${S.rvDone}</button></div>`;
+    panel.classList.add('on');
+    panel.querySelector('.rv-board-x').addEventListener('click', () => panel.classList.remove('on'));
+    const b = (await d.getBoard?.()) || rankNow;
+    if (!alive || !panel.classList.contains('on')) return;
+    const rows = (b?.top || []).map((x) => `<li class="${x.you ? 'me' : ''}"><span>${x.rank === 1 ? '🥇' : x.rank === 2 ? '🥈' : x.rank === 3 ? '🥉' : `${x.rank}.`} ${esc(x.name)}${x.you ? ` <i>(${S.rvYou})</i>` : ''}</span><b>${fmtInt(x.m)} m</b></li>`).join('');
+    const mine = b?.you && !b.top.some((x) => x.you) ? `<li class="me gap"><span>${b.you.rank}. ${S.rvYou}${b.you.hidden ? ' 🙈' : ''}</span><b>${fmtInt(b.you.m)} m</b></li>` : '';
+    panel.querySelector('div').innerHTML = `<h3>${S.rvBoardTitle}</h3>${rows ? `<ol>${rows}${mine}</ol><p class="rv-board-n">${S.rvBoardPlayers(b.players)}</p>` : `<p class="rv-board-wait">${S.rvBoardNone}</p>`}<button class="rv-board-x">${S.rvDone}</button>`;
+    panel.querySelector('.rv-board-x').addEventListener('click', () => panel.classList.remove('on'));
+  }
   /** The Saturday shots this ride earns: 1 per 100 m (with the week's earlier rides), up to what the week still has room for. */
   const shotsEarned = (m) => {
     if (!d.shots?.day) return 0;
     const w = d.shots.riverWeek | 0;
     return Math.max(0, Math.min(d.shots.room | 0, Math.floor((w + m) / 100) - Math.floor(w / 100)));
   };
-  const result = () => ({ rescued: [...rescued], missed: who.filter((id) => !rescued.includes(id)), hits, all: rescued.length === who.length && who.length > 0, metres: Math.floor(dist) });
+  const result = () => ({ rescued: [...rescued], missed: who.filter((id) => !rescued.includes(id)), hits, all: rescued.length === who.length && who.length > 0, metres: Math.floor(dist), durationMs: Math.round((runS + (phase === 'dive' ? 0 : 2)) * 1000) });
   function done() {
     if (phase === 'done') return;
     phase = 'done';
@@ -1823,7 +1864,8 @@ function createRide(K, d) {
     const btnsHtml = free
       ? `<button class="rv-go rv-again">${S.rvAgain}</button><button class="rv-no">${S.rvDone}</button>`
       : `${d.canBuild ? `<button class="rv-go">${S.rvBuild}</button><button class="rv-no">${S.rvLater}</button>` : `<button class="rv-go">${S.rvDone}</button>`}${endless ? `<button class="rv-link rv-again">${S.rvAgain}</button>` : ''}`;
-    cardEl.innerHTML = `${distHtml}${peopleHtml}${shotsHtml}${btnsHtml}`;
+    cardEl.innerHTML = `${distHtml}<p class="rv-rank"></p>${peopleHtml}${shotsHtml}${btnsHtml}`;
+    if (endless && rankNow) setRank(rankNow);
     cardEl.classList.add('on');
     if (free) cardEl.querySelector('.rv-go').addEventListener('click', () => d.onDone?.(r, 'again'));
     else cardEl.querySelector('.rv-go').addEventListener('click', () => d.onDone?.(r, d.canBuild ? 'build' : 'done'));
@@ -1972,6 +2014,8 @@ function createRide(K, d) {
     get scene() { return scene; },
     get camera() { return camera; },
     get stage() { return stage; },
+    /** Afgly's daily ranking for this ride (the server's answer): your place on the card. */
+    setRank,
     /** For tests: what the graphics chip holds now ({ geometries, textures, programs }). */
     gpu: () => ({ ...stage.renderer.info.memory, programs: stage.renderer.info.programs?.length | 0 }),
   };

@@ -30,6 +30,7 @@ function clean(raw, week) {
   }
   d.used = Math.max(0, Math.min(99, raw.used | 0));
   d.rideBest = Math.max(0, Math.min(1e6, raw.rideBest | 0));
+  if (raw.rideRank && typeof raw.rideRank === 'object' && typeof raw.rideRank.day === 'string') d.rideRank = { day: raw.rideRank.day, rank: raw.rideRank.rank | 0, players: raw.rideRank.players | 0, m: raw.rideRank.m | 0 };
   if (Array.isArray(raw.monuments)) d.monuments = raw.monuments.filter((m) => m && typeof m.week === 'string').slice(0, MONUMENTS);
   d.name = typeof raw.name === 'string' ? raw.name.slice(0, 18) : '';
   if (isSpanId(raw.id) && isSpanKey(raw.key)) {
@@ -165,7 +166,7 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
       const sv = S();
       // (the endless river: this week's metres down it, all rides together, and your best single ride)
       const rm = Object.entries(d.rideM || {}).filter(([k]) => weekOf(k) === d.week).map(([, v]) => v | 0);
-      const base = { rideToday: d.rides[day] === 0, rodeToday: day in d.rides && d.rides[day] !== 0, dow: dowOf(day), online: !!sv, rideBest: d.rideBest | 0, rideMetres: rm.reduce((a, b) => a + b, 0) };
+      const base = { rideToday: d.rides[day] === 0, rodeToday: day in d.rides && d.rides[day] !== 0, dow: dowOf(day), online: !!sv, rideBest: d.rideBest | 0, rideMetres: rm.reduce((a, b) => a + b, 0), rideRank: d.rideRank?.day === day ? d.rideRank : null };
       if (sv) {
         const c = sv.crew;
         // (Saturday from noon the crane builds no new floors: turns wait for nothing; repairs go on. The server says.)
@@ -239,6 +240,17 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
       while (strays.length < want && others.length) strays.push(others.splice(Math.floor(rng.next() * others.length), 1)[0]);
       return { who: [...mine, ...strays], mine: mine.length, fromRiver };
     },
+    /** Afgly's daily ranking from the server ({ day, players, top, you }), or null (offline, no server). */
+    async rideBoard(dateKey = today()) {
+      if (!online) return null;
+      const r = await call('POST', '/span/board', { day: dateKey }).catch(() => null);
+      if (r?.status !== 200 || !Array.isArray(r.top)) return null;
+      if (r.you) {
+        d.rideRank = { day: dateKey, rank: r.you.rank | 0, players: r.players | 0, m: r.you.m | 0 };
+        save();
+      }
+      return r;
+    },
     /**
      * A free ride down the river (any time, as often as you like: the owner, 24 Oct 2026, "The game mode needs to be
      * available at all times"): nobody of yours in it, just the metres. Its own river each time.
@@ -250,21 +262,28 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
      * The ride is over: whoever was saved moves into the Weektoring (its free rooms first) and the town; coins for each.
      * The metres count for the week (Saturday's shots, the crew's river metres). `extra`: a free ride (metres only).
      */
-    async rideDone(dateKey, rescued = [], fromRiver = 0, metres = 0, extra = false) {
+    async rideDone(dateKey, rescued = [], fromRiver = 0, metres = 0, extra = false, { durationMs = 0, hidden = false } = {}) {
       const m = Math.max(0, Math.min(40000, metres | 0));
+      // (Afgly's daily ranking: the server's answer, kept for the menu)
+      const keepRank = (r) => {
+        if (r?.board?.you) d.rideRank = { day: dateKey, rank: r.board.you.rank | 0, players: r.board.players | 0, m: r.board.you.m | 0 };
+        return r?.board || null;
+      };
       if (extra) {
         d.rideM[dateKey] = (d.rideM[dateKey] | 0) + m;
         d.runs[dateKey] = (d.runs[dateKey] | 0) + 1;
         d.rideBest = Math.max(d.rideBest | 0, m);
         save();
         if (online && m > 0) {
-          const body = { day: dateKey, rescued: 0, metres: m, extra: true };
+          const body = { day: dateKey, rescued: 0, metres: m, extra: true, durationMs: Math.round(durationMs), hidden: !!hidden };
           const r = await call('POST', '/span/ride', body).catch(() => null);
           if (r?.status === 200 && r.crew && d.srv) d.srv.crew = r.crew;
           else if (!r || r.status >= 500) d.queue.push({ path: '/span/ride', body });
+          const board = keepRank(r);
           save();
+          return { placed: 0, coins: 0, board };
         }
-        return { placed: 0, coins: 0 };
+        return { placed: 0, coins: 0, board: null };
       }
       if (d.rides[dateKey] !== 0) return { placed: 0, coins: 0 };
       const n = Math.max(0, rescued.length | 0);
@@ -273,12 +292,13 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
       d.rideBest = Math.max(d.rideBest | 0, m);
       const coins = n ? earn(n * SPAN.coinsPerRescue) : 0;
       if (online) {
-        const body = { day: dateKey, rescued: n, fromRiver: Math.min(fromRiver | 0, n), metres: m };
+        const body = { day: dateKey, rescued: n, fromRiver: Math.min(fromRiver | 0, n), metres: m, durationMs: Math.round(durationMs), hidden: !!hidden };
         const r = await call('POST', '/span/ride', body).catch(() => null);
         if (r?.status === 200 && r.crew && d.srv) d.srv.crew = r.crew;
         else if (!r || r.status >= 500) d.queue.push({ path: '/span/ride', body });
+        const board = keepRank(r);
         save();
-        return { placed: n, coins };
+        return { placed: n, coins, board };
       }
       const mv = moveIn(d.floors, n);
       d.floors = mv.floors;
