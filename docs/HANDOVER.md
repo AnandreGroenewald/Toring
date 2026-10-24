@@ -1428,5 +1428,7 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
   centred and gone in ~2 s; he rides closer and bigger, three-quarters on, on a real rubber duck with foam and spray.
 - **Hanswors's duck clear of the rocks (25 Oct ~03:30):** the canyon's waterline bulges are eased (the cliffs above
   keep their shape), no boulders on the bank where he rides, and he keeps 1.7 m from the wall and out of the lanes.
+- **"THIS IS FUN!!!" (25 Oct ~04:15):** his one note, everything moving left to right, is fixed: blocks, Blouaap and
+  swimming crocs cross either way, and crocs swim snout first.
 - **Next:** his feedback; his play of checkpoints 1+2 at home:
   http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1; the release on his word (plan §8).
