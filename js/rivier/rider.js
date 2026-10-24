@@ -156,8 +156,51 @@ export function createRider(bend = (m) => m) {
   torso.rotation.y = 0.75;
   head.rotation.y = 0.8;
 
+  // (Saturday) the bazooka on his right shoulder: an olive tube with a flared back, a sight, a grip and a warning band;
+  // it turns to where he aims, kicks back when it fires (a flash at the front, smoke out of the back)
+  const gunMat = bend(std('#6f7f45', { roughness: 0.5, metalness: 0.25 }));
+  const gunDark = bend(std('#2a2f22', { roughness: 0.5, metalness: 0.4 }));
+  const gunBand = bend(std('#ffc21a', { roughness: 0.4 }));
+  const gun = new THREE.Group();   // (its own pivot on the shoulder: yaw on the group, pitch on the tube)
+  gun.position.set(0.02, 0.76, 0.27);   // (on top of his back shoulder, in the chest's own turn)
+  gun.scale.setScalar(1.2);
+  const tube = new THREE.Group();
+  gun.add(tube);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 1.2, 14), gunMat);
+  barrel.rotation.x = Math.PI / 2;
+  tube.add(barrel);
+  const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.13, 0.22, 14, 1, true), gunDark);
+  bell.rotation.x = Math.PI / 2;
+  bell.position.z = 0.7;
+  tube.add(bell);
+  const muzzleRing = new THREE.Mesh(new THREE.TorusGeometry(0.088, 0.022, 6, 16), gunDark);
+  muzzleRing.position.z = -0.6;
+  tube.add(muzzleRing);
+  for (const z of [-0.18, -0.08]) {
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(0.089, 0.089, 0.05, 14), gunBand);
+    b.rotation.x = Math.PI / 2;
+    b.position.z = z;
+    tube.add(b);
+  }
+  const sight = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.09, 0.08), gunDark);
+  sight.position.set(-0.06, 0.1, -0.25);
+  tube.add(sight);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.16, 0.06), gunDark);
+  grip.position.set(0, -0.13, -0.12);
+  grip.rotation.x = 0.25;
+  tube.add(grip);
+  const flash = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), new THREE.MeshBasicMaterial({ color: '#ffd27a', transparent: true, opacity: 0, depthWrite: false, fog: false }));
+  flash.position.z = -0.78;
+  tube.add(flash);
+  gun.visible = false;
+  torso.add(gun);
+  let kick = 0;
+  let flashT = 0;
+  const aimYaw = { v: 0, to: 0 };
+  const aimPitch = { v: 0.08, to: 0.08 };
+
   group.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
-  const mats = [skin, vest, shirt, jeans, boot, hat, boardM, glove];
+  const mats = [skin, vest, shirt, jeans, boot, hat, boardM, glove, gunMat, gunDark, gunBand];
 
   let t0 = 0;
   return {
@@ -188,6 +231,50 @@ export function createRider(bend = (m) => m) {
       armB.rotation.z = 0.5 + crouch * 0.3;
       foreB.rotation.x = 0.45;
       head.rotation.z = lean * 0.18 - (torso.rotation.z + 0.16) * 0.6;
+      if (gun.visible) {
+        // the tube swings to its aim; he holds it up with the back arm, the front hand on the grip
+        const k = 1 - Math.exp(-dt * 12);
+        aimYaw.v += (aimYaw.to - aimYaw.v) * k;
+        aimPitch.v += (aimPitch.to - aimPitch.v) * k;
+        gun.rotation.y = aimYaw.v - torso.rotation.y;   // (the chest is turned: the tube's aim is the world's)
+        tube.rotation.x = aimPitch.v;
+        kick = Math.max(0, kick - dt * 3.2);
+        tube.position.z = kick * 0.32;
+        torso.rotation.z -= kick * 0.25;
+        armB.rotation.x = -0.4 + aimPitch.v * 0.5;
+        armB.rotation.z = 1.9;
+        foreB.rotation.x = -1.6;
+        armF.rotation.x = -1.45 + aimPitch.v * 0.4;
+        armF.rotation.z = 0.9;
+        flashT = Math.max(0, flashT - dt);
+        flash.material.opacity = flashT > 0 ? Math.min(1, flashT / 0.06) : 0;
+        flash.scale.setScalar(1 + (0.12 - flashT) * 8);
+      }
+    },
+    /** (Saturday) the bazooka on his shoulder, or not. */
+    setGun(on) {
+      gun.visible = !!on;
+    },
+    /** Points the bazooka along `dir` (a world direction; the rider's group isn't turned). */
+    aim(dir) {
+      const h = Math.hypot(dir.x, dir.z) || 1;
+      aimYaw.to = Math.atan2(-dir.x, -dir.z);
+      aimPitch.to = Math.max(-0.2, Math.min(1.1, Math.atan2(dir.y, h)));
+    },
+    /** Fires: the flash, the kick. Returns where the shot leaves the tube (world). */
+    fire() {
+      kick = 1;
+      flashT = 0.12;
+      return this.muzzle();
+    },
+    /** The tube's front and back ends (world): where a shot leaves, where the back-blast comes out. */
+    muzzle(out = new THREE.Vector3()) {
+      group.updateMatrixWorld(true);
+      return flash.getWorldPosition(out);
+    },
+    breech(out = new THREE.Vector3()) {
+      group.updateMatrixWorld(true);
+      return bell.getWorldPosition(out);
     },
     /** A knock: he blinks while he can't be knocked again. */
     setBlink(on) {

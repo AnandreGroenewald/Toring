@@ -358,7 +358,7 @@ export const S_EN = {
     { icon: '🛟', text: 'Ride down: after your Daily Tower your builder dives off the top and rides down the river. Swipe left and right past blocks, crocodiles, hippos and Blouaap, and scoop up your people who fell off your tower. They move into your Weekly Tower.' },
     { icon: '🏗️', text: 'Weekly Tower: every Daily Tower (Monday to Saturday) gives a turn with the crane on your crew’s Weekly Tower: 10 blocks, in your own block style. A Perfect floor cracks before it breaks.' },
     { icon: '🏝️', text: 'Ons dorp: your crew is up to 3 builders (invite friends on WhatsApp). Your island shows the Weekly Tower, everyone’s latest Daily Tower and past weeks’ monuments.' },
-    { icon: '💣', text: 'Saturday Challenge: 4 crews on one river, and only the tallest tower can be bombed. Ride down, hold to aim (time slows down), drag and let go. Every bomb that hits knocks out two floors. Your ticket: 3 Daily Towers Monday to Friday; 1 bomb per 25 m. The crane closes at 12:00, and the whistle blows somewhere between 20:00 and 21:00.' },
+    { icon: '💣', text: 'Saturday Challenge: 4 crews on one river, and only the tallest tower can be bombed. Ride down with the bazooka on your shoulder: hold to aim (time slows down), drag and let go to fire. Every bomb that hits knocks out two floors. Your ticket: 3 Daily Towers Monday to Friday; 1 bomb per 25 m. The crane closes at 12:00, and the whistle blows somewhere between 20:00 and 21:00.' },
     // (1.17) The Castle Series (kasteel.html)
     { icon: '🏰', text: 'The Castle Series: your Daily Towers become the towers of your castle. Attack Robot Rikus’s and your friends’ castles with troops, a ram and a trebuchet (break the gate, knock half of it down, make their flag fall), and plan your defence: it fights for you while you’re away.' },
     // (1.18) Block Clash (botsing.html)
@@ -952,7 +952,7 @@ export const S_EN = {
   nwHit: (who, on, m) => `💥 ${who} hit ${on}: -${m}`,
   nwCracked: (who, on) => `💥 ${who} cracked ${on}’s floors`,
   rvTarget: '👑 Target',
-  rvAimHint: 'Hold to aim, drag, let go to throw!',
+  rvAimHint: 'Hold to aim, drag, let go to fire!',
   rvBombsLeft: (n) => `💣 ${n}`,
   rvHitFloor: (m) => `💥 Hit! -${m}`,
   rvCracked: 'Cracked! One more hit',

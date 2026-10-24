@@ -474,8 +474,33 @@ function createRide(K, d) {
   // the blast: a fireball that swells and fades where a bomb lands
   const flashGeo = new THREE.SphereGeometry(1, 16, 12);
   const flashes = [];
-  const bombMat = new THREE.MeshStandardMaterial({ color: '#1c1c22', roughness: 0.35, metalness: 0.4 });
-  const fuseMat = new THREE.MeshStandardMaterial({ color: '#ffb347', emissive: '#ff7a1a', emissiveIntensity: 2 });
+  const bombMat = new THREE.MeshStandardMaterial({ color: '#56633a', roughness: 0.45, metalness: 0.35 });
+  const fuseMat = new THREE.MeshStandardMaterial({ color: '#ffb347', emissive: '#ff7a1a', emissiveIntensity: 2.4 });
+  const noseMat = new THREE.MeshStandardMaterial({ color: '#2a2f22', roughness: 0.4, metalness: 0.5 });
+  const rocketBody = new THREE.CylinderGeometry(0.11, 0.11, 0.62, 12);
+  rocketBody.rotateX(Math.PI / 2);
+  const rocketNose = new THREE.ConeGeometry(0.11, 0.26, 12);
+  rocketNose.rotateX(-Math.PI / 2);
+  rocketNose.translate(0, 0, -0.44);
+  const rocketFin = new THREE.BoxGeometry(0.02, 0.2, 0.16);
+  const rocketFlame = new THREE.ConeGeometry(0.09, 0.42, 10);
+  rocketFlame.rotateX(Math.PI / 2);
+  rocketFlame.translate(0, 0, 0.52);
+  /** A rocket for the bazooka (points along its local -z). */
+  function rocketMesh() {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(rocketBody, bombMat), new THREE.Mesh(rocketNose, noseMat), new THREE.Mesh(rocketFlame, fuseMat));
+    for (let i = 0; i < 4; i++) {
+      const fin = new THREE.Mesh(rocketFin, noseMat);
+      const a = (i / 4) * Math.PI * 2;
+      fin.position.set(Math.cos(a) * 0.13, Math.sin(a) * 0.13, 0.24);
+      fin.rotation.z = a;
+      g.add(fin);
+    }
+    g.scale.setScalar(1.6);
+    return g;
+  }
+  if (raid) rider.setGun(true);
   const AIM_FAR = 115;   // m ahead: the tallest tower can be aimed at from here...
   const AIM_NEAR = 34;   // ...until it's this close (then it's beside you, out of the picture)
   /** The tallest tower, while it's ahead of you in the picture (you can aim at it): its isle, else null. */
@@ -513,18 +538,26 @@ function createRide(K, d) {
     bombsLeft--;
     thrown++;
     setBombs();
-    const mesh = new THREE.Group();
-    mesh.add(new THREE.Mesh(bombGeo, bombMat));
-    const fuse = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 6), fuseMat);
-    fuse.position.y = 0.45;
-    mesh.add(fuse);
+    // the bazooka fires: a flash and a kick at the front, smoke out of the back; the rocket flies nearly straight
+    const from = rider.fire();
+    const back = rider.breech();
+    things.emit(back.x, back.y, back.z + 0.4, 18, 0.9, 0.6);
+    things.emit(from.x, from.y, from.z, 8, 0.5, 0.5);
+    stage.shake(reduced ? 0 : 0.25);
+    const mesh = rocketMesh();
+    mesh.position.copy(from);
     scene.add(mesh);
-    flights.push({ mesh, isle, u: a.u, v: a.v, from: new THREE.Vector3(x, 1.6, -0.5), t: 0, dur: 0.75 });
+    const to0 = towerPoint(isle, a.u, a.v);
+    const dur = clamp(from.distanceTo(to0) / 55, 0.45, 1.4);
+    flights.push({ mesh, isle, u: a.u, v: a.v, from: from.clone(), t: 0, dur });
     hint(null);
     audio.play('fling');
+    audio.play('land', { intensity: 0.5, size: 0.5 });
     haptics.tap?.();
   }
   const _w = new THREE.Vector3();
+  const _aimFrom = new THREE.Vector3();
+  const _ahead = new THREE.Vector3(0, 0.12, -1);
   function towerPoint(isle, u, v) {
     _w.set(u, 3.6 + v, 0);
     isle.island.group.updateWorldMatrix(true, false);
@@ -605,11 +638,14 @@ function createRide(K, d) {
       f.t += dt;
       const q = Math.min(1, f.t / f.dur);
       const to = towerPoint(f.isle, f.u, f.v);
+      const prev = f.mesh.position.clone();
       f.mesh.position.lerpVectors(f.from, to, q);
-      f.mesh.position.y += Math.sin(q * Math.PI) * 5;
-      f.mesh.rotation.x += dt * 9;
-      // (its trail: puffs of smoke behind it, so the eye can follow the throw)
-      things.emit(f.mesh.position.x, f.mesh.position.y + 0.5, f.mesh.position.z, 2, 0.3, 0.4);
+      f.mesh.position.y += Math.sin(q * Math.PI) * 1.2;
+      // (nose first, along its path; a trail of smoke so the eye can follow the shot)
+      const ahead = f.mesh.position.clone().multiplyScalar(2).sub(prev);
+      if (ahead.distanceToSquared(f.mesh.position) > 1e-6) f.mesh.lookAt(ahead);
+      f.mesh.rotateY(Math.PI);
+      things.emit(prev.x, prev.y, prev.z, 3, 0.25, 0.3);
       if (q >= 1) {
         scene.remove(f.mesh);
         flights.splice(k, 1);
@@ -1086,7 +1122,15 @@ function createRide(K, d) {
       isle.island.update(t);
       isle.tag.material.opacity = 1;
     }
-    if (raid) stepBombs(dt);
+    if (raid) {
+      stepBombs(dt);
+      // the bazooka points where he aims (or at the tallest tower coming up; else down the river, a little up)
+      const tgt = targetIsle();
+      let P = null;
+      if (tgt && aiming) P = aimOnTower(tgt, aimAt.x, aimAt.y)?.P || null;
+      if (tgt && !P) P = towerPoint(tgt, 0, Math.max(2, Math.min(18, (tgt.island.top - 3.6) * 0.5)));
+      rider.aim(P ? P.clone().sub(rider.muzzle(_aimFrom)) : _ahead);
+    }
     // (your tower stays upstream: behind the camera once you ride)
     start.group.position.set(0, -0.6, dist + START_Z);
     barEl.style.width = `${clamp(dist / (len - RIVER.finishRun), 0, 1) * 100}%`;
@@ -1211,6 +1255,8 @@ function createRide(K, d) {
     flashGeo.dispose();
     bombMat.dispose();
     fuseMat.dispose();
+    noseMat.dispose();
+    for (const g of [rocketBody, rocketNose, rocketFin, rocketFlame]) g.dispose();
     if (raid) setBend(1);
     island.dispose();
     beasts.dispose();

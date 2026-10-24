@@ -362,7 +362,7 @@ export const S = {
     { icon: '🛟', text: 'Afgly: ná jou Daaglikse Toring duik jou bouer van die top af en gly die rivier af. Swiep links en regs verby blokke, krokodille, seekoeie en Blouaap, en skep jou mense op wat van jou toring afgeval het. Hulle trek in julle Weektoring in.' },
     { icon: '🏗️', text: 'Weektoring: elke Daaglikse Toring (Maandag tot Saterdag) gee ’n beurt met die hyskraan op julle span se Weektoring: 10 blokke, in jou eie blokstyl. ’n Perfek-vloer kraak eers voor hy breek.' },
     { icon: '🏝️', text: 'Ons dorp: julle span is tot 3 bouers (nooi vriende met WhatsApp). Julle eiland wys die Weektoring, elkeen se jongste Daaglikse Toring en vorige weke se monumente.' },
-    { icon: '💣', text: 'Saterdag-uitdaging: 4 spanne op een rivier en net die hoogste toring kan gebombardeer word. Gly af, hou vas om te mik (die tyd gaan stadiger), sleep en los. Elke bom wat tref, slaan twee vloere uit. Jou kaartjie: 3 Daaglikse Torings Maandag tot Vrydag; 1 bom per 25 m. Die kraan sluit 12:00, en die fluitjie blaas iewers tussen 20:00 en 21:00.' },
+    { icon: '💣', text: 'Saterdag-uitdaging: 4 spanne op een rivier en net die hoogste toring kan gebombardeer word. Gly af met die bazooka op jou skouer: hou vas om te mik (die tyd gaan stadiger), sleep en los om te skiet. Elke bom wat tref, slaan twee vloere uit. Jou kaartjie: 3 Daaglikse Torings Maandag tot Vrydag; 1 bom per 25 m. Die kraan sluit 12:00, en die fluitjie blaas iewers tussen 20:00 en 21:00.' },
     // (1.17) Die Kasteelreeks (kasteel.html)
     { icon: '🏰', text: 'Die Kasteelreeks: jou Daaglikse Torings word die torings van jou kasteel. Val Robot Rikus en jou vriende se kastele aan met troepe, ’n stormram en ’n trebuchet (breek die hek, die helfte plat, hul vlag val), en beplan jou verdediging: dit veg vir jou terwyl jy weg is.' },
     // (1.13.1) with the day's free tries (from 12 Oct 2026: 3)
@@ -997,7 +997,7 @@ export const S = {
   nwHit: (who, on, m) => `💥 ${who} het ${on} raak gegooi: -${m}`,
   nwCracked: (who, on) => `💥 ${who} het ${on} se vloere gekraak`,
   rvTarget: '👑 Teiken',
-  rvAimHint: 'Hou vas om te mik, sleep, los om te gooi!',
+  rvAimHint: 'Hou vas om te mik, sleep, los om te skiet!',
   rvBombsLeft: (n) => `💣 ${n}`,
   rvHitFloor: (m) => `💥 Raak! -${m}`,
   rvCracked: 'Gekraak! Nog een hou',
