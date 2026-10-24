@@ -1417,5 +1417,11 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
 - **His verdict (25 Oct ~00:15):** "I think we have a winner ... I'm actually speechless". His one note — it began very
   slow and then stayed the same speed — is fixed: Afgly starts brisk and never stops getting faster (19 → 40 m/s),
   rows come closer in time further down, the music speeds up with it.
+- **Further down the river (25 Oct ~01:30, his "keep it as is for the first 1000 meters, then ... a clown"):** from
+  1 km Hanswors rides beside you on his inflatable duck lobbing cream pies (a shadow shows where; a hit only covers
+  the screen in cream); from 2 km logs to jump (swipe up); from 3 km fallen trees to duck under (swipe down); the
+  first log and tree slow the river nearly still and show how, once per phone. Code: js/core/rivier.js RIVER.unlock,
+  js/rivier/hazards.js, art/blender/hazards.py → img/models/hazards.glb. Fixed: hints after the opening tip were
+  wiped by a 7-second rule. Tests: npm 504, qa later1200 18/18 and the river suite.
 - **Next:** his feedback; his play of checkpoints 1+2 at home:
   http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1; the release on his word (plan §8).
