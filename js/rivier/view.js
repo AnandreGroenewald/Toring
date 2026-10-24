@@ -557,6 +557,8 @@ function createRide(K, d) {
     } else if (k === 'croc' && !l.said && l.obj.userData.snapped?.() && Math.abs(l.x - x) < 4.5) {
       l.said = true;
       audio.play('snap');
+      // (the jaws slam shut: water flies)
+      things.emit(l.x, 0.3, -ahead, 22, 1.6, 3.2);
     }
   }
   const live = [];   // { it, row, obj, z, x, done }
