@@ -10,7 +10,7 @@ const TEX_SLOTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissive
  * Each model's version: raise it when its .glb changes (the website's service worker keeps a model until its name,
  * with this number, changes: sw.js MODELS).
  */
-export const MODEL_V = { croc: 7, hippo: 7, monkey: 7, builder: 11, dorp: 3, island: 2, props: 5 };
+export const MODEL_V = { croc: 7, hippo: 7, monkey: 7, builder: 11, dorp: 3, island: 2, props: 5, hazards: 2 };
 const WAIT_MS = 4000;      // (a ride never waits longer than this for its models)
 // (the characters and creatures get the rim light: the people in the rings, not the rocks, boats or town)
 const RIM_MODELS = new Set(['croc', 'monkey', 'builder']);   // (not the hippo: so much of it faces sideways that it washes out)

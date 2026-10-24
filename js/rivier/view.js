@@ -14,6 +14,7 @@ import { buildRiverWorld, bendMaterial, setBend, BANK, puffTexture } from './wor
 import { createRider } from './rider.js';
 import { createThings, createIsland, createStartTower, labelSprite, disposeTree } from './things.js';
 import { createBeasts } from './beasts.js';
+import { createHazards, splatImage, LOG_TOP } from './hazards.js';
 import { loadModels } from './models.js';
 import { RIVER, rescueCourse, raidCourse, speedAt, laneX, inRapids, rapidsWindow, PACE } from '../core/rivier.js';
 import { floorAt, hit as hitFloor, dimsOf } from '../core/weektower.js';
@@ -72,7 +73,7 @@ function makeKit() {
 /* (eight faces on one line on any phone; more than eight wrap) */
 #rivier .rv-faces img { width: min(30px, calc((100vw - 24px - 7 * 4px) / 8)); aspect-ratio: 1; height: auto; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
 #rivier .rv-faces img.out { opacity: .25; filter: grayscale(1); }
-#rivier .rv-hint { position: absolute; left: 50%; top: calc(104px + var(--sat, 0px)); transform: translateX(-50%); padding: 10px 18px; border-radius: 16px; background: rgba(13,34,40,.66); font-weight: 900; font-size: 18px; white-space: nowrap; opacity: 0; transition: opacity .3s; }
+#rivier .rv-hint { position: absolute; left: 50%; top: calc(104px + var(--sat, 0px)); transform: translateX(-50%); padding: 10px 18px; border-radius: 16px; background: rgba(13,34,40,.66); font-weight: 900; font-size: 18px; width: max-content; max-width: calc(100% - 32px); text-align: center; line-height: 1.25; text-wrap: balance; opacity: 0; transition: opacity .3s; }
 #rivier .rv-hint.on { opacity: 1; }
 #rivier .rv-pop { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%) scale(.6); opacity: 0; font-size: 34px; font-weight: 900; color: #fff3c4; -webkit-text-stroke: 1.5px rgba(40,24,0,.75); text-shadow: 0 4px 0 rgba(40,24,0,.45), 0 8px 24px rgba(0,0,0,.4); width: max-content; max-width: 88%; text-align: center; line-height: 1.12; text-wrap: balance; transition: opacity .25s, transform .35s cubic-bezier(.2,1.4,.4,1); }
 #rivier .rv-pop.long { font-size: 26px; }
@@ -110,6 +111,15 @@ function makeKit() {
 #rivier .rv-card.on { opacity: 1; transform: translate(-50%, 0); }
 #rivier .rv-card h2 { margin: 0 0 4px; font-size: 24px; font-weight: 900; }
 #rivier .rv-card .rv-link { background: none; color: #8ff4ff; min-height: 40px; font-size: 16px; text-decoration: underline; text-underline-offset: 3px; }
+#rivier .rv-splat { position: absolute; width: 62%; max-width: 360px; pointer-events: none; transform: rotate(var(--r, 0deg)) scale(.3); opacity: 0; animation: rv-splat 3.1s cubic-bezier(.2,1.4,.4,1) forwards; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); }
+@keyframes rv-splat { 0% { transform: rotate(var(--r)) scale(.3); opacity: 0; } 8% { transform: rotate(var(--r)) scale(1.05); opacity: 1; } 14% { transform: rotate(var(--r)) scale(1); } 60% { opacity: 1; } 100% { transform: rotate(var(--r)) translateY(70px) scale(1); opacity: 0; } }
+#rivier .rv-arrow { position: absolute; left: 50%; top: 46%; width: 92px; height: 92px; margin: -46px 0 0 -46px; border-radius: 50%; background: rgba(13,34,40,.6); border: 3px solid #fff3c4; display: none; pointer-events: none; }
+#rivier .rv-arrow.on { display: block; }
+#rivier .rv-arrow::after { content: ''; position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -10px 0 0 -15px; border-left: 8px solid #fff3c4; border-top: 8px solid #fff3c4; transform: rotate(45deg); }
+#rivier .rv-arrow.up::after { animation: rv-up .9s ease-in-out infinite; }
+#rivier .rv-arrow.down::after { margin-top: -22px; transform: rotate(225deg); animation: rv-down .9s ease-in-out infinite; }
+@keyframes rv-up { 0%, 100% { translate: 0 6px; } 50% { translate: 0 -10px; } }
+@keyframes rv-down { 0%, 100% { translate: 0 -6px; } 50% { translate: 0 10px; } }
 #rivier .rv-card p.rv-rank { display: none; margin: -4px 0 10px; font-size: 15px; font-weight: 900; color: #ffe08a; }
 #rivier .rv-card p.rv-rank.on { display: block; }
 #rivier .rv-card .rv-ranklist { display: inline; width: auto; min-height: 0; margin: 0 0 0 6px; padding: 3px 10px; border-radius: 999px; background: rgba(255,224,138,.16); color: #ffe08a; font-size: 13px; }
@@ -179,7 +189,7 @@ export async function openRiver(d) {
   current?.close();
   await portraitsReady;   // (the faces on the rings)
   // (the Blender models: the animals; a ride never waits long for them, and works without)
-  const models = await loadModels(['croc', 'hippo', 'monkey', 'builder', 'dorp', 'island', 'props']);
+  const models = await loadModels(['croc', 'hippo', 'monkey', 'builder', 'dorp', 'island', 'props', 'hazards']);
   if (!kit) kit = makeKit();
   const view = createRide(kit, { ...d, models });
   current = view;
@@ -664,6 +674,25 @@ function createRide(K, d) {
   const islandX = endless ? course.island.side * 27 : 0;
   if (endless) island.group.rotation.y = -course.island.side * Math.PI / 2;   // (its jetty to the river)
   let hearts = RIVER.hearts;
+  // (the endless river's later things: a jump over a log, a duck under a fallen tree, Hanswors's pies)
+  const hz = createHazards(bendMaterial, d.models || {});
+  const JUMP_S = 0.62;   // s in the air...
+  const JUMP_H = 1.45;   // ...this high at the top
+  const DUCK_S = 0.8;    // s ducked
+  let jumpT = -1;        // (s into a jump; -1 on the water)
+  let jumpQ = -9;        // (a jump asked for just before landing: it goes as he lands)
+  let duckT = -1;
+  let airY = 0;
+  let duckK = 0;
+  let timeK = 1;         // (a lesson slows the river right down until you do what it shows)
+  let lesson = null;     // { kind, l }
+  const taught = (() => { try { return JSON.parse(localStorage.getItem('stapel.v1.rvTaught') || '{}') || {}; } catch { return {}; } })();
+  const teachDone = (k) => { taught[k] = 1; try { localStorage.setItem('stapel.v1.rvTaught', JSON.stringify(taught)); } catch { /* private window */ } };
+  const pies = [];       // pies in the air: { mesh, shadow, from, to, t, dur, lane }
+  let kmSaid = 0;
+  const pieShadowGeo = new THREE.CircleGeometry(0.9, 24);
+  pieShadowGeo.rotateX(-Math.PI / 2);
+  const pieShadowMat = new THREE.MeshBasicMaterial({ color: '#0b1d22', transparent: true, opacity: 0, depthWrite: false });
   const musicNow = { bpm: 0, layers: 0 };
   let runS = 0;   // (the seconds riding: the server checks no ride is faster than the river)
   let islandSaid = false;
@@ -1115,7 +1144,7 @@ function createRide(K, d) {
   // ---------------------------------------------------------------------------------------------- the overlay
   ov.innerHTML = `<div class="rv-top"><div class="rv-count"><span class="rv-ring"></span><b>0</b><small>/ ${who.length}</small></div>${endless ? `<div class="rv-metres"><b>0</b><small>m</small></div><div class="rv-hearts">${'<i></i>'.repeat(RIVER.hearts)}</div>` : '<div class="rv-bar"><i></i></div>'}<button class="rv-pause" aria-label="${S.pause}">❚❚</button></div>
     <div class="rv-faces"></div><div class="rv-hint"></div><div class="rv-pop"></div><div class="rv-hurt"></div>
-    <div class="rv-card"></div><div class="rv-scope"><svg viewBox="0 0 132 132" aria-hidden="true"><circle class="ring" cx="66" cy="66" r="54"/><g class="ticks">${Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; const r1 = i % 3 ? 49 : 44; return `<line x1="${(66 + Math.cos(a) * r1).toFixed(1)}" y1="${(66 + Math.sin(a) * r1).toFixed(1)}" x2="${(66 + Math.cos(a) * 54).toFixed(1)}" y2="${(66 + Math.sin(a) * 54).toFixed(1)}"/>`; }).join('')}</g><g class="cross"><line x1="66" y1="24" x2="66" y2="57"/><line x1="66" y1="75" x2="66" y2="108"/><line x1="24" y1="66" x2="57" y2="66"/><line x1="75" y1="66" x2="108" y2="66"/></g><path class="brk" d="M10 32 V10 H32 M100 10 H122 V32 M122 100 V122 H100 M32 122 H10 V100"/><circle class="dot" cx="66" cy="66" r="3.5"/></svg><div class="rng"></div></div><button class="rv-fire" aria-label="${S.rvFire}"><svg class="pips" viewBox="0 0 112 112"></svg><span class="in"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2.5c-.4 0-.7.2-.9.5C9.4 5.6 5.5 10.9 5.5 14.6a6.5 6.5 0 0 0 13 0c0-3.7-3.9-9-5.6-11.6-.2-.3-.5-.5-.9-.5z"/><path fill="#9feaf5" d="M9.2 14.4c.3 1.6 1.4 2.7 3 3" stroke="#0b6f8a" stroke-width="1.6" stroke-linecap="round"/></svg><span>${S.rvFire}</span></span></button><div class="rv-board"></div><div class="rv-paused"><div><h2>${S.rvPaused}</h2><button class="rv-on">${S.rvResume}</button><button class="rv-off">${S.rvQuit}</button></div></div>`;
+    <div class="rv-card"></div><div class="rv-scope"><svg viewBox="0 0 132 132" aria-hidden="true"><circle class="ring" cx="66" cy="66" r="54"/><g class="ticks">${Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; const r1 = i % 3 ? 49 : 44; return `<line x1="${(66 + Math.cos(a) * r1).toFixed(1)}" y1="${(66 + Math.sin(a) * r1).toFixed(1)}" x2="${(66 + Math.cos(a) * 54).toFixed(1)}" y2="${(66 + Math.sin(a) * 54).toFixed(1)}"/>`; }).join('')}</g><g class="cross"><line x1="66" y1="24" x2="66" y2="57"/><line x1="66" y1="75" x2="66" y2="108"/><line x1="24" y1="66" x2="57" y2="66"/><line x1="75" y1="66" x2="108" y2="66"/></g><path class="brk" d="M10 32 V10 H32 M100 10 H122 V32 M122 100 V122 H100 M32 122 H10 V100"/><circle class="dot" cx="66" cy="66" r="3.5"/></svg><div class="rng"></div></div><button class="rv-fire" aria-label="${S.rvFire}"><svg class="pips" viewBox="0 0 112 112"></svg><span class="in"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2.5c-.4 0-.7.2-.9.5C9.4 5.6 5.5 10.9 5.5 14.6a6.5 6.5 0 0 0 13 0c0-3.7-3.9-9-5.6-11.6-.2-.3-.5-.5-.9-.5z"/><path fill="#9feaf5" d="M9.2 14.4c.3 1.6 1.4 2.7 3 3" stroke="#0b6f8a" stroke-width="1.6" stroke-linecap="round"/></svg><span>${S.rvFire}</span></span></button><div class="rv-board"></div><div class="rv-arrow"></div><div class="rv-paused"><div><h2>${S.rvPaused}</h2><button class="rv-on">${S.rvResume}</button><button class="rv-off">${S.rvQuit}</button></div></div>`;
   const countEl = ov.querySelector('.rv-count');
   const countB = countEl.querySelector('b');
   const barEl = ov.querySelector('.rv-bar i');
@@ -1139,6 +1168,7 @@ function createRide(K, d) {
   const pausedEl = ov.querySelector('.rv-paused');
   const faceUrl = (id, n = 96) => portraitDataUrl(id, n) || '';
   const scopeEl = ov.querySelector('.rv-scope');
+  const arrowEl = ov.querySelector('.rv-arrow');
   const scopeRng = scopeEl.querySelector('.rng');
   const fireEl = ov.querySelector('.rv-fire');
   function setBombs() {
@@ -1250,6 +1280,11 @@ function createRide(K, d) {
     if (Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy)) {
       down.used = true;
       move(dx > 0 ? 1 : -1);
+    } else if (endless && Math.abs(dy) > 26 && Math.abs(dy) > Math.abs(dx) * 1.2) {
+      // (the endless river: up jumps, down ducks)
+      down.used = true;
+      if (dy < 0) jump();
+      else duck();
     }
   };
   const onUp = (e) => {
@@ -1275,6 +1310,8 @@ function createRide(K, d) {
   const onKey = (e) => {
     if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') move(-1);
     else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') move(1);
+    else if (endless && (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ')) jump();
+    else if (endless && (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S')) duck();
     else if (e.key === 'Escape' || e.key === 'p') setPaused(!paused);
   };
   host.addEventListener('pointerdown', onDown);
@@ -1310,6 +1347,9 @@ function createRide(K, d) {
         else if (it.kind === 'rock') obj = things.rock();
         else if (it.kind === 'croc') obj = beasts.croc(it.drift ? Math.sign(it.drift) : (rowI % 2 ? 1 : -1));
         else if (it.kind === 'hippo') obj = beasts.hippo();
+        else if (it.kind === 'log') obj = hz.log(it.span || 1);
+        else if (it.kind === 'branch') obj = hz.branch(!!it.flip);
+        else if (it.kind === 'clown') obj = hz.clown(it.side || 1);
         else if (it.kind === 'monkey') {
           const blk = things.floating({ ...it, skin: d.skin || 'kleur', spin: 0 });
           obj = beasts.monkeyOn(blk, Math.sign(-(it.drift || 1)), blk.userData.top);
@@ -1333,8 +1373,160 @@ function createRide(K, d) {
     return { x: (_v.x * 0.5 + 0.5) * host.clientWidth, y: (-_v.y * 0.5 + 0.5) * host.clientHeight };
   }
 
+  /** A log or a tree coming: the first one ever stops the river nearly still and shows you; later ones get a quick word. */
+  function teach(l, ahead) {
+    const k = l.it.kind === 'log' ? 'jump' : 'duck';
+    const sp = speedAt(dist, len);
+    if (!taught[k] && !l.taught && ahead < sp * 1.25 && ahead > 0) {
+      l.taught = true;
+      lesson = { kind: k, l };
+      hint(k === 'jump' ? S.rvTeachJump : S.rvTeachDuck);
+      arrowEl.className = `rv-arrow on ${k === 'jump' ? 'up' : 'down'}`;
+    } else if (taught[k] && !l.hinted && ahead < sp * 1.7 && ahead > sp * 0.6) {
+      l.hinted = true;
+      pop(k === 'jump' ? S.rvJumpShort : S.rvDuckShort, 900);
+    }
+  }
+  function endLesson() {
+    lesson = null;
+    hint(null);
+    arrowEl.className = 'rv-arrow';
+  }
+  /** Over the log, under the tree. */
+  function cleared(l) {
+    if (lesson?.l === l) {
+      lesson = null;
+      pop(S.rvNice, 900);
+    }
+    things.emit(x, 0.3, -0.6, 10, 1, 1.4);
+  }
+  /** Jump (swipe up): over a log; the board leaves the water. Asked for just before landing, it goes as he lands. */
+  function jump() {
+    if (phase !== 'run' || paused || raid) return;
+    if (jumpT >= 0) {
+      if (jumpT > JUMP_S * 0.7) jumpQ = t;
+      return;
+    }
+    duckT = -1;
+    jumpT = 0;
+    things.emit(x, 0.15, 0.6, 18, 1.4, 2.6);
+    audio.play('fling');
+    haptics.tap?.();
+    if (lesson?.kind === 'jump' && !lesson.done) { lesson.done = true; teachDone('jump'); hint(null); arrowEl.className = 'rv-arrow'; timeK = 1; }
+  }
+  /** Duck (swipe down): under a fallen tree. In the air, he drops back to the water first. */
+  function duck() {
+    if (phase !== 'run' || paused || raid) return;
+    if (jumpT >= 0) jumpT = Math.max(jumpT, JUMP_S * 0.8);
+    duckT = 0;
+    audio.play('click');
+    haptics.tap?.();
+    if (lesson?.kind === 'duck' && !lesson.done) { lesson.done = true; teachDone('duck'); hint(null); arrowEl.className = 'rv-arrow'; timeK = 1; }
+  }
+  /**
+   * Hanswors's visit: he's met floating ahead, then rides alongside a little ahead of you on your side, winds up and lobs
+   * his pies at the lane you're in (a shadow shows where each lands: move out of it), then waves and drops behind.
+   */
+  function clownStep(l, ahead, dt) {
+    const u = l.obj.userData;
+    const st = l.cs || (l.cs = { phase: 'coming', thrown: 0, timer: 0.9, wind: 0, waveT: 0 });
+    const side = u.side || 1;
+    if (st.phase === 'coming' && ahead < 28 && phase === 'run') {
+      st.phase = 'riding';
+      audio.play('clown');
+      pop(S.rvClown, 1100);
+      if (!taught.clown) { hint(S.rvTeachClown); teachDone('clown'); setTimeout(() => { if (alive) hint(null); }, 3200); }
+    }
+    if (st.phase === 'riding') {
+      // (he keeps pace a little ahead of you)
+      l.z = dist + 24 + Math.sin(t * 0.7) * 1.5;
+      st.timer -= dt;
+      if (st.timer < 0.35 && st.thrown < (l.it.pies || 3)) st.wind = Math.min(1, st.wind + dt / 0.35);
+      if (st.timer <= 0 && st.thrown < (l.it.pies || 3)) {
+        throwPie(l);
+        st.thrown++;
+        st.wind = 1.2;
+        const deep = clamp((dist - RIVER.unlock.clown) / 4000, 0, 1);
+        st.timer = 1.75 - 0.5 * deep;
+      }
+      if (st.wind > 1) st.wind = Math.max(0, st.wind - dt * 4) || 0;
+      if (st.thrown >= (l.it.pies || 3) && !pies.some((pp) => pp.from === l)) {
+        st.phase = 'leaving';
+        st.waveT = 0;
+        l.z = dist + 24;
+      }
+    } else if (st.phase === 'leaving') {
+      st.waveT += dt;
+      // (he waves, then stops paddling: the river carries you past him)
+      if (st.waveT < 1.2) l.z = dist + 24;
+    }
+    const a = l.z - dist;
+    // (between the outer lane and the bank, turned a little towards you: in the picture, never in a lane)
+    l.obj.position.set(side * (RIVER.laneW + 2.1), 0, -a);
+    l.obj.rotation.y = -side * 0.3;
+    u.pose(t, st.wind > 0 && st.wind <= 1 ? st.wind : 0, st.phase === 'leaving' && st.waveT < 1.2 ? 1 : 0);
+  }
+  function throwPie(from) {
+    const u = from.obj.userData;
+    const mesh = hz.pie();
+    const start = new THREE.Vector3();
+    (u.pieHeld || u.head || from.obj).getWorldPosition(start);
+    if (u.pieHeld) u.pieHeld.visible = false;
+    const tx = laneX(lane);
+    const shadow = new THREE.Mesh(pieShadowGeo, pieShadowMat.clone());
+    shadow.position.set(tx, 0.07, 0.4);
+    shadow.renderOrder = 3;
+    scene.add(mesh, shadow);
+    pies.push({ mesh, shadow, from, start, tx, t: 0, dur: 1.05 });
+    audio.play('fling');
+  }
+  const _pp = new THREE.Vector3();
+  function stepPies(dt) {
+    for (let i = pies.length - 1; i >= 0; i--) {
+      const pp = pies[i];
+      pp.t += dt;
+      const s = Math.min(1, pp.t / pp.dur);
+      _pp.set(pp.start.x + (pp.tx - pp.start.x) * s, pp.start.y + (1.1 - pp.start.y) * s + Math.sin(s * Math.PI) * 3.2, pp.start.z + (0.4 - pp.start.z) * s);
+      pp.mesh.position.copy(_pp);
+      pp.mesh.rotation.set(s * 7, s * 3, 0);
+      pp.shadow.material.opacity = 0.15 + 0.45 * s;
+      pp.shadow.scale.setScalar(0.55 + 0.6 * s);
+      if (s >= 1) {
+        const hit = phase === 'run' && Math.abs(x - pp.tx) < 1.5;
+        if (hit) splat();
+        else {
+          things.emit(pp.tx, 0.2, 0.4, 24, 1.6, 2.4);
+          audio.play('splash');
+        }
+        scene.remove(pp.mesh, pp.shadow);
+        pp.shadow.material.dispose();
+        disposeTree(pp.mesh);
+        if (pp.from.obj.userData.pieHeld) pp.from.obj.userData.pieHeld.visible = true;
+        pies.splice(i, 1);
+      }
+    }
+  }
+  /** Cream on the camera: it covers part of the view a moment (no heart lost), slides down and fades. */
+  function splat() {
+    const el = document.createElement('img');
+    el.className = 'rv-splat';
+    el.src = splatSrc || (splatSrc = splatImage());
+    const w = host.clientWidth;
+    el.style.left = `${(0.1 + Math.random() * 0.35) * w}px`;
+    el.style.top = `${(0.12 + Math.random() * 0.2) * host.clientHeight}px`;
+    el.style.setProperty('--r', `${(Math.random() - 0.5) * 40}deg`);
+    ov.appendChild(el);
+    setTimeout(() => el.remove(), 3200);
+    audio.play('splat', { intensity: 0.7 });
+    stage.shake(reduced ? 0 : 0.2);
+    haptics.lost?.();
+    pop(S.rvPie, 900);
+  }
+  let splatSrc = '';
+  let lastKnock = null;   // (what knocked you last: for the tests)
   function knock(l) {
     hits++;
+    lastKnock = l?.it?.kind ?? null;
     if (endless) {
       hearts = Math.max(0, hearts - 1);
       setHearts();
@@ -1365,6 +1557,7 @@ function createRide(K, d) {
   }
   /** The third knock: he goes head over heels into the river, and the ride is over (the card after a moment). */
   function wipeout(l) {
+    endLesson();
     phase = 'wipe';
     phaseT = 0;
     for (const x2 of live) x2.done = true;
@@ -1398,10 +1591,26 @@ function createRide(K, d) {
   // (tests: on the endless river the autopilot stops steering this far down, so a ride ends)
   const pilotStop = Number(d.pilotMetres) || 900;
   function pilot() {
-    if (phase !== 'run' || Math.abs(laneX(lane) - x) > 0.3) return;   // (tests' autopilot: one glide at a time)
+    if (phase !== 'run') return;
     if (endless && dist > pilotStop) return;
+    // (a log or a tree in the way: jump or duck in time, whatever the lane)
+    const sp = speedAt(dist, len);
+    for (const l of live) {
+      if (l.done || (l.it.kind !== 'log' && l.it.kind !== 'branch')) continue;
+      const a = l.z - dist;
+      const u = l.obj.userData;
+      // (a lesson holds time just before its log or tree: answer it there, as a player would)
+      const reach = lesson && !lesson.done && lesson.l === l ? sp * (l.it.kind === 'log' ? 0.3 : 0.16) + 1.5 : sp * 0.3;
+      if (a > 0 && a < reach && Math.abs(l.x - x) < u.w / 2 + HIT_R) {
+        if (l.it.kind === 'log' && jumpT < 0) jump();
+        if (l.it.kind === 'branch' && duckT < 0) duck();
+      }
+    }
+    if (Math.abs(laneX(lane) - x) > 0.3) return;   // (tests' autopilot: one glide at a time)
     const ahead = live.filter((l) => !l.done && l.z > dist + 1 && l.z < dist + 22);
-    const blocked = (ln) => ahead.some((l) => l.it.kind !== 'person' && (l.it.lane === ln || l.it.lane + l.drift === ln) && l.z < dist + 18);
+    // (a pie coming down in a lane: that lane is out)
+    const pieIn = (ln) => pies.some((pp) => Math.abs(pp.tx - laneX(ln)) < 1 && pp.t > 0.15);
+    const blocked = (ln) => pieIn(ln) || ahead.some((l) => !['person', 'log', 'branch', 'clown'].includes(l.it.kind) && (l.it.lane === ln || l.it.lane + l.drift === ln) && l.z < dist + 18);
     const want = ahead.find((l) => l.it.kind === 'person' && !blocked(l.it.lane));
     let target = want ? want.it.lane : lane;
     if (blocked(target)) target = [lane, lane - 1, lane + 1, 0, 1, 2].find((ln) => ln >= 0 && ln < 3 && !blocked(ln)) ?? lane;
@@ -1644,10 +1853,37 @@ function createRide(K, d) {
       left -= h;
     }
     leanV += (clamp(vx / 13, -1, 1) - leanV) * (1 - Math.exp(-dt * 14));
+    // the jump and the duck
+    if (jumpT >= 0) {
+      jumpT += dt;
+      if (jumpT >= JUMP_S) {
+        jumpT = -1;
+        things.emit(x, 0.1, 0.3, 26, 1.8, 2.4);
+        audio.play('splash');
+        if (t - jumpQ < 0.2) jump();
+      }
+    }
+    if (duckT >= 0) {
+      duckT += dt;
+      if (duckT >= DUCK_S) duckT = -1;
+    }
+    const js = jumpT >= 0 ? jumpT / JUMP_S : 0;
+    airY = jumpT >= 0 ? JUMP_H * 4 * js * (1 - js) : 0;
+    duckK = duckT >= 0 ? Math.min(1, duckT / 0.09, (DUCK_S - duckT) / 0.14) : 0;
+    if (phase === 'run') rider.group.position.y = airY;
+    if (pies.length) stepPies(dt);
+    if (endless && phase === 'run') {
+      const km = Math.floor(dist / 1000);
+      if (km > kmSaid) {
+        kmSaid = km;
+        pop(S.rvMilestone(km), 1200);
+        audio.play('banner');
+      }
+    }
     rider.group.position.x = x;
     riderFoam.position.set(x, 0.03, 0.05);
-    riderFoam.visible = phase !== 'dive' || rider.group.position.y < 0.3;
-    rider.update(dt, { lean: leanV, yaw: Math.atan2(-vx, Math.max(4, speedAt(dist, len))) * 0.8, crouch: slowT > 0 ? slowT / RIVER.hitSlowS : 0, speed: speedAt(dist, len) });
+    riderFoam.visible = (phase !== 'dive' || rider.group.position.y < 0.3) && airY < 0.3;
+    rider.update(dt, { lean: leanV, yaw: Math.atan2(-vx, Math.max(4, speedAt(dist, len))) * 0.8, crouch: slowT > 0 ? slowT / RIVER.hitSlowS : 0, speed: speedAt(dist, len), tuck: jumpT >= 0 ? Math.sin(js * Math.PI) : 0, duck: duckK });
     // spray off the board's tail
     if (phase === 'run' && Math.random() < 0.85) things.emit(x - leanV * 0.3, 0.12, 0.9, 1 + Math.round(rapK * 2), 0.6 + rapK, 1.4 + Math.abs(leanV) * 2 + rapK * 1.5);
 
@@ -1667,6 +1903,25 @@ function createRide(K, d) {
       if (u.arm) u.arm.rotation.z = -0.4 + Math.sin(t * 9 + u.phase) * 0.7;
       u.update?.(t, ahead, dt);
       if (phase === 'run') cues(l, ahead);
+      if (u.kind === 'clown') {
+        clownStep(l, ahead, dt);
+        continue;
+      }
+      if (u.kind === 'log' || u.kind === 'branch') {
+        // (a log lies in the water; the tree lies across at head height; both at the middle of what they cover)
+        l.obj.position.set(u.kind === 'branch' ? 0 : lx, u.kind === 'log' ? Math.sin(t * 1.7 + u.phase) * 0.05 : 0, -ahead);
+        if (u.kind === 'log') l.obj.rotation.z = Math.sin(t * 1.3 + u.phase) * 0.03;
+        if (phase === 'run') teach(l, ahead);
+        if (l.done || phase !== 'run') continue;
+        if (Math.abs(ahead) < u.d / 2 + 0.45 && Math.abs(l.x - x) < u.w / 2 + HIT_R * 0.4) {
+          l.done = true;
+          if (lesson?.l === l && lesson.kind === (u.kind === 'log' ? 'jump' : 'duck') && !(u.kind === 'log' ? airY > LOG_TOP - 0.2 : duckK > 0.5)) endLesson();
+          const clear = u.kind === 'log' ? airY > LOG_TOP - 0.2 : duckK > 0.5 && airY < 0.3;
+          if (clear) cleared(l);
+          else if (graceT <= 0) knock(l);
+        }
+        continue;
+      }
       if (l.done || phase !== 'run') continue;
       if (Math.abs(ahead) < (u.d || 1.4) / 2 + 0.5) {
         const dx = Math.abs(l.x - x);
@@ -1801,7 +2056,16 @@ function createRide(K, d) {
     raf = requestAnimationFrame(loop);
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    if (!paused) step(dt);
+    // (a lesson: the river slows as the log (the tree) comes, and stands nearly still just where a jump (a duck) now
+    // clears it, until you swipe; then it's back to full speed at once)
+    let want = 1;
+    if (lesson && !lesson.done) {
+      const a = lesson.l.z - dist;
+      const ideal = speedAt(dist, len) * (lesson.kind === 'jump' ? 0.3 : 0.16) + 1;
+      want = a <= ideal ? 0.015 : Math.min(0.45, 0.015 + 0.45 * (a - ideal) / (ideal * 2.5));
+    }
+    timeK += (want - timeK) * Math.min(1, dt * (want < timeK ? 7 : 14));
+    if (!paused) step(dt * timeK);
     world.reflect(stage.renderer, camera);
     stage.render(dt);
   }
@@ -1889,6 +2153,7 @@ function createRide(K, d) {
     paused = false;
     audio.resume?.();
     for (const l of live) l.done = true;
+    endLesson();
     if (endless && (phase === 'dive' || phase === 'run' || phase === 'wipe')) {
       phaseT = 2;
       done();
@@ -1914,6 +2179,7 @@ function createRide(K, d) {
     try {
       const blk = things.floating({ shape: 'cube', skin, color: 0, spin: 0 });
       const kinds = [beasts.croc(1), beasts.hippo(), things.rock(), things.person(who[0] || 'boer', 0), things.floating({ shape: 'plank', skin, color: 1 }), beasts.monkeyOn(blk, 1, blk.userData.top)];
+      if (endless) kinds.push(hz.log(1), hz.log(3), hz.branch(), hz.clown(1), hz.pie());
       kinds.forEach((o, i) => { o.position.set(i * 3 - 8, 0, -30); tmp.add(o); });
       if (raid) {
         const jm = new THREE.Mesh(jetGeometry(new THREE.Vector3(0, 1, -5), new THREE.Vector3(0, 5, -40), 1), jetMat);
@@ -1972,6 +2238,10 @@ function createRide(K, d) {
     for (const g of new Set(warmGeos)) g.dispose();
     burstTex.dispose();
     jetMat.dispose();
+    for (const pp of pies) { scene.remove(pp.mesh, pp.shadow); pp.shadow.material.dispose(); disposeTree(pp.mesh, done); }
+    pieShadowGeo.dispose();
+    pieShadowMat.dispose();
+    hz.dispose();
     fwRide?.dispose();
     if (raid) setBend(1);
     camera.fov = FOV0;
@@ -1993,7 +2263,7 @@ function createRide(K, d) {
     pause: () => setPaused(true),
     resume: () => setPaused(false),
     /** For tests: where the ride stands. */
-    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, endless, hearts, lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })) }),
+    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, endless, hearts, airY: Math.round(airY * 100) / 100, duckK: Math.round(duckK * 100) / 100, timeK: Math.round(timeK * 100) / 100, lesson: lesson && !lesson.done ? lesson.kind : null, pies: pies.length, headY: rider.headY?.(), lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, lastKnock, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })) }),
     autopilot(on) { pilotOn = !!on; },
     /** For tests (Saturday): where on screen (host px) the tallest tower stands at a share of its height, or null. */
     towerScreen(frac = 0.5) {
@@ -2021,6 +2291,8 @@ function createRide(K, d) {
     /** For tests: where the course's rows and kinds are. */
     course: () => course,
     move,
+    jump,
+    duck,
     skip: finishNow,
     /** For tests: the 3D scene and camera. */
     get scene() { return scene; },

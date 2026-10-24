@@ -31,6 +31,11 @@ export const RIVER = Object.freeze({
   // the endless ride (the owner, 24 Oct 2026: "it was too short, it was quite fun. Please make it that it doesnt end,
   // the more meters you get the better for the week"): it runs until your third knock
   hearts: 3,            // (the pace: js/core/riverpace.js)
+  // (the owner, 25 Oct 2026: "keep it as is for the first 1000 meters, then after that it adds a clown that tries to
+  // distract you, after 2000 meters there is a small object that you need to jump over, the first one shows you to
+  // jump etc"): what the endless river adds as you get further
+  unlock: Object.freeze({ clown: 1000, log: 2000, branch: 3000 }),
+  clownEvery: [520, 820],   // m between Hanswors's visits, once he's come (closer together further down)
   lakeFrom: 600,       // m: the river opens into a lake, your crew's island beside it...
   lakeTo: 880,         // ...and narrows into the canyon again
   islandAt: 740,
@@ -99,6 +104,43 @@ function buildCourse(key, len, who, crews) {
   // again
   const rapids = endless ? { from: 370, to: 460 } : { from: Math.round(len * 0.58), to: Math.round(len * 0.58) + 90 };
   const rapidsAt = (z) => inRapids({ rapids, endless, lake }, z);
+  // (the endless river's later things: Hanswors's visits, logs to jump, fallen trees to duck under)
+  const later = { clownNext: RIVER.unlock.clown, taught: { clown: false, log: false, branch: false } };
+  /** A row of the later things at z, if one is due (pushed; z moved on as it needs); true when it made one. */
+  function laterRow(zz, minGap, deep) {
+    // Hanswors: he comes (alone the first time), rides alongside a while lobbing pies, and goes; then again later
+    if (zz >= later.clownNext) {
+      const first = !later.taught.clown;
+      later.taught.clown = true;
+      const k = Math.min(1, (zz - RIVER.unlock.clown) / 4000);
+      later.clownNext = zz + Math.round(rng.int(RIVER.clownEvery[0], RIVER.clownEvery[1]) * (1 - 0.35 * k));
+      rows.push({ z: zz, items: [{ lane: 1, kind: 'clown', side: rng.chance(0.5) ? -1 : 1, pies: first ? 3 : 3 + Math.round(k * 3) }], teach: first ? 'clown' : undefined });
+      z = zz + minGap * (first ? 2.2 : 1);
+      return true;
+    }
+    // a log to jump: the first one alone, across the whole river (it shows you how); then sometimes across all of it,
+    // sometimes in one lane with blocks beside it (jump it, or go round)
+    if (zz >= RIVER.unlock.log && (!later.taught.log || rng.chance(0.13 + deep * 0.08))) {
+      const first = !later.taught.log;
+      later.taught.log = true;
+      if (first || rng.chance(0.5)) rows.push({ z: zz, items: [{ lane: 1, kind: 'log', span: 3 }], teach: first ? 'log' : undefined });
+      else {
+        const lane = rng.pick(ALL);
+        rows.push({ z: zz, items: [{ lane, kind: 'log', span: 1 }, ...ALL.filter((l) => l !== lane).map((l) => ({ lane: l, ...block() }))] });
+      }
+      z = zz + minGap * (first ? 2.4 : 1.15);
+      return true;
+    }
+    // a fallen tree across the river at head height: duck under it (the first one shows you how)
+    if (zz >= RIVER.unlock.branch && (!later.taught.branch || rng.chance(0.1 + deep * 0.07))) {
+      const first = !later.taught.branch;
+      later.taught.branch = true;
+      rows.push({ z: zz, items: [{ lane: 1, kind: 'branch', span: 3, flip: rng.chance(0.5) }], teach: first ? 'branch' : undefined });
+      z = zz + minGap * (first ? 2.4 : 1.15);
+      return true;
+    }
+    return false;
+  }
   // each new kind is met alone first (introduce, then develop, then mix): where each first comes (m)
   const FIRST = { croc: 0.27 * RIVER.rescueLen, monkey: 0.44 * RIVER.rescueLen, hippo: 0.7 * RIVER.rescueLen };
   const met = { croc: false, monkey: false, hippo: false };
@@ -133,6 +175,12 @@ function buildCourse(key, len, who, crews) {
       z += Math.max(minGap, rng.int(RIVER.gapMin, RIVER.gapMax) - Math.round(deep * 5));
       if (z >= stopAt) break;
       const t = Math.min(1, z / RIVER.rescueLen);   // how far along: harder further on
+      // (the endless river, further down: the new things, each met alone the first time (it shows you what to do), then
+      // in the mix; the first kilometre stays exactly as it was)
+      if (endless && z >= RIVER.unlock.clown && !nearIsland(z) && !rapidsAt(z)) {
+        const extra = laterRow(z, minGap, deep);
+        if (extra) continue;
+      }
       const items = [];
       const open = rng.pick(ALL);
       const shut = ALL.filter((l) => l !== open);
@@ -243,7 +291,8 @@ export function rapidsWindow(course, z) {
  * that lane can be reached in time (the gap at full speed holds two lane changes and a moment to react).
  */
 export function passable(course) {
-  const hard = (it) => it.kind !== 'person';
+  // (a log is jumped, a fallen tree ducked under, Hanswors's pies dodged: none of them shuts a lane)
+  const hard = (it) => !['person', 'clown', 'log', 'branch'].includes(it.kind);
   let prevZ = -Infinity;
   for (const row of course.rows) {
     const shut = new Set();
@@ -253,11 +302,13 @@ export function passable(course) {
       if (it.drift) shut.add(it.lane + it.drift);
     }
     if (shut.size >= RIVER.lanes) return false;
+    // (a jump or a duck needs its time too, before and after)
+    const act = row.items.some((it) => it.kind === 'log' || it.kind === 'branch');
     const dz = row.z - prevZ;
-    if (shut.size && dz < RIVER.gapMin - 0.01) return false;
+    if ((shut.size || act) && dz < RIVER.gapMin - 0.01) return false;
     // (the endless river at speed: the gap still holds the time to react)
-    if (shut.size && course.endless && dz < speedAt(row.z, Infinity) * reactAt(row.z) - 0.51) return false;
-    if (shut.size) prevZ = row.z;
+    if ((shut.size || act) && course.endless && dz < speedAt(row.z, Infinity) * reactAt(row.z) - 0.51) return false;
+    if (shut.size || act) prevZ = row.z;
   }
   return true;
 }

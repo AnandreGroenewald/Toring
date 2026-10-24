@@ -2900,7 +2900,7 @@ let riverPrefetched = false;
 function prefetchRiver() {
   if (riverPrefetched || !has3d()) return;
   riverPrefetched = true;
-  const go = () => import('./rivier/models.js').then((m) => m.loadModels(['croc', 'hippo', 'monkey', 'builder', 'dorp', 'island', 'props'])).catch(() => {});
+  const go = () => import('./rivier/models.js').then((m) => m.loadModels(['croc', 'hippo', 'monkey', 'builder', 'dorp', 'island', 'props', 'hazards'])).catch(() => {});
   if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 3000 });
   else setTimeout(go, 1500);
 }

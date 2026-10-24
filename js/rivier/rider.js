@@ -324,33 +324,37 @@ export function createRider(bend = (m) => m, model = null) {
   let t0 = 0;
   return {
     group,
-    /** `lean`: -1 (carving left) .. 1 (right); `yaw`: the board's heading (rad, + = nose left); `crouch` 0..1 (a knock); `speed` m/s. */
-    update(dt, { lean = 0, yaw = 0, crouch = 0, speed = 15 } = {}) {
+    /**
+     * `lean`: -1 (carving left) .. 1 (right); `yaw`: the board's heading (rad, + = nose left); `crouch` 0..1 (a knock);
+     * `speed` m/s; `tuck` 0..1 (a jump: knees up, board nose up, arms out); `duck` 0..1 (ducking under a tree: low and
+     * flat, his head about 1.1 m over the water).
+     */
+    update(dt, { lean = 0, yaw = 0, crouch = 0, speed = 15, tuck = 0, duck = 0 } = {}) {
       t0 += dt;
       const swell = Math.sin(t0 * 2.6) * 0.045 + Math.sin(t0 * 4.3) * 0.02;
       // the carve: the board rolls into the turn, the nose lifts a little with speed
       tilt.rotation.z = -lean * 0.38 + Math.sin(t0 * 1.7) * 0.03;
       tilt.rotation.y = yaw;
-      tilt.rotation.x = -0.04 - Math.min(0.06, speed / 400) + crouch * 0.08;
+      tilt.rotation.x = -0.04 - Math.min(0.06, speed / 400) + crouch * 0.08 - tuck * 0.22;
       tilt.position.y = swell + 0.03;   // (the group's own place is the ride's: the dive moves it)
       // knees bend with the speed, more in a carve and after a knock
-      const knee = 0.45 + Math.abs(lean) * 0.25 + crouch * 0.5 + Math.min(0.15, speed / 140);
+      const knee = 0.45 + Math.abs(lean) * 0.25 + crouch * 0.5 + Math.min(0.15, speed / 140) + tuck * 0.55 + duck * 0.95;
       hips.position.y = 1.0 - knee * 0.38;
       legF.rotation.x = knee * 0.55;
       legB.rotation.x = -knee * 0.45;
       shinF.rotation.x = -knee * 1.0;
       shinB.rotation.x = knee * 0.85;
       // upper body: leans into the carve, ducks after a knock, breathes with the swell
-      torso.rotation.z = -0.16 - crouch * 0.45 + lean * 0.22;
+      torso.rotation.z = -0.16 - crouch * 0.45 + lean * 0.22 - duck * 0.85 - tuck * 0.2;
       torso.rotation.x = Math.sin(t0 * 2.6) * 0.03;
       // arms out for balance: the front one forward and low, the back one up behind; they swing with the carve
-      armF.rotation.x = -1.25 - lean * 0.35 + Math.sin(t0 * 2.1) * 0.06;
-      armF.rotation.z = 0.35 + crouch * 0.4;
+      armF.rotation.x = -1.25 - lean * 0.35 + Math.sin(t0 * 2.1) * 0.06 - tuck * 0.4;
+      armF.rotation.z = 0.35 + crouch * 0.4 + duck * 0.5 + tuck * 0.5;
       foreF.rotation.x = -0.35;
-      armB.rotation.x = 1.15 - lean * 0.35 + Math.sin(t0 * 2.4) * 0.07;
-      armB.rotation.z = 0.5 + crouch * 0.3;
+      armB.rotation.x = 1.15 - lean * 0.35 + Math.sin(t0 * 2.4) * 0.07 + tuck * 0.4;
+      armB.rotation.z = 0.5 + crouch * 0.3 + duck * 0.4 + tuck * 0.6;
       foreB.rotation.x = 0.45;
-      head.rotation.z = lean * 0.18 - (torso.rotation.z + 0.16) * 0.6;
+      head.rotation.z = lean * 0.18 - (torso.rotation.z + 0.16) * 0.6 + duck * 0.25;
       if (gun.visible) {
         // the tube swings to its aim; he holds it up with the back arm, the front hand on the grip
         const k = 1 - Math.exp(-dt * 12);
@@ -371,6 +375,11 @@ export function createRider(bend = (m) => m, model = null) {
         flash.scale.setScalar(1 + (0.16 - flashT) * 7);
         drawHose();
       }
+    },
+    /** How high his head is over the board's foot (m) in the pose just drawn (tests: he really gets low to duck). */
+    headY() {
+      group.updateMatrixWorld(true);
+      return head.getWorldPosition(new THREE.Vector3()).y - group.position.y;
     },
     /** (Saturday) the water cannon on his shoulder and its tank on his back, or not. */
     setGun(on) {

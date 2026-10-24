@@ -121,6 +121,39 @@ test('rivier (endless): the river never ends — always passable at its speed, e
   assert.ok(inRapids(rescueCourse('x', WHO, { endless: true }), 400) && inRapids(rescueCourse('x', WHO, { endless: true }), 400 + 2 * RIVER.rapidsEvery));
 });
 
+test('rivier (endless): the river grows harder further down — Hanswors from 1 km, logs from 2 km, fallen trees from 3 km, each first one a lesson', () => {
+  // (the owner, 25 Oct 2026: "keep it as is for the first 1000 meters, then after that it adds a clown ... after 2000
+  // meters there is a small object that you need to jump over, the first one shows you to jump")
+  const LATER = ['clown', 'log', 'branch'];
+  for (let d = 0; d < 40; d++) {
+    const c = rescueCourse(`later-${d}`, WHO, { endless: true });
+    c.extend(6000);
+    const at = (kind) => c.rows.filter((r) => r.items.some((it) => it.kind === kind));
+    for (const kind of LATER) {
+      const rows = at(kind);
+      assert.ok(rows.length >= 2, `${kind}: more than one by 6 km (${d})`);
+      assert.ok(rows[0].z >= RIVER.unlock[kind], `${kind} not before ${RIVER.unlock[kind]} m (${rows[0].z})`);
+      assert.ok(rows[0].z < RIVER.unlock[kind] + 900, `${kind} soon after its mark (${rows[0].z})`);
+      assert.equal(rows[0].teach, kind, `the first ${kind} is a lesson`);
+      assert.ok(rows.slice(1).every((r) => r.teach !== kind), `only the first ${kind} teaches`);
+    }
+    // (the first km as it was; none by your island or in the rapids)
+    for (const r of c.rows) {
+      const late = r.items.some((it) => LATER.includes(it.kind));
+      if (r.z < RIVER.unlock.clown) assert.ok(!late, `nothing new in the first km (${r.z})`);
+      if (late) assert.ok(!(r.z > c.lake.from - 20 && r.z < c.lake.to) && !inRapids(c, r.z), `not by the island or in the rapids (${r.z})`);
+      // (a log in one lane leaves the other two lanes to jump or go round: never a person beside a log or a tree)
+      if (r.items.some((it) => it.kind === 'log' || it.kind === 'branch')) assert.ok(!r.items.some((it) => it.kind === 'person'), 'no one to scoop under a log');
+    }
+    assert.ok(passable(c), `later-${d}`);
+  }
+  // (the day's river with an end, and Saturday's, have none of them)
+  for (let d = 0; d < 20; d++) {
+    const c = rescueCourse(`fin-${d}`, WHO);
+    assert.ok(c.rows.every((r) => r.items.every((it) => !LATER.includes(it.kind))));
+  }
+});
+
 test('rivier (endless): however many people (up to 24), all of them fit before the lake and the river runs on busy after it', () => {
   const MANY = ['boer', 'haai', 'bytjie', 'klippie', 'rissie', 'seekat', 'braai', 'duiker', 'madelief', 'draakie', 'brandweer', 'vuurhoutjie'];
   const who24 = [...MANY, ...MANY.map((x) => `${x}2`)];
