@@ -1382,5 +1382,9 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
   fireball). Also: offline crane turns queue, floating floors dropped, new-player limit per address, the prize said
   once, Saturday/Sunday/Monday reminders, the rules screen. Asked him (Telegram 12:47) to install Blender for proper
   models (builder, bazooka, crocodile, hippo, monkey); waiting.
-- **Next:** his answer on Blender; his play of checkpoints 1+2 at home:
+- **Blender (24 Oct afternoon, his "Perfect please use blender"):** models made by script in art/blender/ (README: run
+  `~/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P art/blender/<m>.py -- img/models/<m>.glb`;
+  raise MODEL_V in js/rivier/models.js when a .glb changes). Every model has its code fallback. Plus the bazooka,
+  fireworks for winners, background-skin skies, rushing water, speed feel. A 46 s video sent to his Telegram.
+- **Next:** his feedback; his play of checkpoints 1+2 at home:
   http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1; the release on his word (plan §8).
