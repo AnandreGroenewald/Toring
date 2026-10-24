@@ -999,7 +999,15 @@ function createRide(K, d) {
   host.addEventListener('pointerdown', onDown);
   host.addEventListener('pointermove', onMoveP);
   host.addEventListener('pointerup', onUp);
-  host.addEventListener('pointercancel', () => { down = null; });
+  // (the phone took the touch away, e.g. a notification: no throw, the aim ends)
+  const onCancel = () => {
+    down = null;
+    if (aiming) {
+      aiming = false;
+      showAim(false);
+    }
+  };
+  host.addEventListener('pointercancel', onCancel);
   addEventListener('keydown', onKey);
 
   // ---------------------------------------------------------------------------------------------- the box over Stapel's page
@@ -1450,6 +1458,7 @@ function createRide(K, d) {
     host.removeEventListener('pointerdown', onDown);
     host.removeEventListener('pointermove', onMoveP);
     host.removeEventListener('pointerup', onUp);
+    host.removeEventListener('pointercancel', onCancel);
     for (const l of live) despawn(l);
     live.length = 0;
     scene.remove(rider.group, riderFoam, island.group, start.group, things.spray);
