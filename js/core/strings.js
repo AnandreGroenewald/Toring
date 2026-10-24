@@ -917,6 +917,23 @@ export const S = {
   boardSaving: 'Stoor…',
   boardRetry: 'Nog nie gestoor nie: ons probeer weer sodra jy aanlyn is.',
   boardTitleYesterday: 'Gister se ranglys',
+  turnLooseFree: 'Nie jou skuld nie: dié blok was al los',
+  // --- (1.20) Afgly: the rescue ride down the river (js/rivier/view.js) ---
+  rvHint: 'Swiep ⟵ ⟶ en skep jou mense op!',
+  rvPaused: 'Gepouseer',
+  rvResume: 'Ry verder',
+  rvQuit: 'Klim uit',
+  rvSlipped: (name) => `Oeps! ${name} het weer ingeval`,
+  rvOuch: 'Eina!',
+  rvAll: 'Almal gered! 🛟',
+  rvSaved: (n, t) => `🛟 ${n} van ${t} gered!`,
+  rvNoneSaved: 'Niemand gered nie…',
+  rvMovedIn: (n, crew) => `${n === 1 ? 'Een trek' : `${n} trek`} in by ${crew ? `${crew} se` : 'julle'} Weektoring.`,
+  rvTryTomorrow: 'Môre gly jy weer.',
+  rvYoursLeft: (n) => `${n === 1 ? 'Een' : n} van joune het weggedryf.`,
+  rvBuild: '🏗️ Bou aan die Weektoring',
+  rvLater: 'Later',
+  rvDone: 'Klaar',
   // --- Taal (1.9; js/core/i18n.js) ---
   language: 'Taal',
   reminders: 'Herinneringe',   // (1.14) ⚙️ Instellings

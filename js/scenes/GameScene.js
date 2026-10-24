@@ -2529,7 +2529,17 @@ export class GameScene extends Phaser.Scene {
         free = this.now - this.lastTowerLossAt < COLLAPSE_MS || this.towerFalling();
         if (!free) this.collapseUntil = this.now + COLLAPSE_MS;
       } else {
-        free = this.now < this.collapseUntil;
+        // (1.20, the owner 24 Oct 2026 with two photos: "Twee keer gebeur waar Llewellyn se blokkie nog val dan word dit my
+        // beurt no way to stop it") a tower block that falls in this turn costs this turn's player a heart only when it is
+        // their own block, or one their block hit: a block the other player left loose (it slides off once the tower moves
+        // again) is never the next player's fault. The turn's report carries it (the referee takes the reporter's word).
+        const own = block.index === turn.n - 1;
+        const hit = Number.isInteger(block.touchedBy) && block.touchedBy >= turn.n - 1;
+        free = (!own && !hit) || this.now < this.collapseUntil;
+        if (!own && !hit && turn.mine && !turn.looseSaid) {
+          turn.looseSaid = true;
+          bus.emit('hud:toast', { text: S.turnLooseFree, color: '#c9ffb8' });
+        }
         this.collapseUntil = this.now + COLLAPSE_MS;
         this.lastTowerLossAt = this.now;
       }
