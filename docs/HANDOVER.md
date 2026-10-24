@@ -1372,5 +1372,15 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
   describe Ons dorp's server data. Home play: play-home.sh runs Ons dorp on a test clock (Mon 26 Oct 08:00 first; the
   town's 🕒 row jumps through the week with ?debug=1&meter=0). Tests: npm 498, server 298 (+2 sims), qa/rivier_raid.mjs
   14/14, span1200.mjs 18/18 (two browsers, Monday → Saturday's bomb run), span_clock1200.mjs 5/5.
-- **Next:** his play of checkpoints 1+2 at home: http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1;
-  then checkpoint 3 (the look pass, both languages, small phones, release notes) and the release on his word.
+- **The look pass (24 Oct, afternoon; his Telegram 12:34: "Make it a bazooka on his shoulder ... the graphics just needs
+  a big upgrade, use whatever tool you need ... Very well done"):** Blyde-style canyon (sandstone texture with bumps,
+  ledges, desert varnish, lichen), shrubs, acacias on the rim, rondavels, clouds, birds, waterfalls, the walls mirrored
+  near the banks, a wake and foam under the board; the town shows each member's latest Daily tower and past weeks'
+  monuments (name tags), frames the towers in the space the panel leaves, the panel folds; background skins dress the
+  3D river and town (sunset, night with stars and floodlights, northern lights, space, candy, cherry blossom, aquarium,
+  retro neon); Saturday's bazooka on the builder's shoulder fires rockets (flash, kick, back-blast, smoke trail,
+  fireball). Also: offline crane turns queue, floating floors dropped, new-player limit per address, the prize said
+  once, Saturday/Sunday/Monday reminders, the rules screen. Asked him (Telegram 12:47) to install Blender for proper
+  models (builder, bazooka, crocodile, hippo, monkey); waiting.
+- **Next:** his answer on Blender; his play of checkpoints 1+2 at home:
+  http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1; the release on his word (plan §8).
