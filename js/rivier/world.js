@@ -261,9 +261,9 @@ function shrubGeometry() {
   return g;
 }
 
-/** A rondavel: the round flat-topped sandstone peaks of the Blyde canyon (a drum with a grassy dome), far off. */
+/** A rondavel: the round sandstone peaks of the Blyde canyon (a drum narrowing upward under a grassy, hut-roof cone). */
 function rondavelGeometry(r, h, seed) {
-  const g = new THREE.CylinderGeometry(r * 0.86, r * 1.12, h, 18, 6);
+  const g = new THREE.CylinderGeometry(r * 0.78, r * 1.25, h, 18, 6);
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i);
@@ -297,6 +297,38 @@ void main() {
   col += uSunCol * (pow(s, 900.0) * 6.0 + pow(s, 24.0) * 0.32 + pow(s, 4.0) * 0.12);
   col = mix(col, uHorizon * 0.92, smoothstep(0.05, -0.2, d.y));
   gl_FragColor = vec4(col, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+
+// ------------------------------------------------------------------------------------------------ waterfalls
+const FALL_VERT = `${BEND_GLSL}
+varying vec2 vUv; varying float vDepth;
+void main() {
+  vUv = uv;
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  w.x += rvBend(-w.z, uDist - w.z);
+  vec4 mv = viewMatrix * w;
+  vDepth = -mv.z;
+  gl_Position = projectionMatrix * mv;
+}`;
+const FALL_FRAG = `uniform sampler2D uNoise; uniform float uT; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar;
+varying vec2 vUv; varying float vDepth;
+void main() {
+  float x = vUv.x;
+  float edge = smoothstep(0.0, 0.3, x) * smoothstep(1.0, 0.7, x);
+  // streaks of falling water: the pattern runs down, faster lower down
+  float n = texture2D(uNoise, vec2(x * 0.9, vUv.y * 0.5 + uT * 0.55)).r;
+  float n2 = texture2D(uNoise, vec2(x * 2.3 + 0.3, vUv.y * 1.4 + uT * 1.25)).b;
+  float a = edge * (0.55 + 0.45 * smoothstep(0.35, 0.7, n * 0.55 + n2 * 0.45));
+  a *= smoothstep(1.0, 0.95, vUv.y);
+  vec3 col = mix(vec3(0.72, 0.82, 0.84), vec3(1.0), smoothstep(0.42, 0.8, n2));
+  // white water where it lands
+  float foot = smoothstep(0.14, 0.0, vUv.y);
+  col = mix(col, vec3(1.0), foot);
+  a = max(a, foot * edge * 0.9);
+  col = mix(col, uFog, smoothstep(uFogNear, uFogFar, vDepth));
+  gl_FragColor = vec4(col, a * 0.9);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -474,6 +506,37 @@ export function buildRiverWorld(stage) {
     return g;
   }
   const cliffGeos = { '-1': [0, 1, 2].map((k) => cliffGeometry(-1, k + 1)), 1: [0, 1, 2].map((k) => cliffGeometry(1, k + 4)) };
+  const fallMat = new THREE.ShaderMaterial({
+    uniforms: { uDist: bendUniforms.uDist, uBendK: bendUniforms.uBendK, uNoise: { value: noise }, uT: { value: 0 }, uFog: { value: fog }, uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar } },
+    vertexShader: FALL_VERT, fragmentShader: FALL_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  });
+  /** A strip of falling water on the wall `geo` (side ±1), 2.8 m wide, from the rim to the river, a little off the rock. */
+  function fallGeometry(geo, side) {
+    const pos = geo.attributes.position;
+    const cols = 23;   // (PlaneGeometry(SEG_L, 34, 22, 16): 23 vertices a row)
+    const k = 11;
+    const rows = [];
+    for (let r = 0; r < pos.count / cols; r++) rows.push(new THREE.Vector3().fromBufferAttribute(pos, r * cols + k));
+    rows.sort((a, b) => a.y - b.y);
+    const vtx = [];
+    const uv = [];
+    const idx = [];
+    rows.forEach((p, r) => {
+      const x = p.x - side * 0.45;
+      // (wider as it falls: the water spreads out)
+      const w = 1.8 + (1 - (r / (rows.length - 1))) * 1.6;
+      vtx.push(x, p.y, p.z - w, x, p.y, p.z + w);
+      const v = r / (rows.length - 1);
+      uv.push(0, v, 1, v);
+      if (r) idx.push((r - 1) * 2, r * 2, (r - 1) * 2 + 1, (r - 1) * 2 + 1, r * 2, r * 2 + 1);
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(vtx, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    return g;
+  }
+  const fallGeos = { '-1': cliffGeos['-1'].map((g) => fallGeometry(g, -1)), 1: cliffGeos[1].map((g) => fallGeometry(g, 1)) };
   const bushMat = bendMaterial(new THREE.MeshStandardMaterial({ color: COLORS.bushL, roughness: 0.92, vertexColors: true }));
   const bushGeo = shrubGeometry();
   const boulderGeo = new THREE.DodecahedronGeometry(1, 1);
@@ -487,28 +550,37 @@ export function buildRiverWorld(stage) {
   group.add(bushes, boulders);
   for (let i = 0; i < N_SEG; i++) {
     for (const side of [-1, 1]) {
-      const m = new THREE.Mesh(cliffGeos[side][(i + (side > 0 ? 1 : 0)) % 3], rockMat);
+      const gi = (i + (side > 0 ? 1 : 0)) % 3;
+      const m = new THREE.Mesh(cliffGeos[side][gi], rockMat);
       m.frustumCulled = false;
       group.add(m);
+      // a waterfall down every few pieces, the sides taking turns
+      if (i % 4 === (side < 0 ? 1 : 3)) {
+        const f = new THREE.Mesh(fallGeos[side][gi], fallMat);
+        f.frustumCulled = false;
+        f.renderOrder = 2;
+        m.add(f);
+      }
       const r = (k) => { const x = Math.sin((i * 2 + (side > 0 ? 1 : 0)) * 91.7 + k * 13.1) * 43758.5; return x - Math.floor(x); };
       segs.push({ m, side, i, r, bushes: Array.from({ length: BUSH_PER }, (_, k) => [r(k) * SEG_L - SEG_L / 2, 0.9 + r(k + 40) * 1.7, r(k + 80)]), rocks: Array.from({ length: ROCK_PER }, (_, k) => [r(k + 120) * SEG_L - SEG_L / 2, 0.5 + r(k + 160) * 0.9]) });
     }
   }
   // far off in the haze: rondavels (round sandstone peaks with grassy tops) and a long ridge
   const mesaMat = new THREE.MeshStandardMaterial({ color: COLORS.mesa, roughness: 1, map: rockTex.map });
-  const mesaTopMat = new THREE.MeshStandardMaterial({ color: COLORS.mesaTop, roughness: 1 });
+  const mesaTopMat = new THREE.MeshStandardMaterial({ color: COLORS.mesaTop, roughness: 1, flatShading: true });
   const hills = new THREE.Group();
-  for (const [x, z, r, h, s] of [[-150, -430, 42, 88, 1], [-62, -500, 34, 120, 2], [44, -470, 38, 96, 3], [138, -420, 46, 76, 4], [232, -520, 52, 110, 5], [-250, -520, 56, 100, 6], [-330, -380, 40, 70, 7], [320, -390, 44, 84, 8]]) {
+  // (three together, like the real ones, and a few more along the far rim; warm enough to read through the haze)
+  for (const [x, z, r, h, s] of [[-120, -330, 22, 44, 1], [-78, -350, 18, 52, 2], [-38, -338, 20, 40, 3], [96, -300, 24, 36, 4], [190, -360, 28, 46, 5], [-230, -360, 30, 42, 6], [300, -320, 22, 30, 7]]) {
     const drum = new THREE.Mesh(rondavelGeometry(r, h, s), mesaMat);
-    drum.position.set(x, h / 2 - 8, z);
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(r * 0.88, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), mesaTopMat);
-    cap.scale.y = 0.32;
-    cap.position.set(x, h - 8.5, z);
+    drum.position.set(x, h / 2 + 6, z);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(r * 0.86, r * 0.62, 12, 1), mesaTopMat);
+    cap.position.set(x, h + 6 + r * 0.3, z);
+    cap.rotation.y = s;
     hills.add(drum, cap);
   }
-  const ridge = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 8), new THREE.MeshStandardMaterial({ color: '#8f6a58', roughness: 1 }));
-  ridge.scale.set(900, 60, 80);
-  ridge.position.set(0, -20, -600);
+  // the far rim of the plateau they stand on
+  const ridge = new THREE.Mesh(new THREE.BoxGeometry(1400, 30, 120), new THREE.MeshStandardMaterial({ color: '#9a6a52', roughness: 1, map: rockTex.map }));
+  ridge.position.set(0, -6, -380);
   hills.add(ridge);
   group.add(hills);
   // birds: a few dark shapes gliding and flapping high over the canyon ahead
@@ -544,6 +616,7 @@ export function buildRiverWorld(stage) {
     water.uniforms.uT.value = t;
     water.uniforms.uDist.value = dist;
     skyMat.uniforms.uT.value = t;
+    fallMat.uniforms.uT.value = t;
     water.uniforms.uRider.value.set(riderX ?? 0, riderX === null ? -1e6 : dist);
     for (const bd of birds) {
       const a = bd.ph + t * bd.w;

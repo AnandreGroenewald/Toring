@@ -65,7 +65,8 @@ function makeKit() {
 #rivier .rv-faces img.out { opacity: .25; filter: grayscale(1); }
 #rivier .rv-hint { position: absolute; left: 50%; top: calc(104px + var(--sat, 0px)); transform: translateX(-50%); padding: 10px 18px; border-radius: 16px; background: rgba(13,34,40,.66); font-weight: 900; font-size: 18px; white-space: nowrap; opacity: 0; transition: opacity .3s; }
 #rivier .rv-hint.on { opacity: 1; }
-#rivier .rv-pop { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%) scale(.6); opacity: 0; font-size: 34px; font-weight: 900; color: #fff3c4; -webkit-text-stroke: 1.5px rgba(40,24,0,.75); text-shadow: 0 4px 0 rgba(40,24,0,.45), 0 8px 24px rgba(0,0,0,.4); white-space: nowrap; transition: opacity .25s, transform .35s cubic-bezier(.2,1.4,.4,1); }
+#rivier .rv-pop { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%) scale(.6); opacity: 0; font-size: 34px; font-weight: 900; color: #fff3c4; -webkit-text-stroke: 1.5px rgba(40,24,0,.75); text-shadow: 0 4px 0 rgba(40,24,0,.45), 0 8px 24px rgba(0,0,0,.4); width: max-content; max-width: 88%; text-align: center; line-height: 1.12; text-wrap: balance; transition: opacity .25s, transform .35s cubic-bezier(.2,1.4,.4,1); }
+#rivier .rv-pop.long { font-size: 26px; }
 #rivier .rv-pop.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 #rivier .rv-aim { position: absolute; left: 0; top: 0; width: 56px; height: 56px; border-radius: 50%; border: 3px solid #ffd65c; box-shadow: 0 0 0 2px rgba(40,20,0,.6), inset 0 0 0 2px rgba(40,20,0,.5); opacity: 0; pointer-events: none; }
 #rivier .rv-aim::after { content: ''; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: #ff5a3a; }
@@ -620,6 +621,7 @@ function createRide(K, d) {
   let popT = 0;
   function pop(text, ms = 1200) {
     popEl.textContent = text;
+    popEl.classList.toggle('long', String(text).length > 18);
     popEl.classList.add('on');
     clearTimeout(popT);
     popT = setTimeout(() => popEl.classList.remove('on'), ms);
@@ -1202,6 +1204,9 @@ function createRide(K, d) {
     course: () => course,
     move,
     skip: finishNow,
+    /** For tests: the 3D scene and camera. */
+    get scene() { return scene; },
+    get camera() { return camera; },
   };
   return api;
 }
