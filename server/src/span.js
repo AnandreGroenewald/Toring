@@ -134,6 +134,12 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
       let place = null;
       if (c.river) {
         const r = await get(rKey(c.river));
+        // (nobody looked between the whistle and now: last Saturday is settled first, its places and prizes)
+        if (r && !r.final && t >= r.whistle) {
+          await botsAct(r, r.whistle);
+          await settle(r, t);
+          put(rKey(r.id), r);
+        }
         place = r?.final ? r.final.order.indexOf(c.id) + 1 || null : null;
       }
       c.monuments = [{ week: c.week, h: heightOf(c.floors), n: c.floors.length, place, floors: compact(c.floors, MONUMENT_MAX) }, ...(c.monuments || [])]

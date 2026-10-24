@@ -324,3 +324,20 @@ test('span server: new players from one address are limited (an existing player 
   assert.equal((await s.handle('POST', '/span/sync', ps[2], '1.2.3.4'))[0], 429);
   assert.equal((await s.handle('POST', '/span/sync', ps[0], '1.2.3.4'))[0], 200, 'Anna again: fine');
 });
+
+test('span server: a crew that never looked after the whistle still gets its place and prize on Monday', async () => {
+  const h = harness(sastAt(day(2), 8));
+  const p = player('Stil');
+  await sync(h, p, { days: { [day(0)]: 60, [day(1)]: 60, [day(2)]: 60 } });
+  const [, l] = await h.call('POST', '/span/lease', p);
+  await h.call('POST', '/span/build', { ...p, lease: l.lease, floors: planks(0, 10) });
+  h.clock.t = sastAt(day(5), 9);
+  const [, sat] = await sync(h, p);
+  assert.ok(sat.river, 'a river on Saturday');
+  // (nobody opens the game again until next Monday)
+  h.clock.t = sastAt('2026-11-02', 8);
+  const [, mon] = await sync(h, p);
+  const place = mon.crew.monuments[0].place;
+  assert.ok(place >= 1 && place <= 4, `a place on the monument: ${place}`);
+  assert.equal(mon.me.prize?.coins, SPAN.prize[place - 1], 'the prize, paid now');
+});
