@@ -1695,6 +1695,7 @@ function createRide(K, d) {
   place();
   for (let i = 0; i < 30; i++) cameraFor(0.1);   // (the first frame already looks at the tower top)
   /** Every kind of thing the river brings, put out once out of sight so its shaders compile now (no stutter mid-ride). */
+  const warmMats = [];   // (their own materials stay until the ride closes: freed while still compiling, WebGL complains)
   function warmUp() {
     const tmp = new THREE.Group();
     const skin = d.skin || 'kleur';
@@ -1713,12 +1714,13 @@ function createRide(K, d) {
       console.warn?.('[rivier] warm-up', e?.message);
     }
     scene.remove(tmp);
-    for (const o of tmp.children) {
-      o.traverse((c) => { if (c.isSprite) c.material.dispose(); });
-      if (o.isMesh && o.material === jetMat) o.geometry.dispose();
-      else disposeTree(o);
-    }
+    tmp.traverse((c) => {
+      const ms = Array.isArray(c.material) ? c.material : c.material ? [c.material] : [];
+      for (const m of ms) if (!m.userData?.model && !m.userData?.shared && m !== jetMat && !warmMats.includes(m)) warmMats.push(m);
+      if (c.geometry && !c.geometry.userData?.model && !c.geometry.userData?.shared) warmGeos.push(c.geometry);
+    });
   }
+  const warmGeos = [];
   const ready = (async () => {
     // a first frame before it shows (the shaders compile behind Stapel's page)
     warmUp();
@@ -1754,6 +1756,8 @@ function createRide(K, d) {
     for (const b of debris) { scene.remove(b.g); disposeTree(b.g, done); }
     for (const root of [rider.group, start.group, island.group]) disposeTree(root, done);
     for (const fx of flashes) { scene.remove(fx.fl); fx.fl.material.dispose(); }
+    for (const m of warmMats) m.dispose();
+    for (const g of new Set(warmGeos)) g.dispose();
     burstTex.dispose();
     jetMat.dispose();
     if (raid) setBend(1);
