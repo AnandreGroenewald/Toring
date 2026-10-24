@@ -1435,7 +1435,7 @@ function createRide(K, d) {
       st.phase = 'riding';
       audio.play('clown');
       pop(S.rvClown, 1100);
-      if (!taught.clown) { hint(S.rvTeachClown); teachDone('clown'); setTimeout(() => { if (alive) hint(null); }, 3200); }
+      if (!taught.clown) { hint(S.rvTeachClown); teachDone('clown'); setTimeout(() => { if (alive && hintEl.textContent === S.rvTeachClown) hint(null); }, 3200); }
     }
     if (st.phase === 'riding') {
       // (he keeps pace a little ahead of you)
@@ -1723,6 +1723,7 @@ function createRide(K, d) {
   let ambNow = -1;
   const ambBefore = audio.ambience ?? 0;   // (the game's own level, back when the ride closes)
   let aimHintSaid = false;
+  let startHint = false;   // (the opening tip is up)
   const pilotThrew = new Set();
   let rapK = 0;
   let startGone = 0;
@@ -1751,6 +1752,7 @@ function createRide(K, d) {
         audio.play('splash');
         audio.music?.(true, { bpm: 104, layers: 1, key: 2 });
         hint(who.length ? S.rvHint : S.rvHintFree);
+        startHint = true;
       }
     } else if (phase === 'run') {
       if (pilotOn) pilot();
@@ -1808,7 +1810,8 @@ function createRide(K, d) {
       slowT = Math.max(0, slowT - dt);
       graceT = Math.max(0, graceT - dt);
       rider.setBlink(graceT > 0 && Math.floor(t * 10) % 2 === 0);
-      if (phaseT > 7) hint(null);
+      // (the opening tip goes by itself; the lessons' and the scope's own words stay until they're done)
+      if (startHint && phaseT > 7) { startHint = false; if (hintEl.textContent === (who.length ? S.rvHint : S.rvHintFree)) hint(null); }
       if (endless) {
         // (the music keeps pace with the river: a layer more early on, then faster and faster)
         const bpm = Math.round(Math.min(150, 104 + (speedAt(dist, len) - PACE.start) * 2.2));
