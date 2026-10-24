@@ -312,3 +312,15 @@ test('span server: the automatic crew name follows the founder\'s new nickname; 
   const [, r3] = await sync(h, { ...a, name: 'Annie' });
   assert.equal(r3.crew.name, 'Die Bouers');
 });
+
+test('span server: new players from one address are limited (an existing player always gets in)', async () => {
+  const data = new Map();
+  const store = { get: async (k) => (data.has(k) ? structuredClone(data.get(k)) : undefined), put: async (k, v) => { data.set(k, structuredClone(v)); } };
+  let left = 2;
+  const s = createSpanServer(store, { now: () => sastAt(MON, 9), newPlayer: () => left-- > 0 });
+  const ps = [player('A'), player('B'), player('C')];
+  assert.equal((await s.handle('POST', '/span/sync', ps[0], '1.2.3.4'))[0], 200);
+  assert.equal((await s.handle('POST', '/span/sync', ps[1], '1.2.3.4'))[0], 200);
+  assert.equal((await s.handle('POST', '/span/sync', ps[2], '1.2.3.4'))[0], 429);
+  assert.equal((await s.handle('POST', '/span/sync', ps[0], '1.2.3.4'))[0], 200, 'Anna again: fine');
+});

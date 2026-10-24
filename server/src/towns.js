@@ -85,7 +85,8 @@ export class TownHall {
     const rate = createRateLimiter();
     this.dorp = createDorp(this.store, { now, rand, newTown: (who) => !who || rate.allow(`new:${who}`, NEW_TOWNS_PER_HOUR, now()) });
     this.kasteel = createKasteel(this.store, { now });
-    this.span = createSpanServer(this.store, { now });   // (1.20) Ons dorp: crews, the Weektoring, Saturday
+    // (1.20) Ons dorp: crews, the Weektoring, Saturday (new players: as many an hour from one address as new towns)
+    this.span = createSpanServer(this.store, { now, newPlayer: (who) => !who || rate.allow(`spannew:${who}`, NEW_TOWNS_PER_HOUR, now()) });
     this.queue = Promise.resolve();
   }
 

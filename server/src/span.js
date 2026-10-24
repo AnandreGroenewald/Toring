@@ -43,7 +43,7 @@ const BOT_ACTS = 6;              // a Rikus crew acts this many times through Sa
 const cleanName = (s) => { const r = checkName(String(s ?? '').slice(0, 40), { max: 22 }); return r.ok ? r.value : ''; };
 const sig = (r) => JSON.stringify(r, (k, v) => (k === 'at' ? undefined : v));
 
-export function createSpanServer(store, { now = () => Date.now() } = {}) {
+export function createSpanServer(store, { now = () => Date.now(), newPlayer = () => true } = {}) {
   const pKey = (id) => `spanp:${id}`;
   const cKey = (id) => `spanc:${id}`;
   const iKey = (code) => `spani:${code}`;
@@ -372,11 +372,13 @@ export function createSpanServer(store, { now = () => Date.now() } = {}) {
     rollPlayer(p, now());
     return p;
   }
-  async function sync(b) {
+  async function sync(b, who = '') {
     if (!isSpanId(b.id) || !isSpanKey(b.key)) return [400, { error: 'id' }];
     const t = now();
     let p = await opened(b.id, b.key);
     if (p === false) return [403, { error: 'key' }];
+    // (a new player, from an address that made many this hour: not now)
+    if (!p && !newPlayer(who)) return [429, { error: 'busy' }];
     if (!p) p = { id: b.id, keyHash: await sha256(b.key), name: '', skin: 'kleur', crew: null, week: '', days: {}, granted: {}, used: 0, rides: {}, bombsUsed: 0, prize: null };
     rollPlayer(p, t);
     if (typeof b.name === 'string') p.name = cleanName(b.name);
@@ -615,12 +617,12 @@ export function createSpanServer(store, { now = () => Date.now() } = {}) {
     return [200, { hits: out, me: meView(p), river: await riverView(r.id, t) }];
   }
 
-  async function one(method, path, body) {
+  async function one(method, path, body, who) {
     try {
       const b = body && typeof body === 'object' ? body : {};
       let res;
       if (method === 'GET' && path === '/span/ping') res = [200, { ok: true, v: 1 }];
-      else if (method === 'POST' && path === '/span/sync') res = await sync(b);
+      else if (method === 'POST' && path === '/span/sync') res = await sync(b, who);
       else if (method === 'POST' && path === '/span/make') res = await make(b);
       else if (method === 'POST' && path === '/span/join') res = await join(b);
       else if (method === 'POST' && path === '/span/leave') res = await leave(b);
@@ -654,8 +656,8 @@ export function createSpanServer(store, { now = () => Date.now() } = {}) {
   let queue = Promise.resolve();
   return {
     /** One request: [status, json], after the ones before it. */
-    handle(method, path, body) {
-      const run = queue.then(() => one(method, path, body));
+    handle(method, path, body, who = '') {
+      const run = queue.then(() => one(method, path, body, who));
       queue = run.catch(() => {});
       return run;
     },
