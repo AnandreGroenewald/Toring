@@ -333,3 +333,204 @@ def high_copy(obj, levels=2, bumps=None):
         d.strength = bumps.get('strength', 0.006)
         d.mid_level = 0.5
     return apply(c)
+
+
+# ------------------------------------------------------------------------------------------------ premium parts
+def _orient(obj, look):
+    """Turns `obj` (made facing Blender's +z) to face `look`, then makes the turn real."""
+    q = Vector((0, 0, 1)).rotation_difference(Vector(look).normalized())
+    obj.rotation_mode = 'QUATERNION'
+    obj.rotation_quaternion = q
+    _select([obj], obj)
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+
+
+def eye(name, loc, r, look, iris='#d9e04a', pupil='round', lid=0.3, lid_mat=None, low_lid=0.0, iris_k=0.62):
+    """A premium cartoon eye: a glossy white ball, a coloured iris with a pupil ('round' or 'slit'), a sparkle of light,
+    and lids of the skin's material (`lid` 0..1 how far the upper lid comes down; `low_lid` the lower one). Returns the
+    parts (to join into the head). `look`: where the eye looks (Blender axes)."""
+    lv = Vector(look).normalized()
+    up = Vector((0, 0, 1))
+    side = lv.cross(up).normalized() if abs(lv.dot(up)) < 0.95 else Vector((0, 1, 0))
+    upv = side.cross(lv).normalized()
+    out = []
+    white = material(name + '_white', '#f6f3ea', rough=0.12)
+    ball = prim('sphere', name + '_ball', loc=loc, scale=(r, r, r), mat=white, segments=16, ring_count=10)
+    out.append(ball)
+    imat = material(name + '_iris', iris, rough=0.1, emit=iris, emit_k=0.25)
+    ir = prim('sphere', name + '_iris', loc=(0, 0, 0), scale=(r * iris_k, r * iris_k, r * 0.28), mat=imat, segments=16, ring_count=8)
+    _orient(ir, lv)
+    ir.location = Vector(loc) + lv * (r * 0.8)
+    out.append(ir)
+    pmat = material(name + '_pupil', '#0b0b0d', rough=0.05)
+    ps = (r * 0.16, r * 0.5, r * 0.3) if pupil == 'slit' else (r * 0.32, r * 0.32, r * 0.3)
+    pu = prim('sphere', name + '_pupil', loc=(0, 0, 0), scale=ps, mat=pmat, segments=14, ring_count=8)
+    # (a slit stands up: its long side along the eye's up)
+    if pupil == 'slit':
+        q = Vector((0, 0, 1)).rotation_difference(lv)
+        pu.rotation_mode = 'QUATERNION'
+        # make the slit's long axis (local y) follow the eye's up
+        yl = q @ Vector((0, 1, 0))
+        twist = yl.rotation_difference(upv)
+        pu.rotation_quaternion = twist @ q
+        _select([pu], pu)
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+    else:
+        _orient(pu, lv)
+    pu.location = Vector(loc) + lv * (r * 0.9)
+    out.append(pu)
+    smat = material(name + '_spark', '#ffffff', rough=0.0, emit='#ffffff', emit_k=4.0)
+    sp = prim('sphere', name + '_spark', loc=tuple(Vector(loc) + lv * (r * 0.93) + upv * (r * 0.32) + side * (r * 0.22)), scale=(r * 0.14, r * 0.14, r * 0.14), mat=smat, segments=10, ring_count=6)
+    out.append(sp)
+    sp2 = prim('sphere', name + '_spark2', loc=tuple(Vector(loc) + lv * (r * 0.95) - upv * (r * 0.25) - side * (r * 0.18)), scale=(r * 0.06, r * 0.06, r * 0.06), mat=smat, segments=8, ring_count=5)
+    out.append(sp2)
+    if lid_mat is not None:
+        for k, amount in (('up', lid), ('low', low_lid)):
+            if amount <= 0:
+                continue
+            # a shell a little bigger than the ball, cut to a cap, turned down over the eye
+            bpy.ops.mesh.primitive_uv_sphere_add(segments=18, ring_count=10, radius=r * 1.1, location=(0, 0, 0))
+            cap = bpy.context.active_object
+            cap.name = f'{name}_lid{k}'
+            bm = bmesh.new()
+            bm.from_mesh(cap.data)
+            cut = 1 - 2 * amount   # (a cap down to this height of the ball: 1 = nothing, -1 = all of it)
+            bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.co.z < cut * r * 1.1], context='VERTS')
+            bm.to_mesh(cap.data)
+            bm.free()
+            # (the upper lid's cap stands on the eye's up; the lower one on its down)
+            _orient(cap, upv if k == 'up' else -upv)
+            # lean it forward over the eye a little
+            cap.data.materials.append(lid_mat)
+            for p in cap.data.polygons:
+                p.use_smooth = True
+            sol = cap.modifiers.new('Thick', 'SOLIDIFY')
+            sol.thickness = r * 0.12
+            _select([cap], cap)
+            bpy.ops.object.convert(target='MESH')
+            cap.location = loc
+            out.append(cap)
+    return out
+
+
+def bands(mat, scale=4.0, mix=0.4, color2=None, axis='X', distort=3.0):
+    """Dark bands across a material's colour (a crocodile's back, a tiger's stripes), baked into the texture later."""
+    nt = mat.node_tree
+    b = nt.nodes.get('Principled BSDF')
+    src = b.inputs['Base Color'].links[0].from_socket if b.inputs['Base Color'].links else None
+    base = tuple(b.inputs['Base Color'].default_value)
+    c2 = (*hex_rgb(color2), 1) if color2 else (base[0] * 0.45, base[1] * 0.45, base[2] * 0.45, 1)
+    tex = nt.nodes.new('ShaderNodeTexWave')
+    tex.wave_type = 'BANDS'
+    tex.bands_direction = axis
+    tex.inputs['Scale'].default_value = scale
+    tex.inputs['Distortion'].default_value = distort
+    tex.inputs['Detail'].default_value = 3
+    ramp = nt.nodes.new('ShaderNodeValToRGB')
+    ramp.color_ramp.elements[0].position = 0.55
+    ramp.color_ramp.elements[0].color = (1, 1, 1, 1)
+    ramp.color_ramp.elements[1].position = 0.8
+    ramp.color_ramp.elements[1].color = (0, 0, 0, 1)
+    nt.links.new(tex.outputs['Fac'], ramp.inputs['Fac'])
+    mixn = nt.nodes.new('ShaderNodeMix')
+    mixn.data_type = 'RGBA'
+    if src is not None:
+        nt.links.new(src, mixn.inputs['A'])
+    else:
+        mixn.inputs['A'].default_value = base
+    mixn.inputs['B'].default_value = c2
+    f = nt.nodes.new('ShaderNodeMath')
+    f.operation = 'MULTIPLY'
+    f.inputs[1].default_value = mix
+    nt.links.new(ramp.outputs['Color'], f.inputs[0])
+    nt.links.new(f.outputs['Value'], mixn.inputs['Factor'])
+    nt.links.new(mixn.outputs['Result'], b.inputs['Base Color'])
+    return mat
+
+
+def gradient(mat, top, bottom, z0, z1):
+    """The colour runs from `bottom` (at height z0) to `top` (z1): a darker back over a pale belly, baked in later."""
+    nt = mat.node_tree
+    b = nt.nodes.get('Principled BSDF')
+    geo = nt.nodes.new('ShaderNodeNewGeometry')
+    sep = nt.nodes.new('ShaderNodeSeparateXYZ')
+    nt.links.new(geo.outputs['Position'], sep.inputs['Vector'])
+    mr = nt.nodes.new('ShaderNodeMapRange')
+    mr.inputs['From Min'].default_value = z0
+    mr.inputs['From Max'].default_value = z1
+    nt.links.new(sep.outputs['Z'], mr.inputs['Value'])
+    ramp = nt.nodes.new('ShaderNodeValToRGB')
+    ramp.color_ramp.elements[0].color = (*hex_rgb(bottom), 1)
+    ramp.color_ramp.elements[1].color = (*hex_rgb(top), 1)
+    nt.links.new(mr.outputs['Result'], ramp.inputs['Fac'])
+    nt.links.new(ramp.outputs['Color'], b.inputs['Base Color'])
+    b.inputs['Base Color'].default_value = (*hex_rgb(top), 1)
+    return mat
+
+
+def _to_srgb(c):
+    return 12.92 * c if c <= 0.0031308 else 1.055 * (c ** (1 / 2.4)) - 0.055
+
+
+def palettize(objs, name, cell=8, cols=8, rough=0.32):
+    """All the small parts' flat colours in one little palette picture (each colour a `cell`-pixel square), every face
+    pointing its UVs at its colour: one material for the lot (one draw call on the phone instead of one per colour).
+    Glowing colours (eye sparkles, lenses) go into the palette's glow picture. Call before joining them on."""
+    import numpy as np
+    keys = {}
+
+    def key_of(m):
+        b = m.node_tree.nodes.get('Principled BSDF')
+        c = tuple(round(x, 4) for x in b.inputs['Base Color'].default_value[:3])
+        k = b.inputs['Emission Strength'].default_value
+        e = tuple(round(min(1.0, x * min(1.0, k)), 4) for x in b.inputs['Emission Color'].default_value[:3]) if k > 0 else (0.0, 0.0, 0.0)
+        return (c, e)
+
+    for o in objs:
+        if not o.data.uv_layers:
+            o.data.uv_layers.new(name='UVMap')
+        uv = o.data.uv_layers.active
+        for p in o.data.polygons:
+            if not o.data.materials:
+                continue
+            idx = keys.setdefault(key_of(o.data.materials[p.material_index]), len(keys))
+            cx, cy = idx % cols, idx // cols
+            u = (cx + 0.5) / cols
+            v = (cy + 0.5) / cols
+            for li in p.loop_indices:
+                uv.data[li].uv = (u, v)
+    size = cell * cols
+    assert len(keys) <= cols * cols, 'too many colours for the palette'
+    col = np.zeros((size, size, 4), dtype=np.float32)
+    emi = np.zeros((size, size, 4), dtype=np.float32)
+    col[:, :, 3] = 1
+    emi[:, :, 3] = 1
+    for (c, e), idx in keys.items():
+        cx, cy = idx % cols, idx // cols
+        col[cy * cell:(cy + 1) * cell, cx * cell:(cx + 1) * cell, :3] = [_to_srgb(x) for x in c]
+        emi[cy * cell:(cy + 1) * cell, cx * cell:(cx + 1) * cell, :3] = [_to_srgb(x) for x in e]
+    imgs = []
+    for nm, arr in (('col', col), ('glow', emi)):
+        im = bpy.data.images.new(f'{name}_pal_{nm}', size, size, alpha=False)
+        im.pixels[:] = arr.ravel()
+        im.pack()
+        imgs.append(im)
+    m = bpy.data.materials.new(f'{name}_palette')
+    m.use_nodes = True
+    nt = m.node_tree
+    b = nt.nodes.get('Principled BSDF')
+    tc = nt.nodes.new('ShaderNodeTexImage')
+    tc.image = imgs[0]
+    tc.interpolation = 'Closest'
+    nt.links.new(tc.outputs['Color'], b.inputs['Base Color'])
+    b.inputs['Roughness'].default_value = rough
+    if any(e != (0.0, 0.0, 0.0) for _, e in keys):
+        te = nt.nodes.new('ShaderNodeTexImage')
+        te.image = imgs[1]
+        te.interpolation = 'Closest'
+        nt.links.new(te.outputs['Color'], b.inputs['Emission Color'])
+        b.inputs['Emission Strength'].default_value = 1.0
+    for o in objs:
+        o.data.materials.clear()
+        o.data.materials.append(m)
+    return m

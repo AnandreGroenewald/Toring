@@ -6,11 +6,15 @@
 # board, cannon (the water cannon), tank (on his back), tankwater. usage: Blender -b -P art/blender/builder.py -- img/models/builder.glb
 import sys, os, math
 sys.path.insert(0, os.path.dirname(__file__))
-from common import reset, out_path, material, skin_body, apply, prim, join, pivot, export, detail, bake_set, high_copy
+from common import reset, out_path, material, skin_body, apply, prim, join, pivot, export, detail, bake_set, high_copy, eye, palettize
 
 reset()
 jeans = material('b_jeans', '#4a6494', rough=0.85)
 jeansDark = material('b_jeansdark', '#2b3b58', rough=0.85)
+# (plain copies for the joints: a material with a pattern only exports once it's baked)
+jeansJ = material('b_jeansj', '#3f5682', rough=0.85)
+shirtJ = material('b_shirtj', '#26384f', rough=0.8)
+skinJ = material('b_skinj', '#a8754f', rough=0.55)
 shirt = material('b_shirt', '#2b3f5c', rough=0.8)
 vest = material('b_vest', '#ff6a10', rough=0.55)
 silver = material('b_silver', '#dfe6ec', rough=0.25, metal=0.4, emit='#9aa3aa', emit_k=0.2)
@@ -30,12 +34,50 @@ def T(x, y, z):
     """three's (x, y, z) as Blender's."""
     return (x, -z, y)
 
+def shell(src, name, z0, z1, push, mat, thick=0.008):
+    """A layer over `src` between Blender heights z0..z1, pushed out along the surface: a stripe, a belt that fits."""
+    import bpy, bmesh
+    o = src.copy()
+    o.data = src.data.copy()
+    bpy.context.collection.objects.link(o)
+    o.name = name
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    bm.normal_update()
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if not (z0 <= f.calc_center_median().z <= z1)], context='FACES')
+    bm.normal_update()
+    for v in bm.verts:
+        v.co += v.normal * push
+    bm.to_mesh(o.data)
+    bm.free()
+    o.data.materials.clear()
+    o.data.materials.append(mat)
+    s = o.modifiers.new('Thick', 'SOLIDIFY')
+    s.thickness = thick
+    s.offset = 1
+    return apply(o)
+
+
+def on_surface(target, origin, direction):
+    """Where a ray from `origin` along `direction` (Blender axes) meets `target`'s surface, and its normal there."""
+    from mathutils import Vector
+    # (the ray is cast in the object's own frame: in, then the hit back out)
+    mw = target.matrix_world
+    inv = mw.inverted()
+    o = inv @ Vector(origin)
+    d = (inv.to_3x3() @ Vector(direction)).normalized()
+    ok, loc, nrm, _ = target.ray_cast(o, d)
+    if not ok:
+        return Vector(origin), -Vector(direction).normalized()
+    return mw @ loc, (mw.to_3x3() @ nrm).normalized()
+
+
 BASE = []   # (name, base mesh, details): the bases are baked into one texture set, then the details joined on
 parts = []
 # --- the thigh: from the hip down to the knee (0.56 m), jeans, a seam
 thigh = apply(skin_body('thigh', [(*T(0, 0, 0), 0.14, 0.14), (*T(0, -0.3, 0.01), 0.125, 0.125), (*T(0, -0.56, 0), 0.1, 0.1)], [(0, 1), (1, 2)], smooth=2), tris=500)
 thigh.data.materials.append(jeans)
-BASE.append(('thigh', thigh, []))
+BASE.append(('thigh', thigh, [prim('sphere', 'hipball', loc=(0, 0, 0), scale=(0.142, 0.142, 0.142), mat=jeansJ, segments=16, ring_count=10)]))
 # --- the shin: knee to ankle, then the boot (toe toward three's +z, the way rider.js puts it)
 shin = apply(skin_body('shin', [(*T(0, 0, 0), 0.105, 0.105), (*T(0, -0.3, 0), 0.095, 0.095), (*T(0, -0.5, 0), 0.088, 0.088)], [(0, 1), (1, 2)], smooth=2), tris=420)
 shin.data.materials.append(jeans)
@@ -43,12 +85,14 @@ cuff = prim('cyl', 'cuff', loc=T(0, -0.47, 0), scale=(0.1, 0.1, 0.045), mat=jean
 bt = apply(skin_body('boot', [(*T(0, -0.5, -0.03), 0.1, 0.1), (*T(0, -0.6, 0.05), 0.1, 0.085), (*T(0, -0.62, 0.21), 0.09, 0.07)], [(0, 1), (1, 2)], smooth=2), tris=480)
 bt.data.materials.append(boot)
 solep = prim('cube', 'sole', loc=T(0, -0.68, 0.08), scale=(0.1, 0.2, 0.025), mat=sole)
-BASE.append(('shin', join([shin, bt], 'shin'), [cuff, solep]))
+kneeball = prim('sphere', 'knee', loc=(0, 0, 0), scale=(0.112, 0.112, 0.112), mat=jeansJ, segments=16, ring_count=10)
+BASE.append(('shin', join([shin, bt], 'shin'), [cuff, solep, kneeball]))
 # --- the pelvis: across (three's z), jeans with a belt
 pel = apply(skin_body('pelvis', [(*T(0, 0, -0.21), 0.16, 0.15), (*T(0, 0.02, 0), 0.18, 0.16), (*T(0, 0, 0.21), 0.16, 0.15)], [(0, 1), (1, 2)], smooth=2), tris=500)
 pel.data.materials.append(jeans)
-bel = prim('torus', 'belt', loc=T(0, 0.09, 0), scale=(0.168, 0.222, 0.12), rot=(0, 0, 0), mat=belt, major_radius=1, minor_radius=0.14, major_segments=24, minor_segments=6)
-buckle = prim('cube', 'buckle', loc=T(0.17, 0.09, 0), scale=(0.012, 0.04, 0.03), mat=silver)
+bel = shell(pel, 'belt', 0.06, 0.125, 0.006, belt, 0.012)
+bp_, bn_ = on_surface(pel, T(0.6, 0.09, 0), T(-1, 0, 0))
+buckle = prim('cube', 'buckle', loc=tuple(bp_ + bn_ * 0.012), scale=(0.012, 0.04, 0.03), mat=silver)
 wood = material('b_wood', '#9a6a3c', rough=0.6)
 handle = prim('cyl', 'hammerhandle', loc=T(0.06, -0.08, -0.25), scale=(0.018, 0.018, 0.16), rot=(0, 0, 0), mat=wood, vertices=8)
 hhead = prim('cube', 'hammerhead', loc=T(0.06, 0.08, -0.25), scale=(0.075, 0.022, 0.026), mat=steelish if False else silver)
@@ -62,11 +106,12 @@ for p in tor.data.polygons:
     # (the shirt shows at the collar)
     p.material_index = 1 if p.center.z > 0.66 else 0
 T_ = [tor]
-for y in (0.16, 0.27):
-    T_.append(prim('torus', 'band', loc=T(0, y, 0), scale=(0.2, 0.24, 0.5), mat=silver, major_radius=1, minor_radius=0.05, major_segments=28, minor_segments=4))
-# the X on his back (three's -x side)
+for y0, y1 in ((0.13, 0.18), (0.24, 0.29)):
+    T_.append(shell(tor, 'band', y0, y1, 0.004, silver, 0.006))
+# the X on his back (three's -x side), lying on the vest
+xp_, xn_ = on_surface(tor, T(-0.8, 0.46, 0), T(1, 0, 0))
 for s in (1, -1):
-    T_.append(prim('cube', 'x', loc=T(-0.2, 0.46, 0), scale=(0.008, 0.02, 0.2), rot=(s * 0.62, 0, 0), mat=silver))
+    T_.append(prim('cube', 'x', loc=tuple(xp_ + xn_ * 0.004), scale=(0.006, 0.022, 0.19), rot=(s * 0.62, 0, 0), mat=silver))
 neck = prim('cyl', 'neck', loc=T(0, 0.74, 0), scale=(0.065, 0.065, 0.07), mat=skin, vertices=12)
 BASE.append(('torso', join([tor, neck], 'torso'), T_[1:]))
 # --- the head: face toward three's +x; the hard hat on top
@@ -74,27 +119,41 @@ HB = [prim('sphere', 'skull', loc=(0, 0, 0), scale=(0.15, 0.145, 0.16), mat=skin
 HB.append(prim('sphere', 'nose', loc=T(0.15, -0.01, 0), scale=(0.03, 0.025, 0.035), mat=skin, segments=10, ring_count=6))
 HB.append(prim('sphere', 'jaw', loc=T(0.05, -0.07, 0), scale=(0.12, 0.12, 0.09), mat=skin, segments=14, ring_count=8))
 H = []
+lipm = material('b_lip', '#7a3a2c', rough=0.4)
+teeth = material('b_teeth', '#fbf7ee', rough=0.25)
+skinLid = material('b_skinlid', '#b77d55', rough=0.55)
 for s in (1, -1):
-    H.append(prim('sphere', 'eye', loc=T(0.135, 0.03, s * 0.055), scale=(0.012, 0.016, 0.016), mat=dark, segments=8, ring_count=6))
-    H.append(prim('sphere', 'brow', loc=T(0.14, 0.065, s * 0.055), scale=(0.012, 0.035, 0.01), mat=dark, segments=8, ring_count=6))
+    # big friendly eyes, a little lid; thick brows; ears
+    H += eye(f'beye{s}', T(0.13, 0.0, s * 0.056), 0.031, T(1, 0.05, s * 0.12), iris='#3b2a1c', pupil='round', lid=0.2, lid_mat=skinLid, iris_k=0.72)
+    H.append(prim('sphere', 'brow', loc=T(0.145, 0.038, s * 0.058), scale=(0.014, 0.011, 0.034), rot=(s * 0.18, 0, 0), mat=dark, segments=10, ring_count=6))
     HB.append(prim('sphere', 'ear', loc=T(0, 0.0, s * 0.15), scale=(0.025, 0.035, 0.045), mat=skin, segments=10, ring_count=6))
-H.append(prim('torus', 'smile', loc=T(0.135, -0.06, 0), scale=(0.035, 0.012, 0.03), rot=(0, 1.5708, 0), mat=dark, major_radius=1, minor_radius=0.3, major_segments=12, minor_segments=4))
-dome = prim('sphere', 'dome', loc=T(0, 0.04, 0), scale=(0.18, 0.175, 0.17), mat=hat, segments=24, ring_count=12)
-# (only the top half of the dome: the lower half sinks into the skull, hidden)
+# the grin: a dark mouth with a row of teeth, a lip line under
+mp_, mn_ = on_surface(HB[2], T(0.6, -0.065, 0), T(-1, 0, 0))   # (on the jaw's front)
+H.append(prim('sphere', 'mouth', loc=tuple(mp_ + mn_ * 0.002), scale=(0.012, 0.045, 0.016), mat=lipm, segments=12, ring_count=8))
+H.append(prim('cube', 'teeth', loc=tuple(mp_ + mn_ * 0.009 + __import__("mathutils").Vector(T(0, 0.005, 0))), scale=(0.004, 0.034, 0.007), mat=teeth))
+dome = prim('sphere', 'dome', loc=T(0, 0.04, 0), scale=(0.18, 0.175, 0.17), mat=hat, segments=28, ring_count=14)
+# (only the top half of the dome, sitting on his head: the face shows under the brim)
+import bpy as _bpy, bmesh as _bm
+_b = _bm.new()
+_b.from_mesh(dome.data)
+_bm.ops.delete(_b, geom=[v for v in _b.verts if v.co.z < 0.035], context='VERTS')
+_b.to_mesh(dome.data)
+_b.free()
 brim = prim('cyl', 'brim', loc=T(0.03, 0.05, 0), scale=(0.235, 0.22, 0.013), mat=hat, vertices=28)
-ridge = prim('cube', 'ridge', loc=T(0.0, 0.2, 0), scale=(0.15, 0.025, 0.025), mat=hat)
+ridge = prim('cyl', 'ridge', loc=T(0.0, 0.205, 0), scale=(0.022, 0.032, 0.15), rot=(0, math.pi / 2, 0), mat=hat, vertices=14)
 H += [dome, brim, ridge]
 BASE.append(('head', join(HB, 'head'), H))
 # --- the arms: a sleeve (shoulder to elbow), the forearm and a glove
 up = apply(skin_body('upperarm', [(*T(0, 0, 0), 0.088, 0.088), (*T(0, -0.33, 0), 0.07, 0.07)], [(0, 1)], smooth=2), tris=300)
 up.data.materials.append(shirt)
-BASE.append(('upperarm', up, []))
+BASE.append(('upperarm', up, [prim('sphere', 'shoulder', loc=(0, 0, 0), scale=(0.092, 0.092, 0.092), mat=shirtJ, segments=14, ring_count=8)]))
 fa = apply(skin_body('forearm', [(*T(0, 0, 0), 0.068, 0.068), (*T(0, -0.3, 0), 0.054, 0.054)], [(0, 1)], smooth=2), tris=260)
 fa.data.materials.append(skin)
 gl = prim('sphere', 'glove', loc=T(0, -0.36, 0), scale=(0.072, 0.088, 0.06), mat=glove, segments=12, ring_count=8)
 thumb = prim('sphere', 'thumb', loc=T(0.04, -0.33, 0.03), scale=(0.022, 0.035, 0.022), mat=glove, segments=8, ring_count=6)
 cuffg = prim('cyl', 'glovecuff', loc=T(0, -0.29, 0), scale=(0.066, 0.066, 0.035), mat=glove, vertices=12)
-BASE.append(('forearm', fa, [gl, thumb, cuffg]))
+elbow = prim('sphere', 'elbow', loc=(0, 0, 0), scale=(0.071, 0.071, 0.071), mat=skinJ, segments=14, ring_count=8)
+BASE.append(('forearm', fa, [gl, thumb, cuffg, elbow]))
 # --- the surfboard: nose toward three's -z (down the river), a rounded tail, a fin under it; stripes
 B = []
 outline = []
@@ -177,6 +236,8 @@ C.append(prim('torus', 'gaugerim', loc=(0.139, -0.17, 0.0), scale=(0.046, 0.046,
 C.append(prim('cube', 'needle', loc=(0.149, -0.17, 0.01), scale=(0.002, 0.004, 0.03), rot=(0.6, 0, 0), mat=cn_red))
 # the hose's port at the back
 C.append(prim('torus', 'port', loc=T(0, 0, 0.45), scale=(0.045, 0.045, 0.045), rot=ALONG, mat=cn_chrome, major_radius=1, minor_radius=0.3, major_segments=18, minor_segments=6))
+# (one palette for the cannon's colours; its glass window keeps its own see-through material)
+palettize([o for o in C if o.name != 'window'], 'cannon', rough=0.22)
 cannon = join(C, 'cannon')
 pivot(cannon, (0, 0, 0))
 parts.append(cannon)
@@ -193,6 +254,7 @@ K.append(prim('cyl', 'cap', loc=T(TX, TY + 0.28, 0), scale=(0.04, 0.04, 0.025), 
 K.append(prim('cube', 'frame', loc=T(TX + 0.13, TY, 0), scale=(0.02, 0.2, 0.11), mat=cn_black))
 for s in (-1, 1):
     K.append(prim('torus', 'strap', loc=T(-0.06, 0.5, s * 0.12), scale=(0.15, 0.15, 0.15), rot=ALONG, mat=cn_black, major_radius=1, minor_radius=0.09, major_segments=20, minor_segments=4))
+palettize([o for o in K if o.name != 'tankshell'], 'tank', rough=0.25)
 tank = join(K, 'tank')
 pivot(tank, (0, 0, 0))
 parts.append(tank)
@@ -210,6 +272,8 @@ detail(skin, 'noise', scale=20, mix=0.08)
 objs = [b for _, b, _ in BASE]
 highs = [high_copy(b, 1, {'kind': 'STUCCI', 'scale': 0.004, 'strength': 0.003}) if n in ('thigh', 'shin', 'torso', 'upperarm', 'pelvis') else None for n, b, _ in BASE]
 bake_set(objs, 'builder', size=512, highs=highs)
+# (one palette for all the small parts' colours: two draw calls a part on the phone)
+palettize([d_ for _, _, det in BASE for d_ in det], 'builderdet', rough=0.4)
 for n, b, det in BASE:
     o = join([b] + det, n) if det else b
     o.name = n

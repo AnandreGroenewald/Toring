@@ -181,12 +181,16 @@ export function createBeasts(bend = (m) => m, models = {}) {
   function crocModel(side) {
     const m = models.croc.clone(true);
     const jaw = m.getObjectByName('jaw');
+    // (the tail in two: the tip hangs on the root so it swings after it, a whip)
+    const tail1 = m.getObjectByName('tail1');
+    const tail2 = m.getObjectByName('tail2');
+    if (tail1 && tail2) tail1.attach(tail2);
     const g = new THREE.Group();
     g.add(m);
     // (3.7 m long in the model; 3 m here, across its lane, snout to the side it came from; the waterline just under
     // the scutes)
     // (a little taller than life: a flat crocodile reads at a glance from 40 m too)
-    m.scale.set(0.84, 1.45, 0.95);
+    m.scale.set(0.84, 1.25, 0.95);
     m.position.y = -0.04;
     m.rotation.y = side > 0 ? 0 : Math.PI;
     const holder = new THREE.Group();
@@ -195,8 +199,11 @@ export function createBeasts(bend = (m) => m, models = {}) {
     holder.userData = {
       w: 3.0, d: 1.5, kind: 'croc',
       update(t, ahead, dt) {
-        // the tail end swings, the body rocks a little on the current
-        m.rotation.y = (side > 0 ? 0 : Math.PI) + Math.sin(t * 2.3 + g.id) * 0.07;
+        // the tail swishes (the tip a beat after the root), the body sways and rocks a little on the current
+        const ph = t * 2.3 + g.id;
+        m.rotation.y = (side > 0 ? 0 : Math.PI) + Math.sin(ph) * 0.05;
+        if (tail1) tail1.rotation.y = Math.sin(ph - 0.6) * 0.22;
+        if (tail2) tail2.rotation.y = Math.sin(ph - 1.5) * 0.38;
         g.position.y = Math.sin(t * 1.7 + g.id) * 0.03;
         let open = 0;
         if (ahead < 16 && ahead > 2) open = Math.min(1, (16 - ahead) / 8) * 0.42;
@@ -221,6 +228,7 @@ export function createBeasts(bend = (m) => m, models = {}) {
     // (the Blender hippo when it's there: its body turns a little, its own jaw yawns)
     let head;
     let jaw;
+    let ears = [];
     if (models.hippo) {
       const m = models.hippo.clone(true);
       m.scale.setScalar(1.3);
@@ -228,10 +236,11 @@ export function createBeasts(bend = (m) => m, models = {}) {
       inner.add(m);
       head = m;
       jaw = m.getObjectByName('jaw') || new THREE.Group();
+      ears = ['earL', 'earR'].map((n) => m.getObjectByName(n)).filter(Boolean);
     } else {
       ({ head, jaw } = hippoShapes(inner));
     }
-    return hippoLife(g, inner, head, jaw);
+    return hippoLife(g, inner, head, jaw, ears);
   }
   /** The simple hippo (no model): body, head, jaw from spheres. */
   function hippoShapes(inner) {
@@ -278,7 +287,7 @@ export function createBeasts(bend = (m) => m, models = {}) {
     return { head, jaw };
   }
   /** The hippo's life in the river: under the water, bubbles, up in your lane, a yawn as you come. */
-  function hippoLife(g, inner, head, jaw) {
+  function hippoLife(g, inner, head, jaw, ears = []) {
     // its bubbles
     const bubbles = [];
     for (let i = 0; i < 10; i++) {
@@ -309,6 +318,9 @@ export function createBeasts(bend = (m) => m, models = {}) {
         // a big yawn when you're near
         jaw.rotation.x = ahead < 14 && ahead > -2 ? Math.min(0.75, (14 - ahead) / 8) : 0.05 + Math.sin(t * 0.8) * 0.03;
         head.rotation.y = Math.sin(t * 0.9 + g.id) * 0.1;
+        // its ears flick now and then (a quick double twitch)
+        const fl = (t * 0.7 + g.id * 0.37) % 2.3;
+        ears.forEach((e, i) => { e.rotation.y = (fl < 0.25 ? Math.sin(fl * 25 + i) * 0.5 : 0) * (i ? -1 : 1); });
       },
       surfaced: () => rise > 0.5,
     };

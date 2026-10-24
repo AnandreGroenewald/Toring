@@ -106,6 +106,85 @@ export function createThings(scene, pieces) {
   const shirtMats = SHIRTS.map((c) => bendMaterial(new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 })));
   const skinMat = bendMaterial(new THREE.MeshStandardMaterial({ color: '#d9a47e', roughness: 0.6 }));
   const faceTex = new Map();
+  /**
+   * A person's face as a glossy badge: their portrait in a round frame (a white rim with a soft blue edge, a drop of
+   * shadow under it, a curved gleam of light across the top), drawn once the portrait has loaded.
+   */
+  function faceBadge(who) {
+    const S = 256;
+    const c = document.createElement('canvas');
+    c.width = c.height = S;
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const g = c.getContext('2d');
+    const R = S * 0.42;
+    const cx = S / 2;
+    const cy = S / 2 - 4;
+    const draw = (img) => {
+      g.clearRect(0, 0, S, S);
+      // (the shadow under the badge)
+      g.save();
+      g.shadowColor = 'rgba(0,20,30,.45)';
+      g.shadowBlur = 14;
+      g.shadowOffsetY = 6;
+      g.fillStyle = '#ffffff';
+      g.beginPath();
+      g.arc(cx, cy, R + 9, 0, Math.PI * 2);
+      g.fill();
+      g.restore();
+      // (the rim: white with a soft blue edge)
+      const rim = g.createLinearGradient(0, cy - R, 0, cy + R);
+      rim.addColorStop(0, '#ffffff');
+      rim.addColorStop(1, '#bfe6f2');
+      g.fillStyle = rim;
+      g.beginPath();
+      g.arc(cx, cy, R + 9, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = 'rgba(30,110,140,.55)';
+      g.lineWidth = 3;
+      g.stroke();
+      // (the face, clipped round, on a sky-blue ground)
+      g.save();
+      g.beginPath();
+      g.arc(cx, cy, R, 0, Math.PI * 2);
+      g.clip();
+      const bg = g.createRadialGradient(cx, cy - R * 0.3, R * 0.1, cx, cy, R);
+      bg.addColorStop(0, '#d9f4ff');
+      bg.addColorStop(1, '#7cc8e6');
+      g.fillStyle = bg;
+      g.fillRect(cx - R, cy - R, R * 2, R * 2);
+      if (img) g.drawImage(img, cx - R, cy - R, R * 2, R * 2);
+      // (a soft shade round the inside of the frame)
+      const sh = g.createRadialGradient(cx, cy, R * 0.75, cx, cy, R);
+      sh.addColorStop(0, 'rgba(0,30,50,0)');
+      sh.addColorStop(1, 'rgba(0,30,50,.28)');
+      g.fillStyle = sh;
+      g.fillRect(cx - R, cy - R, R * 2, R * 2);
+      g.restore();
+      // (the gleam: a curved band of light over the top)
+      g.save();
+      g.beginPath();
+      g.arc(cx, cy, R, 0, Math.PI * 2);
+      g.clip();
+      const gl = g.createLinearGradient(0, cy - R, 0, cy);
+      gl.addColorStop(0, 'rgba(255,255,255,.55)');
+      gl.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gl;
+      g.beginPath();
+      g.ellipse(cx - R * 0.12, cy - R * 0.55, R * 0.78, R * 0.42, -0.25, 0, Math.PI * 2);
+      g.fill();
+      g.restore();
+      tex.needsUpdate = true;
+    };
+    draw(null);
+    const url = portraitDataUrl(who, 192);
+    if (url) {
+      const img = new Image();
+      img.onload = () => draw(img);
+      img.src = url;
+    }
+    return tex;
+  }
   const blockMats = new Map();
 
   /** A block's materials for the river (copies of Stapel's 3D block's, bent with the river). */
@@ -217,14 +296,12 @@ export function createThings(scene, pieces) {
     }
     let tex = faceTex.get(who);
     if (!tex) {
-      const url = portraitDataUrl(who, 128);
-      tex = new THREE.TextureLoader().load(url || 'data:image/gif;base64,R0lGODlhAQABAAAAACw=');
-      tex.colorSpace = THREE.SRGBColorSpace;
+      tex = faceBadge(who);
       faceTex.set(who, tex);
     }
     const face = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: true, fog: true }));
-    face.scale.set(0.95, 0.95, 1);
-    face.position.y = 1.08;
+    face.scale.set(1.12, 1.12, 1);
+    face.position.y = 1.32;
     root.add(face);
     const f = foam(2.2);
     f.position.y = 0.04;

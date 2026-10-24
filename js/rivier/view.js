@@ -1368,6 +1368,9 @@ function createRide(K, d) {
     } else if (d.debugCam === 'side') {   // (tests: his gear from his right, close)
       p = new THREE.Vector3(x + 1.9, 1.75, -1.1);
       l = new THREE.Vector3(x, 1.35, 0);
+    } else if (d.debugCam === 'face') {   // (tests: his face, close)
+      p = new THREE.Vector3(x + 0.55, 1.95, -1.05);
+      l = new THREE.Vector3(x + 0.05, 1.82, 0);
     } else if (d.debugCam === 'left') {
       p = new THREE.Vector3(x - 1.9, 1.75, -0.6);
       l = new THREE.Vector3(x, 1.35, 0);
@@ -1689,8 +1692,34 @@ function createRide(K, d) {
   host.style.display = 'block';
   place();
   for (let i = 0; i < 30; i++) cameraFor(0.1);   // (the first frame already looks at the tower top)
+  /** Every kind of thing the river brings, put out once out of sight so its shaders compile now (no stutter mid-ride). */
+  function warmUp() {
+    const tmp = new THREE.Group();
+    const skin = d.skin || 'kleur';
+    try {
+      const blk = things.floating({ shape: 'cube', skin, color: 0, spin: 0 });
+      const kinds = [beasts.croc(1), beasts.hippo(), things.rock(), things.person(who[0] || 'boer', 0), things.floating({ shape: 'plank', skin, color: 1 }), beasts.monkeyOn(blk, 1, blk.userData.top)];
+      kinds.forEach((o, i) => { o.position.set(i * 3 - 8, 0, -30); tmp.add(o); });
+      if (raid) {
+        const jm = new THREE.Mesh(jetGeometry(new THREE.Vector3(0, 1, -5), new THREE.Vector3(0, 5, -40), 1), jetMat);
+        tmp.add(jm);
+        tmp.add(new THREE.Sprite(new THREE.SpriteMaterial({ map: burstTex, transparent: true, depthWrite: false })));
+      }
+      scene.add(tmp);
+      stage.renderer.compile(scene, camera);
+    } catch (e) {
+      console.warn?.('[rivier] warm-up', e?.message);
+    }
+    scene.remove(tmp);
+    for (const o of tmp.children) {
+      o.traverse((c) => { if (c.isSprite) c.material.dispose(); });
+      if (o.isMesh && o.material === jetMat) o.geometry.dispose();
+      else disposeTree(o);
+    }
+  }
   const ready = (async () => {
     // a first frame before it shows (the shaders compile behind Stapel's page)
+    warmUp();
     stage.render(0);
     await new Promise((res) => requestAnimationFrame(res));
     raf = requestAnimationFrame(loop);
