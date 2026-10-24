@@ -300,3 +300,15 @@ test('span server: a member\'s latest Daily tower stands on the island; nonsense
   assert.equal(r2.crew.monuments[0].floors.length, 3);
   assert.equal(r2.crew.monuments[0].floors[0].s, 'plank');
 });
+
+test('span server: the automatic crew name follows the founder\'s new nickname; a chosen name stays', async () => {
+  const h = harness();
+  const a = player('Bouer 622');
+  const [, r1] = await sync(h, a);
+  assert.equal(r1.crew.name, 'Bouer 622 se span');
+  const [, r2] = await sync(h, { ...a, name: 'Anna' });
+  assert.equal(r2.crew.name, 'Anna se span');
+  await h.call('POST', '/span/rename', { ...a, name: 'Die Bouers' });
+  const [, r3] = await sync(h, { ...a, name: 'Annie' });
+  assert.equal(r3.crew.name, 'Die Bouers');
+});

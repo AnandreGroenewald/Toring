@@ -399,6 +399,8 @@ export function createSpanServer(store, { now = () => Date.now() } = {}) {
     // (your latest Daily tower stands on the crew's island)
     const tower = b.tower ? cleanDaily(b.tower) : null;
     if (me && (me.name !== p.name || me.skin !== p.skin || (tower && JSON.stringify(tower) !== JSON.stringify(me.tower)))) {
+      // (a crew still called after its founder's old name follows the new one; a name they chose stays)
+      if (c.founder === p.id && me.name !== p.name && p.name && c.name === cleanCrewName(`${me.name || 'Bouer'} se span`)) c.name = cleanCrewName(`${p.name} se span`) || c.name;
       me.name = p.name;
       me.skin = p.skin;
       if (tower) me.tower = tower;
