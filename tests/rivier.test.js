@@ -1,0 +1,57 @@
+// (1.20) Die Rivier's courses (js/core/rivier.js): the same river for everyone on a day, always passable, people
+// to rescue in the order given (yours first), Saturday's islands along the way.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { RIVER, rescueCourse, raidCourse, passable, speedAt, laneX } from '../js/core/rivier.js';
+
+const WHO = ['boer', 'haai', 'bytjie', 'klippie', 'rissie', 'seekat', 'braai', 'duiker'];
+
+test('rivier: the same seed gives the same river; another seed another', () => {
+  const a = rescueCourse('2026-10-26', WHO);
+  const b = rescueCourse('2026-10-26', WHO);
+  assert.deepEqual(a, b);
+  assert.notDeepEqual(rescueCourse('2026-10-27', WHO).rows, a.rows);
+  assert.equal(a.len, RIVER.rescueLen);
+});
+
+test('rivier: every course of a year is passable, starts with people only, and keeps everyone in order', () => {
+  for (let d = 0; d < 365; d++) {
+    const seed = `day-${d}`;
+    const c = rescueCourse(seed, WHO);
+    assert.ok(passable(c), seed);
+    const intro = c.rows.filter((r) => r.intro);
+    assert.ok(intro.length >= 3);
+    for (const r of intro) for (const it of r.items) assert.equal(it.kind, 'person');
+    const got = c.rows.flatMap((r) => r.items.filter((it) => it.kind === 'person').map((it) => it.who));
+    assert.deepEqual(got, WHO.slice(0, got.length), 'in the order given');
+    assert.equal(got.length, WHO.length, `${seed}: everyone has a place`);
+    assert.ok(c.rows.some((r) => r.items.some((it) => it.kind === 'block')), 'blocks to dodge');
+    for (const r of c.rows) {
+      assert.ok(r.z > 0 && r.z < c.len);
+      for (const it of r.items) assert.ok(it.lane >= 0 && it.lane < RIVER.lanes);
+    }
+    const zs = c.rows.map((r) => r.z);
+    assert.deepEqual(zs, [...zs].sort((x, y) => x - y), 'rows in order');
+  }
+});
+
+test('rivier: Saturday\'s course passes four islands, both sides of the river, calmer beside them', () => {
+  const c = raidCourse('2026-10-31/R1', ['A', 'B', 'C', 'D'], WHO);
+  assert.equal(c.islands.length, 4);
+  assert.deepEqual(c.islands.map((i) => i.crew), ['A', 'B', 'C', 'D']);
+  assert.ok(new Set(c.islands.map((i) => i.side)).size === 2);
+  assert.ok(passable(c));
+  for (const i of c.islands) {
+    const near = c.rows.filter((r) => Math.abs(r.z - i.z) < 40);
+    for (const r of near) assert.ok(r.items.filter((it) => it.kind !== 'person').length <= 1, 'one block at most by an island');
+  }
+});
+
+test('rivier: speed rises along the course; lanes sit either side of the middle', () => {
+  assert.equal(speedAt(0, 640), RIVER.speed0);
+  assert.equal(speedAt(640, 640), RIVER.speed1);
+  assert.ok(speedAt(300, 640) > RIVER.speed0 && speedAt(300, 640) < RIVER.speed1);
+  assert.equal(laneX(1), 0);
+  assert.equal(laneX(0), -RIVER.laneW);
+  assert.equal(passable({ rows: [{ z: 10, items: [0, 1, 2].map((lane) => ({ lane, kind: 'block' })) }] }), false);
+});
