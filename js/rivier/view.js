@@ -166,6 +166,9 @@ function createTown(K, d) {
   const island = createIsland(things, { radius: 22, plots: true });
   scene.add(island.group);
   // (Saturday won: fireworks over the island and a gold crown on the Weektoring, until the new week)
+  // (the lake's gentle sound round the island; the game's own level back on leaving)
+  const ambBefore = audio.ambience ?? 0;
+  audio.setAmbience?.(0.35);
   const wonOf = (v) => !!(v.river?.over && v.river.final?.order?.[0] && v.river.final.order[0] === v.crew?.id);
   let won = wonOf(d);
   let fw = won ? createFireworks(scene, reduced) : null;
@@ -361,6 +364,7 @@ function createTown(K, d) {
     host.removeEventListener('pointerdown', onTownDown);
     host.removeEventListener('pointerup', onTownUp);
     if (flood) scene.remove(flood, flood.target);
+    audio.setAmbience?.(ambBefore);
     fw?.dispose();
     setCrownOff();
     scene.remove(island.group, things.spray);
