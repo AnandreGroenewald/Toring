@@ -1593,9 +1593,18 @@ function createRide(K, d) {
         scopeEl.classList.add('on');
         scopeEl.classList.toggle('lock', lockT > 0.12);
         scopeEl.classList.toggle('miss', !onTarget);
-        scopeRng.textContent = `${Math.round(tgt.z - dist)} m`;
+        // (the crew's name in the scope's readout; its tag on the tower fades so the scope sits clear)
+        const nm = R?.rows?.find((x) => x.id === tgt.crew)?.name || '';
+        scopeRng.textContent = `${nm ? `${nm} · ` : ''}${Math.round(tgt.z - dist)} m`;
       } else {
         scopeEl.classList.remove('on', 'lock');
+      }
+      for (const is of isles) {
+        const want = is === tgt && aiming ? 0.12 : 1;
+        if (is.tag.material) {
+          is.tag.material.transparent = true;
+          is.tag.material.opacity += (want - is.tag.material.opacity) * Math.min(1, dt * 8);
+        }
       }
       fireEl.classList.toggle('show', phase === 'run');
       fireEl.classList.toggle('off', !aiming);
