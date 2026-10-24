@@ -360,7 +360,7 @@ export const KASTEEL = Object.freeze({ on: false });
 // (an old friend link still opens it); `on: true` brings it back.
 export const BOTSING = Object.freeze({ on: false });
 /** (1.19 3D) Glybaan, the downhill four-lane slide (its own page, glybaan.html): on the menu where Block Clash was. */
-export const GLYBAAN = Object.freeze({ on: true });
+export const GLYBAAN = Object.freeze({ on: false });   // (24 Oct 2026, the owner: "lets leave the whole earth, water and fire scenario": the slide lives on as the river, js/rivier/)
 
 // (1.18, the owner 18 Oct 2026: "for now all skins needs to be free ... For people to test it") every skin and look in the
 // Winkel costs nothing while `on`; what testers take stays theirs when the prices come back (`on: false`).

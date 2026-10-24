@@ -24,14 +24,15 @@ test('titles: by people, with the way to the next one', () => {
   assert.equal(titleProgress(1000), 1);
 });
 
-test('casting: the same seed, the same people; mostly the own tribe', () => {
+test('casting: the same seed, the same people; (1.20) the whole cast, no tribe first', () => {
   const a = createCasting('s1', 'water');
   const b = createCasting('s1', 'water');
-  const xs = Array.from({ length: 200 }, () => a.next());
+  const xs = Array.from({ length: 240 }, () => a.next());
   assert.deepEqual(xs.slice(0, 20), Array.from({ length: 20 }, () => b.next()));
-  const own = xs.filter((x) => ['haai', 'seekat', 'duiker', 'brandweer'].includes(x.who)).length;
-  assert.ok(own > 90 && own < 170, `own tribe ${own}/200`);
+  const water = xs.filter((x) => ['haai', 'seekat', 'duiker', 'brandweer'].includes(x.who)).length;
+  assert.ok(water > 45 && water < 115, `a third or so are the old water tribe: ${water}/240`);
   assert.ok(xs.every((x) => CAST_IDS.includes(x.who)));
+  assert.equal(new Set(xs.map((x) => x.who)).size, CAST_IDS.length, 'everyone comes');
 });
 
 test('the store: tribe, record, who lived there, junk cleaned', () => {

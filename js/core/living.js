@@ -77,14 +77,15 @@ export function titleProgress(people) {
  */
 export function createCasting(seed, tribe) {
   const rng = createRng(`${seed}/lewende`);
-  const own = CAST_IDS.filter((id) => CAST_TRIBE[id] === tribe);
-  const other = CAST_IDS.filter((id) => CAST_TRIBE[id] !== tribe);
+  // (1.20, the owner 24 Oct 2026: "lets leave the whole earth, water and fire scenario") everyone from the whole cast, no
+  // tribe first (`tribe` is kept for the old callers)
+  void tribe;
   let last = null;
   return {
     next() {
       let who = null;
       for (let tries = 0; tries < 4 && (!who || who === last); tries++) {
-        who = rng.chance(LIVING.ownTribe) || !other.length ? rng.pick(own.length ? own : CAST_IDS) : rng.pick(other);
+        who = rng.pick(CAST_IDS);
       }
       last = who;
       return { who, gold: rng.chance(LIVING.goldChance) };

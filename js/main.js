@@ -2748,10 +2748,7 @@ async function startRide() {
       onDone: (res, next) => {
         closeRide();
         if (next === 'build') startWeekTurn();
-        else {
-          startIdle();
-          showMenu();
-        }
+        else openSpanTown();
       },
     });
     if (seq !== rideSeq) { r.close(); return; }
@@ -2780,13 +2777,33 @@ function startWeekTurn() {
 }
 bus.on('ui:rivier', startRide);
 bus.on('ui:week-build', startWeekTurn);
-bus.on('ui:span', () => {
-  // (checkpoint 1: the town is the island with its Weektoring at the ride's end; the town's own screen comes with crews)
-  const v = span.view();
-  if (v.rideToday) startRide();
-  else if (v.turns > 0) startWeekTurn();
-  else ui.toast(S.twNoTurn, 2600);
-});
+/** Ons dorp's own screen: your crew's island and its Weektoring in 3D (js/rivier/view.js openTown), your week. */
+async function openSpanTown() {
+  const seq = ++rideSeq;
+  screen = 'rivier';
+  ui.hideAll();
+  wakeLoop();
+  try {
+    const mod = await import('./rivier/view.js');
+    if (seq !== rideSeq) return;
+    const v = span.view();
+    const r = await mod.openTown({
+      ...v, reducedMotion: !!settings.reducedMotion,
+      onRide: () => { closeRide(); startRide(); },
+      onBuild: () => { closeRide(); startWeekTurn(); },
+      onBack: () => { closeRide(); startIdle(); showMenu(); },
+    });
+    if (seq !== rideSeq) { r.close(); return; }
+    ride = r;
+    if (!loopAsleep && game.loop?.running) { loopAsleep = true; game.loop.sleep(); }
+  } catch (e) {
+    console.error('[ons dorp]', e);
+    closeRide();
+    startIdle();
+    showMenu();
+  }
+}
+bus.on('ui:span', openSpanTown);
 // (Android's Back during a ride: its pause card, with "Klim uit")
 window.addEventListener('stapel:back', (e) => {
   if (!ride) return;
@@ -3301,8 +3318,11 @@ bus.on('ui:view', () => setTimeout(dorpWhenFree, 0));
 
 let dorpAsking = false;
 let dorpAskAgain = false;
+// (1.20) Jou dorp's Steel en Wraak is gone (the owner, 24 Oct 2026: "I like the dorp scenario but I do not like the steal");
+// Ons dorp takes its place (js/span.js). Its code stays, switched off here.
+const DORP_ON = false;
 async function dorpStart() {
-  if (dorpOn || dorpAsking) return;
+  if (!DORP_ON || dorpOn || dorpAsking) return;
   dorpAsking = true;
   dorpOn = await dorp.ping();
   dorpAsking = false;

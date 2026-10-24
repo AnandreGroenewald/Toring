@@ -2968,9 +2968,8 @@ export function createUI(bus) {
       h('div', { class: 'sheet-body' },
         h('p', { class: 'album-count', text: S.lvAlbumCount(nMet, ids.length) }),
         h('p', { class: 'album-gold', text: S.lvAlbumGold(nGold, ids.length) }),
-        ['vuur', 'water', 'gras'].map((t) => h('div', { class: `album-tribe tribe-${t}` },
-          h('h3', { class: 'album-tribe-name' }, emo(TRIBE_EMOJI[t]), h('span', { text: S.lvTribeNames[t] })),
-          h('div', { class: 'album-grid' }, castOf(t).map(slot)))),
+        // (1.20: one cast, no tribes)
+        h('div', { class: 'album-grid' }, ids.map(slot)),
         h('p', { class: 'album-hint', text: S.lvAlbumHint }))));
     paint();
     openModal('album');
@@ -3619,7 +3618,7 @@ export function createUI(bus) {
           toggleRow('highContrast', '◐'),
           // (1.16) Die Lewende Toring: people in the towers, and whose
           toggleRow('living', '🏠'),
-          st.settings.living !== false ? row(TRIBE_EMOJI[st.lvTribe] || '🔥', S.lvTribe, S.lvTribeNames[st.lvTribe] || '', () => showTribe()) : null,
+          null,   // (1.20: no tribes any more; the album stays)
           st.settings.living !== false ? row('📖', S.lvAlbum, '›', () => bus.emit('ui:lv-album')) : null,
           row('🌐', S.language, S.langNames[lang], () => showLanguage({ current: lang })),
           st.remindOn ? row('🔔', S.reminders, st.remindTime || S.off, () => bus.emit('ui:remind')) : null,

@@ -131,7 +131,9 @@ export function createDuel({
     const turns = mode === 'turns';
     // (1.16) Die Lewende Toring's battles: against Robot Rikus when the Living Tower is on; live when the room says both
     // games know them. Rikus's tribe comes from the match seed; a person's from their card.
-    const lvOn = turns && (kind !== 'live' ? !!living() : lv === true);
+    // (1.20, the owner 24 Oct 2026: "lets leave the whole earth, water and fire scenario") the tribes' missions are off: the
+    // Living Tower's people stay, nobody's tribe is sent at anyone
+    const lvOn = false && turns && (kind !== 'live' ? !!living() : lv === true);
     const oppTribe = kind === 'live' ? cleanCard(oppCard || {}).tr : createRng(`${seed}/rikus-stam`).pick(['vuur', 'water', 'gras']);
     match = {
       kind, seed, ws, you,

@@ -17,6 +17,7 @@ import { createBeasts } from './beasts.js';
 import { RIVER, rescueCourse, speedAt, laneX } from '../core/rivier.js';
 import { portraitDataUrl, portraitsReady, CAST } from '../game/residents.js';
 import { S } from '../core/strings.js';
+import { fmtM, fmtInt } from '../core/format.js';
 import { audio, haptics } from '../audio.js';
 
 const AHEAD = 230;       // m: things are made this far ahead...
@@ -111,6 +112,117 @@ export async function openRiver(d) {
   return view;
 }
 export const river = () => current;
+
+/**
+ * (1.20) Ons dorp: your crew's island in the lake, its Weektoring (every floor in its builder's skin) and the week: the
+ * ticket, the bombs, the build turns, today's ride. `d`: { name, floors, heightM, people, turns, rideToday, ticket,
+ * weekdays, bombs, reducedMotion, onRide, onBuild, onBack }. Resolves its controller ({ close }).
+ */
+export async function openTown(d) {
+  current?.close();
+  await portraitsReady;
+  if (!kit) kit = makeKit();
+  const view = createTown(kit, d);
+  current = view;
+  await view.ready;
+  return view;
+}
+
+function createTown(K, d) {
+  const { host, ov, stage, pieces } = K;
+  const { scene, camera } = stage;
+  const reduced = !!d.reducedMotion;
+  const gameCanvas = document.querySelector('#game > canvas');
+  const world = buildRiverWorld(stage);
+  world.setPool(1e6);   // (all lake: the canyon is far off)
+  const things = createThings(scene, pieces);
+  const island = createIsland(things, { radius: 22 });
+  scene.add(island.group);
+  island.setFloors(d.floors || []);
+  const IZ = 60;
+  let alive = true;
+  let raf = 0;
+  let last = performance.now();
+  let t = 0;
+  ov.innerHTML = `<div class="tw-top"><button class="tw-back">${S.twBack}</button><div class="tw-card"><b>🏝️ ${esc(d.name || S.spanMenu)}</b>
+      <span>${S.twHeight} <em>${fmtM(d.heightM || 0)}</em> · ${S.twPeople} <em>${fmtInt(d.people | 0)}</em></span></div></div>
+    <div class="tw-panel"><p>${d.ticket ? S.twTicketOk : S.twTicket(d.weekdays | 0, 3)}</p><p>${S.twBombs(d.bombs | 0)}</p><p class="tw-sat">${S.twSat}</p>
+      <div class="tw-btns">${d.rideToday ? `<button class="tw-ride">${S.rvResGo}</button>` : ''}${d.turns > 0 ? `<button class="tw-build">${S.twBuild(d.turns)}</button>` : `<p class="tw-none">${S.twNoTurn}</p>`}</div></div>`;
+  if (!document.getElementById('tw-style')) {
+    const st = document.createElement('style');
+    st.id = 'tw-style';
+    st.textContent = `
+#rivier .tw-top { position: absolute; left: 10px; right: 10px; top: calc(10px + var(--sat, 0px)); display: flex; gap: 8px; align-items: flex-start; pointer-events: none; }
+#rivier .tw-back { pointer-events: auto; min-height: 44px; padding: 0 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,.3); background: rgba(13,34,40,.66); color: #fff; font: inherit; font-weight: 900; font-size: 16px; }
+#rivier .tw-card { flex: 1; display: grid; gap: 2px; padding: 8px 14px; border-radius: 16px; background: rgba(13,34,40,.66); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+#rivier .tw-card b { font-size: 19px; font-weight: 900; }
+#rivier .tw-card span { font-size: 13px; font-weight: 800; color: #d4f3ec; }
+#rivier .tw-card em { font-style: normal; color: #fff3c4; }
+#rivier .tw-panel { pointer-events: auto; position: absolute; left: 50%; bottom: calc(14px + var(--sab, 0px)); transform: translateX(-50%); width: min(92%, 420px); padding: 14px 16px; border-radius: 22px;
+  background: rgba(16,30,36,.84); border: 1px solid rgba(255,255,255,.2); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 18px 50px rgba(0,0,0,.4); }
+#rivier .tw-panel p { margin: 0 0 6px; font-weight: 800; font-size: 15px; color: #e3f6f1; }
+#rivier .tw-panel .tw-sat { font-size: 13px; color: #b9d6e3; }
+#rivier .tw-btns { display: grid; gap: 8px; margin-top: 10px; }
+#rivier .tw-btns button { min-height: 52px; border-radius: 14px; border: 0; font: inherit; font-weight: 900; font-size: 18px; }
+#rivier .tw-ride { background: linear-gradient(180deg, #8ff0d8, #2fb59c); color: #062b25; box-shadow: 0 4px 0 #18806c; }
+#rivier .tw-build { background: linear-gradient(180deg, #ffd65c, #f0a81c); color: #2b1a00; box-shadow: 0 4px 0 #a86e00; }
+#rivier .tw-none { text-align: center; color: #b9d6e3 !important; font-size: 14px !important; }`;
+    document.head.appendChild(st);
+  }
+  ov.querySelector('.tw-back').addEventListener('click', () => d.onBack?.());
+  ov.querySelector('.tw-ride')?.addEventListener('click', () => d.onRide?.());
+  ov.querySelector('.tw-build')?.addEventListener('click', () => d.onBuild?.());
+  function place() {
+    const r = gameCanvas?.getBoundingClientRect() || { left: 0, top: 0, width: innerWidth, height: innerHeight };
+    Object.assign(host.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    stage.resize();
+  }
+  addEventListener('resize', place);
+  // the camera drifts slowly round the island; the whole tower fits the top 60 % (the panel has the rest)
+  const h = Math.max(16, island.top) + 6;
+  function frame(dt) {
+    t += dt;
+    const half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const D = Math.max(46, (h / 0.6) / (2 * half));
+    const a = 0.5 + (reduced ? 0 : t * 0.045);
+    const mid = h * 0.5 - (h / 0.6) * 0.2;
+    camera.position.set(Math.sin(a) * D, mid + D * 0.12, -IZ + Math.cos(a) * D);
+    camera.lookAt(0, mid, -IZ);
+    island.group.position.set(0, -0.6, -IZ);
+    world.update(0, t);
+  }
+  function loop(now) {
+    if (!alive) return;
+    raf = requestAnimationFrame(loop);
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    frame(dt);
+    stage.render(dt);
+  }
+  host.style.display = 'block';
+  place();
+  frame(0);
+  const ready = (async () => {
+    stage.render(0);
+    await new Promise((res) => requestAnimationFrame(res));
+    raf = requestAnimationFrame(loop);
+  })();
+  function close() {
+    if (!alive) return;
+    alive = false;
+    cancelAnimationFrame(raf);
+    removeEventListener('resize', place);
+    scene.remove(island.group, things.spray);
+    things.dispose();
+    world.dispose();
+    ov.innerHTML = '';
+    host.style.display = 'none';
+    if (current === api) current = null;
+  }
+  const api = { ready, close, state: () => ({ phase: 'town', h }) };
+  return api;
+}
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 function createRide(K, d) {
   const { host, ov, stage, pieces } = K;
