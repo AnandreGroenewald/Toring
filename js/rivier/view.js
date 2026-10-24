@@ -496,6 +496,8 @@ function createTown(K, d) {
     island.dispose();
     things.dispose();
     world.dispose();
+    // (the block looks this screen painted: the most recent stay for the next, the rest go off the graphics chip)
+    pieces.trim?.(24);
     ov.innerHTML = '';
     host.style.display = 'none';
     if (current === api) current = null;
@@ -1971,6 +1973,8 @@ function createRide(K, d) {
     beasts.dispose();
     things.dispose();
     world.dispose();
+    // (the block looks this screen painted: the most recent stay for the next, the rest go off the graphics chip)
+    pieces.trim?.(24);
     ov.innerHTML = '';
     host.style.display = 'none';
     if (current === api) current = null;

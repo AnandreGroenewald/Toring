@@ -519,6 +519,8 @@ bus.on('ui:board-hide', (hide) => {
   store.setBoardHidden(!!hide);
   boardChanged();
   account.soon();
+  // (the same switch for Afgly's daily ranking)
+  span.rideBoard(todayKey(), !!hide).catch(() => {});
 });
 
 /** At start: a change that didn't reach the server last time goes now (one about an older day is let go). */
@@ -2741,6 +2743,10 @@ async function startRide(opts = {}) {
   const from = opts?.from || 'town';
   const day = todayKey();
   const rd = span.ride(day) || span.freeRide(day);
+  // (the server times the ride from its own ticket; asked now, while the river loads)
+  const ticket = span.rideStart().catch(() => '');
+  // (this ride's own name: the phone's queue may send it again, the server counts it once)
+  const rid = rd.extra ? `x${String(rd.seed || '').split('/')[1] || Date.now()}` : 'r';
   if (rd.extra && !has3d()) {
     // (a phone without the 3D the river needs: there's no free ride to have)
     ui.toast(S.no3dRide, 3600);
@@ -2763,10 +2769,10 @@ async function startRide(opts = {}) {
       daily: dayLayout(day), skin: store.getSkins().wear.blocks || 'kleur',
       reducedMotion: !!settings.reducedMotion, autopilot: DEBUG && params.has('rvauto'), pilotMetres: DEBUG ? Number(params.get('rvm')) || undefined : undefined,
       onResult: (res) => {
-        span.rideDone(day, res.rescued || [], rd.fromRiver || 0, res.metres || 0, !!rd.extra, { durationMs: res.durationMs || 0, hidden: store.getBoardHidden() }).then((out) => {
+        ticket.then((tk) => span.rideDone(day, res.rescued || [], rd.fromRiver || 0, res.metres || 0, !!rd.extra, { durationMs: res.durationMs || 0, hidden: store.getBoardHidden(), ticket: tk, rid })).then((out) => {
           if (out.coins) coinsChanged();
-          // (Afgly's daily ranking: your place on the card as soon as the server says it)
-          if (out.board) ride?.setRank?.(out.board);
+          // (Afgly's daily ranking: your place on this ride's card as soon as the server says it; not on a newer one)
+          if (out.board && seq === rideSeq) ride?.setRank?.(out.board);
         });
       },
       getBoard: () => span.rideBoard(day),

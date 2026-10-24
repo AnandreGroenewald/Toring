@@ -104,3 +104,20 @@ test('rivier (endless): the river never ends — always passable at its speed, e
   assert.ok(speedAt(1200, Infinity) > RIVER.speed1 && speedAt(300, Infinity) < RIVER.speed1);
   assert.ok(inRapids(rescueCourse('x', WHO, { endless: true }), 400) && inRapids(rescueCourse('x', WHO, { endless: true }), 400 + 2 * RIVER.rapidsEvery));
 });
+
+test('rivier (endless): however many people (up to 24), all of them fit before the lake and the river runs on busy after it', () => {
+  const MANY = ['boer', 'haai', 'bytjie', 'klippie', 'rissie', 'seekat', 'braai', 'duiker', 'madelief', 'draakie', 'brandweer', 'vuurhoutjie'];
+  const who24 = [...MANY, ...MANY.map((x) => `${x}2`)];
+  for (let d = 0; d < 400; d++) {
+    for (const who of [who24, MANY, MANY.slice(0, 6), []]) {
+      const c = rescueCourse(`many-${d}`, who, { endless: true });
+      c.extend(3000);
+      const ppl = c.rows.flatMap((r) => r.items.filter((it) => it.kind === 'person').map(() => r.z));
+      assert.equal(ppl.length, who.length, `many-${d}/${who.length}: everyone`);
+      assert.ok(ppl.every((z) => z < RIVER.lakeFrom), 'before the lake');
+      const after = c.rows.filter((r) => r.z > RIVER.lakeTo + 100 && r.items.some((it) => it.kind !== 'person'));
+      assert.ok(after.length > 40, `many-${d}/${who.length}: obstacles after the lake (${after.length})`);
+      assert.ok(passable(c));
+    }
+  }
+});

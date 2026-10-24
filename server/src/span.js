@@ -16,7 +16,9 @@
 //   POST /span/ride    {id, key, day, rescued, fromRiver, metres, extra}  -> today's ride (once a day): people home; or
 //                      a free ride (extra: any time, metres only); the metres
 //                      ridden down the endless river count for the player's and the crew's week
-//   POST /span/board   {id, key, day}                       -> Afgly's daily ranking: the top 10 and your own place
+//   POST /span/ride-start {id, key}                          -> a ticket for a ride about to start (the server times it)
+//   POST /span/board   {id, key, day, hidden?}              -> Afgly's daily ranking: the top 10 and your own place
+//                      (hidden: the Daily ranking's "show me" switch, applied to today's and yesterday's rows)
 //   POST /span/bomb    {id, key, target, hits: [{x, y}]}    -> Saturday: bombs on the tallest tower of your river
 //   GET  /span/river/<id>                       -> the Saturday standings
 //   GET  /span/invite/<code>                    -> the crew an invite link is for (its name, how many)
@@ -49,6 +51,7 @@ const BOARD_TOP = 10;
 const BOARD_ROWS = 1500;          // rows a day keeps at most (the shortest go first)
 const BOARD_DAYS = 8;
 const RIVER_MPS = 31;             // m/s: no ride goes faster on average (its top speed is 27; the rapids add a quarter)
+const RIDE_IDS = 40;              // a player's last ride ids kept: a ride sent again (the phone's queue) counts once
 const BOT_ACTS = 6;              // a Rikus crew acts this many times through Saturday...
 /** A player's name as other crews see it on Saturday: kid-clean (js/core/nameRules.js), else none. */
 const cleanName = (s) => { const r = checkName(String(s ?? '').slice(0, 40), { max: 22 }); return r.ok ? r.value : ''; };
@@ -170,6 +173,8 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
   async function leaveCrew(p, c, why = 'left') {
     c.members = c.members.filter((m) => m.id !== p.id);
     if (c.lease?.by === p.id) c.lease = null;
+    // (the crew's river metres are its members': a builder who goes takes theirs along)
+    if (c.rideBy?.[p.id] !== undefined) { const rb = { ...c.rideBy }; delete rb[p.id]; c.rideBy = rb; }
     if (!c.members.length) {
       put(iKey(c.invite), { crew: null });
     } else {
@@ -193,7 +198,7 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
       id: c.id, name: c.name, invite: c.invite, founder: c.founder, members: c.members, week: c.week, floors: c.floors,
       heightM: heightOf(c.floors), people: c.people | 0, inRiver: c.inRiver | 0, repair: c.repair | 0,
       // (this week's metres down the river, each member's and all together)
-      rideBy: c.rideBy || {}, rideM: Object.values(c.rideBy || {}).reduce((s, v) => s + (v | 0), 0),
+      rideBy: c.rideBy || {}, rideM: c.members.reduce((s, m) => s + ((c.rideBy || {})[m.id] | 0), 0),
       lease: c.lease && c.lease.until > now() ? { by: c.lease.by, name: c.members.find((m) => m.id === c.lease.by)?.name || '' } : null,
       monuments: c.monuments || [], news: (c.news || []).slice(-12), newsN: c.newsN | 0, river: c.river || null,
     };
@@ -666,44 +671,86 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
     const p = await open(b);
     if (Array.isArray(p)) return p;
     const day = sastOf(now()).key;
+    // (the Daily ranking's "show me" switch: today's and yesterday's rows follow it)
+    if (typeof b.hidden === 'boolean') {
+      for (const dk of [day, plusDays(day, -1)]) {
+        const bd = await get(bKey(dk));
+        const row = bd?.rows?.[p.id];
+        if (row && !!row.h !== b.hidden) {
+          bd.rows[p.id] = { ...row, h: b.hidden ? 1 : 0 };
+          put(bKey(dk), bd);
+        }
+      }
+    }
     const d = isDayKey(b.day) && (b.day === day || b.day === plusDays(day, -1)) ? b.day : day;
     return [200, boardView(await get(bKey(d)), d, p.id)];
+  }
+  /** A ride is about to start: its ticket (the server's own clock times it; the phone's can't be trusted). */
+  async function rideStart(b) {
+    const p = await open(b);
+    if (Array.isArray(p)) return p;
+    const tk = newSpanId();
+    p.rideTk = { tk, at: now() };
+    put(pKey(p.id), p);
+    return [200, { ticket: tk }];
   }
   async function ride(b) {
     const p = await open(b);
     if (Array.isArray(p)) return p;
     const day = sastOf(now()).key;
     if (b.day !== day && b.day !== plusDays(day, -1)) return [400, { error: 'day' }];
-    // (no ride goes faster than the river: one that claims more than its seconds allow counts for nothing)
+    // (the same ride sent again, the phone's queue after a lost answer: counted once)
+    const rid = typeof b.rid === 'string' && /^[0-9a-z/-]{1,40}$/i.test(b.rid) ? `${b.day}|${b.rid}` : null;
+    if (rid && (p.rideIds || []).includes(rid)) {
+      const c = await crewOf(p);
+      return [200, { crew: crewView(c), me: meView(p), board: boardView(await get(bKey(b.day)), b.day, p.id), again: true }];
+    }
+    // (no ride goes faster than the river: timed by the server from the ride's ticket, once; without one the metres
+    // count for nothing)
     const one = Math.max(0, Math.min(RIDE_M_MAX, Math.floor(Number(b.metres) || 0)));
-    const secs = Number(b.durationMs) / 1000;
-    const real = one > 0 && Number.isFinite(secs) && secs > 0 && one <= 60 + secs * RIVER_MPS;
+    const tk = p.rideTk && typeof b.ticket === 'string' && b.ticket === p.rideTk.tk ? p.rideTk : null;
+    if (tk) p.rideTk = null;
+    const secs = tk ? (now() - tk.at) / 1000 : 0;
+    const real = one > 0 && secs > 0 && one <= 60 + secs * RIVER_MPS;
+    // (a ride of a day in last week, sent after Monday came: its place on that day's ranking, nothing for this week)
+    const thisWeek = weekOf(b.day) === p.week;
     // (a free ride, any time: only its metres count; a day's metres stop at RIDE_DAY_MAX)
-    const m = real ? Math.min(one, Math.max(0, RIDE_DAY_MAX - ((p.rideM || {})[b.day] | 0))) : 0;
+    const m = real && thisWeek ? Math.min(one, Math.max(0, RIDE_DAY_MAX - ((p.rideM || {})[b.day] | 0))) : 0;
     const rank = async () => (real ? boardAdd(b.day, p, one, b.hidden === true) : boardView(await get(bKey(b.day)), b.day, p.id));
+    const remember = () => { if (rid) p.rideIds = [...(p.rideIds || []), rid].slice(-RIDE_IDS); };
     if (b.extra === true) {
       const c = await crewOf(p);
-      p.rideM = { ...(p.rideM || {}), [b.day]: ((p.rideM || {})[b.day] | 0) + m };
-      c.rideBy = { ...(c.rideBy || {}), [p.id]: ((c.rideBy || {})[p.id] | 0) + m };
+      if (m) {
+        p.rideM = { ...(p.rideM || {}), [b.day]: ((p.rideM || {})[b.day] | 0) + m };
+        if (c.week === p.week) c.rideBy = { ...(c.rideBy || {}), [p.id]: ((c.rideBy || {})[p.id] | 0) + m };
+      }
+      remember();
+      const board = await rank();
       put(cKey(c.id), c);
       put(pKey(p.id), p);
-      return [200, { crew: crewView(c), me: meView(p), board: await rank() }];
+      return [200, { crew: crewView(c), me: meView(p), board }];
     }
     if (p.rides?.[b.day]) return [409, { error: 'done' }];
+    // (last week's rescue ride, sent late: its people went with that week's tower)
+    if (!thisWeek) return [409, { error: 'week' }];
     const n = Math.max(0, Math.min(SPAN.rescuePerRun, b.rescued | 0));
     const c = await crewOf(p);
     const fromRiver = Math.max(0, Math.min(c.inRiver | 0, b.fromRiver | 0, n));
     p.rides = { ...(p.rides || {}), [b.day]: n || -1 };
-    p.rideM = { ...(p.rideM || {}), [b.day]: ((p.rideM || {})[b.day] | 0) + m };
-    c.rideBy = { ...(c.rideBy || {}), [p.id]: ((c.rideBy || {})[p.id] | 0) + m };
+    if (m) {
+      p.rideM = { ...(p.rideM || {}), [b.day]: ((p.rideM || {})[b.day] | 0) + m };
+      if (c.week === p.week) c.rideBy = { ...(c.rideBy || {}), [p.id]: ((c.rideBy || {})[p.id] | 0) + m };
+    }
+    remember();
     const r = moveIn(c.floors, n);
     c.floors = r.floors;
     c.people = (c.people | 0) + n;
     c.inRiver = Math.max(0, (c.inRiver | 0) - fromRiver);
     if (n) addNews(c, { kind: 'rescued', who: p.name || '', n });
+    const board = await rank();
     put(cKey(c.id), c);
     put(pKey(p.id), p);
-    return [200, { crew: crewView(c), me: meView(p), board: await rank() }];
+    return [200, { crew: crewView(c), me: meView(p), board }];
   }
   async function bomb(b) {
     const p = await open(b);
@@ -768,6 +815,7 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
       else if (method === 'POST' && path === '/span/build') res = await build(b);
       else if (method === 'POST' && path === '/span/ride') res = await ride(b);
       else if (method === 'POST' && path === '/span/board') res = await board(b);
+      else if (method === 'POST' && path === '/span/ride-start') res = await rideStart(b);
       else if (method === 'POST' && path === '/span/bomb') res = await bomb(b);
       else {
         let m = /^\/span\/river\/([A-Z0-9]{8})$/.exec(path);

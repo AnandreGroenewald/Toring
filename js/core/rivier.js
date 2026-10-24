@@ -125,9 +125,10 @@ function buildCourse(key, len, who, crews) {
       const minGap = Math.max(RIVER.gapMin, endless ? speedAt(z, len) * RIVER.reactS : 0);
       z += Math.max(minGap, rng.int(RIVER.gapMin, RIVER.gapMax) - Math.round(deep * 5));
       if (z >= stopAt) break;
-      if (endless && pi < people.length && z >= peopleBy) {
-        // the people still waiting, one row each, lane by lane, before the lake
-        while (pi < people.length && z < RIVER.lakeFrom - 20) {
+      // the people still waiting, one row each, lane by lane, before the lake: started early enough that all of them fit
+      // (11 m apart) before it, however many there are
+      if (endless && pi < people.length && z >= Math.min(peopleBy, RIVER.lakeFrom - 20 - 11 * (people.length - pi))) {
+        while (pi < people.length) {
           rows.push({ z, items: [person([1, 0, 2][pi % 3])], finish: true });
           z += 11;
         }

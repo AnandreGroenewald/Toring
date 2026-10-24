@@ -240,10 +240,17 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
       while (strays.length < want && others.length) strays.push(others.splice(Math.floor(rng.next() * others.length), 1)[0]);
       return { who: [...mine, ...strays], mine: mine.length, fromRiver };
     },
-    /** Afgly's daily ranking from the server ({ day, players, top, you }), or null (offline, no server). */
-    async rideBoard(dateKey = today()) {
+    /** A ride is starting: the server's ticket (it times the ride), or '' (offline). */
+    async rideStart() {
+      if (!online) return '';
+      const r = await call('POST', '/span/ride-start', {}).catch(() => null);
+      return r?.status === 200 && typeof r.ticket === 'string' ? r.ticket : '';
+    },
+    /** Afgly's daily ranking from the server ({ day, players, top, you }), or null (offline, no server). `hidden`: the
+     * Daily ranking's "show me" switch, passed on to today's and yesterday's rows. */
+    async rideBoard(dateKey = today(), hidden = undefined) {
       if (!online) return null;
-      const r = await call('POST', '/span/board', { day: dateKey }).catch(() => null);
+      const r = await call('POST', '/span/board', { day: dateKey, ...(typeof hidden === 'boolean' ? { hidden } : {}) }).catch(() => null);
       if (r?.status !== 200 || !Array.isArray(r.top)) return null;
       if (r.you) {
         d.rideRank = { day: dateKey, rank: r.you.rank | 0, players: r.players | 0, m: r.you.m | 0 };
@@ -262,8 +269,10 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
      * The ride is over: whoever was saved moves into the Weektoring (its free rooms first) and the town; coins for each.
      * The metres count for the week (Saturday's shots, the crew's river metres). `extra`: a free ride (metres only).
      */
-    async rideDone(dateKey, rescued = [], fromRiver = 0, metres = 0, extra = false, { durationMs = 0, hidden = false } = {}) {
+    async rideDone(dateKey, rescued = [], fromRiver = 0, metres = 0, extra = false, { durationMs = 0, hidden = false, ticket = '', rid = '' } = {}) {
       const m = Math.max(0, Math.min(40000, metres | 0));
+      // (the server's answer: the crew, and your own week as it counts it now: the shots, the metres)
+      const keepMe = (r) => { if (r?.me && d.srv) d.srv.me = { ...d.srv.me, ...r.me }; };
       // (Afgly's daily ranking: the server's answer, kept for the menu)
       const keepRank = (r) => {
         if (r?.board?.you) d.rideRank = { day: dateKey, rank: r.board.you.rank | 0, players: r.board.players | 0, m: r.board.you.m | 0 };
@@ -275,9 +284,9 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
         d.rideBest = Math.max(d.rideBest | 0, m);
         save();
         if (online && m > 0) {
-          const body = { day: dateKey, rescued: 0, metres: m, extra: true, durationMs: Math.round(durationMs), hidden: !!hidden };
+          const body = { day: dateKey, rescued: 0, metres: m, extra: true, durationMs: Math.round(durationMs), hidden: !!hidden, ticket: String(ticket || ''), rid: String(rid || '') };
           const r = await call('POST', '/span/ride', body).catch(() => null);
-          if (r?.status === 200 && r.crew && d.srv) d.srv.crew = r.crew;
+          if (r?.status === 200 && r.crew && d.srv) { d.srv.crew = r.crew; keepMe(r); }
           else if (!r || r.status >= 500) d.queue.push({ path: '/span/ride', body });
           const board = keepRank(r);
           save();
@@ -292,9 +301,9 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
       d.rideBest = Math.max(d.rideBest | 0, m);
       const coins = n ? earn(n * SPAN.coinsPerRescue) : 0;
       if (online) {
-        const body = { day: dateKey, rescued: n, fromRiver: Math.min(fromRiver | 0, n), metres: m, durationMs: Math.round(durationMs), hidden: !!hidden };
+        const body = { day: dateKey, rescued: n, fromRiver: Math.min(fromRiver | 0, n), metres: m, durationMs: Math.round(durationMs), hidden: !!hidden, ticket: String(ticket || ''), rid: String(rid || 'r') };
         const r = await call('POST', '/span/ride', body).catch(() => null);
-        if (r?.status === 200 && r.crew && d.srv) d.srv.crew = r.crew;
+        if (r?.status === 200 && r.crew && d.srv) { d.srv.crew = r.crew; keepMe(r); }
         else if (!r || r.status >= 500) d.queue.push({ path: '/span/ride', body });
         const board = keepRank(r);
         save();

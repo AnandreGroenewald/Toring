@@ -380,7 +380,13 @@ export function createPieces(renderer) {
   function faceMaterials(shape, skin, colorIndex = null, paintK = PAINT_K) {
     const color = colorIndex ?? SHAPE_COLOR[shape] ?? 0;
     const k = `${shape}|${skin}|${color}|${paintK}`;
-    if (matCache.has(k)) return matCache.get(k);
+    if (matCache.has(k)) {
+      // (most recently used last: trim() lets the oldest go)
+      const hit = matCache.get(k);
+      matCache.delete(k);
+      matCache.set(k, hit);
+      return hit;
+    }
     const s = shapeInfo(shape);
     const D = DEPTH * PX;   // (the depth in Stapel's px)
     let mats = [base.sandstone, base.sandstone];
@@ -433,6 +439,36 @@ export function createPieces(renderer) {
     for (const m of [...(Array.isArray(mats) ? mats : [mats]), mats.chip]) if (m) m.userData.shared = true;   // (a town's teardown leaves them)
     matCache.set(k, mats);
     return mats;
+  }
+  /**
+   * Frees the block looks used longest ago, keeping the `keep` most recent (the river makes a new river every ride: its
+   * blocks' shapes and colours would otherwise pile up on the graphics chip for the whole visit). A look that comes back
+   * is painted again. Only between screens: nothing on the screen may be using what goes.
+   */
+  function trim(keep = 24) {
+    const TEX = ['map', 'bumpMap', 'emissiveMap', 'normalMap', 'roughnessMap'];
+    const done = new Set();
+    const keepTex = new Set();
+    const keys = [...matCache.keys()];
+    const going = keys.slice(0, Math.max(0, keys.length - keep));
+    // (a picture shared with a look that stays, stays)
+    for (const k of keys.slice(going.length)) {
+      const mats = matCache.get(k);
+      for (const m of [...(Array.isArray(mats) ? mats : [mats]), mats.chip]) for (const s of TEX) if (m?.[s]) keepTex.add(m[s]);
+    }
+    for (const k of going) {
+      const mats = matCache.get(k);
+      matCache.delete(k);
+      for (const m of [...(Array.isArray(mats) ? mats : [mats]), mats.chip]) {
+        if (!m || done.has(m)) continue;
+        done.add(m);
+        // (only this kit's own: the shared base materials stay)
+        if (Object.values(base).includes(m)) continue;
+        for (const s of TEX) { const tx = m[s]; if (tx && !keepTex.has(tx) && !done.has(tx)) { done.add(tx); tx.dispose(); } }
+        m.dispose();
+      }
+    }
+    return going.length;
   }
   const emblemMats = new Map();
   /** A shape's end facing -x (metres, round its centroid): its middle, its outward normal, its length. */
@@ -1400,5 +1436,5 @@ export function createPieces(renderer) {
     return g;
   }
 
-  return { M, block, crown, seam, crack, glassCrack, glassBreak, soot, vineWrap, springCoil, dropCoil, waterSkin, drySkin, tick, crane, pin, blockGeometry, cardImage, prepareCards, team, velvet, ghost, crownMark, prepare, medallion };
+  return { M, block, crown, seam, crack, glassCrack, glassBreak, soot, vineWrap, springCoil, dropCoil, waterSkin, drySkin, tick, crane, pin, blockGeometry, cardImage, prepareCards, team, velvet, ghost, crownMark, prepare, medallion, trim };
 }

@@ -21,6 +21,12 @@ function player(name) {
   return { id: newSpanId(), key: newSpanKey(), name };
 }
 const sync = (h, p, extra = {}) => h.call('POST', '/span/sync', { ...p, ...extra });
+/** A ride timed by the server: its ticket, then `secs` later its end. */
+async function rideFor(h, p, body, secs = 60) {
+  const [, st] = await h.call('POST', '/span/ride-start', p);
+  h.clock.t += secs * 1000;
+  return h.call('POST', '/span/ride', { ...p, ...body, ticket: st.ticket });
+}
 const plank = (y, q = 'G') => ({ s: 'plank', k: 1, c: 1, x: 0, y, r: 0, q, p: 1 });
 const planks = (from, n) => Array.from({ length: n }, (_, i) => plank(from + i * 1.6));
 
@@ -135,28 +141,28 @@ test('span server: the metres down the endless river count for the player and th
   const [, ca] = await h.call('POST', '/span/sync', { ...a, name: 'Anna', days: { [day(0)]: 40 } });
   await sync(h, b, { days: { [day(0)]: 30 } });
   await h.call('POST', '/span/join', { ...b, invite: ca.crew.invite });
-  const [s1, r1] = await h.call('POST', '/span/ride', { ...a, day: day(0), rescued: 4, metres: 1234.7, durationMs: 62000 });
+  const [s1, r1] = await rideFor(h, a, { day: day(0), rescued: 4, metres: 1234.7 }, 62);
   assert.equal(s1, 200);
   assert.equal(r1.me.rideM[day(0)], 1234);
   assert.equal(r1.me.bombs, SPAN.bombsMax, '1 shot per 25 m of Dailies + 1 per 100 m ridden, the week\'s 10 at most');
   assert.equal(r1.me.river, 1234);
-  const [, r2] = await h.call('POST', '/span/ride', { ...b, day: day(0), rescued: 2, metres: 9e9, durationMs: 2e6 });
+  const [, r2] = await rideFor(h, b, { day: day(0), rescued: 2, metres: 9e9 }, 2000);
   assert.equal(r2.crew.rideBy[a.id], 1234);
   assert.equal(r2.crew.rideBy[b.id], 40000, 'one ride counts at most 40 km');
   assert.equal(r2.crew.rideM, 41234);
   // free rides, any time and as often as you like: their metres add up, nobody moves in, the day's ride stays done
-  const [sx, rx] = await h.call('POST', '/span/ride', { ...a, day: day(0), rescued: 7, metres: 500, extra: true, durationMs: 25000 });
+  const [sx, rx] = await rideFor(h, a, { day: day(0), rescued: 7, metres: 500, extra: true }, 25);
   assert.equal(sx, 200);
   assert.equal(rx.me.rideM[day(0)], 1734);
   assert.equal(rx.crew.people, r2.crew.people, 'a free ride brings nobody in');
-  assert.equal((await h.call('POST', '/span/ride', { ...a, day: day(0), rescued: 0, metres: 300, extra: true, durationMs: 15000 }))[1].crew.rideBy[a.id], 2034);
+  assert.equal((await rideFor(h, a, { day: day(0), rescued: 0, metres: 300, extra: true }, 15))[1].crew.rideBy[a.id], 2034);
   assert.equal((await h.call('POST', '/span/ride', { ...a, day: day(0), rescued: 5 }))[0], 409, 'the rescue ride is still once a day');
   const c = player('Carla');
   await sync(h, c, { days: { [day(0)]: 20 } });
   await h.call('POST', '/span/join', { ...c, invite: ca.crew.invite });
-  const [s3, r3] = await h.call('POST', '/span/ride', { ...c, day: day(0), rescued: 0, metres: 'x', durationMs: 9000 });
+  const [s3, r3] = await rideFor(h, c, { day: day(0), rescued: 0, metres: 'x' }, 9);
   assert.equal(s3, 200);
-  assert.equal(r3.crew.rideBy[c.id], 0, 'nonsense metres count as none');
+  assert.equal(r3.crew.rideBy[c.id] | 0, 0, 'nonsense metres count as none');
   h.clock.t = sastAt('2026-11-02', 9);
   const [, nx] = await h.call('POST', '/span/sync', { ...a, name: 'Anna', days: {} });
   assert.equal(nx.crew.rideM, 0, 'a new week starts at nothing');
@@ -167,7 +173,7 @@ test('span server: Afgly\'s daily ranking — your furthest ride of the day, the
   const ps = Array.from({ length: 13 }, (_, k) => player(`Bouer${k}`));
   for (const [k, p] of ps.entries()) {
     await sync(h, p, { name: `Speler${k}`, days: { [day(0)]: 20 } });
-    await h.call('POST', '/span/ride', { ...p, day: day(0), rescued: 1, metres: 100 + k * 50, durationMs: 60000 });
+    await rideFor(h, p, { day: day(0), rescued: 1, metres: 100 + k * 50 }, 60);
   }
   const me = ps[2];   // 200 m: 11th
   let [s, bd] = await h.call('POST', '/span/board', { ...me, day: day(0) });
@@ -178,18 +184,18 @@ test('span server: Afgly\'s daily ranking — your furthest ride of the day, the
   assert.equal(bd.top[0].name, 'Speler12');
   assert.deepEqual(bd.you, { rank: 11, m: 200, hidden: false });
   // a further free ride lifts you; a shorter one leaves your best
-  const [, r1] = await h.call('POST', '/span/ride', { ...me, day: day(0), metres: 900, extra: true, durationMs: 40000 });
+  const [, r1] = await rideFor(h, me, { day: day(0), metres: 900, extra: true }, 40);
   assert.equal(r1.board.you.rank, 1);
   assert.ok(r1.board.top[0].you);
-  const [, r2] = await h.call('POST', '/span/ride', { ...me, day: day(0), metres: 120, extra: true, durationMs: 9000 });
+  const [, r2] = await rideFor(h, me, { day: day(0), metres: 120, extra: true }, 9);
   assert.equal(r2.board.you.m, 900);
   // too fast for the river: no place, no metres
   const cheat = ps[0];
-  const [, r3] = await h.call('POST', '/span/ride', { ...cheat, day: day(0), metres: 5000, extra: true, durationMs: 10000 });
+  const [, r3] = await rideFor(h, cheat, { day: day(0), metres: 5000, extra: true }, 10);
   assert.equal(r3.board.you.m, 100, 'the impossible ride left nothing');
   assert.equal(r3.me.rideM[day(0)], 100);
   // hiding: your place stays, the list skips you
-  const [, r4] = await h.call('POST', '/span/ride', { ...me, day: day(0), metres: 50, extra: true, durationMs: 9000, hidden: true });
+  const [, r4] = await rideFor(h, me, { day: day(0), metres: 50, extra: true, hidden: true }, 9);
   assert.equal(r4.board.you.rank, 1);
   assert.ok(r4.board.top.every((x) => !x.you));
   assert.equal(r4.board.top[0].rank, 2);
@@ -198,6 +204,57 @@ test('span server: Afgly\'s daily ranking — your furthest ride of the day, the
   [, bd] = await h.call('POST', '/span/board', { ...me, day: day(1) });
   assert.equal(bd.players, 0);
   assert.equal(bd.you, null);
+});
+
+test('span server: a ride counts once and only as the server timed it — a resent ride, no ticket, an old ticket, last week\'s day, the hide switch, a builder who leaves', async () => {
+  const h = harness();
+  const a = player('Anna');
+  const b = player('Bennie');
+  const [, ca] = await sync(h, a, { name: 'Anna', days: { [day(0)]: 40 } });
+  await sync(h, b, { name: 'Bennie', days: { [day(0)]: 30 } });
+  await h.call('POST', '/span/join', { ...b, invite: ca.crew.invite });
+  // the phone's queue sends the same free ride again: counted once
+  const [, r1] = await rideFor(h, a, { day: day(0), metres: 800, extra: true, rid: 'x1' }, 40);
+  assert.equal(r1.me.rideM[day(0)], 800);
+  const [s2, r2] = await h.call('POST', '/span/ride', { ...a, day: day(0), metres: 800, extra: true, rid: 'x1', ticket: 'whatever' });
+  assert.equal(s2, 200);
+  assert.equal(r2.me.rideM[day(0)], 800, 'not twice');
+  assert.equal(r2.crew.rideBy[a.id], 800);
+  // no ticket, or a ticket used already, or the phone's own clock: nothing counts
+  const [, r3] = await h.call('POST', '/span/ride', { ...a, day: day(0), metres: 900, extra: true, rid: 'x2', durationMs: 1e9 });
+  assert.equal(r3.me.rideM[day(0)], 800, 'no ticket: no metres');
+  const [, st] = await h.call('POST', '/span/ride-start', a);
+  h.clock.t += 30000;
+  await h.call('POST', '/span/ride', { ...a, day: day(0), metres: 500, extra: true, rid: 'x3', ticket: st.ticket });
+  h.clock.t += 600000;
+  const [, r4] = await h.call('POST', '/span/ride', { ...a, day: day(0), metres: 9000, extra: true, rid: 'x4', ticket: st.ticket });
+  assert.equal(r4.me.rideM[day(0)], 1300, 'a ticket counts once');
+  // the server's clock, not the claim: 30 s can't be 2 km
+  const [, r5] = await rideFor(h, a, { day: day(0), metres: 2000, extra: true, rid: 'x5', durationMs: 999999 }, 30);
+  assert.equal(r5.me.rideM[day(0)], 1300);
+  // the hide switch reaches today's ranking
+  const [, hb] = await h.call('POST', '/span/board', { ...a, day: day(0), hidden: true });
+  assert.ok(hb.top.every((x) => !x.you) && hb.you.hidden);
+  const [, sb] = await h.call('POST', '/span/board', { ...a, day: day(0), hidden: false });
+  assert.ok(sb.top.some((x) => x.you));
+  // a builder who leaves takes their metres along
+  await rideFor(h, b, { day: day(0), metres: 300, extra: true, rid: 'y1' }, 20);
+  const [, lv] = await h.call('POST', '/span/leave', b);
+  const [, after] = await sync(h, a, { name: 'Anna', days: { [day(0)]: 40 } });
+  assert.equal(after.crew.rideM, 1300, 'only the members\' metres');
+  assert.equal(after.crew.rideBy[b.id], undefined);
+  assert.ok(lv);
+  // Sunday's ride sent on Monday at 00:30: its day's ranking, nothing for the new week; a late rescue ride is refused
+  h.clock.t = sastAt(day(6), 22);
+  const [, sun] = await rideFor(h, a, { day: day(6), metres: 400, extra: true, rid: 'z1' }, 30);
+  assert.equal(sun.me.rideM[day(6)], 400);
+  const [, st2] = await h.call('POST', '/span/ride-start', a);
+  h.clock.t = sastAt('2026-11-02', 0) + 30 * 60000;
+  const [, late] = await h.call('POST', '/span/ride', { ...a, day: day(6), metres: 500, extra: true, rid: 'z2', ticket: st2.ticket });
+  assert.equal(late.crew.rideM, 0, 'the new week starts at nothing');
+  assert.equal(Object.keys(late.me.rideM).length, 0);
+  assert.equal(late.board.you.m, 500, 'Sunday\'s ranking has it');
+  assert.equal((await h.call('POST', '/span/ride', { ...a, day: day(6), rescued: 3, rid: 'r' }))[0], 409, 'last week\'s rescue ride: refused');
 });
 
 /** Five crews over a week: four with a ticket (towers 16, 11.2, 8, 4.8 m), one without. */
