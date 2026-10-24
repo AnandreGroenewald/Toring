@@ -8,6 +8,9 @@
 // narrows. Every row leaves a lane free, and rows are far enough apart that two lane changes always fit between them.
 import { createRng } from './rng.js';
 import { createSequence } from './sequence.js';
+import { paceAt, reactAt, PACE } from './riverpace.js';
+
+export { PACE, paceAt, reactAt };
 
 export const RIVER = Object.freeze({
   lanes: 3,
@@ -27,23 +30,16 @@ export const RIVER = Object.freeze({
   islandEvery: 220,    // m between Saturday's islands
   // the endless ride (the owner, 24 Oct 2026: "it was too short, it was quite fun. Please make it that it doesnt end,
   // the more meters you get the better for the week"): it runs until your third knock
-  hearts: 3,
-  speedMax: 27,        // m/s, reached at...
-  rampLen: 2400,       // ...this far down the river
+  hearts: 3,            // (the pace: js/core/riverpace.js)
   lakeFrom: 600,       // m: the river opens into a lake, your crew's island beside it...
   lakeTo: 880,         // ...and narrows into the canyon again
   islandAt: 740,
   rapidsEvery: 520,    // m between the stretches of white water
-  reactS: 0.85,        // s between rows at the speed you're going, at least (two lane changes and a look)
 });
 
 /** The speed (m/s) `z` metres into a course `len` long (an endless course: `len` Infinity, faster and faster). */
 export function speedAt(z, len) {
-  if (len === Infinity) {
-    const a = Math.min(1, Math.max(0, z / RIVER.rescueLen));
-    const b = Math.min(1, Math.max(0, (z - RIVER.rescueLen) / (RIVER.rampLen - RIVER.rescueLen)));
-    return RIVER.speed0 + (RIVER.speed1 - RIVER.speed0) * a + (RIVER.speedMax - RIVER.speed1) * b;
-  }
+  if (len === Infinity) return paceAt(z);
   return RIVER.speed0 + (RIVER.speed1 - RIVER.speed0) * Math.min(1, Math.max(0, z / Math.max(1, len - RIVER.finishRun)));
 }
 /** A lane's middle across the river (m; lane 1 is the middle). */
@@ -122,18 +118,20 @@ function buildCourse(key, len, who, crews) {
     while (z < Math.min(untilZ, stopAt)) {
       // (further down the endless river: a little closer together, but never closer than you can react at your speed)
       const deep = endless ? Math.min(1, Math.max(0, (z - RIVER.lakeTo) / 1800)) : 0;
-      const minGap = Math.max(RIVER.gapMin, endless ? speedAt(z, len) * RIVER.reactS : 0);
-      z += Math.max(minGap, rng.int(RIVER.gapMin, RIVER.gapMax) - Math.round(deep * 5));
-      if (z >= stopAt) break;
-      // the people still waiting, one row each, lane by lane, before the lake: started early enough that all of them fit
-      // (11 m apart) before it, however many there are
-      if (endless && pi < people.length && z >= Math.min(peopleBy, RIVER.lakeFrom - 20 - 11 * (people.length - pi))) {
+      const minGap = Math.max(RIVER.gapMin, endless ? speedAt(z, len) * reactAt(z) : 0);
+      // the people still waiting, one row each, lane by lane, before the lake: started early enough that all of them
+      // fit (11 m apart, closer if they must) before it, however many there are
+      const due = endless && pi < people.length && z + RIVER.gapMax >= Math.min(peopleBy, RIVER.lakeFrom - 20 - 11 * (people.length - pi));
+      if (due) {
+        z += minGap;
         while (pi < people.length) {
           rows.push({ z, items: [person([1, 0, 2][pi % 3])], finish: true });
-          z += 11;
+          z += Math.max(6, Math.min(11, (RIVER.lakeFrom - 12 - z) / Math.max(1, people.length - pi)));
         }
         continue;
       }
+      z += Math.max(minGap, rng.int(RIVER.gapMin, RIVER.gapMax) - Math.round(deep * 5));
+      if (z >= stopAt) break;
       const t = Math.min(1, z / RIVER.rescueLen);   // how far along: harder further on
       const items = [];
       const open = rng.pick(ALL);
@@ -258,7 +256,7 @@ export function passable(course) {
     const dz = row.z - prevZ;
     if (shut.size && dz < RIVER.gapMin - 0.01) return false;
     // (the endless river at speed: the gap still holds the time to react)
-    if (shut.size && course.endless && dz < speedAt(row.z, Infinity) * RIVER.reactS - 0.51) return false;
+    if (shut.size && course.endless && dz < speedAt(row.z, Infinity) * reactAt(row.z) - 0.51) return false;
     if (shut.size) prevZ = row.z;
   }
   return true;

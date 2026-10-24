@@ -15,7 +15,7 @@ import { createRider } from './rider.js';
 import { createThings, createIsland, createStartTower, labelSprite, disposeTree } from './things.js';
 import { createBeasts } from './beasts.js';
 import { loadModels } from './models.js';
-import { RIVER, rescueCourse, raidCourse, speedAt, laneX, inRapids, rapidsWindow } from '../core/rivier.js';
+import { RIVER, rescueCourse, raidCourse, speedAt, laneX, inRapids, rapidsWindow, PACE } from '../core/rivier.js';
 import { floorAt, hit as hitFloor, dimsOf } from '../core/weektower.js';
 import { weekOf, plusDays } from '../core/span.js';
 import { portraitDataUrl, portraitsReady, CAST } from '../game/residents.js';
@@ -664,6 +664,7 @@ function createRide(K, d) {
   const islandX = endless ? course.island.side * 27 : 0;
   if (endless) island.group.rotation.y = -course.island.side * Math.PI / 2;   // (its jetty to the river)
   let hearts = RIVER.hearts;
+  const musicNow = { bpm: 0, layers: 0 };
   let runS = 0;   // (the seconds riding: the server checks no ride is faster than the river)
   let islandSaid = false;
 
@@ -1493,7 +1494,8 @@ function createRide(K, d) {
     // the feel of speed: the view widens a little as the river speeds up and in the rapids (narrower while aiming), and
     // leans a touch into each carve (none with less motion)
     if (!reduced && phase === 'run' && !d.debugCam) {
-      const sp = clamp((speedAt(dist, len) - RIVER.speed0) / (RIVER.speed1 - RIVER.speed0), 0, 1);
+      // (the endless river: the view keeps widening as it keeps getting faster)
+      const sp = endless ? clamp((speedAt(dist, len) - PACE.start) / (PACE.max - PACE.start), 0, 1) : clamp((speedAt(dist, len) - RIVER.speed0) / (RIVER.speed1 - RIVER.speed0), 0, 1);
       const want = FOV0 + sp * 5 + rapK * 3 - (aiming ? 6 : 0);
       camera.fov += (want - camera.fov) * (1 - Math.exp(-dt * 3));
       camera.updateProjectionMatrix();
@@ -1599,8 +1601,14 @@ function createRide(K, d) {
       rider.setBlink(graceT > 0 && Math.floor(t * 10) % 2 === 0);
       if (phaseT > 7) hint(null);
       if (endless) {
-        if (dist > 300) audio.musicSet?.({ layers: 2, bpm: 112 });
-        if (dist > 1000) audio.musicSet?.({ layers: 3, bpm: 120 });
+        // (the music keeps pace with the river: a layer more early on, then faster and faster)
+        const bpm = Math.round(Math.min(150, 104 + (speedAt(dist, len) - PACE.start) * 2.2));
+        const layers = dist > 1000 ? 3 : dist > 300 ? 2 : 1;
+        if (bpm !== musicNow.bpm || layers !== musicNow.layers) {
+          musicNow.bpm = bpm;
+          musicNow.layers = layers;
+          audio.musicSet?.({ layers, bpm });
+        }
       } else if (dist > len * 0.4) audio.musicSet?.({ layers: 2, bpm: 112 });
       if (dist >= len - RIVER.finishRun + 10) {
         phase = 'finish';

@@ -25,6 +25,7 @@
 // A player is opened by their phone's secret key (the server keeps its SHA-256). Requests run one after the other (the
 // host keeps one queue: a bomb and a build on the same tower never cross). Robot Rikus's crews fill a river and act by
 // catch-up: every call works out what they did since the last one. Writes only when a record changed.
+import { rideMaxMetres } from '../../js/core/riverpace.js';
 import {
   SPAN, sastOf, weekOf, dowOf, plusDays, saturdayOf, sastAt, whistleAt, phaseAt, crewLocked, weekStats, craneOpen, isDayKey,
   isSpanId, isSpanKey, isInvite, newSpanId, newInvite, cleanCrewName, cleanSkin,
@@ -50,7 +51,6 @@ const RIDE_DAY_MAX = 200000;     // m: the most a day's rides can count together
 const BOARD_TOP = 10;
 const BOARD_ROWS = 1500;          // rows a day keeps at most (the shortest go first)
 const BOARD_DAYS = 8;
-const RIVER_MPS = 31;             // m/s: no ride goes faster on average (its top speed is 27; the rapids add a quarter)
 const RIDE_IDS = 40;              // a player's last ride ids kept: a ride sent again (the phone's queue) counts once
 const BOT_ACTS = 6;              // a Rikus crew acts this many times through Saturday...
 /** A player's name as other crews see it on Saturday: kid-clean (js/core/nameRules.js), else none. */
@@ -711,7 +711,7 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
     const tk = p.rideTk && typeof b.ticket === 'string' && b.ticket === p.rideTk.tk ? p.rideTk : null;
     if (tk) p.rideTk = null;
     const secs = tk ? (now() - tk.at) / 1000 : 0;
-    const real = one > 0 && secs > 0 && one <= 60 + secs * RIVER_MPS;
+    const real = one > 0 && secs > 0 && one <= 60 + rideMaxMetres(secs);
     // (a ride of a day in last week, sent after Monday came: its place on that day's ranking, nothing for this week)
     const thisWeek = weekOf(b.day) === p.week;
     // (a free ride, any time: only its metres count; a day's metres stop at RIDE_DAY_MAX)

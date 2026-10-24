@@ -2,7 +2,8 @@
 // to rescue in the order given (yours first), Saturday's islands along the way.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RIVER, rescueCourse, raidCourse, passable, speedAt, laneX, inRapids } from '../js/core/rivier.js';
+import { RIVER, rescueCourse, raidCourse, passable, speedAt, laneX, inRapids, PACE } from '../js/core/rivier.js';
+import { rideMaxMetres } from '../js/core/riverpace.js';
 
 const WHO = ['boer', 'haai', 'bytjie', 'klippie', 'rissie', 'seekat', 'braai', 'duiker'];
 
@@ -100,8 +101,23 @@ test('rivier (endless): the river never ends — always passable at its speed, e
     c2.extend(3000);
     assert.deepEqual(c2.rows, c.rows.filter((r) => r.z <= c2.rows.at(-1).z));
   }
-  assert.ok(speedAt(RIVER.rampLen, Infinity) === RIVER.speedMax && speedAt(10000, Infinity) === RIVER.speedMax);
-  assert.ok(speedAt(1200, Infinity) > RIVER.speed1 && speedAt(300, Infinity) < RIVER.speed1);
+  // (the owner: "it begins VERY slow and then the speed stays the same": a brisk start, and always getting faster)
+  assert.equal(speedAt(0, Infinity), PACE.start);
+  assert.ok(PACE.start >= 18, 'not a slow start');
+  let prev = 0;
+  for (let z = 0; z <= 7000; z += 250) {
+    const v = speedAt(z, Infinity);
+    assert.ok(v > prev, `faster at ${z} m (${v})`);
+    prev = v;
+  }
+  assert.equal(speedAt(20000, Infinity), PACE.max);
+  // the server's limit: an honest ride is always within it, a forged one isn't
+  for (const secs of [20, 60, 180, 600]) {
+    let d = 0;
+    for (let s = 0; s < secs; s += 0.05) d += speedAt(d, Infinity) * 0.05;
+    assert.ok(d <= rideMaxMetres(secs), `${secs} s: ${Math.round(d)} m fits`);
+    assert.ok(rideMaxMetres(secs) < d * 1.6 + 60, 'and the limit stays close to it');
+  }
   assert.ok(inRapids(rescueCourse('x', WHO, { endless: true }), 400) && inRapids(rescueCourse('x', WHO, { endless: true }), 400 + 2 * RIVER.rapidsEvery));
 });
 
