@@ -2768,9 +2768,23 @@ async function startRide() {
   } catch (e) {
     console.error('[rivier]', e);
     closeRide();
+    // (a phone without the 3D the river needs: your own people count as rescued, and the crane opens straight away)
+    if (!has3d()) {
+      span.rideDone(day, rd.who.slice(0, Math.max(1, rd.mine)), 0).then((out) => { if (out.coins) coinsChanged(); });
+      ui.toast(S.no3dRide, 3600);
+      if (span.view().turns > 0) { startWeekTurn(); return; }
+    }
     startIdle();
     showMenu();
   }
+}
+/** Can this phone draw the 3D river (WebGL 2)? */
+let has3dCache = null;
+function has3d() {
+  if (has3dCache === null) {
+    try { has3dCache = !!document.createElement('canvas').getContext('webgl2'); } catch { has3dCache = false; }
+  }
+  return has3dCache;
 }
 let weekLease = null;      // the crane's lease for this build turn (with the server)
 let weekTurnBusy = false;
@@ -2916,6 +2930,11 @@ async function openSpanTown() {
   } catch (e) {
     console.error('[ons dorp]', e);
     closeRide();
+    // (no 3D on this phone: the crane turn straight away when there's one, else the menu with a word why)
+    if (!has3d()) {
+      ui.toast(S.no3dTown, 3600);
+      if (span.view().turns > 0) { startWeekTurn(); return; }
+    }
     startIdle();
     showMenu();
   }

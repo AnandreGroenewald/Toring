@@ -991,6 +991,8 @@ export const S = {
   spanRemoved: 'Die bouer is uit die span. Hulle kry hul eie eiland.',
   twShareWin: '📲 Vertel jou vriende',
   spanWinText: (name, h, url) => `🏆 ${name} het Saterdag gewen met ’n Weektoring van ${h} in Stapel! Kom bou saam met ons: ${url}`,
+  no3dRide: 'Hierdie foon kan nie die rivier in 3D wys nie: jou mense is gered. Bou nou aan die Weektoring!',
+  no3dTown: 'Hierdie foon kan nie Ons dorp in 3D wys nie. Jou boubeurte werk wel.',
   twFold: 'Vou die paneel op of oop',
   twWhistle: 'Die fluitjie blaas iewers tussen 20:00 en 21:00. Niemand weet presies wanneer nie!',
   twBomb: (n) => `💣 Gly af en bombardeer (${n})`,

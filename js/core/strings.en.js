@@ -946,6 +946,8 @@ export const S_EN = {
   spanRemoved: 'That builder is out of the crew. They get their own island.',
   twShareWin: '📲 Tell your friends',
   spanWinText: (name, h, url) => `🏆 ${name} won Saturday with a Weekly Tower of ${h} in Stapel! Come build with us: ${url}`,
+  no3dRide: 'This phone can’t show the river in 3D: your people are rescued. Build on the Weekly Tower now!',
+  no3dTown: 'This phone can’t show Ons dorp in 3D. Your build turns still work.',
   twFold: 'Fold the panel up or down',
   twWhistle: 'The whistle blows somewhere between 20:00 and 21:00. Nobody knows exactly when!',
   twBomb: (n) => `💣 Ride down and bomb (${n})`,
