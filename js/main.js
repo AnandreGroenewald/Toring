@@ -2802,6 +2802,7 @@ async function spanStart() {
   }
   const ok = await span.start();
   if (screen === 'menu') ui.showMenu(menuModel());
+  if (DEBUG && params.get('town') === '1' && !spanLinkCode) openSpanTown();   // (after a test-clock jump)
   if (spanLinkCode) {
     const c = spanLinkCode;
     spanLinkCode = null;
@@ -2848,7 +2849,7 @@ async function openSpanTown() {
     span.newsSeen();
     if (span.online) span.sync().then(() => { if (ride?.refresh && screen === 'rivier') ride.refresh(span.view()); span.newsSeen(); });
     const r = await mod.openTown({
-      ...v, myId: span.id, reducedMotion: !!settings.reducedMotion,
+      ...v, myId: span.id, reducedMotion: !!settings.reducedMotion, clock: await spanTestClock(),
       onRide: () => { closeRide(); startRide(); },
       onBuild: () => { closeRide(); startWeekTurn(); },
       onRepair: () => { closeRide(); startWeekTurn({ repair: true }); },
@@ -2872,6 +2873,31 @@ async function openSpanTown() {
   }
 }
 bus.on('ui:span', openSpanTown);
+/**
+ * (tests and his home play) ?debug=1 against a home server with a test clock (play-home.sh): the town shows the server's
+ * time and jumps through the week; a jump moves the server's clock, then the page comes back on that day with the town.
+ */
+async function spanTestClock() {
+  if (!DEBUG || !span.online) return null;
+  try {
+    const r = await fetch(`${matchApiUrl()}/span-clock`, { cache: 'no-store' });
+    if (!r.ok) return null;
+    const c = await r.json();
+    if (!c?.sast) return null;
+    return {
+      sast: c.sast,
+      async jump(at) {
+        await fetch(`${matchApiUrl()}/span-clock`, { method: 'POST', body: JSON.stringify({ at }) }).catch(() => null);
+        const q = new URLSearchParams(location.search);
+        q.set('date', at.slice(0, 10));
+        q.set('town', '1');
+        location.replace(`${location.pathname}?${q}`);
+      },
+    };
+  } catch {
+    return null;
+  }
+}
 /** The crew's invite link on WhatsApp (or the phone's share sheet): the crew's name, the tower's height, ?span=CODE. */
 function shareInvite() {
   const v = span.view();
@@ -3974,7 +4000,7 @@ function onReady() {
   if (recovered.length) ui.toast(recoveredCoins ? `${S.unfinished} +${recoveredCoins} 🪙` : S.unfinished, 3600);
   else if (liveElsewhere(todayKey())) ui.toast(S.otherTab, 3000);
   if (testerCode !== null) setTimeout(() => claimTesterGift(testerCode), 900);   // (1.13.2) the testers' gift
-  if (DEBUG) startFpsMeter();
+  if (DEBUG && params.get('meter') !== '0') startFpsMeter();   // (&meter=0: his home play without it)
   setTimeout(capFrames, 1500);   // (once the start-up's work is done: a busy start would measure low)
   window.__stapel.booted = true;
 }

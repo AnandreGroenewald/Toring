@@ -16,6 +16,7 @@ import { createThings, createIsland, createStartTower } from './things.js';
 import { createBeasts } from './beasts.js';
 import { RIVER, rescueCourse, raidCourse, speedAt, laneX } from '../core/rivier.js';
 import { floorAt, hit as hitFloor, dimsOf } from '../core/weektower.js';
+import { weekOf, plusDays } from '../core/span.js';
 import { portraitDataUrl, portraitsReady, CAST } from '../game/residents.js';
 import { S } from '../core/strings.js';
 import { fmtM, fmtInt } from '../core/format.js';
@@ -190,7 +191,7 @@ function createTown(K, d) {
         <span>${S.twHeight} <em>${fmtM(v.heightM || 0)}</em> · ${S.twPeople} <em>${fmtInt(v.people | 0)}</em></span></div></div>
       <div class="tw-panel">${river}<p>${v.ticket ? S.twTicketOk : S.twTicket(v.weekdays | 0, 3)}</p><p>${S.twBombs(v.bombs | 0)}</p>${r ? '' : `<p class="tw-sat">${S.twSat}</p>`}
         ${members}${news ? `<ul class="tw-news">${news}</ul>` : ''}
-        <div class="tw-btns">${btns.join('')}</div>${crew && crew.members.length > 1 && !sat ? `<button class="tw-leave">${S.spanLeave}</button>` : ''}</div>`;
+        <div class="tw-btns">${btns.join('')}</div>${crew && crew.members.length > 1 && !sat ? `<button class="tw-leave">${S.spanLeave}</button>` : ''}${clockRow(v.clock)}</div>`;
     const on = (sel, fn) => ov.querySelector(sel)?.addEventListener('click', fn);
     on('.tw-back', () => d.onBack?.());
     on('.tw-ride', () => d.onRide?.());
@@ -199,6 +200,15 @@ function createTown(K, d) {
     on('.tw-bomb', () => d.onBomb?.());
     on('.tw-invite', () => d.onInvite?.());
     on('.tw-leave', () => d.onLeave?.());
+    ov.querySelectorAll('.tw-clock button').forEach((b) => b.addEventListener('click', () => v.clock.jump(b.dataset.at)));
+  }
+  /** (tests and his home play, ?debug=1 against a server with a test clock) the server's time and jumps through the week. */
+  function clockRow(c) {
+    if (!c?.sast) return '';
+    const mon = weekOf(c.sast.slice(0, 10));
+    const at = (k, hm) => `${plusDays(mon, k)}T${hm}`;
+    const jumps = [['Ma', at(0, '08:00')], ['Wo', at(2, '18:00')], ['Vr', at(4, '18:00')], ['Sa 09', at(5, '09:00')], ['Sa 13', at(5, '13:00')], ['Sa 21:05', at(5, '21:05')], ['Ma ná', at(7, '08:00')]];
+    return `<div class="tw-clock"><span>🕒 ${esc(c.sast.replace('T', ' '))}</span>${jumps.map(([l, a]) => `<button data-at="${a}">${l}</button>`).join('')}</div>`;
   }
   if (!document.getElementById('tw-style')) {
     const st = document.createElement('style');
@@ -225,6 +235,9 @@ function createTown(K, d) {
 #rivier .tw-invite { min-height: 40px; padding: 0 12px; border-radius: 12px; border: 0; background: #25d366; color: #05300f; font: inherit; font-weight: 900; font-size: 15px; }
 #rivier .tw-news { margin: 0 0 6px; padding: 0; list-style: none; font-size: 13px; font-weight: 700; color: #cfe3ea; display: grid; gap: 3px; }
 #rivier .tw-btns { display: grid; gap: 8px; margin-top: 10px; }
+#rivier .tw-clock { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,.25); font: 12px/1.2 monospace; color: #b9d6e3; }
+#rivier .tw-clock span { width: 100%; }
+#rivier .tw-clock button { min-height: 30px; padding: 0 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.08); color: #fff; font: inherit; }
 #rivier .tw-btns button { min-height: 52px; border-radius: 14px; border: 0; font: inherit; font-weight: 900; font-size: 18px; }
 #rivier .tw-ride { background: linear-gradient(180deg, #8ff0d8, #2fb59c); color: #062b25; box-shadow: 0 4px 0 #18806c; }
 #rivier .tw-build { background: linear-gradient(180deg, #ffd65c, #f0a81c); color: #2b1a00; box-shadow: 0 4px 0 #a86e00; }
