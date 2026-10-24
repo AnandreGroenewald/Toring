@@ -154,6 +154,29 @@ test('rivier (endless): the river grows harder further down — Hanswors from 1 
   }
 });
 
+test('rivier (endless): what crosses the river crosses both ways — blocks, Blouaap and the crocodiles', () => {
+  // (the owner, 25 Oct 2026: "every object goes from left to right")
+  const ways = { block: new Set(), monkey: new Set(), croc: new Set() };
+  const count = { block: [0, 0], monkey: [0, 0], croc: [0, 0] };
+  for (let d = 0; d < 30; d++) {
+    const c = rescueCourse(`ways-${d}`, WHO, { endless: true });
+    c.extend(5000);
+    for (const r of c.rows) {
+      for (const it of r.items) {
+        if (!it.drift) continue;
+        const k = it.kind === 'monkey' || it.kind === 'croc' ? it.kind : 'block';
+        ways[k].add(Math.sign(it.drift));
+        count[k][it.drift > 0 ? 0 : 1]++;
+      }
+    }
+  }
+  for (const k of Object.keys(ways)) {
+    assert.deepEqual([...ways[k]].sort(), [-1, 1], `${k}: both ways`);
+    const [a, b] = count[k];
+    assert.ok(Math.min(a, b) / (a + b) > 0.35, `${k}: about as often each way (${a} / ${b})`);
+  }
+});
+
 test('rivier (endless): however many people (up to 24), all of them fit before the lake and the river runs on busy after it', () => {
   const MANY = ['boer', 'haai', 'bytjie', 'klippie', 'rissie', 'seekat', 'braai', 'duiker', 'madelief', 'draakie', 'brandweer', 'vuurhoutjie'];
   const who24 = [...MANY, ...MANY.map((x) => `${x}2`)];

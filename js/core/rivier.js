@@ -184,6 +184,8 @@ function buildCourse(key, len, who, crews) {
       const items = [];
       const open = rng.pick(ALL);
       const shut = ALL.filter((l) => l !== open);
+      // (which way something crosses between the two shut lanes: either way, a coin toss; [from, to])
+      const across = () => (rng.chance(0.5) ? [shut[0], shut[1]] : [shut[1], shut[0]]);
       // a new kind, alone, the first time (a person in another lane: the way past it is plain)
       const fresh = Object.keys(FIRST).find((k) => !met[k] && z >= FIRST[k]);
       if (fresh && !nearIsland(z) && !rapidsAt(z)) {
@@ -213,12 +215,14 @@ function buildCourse(key, len, who, crews) {
         addPerson(items, open, 0.5);
       } else if (met.monkey && roll < 0.3) {
         // Blouaap paddles a block across, from a shut lane into the other one (the open lane stays open)
-        items.push({ lane: shut[1], ...block(), kind: 'monkey', drift: shut[0] - shut[1] });
+        const [from, to] = across();
+        items.push({ lane: to, ...block(), kind: 'monkey', drift: from - to });
         addPerson(items, open, 0.6);
       } else if (met.croc && roll < 0.5) {
         // crocodiles: one, or one swimming across when you're further along
         const swim = t > 0.5 && rng.chance(0.4);
-        items.push(swim ? { lane: shut[1], kind: 'croc', drift: shut[0] - shut[1] } : { lane: rng.pick(shut), kind: 'croc' });
+        const [from, to] = swim ? across() : [];
+        items.push(swim ? { lane: to, kind: 'croc', drift: from - to } : { lane: rng.pick(shut), kind: 'croc' });
         if (!swim && rng.chance(0.4)) items.push({ lane: shut.find((l) => !items.some((it) => it.lane === l)), ...block() });
         addPerson(items, open, 0.5);
       } else if (roll < 0.66) {
@@ -231,7 +235,8 @@ function buildCourse(key, len, who, crews) {
         addPerson(items, 1, 0.55);
       } else if (roll < 0.9 && t > 0.45) {
         // a drifting block: it floats across into the open lane's neighbour as you come (watch which way)
-        items.push({ lane: shut[1], ...block(), drift: shut[0] - shut[1] });
+        const [from, to] = across();
+        items.push({ lane: to, ...block(), drift: from - to });
         addPerson(items, open, 0.7);
       } else {
         // a block in your way, a person behind it in the next row (a choice: safe or brave)

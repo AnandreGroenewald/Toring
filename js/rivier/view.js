@@ -1345,7 +1345,8 @@ function createRide(K, d) {
         let obj;
         if (it.kind === 'block') obj = things.floating({ ...it, skin: d.skin || 'kleur' });
         else if (it.kind === 'rock') obj = things.rock();
-        else if (it.kind === 'croc') obj = beasts.croc(it.drift ? Math.sign(it.drift) : (rowI % 2 ? 1 : -1));
+        // (a swimming croc's snout points the way it swims: it starts at lane + drift and crosses to its lane)
+        else if (it.kind === 'croc') obj = beasts.croc(it.drift ? -Math.sign(it.drift) : (rowI % 2 ? 1 : -1));
         else if (it.kind === 'hippo') obj = beasts.hippo();
         else if (it.kind === 'log') obj = hz.log(it.span || 1);
         else if (it.kind === 'branch') obj = hz.branch(!!it.flip);
