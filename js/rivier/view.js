@@ -70,6 +70,7 @@ function makeKit() {
 #rivier .rv-pop { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%) scale(.6); opacity: 0; font-size: 34px; font-weight: 900; color: #fff3c4; -webkit-text-stroke: 1.5px rgba(40,24,0,.75); text-shadow: 0 4px 0 rgba(40,24,0,.45), 0 8px 24px rgba(0,0,0,.4); width: max-content; max-width: 88%; text-align: center; line-height: 1.12; text-wrap: balance; transition: opacity .25s, transform .35s cubic-bezier(.2,1.4,.4,1); }
 #rivier .rv-pop.long { font-size: 26px; }
 #rivier .rv-pop.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+#rivier .rv-pop.low { top: 47%; }
 #rivier .rv-scope { position: absolute; left: 0; top: 0; width: 132px; height: 132px; margin: -66px 0 0 -66px; opacity: 0; pointer-events: none; transition: opacity .2s; --sc: #5ff2ff; }
 #rivier .rv-scope.on { opacity: 1; }
 #rivier .rv-scope.miss { --sc: #ffc24a; }
@@ -1600,13 +1601,15 @@ function createRide(K, d) {
         scopeEl.classList.remove('on', 'lock');
       }
       for (const is of isles) {
-        const want = is === tgt && aiming ? 0.12 : 1;
+        const want = is === tgt && aiming ? 0 : 1;
         if (is.tag.material) {
           is.tag.material.transparent = true;
-          is.tag.material.opacity += (want - is.tag.material.opacity) * Math.min(1, dt * 8);
+          is.tag.material.opacity += (want - is.tag.material.opacity) * Math.min(1, dt * 10);
+          is.tag.visible = is.tag.material.opacity > 0.03;
         }
       }
       fireEl.classList.toggle('show', phase === 'run');
+      popEl.classList.toggle('low', aiming);   // (the words that pop up go under the scope while it's up)
       fireEl.classList.toggle('off', !aiming);
       fireEl.classList.toggle('pulse', aiming && !thrown);
       if (tgt && !P) P = towerPoint(tgt, 0, Math.max(2, Math.min(18, (tgt.island.top - 3.6) * 0.5)));
