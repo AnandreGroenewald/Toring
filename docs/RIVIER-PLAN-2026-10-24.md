@@ -117,7 +117,7 @@ Your town (**Ons dorp**) is your crew's island: the Weektoring in the middle, ev
 - Browser (headless, phone size): the day's loop end to end, the river at 60 fps on a 4x slowed phone, a Saturday run
   with real taps, two phones in one crew, English and Afrikaans, a 360x640 screen.
 
-## 9. Release (only on his word; the quick security scan before each step)
+## 8. Release (only on his word; the quick security scan before each step)
 
 1. **Version**: js/config.js VERSION 1.20.0; sw.js cache stapel-v1.20.0; the app's versionCode 12000 / versionName 1.20.0;
    release notes af + en (Play's 500 characters each).
@@ -135,7 +135,7 @@ Your town (**Ons dorp**) is your crew's island: the Weektoring in the middle, ev
 6. **After**: a real phone: Daily → ride → crane turn → town; a second phone joins by link; Saturday on the next real
    Saturday (or the home server's test clock before).
 
-## 8. Status
+## 9. Status
 
 - 24 Oct: plan written; checkpoint 1 built (the day's loop on one phone) and ready for his play over home Wi-Fi.
 - 24 Oct (later): checkpoint 2 built. Server: crews, invites, the crane lease, rides, Saturday's rivers with Rikus,
