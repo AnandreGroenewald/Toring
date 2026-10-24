@@ -61,8 +61,9 @@ function makeKit() {
 #rivier .rv-bar { flex: 1; height: 8px; border-radius: 6px; background: rgba(13,34,40,.45); overflow: hidden; border: 1px solid rgba(255,255,255,.22); }
 #rivier .rv-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #8fe3d3, #fff3c4); }
 #rivier .rv-pause { pointer-events: auto; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.35); background: rgba(13,34,40,.62); color: #fff; font-size: 18px; font-weight: 900; }
-#rivier .rv-faces { position: absolute; left: 12px; top: calc(62px + var(--sat, 0px)); display: flex; flex-wrap: wrap; gap: 4px; max-width: 70%; }
-#rivier .rv-faces img { width: 30px; height: 30px; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+#rivier .rv-faces { position: absolute; left: 12px; right: 12px; top: calc(62px + var(--sat, 0px)); display: flex; flex-wrap: wrap; gap: 4px; }
+/* (eight faces on one line on any phone; more than eight wrap) */
+#rivier .rv-faces img { width: min(30px, calc((100vw - 24px - 7 * 4px) / 8)); aspect-ratio: 1; height: auto; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
 #rivier .rv-faces img.out { opacity: .25; filter: grayscale(1); }
 #rivier .rv-hint { position: absolute; left: 50%; top: calc(104px + var(--sat, 0px)); transform: translateX(-50%); padding: 10px 18px; border-radius: 16px; background: rgba(13,34,40,.66); font-weight: 900; font-size: 18px; white-space: nowrap; opacity: 0; transition: opacity .3s; }
 #rivier .rv-hint.on { opacity: 1; }
