@@ -368,6 +368,29 @@ function rockTextures() {
   return { map, bump };
 }
 
+/** A boulder: a rough, faceted lump of sandstone, flat where it sits, a broken face or two, darker and wet at its foot. */
+function boulderGeometry() {
+  const g = new THREE.IcosahedronGeometry(1, 3);
+  const p = g.attributes.position;
+  const v = new THREE.Vector3();
+  const cuts = [[0.8, 0.3, 0.5, 0.78], [-0.6, 0.5, -0.6, 0.8], [0.1, 0.9, -0.4, 0.85]].map(([x, y, z, d]) => [new THREE.Vector3(x, y, z).normalize(), d]);
+  const col = [];
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const n = Math.sin(v.x * 3.1 + v.y * 1.7) * 0.07 + Math.sin(v.y * 4.3 - v.z * 2.9) * 0.05 + Math.sin(v.z * 7.7 + v.x * 5.3) * 0.03;
+    v.multiplyScalar(1 + n);
+    // (broken faces: flat planes sliced off)
+    for (const [cn, d] of cuts) { const k = v.dot(cn); if (k > d) v.addScaledVector(cn, d - k); }
+    v.y = Math.max(v.y, -0.35) * 0.78;
+    p.setXYZ(i, v.x * 1.15, v.y, v.z);
+    const c = (v.y < -0.12 ? 0.62 : 0.82 + n * 1.4) + Math.max(0, v.y) * 0.12;
+    col.push(c, c * 0.97, c * 0.93);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
 /** A shrub: a lumpy ball of leaves, flat at its foot, darker inside and below (smooth, not faceted). */
 function shrubGeometry() {
   const g = new THREE.IcosahedronGeometry(1, 2);
@@ -895,8 +918,8 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
   const fallGeos = { '-1': cliffGeos['-1'].map((g) => fallGeometry(g, -1)), 1: cliffGeos[1].map((g) => fallGeometry(g, 1)) };
   const bushMat = bendMaterial(new THREE.MeshStandardMaterial({ color: COLORS.bushL, roughness: 0.92, vertexColors: true }));
   const bushGeo = shrubGeometry();
-  const boulderGeo = new THREE.DodecahedronGeometry(1, 1);
-  const boulderMat = bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, bumpMap: rockTex.bump, bumpScale: 1.4, color: '#b98c6a', roughness: 0.85 }));
+  const boulderGeo = boulderGeometry();
+  const boulderMat = bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, bumpMap: rockTex.bump, bumpScale: 1.6, color: '#d6b08e', roughness: 0.85, vertexColors: true, flatShading: true }));
   const segs = [];
   const BUSH_PER = quality.name === 'low' ? 6 : 12;
   const ROCK_PER = 5;
