@@ -717,7 +717,7 @@ export function buildRiverWorld(stage, lookId = 'dag') {
   }
 
   return {
-    group, water, sun, update, halfAt,
+    group, water, sun, update, halfAt, night: L.stars > 0 && L.sunI < 1.5,
     /** Open water at the river's head, up to course z `to` (where your tower stands). */
     setPool(to) {
       poolTo = to;

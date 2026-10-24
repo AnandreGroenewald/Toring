@@ -159,6 +159,9 @@ function createTown(K, d) {
   const things = createThings(scene, pieces);
   const island = createIsland(things, { radius: 22, plots: true });
   scene.add(island.group);
+  // (a night sky: warm floodlights on the towers, from where the camera stands)
+  const flood = world.night ? new THREE.DirectionalLight('#ffdcae', 1.5) : null;
+  if (flood) scene.add(flood, flood.target);
   island.setFloors(d.floors || []);
   island.setPlots({ towers: d.plots || [], monuments: d.monuments || [] });
   const IZ = 0;   // (the island at the world's middle: nothing bends)
@@ -301,6 +304,10 @@ function createTown(K, d) {
     const mid = h * 0.5 + (bandMid - 0.5) * (h / room.f);
     camera.position.set(Math.sin(a) * D, mid + D * 0.12, -IZ + Math.cos(a) * D);
     camera.lookAt(0, mid, -IZ);
+    if (flood) {
+      flood.position.set(camera.position.x * 0.6, camera.position.y + 30, camera.position.z * 0.6);
+      flood.target.position.set(0, mid * 0.6, -IZ);
+    }
     island.group.position.set(0, -0.6, -IZ);
     island.update(t);
     world.update(0, t);
@@ -329,6 +336,7 @@ function createTown(K, d) {
     removeEventListener('resize', place);
     host.removeEventListener('pointerdown', onTownDown);
     host.removeEventListener('pointerup', onTownUp);
+    if (flood) scene.remove(flood, flood.target);
     scene.remove(island.group, things.spray);
     island.dispose();
     things.dispose();
