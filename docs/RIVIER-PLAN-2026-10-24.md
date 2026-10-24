@@ -114,4 +114,4 @@ Your town (**Ons dorp**) is your crew's island: the Weektoring in the middle, ev
 
 ## 8. Status
 
-- 24 Oct: plan written; checkpoint 1 under way.
+- 24 Oct: plan written; checkpoint 1 built (the day's loop on one phone) and ready for his play over home Wi-Fi.

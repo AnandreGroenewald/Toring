@@ -1343,3 +1343,23 @@ Each step should end green (`npm test`, `cd server && npm test`, a headless play
 
 ### 20 Oct 2026 18:33 — 1.19.1 (11901) on Play internal testing
 The owner: "Please upload the latest stapel if its ready". Bundle SHA 9a60e4b7…a7f8 (from 1b2ad77), security scan clear, Play release 22 "Available to internal testers". Notes af 475 / en 497 (Play wants the tag <af>, not <af-ZA>). NOT pushed, Worker + website NOT deployed (as 1.19.0). Next: his 2-minute phone check (README in Older builds › "Upload 1.19.1 internal (DONE …)").
+
+### 24 Oct 2026 — the new direction: Ons dorp, die Rivier, die Saterdag-uitdaging (branch rivier/1.20); 1.15.6 web + 1.19.2 Play hotfix
+His words (24 Oct): "I like the dorp scenario but I do not like the steal and the look of the town", "lets leave the whole
+earth, water and fire scenario", the river "a rescue mission for the men you lost on the towers", "use a crane to build
+ontop of the weekly tower", "I want a Saterday Challenge", crocodiles and Blouaap on a block, "I want this to be the FINAL
+version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints).
+- **Live hotfix (his Telegram photos 08:41):** Blok vir Blok, a block the other player left loose that falls in your turn no
+  longer costs your heart (GameScene.markLost, turns path: own block or touchedBy only; toast turnLooseFree). Website 1.15.6
+  live (Pages bbe2bf8e from hotfix/1.15.6; rollback c0e5c76a). Play 1.19.2 (11902) built from hotfix/1.19.2 = 1.19.1 + the
+  fix (Play folder "Upload 1.19.2 internal"), waiting for his typed "upload". qa/bvb_loose1200.mjs.
+- **Checkpoint 1 built (rivier/1.20, local, not live):** js/core/span.js (week, phases, whistle, ticket, bombs), js/core/
+  weektower.js (floors, hits, chains, cracks), js/core/rivier.js (courses: blocks, rocks, crocodiles, Blouaap paddling a
+  block, hippos, rapids; each kind met alone first; passable), js/rivier/ (the 3D ride: world, rider, things, beasts, view:
+  the dive off your Daily tower, the ride, the finish at your island; openTown = the Ons dorp screen with a Karoo dorp),
+  js/span.js (the week on the phone), GameScene mode 'week' (the Weektoring restored as cement, 10 blocks, no hearts),
+  main.js (Daily → results "🛟 Gly af" → ride → "Bou aan die Weektoring" → turn → sheet), the menu's Ons dorp button.
+  Tribes, tribe missions, Glybaan's button and Steel en Wraak are switched off. Tests: npm 496; qa/dayloop1200.mjs,
+  rivier_shots.mjs, rivier_perf1200.mjs (59 fps avg on a 4x slowed CPU), bvb_loose1200.mjs, smoke, daily, living1160.
+- **Next:** his play of checkpoint 1 (home Wi-Fi http://192.168.1.225:8500/?nosw=1); then checkpoint 2 (crews on the server,
+  the Saturday challenge with 4 crews, the bomb run, Rikus crews); then the look pass and the release.
