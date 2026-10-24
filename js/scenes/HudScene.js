@@ -317,6 +317,9 @@ export class HudScene extends Phaser.Scene {
       this.hearts.push(add(this.add.image(hx, y1, 'hud_heart').setScale(0.78)));
     }
     this.lives = LIVES;
+    // (1.20) the Weektoring: the blocks left on this turn take the hearts' place
+    this.blocksTxt = add(text(this, hcx, y1 - 1, '', 28, { emoji: true, strokeMul: 0.18 }).setOrigin(0.5).setVisible(false));
+    this.blocksN = -1;
     this.pips = [];
     const every = SCORING.heartEvery;
     for (let k = 0; k < every; k++) {
@@ -463,6 +466,7 @@ export class HudScene extends Phaser.Scene {
     const game = this.scene.get('Game');
     const mode = game && game.mode;
     if (mode === 'daily') return `🏗️ ${S.dailyN(game.dayNumber ?? '?')}`;
+    if (mode === 'week') return `🏗️ ${game.week?.title || S.weekTowerName}`;
     if (mode === 'duel') return `${game.turns ? '🧱' : '🏁'} ${S.duelVs(game.duel?.name || S.duelSomeone)}`;
     return `🧱 ${S.practiceLabel}`;
   }
@@ -532,7 +536,15 @@ export class HudScene extends Phaser.Scene {
       if (this.dispScore === s.score) this.pulse(this.scoreTxt, 1.12);
     }
 
-    if (!this.duelHud) {
+    if (Number.isInteger(s.blocksLeft)) {
+      if (s.blocksLeft !== this.blocksN) {
+        const first = this.blocksN < 0;
+        this.blocksN = s.blocksLeft;
+        if (first) for (const o of [...this.hearts, ...this.pips]) o.setVisible(false);
+        this.blocksTxt.setVisible(true).setText(`🧱 ${s.blocksLeft}`);
+        if (!first) this.pulse(this.blocksTxt, 1.12);
+      }
+    } else if (!this.duelHud) {
       if (s.lives !== this.lives) this.setLives(s.lives, s.maxLives || LIVES);
       this.setPips(s.lives < (s.maxLives || LIVES) ? s.heartProgress || 0 : -1);
     }

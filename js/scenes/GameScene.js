@@ -38,6 +38,7 @@ import { SLOW_BLOCKS, SLOW_MUL } from '../core/economy.js';
 import { DORP } from '../core/dorp.js';
 
 const FIXED = PHYSICS.fixedDtMs;
+const WEEK_BASE = 10000;          // (1.20) the Weektoring's restored floors' block indexes start here (the turn's are 0 .. n-1)
 const MAX_FRAME_MS = 100;
 const SETTLE = PHYSICS.settle;
 const TOP_HIT_TOL = 18;          // px: falling block bottom this far below a support's top still counts as "on top"
@@ -403,8 +404,16 @@ export class GameScene extends Phaser.Scene {
   // -------------------------------------------------------------------------
   init(data) {
     const d = data || {};
-    this.mode = d.mode === 'daily' || d.mode === 'practice' || d.mode === 'duel' ? d.mode : 'idle';
+    this.mode = d.mode === 'daily' || d.mode === 'practice' || d.mode === 'duel' || d.mode === 'week' ? d.mode : 'idle';
     this.idle = this.mode === 'idle';
+    // (1.20) Die Weektoring: a build turn on the crew's tower (js/core/weektower.js floors, restored as cement), `blocks`
+    // blocks on the crane, no hearts, no flood, no weather or visitors (the owner, 24 Oct 2026: "use a crane to build ontop
+    // of the weekly tower")
+    this.week = this.mode === 'week' ? {
+      floors: Array.isArray(d.week?.floors) ? d.week.floors : [],
+      n: Math.max(1, Math.min(40, d.week?.blocks | 0 || 10)),
+      title: typeof d.week?.title === 'string' ? d.week.title : '',
+    } : null;
     // (1.16) Die Lewende Toring: people live in the blocks (js/game/living.js); main.js says whether, and whose people
     this.livingOpts = d.living && typeof d.living === 'object' ? d.living : null;
     this.ambQ = -1;
@@ -577,7 +586,7 @@ export class GameScene extends Phaser.Scene {
 
     // Practice seeds live in their own namespace: no practice run can replay a daily.
     // Practice and match seeds live in their own namespaces: no practice run or match can replay a daily.
-    const seqSeed = this.mode === 'practice' ? `oefen/${this.seed}` : this.mode === 'duel' ? duelSeedKey(this.seed) : this.seed;
+    const seqSeed = this.mode === 'practice' ? `oefen/${this.seed}` : this.mode === 'duel' ? duelSeedKey(this.seed) : this.mode === 'week' ? `week/${this.seed}` : this.seed;
     this.sequence = createSequence(seqSeed);
     this.namer = this.makeNamer();
 
@@ -623,8 +632,8 @@ export class GameScene extends Phaser.Scene {
         }
       });
     }
-    this.weather = this.idle ? calmWeather() : this.buildWeather();
-    this.visitors = this.buildVisitors();
+    this.weather = this.idle || this.week ? calmWeather() : this.buildWeather();
+    this.visitors = this.week ? noVisitors() : this.buildVisitors();
     if (this.forceVisitor) this.visitors.force(this.forceVisitor);
 
     // Landing ghost: white silhouette with a navy rim so it reads against a pale sky,
@@ -768,6 +777,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.idle) this.scene.launch('Hud');
 
     this.prewarmTextures(0, PREWARM_AHEAD + 2);   // the first blocks, while the screen changes anyway
+    if (this.week) this.restoreWeek();
     if (this.turns) {
       this.hintPending = false;
       this.turnHold = true;
@@ -1288,8 +1298,9 @@ export class GameScene extends Phaser.Scene {
         if (calm || this.now >= this.calmCap) {
           this.spawnDue = null;
           // (1.17) the Daily's tower at rest: the castle keeps this, never a collapse caught in the air
-          if (calm && this.mode === 'daily') this.calmCastle = this.castleLayout();
-          this.spawnBlock(this.i + 1);
+          if (calm && (this.mode === 'daily' || this.week)) this.calmCastle = this.castleLayout();
+          if (this.week && this.i + 1 >= this.week.n) this.endGame('done');
+          else this.spawnBlock(this.i + 1);
         }
       }
     }
@@ -2285,7 +2296,7 @@ export class GameScene extends Phaser.Scene {
       const size = clamp((width * (f.bottom - f.top)) / (200 * 48), 0.25, 1);
       audio.play('land', { intensity, size });
       // the flood starts quietly; the toast comes once it is actually getting close (updateWater)
-      if (this.landedCount >= WATER.startAfterBlocks && !this.water.rising && !this.over && !this.turns) {
+      if (this.landedCount >= WATER.startAfterBlocks && !this.water.rising && !this.over && !this.turns && !this.week) {
         this.water.start();
         this.coachSay(this.coach.water(), COACH.landingDelayMs);
       }
@@ -2524,7 +2535,9 @@ export class GameScene extends Phaser.Scene {
     // tower blocks that fall count for the latest throw; a throw that already cost a heart costs nothing more.
     let free;
     const turn = this.turns?.cur;
-    if (turn) {
+    if (this.week) {
+      free = true;   // (the Weektoring: a block that falls is only a block less)
+    } else if (turn) {
       if (wasFalling) {
         free = this.now - this.lastTowerLossAt < COLLAPSE_MS || this.towerFalling();
         if (!free) this.collapseUntil = this.now + COLLAPSE_MS;
@@ -3817,6 +3830,7 @@ export class GameScene extends Phaser.Scene {
     s.wobble = this.wobble;
     s.lean = this.lean;
     s.turns = this.turns ? this.turnsHud() : null;
+    s.blocksLeft = this.week ? Math.max(0, this.week.n - this.blocksDropped) : null;
     // (1.15) the visitor on screen (its chip on the left side of the HUD), none in Blok vir Blok (its rounds have the pill)
     const v = !this.turns && this.visitors?.active;
     s.visitor = v && !v.gone ? v.type : null;
@@ -3876,7 +3890,7 @@ export class GameScene extends Phaser.Scene {
       const oy = g.h - g.cy;
       const px = b.body.position.x + ox * Math.cos(a) - oy * Math.sin(a);
       const py = b.body.position.y + ox * Math.sin(a) + oy * Math.cos(a);
-      out.push({ s: b.spec.shape, k: b.spec.scale ?? 1, x: r2((px - BASE_CX) / PX_PER_M), y: r2((LAYOUT.baseTopY - py) / PX_PER_M), r: Math.round(-a * 1000) / 1000, q: b.rating || 'S' });
+      out.push({ s: b.spec.shape, k: b.spec.scale ?? 1, c: b.spec.color | 0, i: b.index, x: r2((px - BASE_CX) / PX_PER_M), y: r2((LAYOUT.baseTopY - py) / PX_PER_M), r: Math.round(-a * 1000) / 1000, q: b.rating || 'S' });
     }
     out.top = r2(top);
     return out;
@@ -3931,7 +3945,74 @@ export class GameScene extends Phaser.Scene {
       weather: [...(this.weather.seen || [])],
       visitors: this.visitors ? this.visitors.log() : [],
       durationMs: Math.round(this.playMs),
+      ...(this.week ? { week: this.weekFloors() } : {}),
     };
+  }
+
+  /**
+   * (1.20) The Weektoring as it was when this turn began: its floors become cement (static), each in its builder's skin,
+   * with the rooms its people live in lit; the camera starts at its top. Floor i: block index WEEK_BASE + i (the turn's
+   * own blocks are 0 .. n-1).
+   */
+  restoreWeek() {
+    const floors = this.week.floors;
+    let k = 0;
+    for (const f of floors) {
+      if (!f || !f.s) continue;
+      const spec = { i: WEEK_BASE + k, shape: f.s, scale: Number(f.k) || 1, color: f.c | 0 };
+      let b;
+      try {
+        const g = getGeometry(spec);
+        const a = -(Number(f.r) || 0);
+        const ox = g.w / 2 - g.cx;
+        const oy = g.h - g.cy;
+        const px = BASE_CX + (Number(f.x) || 0) * PX_PER_M;
+        const py = LAYOUT.baseTopY - (Number(f.y) || 0) * PX_PER_M;
+        const cx = px - (ox * Math.cos(a) - oy * Math.sin(a));
+        const cy = py - (ox * Math.sin(a) + oy * Math.cos(a));
+        b = withBlockSkin(f.sk || 'kleur', () => new Block(this, spec, cx, cy, a, null));
+      } catch (err) {
+        console.warn('[Game] a Weektoring floor could not be drawn', err);
+        continue;
+      }
+      b.special = null;
+      b.state = 'settled';
+      b.rating = f.q || 'S';
+      b.rested = true;
+      b.landedAt = 0;
+      b.advanced = true;
+      b.lostMarked = false;
+      b.pendingRate = false;
+      b.weekFloor = f;
+      this.tower.push(b);
+      this.active.push(b);
+      if (this.living) safely(() => this.living.restore(b, f.p | 0));
+      this.freezeBlock(b, true);
+      k++;
+    }
+    this.cementSaid = true;   // (the grey of cement is the old tower's, nothing to explain)
+    this.dynDirty = true;
+    this.updateTowerHeight();
+    this.maxHeightM = Math.max(0, LAYOUT.baseTopY - this.towerTopY) / PX_PER_M;
+    this.weekStartM = this.maxHeightM;
+    this.progressHeight = this.maxHeightM;
+    this.nextMilestoneM = (Math.floor(this.maxHeightM / MILESTONE_STEP_M) + 1) * MILESTONE_STEP_M;
+    this.zoneShown = zoneAt(this.maxHeightM);
+    const cam = this.cameras.main;
+    cam.setScroll(0, Math.min(this.towerTopY - this.dropLineY, LAYOUT.baseTopY - this.dropLineY));
+  }
+
+  /** (1.20) This turn's floors as they stand (js/core/weektower.js's shape): their colour and the people in them too. */
+  weekFloors() {
+    const all = this.castleAtEnd();
+    const out = [];
+    for (const b of this.tower) {
+      if (!b?.body || b.index >= WEEK_BASE || b.destroyed || b.state === 'lost' || b.state === 'falling') continue;
+      const e = all.find((x) => x.i === b.index);
+      if (!e) continue;
+      out.push({ s: e.s, k: e.k, c: b.spec.color | 0, x: e.x, y: e.y, r: e.r, q: e.q, p: this.living ? this.living.peopleIn(b) : 0 });
+    }
+    return out;
   }
 
   // -------------------------------------------------------------------------
@@ -3987,7 +4068,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.timeScale = SLOWMO_SCALE;
     this.slowT = 0;
-    if (reason === 'won') {
+    if (reason === 'won' || reason === 'done') {
       // first to 50 m (or the other tower fell): a celebration, not a game-over
       audio.play('record');
       haptics.perfect();

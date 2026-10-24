@@ -139,6 +139,7 @@ export class Living {
     this.movedIn = 0;              // moved in this game (the ones who jumped too)
     this.peak = 0;                 // the most of yours at once (the record: the toast says it the moment it is passed)
     this.jumped = 0;
+    this.fellWho = [];             // (1.20) who of yours jumped (the river's rescue ride looks for them)
     this.met = new Set();
     this.goldMet = [];
     this.newMet = [];              // people who had never lived in one of this player's towers before
@@ -204,6 +205,8 @@ export class Living {
         if (f.mine) {
           this.people++;
           this.jumped = Math.max(0, this.jumped - 1);
+          const at = this.fellWho.lastIndexOf(v.who);
+          if (at >= 0) this.fellWho.splice(at, 1);
         } else {
           this.theirs++;
         }
@@ -415,6 +418,33 @@ export class Living {
     });
   }
 
+  // ------------------------------------------------------------------------------------------- the Weektoring (1.20)
+  /** A restored Weektoring floor: `n` of its windows lit with people, quietly (they live there already). */
+  restore(b, n) {
+    if (this.dead || !b || !(n > 0)) return;
+    const f = this.landed(b);
+    if (!f) return;
+    f.rated = true;
+    let k = 0;
+    for (const w of f.wins) {
+      if (k >= n) break;
+      if (w.s !== 'dark') continue;
+      const { who } = this.casting.next();
+      Object.assign(w, { s: 'home', who, gold: false, known: true });
+      k++;
+    }
+    this.people += k;
+    this.peak = Math.max(this.peak, this.people);
+    this.dirty.add(f);
+  }
+
+  /** The people living in block b's floor now (and those on their way in). */
+  peopleIn(b) {
+    const f = b ? this.floors.get(b.index) : null;
+    if (!f || f.gone || f.block !== b) return 0;
+    return f.wins.filter((w) => w.s === 'home' || w.s === 'coming').length;
+  }
+
   // ------------------------------------------------------------------------------------------- losing people
   /** A floor left the tower (fell, was stolen, sank): everyone in it jumps out with a parachute. */
   lost(b, { quiet = false } = {}) {
@@ -442,6 +472,7 @@ export class Living {
         const p = windowWorld(b, i);
         parachute(this.scene, p.x, p.y, w.who, { dir: (i + n) % 2 ? 1 : -1, seaY: sea, delay: 60 + n * 140 });
       }
+      if (f.mine && w.who) this.fellWho.push(w.who);
       w.s = 'dark';
       w.who = null;
       w.gold = false;
@@ -907,7 +938,7 @@ export class Living {
     let rooms = 0;
     for (const f of this.floors.values()) if (!f.gone && f.mine) rooms += f.wins.filter((w) => w.s === 'home').length;
     return {
-      people: this.people, peak: this.peak, theirs: this.theirs, rooms, movedIn: this.movedIn, jumped: this.jumped,
+      people: this.people, peak: this.peak, theirs: this.theirs, rooms, movedIn: this.movedIn, jumped: this.jumped, fell: [...this.fellWho],
       title: now ? now.id : null, met: [...this.met], gold: [...this.goldMet], fresh: [...this.newMet],
       best: this.best,
     };

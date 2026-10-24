@@ -3895,3 +3895,23 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .slag-code-label { margin: 0; font-weight: 800; opacity: 0.85; }
 .slag-code { margin: 0; font-size: calc(76 * var(--u)); font-weight: 900; letter-spacing: 0.16em; color: var(--slag-accent); text-shadow: 0 calc(4 * var(--u)) 0 rgba(0, 0, 0, 0.35); }
 .slag-waiting { display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u)); margin: 0; font-weight: 800; opacity: 0.9; }
+
+/* ---------------------------------------------------------------------------------------------- (1.20) Ons dorp
+   The menu's island button (the town button's shape: a river-green card), the Daily results' ride card, the Weektoring
+   turn's sheet. Animations play a few times, never endlessly. */
+.span-btn { background: linear-gradient(160deg, #1f6f6c 0%, #164f55 60%, #0d3439 140%); box-shadow: 0 calc(6 * var(--u)) 0 #082427, inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.span-btn:active { box-shadow: 0 calc(2 * var(--u)) 0 #082427, inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.span-btn.has-go { box-shadow: 0 calc(6 * var(--u)) 0 #082427, 0 0 0 calc(3 * var(--u)) #ffd23f; }
+.span-btn .dorp-btn-sub { color: #c9efe7; }
+.span-btn-ic { background: linear-gradient(160deg, #7fd8f0, #2a8fb0); }
+.res-rivier { display: flex; flex-direction: column; align-items: center; gap: calc(6 * var(--u)); margin: calc(14 * var(--u)) 0 calc(4 * var(--u));
+  padding: calc(16 * var(--u)) calc(18 * var(--u)) calc(18 * var(--u)); border-radius: calc(24 * var(--u));
+  background: linear-gradient(170deg, #1f7a7a, #145457); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); color: #fff; }
+.res-rivier-faces { display: flex; justify-content: center; flex-wrap: wrap; gap: calc(4 * var(--u)); }
+.res-rivier-faces img { width: calc(52 * var(--u)); height: calc(52 * var(--u)); border-radius: 50%; box-shadow: 0 calc(3 * var(--u)) calc(8 * var(--u)) rgba(0, 0, 0, 0.3); }
+.res-rivier-title { margin: calc(4 * var(--u)) 0 0; font-weight: 900; font-size: max(16px, calc(34 * var(--u))); text-align: center; }
+.res-rivier-sub { margin: 0 0 calc(6 * var(--u)); font-weight: 800; color: #d4f3ec; text-align: center; font-size: max(13px, calc(23 * var(--u))); }
+.res-rivier-go { width: 100%; animation: dorp-ping 0.9s ease-out 2; }
+.week-sheet .sheet-body { display: flex; flex-direction: column; gap: calc(10 * var(--u)); }
+.week-gain { margin: 0; text-align: center; font-weight: 900; font-size: max(17px, calc(36 * var(--u))); color: #1d7a4a; }
+.week-line { margin: 0; text-align: center; font-weight: 800; color: var(--ink-soft); font-size: max(13px, calc(24 * var(--u))); }

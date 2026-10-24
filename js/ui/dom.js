@@ -192,6 +192,7 @@ export function createUI(bus) {
     offer: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-offer-title', tabindex: '-1' }),   // (1.15.3) the lobby's offer
     tribe: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-tribe-title', tabindex: '-1' }),   // (1.16) the Living Tower's tribe
     album: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-album-title', tabindex: '-1' }),   // (1.16) its residents album
+    week: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-week-title', tabindex: '-1' }),   // (1.20) a Weektoring turn's result
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -232,7 +233,7 @@ export function createUI(bus) {
   // buttons take taps: a tap anywhere else still drops a block)
   const emoteBar = h('div', { class: 'emote-bar', role: 'group', 'aria-label': S.emoteLabel, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, screens.dorp, screens.slag, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, modals.tribe, modals.album, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, screens.dorp, screens.slag, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, modals.tribe, modals.album, modals.week, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // (1.15, the owner: "We need a better way to display the coins please") every 🪙 the UI shows becomes the game's own
@@ -1044,7 +1045,7 @@ export function createUI(bus) {
       },
     }, coinIc(), h('b', { class: 'wallet-n', text: fmtInt(m.coins || 0) }), m.refill ? h('span', { class: 'wallet-plus', 'aria-hidden': 'true', text: '+' }) : null);
     screens.menu.replaceChildren(brand, gap,
-      h('div', { class: 'menu-stack' }, card, dorpMenuEl(m.dorp), GLYBAAN.on ? glybaanMenuEl(m.gly) : null, BOTSING.on ? botsingMenuEl() : null, kasteelMenuEl(m.kasteel), slagMenuEl(m.slag), playRow, dock, adSlot), langChip, wallet);
+      h('div', { class: 'menu-stack' }, card, spanMenuEl(m.span), dorpMenuEl(m.dorp), GLYBAAN.on ? glybaanMenuEl(m.gly) : null, BOTSING.on ? botsingMenuEl() : null, kasteelMenuEl(m.kasteel), slagMenuEl(m.slag), playRow, dock, adSlot), langChip, wallet);
     // the gap shrinks when the sponsor feed adds the ad card later, so re-check whenever it resizes
     if (saying && typeof ResizeObserver === 'function') {
       if (!st.sayingRO) st.sayingRO = new ResizeObserver(() => fitSaying());
@@ -2465,7 +2466,7 @@ export function createUI(bus) {
       h('p', { class: 'res-sub', text: why }));
   }
 
-  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null, againStake = 0, againStakes = null, freeTry = null, bestStays = null, switchTo = null, signinOffer = false, revisit = false, towerShot = null } = {}) {
+  function showResults({ result, stats = null, isNewBest = false, shareText = '', nextDayAt = 0, mode, city = null, teaser = null, install = null, duel = null, reward = null, again = null, againStake = 0, againStakes = null, freeTry = null, bestStays = null, switchTo = null, signinOffer = false, revisit = false, towerShot = null, rivier = null } = {}) {
     if (st.modal) closeModal();
     const r = result || {};
     const m = mode || r.mode || 'practice';
@@ -2513,6 +2514,7 @@ export function createUI(bus) {
       // (1.15.3) the next match right under the players, in sight without scrolling
       duel ? againBox({ again, againStake, againStakes }) : null,
       townEl(r.living),
+      rivierResEl(rivier),
       dorpResEl(r.dorp),
       r.slagGain ? h('p', { class: 'res-dorp-line res-slag-line', text: S.slagHarvestLine(S.slagHarvest(r.slagGain)) }) : null,
       rewardEl(reward),
@@ -3203,6 +3205,45 @@ export function createUI(bus) {
   }
 
   /** The results card's line for the town: what this tower sent there, and a way to go and use it. */
+  // -------------------------------------------------------------------------------------------- (1.20) Ons dorp
+  /** The menu's way to your crew's island: the Weektoring's height and people; what waits (today's ride, build turns). */
+  function spanMenuEl(v) {
+    if (!v) return null;
+    const sub = v.heightM > 0 ? S.spanMenuSub(fmtM(v.heightM), fmtInt(v.people | 0)) : S.spanMenuNew;
+    const go = v.rideToday ? S.spanRide : v.turns > 0 ? S.spanTurns(v.turns) : null;
+    return h('button', {
+      type: 'button', class: `dorp-btn span-btn${go ? ' has-go' : ''}`, 'aria-label': `${S.spanMenu}: ${sub}${go ? ` · ${go}` : ''}`,
+      onclick: () => { if (!guard()) return; audio.play('click'); bus.emit(v.rideToday ? 'ui:rivier' : 'ui:span'); },
+    },
+    h('span', { class: 'dorp-btn-pic dorp-btn-ic span-btn-ic' }, emo('🏝️')),
+    h('span', { class: 'dorp-btn-txt' }, h('b', null, h('span', { text: S.spanMenu })), h('span', { class: 'dorp-btn-sub', text: sub })),
+    go ? h('span', { class: 'dorp-btn-go', text: go }) : h('span', { class: 'dorp-btn-arrow', 'aria-hidden': 'true', text: '›' }));
+  }
+
+  /** The Daily's results: people fell into the river — ride down and rescue them (today's ride, once). */
+  function rivierResEl(rv) {
+    if (!rv || !(rv.n > 0)) return null;
+    return h('div', { class: 'res-rivier' },
+      h('div', { class: 'res-rivier-faces', 'aria-hidden': 'true' }, (rv.who || []).slice(0, 8).map((id) => h('img', { alt: '', src: portraitDataUrl(id, 64) || '' }))),
+      h('p', { class: 'res-rivier-title', text: S.rvResTitle(rv.n) }),
+      h('p', { class: 'res-rivier-sub', text: S.rvResSub(rv.mine | 0) }),
+      button('btn-big btn-green res-rivier-go', [h('span', { text: S.rvResGo })], () => bus.emit('ui:rivier'), { nav: true }));
+  }
+
+  /** A Weektoring turn's result (a sheet over the tower's reveal): the height, what it added, the people; build again? */
+  function showWeekResult(v = {}) {
+    modals.week.replaceChildren(h('div', { class: 'card sheet week-sheet' },
+      h('div', { class: 'sheet-head' }, h('h2', { id: 'stapel-week-title', text: S.wkResTitle(fmtM(v.heightM || 0)) })),
+      h('div', { class: 'sheet-body' },
+        h('p', { class: 'week-gain', text: S.wkResGain(fmtM(Math.max(0, v.gain || 0)), v.added | 0) }),
+        v.perfects > 0 ? h('p', { class: 'week-line', text: S.wkResPerfect(v.perfects) }) : null,
+        h('p', { class: 'week-line', text: S.wkResPeople(fmtInt(v.people | 0)) }),
+        v.turns > 0 ? button('btn-big btn-green', [h('span', { text: S.wkAgain(v.turns) })], () => { closeModal(); bus.emit('ui:week-build'); }) : null,
+        button('btn-teal', [h('span', { text: S.wkTown })], () => { closeModal(); bus.emit('ui:span'); }),
+        button('btn-white', [h('span', { text: S.wkDone })], () => { closeModal(); bus.emit('ui:home'); }))));
+    openModal('week');
+  }
+
   function dorpResEl(d) {
     if (!d || !(d.people || d.raids || d.walls)) return null;
     return h('div', { class: 'res-dorp' },
@@ -3980,6 +4021,7 @@ export function createUI(bus) {
     showTribe,
     showAlbum,
     showDorpScreen,
+    showWeekResult,
     showSlagScreen,
     slagMode,
     slagCounts,

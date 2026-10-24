@@ -42,6 +42,7 @@ import { createSlagNet } from './slagNet.js';
 import { createLewendeUi } from './ui/lewendeUi.js';
 import { createLivingStore, CAST_IDS } from './core/living.js';
 import { createDorpClient } from './dorp.js';
+import { createSpan } from './span.js';
 import { DORP, RIKUS_ID, markOf, isTownId, isRaidId } from './core/dorp.js';
 import { castOf, portraitDataUrl } from './game/residents.js';
 import { setBlockSkin } from './game/blocks.js';
@@ -121,6 +122,13 @@ function nextDayFor(dateKey) {
 // Store, settings, UI
 // ---------------------------------------------------------------------------
 const store = createStore(undefined, DEBUG ? { key: `${STORAGE_KEY}.debug` } : {});
+// (1.20) Ons dorp: your crew's week on this phone (the Weektoring, build turns, today's ride, the town's people)
+const span = createSpan({
+  debug: DEBUG,   // (a debug session keeps its own week)
+  castIds: CAST_IDS,
+  earn: (n) => store.earnCoins(n, { capped: true }).added,
+  today: () => todayKey(),
+});
 let settings = store.getSettings();
 // (1.16) Die Lewende Toring in every tower: the player's tribe, record and the people they have met (its own store)
 const livingStore = createLivingStore();
@@ -572,6 +580,7 @@ function menuModel() {
     dorp: (() => { const d = dorpView(); dorpMenuKey = JSON.stringify(d); return d; })(),   // (1.16) Jou dorp
     slag: SLAG_ON ? slagMenuView() : null,   // (1.17) Vrugteslag (set aside)
     gly: GLYBAAN.on ? glyMenuView() : null,   // (1.19) Glybaan, the slide
+    span: span.view(),   // (1.20) Ons dorp
     kasteel: KASTEEL.on ? kasteelMenuView() : null,   // (1.17) Die Kasteelreeks (off since 18 Oct: config KASTEEL)
   };
 }
@@ -1128,7 +1137,10 @@ bus.on('ui:share-tap', (e) => {
 /** What the daily results add beyond the result itself: the skyline, tomorrow's teaser and the install offer. */
 function resultsExtras(r) {
   if (!r || r.mode !== 'daily' || !r.dateKey) return {};
-  return { city: skylineFor(r.dateKey), teaser: tomorrowTeaser(r.dateKey), install: installMode(), ...dayTriesExtras(r) };
+  // (1.20) today's rescue ride, while it waits: who's in the river, how many of them fell off your tower
+  const rd = r.dateKey === todayKey() ? span.ride(r.dateKey) : null;
+  const rivier = rd ? { n: rd.who.length, mine: rd.mine, who: rd.who } : null;
+  return { city: skylineFor(r.dateKey), teaser: tomorrowTeaser(r.dateKey), install: installMode(), rivier, ...dayTriesExtras(r) };
 }
 
 /**
@@ -2589,6 +2601,13 @@ function finalize(result) {
   run.over = true;
   stopHeartbeat();
   // (1.16) the Living Tower's town: the record and who lived there (kept apart from the tower's own result)
+  // (1.20) a Weektoring turn: its floors join the tower (a turn left before its first drop is still there)
+  if (result.mode === 'week') {
+    const aborted = !(result.blocksDropped > 0);
+    const out = aborted ? null : span.turnDone(result.week || [], { skin: store.getSkins().wear.blocks || 'kleur', day: todayKey() });
+    run.final = { result: { ...result, weekOut: out }, stats: null, isNewBest: false, aborted };
+    return run.final;
+  }
   const town = result.living ? recordTown(result.living) : null;
   const dorpGain = dorpGainFor(result);   // (1.16) Jou dorp: what this tower sent to the town
   if (result.mode === 'duel') {
@@ -2628,6 +2647,11 @@ function finalize(result) {
   } else {
     const rec = store.recordPractice(result);
     isNewBest = !!rec.isNewBest;
+  }
+  // (1.20) Ons dorp: a finished Daily counts for the week (its height: bombs; the weekday: the ticket), gives a build turn
+  // and today's rescue ride (who fell off your tower is in the river)
+  if (result.mode === 'daily' && result.dateKey && !aborted) {
+    try { span.dailyDone(result.dateKey, shown.heightM || 0, result.living?.fell || []); } catch (e) { console.warn('[span]', e); }
   }
   // coins: the daily tower pays in full (once); Oefen counts towards the day's cap
   let coins = null;
@@ -2673,6 +2697,104 @@ bus.on('game:final', (result) => {
 });
 
 // (1.17) Die Kasteelreeks: every Daily Tower is kept as a tower of the player's castle (each day's best try, 7 days)
+// ---------------------------------------------------------------------------
+// (1.20) Ons dorp: the day's ride down the river (js/rivier/view.js over Stapel's page) and the Weektoring's build turn
+// (GameScene mode 'week'). The owner, 24 Oct 2026: "The river can be part of a rescue mission for the men you lost on the
+// towers", "use a crane to build ontop of the weekly tower". The plan: docs/RIVIER-PLAN-2026-10-24.md.
+// ---------------------------------------------------------------------------
+let ride = null;          // the ride's controller while it's open
+let rideSeq = 0;
+Object.defineProperty(window.__stapel, 'ride', { get: () => ride, configurable: true });   // (tests)
+window.__stapel.span = span;
+Object.defineProperty(window.__stapel, 'where', { get: () => ({ screen, mode: run.mode, over: run.over }), configurable: true });   // (tests)
+/** The Daily tower as it stood at the end of the day's best try (the river starts at its top), or []. */
+function dayLayout(dateKey) {
+  try {
+    const all = JSON.parse(localStorage.getItem('stapel.v1.kasteeldae') || '{}') || {};
+    return Array.isArray(all[dateKey]?.b) ? all[dateKey].b : [];
+  } catch {
+    return [];
+  }
+}
+function closeRide() {
+  rideSeq += 1;
+  ride?.close();
+  ride = null;
+  wakeLoop();
+}
+async function startRide() {
+  const day = todayKey();
+  const rd = span.ride(day);
+  if (!rd) {
+    showMenu();
+    return;
+  }
+  const seq = ++rideSeq;
+  screen = 'rivier';
+  ui.hideAll();
+  wakeLoop();
+  try {
+    const mod = await import('./rivier/view.js');
+    if (seq !== rideSeq) return;
+    const v = span.view();
+    const r = await mod.openRiver({
+      seed: day, who: rd.who, mine: rd.mine, floors: v.floors, crew: v.name || '', canBuild: v.turns > 0,
+      daily: dayLayout(day), skin: store.getSkins().wear.blocks || 'kleur',
+      reducedMotion: !!settings.reducedMotion, autopilot: DEBUG && params.has('rvauto'),
+      onResult: (res) => {
+        const out = span.rideDone(day, res.rescued || []);
+        if (out.coins) coinsChanged();
+      },
+      onDone: (res, next) => {
+        closeRide();
+        if (next === 'build') startWeekTurn();
+        else {
+          startIdle();
+          showMenu();
+        }
+      },
+    });
+    if (seq !== rideSeq) { r.close(); return; }
+    ride = r;
+    // (Stapel's own drawing rests while the river is open: one picture on the screen at a time)
+    if (!loopAsleep && game.loop?.running) { loopAsleep = true; game.loop.sleep(); }
+  } catch (e) {
+    console.error('[rivier]', e);
+    closeRide();
+    startIdle();
+    showMenu();
+  }
+}
+function startWeekTurn() {
+  const tt = span.turn(todayKey());
+  if (!tt) {
+    ui.toast(S.twNoTurn, 2600);
+    startIdle();
+    showMenu();
+    return;
+  }
+  resetRun('week');
+  startGame({ mode: 'week', seed: tt.seed, autoplay: AUTO, week: { floors: tt.floors, blocks: tt.blocks, title: S.weekTowerName } });
+  screen = 'game';
+  ui.showInGame();
+}
+bus.on('ui:rivier', startRide);
+bus.on('ui:week-build', startWeekTurn);
+bus.on('ui:span', () => {
+  // (checkpoint 1: the town is the island with its Weektoring at the ride's end; the town's own screen comes with crews)
+  const v = span.view();
+  if (v.rideToday) startRide();
+  else if (v.turns > 0) startWeekTurn();
+  else ui.toast(S.twNoTurn, 2600);
+});
+// (Android's Back during a ride: its pause card, with "Klim uit")
+window.addEventListener('stapel:back', (e) => {
+  if (!ride) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  ride.pause();
+}, true);
+
 bus.on('game:castle', (c) => {
   try {
     const KEY = 'stapel.v1.kasteeldae';
@@ -2711,6 +2833,15 @@ bus.on('game:over', (result) => {
     showMenu();
     if (home && added > 0) ui.toast(`+${fmtInt(added)} 🪙`, 2400);
     if (home && result.mode === 'daily') planReminders();   // today is built: no reminder today
+    return;
+  }
+  if (result.mode === 'week') {
+    // (1.20) the Weektoring's turn: its sheet over the tower's reveal
+    const o = f.result.weekOut || {};
+    const v = span.view();
+    screen = 'results';
+    ui.showWeekResult({ heightM: o.heightM ?? v.heightM, gain: o.gain || 0, added: o.added || 0, people: v.people, perfects: f.result.perfects | 0, turns: v.turns });
+    sleepLoop(RESULTS_SLEEP_MS);
     return;
   }
   if (f.isNewBest) audio.play('record');
