@@ -184,3 +184,12 @@ test('weektower: rescued people move into free rooms, lowest floors first', () =
   assert.equal(cleanFloor({ ...t[0], extra: 'x' }).extra, undefined);
   assert.equal(cleanFloor({ s: 'house' }), null);
 });
+
+test('weektower: a turn\'s floor floating in the air is dropped (and whatever stands on it); resting ones stay', () => {
+  const base = stack(['G', 'G']);
+  const ok = addFloors(base, [{ s: 'plank', x: 0, y: 3.2, r: 0, q: 'G' }, { s: 'plank', x: 0, y: 4.8, r: 0, q: 'P' }], { by: 'a' });
+  assert.equal(ok.length, 4);
+  const cheat = addFloors(base, [{ s: 'plank', x: 0, y: 3.2, r: 0, q: 'G' }, { s: 'plank', x: 0, y: 40, r: 0, q: 'P' }, { s: 'plank', x: 0, y: 41.6, r: 0, q: 'P' }], { by: 'a' });
+  assert.equal(cheat.length, 3, 'the two in the air are gone');
+  assert.equal(heightOf(cheat), 4.8);
+});
