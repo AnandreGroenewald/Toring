@@ -1144,6 +1144,7 @@ function resultsExtras(r) {
   // (1.20) today's rescue ride, while it waits: who's in the river, how many of them fell off your tower
   const rd = r.dateKey === todayKey() ? span.ride(r.dateKey) : null;
   const rivier = rd ? { n: rd.who.length, mine: rd.mine, who: rd.who } : null;
+  if (rivier) prefetchRiver();
   return { city: skylineFor(r.dateKey), teaser: tomorrowTeaser(r.dateKey), install: installMode(), rivier, ...dayTriesExtras(r) };
 }
 
@@ -2849,6 +2850,15 @@ function spanPrize() {
   ui.toast(S.spanPrize(pz.place, pz.coins), 5200);
 }
 bus.on('ui:rivier', startRide);
+/** (the results card offers the ride: its 3D code and models start downloading now, quietly, so the ride opens at once) */
+let riverPrefetched = false;
+function prefetchRiver() {
+  if (riverPrefetched) return;
+  riverPrefetched = true;
+  const go = () => import('./rivier/models.js').then((m) => m.loadModels(['croc', 'hippo', 'monkey', 'builder', 'dorp', 'island', 'props'])).catch(() => {});
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 3000 });
+  else setTimeout(go, 1500);
+}
 bus.on('ui:week-build', startWeekTurn);
 /** Ons dorp's own screen: your crew's island and its Weektoring in 3D (js/rivier/view.js openTown), your week. */
 async function openSpanTown() {
