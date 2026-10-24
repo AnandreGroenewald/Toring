@@ -924,6 +924,7 @@ export const S_EN = {
   spanLeft: 'You left the crew. You have your own island again.',
   twRiver: '⚔️ Saturday’s river',
   twYou: 'you',
+  twFold: 'Fold the panel up or down',
   twWhistle: 'The whistle blows somewhere between 20:00 and 21:00. Nobody knows exactly when!',
   twBomb: (n) => `💣 Ride down and bomb (${n})`,
   twRepair: (n) => `🛠️ Repair (${n})`,

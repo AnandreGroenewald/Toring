@@ -168,6 +168,13 @@ function createTown(K, d) {
   let t = 0;
   /** The screen over the island: the crew and its tower; Saturday's river; the week; the news; what you can do now. */
   const newsLine = (n) => spanNewsLine(n);
+  // (the panel folds down to its buttons: a tap on the island or its handle; the town fills the screen)
+  let folded = false;
+  function fold(on) {
+    folded = !!on;
+    ov.querySelector('.tw-panel')?.classList.toggle('min', folded);
+    measure?.();
+  }
   function paint(v) {
     const crew = v.crew;
     const r = v.river;
@@ -191,10 +198,11 @@ function createTown(K, d) {
     if (!btns.length) btns.push(`<p class="tw-none">${over ? S.twKroning : v.craneShut ? S.twCraneShut : S.twNoTurn}</p>`);
     ov.innerHTML = `<div class="tw-top"><button class="tw-back">${S.twBack}</button><div class="tw-card"><b>🏝️ ${esc(v.name || S.spanMenu)}</b>
         <span>${S.twHeight} <em>${fmtM(v.heightM || 0)}</em> · ${S.twPeople} <em>${fmtInt(v.people | 0)}</em></span></div></div>
-      <div class="tw-panel">${river}<p>${v.ticket ? S.twTicketOk : S.twTicket(v.weekdays | 0, 3)}</p><p>${S.twBombs(v.bombs | 0)}</p>${r ? '' : `<p class="tw-sat">${S.twSat}</p>`}
+      <div class="tw-panel${folded ? ' min' : ''}"><button class="tw-fold" aria-label="${S.twFold}"></button>${river}<p>${v.ticket ? S.twTicketOk : S.twTicket(v.weekdays | 0, 3)}</p><p>${S.twBombs(v.bombs | 0)}</p>${r ? '' : `<p class="tw-sat">${S.twSat}</p>`}
         ${members}${news ? `<ul class="tw-news">${news}</ul>` : ''}
         <div class="tw-btns">${btns.join('')}</div>${crew && crew.members.length > 1 && !sat ? `<button class="tw-leave">${S.spanLeave}</button>` : ''}${clockRow(v.clock)}</div>`;
     const on = (sel, fn) => ov.querySelector(sel)?.addEventListener('click', fn);
+    on('.tw-fold', () => fold(!folded));
     on('.tw-back', () => d.onBack?.());
     on('.tw-ride', () => d.onRide?.());
     on('.tw-build', () => d.onBuild?.());
@@ -237,6 +245,10 @@ function createTown(K, d) {
 #rivier .tw-invite { min-height: 40px; padding: 0 12px; border-radius: 12px; border: 0; background: #25d366; color: #05300f; font: inherit; font-weight: 900; font-size: 15px; }
 #rivier .tw-news { margin: 0 0 6px; padding: 0; list-style: none; font-size: 13px; font-weight: 700; color: #cfe3ea; display: grid; gap: 3px; }
 #rivier .tw-btns { display: grid; gap: 8px; margin-top: 10px; }
+#rivier .tw-fold { display: block; width: 64px; height: 22px; margin: -8px auto 4px; border: 0; background: none; position: relative; }
+#rivier .tw-fold::before { content: ''; position: absolute; left: 14px; right: 14px; top: 9px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.35); }
+#rivier .tw-panel.min > :not(.tw-btns):not(.tw-fold) { display: none; }
+#rivier .tw-panel.min .tw-btns { margin-top: 0; }
 #rivier .tw-clock { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,.25); font: 12px/1.2 monospace; color: #b9d6e3; }
 #rivier .tw-clock span { width: 100%; }
 #rivier .tw-clock button { min-height: 30px; padding: 0 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.08); color: #fff; font: inherit; }
@@ -256,15 +268,37 @@ function createTown(K, d) {
     stage.resize();
   }
   addEventListener('resize', place);
-  // the camera drifts slowly round the island; the whole tower (and the towers round it) fit the top 60 % (the panel has
-  // the rest)
+  // a tap on the island (not a drag, not the panel): fold or unfold the panel
+  let downAt = null;
+  const onTownDown = (e) => { downAt = e.target.closest?.('.tw-panel, .tw-top') ? null : { x: e.clientX, y: e.clientY, t: performance.now() }; };
+  const onTownUp = (e) => {
+    if (downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 12 && performance.now() - downAt.t < 400) fold(!folded);
+    downAt = null;
+  };
+  host.addEventListener('pointerdown', onTownDown);
+  host.addEventListener('pointerup', onTownUp);
+  // the camera drifts slowly round the island; the whole tower (and the towers round it) fit the picture between the
+  // card at the top and the panel (a small phone's panel takes more of it)
+  let room = { f: 0.6, top: 0.1 };
+  function measure() {
+    const hr = host.getBoundingClientRect();
+    const pr = ov.querySelector('.tw-panel')?.getBoundingClientRect();
+    const tr = ov.querySelector('.tw-top')?.getBoundingClientRect();
+    if (!hr.height || !pr) return;
+    const top = tr ? clamp((tr.bottom - hr.top) / hr.height, 0, 0.25) : 0.1;
+    const f = clamp((pr.top - hr.top) / hr.height - top, 0.25, 0.8);
+    room = { f, top };
+  }
   function frame(dt) {
     const h = Math.max(16, island.top, island.plotTop) + 6;
     t += dt;
+    if (Math.floor(t * 2) !== Math.floor((t - dt) * 2)) measure();
     const half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    const D = Math.max(46, (h / 0.6) / (2 * half));
+    // (the tower fills the free band: its middle sits at the band's middle)
+    const D = Math.max(46, (h / room.f) / (2 * half));
     const a = 0.5 + (reduced ? 0 : t * 0.045);
-    const mid = h * 0.5 - (h / 0.6) * 0.2;
+    const bandMid = room.top + room.f / 2;   // (from the top, 0..1)
+    const mid = h * 0.5 + (bandMid - 0.5) * (h / room.f);
     camera.position.set(Math.sin(a) * D, mid + D * 0.12, -IZ + Math.cos(a) * D);
     camera.lookAt(0, mid, -IZ);
     island.group.position.set(0, -0.6, -IZ);
@@ -281,6 +315,7 @@ function createTown(K, d) {
   }
   host.style.display = 'block';
   place();
+  measure();
   frame(0);
   const ready = (async () => {
     stage.render(0);
@@ -292,6 +327,8 @@ function createTown(K, d) {
     alive = false;
     cancelAnimationFrame(raf);
     removeEventListener('resize', place);
+    host.removeEventListener('pointerdown', onTownDown);
+    host.removeEventListener('pointerup', onTownUp);
     scene.remove(island.group, things.spray);
     island.dispose();
     things.dispose();
