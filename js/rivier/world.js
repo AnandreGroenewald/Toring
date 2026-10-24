@@ -143,7 +143,14 @@ float rkOpen(float z) {
     float rkN2 = texture2D(uRkNoise, vRkL.zy * 0.06 + 0.3).g;
     diffuseColor.rgb *= 0.88 + rkN * 0.26;
     vec3 rkDust = mix(vec3(0.5, 0.27, 0.13), vec3(0.2, 0.25, 0.07), smoothstep(0.5, 0.68, rkN2));
-    diffuseColor.rgb = mix(diffuseColor.rgb, rkDust * (0.8 + rkN2 * 0.4), rkFlat * 0.7);
+    float rkFlatK = rkFlat * 0.7;
+    #ifdef USE_COLOR
+      // (the plateau: savanna grass, dry gold and green in patches, all over it)
+      float rkPlain = smoothstep(0.05, 0.2, vColor.g - vColor.r);
+      rkDust = mix(rkDust, mix(vec3(0.36, 0.33, 0.12), vec3(0.16, 0.24, 0.07), smoothstep(0.42, 0.62, rkN)), rkPlain);
+      rkFlatK = mix(rkFlatK, 0.92, rkPlain);
+    #endif
+    diffuseColor.rgb = mix(diffuseColor.rgb, rkDust * (0.8 + rkN2 * 0.4), rkFlatK);
     float rkLine = uRkWet + (rkN2 - 0.5) * min(1.4, uRkWet * 1.2 + 0.2);
     float rkWet = 1.0 - smoothstep(rkLine - 0.35, rkLine + 0.2, vRkL.y);
     diffuseColor.rgb *= 1.0 - rkWet * 0.32;
@@ -986,8 +993,9 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true } = {}) {
       const y = 32.4 + Math.sin(x * 0.07) * 0.8 + Math.sin((z / SEG_L) * Math.PI * 2 + x * 0.03) * 0.5 + Math.max(0, (Math.abs(lx) - 40) * 0.04);
       pos.setXYZ(i, lx, y, z);
       uv.setXY(i, lx / 37, z / 53);
+      // (green in the vertex colour marks it as grassland for the walls' shader)
       const k = 0.78 + Math.sin(x * 0.13 + (z / SEG_L) * Math.PI * 4) * 0.08;
-      col.push(k, k * 0.97, k * 0.86);
+      col.push(k * 0.72, k, k * 0.55);
     }
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     // (the left side's faces turned to face up after its x was mirrored)
