@@ -3024,6 +3024,20 @@ async function startRaid() {
   } catch (e) {
     console.error('[aanval]', e);
     closeRide();
+    // (a phone without 3D: its bombs fly by themselves at the tallest tower, aimed up and down it; the result in a word)
+    if (!has3d()) {
+      const lead = v.river.rows.find((x) => x.id === v.river.leader);
+      const h = lead?.h || 10;
+      const n = Math.min(v.bombs, 3);
+      const hits = Array.from({ length: n }, (_, i) => ({ x: (i - 1) * 0.3, y: Math.round(h * (0.2 + 0.25 * i) * 100) / 100 }));
+      span.bomb(v.river.leader, hits).then((res) => {
+        const got = (res.hits || []).filter((x) => !x.miss).length;
+        ui.toast(res.error ? S.spanOffline : S.no3dRaid(got, n), 3600);
+        startIdle();
+        showMenu();
+      });
+      return;
+    }
     openSpanTown();
   }
 }
