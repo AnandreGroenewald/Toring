@@ -10,6 +10,13 @@ export const TREE_UNDER = 1.5;
 /** A log's top over the water (m): jump higher than this. */
 export const LOG_TOP = 0.62;
 
+/** Hanswors's size (the model is life-size: he's made big enough to read across the river). */
+export const CLOWN_SCALE = 1.8;
+/** His head turned towards you from his three-quarter seat (rad, in his own frame: the mirror flips it for the right bank). */
+const HEAD_TO_YOU = 0.55;
+/** A thrown pie's size: cartoon-big, so it reads in the air. */
+export const PIE_SCALE = 2.2;
+
 export function createHazards(bend = (m) => m, models = {}) {
   const H = models.hazards || null;
   const part = (name) => {
@@ -23,6 +30,42 @@ export function createHazards(bend = (m) => m, models = {}) {
   // (shared by every copy: a passed one's clean-up leaves them; this kit frees them when the ride closes)
   const std = (color, o = {}) => { const m = bend(new THREE.MeshStandardMaterial({ color, roughness: 0.7, ...o })); m.userData.shared = true; own.push(m); return m; };
   const geo = (g) => { g.userData.shared = true; own.push(g); return g; };
+  // (the duck's foam: white froth that fades at its edges, drawn once for the ride)
+  let foamM = null;
+  let foamG = null;
+  const foamMat = () => {
+    if (!foamM) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 128;
+      const x = c.getContext('2d');
+      const gr = x.createRadialGradient(64, 64, 8, 64, 64, 62);
+      gr.addColorStop(0, 'rgba(255,255,255,0.05)');
+      gr.addColorStop(0.55, 'rgba(255,255,255,0.55)');
+      gr.addColorStop(0.8, 'rgba(255,255,255,0.35)');
+      gr.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = gr;
+      x.fillRect(0, 0, 128, 128);
+      // (flecks of froth)
+      let sd = 7;
+      const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+      x.fillStyle = 'rgba(255,255,255,0.7)';
+      for (let k = 0; k < 140; k++) {
+        const a = rnd() * Math.PI * 2;
+        const r = 30 + rnd() * 30;
+        x.beginPath();
+        x.arc(64 + Math.cos(a) * r, 64 + Math.sin(a) * r, 0.8 + rnd() * 2.2, 0, Math.PI * 2);
+        x.fill();
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      own.push(tex);
+      foamM = bend(new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0.8 }));
+      foamM.userData.shared = true;
+      own.push(foamM);
+      foamG = geo(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2));
+    }
+    return foamM;
+  };
   const noCull = (g) => { g.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; o.receiveShadow = true; } }); return g; };
 
   /** A log across `span` lanes (1 or 3), lying in the water: { obj } with userData { kind 'log', w, d }. */
@@ -84,7 +127,9 @@ export function createHazards(bend = (m) => m, models = {}) {
 
   /**
    * Hanswors sitting backwards on his duck, facing you, a pie held up: userData { kind 'clown', arm, head, balloons,
-   * duck, pieHeld } — the ride moves him; `pose(t, wind)` animates him (wind 0..1: his arm drawn back to throw).
+   * duck, pieHeld, foam } — the ride moves him; `pose(t, wind, wave, after)` animates him (wind 0..1: his arm drawn
+   * back to throw; after 0..1: the throw's follow-through). Seen three-quarters on (the duck's head and beak show), his
+   * face turned to you, his throwing arm on the river's side (on the right bank he's mirrored).
    */
   function clown(side = 1) {
     const g = new THREE.Group();
@@ -124,23 +169,40 @@ export function createHazards(bend = (m) => m, models = {}) {
       arm.position.set(0.3, 1.3, 0);
       inner.add(d, b, head, nose, arm);
     }
-    // (he sits backwards facing you: the model faces +z already; the duck goes downstream)
-    inner.scale.setScalar(1.6);
+    // (he sits backwards facing you: the model faces +z already; the duck goes downstream. His throwing arm is on his
+    // +x side: on the right bank (side 1) he's mirrored so it's on the river's side, where you see the throw)
+    inner.scale.set(side > 0 ? -CLOWN_SCALE : CLOWN_SCALE, CLOWN_SCALE, CLOWN_SCALE);
+    // (the duck's own foam on the water, along its body)
+    foamMat();
+    const foam = new THREE.Mesh(foamG, foamM);
+    foam.scale.set(4.2, 1, 6.6);
+    foam.position.y = 0.04;
+    foam.renderOrder = 2;
+    g.add(foam);
     noCull(g);
+    foam.castShadow = false;
+    foam.receiveShadow = false;
     const shoulderRest = arm ? arm.rotation.x : 0;
+    const headRest = head ? head.rotation.y : 0;
     g.userData = {
-      kind: 'clown', side, arm, head, balloons, duck, pieHeld, inner, w: 0, d: 0,
-      pose(t, wind = 0, wave = 0) {
+      kind: 'clown', side, arm, head, balloons, duck, pieHeld, inner, foam, w: 0, d: 0, phase: Math.random() * 6,
+      pose(t, wind = 0, wave = 0, after = 0) {
         inner.position.y = Math.sin(t * 2.1) * 0.08;
         inner.rotation.z = Math.sin(t * 1.6) * 0.06;
-        inner.rotation.x = Math.sin(t * 1.3 + 1) * 0.04;
-        if (head) head.rotation.z = Math.sin(t * 2.7) * 0.15;
+        // (he leans back as he winds up, and into the throw after it)
+        inner.rotation.x = Math.sin(t * 1.3 + 1) * 0.04 - 0.14 * wind + 0.12 * after;
+        // (his face turned to you; a cheeky wobble)
+        if (head) {
+          head.rotation.y = headRest + HEAD_TO_YOU;
+          head.rotation.z = Math.sin(t * 2.7) * 0.15;
+        }
         if (balloons) balloons.rotation.z = Math.sin(t * 1.1) * 0.12;
-        // (the arm: drawn back over his shoulder to throw, then forward; or waving goodbye)
+        // (the arm: drawn back over his shoulder, flung forward in the throw; or waving goodbye)
         if (arm) {
-          arm.rotation.x = shoulderRest + (wind > 0 ? (wind < 1 ? -0.9 * wind : 0.9) : 0);
+          arm.rotation.x = shoulderRest - 1.25 * wind + 1.35 * after;
           arm.rotation.z = wave ? Math.sin(t * 9) * 0.5 : 0;
         }
+        foamM.opacity = 0.75 + Math.sin(t * 5) * 0.1;
       },
     };
     return g;

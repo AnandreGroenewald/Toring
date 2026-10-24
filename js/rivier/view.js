@@ -14,7 +14,7 @@ import { buildRiverWorld, bendMaterial, setBend, BANK, puffTexture } from './wor
 import { createRider } from './rider.js';
 import { createThings, createIsland, createStartTower, labelSprite, disposeTree } from './things.js';
 import { createBeasts } from './beasts.js';
-import { createHazards, splatImage, LOG_TOP } from './hazards.js';
+import { createHazards, splatImage, LOG_TOP, PIE_SCALE } from './hazards.js';
 import { loadModels } from './models.js';
 import { RIVER, rescueCourse, raidCourse, speedAt, laneX, inRapids, rapidsWindow, PACE } from '../core/rivier.js';
 import { floorAt, hit as hitFloor, dimsOf } from '../core/weektower.js';
@@ -111,8 +111,8 @@ function makeKit() {
 #rivier .rv-card.on { opacity: 1; transform: translate(-50%, 0); }
 #rivier .rv-card h2 { margin: 0 0 4px; font-size: 24px; font-weight: 900; }
 #rivier .rv-card .rv-link { background: none; color: #8ff4ff; min-height: 40px; font-size: 16px; text-decoration: underline; text-underline-offset: 3px; }
-#rivier .rv-splat { position: absolute; width: 62%; max-width: 360px; pointer-events: none; transform: rotate(var(--r, 0deg)) scale(.3); opacity: 0; animation: rv-splat 3.1s cubic-bezier(.2,1.4,.4,1) forwards; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); }
-@keyframes rv-splat { 0% { transform: rotate(var(--r)) scale(.3); opacity: 0; } 8% { transform: rotate(var(--r)) scale(1.05); opacity: 1; } 14% { transform: rotate(var(--r)) scale(1); } 60% { opacity: 1; } 100% { transform: rotate(var(--r)) translateY(70px) scale(1); opacity: 0; } }
+#rivier .rv-splat { position: absolute; pointer-events: none; transform-origin: 50% 40%; transform: rotate(var(--r, 0deg)) scale(.4); opacity: 0; animation: rv-splat 2.2s cubic-bezier(.25,.9,.35,1) forwards; filter: drop-shadow(0 8px 14px rgba(0,0,0,.28)); }
+@keyframes rv-splat { 0% { transform: rotate(var(--r)) scale(.4); opacity: 0; } 4% { transform: rotate(var(--r)) scale(1.1, .92); opacity: 1; } 9% { transform: rotate(var(--r)) scale(.97, 1.03); } 14% { transform: rotate(var(--r)) scale(1); } 45% { transform: rotate(var(--r)) translateY(4%) scale(1, 1.02); opacity: 1; } 100% { transform: rotate(var(--r)) translateY(34%) scale(.98, 1.1); opacity: 0; } }
 #rivier .rv-arrow { position: absolute; left: 50%; top: 46%; width: 92px; height: 92px; margin: -46px 0 0 -46px; border-radius: 50%; background: rgba(13,34,40,.6); border: 3px solid #fff3c4; display: none; pointer-events: none; }
 #rivier .rv-arrow.on { display: block; }
 #rivier .rv-arrow::after { content: ''; position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -10px 0 0 -15px; border-left: 8px solid #fff3c4; border-top: 8px solid #fff3c4; transform: rotate(45deg); }
@@ -1427,49 +1427,65 @@ function createRide(K, d) {
    * Hanswors's visit: he's met floating ahead, then rides alongside a little ahead of you on your side, winds up and lobs
    * his pies at the lane you're in (a shadow shows where each lands: move out of it), then waves and drops behind.
    */
+  // Hanswors: where he rides beside you (m ahead; across, in open water outside the lanes) and how he sits (three-quarters
+  // on, so his duck's head and beak show)
+  const CLOWN = { ahead: 15, x: 6.1, yaw: 0.55 };
   function clownStep(l, ahead, dt) {
     const u = l.obj.userData;
-    const st = l.cs || (l.cs = { phase: 'coming', thrown: 0, timer: 0.9, wind: 0, waveT: 0 });
+    const st = l.cs || (l.cs = { phase: 'coming', thrown: 0, timer: 1.1, wind: 0, after: 0, waveT: 0, off: 0 });
     const side = u.side || 1;
-    if (st.phase === 'coming' && ahead < 28 && phase === 'run') {
+    if (st.phase === 'coming' && ahead < CLOWN.ahead + 9 && phase === 'run') {
       st.phase = 'riding';
+      st.off = ahead;
       audio.play('clown');
       pop(S.rvClown, 1100);
       if (!taught.clown) { hint(S.rvTeachClown); teachDone('clown'); setTimeout(() => { if (alive && hintEl.textContent === S.rvTeachClown) hint(null); }, 3200); }
     }
+    let throwNow = false;
     if (st.phase === 'riding') {
-      // (he keeps pace a little ahead of you)
-      l.z = dist + 24 + Math.sin(t * 0.7) * 1.5;
+      // (he paddles up to keep pace a little ahead of you, easing in: never a jump)
+      st.off += (CLOWN.ahead - st.off) * Math.min(1, dt * 2.2);
+      l.z = dist + st.off + Math.sin(t * 0.7) * 1.2;
       st.timer -= dt;
-      if (st.timer < 0.35 && st.thrown < (l.it.pies || 3)) st.wind = Math.min(1, st.wind + dt / 0.35);
-      if (st.timer <= 0 && st.thrown < (l.it.pies || 3)) {
-        throwPie(l);
+      const pies0 = l.it.pies || 3;
+      if (st.timer < 0.45 && st.thrown < pies0) st.wind = Math.min(1, st.wind + dt / 0.45);
+      if (st.timer <= 0 && st.thrown < pies0) {
+        throwNow = true;
         st.thrown++;
-        st.wind = 1.2;
+        st.wind = 0;
+        st.after = 1;
         const deep = clamp((dist - RIVER.unlock.clown) / 4000, 0, 1);
         st.timer = 1.75 - 0.5 * deep;
       }
-      if (st.wind > 1) st.wind = Math.max(0, st.wind - dt * 4) || 0;
-      if (st.thrown >= (l.it.pies || 3) && !pies.some((pp) => pp.from === l)) {
+      if (st.thrown >= pies0 && !pies.some((pp) => pp.from === l) && st.after <= 0) {
         st.phase = 'leaving';
         st.waveT = 0;
-        l.z = dist + 24;
       }
     } else if (st.phase === 'leaving') {
       st.waveT += dt;
       // (he waves, then stops paddling: the river carries you past him)
-      if (st.waveT < 1.2) l.z = dist + 24;
+      if (st.waveT < 1.2) l.z = dist + st.off + Math.sin(t * 0.7) * 1.2;
     }
+    st.after = Math.max(0, st.after - dt * 3.2);
     const a = l.z - dist;
-    // (between the outer lane and the bank, turned a little towards you: in the picture, never in a lane)
-    l.obj.position.set(side * (RIVER.laneW + 2.1), 0, -a);
-    l.obj.rotation.y = -side * 0.3;
-    u.pose(t, st.wind > 0 && st.wind <= 1 ? st.wind : 0, st.phase === 'leaving' && st.waveT < 1.2 ? 1 : 0);
+    l.obj.position.set(side * CLOWN.x, 0, -a);
+    l.obj.rotation.set(0, side * CLOWN.yaw, 0);
+    u.pose(t, st.wind, st.phase === 'leaving' && st.waveT < 1.2 ? 1 : 0, st.after);
+    // (spray off the duck's tail as he paddles)
+    if (st.phase !== 'coming' && phase === 'run' && Math.random() < 0.6) {
+      _pp.set(0, 0.15, 2.3).applyAxisAngle(_up, side * CLOWN.yaw);
+      things.emit(side * CLOWN.x + _pp.x, 0.15, -a + _pp.z, 1, 0.6, 1.3);
+    }
+    // (the pie leaves his hand where it is now, after the pose)
+    if (throwNow) throwPie(l);
   }
+  const _up = new THREE.Vector3(0, 1, 0);
   function throwPie(from) {
     const u = from.obj.userData;
     const mesh = hz.pie();
+    mesh.scale.setScalar(PIE_SCALE);
     const start = new THREE.Vector3();
+    from.obj.updateMatrixWorld(true);
     (u.pieHeld || u.head || from.obj).getWorldPosition(start);
     if (u.pieHeld) u.pieHeld.visible = false;
     const tx = laneX(lane);
@@ -1477,23 +1493,44 @@ function createRide(K, d) {
     shadow.position.set(tx, 0.07, 0.4);
     shadow.renderOrder = 3;
     scene.add(mesh, shadow);
-    pies.push({ mesh, shadow, from, start, tx, t: 0, dur: 1.05 });
+    pies.push({ mesh, shadow, from, start, tx, t: 0, dur: 1.25, hit: null, mid: new THREE.Vector3() });
     audio.play('fling');
   }
   const _pp = new THREE.Vector3();
+  const _lens = new THREE.Vector3();
+  /** Where the pie's arc ends: just in front of you, over your lane (then into the lens, or down into the water). */
+  const PIE_DOWN = 0.82;
   function stepPies(dt) {
     for (let i = pies.length - 1; i >= 0; i--) {
       const pp = pies[i];
       pp.t += dt;
       const s = Math.min(1, pp.t / pp.dur);
-      _pp.set(pp.start.x + (pp.tx - pp.start.x) * s, pp.start.y + (1.1 - pp.start.y) * s + Math.sin(s * Math.PI) * 3.2, pp.start.z + (0.4 - pp.start.z) * s);
+      if (s < PIE_DOWN) {
+        // the lob: up out of his hand, over, and down towards you
+        const k = s / PIE_DOWN;
+        _pp.set(pp.start.x + (pp.tx - pp.start.x) * k, pp.start.y + (1.5 - pp.start.y) * k + Math.sin(k * Math.PI) * 3.4, pp.start.z + (-0.8 - pp.start.z) * k);
+        pp.mid.copy(_pp);
+        // (flat, cream up, wobbling as it flies)
+        pp.mesh.rotation.set(Math.sin(pp.t * 11) * 0.22, pp.t * 6, Math.sin(pp.t * 8) * 0.18);
+      } else {
+        // the last moment: still in its lane, it comes straight at you (into the lens); out of it, down into the water
+        if (pp.hit === null) pp.hit = phase === 'run' && Math.abs(x - pp.tx) < 1.5;
+        const k = (s - PIE_DOWN) / (1 - PIE_DOWN);
+        if (pp.hit) {
+          camera.getWorldDirection(_lens);
+          _lens.multiplyScalar(1.25).add(camera.position);
+          _pp.copy(pp.mid).lerp(_lens, k * k);
+          // (the cream turns to face you)
+          pp.mesh.rotation.set(k * Math.PI * 0.5, pp.mesh.rotation.y, 0);
+        } else {
+          _pp.set(pp.tx, 1.5 * (1 - k), -0.8 + 1.2 * k);
+        }
+      }
       pp.mesh.position.copy(_pp);
-      pp.mesh.rotation.set(s * 7, s * 3, 0);
-      pp.shadow.material.opacity = 0.15 + 0.45 * s;
-      pp.shadow.scale.setScalar(0.55 + 0.6 * s);
+      pp.shadow.material.opacity = 0.15 + 0.5 * s;
+      pp.shadow.scale.setScalar(0.55 + 0.65 * s);
       if (s >= 1) {
-        const hit = phase === 'run' && Math.abs(x - pp.tx) < 1.5;
-        if (hit) splat();
+        if (pp.hit) splat();
         else {
           things.emit(pp.tx, 0.2, 0.4, 24, 1.6, 2.4);
           audio.play('splash');
@@ -1511,12 +1548,16 @@ function createRide(K, d) {
     const el = document.createElement('img');
     el.className = 'rv-splat';
     el.src = splatSrc || (splatSrc = splatImage());
+    // (the pie hit the lens: the cream is big, near the middle, and slides off within two seconds)
     const w = host.clientWidth;
-    el.style.left = `${(0.1 + Math.random() * 0.35) * w}px`;
-    el.style.top = `${(0.12 + Math.random() * 0.2) * host.clientHeight}px`;
-    el.style.setProperty('--r', `${(Math.random() - 0.5) * 40}deg`);
+    const h = host.clientHeight;
+    const sw = Math.min(w * 0.84, 470);
+    el.style.width = `${sw}px`;
+    el.style.left = `${(w - sw) / 2 + (Math.random() - 0.5) * w * 0.12}px`;
+    el.style.top = `${h * (0.47 + Math.random() * 0.06) - sw * 0.45}px`;
+    el.style.setProperty('--r', `${(Math.random() - 0.5) * 30}deg`);
     ov.appendChild(el);
-    setTimeout(() => el.remove(), 3200);
+    setTimeout(() => el.remove(), 2300);
     audio.play('splat', { intensity: 0.7 });
     stage.shake(reduced ? 0 : 0.2);
     haptics.lost?.();
@@ -1903,7 +1944,7 @@ function createRide(K, d) {
         u.block.rotation.y += dt * 0.2;
         u.block.rotation.z = Math.sin(t * 1.3 + u.phase) * 0.05;
       }
-      if (u.arm) u.arm.rotation.z = -0.4 + Math.sin(t * 9 + u.phase) * 0.7;
+      if (u.arm && u.kind !== 'clown') u.arm.rotation.z = -0.4 + Math.sin(t * 9 + u.phase) * 0.7;
       u.update?.(t, ahead, dt);
       if (phase === 'run') cues(l, ahead);
       if (u.kind === 'clown') {
@@ -2266,7 +2307,7 @@ function createRide(K, d) {
     pause: () => setPaused(true),
     resume: () => setPaused(false),
     /** For tests: where the ride stands. */
-    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, endless, hearts, airY: Math.round(airY * 100) / 100, duckK: Math.round(duckK * 100) / 100, timeK: Math.round(timeK * 100) / 100, lesson: lesson && !lesson.done ? lesson.kind : null, pies: pies.length, headY: rider.headY?.(), lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, lastKnock, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })) }),
+    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, endless, hearts, airY: Math.round(airY * 100) / 100, duckK: Math.round(duckK * 100) / 100, timeK: Math.round(timeK * 100) / 100, lesson: lesson && !lesson.done ? lesson.kind : null, pies: pies.length, pieAt: pies.map((pp) => { const v = pp.mesh.getWorldPosition(new THREE.Vector3()).project(camera); return { t: Math.round(pp.t * 100) / 100, x: Math.round(v.x * 100) / 100, y: Math.round(v.y * 100) / 100, z: Math.round(v.z * 1000) / 1000 }; }), headY: rider.headY?.(), lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, lastKnock, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })) }),
     autopilot(on) { pilotOn = !!on; },
     /** For tests (Saturday): where on screen (host px) the tallest tower stands at a share of its height, or null. */
     towerScreen(frac = 0.5) {
