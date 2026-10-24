@@ -1426,5 +1426,7 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
 - **Hanswors fixed frame by frame (25 Oct ~02:30, his "look at it frame by frame"):** the pie now shows in the air
   and flies into the screen on a hit (it was never drawn before: a NaN from a shared arm line); the cream is big,
   centred and gone in ~2 s; he rides closer and bigger, three-quarters on, on a real rubber duck with foam and spray.
+- **Hanswors's duck clear of the rocks (25 Oct ~03:30):** the canyon's waterline bulges are eased (the cliffs above
+  keep their shape), no boulders on the bank where he rides, and he keeps 1.7 m from the wall and out of the lanes.
 - **Next:** his feedback; his play of checkpoints 1+2 at home:
   http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1; the release on his word (plan §8).
