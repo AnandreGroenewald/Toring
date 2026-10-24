@@ -137,6 +137,9 @@ test('rivier (endless): the river grows harder further down — Hanswors from 1 
       assert.equal(rows[0].teach, kind, `the first ${kind} is a lesson`);
       assert.ok(rows.slice(1).every((r) => r.teach !== kind), `only the first ${kind} teaches`);
     }
+    // (Hanswors is an event, not a fixture: at least 1.6 km between his visits)
+    const cz = at('clown').map((r) => r.z);
+    for (let i = 1; i < cz.length; i++) assert.ok(cz[i] - cz[i - 1] >= RIVER.clownEvery[0] - 1, `Hanswors ${Math.round(cz[i] - cz[i - 1])} m after the last`);
     // (the first km as it was; none by your island or in the rapids)
     for (const r of c.rows) {
       const late = r.items.some((it) => LATER.includes(it.kind));

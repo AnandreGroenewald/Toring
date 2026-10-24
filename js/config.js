@@ -360,7 +360,12 @@ export const KASTEEL = Object.freeze({ on: false });
 // (an old friend link still opens it); `on: true` brings it back.
 export const BOTSING = Object.freeze({ on: false });
 /** (1.19 3D) Glybaan, the downhill four-lane slide (its own page, glybaan.html): on the menu where Block Clash was. */
-export const GLYBAAN = Object.freeze({ on: false });   // (24 Oct 2026, the owner: "lets leave the whole earth, water and fire scenario": the slide lives on as the river, js/rivier/)
+export const GLYBAAN = Object.freeze({ on: false });
+// (1.20) Ons dorp: the crews' town, the Weekly Tower you build together and Saturday's challenge. Off for now (the owner,
+// 25 Oct 2026: "the ons dorp, lets leave that one out for now. lets make it the River run only"): the menu has the River
+// run (Afgly) without the town; the rescued go ashore on the island; no town links, turns, raids, prizes or Saturday
+// reminders. Its code and server stay (the River run's daily ranking lives there); `on: true` brings it all back.
+export const ONS_DORP = Object.freeze({ on: false });   // (24 Oct 2026, the owner: "lets leave the whole earth, water and fire scenario": the slide lives on as the river, js/rivier/)
 
 // (1.18, the owner 18 Oct 2026: "for now all skins needs to be free ... For people to test it") every skin and look in the
 // Winkel costs nothing while `on`; what testers take stays theirs when the prices come back (`on: false`).

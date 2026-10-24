@@ -3,7 +3,7 @@
 // and real buttons lives here, positioned exactly over the canvas by layout().
 // All sizes in css/style.css scale with --u (= canvas width / 720 px).
 
-import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, DUEL, computeGameHeight, IDEAS_VOTE, KASTEEL, BOTSING, GLYBAAN } from '../config.js';
+import { GAME_W, PALETTE, RATING_EMOJI, VERSION, TURNS, DUEL, computeGameHeight, IDEAS_VOTE, KASTEEL, BOTSING, GLYBAAN, ONS_DORP } from '../config.js';
 import { WEEK } from '../core/week.js';
 
 const WEEK_COINS = WEEK.coins;
@@ -1127,7 +1127,9 @@ export function createUI(bus) {
   function renderHowTo() {
     const free = st.model?.tries?.free || 1;   // (1.13.1) the day's free tries, as on the daily card
     // (the castle's line only while the Kasteelreeks is on)
-    const steps = S.howToSteps.filter((s) => (KASTEEL.on || s.icon !== '🏰') && (BOTSING.on || s.icon !== '💥') && (GLYBAAN.on || s.icon !== '🌀')).map((s, i) => {
+    // (Ons dorp off: no Weektoring, town or Saturday lines; the River run's own line without them)
+    const steps = S.howToSteps.filter((s) => (KASTEEL.on || s.icon !== '🏰') && (BOTSING.on || s.icon !== '💥') && (GLYBAAN.on || s.icon !== '🌀') && (ONS_DORP.on || !['🏗️', '🏝️', '💦'].includes(s.icon)))
+      .map((s) => (!ONS_DORP.on && s.icon === '🛟' ? { ...s, text: S.howToRiverRun } : s)).map((s, i) => {
       const c = STEP_COLORS[i % STEP_COLORS.length];
       return h('li', { class: 'step' },
         h('span', { class: 'step-ic', vars: { '--c': `var(--${c})`, '--cd': `var(--${c}-d)`, '--r': `${i % 2 ? 3 : -3}deg` } }, emo(s.icon)),
@@ -3230,14 +3232,15 @@ export function createUI(bus) {
    */
   /** Ons dorp and Afgly side by side: one row, the height the island's button always had (small phones fit). */
   function spanRowEl(v, can3d) {
-    const a = spanMenuEl(v);
+    const a = ONS_DORP.on ? spanMenuEl(v) : null;
     const b = rivierMenuEl(v, can3d);
     return a && b ? h('div', { class: 'span-row' }, a, b) : a || b;
   }
   function rivierMenuEl(v, can3d) {
     if (!v || can3d === false) return null;
     // (today's place in Afgly's ranking first; else your best this week)
-    const sub = v.rideRank ? S.afglyRank(v.rideRank.rank, fmtInt(v.rideRank.m)) : v.rideBest > 0 ? S.afglyBest(fmtInt(v.rideBest)) : S.afglyMenuSub;
+    // (without the town: today's rescue ride waiting is said here)
+    const sub = !ONS_DORP.on && v.rideToday ? S.spanRide : v.rideRank ? S.afglyRank(v.rideRank.rank, fmtInt(v.rideRank.m)) : v.rideBest > 0 ? S.afglyBest(fmtInt(v.rideBest)) : S.afglyMenuSub;
     return h('button', {
       type: 'button', class: 'kasteel-menu-btn rivier-menu-btn', 'aria-label': `${S.afgly}: ${sub}`,
       onclick: () => { if (!guard()) return; audio.play('click'); bus.emit('ui:rivier', { from: 'menu' }); },

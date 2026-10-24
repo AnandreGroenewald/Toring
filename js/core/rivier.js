@@ -35,7 +35,7 @@ export const RIVER = Object.freeze({
   // distract you, after 2000 meters there is a small object that you need to jump over, the first one shows you to
   // jump etc"): what the endless river adds as you get further
   unlock: Object.freeze({ clown: 1000, log: 2000, branch: 3000 }),
-  clownEvery: [520, 820],   // m between Hanswors's visits, once he's come (closer together further down)
+  clownEvery: [1600, 2400],   // m between Hanswors's visits, once he's come (an event, about once a minute: the owner, 25 Oct 2026, "it appears way too many times")
   lakeFrom: 600,       // m: the river opens into a lake, your crew's island beside it...
   lakeTo: 880,         // ...and narrows into the canyon again
   islandAt: 740,
@@ -113,7 +113,7 @@ function buildCourse(key, len, who, crews) {
       const first = !later.taught.clown;
       later.taught.clown = true;
       const k = Math.min(1, (zz - RIVER.unlock.clown) / 4000);
-      later.clownNext = zz + Math.round(rng.int(RIVER.clownEvery[0], RIVER.clownEvery[1]) * (1 - 0.35 * k));
+      later.clownNext = zz + rng.int(RIVER.clownEvery[0], RIVER.clownEvery[1]);
       rows.push({ z: zz, items: [{ lane: 1, kind: 'clown', side: rng.chance(0.5) ? -1 : 1, pies: first ? 3 : 3 + Math.round(k * 3) }], teach: first ? 'clown' : undefined });
       z = zz + minGap * (first ? 2.2 : 1);
       return true;

@@ -725,11 +725,17 @@ function createRide(K, d) {
   let closeAt = -9;
   let streak = 0;
   /** The animals' moments, once each: Blouaap chatters, the hippo grunts as it surfaces, a crocodile snaps near you. */
+  let monkeySaidAt = -1e9;
   function cues(l, ahead) {
     const k = l.it.kind;
     if (k === 'monkey' && !l.said && ahead < 30) {
       l.said = true;
-      audio.play('monkey');
+      // (Blouaap's chatter: the first of a ride, then now and then, softer; not for every block he paddles: the owner,
+      // 25 Oct 2026, "the monkey sounds gets a little irritating")
+      if (t - monkeySaidAt > 30) {
+        monkeySaidAt = t;
+        audio.play('monkey', { intensity: 0.55 });
+      }
     } else if (k === 'hippo' && !l.said && ahead < 33) {
       l.said = true;
       audio.play('hippo');
@@ -1811,7 +1817,9 @@ function createRide(K, d) {
       // he falls from the top into the river: a splash, and he's up on his board
       const k = clamp(phaseT / DIVE, 0, 1);
       if (quick) {
-        // (dropped in: onto the water from just above it, right where he rides)
+        // (dropped in: onto the water from just above it, right where he rides; the river already flowing under him)
+        dist += speedAt(dist, len) * dt;
+        runS += dt;
         rider.group.position.y = 2.2 * (1 - k * k);
         rider.group.position.z = 0;
         rider.group.rotation.x = 0;
@@ -1877,7 +1885,7 @@ function createRide(K, d) {
         if (!islandSaid && dist > islandZ - 18) {
           islandSaid = true;
           if (rescued.length) {
-            pop(S.rvIslandPass(rescued.length, d.crew || ''), 1800);
+            pop(d.town === false ? S.rvSafeIsland(rescued.length) : S.rvIslandPass(rescued.length, d.crew || ''), 1800);
             audio.play('record');
             if (rescued.length === who.length && !fwRide) fwRide = createFireworks(scene, reduced, world.night);
           }
@@ -2217,7 +2225,7 @@ function createRide(K, d) {
     const distHtml = endless ? `<div class="rv-dist"><b>${fmtInt(r.metres)}</b><small>m</small></div><p class="rv-distline">${record ? S.rvRecord : S.rvDistance}${d.best && !record ? ` · ${S.rvBest(fmtInt(best))}` : ''}</p>` : '';
     const shotsHtml = endless && d.shots?.day ? `<p class="rv-shots">${shotsEarned(r.metres) > 0 ? S.rvShots(shotsEarned(r.metres)) : d.shots.room <= 0 ? S.rvShotsFull(d.shots.max || 10) : S.rvShotsNext(100 - ((d.shots.riverWeek + r.metres) % 100))}</p>` : '';
     const peopleHtml = free ? '' : `<h2>${r.rescued.length ? S.rvSaved(r.rescued.length, who.length) : S.rvNoneSaved}</h2>
-      <p>${r.rescued.length ? S.rvMovedIn(r.rescued.length, d.crew || '') : S.rvTryTomorrow}${mine && yours < mine ? ` ${S.rvYoursLeft(mine - yours)}` : ''}</p>
+      <p>${r.rescued.length ? (d.town === false ? S.rvSafeOut(r.rescued.length) : S.rvMovedIn(r.rescued.length, d.crew || '')) : S.rvTryTomorrow}${mine && yours < mine ? ` ${S.rvYoursLeft(mine - yours)}` : ''}</p>
       <div class="rv-row">${who.map((id) => `<img src="${faceUrl(id, 64)}" alt="" class="${rescued.includes(id) ? '' : 'out'}">`).join('')}</div>`;
     const btnsHtml = free
       ? `<button class="rv-go rv-again">${S.rvAgain}</button><button class="rv-no">${S.rvDone}</button>`

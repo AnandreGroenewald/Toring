@@ -750,13 +750,15 @@ const SOUNDS = {
 
   // --- visitors (js/game/visitors.js) ---
 
-  monkey(v, t) {
-    // Blouaap: "oe-oe-aa-aa", four quick squeaky syllables, each a gliding saw through two vowel formants.
+  monkey(v, t, o = {}) {
+    // Blouaap: "oe-oe-aa-aa", four quick squeaky syllables, each a gliding saw through two vowel formants (intensity:
+    // how loud, 1 = as he's always been)
+    const lvl = 0.5 * clamp(num(o.intensity, 1), 0, 1);
     const syl = [[0, 520, 650, 380, 900], [0.17, 540, 690, 380, 900], [0.36, 820, 1150, 820, 1300], [0.55, 860, 1240, 820, 1300]];
     for (const [dt, f0, f1, fa, fb] of syl) {
       const st = t + dt;
       const d = 0.15;
-      const g = v.envHold(v.out, st, 0.5, 0.012, d - 0.06, 0.05);
+      const g = v.envHold(v.out, st, lvl, 0.012, d - 0.06, 0.05);
       const b1 = v.filter('bandpass', fa, 4, g);
       const b2 = v.filter('bandpass', fb, 5, v.gain(0.7, g));
       const o = v.osc('sawtooth', f0, st, d + 0.02, b1);

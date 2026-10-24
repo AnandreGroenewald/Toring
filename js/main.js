@@ -2,7 +2,7 @@
 // pause/visibility, settings, service worker and debug hooks.
 // First of all: the language, before any other module reads a string (js/core/langboot.js).
 import { SAVED_LANG, PREVIEW_LANG } from './core/langboot.js';
-import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL, TESTER_GIFT, REFILL, AUTH, VERSION, KASTEEL, GLYBAAN } from './config.js';
+import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL, TESTER_GIFT, REFILL, AUTH, VERSION, KASTEEL, GLYBAAN, ONS_DORP } from './config.js';
 import { bus } from './core/bus.js';
 import { S, POWERUP_INFO, COSMETIC_INFO, RANK_INFO } from './core/strings.js';
 import { fmtDateKey, fmtM, fmtInt } from './core/format.js';
@@ -1618,9 +1618,10 @@ function reminderList(time, now = new Date()) {
     // it only fires if the game wasn't opened since (that plans again): the box waiting that day, as is
     const day = weekView(week, dateKeyFor(at)).day;
     const n = Math.floor(at.getTime() / 86400000);   // the day's number: the same text for the same day
-    // (1.20) Ons dorp's week has its own big days: Saturday's challenge, Sunday's result, Monday's new Weektoring
+    // (1.20) Ons dorp's week has its own big days: Saturday's challenge, Sunday's result, Monday's new Weektoring (while
+    // the town is on)
     const dow = at.getDay();
-    const body = dow === 6 ? (hh < SPAN.craneClose ? S.remindSat : S.remindSatLate) : dow === 0 ? S.remindSun : dow === 1 ? S.remindMon : texts(day, WEEK_COINS[day - 1], n);
+    const body = ONS_DORP.on && dow === 6 ? (hh < SPAN.craneClose ? S.remindSat : S.remindSatLate) : ONS_DORP.on && dow === 0 ? S.remindSun : ONS_DORP.on && dow === 1 ? S.remindMon : texts(day, WEEK_COINS[day - 1], n);
     list.push({ id: REMIND_ID + k, at: at.getTime(), title: 'Stapel', body });
   }
   return list;
@@ -2733,7 +2734,31 @@ function closeRide() {
   rideSeq += 1;
   ride?.close();
   ride = null;
+  veilOff();
   wakeLoop();
+}
+/**
+ * A cover in the river's colours while a ride opens, so Stapel's own picture never flashes up between the menu (or the
+ * last ride's card) and the river (the owner, 25 Oct 2026: "once I start it begins at stapel"). Off once the river has
+ * drawn: it fades.
+ */
+let rideVeil = null;
+function veilOn() {
+  if (rideVeil) return;
+  rideVeil = document.createElement('div');
+  rideVeil.className = 'rv-veil';
+  rideVeil.style.cssText = 'position:fixed;inset:0;z-index:4;pointer-events:none;opacity:1;transition:opacity .25s ease;background:linear-gradient(180deg,#f4dfc4 0%,#e6c9a1 44%,#3a9a96 56%,#1f6f72 100%);';
+  document.body.appendChild(rideVeil);
+}
+function veilOff() {
+  const v = rideVeil;
+  if (!v) return;
+  rideVeil = null;
+  // (two frames: the river's first picture is on the screen before the cover lifts)
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    v.style.opacity = '0';
+    setTimeout(() => v.remove(), 300);
+  }));
 }
 /**
  * Down the river. The first ride after a Daily brings your people who fell (once a day); any other time it's a free ride
@@ -2749,11 +2774,12 @@ async function startRide(opts = {}) {
   const rid = rd.extra ? `x${String(rd.seed || '').split('/')[1] || Date.now()}` : 'r';
   if (rd.extra && !has3d()) {
     // (a phone without the 3D the river needs: there's no free ride to have)
-    ui.toast(S.no3dRide, 3600);
+    ui.toast(S.no3dRideFree, 3600);
     showMenu();
     return;
   }
   const seq = ++rideSeq;
+  veilOn();
   screen = 'rivier';
   ui.hideAll();
   wakeLoop();
@@ -2763,9 +2789,11 @@ async function startRide(opts = {}) {
     const v = span.view();
     const r = await mod.openRiver({
       scene: store.getSkins().wear.scene,
-      seed: rd.seed || day, who: rd.who, mine: rd.mine, extra: !!rd.extra, floors: v.floors, crew: v.name || '', canBuild: v.turns > 0, best: v.rideBest || 0,
+      seed: rd.seed || day, who: rd.who, mine: rd.mine, extra: !!rd.extra, best: v.rideBest || 0,
+      // (the town's part of the ride: your crew's tower on the island, a floor to build after, shots for Saturday)
+      town: ONS_DORP.on, floors: ONS_DORP.on ? v.floors : [], crew: ONS_DORP.on ? v.name || '' : '', canBuild: ONS_DORP.on && v.turns > 0,
       // (the shots this ride can still earn for Saturday: 1 per 100 m, up to the week's 10; none on a Sunday)
-      shots: { max: SPAN.bombsMax, room: (v.dow | 0) <= 6 ? Math.max(0, SPAN.bombsMax - (v.bombsWeek | 0)) : 0, riverWeek: v.rideMetres | 0, day: (v.dow | 0) <= 6 },
+      shots: { max: SPAN.bombsMax, room: ONS_DORP.on && (v.dow | 0) <= 6 ? Math.max(0, SPAN.bombsMax - (v.bombsWeek | 0)) : 0, riverWeek: v.rideMetres | 0, day: ONS_DORP.on && (v.dow | 0) <= 6 },
       daily: dayLayout(day), skin: store.getSkins().wear.blocks || 'kleur',
       reducedMotion: !!settings.reducedMotion, autopilot: DEBUG && params.has('rvauto'), pilotMetres: DEBUG ? Number(params.get('rvm')) || undefined : undefined,
       onResult: (res) => {
@@ -2780,12 +2808,13 @@ async function startRide(opts = {}) {
         closeRide();
         if (next === 'build') startWeekTurn({ from: 'ride' });
         else if (next === 'again') startRide({ from });
-        else if (from === 'menu') { startIdle(); showMenu(); }
+        else if (from === 'menu' || !ONS_DORP.on) { startIdle(); showMenu(); }
         else openSpanTown();
       },
     });
     if (seq !== rideSeq) { r.close(); return; }
     ride = r;
+    veilOff();
     // (Stapel's own drawing rests while the river is open: one picture on the screen at a time)
     if (!loopAsleep && game.loop?.running) { loopAsleep = true; game.loop.sleep(); }
   } catch (e) {
@@ -2794,8 +2823,8 @@ async function startRide(opts = {}) {
     // (a phone without the 3D the river needs: your own people count as rescued, and the crane opens straight away)
     if (!has3d()) {
       span.rideDone(day, rd.who.slice(0, Math.max(1, rd.mine)), 0).then((out) => { if (out.coins) coinsChanged(); });
-      ui.toast(S.no3dRide, 3600);
-      if (span.view().turns > 0) { startWeekTurn(); return; }
+      ui.toast(ONS_DORP.on ? S.no3dRide : S.no3dRideSaved, 3600);
+      if (ONS_DORP.on && span.view().turns > 0) { startWeekTurn(); return; }
     }
     startIdle();
     showMenu();
@@ -2813,6 +2842,7 @@ let weekLease = null;      // the crane's lease for this build turn (with the se
 let weekTurnBusy = false;
 const TURN_ERRORS = { busy: (r) => S.twBusy(r.by), noturn: () => S.twNoTurn, ticket: () => S.twTicketNeeded, kroning: () => S.twKroning, norepair: () => S.twNoRepair, crane: () => S.twCraneShut };
 async function startWeekTurn({ repair = false, from = 'menu' } = {}) {
+  if (!ONS_DORP.on) { startIdle(); showMenu(); return; }
   if (weekTurnBusy) return;
   weekTurnBusy = true;
   let tt;
@@ -2854,7 +2884,8 @@ async function spanStart() {
   if (screen === 'menu') ui.showMenu(menuModel());
   spanPrize();
   if (DEBUG && params.get('town') === '1' && !spanLinkCode) openSpanTown();   // (after a test-clock jump)
-  if (spanLinkCode) {
+  // (a town invite link: only while the town is on)
+  if (spanLinkCode && ONS_DORP.on) {
     const c = spanLinkCode;
     spanLinkCode = null;
     if (!ok) {
@@ -2875,6 +2906,7 @@ async function spanStart() {
   }
 }
 bus.on('ui:span-join', async (code) => {
+  if (!ONS_DORP.on) return;
   const r = await span.join(code);
   if (r.error) {
     ui.toast(r.error === 'full' ? S.spanJoinFull : r.error === 'locked' ? S.spanJoinLocked : r.error === 'crew' ? S.spanJoinGone : S.spanOffline, 3600);
@@ -2888,7 +2920,7 @@ document.addEventListener('visibilitychange', () => {
 });
 /** Saturday's prize landed in the wallet: say so once, with its place (on the menu or the town, not in the middle of a game). */
 function spanPrize() {
-  if (screen !== 'menu' && screen !== 'rivier') return;
+  if (!ONS_DORP.on || (screen !== 'menu' && screen !== 'rivier')) return;
   const pz = span.prizeNew();
   if (!pz || !(pz.coins > 0)) return;
   audio.play(pz.place === 1 ? 'record' : 'banner');
@@ -2907,6 +2939,7 @@ function prefetchRiver() {
 bus.on('ui:week-build', startWeekTurn);
 /** Ons dorp's own screen: your crew's island and its Weektoring in 3D (js/rivier/view.js openTown), your week. */
 async function openSpanTown() {
+  if (!ONS_DORP.on) { startIdle(); showMenu(); return; }   // (the town is off: the River run only)
   const seq = ++rideSeq;
   screen = 'rivier';
   ui.hideAll();
@@ -3017,6 +3050,7 @@ function shareInvite() {
 }
 /** (1.20) Saturday's bomb run: down the river past the four islands; bombs on the tallest tower. */
 async function startRaid() {
+  if (!ONS_DORP.on) { startIdle(); showMenu(); return; }
   const v = span.view();
   if (!v.river || v.phase !== 'uitdaging') {
     ui.toast(S.twKroning, 3000);
