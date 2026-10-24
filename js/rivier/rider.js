@@ -65,7 +65,7 @@ function limb(r, len, mat) {
  * The rider: { group, update(dt, { lean -1..1, crouch 0..1, speed }), setBlink(on) }. `bend(mat)` patches each material
  * so the rider winds with the river like everything else (he stands at its start: he barely moves).
  */
-export function createRider(bend = (m) => m) {
+export function createRider(bend = (m) => m, model = null) {
   const group = new THREE.Group();
   const skin = bend(std('#b98159', { roughness: 0.6 }));
   const vest = bend(std('#ffffff', { map: vestTexture(), roughness: 0.55 }));
@@ -199,8 +199,52 @@ export function createRider(bend = (m) => m) {
   const aimYaw = { v: 0, to: 0 };
   const aimPitch = { v: 0.08, to: 0.08 };
 
-  group.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
   const mats = [skin, vest, shirt, jeans, boot, hat, boardM, glove, gunMat, gunDark, gunBand];
+  // (the Blender builder when it's there: each joint keeps its place and its turn; its simple shape gives way to the
+  // model's part, made in the same frame: art/blender/builder.py)
+  if (model) {
+    const EMPTY = new THREE.BufferGeometry();
+    const part = (name) => {
+      const src = model.getObjectByName(name);
+      if (!src) return null;
+      const c = src.clone(true);
+      c.position.set(0, 0, 0);
+      c.traverse((o) => { if (o.isMesh && !mats.includes(o.material)) mats.push(o.material); });
+      return c;
+    };
+    /** `joint` keeps turning; what it showed goes (and the meshes hung on it that `drop` names). */
+    const dress = (joint, name, drop = []) => {
+      const p = part(name);
+      if (!p) return;
+      if (joint.isMesh) joint.geometry = EMPTY;
+      for (const d of drop) { d.removeFromParent(); }
+      joint.add(p);
+    };
+    dress(legF, 'thigh');
+    dress(legB, 'thigh');
+    dress(shinF, 'shin', shinF.children.filter((c) => c.isMesh));
+    dress(shinB, 'shin', shinB.children.filter((c) => c.isMesh));
+    pelvis.geometry = EMPTY;
+    dress(hips, 'pelvis');
+    chest.geometry = EMPTY;
+    neck.geometry = EMPTY;
+    dress(torso, 'torso');
+    dress(head, 'head', head.children.filter((c) => c.isMesh));
+    dress(armF, 'upperarm');
+    dress(armB, 'upperarm');
+    dress(foreF, 'forearm', foreF.children.filter((c) => c.isMesh));
+    dress(foreB, 'forearm', foreB.children.filter((c) => c.isMesh));
+    board.geometry = EMPTY;
+    const bp = part('board');
+    if (bp) tilt.add(bp);
+    const gp = part('bazooka');
+    if (gp) {
+      for (const m of [barrel, muzzleRing, sight, grip, ...tube.children.filter((c) => c.isMesh && c.geometry.type === 'CylinderGeometry' && c !== barrel)]) m.visible = false;
+      bell.visible = false;   // (kept: where the back-blast comes out)
+      tube.add(gp);
+    }
+  }
+  group.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
 
   let t0 = 0;
   return {

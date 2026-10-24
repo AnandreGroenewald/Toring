@@ -118,7 +118,7 @@ export async function openRiver(d) {
   current?.close();
   await portraitsReady;   // (the faces on the rings)
   // (the Blender models: the animals; a ride never waits long for them, and works without)
-  const models = await loadModels(['croc', 'hippo', 'monkey']);
+  const models = await loadModels(['croc', 'hippo', 'monkey', 'builder']);
   if (!kit) kit = makeKit();
   const view = createRide(kit, { ...d, models });
   current = view;
@@ -369,7 +369,7 @@ function createRide(K, d) {
   const gameCanvas = document.querySelector('#game > canvas');
   const world = buildRiverWorld(stage, d.scene);   // (the sky of his background skin)
   const things = createThings(scene, pieces);
-  const rider = createRider(bendMaterial);
+  const rider = createRider(bendMaterial, d.models?.builder || null);
   scene.add(rider.group);
   // (the board's own foam and shadow on the water, under him)
   const riderFoam = things.foam(2.6);
