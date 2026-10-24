@@ -26,6 +26,7 @@ const THROTTLE = {
   monkey: 300, shoo: 250, clown: 250, thief: 300, escape: 400, caught: 400,
   room: 45, chute: 160, milestone: 500, gold: 250, board: 120, pop: 120,
   horn: 1000, drum: 150, clash: 120, fling: 400,
+  launch: 250, boom: 120,
 };
 // At the per-name limit these steal the oldest voice; all others skip the new one.
 const STEAL = new Set([
@@ -41,6 +42,7 @@ const LEVEL = {
   monkey: 0.85, shoo: 0.75, clown: 0.55, thief: 0.62, escape: 0.34, caught: 0.5,
   room: 0.85, chute: 0.55, milestone: 0.6, gold: 0.7, board: 0.75, pop: 0.5,
   horn: 0.38, drum: 0.48, clash: 0.5, fling: 2.2,
+  launch: 0.9, boom: 0.8,
 };
 
 const PENTA = [0, 2, 4, 7, 9];   // major pentatonic (semitones)
@@ -334,6 +336,35 @@ const SOUNDS = {
     whoosh(v, B, t, 0.55, 220, 1300, 1.3, 0.55, 0.12);
     const bp = v.filter('bandpass', 2400, 2, v.env(v.out, t + 0.42, 0.35, 0.001, 0.05));
     v.noise(B.white, t + 0.42, 0.07, bp);
+  },
+
+  // (1.20) Saturday's bazooka: the launch (a hollow thump, the rocket's hiss leaving, its whoosh away) and the blast on
+  // the tower (a deep boom, a crack on top, debris rattling after)
+  launch(v, t, o, B) {
+    const th = v.osc('sine', 120, t, 0.22, v.env(v.out, t, 0.9, 0.002, 0.16));
+    th.frequency.exponentialRampToValueAtTime(48, t + 0.18);
+    const pop = v.filter('bandpass', 900, 1.2, v.env(v.out, t, 0.55, 0.001, 0.05));
+    v.noise(B.white, t, 0.07, pop);
+    const hiss = v.filter('highpass', 3000, 0.6, v.envHold(v.out, t + 0.02, 0.32, 0.01, 0.2, 0.35));
+    v.noise(B.white, t + 0.02, 0.58, hiss);
+    whoosh(v, B, t + 0.05, 0.7, 1800, 380, 1.1, 0.5, 0.1);
+  },
+  boom(v, t, o, B) {
+    const I = clamp(num(o.intensity, 1), 0, 1);
+    v.out.gain.value *= 0.5 + 0.5 * I;
+    const body = v.osc('sine', 85, t, 0.75, v.env(v.out, t, 1.0, 0.003, 0.6));
+    body.frequency.exponentialRampToValueAtTime(32, t + 0.6);
+    const sub = v.osc('triangle', 55, t, 0.5, v.env(v.out, t, 0.6, 0.005, 0.4));
+    sub.frequency.exponentialRampToValueAtTime(28, t + 0.45);
+    const crack = v.filter('bandpass', 1800, 0.8, v.env(v.out, t, 0.9, 0.001, 0.09));
+    v.noise(B.white, t, 0.12, crack);
+    const rumble = v.filter('lowpass', 520, 0.7, v.envHold(v.out, t + 0.02, 0.55, 0.02, 0.25, 0.7));
+    v.noise(B.white, t + 0.02, 1.0, rumble);
+    for (let i = 0; i < 6; i++) {
+      const dt = 0.25 + i * rand(0.07, 0.13);
+      const bp = v.filter('bandpass', rand(1400, 3200), 3, v.env(v.out, t + dt, rand(0.08, 0.18), 0.001, 0.03));
+      v.noise(B.white, t + dt, 0.04, bp);
+    }
   },
 
   // (1.20) Die Rivier: a crocodile's jaws clacking shut, and a hippo's grunt as it surfaces

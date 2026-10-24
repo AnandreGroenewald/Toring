@@ -561,8 +561,7 @@ function createRide(K, d) {
     const dur = clamp(from.distanceTo(to0) / 55, 0.45, 1.4);
     flights.push({ mesh, isle, u: a.u, v: a.v, from: from.clone(), t: 0, dur });
     hint(null);
-    audio.play('fling');
-    audio.play('land', { intensity: 0.5, size: 0.5 });
+    audio.play('launch');
     haptics.tap?.();
   }
   const _w = new THREE.Vector3();
@@ -586,7 +585,8 @@ function createRide(K, d) {
       flashes.push({ fl, t: 0 });
     }
     stage.shake(reduced ? 0 : 0.6);
-    audio.play('land', { intensity: 1, size: 1 });
+    audio.play('boom', { intensity: 1 });
+    haptics.lost?.();
     const i = floorAt(isle.floors, f.u, f.v);
     let mine = { hit: false, lost: 0 };   // (what this side counted: the server's word corrects it)
     if (i < 0) {
