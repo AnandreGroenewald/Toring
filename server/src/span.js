@@ -253,6 +253,58 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
     }
     return idx;
   }
+  /**
+   * A crew whose ticket reached the server after Saturday's grouping (a Daily played offline): it takes the place of a
+   * Rikus crew on the river nearest its height, or a new river of its own with Rikus. Not in the last hour.
+   */
+  async function lateRiver(c, t) {
+    let ticket = false;
+    for (const m of c.members) {
+      const p = await get(pKey(m.id));
+      if (p && p.week === c.week && weekStats(p.days || {}, c.week).ticket) ticket = true;
+    }
+    if (!ticket) return;
+    const idx = (await get(wKey(c.week))) || { crews: [], rivers: [], grouped: true };
+    const h = heightOf(c.floors);
+    let best = null;
+    for (const rid of idx.rivers || []) {
+      const r = await get(rKey(rid));
+      if (!r || r.final || t >= r.whistle - 3600e3) continue;
+      const bot = r.crews.find((id) => r.bots[id]);
+      if (!bot) continue;
+      const rows = await standings(r, t);
+      const mid = rows.reduce((s, x) => s + x.h, 0) / Math.max(1, rows.length);
+      if (!best || Math.abs(mid - h) < best.d) best = { r, bot, d: Math.abs(mid - h) };
+    }
+    if (best) {
+      const { r, bot } = best;
+      r.crews = r.crews.map((id) => (id === bot ? c.id : id));
+      delete r.bots[bot];
+      if (r.leader === bot) r.leader = null;
+      if (r.prevLeader === bot) r.prevLeader = null;
+      c.river = r.id;
+      put(rKey(r.id), r);
+    } else {
+      let rid = newSpanId();
+      while (await get(rKey(rid))) rid = newSpanId();
+      const salt = newSpanId();
+      const bots = {};
+      const crews = [c.id];
+      for (let b = 0; crews.length < SPAN.riverCrews; b++) {
+        const bid = `RIKUS${b}`;
+        const bh = Math.max(12, h * (0.8 + 0.3 * createRng(`${rid}/${bid}`).next()));
+        bots[bid] = { id: bid, name: BOT_NAMES[b % BOT_NAMES.length], floors: botTower(`${rid}/${bid}`, bh), people: 20 + b * 7, repair: 0, acts: 0, inRiver: 0 };
+        crews.push(bid);
+      }
+      const r = { id: rid, week: c.week, crews, bots, salt, whistle: whistleAt(c.week, rid, salt), leader: null, prevLeader: null, prevUntil: 0, log: [], final: null };
+      if (t >= r.whistle - 3600e3) return;
+      put(rKey(rid), r);
+      idx.rivers = [...(idx.rivers || []), rid];
+      put(wKey(c.week), idx);
+      c.river = rid;
+    }
+    put(cKey(c.id), c);
+  }
   async function towerOf(r, id) {
     if (r.bots[id]) return { floors: r.bots[id].floors, name: r.bots[id].name, bot: true };
     const c = await get(cKey(id));
@@ -420,7 +472,10 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
       idx.crews.push(c.id);
       put(wKey(c.week), idx);
     }
-    if (ph.phase !== 'bou' && ph.week === c.week) await groupRivers(c.week);
+    if (ph.phase !== 'bou' && ph.week === c.week) {
+      await groupRivers(c.week);
+      if (ph.phase === 'uitdaging' && !c.river) await lateRiver(c, t);
+    }
     const fresh = await get(cKey(c.id));
     const river = await riverView(fresh.river, t);
     // the Saturday prize, once: the phone adds it to the wallet
@@ -546,6 +601,7 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
     c.lease = null;
     if (L.repair) c.repair = Math.max(0, (c.repair | 0) - L.blocks);
     else p.used = (p.used | 0) + 1;
+    const prevN = c.floors.length;
     if (next) {
       const was = peopleIn(c.floors);
       c.floors = next;
@@ -554,7 +610,7 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
     }
     put(cKey(c.id), c);
     put(pKey(p.id), p);
-    return [200, { crew: crewView(c), me: meView(p), added: next ? list.length : 0, gain: Math.round((heightOf(c.floors) - before) * 10) / 10 }];
+    return [200, { crew: crewView(c), me: meView(p), added: next ? next.length - prevN : 0, gain: Math.round((heightOf(c.floors) - before) * 10) / 10 }];
   }
   async function ride(b) {
     const p = await open(b);

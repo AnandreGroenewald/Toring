@@ -341,3 +341,31 @@ test('span server: a crew that never looked after the whistle still gets its pla
   assert.ok(place >= 1 && place <= 4, `a place on the monument: ${place}`);
   assert.equal(mon.me.prize?.coins, SPAN.prize[place - 1], 'the prize, paid now');
 });
+
+test('span server: a ticket that reaches the server after Saturday\'s grouping still gets a river (in a Rikus crew\'s place)', async () => {
+  const h = harness(sastAt(day(2), 8));
+  const a = player('Vroeg');
+  await sync(h, a, { days: { [day(0)]: 60, [day(1)]: 60, [day(2)]: 60 } });
+  const [, la] = await h.call('POST', '/span/lease', a);
+  await h.call('POST', '/span/build', { ...a, lease: la.lease, floors: planks(0, 10) });
+  const b = player('Laat');
+  await sync(h, b, { days: { [day(0)]: 40 } });   // (only one Daily reached the server before Saturday)
+  h.clock.t = sastAt(day(5), 8);
+  const [, sa] = await sync(h, a);
+  assert.ok(sa.river);
+  assert.equal(sa.river.rows.filter((x) => x.bot).length, 3);
+  // B's other two Dailies arrive now (played offline on Tuesday and Wednesday)
+  h.clock.t = sastAt(day(5), 10);
+  const [, sb] = await sync(h, b, { days: { [day(0)]: 40, [day(1)]: 40, [day(2)]: 40 } });
+  assert.equal(sb.me.ticket, true);
+  assert.ok(sb.river, 'a river for the late crew');
+  assert.equal(sb.river.id, sa.river.id, 'the same river, in a Rikus crew\'s place');
+  assert.equal(sb.river.rows.filter((x) => x.bot).length, 2);
+  // the builder's answer counts only the floors that went up (one floating in the air is dropped)
+  h.clock.t = sastAt(day(5), 11);
+  await sync(h, a, { days: { [day(5)]: 30 } });
+  const [, l2] = await h.call('POST', '/span/lease', a);
+  const top = 16;
+  const [, bl] = await h.call('POST', '/span/build', { ...a, lease: l2.lease, floors: [plank(top), plank(top + 40)] });
+  assert.equal(bl.added, 1);
+});
