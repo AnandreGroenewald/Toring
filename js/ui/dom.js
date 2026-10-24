@@ -195,6 +195,7 @@ export function createUI(bus) {
     album: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-album-title', tabindex: '-1' }),   // (1.16) its residents album
     week: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-week-title', tabindex: '-1' }),   // (1.20) a Weektoring turn's result
     spanjoin: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-spanjoin-title', tabindex: '-1' }),   // (1.20) a friend's invite
+    span2d: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-span2d-title', tabindex: '-1' }),   // (1.20) Ons dorp without 3D
   };
   const pauseBtn = h('button', {
     class: 'pause-btn', type: 'button', 'aria-label': S.pause, title: S.pause, hidden: true,
@@ -235,7 +236,7 @@ export function createUI(bus) {
   // buttons take taps: a tap anywhere else still drops a block)
   const emoteBar = h('div', { class: 'emote-bar', role: 'group', 'aria-label': S.emoteLabel, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, screens.dorp, screens.slag, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, modals.tribe, modals.album, modals.week, modals.spanjoin, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, screens.dorp, screens.slag, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, modals.tribe, modals.album, modals.week, modals.spanjoin, modals.span2d, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // (1.15, the owner: "We need a better way to display the coins please") every 🪙 the UI shows becomes the game's own
@@ -3248,6 +3249,32 @@ export function createUI(bus) {
   }
 
   /** A friend's invite link (?span=CODE): join their crew? */
+  /**
+   * (1.20) Ons dorp on a phone without 3D: the crew, its tower, Saturday's standings and what you can do (build, bomb,
+   * repair, invite), as a sheet.
+   */
+  function showSpanSheet(v = {}) {
+    const r = v.river;
+    const sat = !!(r && v.phase === 'uitdaging' && !r.over);
+    const iLead = !!(r && r.leader && r.leader === v.crew?.id);
+    const rows = r ? [...r.rows].sort((a, b) => b.h - a.h).map((x) => h('p', { class: 'week-line', text: `${x.leader ? '👑 ' : ''}${x.name}${x.id === v.crew?.id ? ` (${S.twYou})` : ''} · ${fmtM(x.h)}` })) : [];
+    modals.span2d.replaceChildren(h('div', { class: 'card sheet week-sheet' },
+      closeX(() => closeModal()),
+      h('div', { class: 'sheet-head' }, emo('🏝️'), h('h2', { id: 'stapel-span2d-title', text: v.name || S.spanMenu })),
+      h('div', { class: 'sheet-body' },
+        h('p', { class: 'week-gain', text: `${S.twHeight} ${fmtM(v.heightM || 0)} · ${S.twPeople} ${fmtInt(v.people | 0)}` }),
+        r ? h('p', { class: 'week-line', text: S.twRiver }) : null,
+        ...rows,
+        h('p', { class: 'week-line', text: v.ticket ? S.twTicketOk : S.twTicket(v.weekdays | 0, 3) }),
+        h('p', { class: 'week-line', text: S.twBombs(v.bombs | 0) }),
+        v.turns > 0 ? button('btn-big btn-green', [h('span', { text: S.twBuild(v.turns) })], () => { closeModal(); bus.emit('ui:week-build', { from: 'menu' }); }) : null,
+        sat && !iLead && v.ticket && v.bombs > 0 ? button('btn-big btn-quit', [h('span', { text: S.twBomb2d(Math.min(3, v.bombs)) })], () => { closeModal(); bus.emit('ui:span-raid'); }) : null,
+        sat && v.ticket && v.repair > 0 ? button('btn-teal', [h('span', { text: S.twRepair(v.repair) })], () => { closeModal(); bus.emit('ui:week-build', { repair: true, from: 'menu' }); }) : null,
+        v.crew && v.crew.members.length < 3 ? button('btn-white', [h('span', { text: S.spanInvite })], () => bus.emit('ui:span-invite')) : null,
+        button('btn-white', [h('span', { text: S.wkDone })], () => closeModal()))));
+    openModal('span2d');
+  }
+
   function showSpanJoin({ code, name = '', n = 1, of = 3, names = [], mineM = 0, alone = true } = {}) {
     modals.spanjoin.replaceChildren(h('div', { class: 'card sheet week-sheet' },
       closeX(() => closeModal()),
@@ -4042,6 +4069,7 @@ export function createUI(bus) {
     showDorpScreen,
     showWeekResult,
     showSpanJoin,
+    showSpanSheet,
     showSlagScreen,
     slagMode,
     slagCounts,

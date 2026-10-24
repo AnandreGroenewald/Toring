@@ -2930,16 +2930,15 @@ async function openSpanTown() {
   } catch (e) {
     console.error('[ons dorp]', e);
     closeRide();
-    // (no 3D on this phone: the crane turn straight away when there's one, else the menu with a word why)
-    if (!has3d()) {
-      ui.toast(S.no3dTown, 3600);
-      if (span.view().turns > 0) { startWeekTurn(); return; }
-    }
     startIdle();
     showMenu();
+    // (no 3D on this phone: Ons dorp as a sheet over the menu)
+    if (!has3d()) ui.showSpanSheet(span.view());
   }
 }
 bus.on('ui:span', openSpanTown);
+bus.on('ui:span-raid', () => startRaid());
+bus.on('ui:span-invite', () => shareInvite());
 /** This phone's latest Daily tower ({ day, h, b: its blocks as they stood }), for the crew's island; null if none. */
 function latestDailyTower() {
   try {

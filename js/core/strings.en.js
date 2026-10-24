@@ -949,6 +949,7 @@ export const S_EN = {
   no3dRide: 'This phone can’t show the river in 3D: your people are rescued. Build on the Weekly Tower now!',
   no3dTown: 'This phone can’t show Ons dorp in 3D. Your build turns still work.',
   no3dRaid: (h, n) => `This phone can’t show the river in 3D: your ${n} bombs flew by themselves. 💥 ${h} hit!`,
+  twBomb2d: (n) => `💣 Fire ${n} ${n === 1 ? 'bomb' : 'bombs'} at the tallest tower`,
   twFold: 'Fold the panel up or down',
   twWhistle: 'The whistle blows somewhere between 20:00 and 21:00. Nobody knows exactly when!',
   twBomb: (n) => `💣 Ride down and bomb (${n})`,

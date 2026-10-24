@@ -994,6 +994,7 @@ export const S = {
   no3dRide: 'Hierdie foon kan nie die rivier in 3D wys nie: jou mense is gered. Bou nou aan die Weektoring!',
   no3dTown: 'Hierdie foon kan nie Ons dorp in 3D wys nie. Jou boubeurte werk wel.',
   no3dRaid: (h, n) => `Hierdie foon kan nie die rivier in 3D wys nie: jou ${n} bomme is vanself gegooi. 💥 ${h} raak!`,
+  twBomb2d: (n) => `💣 Gooi ${n} ${n === 1 ? 'bom' : 'bomme'} op die hoogste toring`,
   twFold: 'Vou die paneel op of oop',
   twWhistle: 'Die fluitjie blaas iewers tussen 20:00 en 21:00. Niemand weet presies wanneer nie!',
   twBomb: (n) => `💣 Gly af en bombardeer (${n})`,
