@@ -1427,12 +1427,34 @@ function createRide(K, d) {
    * Hanswors's visit: he's met floating ahead, then rides alongside a little ahead of you on your side, winds up and lobs
    * his pies at the lane you're in (a shadow shows where each lands: move out of it), then waves and drops behind.
    */
-  // Hanswors: where he rides beside you (m ahead; across, in open water outside the lanes) and how he sits (three-quarters
-  // on, so his duck's head and beak show)
-  const CLOWN = { ahead: 15, x: 6.1, yaw: 0.55 };
+  // Hanswors: where he rides beside you (m ahead; across, in open water outside the lanes, never nearer the wall's foot
+  // than `reach`, never into the lane past `minX`) and how he sits (turned a little, so his duck's head shows)
+  const CLOWN = { ahead: 15, x: 6.5, minX: 5.0, reach: 1.7, yaw: 0.4 };
+  // (no boulders on the bank where he rides: from his row to well past where he's left behind, read off the course long
+  // before those boulders come into view)
+  const clownBanks = [];
+  let clownScan = 0;
+  world.setRockClear?.((side, z) => {
+    for (; clownScan < course.rows.length; clownScan++) {
+      const r = course.rows[clownScan];
+      for (const it of r.items) {
+        if (it.kind !== 'clown') continue;
+        const secs = 1.1 + ((it.pies || 3) - 1) * 1.75 + 3.2;
+        clownBanks.push({ side: it.side || 1, from: r.z - 40, to: r.z + secs * speedAt(r.z + 400, Infinity) * 1.25 + 30 });
+      }
+    }
+    return clownBanks.some((c) => c.side === side && z > c.from && z < c.to);
+  });
+  /** How far out he can sit at course metre z: clear of the wall's foot all along his duck and a little ahead of it. */
+  function clownRoom(side, z) {
+    const sp = speedAt(dist, len);
+    let foot = 99;
+    for (let dz = -3; dz <= 3 + sp * 0.35; dz += 1.5) foot = Math.min(foot, world.footAt?.(side, z + dz) ?? 99);
+    return clamp(foot - CLOWN.reach, CLOWN.minX, CLOWN.x);
+  }
   function clownStep(l, ahead, dt) {
     const u = l.obj.userData;
-    const st = l.cs || (l.cs = { phase: 'coming', thrown: 0, timer: 1.1, wind: 0, after: 0, waveT: 0, off: 0 });
+    const st = l.cs || (l.cs = { phase: 'coming', thrown: 0, timer: 1.1, wind: 0, after: 0, waveT: 0, off: 0, x: null });
     const side = u.side || 1;
     if (st.phase === 'coming' && ahead < CLOWN.ahead + 9 && phase === 'run') {
       st.phase = 'riding';
@@ -1468,13 +1490,16 @@ function createRide(K, d) {
     }
     st.after = Math.max(0, st.after - dt * 3.2);
     const a = l.z - dist;
-    l.obj.position.set(side * CLOWN.x, 0, -a);
+    // (he steers out from the wall's bulges before they reach him, and drifts back out after)
+    const room = clownRoom(side, l.z);
+    st.x = st.x === null ? room : st.x + (room - st.x) * Math.min(1, dt * (room < st.x ? 6 : 1.5));
+    l.obj.position.set(side * st.x, 0, -a);
     l.obj.rotation.set(0, side * CLOWN.yaw, 0);
     u.pose(t, st.wind, st.phase === 'leaving' && st.waveT < 1.2 ? 1 : 0, st.after);
     // (spray off the duck's tail as he paddles)
     if (st.phase !== 'coming' && phase === 'run' && Math.random() < 0.6) {
       _pp.set(0, 0.15, 2.3).applyAxisAngle(_up, side * CLOWN.yaw);
-      things.emit(side * CLOWN.x + _pp.x, 0.15, -a + _pp.z, 1, 0.6, 1.3);
+      things.emit(side * st.x + _pp.x, 0.15, -a + _pp.z, 1, 0.6, 1.3);
     }
     // (the pie leaves his hand where it is now, after the pose)
     if (throwNow) throwPie(l);
@@ -2307,7 +2332,7 @@ function createRide(K, d) {
     pause: () => setPaused(true),
     resume: () => setPaused(false),
     /** For tests: where the ride stands. */
-    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, endless, hearts, airY: Math.round(airY * 100) / 100, duckK: Math.round(duckK * 100) / 100, timeK: Math.round(timeK * 100) / 100, lesson: lesson && !lesson.done ? lesson.kind : null, pies: pies.length, pieAt: pies.map((pp) => { const v = pp.mesh.getWorldPosition(new THREE.Vector3()).project(camera); return { t: Math.round(pp.t * 100) / 100, x: Math.round(v.x * 100) / 100, y: Math.round(v.y * 100) / 100, z: Math.round(v.z * 1000) / 1000 }; }), headY: rider.headY?.(), lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, lastKnock, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })) }),
+    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, endless, hearts, airY: Math.round(airY * 100) / 100, duckK: Math.round(duckK * 100) / 100, timeK: Math.round(timeK * 100) / 100, lesson: lesson && !lesson.done ? lesson.kind : null, pies: pies.length, clowns: live.filter((l) => l.obj.userData.kind === 'clown').map((l) => ({ z: Math.round(l.z * 10) / 10, x: Math.round(l.obj.position.x * 100) / 100, phase: l.cs?.phase, foot: Math.round((world.footAt?.(l.obj.userData.side || 1, l.z) ?? 0) * 100) / 100 })), pieAt: pies.map((pp) => { const v = pp.mesh.getWorldPosition(new THREE.Vector3()).project(camera); return { t: Math.round(pp.t * 100) / 100, x: Math.round(v.x * 100) / 100, y: Math.round(v.y * 100) / 100, z: Math.round(v.z * 1000) / 1000 }; }), headY: rider.headY?.(), lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, lastKnock, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })) }),
     autopilot(on) { pilotOn = !!on; },
     /** For tests (Saturday): where on screen (host px) the tallest tower stands at a share of its height, or null. */
     towerScreen(frac = 0.5) {
@@ -2317,6 +2342,7 @@ function createRide(K, d) {
       return { x: (v3.x * 0.5 + 0.5) * host.clientWidth, y: (-v3.y * 0.5 + 0.5) * host.clientHeight, ahead: isle.z - dist };
     },
     /** For tests: the ride jumps to course z (what's before it is gone; the dive is skipped). */
+    footAt: (side, z) => world.footAt?.(side, z),
     jumpTo(z) {
       for (const l of live) despawn(l);
       live.length = 0;

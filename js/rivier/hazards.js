@@ -11,9 +11,9 @@ export const TREE_UNDER = 1.5;
 export const LOG_TOP = 0.62;
 
 /** Hanswors's size (the model is life-size: he's made big enough to read across the river). */
-export const CLOWN_SCALE = 1.8;
+export const CLOWN_SCALE = 1.55;
 /** His head turned towards you from his three-quarter seat (rad, in his own frame: the mirror flips it for the right bank). */
-const HEAD_TO_YOU = 0.55;
+const HEAD_TO_YOU = 0.45;
 /** A thrown pie's size: cartoon-big, so it reads in the air. */
 export const PIE_SCALE = 2.2;
 

@@ -1033,6 +1033,13 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       for (const [bu, bv, br] of bumps) own -= Math.exp(-((u - bu) ** 2 + (v - bv) ** 2) / (br * br * 2)) * 1.6;
       if (v > 1.4) own += (fbm(u * 0.14 + 3, v * 0.2) - 0.5) * 2.6;
       let out = common + own * ends;
+      // (no deep bulge at the water: something riding along the bank, Hanswors on his duck, stays clear of the rock. The
+      // limit eases off above a rider's height, and the rock eases into it rather than being cut flat)
+      if (v < 6.5) {
+        const lim = -0.3 - Math.max(0, v - 3.5) * 0.6;
+        const dd = out - lim;
+        if (dd < 0.4) out = lim + 0.4 * Math.exp(dd / 0.4 - 1);
+      }
       const shelf = v < 1.2 ? (1.2 - v) * 1.4 : 0;   // (a ledge at the water)
       pos.setXYZ(i, side * (out + shelf), v - 1.1, u);
       // light varies along the wall; the foot is wet and dark, the rim sun-bleached
@@ -1075,6 +1082,22 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     }
     g.computeVertexNormals();
     return g;
+  }
+  // (where each wall's foot stands, metre by metre along it: its nearest point to the river from the water up to a rider's
+  // height. Something riding beside the wall keeps clear of it: footAt)
+  for (const side of [-1, 1]) {
+    for (const g of cliffGeos[side]) {
+      const pos = g.attributes.position;
+      const raw = new Float32Array(SEG_L + 1).fill(99);
+      for (let i = 0; i < pos.count; i++) {
+        const v = pos.getY(i) + 1.1;
+        if (v < 0 || v > 4.5) continue;
+        const b = Math.round(pos.getZ(i) + SEG_L / 2);
+        if (b >= 0 && b <= SEG_L) raw[b] = Math.min(raw[b], side * pos.getX(i));
+      }
+      // (the nearest of each metre and its neighbours: no gap between the wall's vertex rows)
+      g.userData.footLine = raw.map((_, b) => Math.min(raw[Math.max(0, b - 1)], raw[b], raw[Math.min(SEG_L, b + 1)]));
+    }
   }
   const wallGeos = { '-1': cliffGeos['-1'].map((g, k) => mergeGeometries([g, plateauGeometry(-1, k + 1)])), 1: cliffGeos[1].map((g, k) => mergeGeometries([g, plateauGeometry(1, k + 4)])) };
   const fallMat = new THREE.ShaderMaterial({
@@ -1379,6 +1402,15 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     return BANK.half + (lakeHalf - BANK.half) * k * k * (3 - 2 * k);
   };
 
+  /** How far the wall's foot on `side` stands from the river's middle at course metre z (m). */
+  function footAt(side, z) {
+    const slot = Math.floor(z / SEG_L);
+    const i = ((slot % N_SEG) + N_SEG) % N_SEG;
+    const line = cliffGeos[side][(i + (side > 0 ? 1 : 0)) % 3].userData.footLine;
+    const b = Math.round(slot * SEG_L + SEG_L - z);
+    return halfAt(z) + line[Math.min(SEG_L, Math.max(0, b))];
+  }
+  let rockClear = null;
   function update(dist, t, riderX = null) {
     water.uniforms.uT.value = t;
     rkClock.value = t;
@@ -1463,8 +1495,10 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       }
       for (const [u, sc] of s.rocks) {
         const half = halfAt(zc + u);
+        // (none on a stretch of bank kept clear for something riding along it: setRockClear)
+        const k = rockClear?.(s.side, zc + u) ? 1e-4 : 1;
         tmp.position.set(s.side * (half - 0.3 - sc * 0.4), sc * 0.25 - 0.2, -(ahead + u));
-        tmp.scale.set(sc * 1.3, sc * 0.8, sc);
+        tmp.scale.set(sc * 1.3 * k, sc * 0.8 * k, sc * k);
         tmp.rotation.set(sc, u, 0);
         tmp.updateMatrix();
         boulders.setMatrixAt(ri++, tmp.matrix);
@@ -1477,7 +1511,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
   }
 
   return {
-    group, water, sun, update, halfAt, setShadowFocus, shadows, reflect, fxTint, stoneMat, night: L.stars > 0 && L.sunI < 1.5,
+    group, water, sun, update, halfAt, footAt, setRockClear: (fn) => { rockClear = fn; }, setShadowFocus, shadows, reflect, fxTint, stoneMat, night: L.stars > 0 && L.sunI < 1.5,
     /** Open water at the river's head, up to course z `to` (where your tower stands). */
     setPool(to) {
       poolTo = to;
