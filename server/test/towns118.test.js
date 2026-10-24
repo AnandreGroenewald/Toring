@@ -419,7 +419,7 @@ test('routes: the front door says the towns and rooms are here only when they ar
   assert.deepEqual((await bare.request('GET', '/')).json, { ok: true, service: 'stapel-borge' });
   const { env } = liveEnv();
   const h = createHarness(env);
-  assert.deepEqual((await h.request('GET', '/')).json, { ok: true, service: 'stapel-borge', dorp: 1, kasteel: 1, slag: 1 });
+  assert.deepEqual((await h.request('GET', '/')).json, { ok: true, service: 'stapel-borge', dorp: 1, kasteel: 1, span: 1, slag: 1 });
 });
 
 test('routes: /dorp and /kasteel through the object, only from the game\'s pages, with the body limits', async () => {

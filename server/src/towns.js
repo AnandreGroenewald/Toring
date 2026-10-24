@@ -14,6 +14,7 @@
 
 import { createDorp } from './dorp.js';
 import { createKasteel } from './kasteel.js';
+import { createSpanServer } from './span.js';
 import { createRateLimiter } from './stats.js';
 
 export const NEW_TOWNS_PER_HOUR = 20;   // towns one address may make an hour (every new town starts with a strooptog)
@@ -80,6 +81,7 @@ export class TownHall {
     const rate = createRateLimiter();
     this.dorp = createDorp(this.store, { now, rand, newTown: (who) => !who || rate.allow(`new:${who}`, NEW_TOWNS_PER_HOUR, now()) });
     this.kasteel = createKasteel(this.store, { now });
+    this.span = createSpanServer(this.store, { now });   // (1.20) Ons dorp: crews, the Weektoring, Saturday
     this.queue = Promise.resolve();
   }
 
@@ -104,7 +106,7 @@ export class TownHall {
       const method = b.method === 'GET' ? 'GET' : 'POST';
       const path = typeof b.path === 'string' ? b.path : '';
       const who = request.headers.get('X-Stapel-Addr') || '';
-      const mod = path.startsWith('/kasteel/') ? this.kasteel : path.startsWith('/dorp/') ? this.dorp : null;
+      const mod = path.startsWith('/kasteel/') ? this.kasteel : path.startsWith('/dorp/') ? this.dorp : path.startsWith('/span/') ? this.span : null;
       if (!mod) return json(404, { error: 'not found' });
       const [status, out] = await this.run(() => mod.handle(method, path, b.body ?? null, who));
       return json(status, out);

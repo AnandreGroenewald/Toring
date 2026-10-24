@@ -29,7 +29,7 @@ const SLAG_ROOMS_PER_HOUR = 30;   // (1.18) Blokbotsing rooms one address may op
 // (1.16) town and castle calls from one address an hour (a phone on the menu asks 4 times a minute; a few phones can
 // share one address on a mobile network)
 const TOWN_CALLS_PER_HOUR = 3000;
-const TOWN_BODY_MAX = { dorp: 16 * 1024, kasteel: 128 * 1024 };
+const TOWN_BODY_MAX = { dorp: 16 * 1024, kasteel: 128 * 1024, span: 64 * 1024 };   // (1.20 span: a build turn's floors, a week's days)
 const IMPORT_BODY_MAX = 512 * 1024;
 const FEED_TTL_MS = { '/sponsors': 30_000, '/availability': 15_000 };
 const BROWSER_CACHE = { '/sponsors': 'public, max-age=300', '/availability': 'public, max-age=60' };
@@ -43,7 +43,7 @@ function defaultLog(level, event, fields = {}) {
 
 /** CORS class of a path: feeds are public, the webhook is server-to-server, the rest is site-only. */
 function corsMode(path) {
-  if (path.startsWith('/match/') || path.startsWith('/slag/') || path.startsWith('/dorp/') || path.startsWith('/kasteel/')) return 'site';
+  if (path.startsWith('/match/') || path.startsWith('/slag/') || path.startsWith('/dorp/') || path.startsWith('/kasteel/') || path.startsWith('/span/')) return 'site';
   if (path === '/sponsors' || path === '/availability' || path === '/') return 'public';
   if (path === '/paystack/webhook') return 'none';
   return 'site';
@@ -233,7 +233,7 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
     if (request.method !== 'GET' && request.method !== 'POST') return methodNotAllowed('GET, POST');
     let body = null;
     if (request.method === 'POST') {
-      const bytes = await readBody(request, TOWN_BODY_MAX[path.startsWith('/kasteel/') ? 'kasteel' : 'dorp']);
+      const bytes = await readBody(request, TOWN_BODY_MAX[path.startsWith('/kasteel/') ? 'kasteel' : path.startsWith('/span/') ? 'span' : 'dorp']);
       try {
         body = JSON.parse(new TextDecoder().decode(bytes));
       } catch {
@@ -320,7 +320,7 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
 
     let response;
     const live = path.startsWith('/match/') ? routeMatch : path.startsWith('/slag/') ? routeSlag
-      : path.startsWith('/dorp/') || path.startsWith('/kasteel/') ? routeTowns : null;
+      : path.startsWith('/dorp/') || path.startsWith('/kasteel/') || path.startsWith('/span/') ? routeTowns : null;
     if (live) {
       try {
         response = await live(request, env, path, cfg);
@@ -340,7 +340,7 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
         now: now(),
         lobby: env.MATCH_LOBBY ? () => env.MATCH_LOBBY.get(env.MATCH_LOBBY.idFromName('lobby')) : null,
         towns: env.TOWNS ? () => env.TOWNS.get(env.TOWNS.idFromName('towns')) : null,
-        front: { ...(env.TOWNS ? { dorp: 1, kasteel: 1 } : {}), ...(env.SLAG_ROOM ? { slag: 1 } : {}) },
+        front: { ...(env.TOWNS ? { dorp: 1, kasteel: 1, span: 1 } : {}), ...(env.SLAG_ROOM ? { slag: 1 } : {}) },
         log,
         invalidate,
         planCache,

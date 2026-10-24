@@ -55,7 +55,7 @@ test('workerd: the towns, the castles and a Blokbotsing room on the real runtime
     };
     // the front door
     let [st, r] = await call('GET', '/');
-    assert.deepEqual(r, { ok: true, service: 'stapel-borge', dorp: 1, kasteel: 1, slag: 1 });
+    assert.deepEqual(r, { ok: true, service: 'stapel-borge', dorp: 1, kasteel: 1, span: 1, slag: 1 });
 
     // two towns, neighbours, a raid, the news
     const a = { id: newTownId(), key: newTownKey() };
