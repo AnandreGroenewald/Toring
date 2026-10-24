@@ -154,7 +154,7 @@ function createTown(K, d) {
   const { scene, camera } = stage;
   const reduced = !!d.reducedMotion;
   const gameCanvas = document.querySelector('#game > canvas');
-  const world = buildRiverWorld(stage);
+  const world = buildRiverWorld(stage, d.scene);   // (the sky of his background skin)
   world.setPool(1e6);   // (all lake: the canyon is far off)
   const things = createThings(scene, pieces);
   const island = createIsland(things, { radius: 22, plots: true });
@@ -356,7 +356,7 @@ function createRide(K, d) {
   const { scene, camera } = stage;
   const reduced = !!d.reducedMotion;
   const gameCanvas = document.querySelector('#game > canvas');
-  const world = buildRiverWorld(stage);
+  const world = buildRiverWorld(stage, d.scene);   // (the sky of his background skin)
   const things = createThings(scene, pieces);
   const rider = createRider(bendMaterial);
   scene.add(rider.group);

@@ -16,6 +16,39 @@ export const COLORS = {
   bush: '#3f5a2a', bushL: '#5f7a35', grass: '#8a9a4a', wall: '#6b4430', mesa: '#a9705a', mesaTop: '#6f7d4f', bird: '#241d1a',
 };
 export const BANK = { half: 8.2, lake: 46, fogNear: 90, fogFar: 520 };
+/**
+ * The sky and light for each background skin from the Winkel (the 2D game's `scene`): the same canyon at midday, at
+ * sunset, under the moon and stars, the northern lights, deep space, pastel candy, cherry blossom, the aquarium and
+ * retro neon. Unknown ids look like the day.
+ */
+const DAY = {
+  zenith: COLORS.zenith, horizon: COLORS.horizon, haze: COLORS.haze, sun: COLORS.sun, sunDir: [-0.45, 0.34, -0.83], sunI: 2.6,
+  fill: '#ffd9b0', fillI: 0.9, hemiSky: '#bcd6ff', hemiGround: '#7a5a3a', hemiI: 0.75, deep: COLORS.deep, shallow: COLORS.shallow,
+  skyRefl: COLORS.skyRefl, wall: COLORS.wall, stars: 0, aurora: 0, clouds: 1, exposure: 1.06, envI: 0.7,
+};
+const NIGHT = {
+  ...DAY, zenith: '#070d24', horizon: '#1d2d57', haze: '#18233f', sun: '#cfe0ff', sunDir: [0.35, 0.45, -0.82], sunI: 0.9, fill: '#8aa6ff',
+  fillI: 0.35, hemiSky: '#3d5491', hemiGround: '#1a1410', hemiI: 0.6, deep: '#0c2a3c', shallow: '#1d4f62', skyRefl: '#2a3f6e', wall: '#1d1514',
+  stars: 1, clouds: 0.3, exposure: 1.3, envI: 0.35,
+};
+export const LOOKS = {
+  dag: DAY,
+  sonsondergang: {
+    ...DAY, zenith: '#4a5f9e', horizon: '#f1b383', haze: '#d8b2a0', sun: '#ffc48a', sunDir: [-0.3, 0.14, -0.95], sunI: 1.9, fill: '#ffb48a',
+    fillI: 0.6, hemiSky: '#a9b4dc', hemiGround: '#5e3f33', hemiI: 0.75, deep: '#1f6672', shallow: '#4a9a98', skyRefl: '#c9a59a', wall: '#4e3229',
+  },
+  nag: NIGHT,
+  noorderlig: { ...NIGHT, horizon: '#123b45', haze: '#10283a', stars: 0.8, aurora: 1 },
+  ruimte: { ...NIGHT, zenith: '#05030f', horizon: '#2a1446', haze: '#1a0f2e', sun: '#e6d7ff', hemiSky: '#5a3d91', stars: 1.7, clouds: 0, aurora: 0.25 },
+  kersieblom: { ...DAY, horizon: '#f6d6dc', haze: '#efd0d6', zenith: '#7fa6d9', skyRefl: '#e6b8c6' },
+  lekkergoed: { ...DAY, zenith: '#8fd3f4', horizon: '#ffd1e8', haze: '#f7d6ea', sun: '#fff3c4', skyRefl: '#ffc4e1', deep: '#2f9fa0', shallow: '#7fe0c8' },
+  akwarium: { ...DAY, zenith: '#1f6f8f', horizon: '#9fe0d8', haze: '#8fcfc8', skyRefl: '#7fd0d0', deep: '#13707a', shallow: '#3fc0b0' },
+  sintgolf: {
+    ...DAY, zenith: '#22104a', horizon: '#ff7ab5', haze: '#6a3a7a', sun: '#ffc08a', sunDir: [-0.2, 0.1, -0.97], sunI: 1.6, fill: '#c98aff',
+    fillI: 0.55, hemiSky: '#8a7cff', hemiGround: '#2a1030', hemiI: 0.75, deep: '#1b2f63', shallow: '#3f5aa8', skyRefl: '#c77ab8', wall: '#2f1d3a',
+    stars: 0.6, clouds: 0.4, envI: 0.5,
+  },
+};
 
 /** How far across the world bends `d` metres ahead (m): a gentle winding that changes with the course. */
 export let bendK = 1;   // (Saturday's run: 0, so a bomb's aim lands where the tower is drawn)
@@ -279,7 +312,8 @@ function rondavelGeometry(r, h, seed) {
 
 // ------------------------------------------------------------------------------------------------ the sky
 const SKY_VERT = `varying vec3 vDir; void main() { vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w; }`;
-const SKY_FRAG = `uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSun; uniform vec3 uSunCol; uniform sampler2D uNoise; uniform float uT; varying vec3 vDir;
+const SKY_FRAG = `uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSun; uniform vec3 uSunCol; uniform sampler2D uNoise; uniform float uT;
+uniform float uStars; uniform float uAurora; uniform float uClouds; varying vec3 vDir;
 void main() {
   vec3 d = normalize(vDir);
   float h = clamp(d.y, -0.2, 1.0);
@@ -292,7 +326,22 @@ void main() {
     float cl = smoothstep(0.5, 0.74, n) * smoothstep(0.02, 0.2, d.y) * (1.0 - smoothstep(0.5, 0.85, d.y));
     vec3 lit = mix(vec3(1.0, 0.95, 0.88), uSunCol, 0.35) * (0.95 + 0.5 * pow(s, 5.0));
     vec3 shade = mix(uHorizon, uZenith, 0.35) * 0.92;
-    col = mix(col, mix(shade, lit, smoothstep(0.52, 0.82, n)), cl * 0.8);
+    col = mix(col, mix(shade, lit, smoothstep(0.52, 0.82, n)), cl * 0.8 * uClouds);
+  }
+  // stars (the night skies): a fixed field, twinkling a little, fading near the horizon
+  if (uStars > 0.0 && d.y > 0.0) {
+    vec3 q = floor(d * 420.0);
+    float hs = fract(sin(dot(q, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+    float st = step(0.9968, hs) * smoothstep(0.03, 0.3, d.y) * (0.65 + 0.35 * sin(uT * 2.3 + hs * 60.0));
+    col += vec3(0.9, 0.94, 1.0) * st * uStars;
+  }
+  // the northern lights: green curtains drifting high up, a purple edge on top
+  if (uAurora > 0.0 && d.y > 0.04) {
+    vec2 ap = d.xz / (d.y + 0.3);
+    float band = texture2D(uNoise, vec2(ap.x * 0.22 + uT * 0.004, ap.y * 0.05 + 0.2)).r;
+    float curtain = smoothstep(0.52, 0.74, band) * smoothstep(0.06, 0.28, d.y) * (1.0 - smoothstep(0.55, 0.85, d.y));
+    float rays = 0.45 + texture2D(uNoise, vec2(ap.x * 1.7 + uT * 0.012, 0.37)).b;
+    col += (vec3(0.2, 1.0, 0.55) * (1.0 - smoothstep(0.3, 0.6, d.y)) + vec3(0.65, 0.25, 0.95) * smoothstep(0.3, 0.6, d.y)) * curtain * rays * uAurora * 0.7;
   }
   col += uSunCol * (pow(s, 900.0) * 6.0 + pow(s, 24.0) * 0.32 + pow(s, 4.0) * 0.12);
   col = mix(col, uHorizon * 0.92, smoothstep(0.05, -0.2, d.y));
@@ -414,18 +463,25 @@ void main() {
 /**
  * The world: { group, water, update(dist, t, camera), setLake(fromZ, toZ), dispose() }. `quality` from the stage.
  */
-export function buildRiverWorld(stage) {
+export function buildRiverWorld(stage, lookId = 'dag') {
   const { scene, renderer, quality } = stage;
+  const L = LOOKS[lookId] || LOOKS.dag;
+  const sunDir = new THREE.Vector3(...L.sunDir).normalize();
+  const exposure = renderer.toneMappingExposure;
+  renderer.toneMappingExposure = L.exposure;
   const group = new THREE.Group();
   scene.add(group);
-  const fog = lin(COLORS.haze);
+  const fog = lin(L.haze);
   scene.fog = new THREE.Fog(fog, BANK.fogNear, BANK.fogFar);
   scene.background = null;
 
   const noise = noiseTexture(quality.name === 'low' ? 96 : 128);
   // sky dome
   const skyMat = new THREE.ShaderMaterial({
-    uniforms: { uZenith: { value: lin(COLORS.zenith) }, uHorizon: { value: lin(COLORS.horizon) }, uSun: { value: SUN.clone() }, uSunCol: { value: lin(COLORS.sun) }, uNoise: { value: noise }, uT: { value: 0 } },
+    uniforms: {
+      uZenith: { value: lin(L.zenith) }, uHorizon: { value: lin(L.horizon) }, uSun: { value: sunDir.clone() }, uSunCol: { value: lin(L.sun) }, uNoise: { value: noise }, uT: { value: 0 },
+      uStars: { value: L.stars }, uAurora: { value: L.aurora }, uClouds: { value: L.clouds },
+    },
     vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false, fog: false,
   });
   const sky = new THREE.Mesh(new THREE.SphereGeometry(1800, 32, 16), skyMat);
@@ -437,28 +493,28 @@ export function buildRiverWorld(stage) {
   envScene.add(new THREE.Mesh(new THREE.SphereGeometry(100, 24, 12), skyMat.clone()));
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(envScene, 0.04).texture;
-  scene.environmentIntensity = 0.7;
+  scene.environmentIntensity = L.envI;
   pmrem.dispose();
 
   // light: the low sun ahead-left, the sky's blue from above, warm ground bounce
-  const sun = new THREE.DirectionalLight(COLORS.sun, 2.6);
-  sun.position.copy(SUN).multiplyScalar(120);
+  const sun = new THREE.DirectionalLight(L.sun, L.sunI);
+  sun.position.copy(sunDir).multiplyScalar(120);
   group.add(sun, sun.target);
-  const fill = new THREE.DirectionalLight('#ffd9b0', 0.9);   // (from behind the camera: what comes at you is lit)
+  const fill = new THREE.DirectionalLight(L.fill, L.fillI);   // (from behind the camera: what comes at you is lit)
   fill.position.set(6, 10, 30);
   group.add(fill);
-  group.add(new THREE.HemisphereLight('#bcd6ff', '#7a5a3a', 0.75));
+  group.add(new THREE.HemisphereLight(L.hemiSky, L.hemiGround, L.hemiI));
 
   // the water: a long strip that rides with the camera; its ripples run in course space
   const water = new THREE.ShaderMaterial({
     uniforms: {
-      uT: { value: 0 }, uDist: { value: 0 }, uNoise: { value: noise }, uSun: { value: SUN.clone() }, uSunCol: { value: lin(COLORS.sun) },
-      uDeep: { value: lin(COLORS.deep) }, uShallow: { value: lin(COLORS.shallow) }, uZenith: { value: lin(COLORS.zenith) },
-      uHorizon: { value: lin(COLORS.horizon) }, uSkyRefl: { value: lin(COLORS.skyRefl) }, uFoam: { value: lin(COLORS.foam) }, uFog: { value: fog },
+      uT: { value: 0 }, uDist: { value: 0 }, uNoise: { value: noise }, uSun: { value: sunDir.clone() }, uSunCol: { value: lin(L.sun) },
+      uDeep: { value: lin(L.deep) }, uShallow: { value: lin(L.shallow) }, uZenith: { value: lin(L.zenith) },
+      uHorizon: { value: lin(L.horizon) }, uSkyRefl: { value: lin(L.skyRefl) }, uFoam: { value: lin(COLORS.foam) }, uFog: { value: fog },
       uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uHalf: { value: BANK.half },
       uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uDetail: { value: quality.name === 'low' ? 0 : 1 },
       uBendA: { value: 0 }, uBendB: { value: 0 }, uBendK: bendUniforms.uBendK, uRapids: { value: new THREE.Vector2(-1e6, -1e6) }, uPoolTo: { value: -1e6 },
-      uWall: { value: lin(COLORS.wall) }, uRider: { value: new THREE.Vector2(0, -1e6) },
+      uWall: { value: lin(L.wall) }, uRider: { value: new THREE.Vector2(0, -1e6) },
     },
     vertexShader: WATER_VERT, fragmentShader: WATER_FRAG,
   });
@@ -688,6 +744,7 @@ export function buildRiverWorld(stage) {
       scene.environment?.dispose?.();
       scene.environment = null;
       scene.fog = null;
+      renderer.toneMappingExposure = exposure;
     },
   };
 }

@@ -2747,6 +2747,7 @@ async function startRide() {
     if (seq !== rideSeq) return;
     const v = span.view();
     const r = await mod.openRiver({
+      scene: store.getSkins().wear.scene,
       seed: day, who: rd.who, mine: rd.mine, floors: v.floors, crew: v.name || '', canBuild: v.turns > 0,
       daily: dayLayout(day), skin: store.getSkins().wear.blocks || 'kleur',
       reducedMotion: !!settings.reducedMotion, autopilot: DEBUG && params.has('rvauto'),
@@ -2862,6 +2863,7 @@ async function openSpanTown() {
     span.newsSeen();
     if (span.online) span.sync().then(() => { if (ride?.refresh && screen === 'rivier') { const nv = span.view(); ride.refresh({ ...nv, plots: spanPlots(nv) }); } span.newsSeen(); });
     const r = await mod.openTown({
+      scene: store.getSkins().wear.scene,
       ...v, myId: span.id, reducedMotion: !!settings.reducedMotion, clock: await spanTestClock(), plots: spanPlots(v),
       onRide: () => { closeRide(); startRide(); },
       onBuild: () => { closeRide(); startWeekTurn(); },
@@ -2958,6 +2960,7 @@ async function startRaid() {
     const mod = await import('./rivier/view.js');
     if (seq !== rideSeq) return;
     const r = await mod.openRaid({
+      scene: store.getSkins().wear.scene,
       river: v.river, crewId: v.crew.id, bombs: Math.min(v.bombs, 3), skin: store.getSkins().wear.blocks || 'kleur',
       reducedMotion: !!settings.reducedMotion, autopilot: DEBUG && params.has('rvauto'),
       onBomb: (target, hit) => span.bomb(target, [hit]),
