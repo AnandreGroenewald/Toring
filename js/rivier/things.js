@@ -259,6 +259,16 @@ export function createIsland(things, { radius = 26, jetty: withJetty = true, plo
   const top = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.9, radius * 0.92, 0.6, 24), grassMat);
   top.position.y = 3.3;
   group.add(top);
+  // (the Blender island when it's there: layered cliffs, a sandy shore, boulders; made for a 22 m radius)
+  const isl = things.models?.island;
+  if (isl) {
+    rock.visible = false;
+    top.visible = false;
+    const m = isl.clone(true);
+    m.scale.set(radius / 22, 1, radius / 22);
+    m.position.y = 0.05;
+    group.add(m);
+  }
   const jetty = new THREE.Mesh(new THREE.BoxGeometry(3, 0.4, 16), woodMat);
   jetty.position.set(0, 1.4, radius + 6);
   if (withJetty) group.add(jetty);

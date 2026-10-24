@@ -4,7 +4,7 @@
 # at the origin, its front toward Blender -y (three's +z). usage: Blender -b -P art/blender/dorp.py -- img/models/dorp.glb
 import sys, os, math
 sys.path.insert(0, os.path.dirname(__file__))
-from common import reset, out_path, material, apply, prim, join, pivot, export
+from common import reset, out_path, material, apply, prim, join, pivot, export, detail, bake_set
 import bpy, bmesh
 
 reset()
@@ -206,10 +206,13 @@ def tank():
     return join(P, 'tenk')
 
 
-farmhouse()
-capedutch()
-flatroof()
-church()
+houses = [farmhouse(), capedutch(), flatroof(), church()]
 windpomp()
-tank()
+tk = tank()
+# the walls' plaster and the thatch baked with soft shadows under the eaves, the stoeps and round the windows
+detail(wall, 'noise', scale=9, mix=0.14, color2='#d9cfbd')
+detail(wallWarm, 'noise', scale=9, mix=0.14, color2='#d6c4a2')
+detail(thatch, 'stripes', scale=60, mix=0.3, color2='#5e4a2c')
+detail(plinth, 'noise', scale=14, mix=0.25)
+bake_set(houses + [tk], 'dorp', size=1024, highs=None, ao_dist=0.35, ao_k=0.32)
 export(out_path(os.path.join(os.path.dirname(__file__), '..', '..', 'img', 'models', 'dorp.glb')))

@@ -118,7 +118,7 @@ export async function openRiver(d) {
   current?.close();
   await portraitsReady;   // (the faces on the rings)
   // (the Blender models: the animals; a ride never waits long for them, and works without)
-  const models = await loadModels(['croc', 'hippo', 'monkey', 'builder', 'dorp']);
+  const models = await loadModels(['croc', 'hippo', 'monkey', 'builder', 'dorp', 'island']);
   if (!kit) kit = makeKit();
   const view = createRide(kit, { ...d, models });
   current = view;
@@ -145,7 +145,7 @@ export async function openRaid(d) {
 export async function openTown(d) {
   current?.close();
   await portraitsReady;
-  const models = await loadModels(['dorp']);
+  const models = await loadModels(['dorp', 'island']);
   if (!kit) kit = makeKit();
   const view = createTown(kit, { ...d, models });
   current = view;
