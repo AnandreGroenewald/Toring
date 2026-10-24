@@ -601,6 +601,16 @@ export function buildRiverWorld(stage, lookId = 'dag') {
   const BUSH_PER = quality.name === 'low' ? 6 : 12;
   const ROCK_PER = 5;
   const bushes = new THREE.InstancedMesh(bushGeo, bushMat, N_SEG * 2 * BUSH_PER);
+  // acacias on the rim: a thin crooked trunk and a wide flat crown, a couple to each piece of wall
+  const TREE_PER = quality.name === 'low' ? 1 : 2;
+  const trunkGeo = new THREE.CylinderGeometry(0.22, 0.38, 1, 6);
+  trunkGeo.translate(0, 0.5, 0);
+  const crownGeo = shrubGeometry();
+  crownGeo.scale(1, 0.32, 1);
+  const trunks = new THREE.InstancedMesh(trunkGeo, bendMaterial(new THREE.MeshStandardMaterial({ color: '#4a3526', roughness: 0.9 })), N_SEG * 2 * TREE_PER);
+  const crowns = new THREE.InstancedMesh(crownGeo, bendMaterial(new THREE.MeshStandardMaterial({ color: '#6d8a3c', roughness: 0.9, vertexColors: true })), N_SEG * 2 * TREE_PER);
+  trunks.frustumCulled = crowns.frustumCulled = false;
+  group.add(trunks, crowns);
   const boulders = new THREE.InstancedMesh(boulderGeo, boulderMat, N_SEG * 2 * ROCK_PER);
   bushes.frustumCulled = boulders.frustumCulled = false;
   group.add(bushes, boulders);
@@ -618,7 +628,7 @@ export function buildRiverWorld(stage, lookId = 'dag') {
         m.add(f);
       }
       const r = (k) => { const x = Math.sin((i * 2 + (side > 0 ? 1 : 0)) * 91.7 + k * 13.1) * 43758.5; return x - Math.floor(x); };
-      segs.push({ m, side, i, r, bushes: Array.from({ length: BUSH_PER }, (_, k) => [r(k) * SEG_L - SEG_L / 2, 0.9 + r(k + 40) * 1.7, r(k + 80)]), rocks: Array.from({ length: ROCK_PER }, (_, k) => [r(k + 120) * SEG_L - SEG_L / 2, 0.5 + r(k + 160) * 0.9]) });
+      segs.push({ m, side, i, r, bushes: Array.from({ length: BUSH_PER }, (_, k) => [r(k) * SEG_L - SEG_L / 2, 0.9 + r(k + 40) * 1.7, r(k + 80)]), rocks: Array.from({ length: ROCK_PER }, (_, k) => [r(k + 120) * SEG_L - SEG_L / 2, 0.5 + r(k + 160) * 0.9]), trees: Array.from({ length: TREE_PER }, (_, k) => [r(k + 200) * SEG_L - SEG_L / 2, 4 + r(k + 220) * 3.5, r(k + 240)]) });
     }
   }
   // far off in the haze: rondavels (round sandstone peaks with grassy tops) and a long ridge
@@ -688,6 +698,7 @@ export function buildRiverWorld(stage, lookId = 'dag') {
     const first = Math.floor((dist - 40) / SEG_L);
     let bi = 0;
     let ri = 0;
+    let ti = 0;
     for (const s of segs) {
       const slot = first + ((s.i - first) % N_SEG + N_SEG) % N_SEG;
       const zc = slot * SEG_L + SEG_L / 2;   // course z of the piece's middle
@@ -704,6 +715,20 @@ export function buildRiverWorld(stage, lookId = 'dag') {
         tmp.updateMatrix();
         bushes.setMatrixAt(bi++, tmp.matrix);
       }
+      for (const [u, th, kk] of s.trees) {
+        const by = (34 + kk * 2) * hy;
+        tmp.position.set(s.side * (half + 9 + kk * 6), by - 0.6, -(ahead + u));
+        tmp.rotation.set(0.05 * (kk - 0.5), kk * 6, 0.12 * (kk - 0.5));
+        tmp.scale.set(1, th, 1);
+        tmp.updateMatrix();
+        trunks.setMatrixAt(ti, tmp.matrix);
+        tmp.position.y = by - 0.6 + th;
+        tmp.rotation.set(0, kk * 9, 0);
+        const cw = 3.2 + kk * 2.4;
+        tmp.scale.set(cw, cw * 0.9, cw * (0.8 + kk * 0.3));
+        tmp.updateMatrix();
+        crowns.setMatrixAt(ti++, tmp.matrix);
+      }
       for (const [u, sc] of s.rocks) {
         tmp.position.set(s.side * (half - 0.3 - sc * 0.4), sc * 0.25 - 0.2, -(ahead + u));
         tmp.scale.set(sc * 1.3, sc * 0.8, sc);
@@ -714,6 +739,8 @@ export function buildRiverWorld(stage, lookId = 'dag') {
     }
     bushes.instanceMatrix.needsUpdate = true;
     boulders.instanceMatrix.needsUpdate = true;
+    trunks.instanceMatrix.needsUpdate = true;
+    crowns.instanceMatrix.needsUpdate = true;
   }
 
   return {
