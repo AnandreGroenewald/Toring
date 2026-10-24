@@ -15,14 +15,20 @@ const WAIT_MS = 4000;      // (a ride never waits longer than this for its model
 function load(name) {
   if (!cache.has(name)) {
     const url = new URL(`../../img/models/${name}.glb?v=${MODEL_V[name] || 1}`, import.meta.url).href;
-    cache.set(name, new GLTFLoader().loadAsync(url).then((g) => {
+    const once = () => new GLTFLoader().loadAsync(url);
+    // (a download the browser dropped is tried once more; a model that still can't be had isn't remembered as
+    // missing: the next ride asks again)
+    cache.set(name, once().catch(() => new Promise((res) => setTimeout(res, 400)).then(once)).then((g) => {
       g.scene.traverse((o) => {
         if (!o.isMesh) return;
         o.frustumCulled = false;
         o.material = bendMaterial(o.material);
       });
       return g.scene;
-    }).catch(() => null));
+    }).catch(() => {
+      cache.delete(name);
+      return null;
+    }));
   }
   return cache.get(name);
 }
