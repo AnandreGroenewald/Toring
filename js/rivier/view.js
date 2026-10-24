@@ -164,11 +164,28 @@ function createTown(K, d) {
   things.models = d.models || {};   // (the Blender models, for the island's town)
   const island = createIsland(things, { radius: 22, plots: true });
   scene.add(island.group);
+  // (Saturday won: fireworks over the island and a gold crown on the Weektoring, until the new week)
+  const wonOf = (v) => !!(v.river?.over && v.river.final?.order?.[0] && v.river.final.order[0] === v.crew?.id);
+  let won = wonOf(d);
+  let fw = won ? createFireworks(scene, reduced) : null;
+  let crownTag = null;
+  function setCrown() {
+    if (crownTag) { island.group.remove(crownTag); crownTag.material.map?.dispose(); crownTag.material.dispose(); crownTag = null; }
+    if (!won) return;
+    crownTag = labelSprite(S.twWinners, { gold: true });
+    // (bigger over a tall tower: the camera stands further back)
+    const k = Math.max(1, island.top / 28);
+    crownTag.scale.multiplyScalar(k);
+    crownTag.position.set(0, island.top + 2.5 * k, 0);
+    island.group.add(crownTag);
+  }
+  function setCrownOff() { if (crownTag) { crownTag.material.map?.dispose(); crownTag.material.dispose(); } }
   // (a night sky: warm floodlights on the towers, from where the camera stands)
   const flood = world.night ? new THREE.DirectionalLight('#ffdcae', 1.5) : null;
   if (flood) scene.add(flood, flood.target);
   island.setFloors(d.floors || []);
   island.setPlots({ towers: d.plots || [], monuments: d.monuments || [] });
+  setCrown();
   const IZ = 0;   // (the island at the world's middle: nothing bends)
   let alive = true;
   let raf = 0;
@@ -298,7 +315,7 @@ function createTown(K, d) {
     room = { f, top };
   }
   function frame(dt) {
-    const h = Math.max(16, island.top, island.plotTop) + 6;
+    const h = Math.max(16, island.top, island.plotTop) + (crownTag ? 5 * Math.max(1, island.top / 28) : 6);
     t += dt;
     if (Math.floor(t * 2) !== Math.floor((t - dt) * 2)) measure();
     const half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
@@ -316,6 +333,7 @@ function createTown(K, d) {
     island.group.position.set(0, -0.6, -IZ);
     island.update(t);
     world.update(0, t);
+    fw?.update(dt, island.top);
   }
   function loop(now) {
     if (!alive) return;
@@ -342,6 +360,8 @@ function createTown(K, d) {
     host.removeEventListener('pointerdown', onTownDown);
     host.removeEventListener('pointerup', onTownUp);
     if (flood) scene.remove(flood, flood.target);
+    fw?.dispose();
+    setCrownOff();
     scene.remove(island.group, things.spray);
     island.dispose();
     things.dispose();
@@ -358,11 +378,110 @@ function createTown(K, d) {
       paint({ ...d, ...v });
       island.setFloors(v.floors || []);
       island.setPlots({ towers: v.plots || d.plots || [], monuments: v.monuments || [] });
+      won = wonOf({ ...d, ...v });
+      if (won && !fw) fw = createFireworks(scene, reduced);
+      setCrown();
     },
   };
   return api;
 }
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+/**
+ * Fireworks over the island (Saturday's winners): a rocket's trail up, a burst of coloured sparks that fall and fade,
+ * one every second or so. One cloud of points (a single draw call). { update(dt, top), dispose() }.
+ */
+function createFireworks(scene, reduced) {
+  const N = 900;
+  const pos = new Float32Array(N * 3);
+  const col = new Float32Array(N * 3);
+  const vel = new Float32Array(N * 3);
+  const life = new Float32Array(N);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  grd.addColorStop(0, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.35, 'rgba(255,255,255,0.8)');
+  grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 32, 32);
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.PointsMaterial({ size: 2.6, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  scene.add(pts);
+  for (let i = 0; i < N; i++) pos[i * 3 + 1] = -999;
+  const COLS = ['#ffd65c', '#ff6a3d', '#5ce1ff', '#ff5fa8', '#8dff6a', '#ffffff'].map((h) => new THREE.Color(h));
+  let next = 0;
+  let wait = 0.3;
+  const shells = [];
+  function burst(x, y, z) {
+    const a = COLS[Math.floor(Math.random() * COLS.length)];
+    const b = COLS[Math.floor(Math.random() * COLS.length)];
+    const n = reduced ? 40 : 110;
+    for (let k = 0; k < n; k++) {
+      const i = next++ % N;
+      const u = Math.random() * 2 - 1;
+      const th = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(1 - u * u);
+      const sp = 11 + Math.random() * 5;
+      pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
+      vel[i * 3] = r * Math.cos(th) * sp; vel[i * 3 + 1] = u * sp; vel[i * 3 + 2] = r * Math.sin(th) * sp;
+      const cc = k % 3 ? a : b;
+      col[i * 3] = cc.r; col[i * 3 + 1] = cc.g; col[i * 3 + 2] = cc.b;
+      life[i] = 1.4 + Math.random() * 0.6;
+    }
+  }
+  return {
+    update(dt, top) {
+      wait -= dt;
+      if (wait <= 0) {
+        wait = 0.8 + Math.random() * 0.9;
+        const a = Math.random() * Math.PI * 2;
+        const r = 6 + Math.random() * 14;
+        const h = Math.max(24, top);
+        shells.push({ x: Math.sin(a) * r, z: Math.cos(a) * r, y: 4, vy: 30 + Math.random() * 8, at: h * (0.45 + Math.random() * 0.4) });
+      }
+      for (let s = shells.length - 1; s >= 0; s--) {
+        const sh = shells[s];
+        sh.y += sh.vy * dt;
+        // (its trail: a few sparks left behind)
+        const i = next++ % N;
+        pos[i * 3] = sh.x; pos[i * 3 + 1] = sh.y; pos[i * 3 + 2] = sh.z;
+        vel[i * 3] = 0; vel[i * 3 + 1] = -1; vel[i * 3 + 2] = 0;
+        col[i * 3] = 1; col[i * 3 + 1] = 0.8; col[i * 3 + 2] = 0.5;
+        life[i] = 0.35;
+        if (sh.y >= sh.at) {
+          burst(sh.x, sh.y, sh.z);
+          shells.splice(s, 1);
+          audio.play('pop');
+        }
+      }
+      for (let i = 0; i < N; i++) {
+        if (life[i] <= 0) continue;
+        life[i] -= dt;
+        vel[i * 3 + 1] -= 7 * dt;
+        const drag = Math.exp(-dt * 1.6);
+        vel[i * 3] *= drag; vel[i * 3 + 2] *= drag;
+        pos[i * 3] += vel[i * 3] * dt; pos[i * 3 + 1] += vel[i * 3 + 1] * dt; pos[i * 3 + 2] += vel[i * 3 + 2] * dt;
+        if (life[i] <= 0) pos[i * 3 + 1] = -999;
+        else if (life[i] < 0.5) { col[i * 3] *= 0.95; col[i * 3 + 1] *= 0.95; col[i * 3 + 2] *= 0.95; }
+      }
+      geo.attributes.position.needsUpdate = true;
+      geo.attributes.color.needsUpdate = true;
+    },
+    dispose() {
+      scene.remove(pts);
+      geo.dispose();
+      mat.dispose();
+      tex.dispose();
+    },
+  };
+}
 
 function createRide(K, d) {
   const { host, ov, stage, pieces } = K;

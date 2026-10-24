@@ -979,6 +979,7 @@ export const S = {
   spanLeft: 'Jy het uit die span geklim. Jy het weer ’n eie eiland.',
   twRiver: '⚔️ Saterdag se rivier',
   twYou: 'julle',
+  twWinners: '👑 Saterdag se wenners',
   twFold: 'Vou die paneel op of oop',
   twWhistle: 'Die fluitjie blaas iewers tussen 20:00 en 21:00. Niemand weet presies wanneer nie!',
   twBomb: (n) => `💣 Gly af en bombardeer (${n})`,
