@@ -964,7 +964,7 @@ export const S_EN = {
   nwRescued: (who, n) => `🛟 ${who} rescued ${n} ${n === 1 ? 'person' : 'people'}`,
   nwJoined: (who) => `👋 ${who} joined`,
   nwLeft: (who) => `🚪 ${who} left`,
-  nwSaturday: (p, of) => `🏆 Saturday: ${p} of ${of}`,
+  nwSaturday: (p, of) => `🏆 Saturday: ${p}${p === 1 ? 'st' : p === 2 ? 'nd' : p === 3 ? 'rd' : 'th'} of ${of}`,
   nwHit: (who, on, m) => `💥 ${who} hit ${on}: -${m}`,
   nwCracked: (who, on) => `💥 ${who} cracked ${on}’s floors`,
   rvTarget: '👑 Target',
