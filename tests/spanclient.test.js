@@ -246,3 +246,37 @@ test('span client + server: a turn\'s floors wait on the phone without a connect
   assert.equal(a.s.view().floors.length, 2, 'the floors went up with the sync');
   assert.equal(a.s.view().turns, 0, 'the turn is used once');
 });
+
+test('span client: the news seen and the prize message survive a restart (no news dot again on every launch)', async () => {
+  const clock = { t: sastAt('2026-10-28', 9) };
+  const store = { data: new Map() };
+  const dayKey = { v: '2026-10-28' };
+  const srv = createSpanServer({ get: async (k) => (store.data.has(k) ? structuredClone(store.data.get(k)) : undefined), put: async (k, v) => { store.data.set(k, structuredClone(v)); } }, { now: () => clock.t });
+  const fetchImpl = async (url, o = {}) => {
+    const path = new URL(url).pathname;
+    if (path === '/') return { status: 200, json: async () => ({ ok: true, span: 1 }) };
+    const [status, out] = await srv.handle(o.method || 'GET', path, o.body ? JSON.parse(o.body) : null);
+    return { status, json: async () => out };
+  };
+  const phone = (backend, name) => createSpan({ backend, castIds: CAST, today: () => dayKey.v, api: () => 'http://srv', who: () => ({ name, skin: 'goud' }), fetchImpl });
+  const annaStore = memoryBackend();
+  const a = phone(annaStore, 'Anna');
+  const b = phone(memoryBackend(), 'Ben');
+  await a.start();
+  await b.start();
+  const made = await a.make('Die Bouers');
+  await b.join(made.crew.invite);
+  // Ben builds: news for Anna
+  b.dailyDone('2026-10-28', 50, []);
+  await b.sync();
+  const tb = await b.turn();
+  await b.turnDone([plank(0)], { lease: tb.lease });
+  await a.sync();
+  assert.ok(a.view().news.some((n) => n.kind === 'built'), 'Ben\'s floors are news for Anna');
+  a.newsSeen();
+  assert.equal(a.view().news.length, 0, 'seen');
+  // Anna's app restarts: a new client on her same storage
+  const a2 = phone(annaStore, 'Anna');
+  await a2.start();
+  assert.equal(a2.view().news.length, 0, 'still seen after a restart');
+});

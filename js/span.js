@@ -38,6 +38,9 @@ function clean(raw, week) {
   if (raw.srv && typeof raw.srv === 'object' && raw.srv.crew && Array.isArray(raw.srv.crew.floors)) d.srv = raw.srv;
   if (Array.isArray(raw.queue)) d.queue = raw.queue.filter((q) => q && typeof q.path === 'string').slice(-20);
   if (raw.fell && typeof raw.fell === 'object') d.fell = raw.fell;
+  // (the crew's news seen so far, and the last Saturday prize and whether it was said: kept across restarts)
+  d.seenN = Math.max(0, raw.seenN | 0);
+  if (raw.prizeSeen && typeof raw.prizeSeen === 'object') d.prizeSeen = { place: raw.prizeSeen.place | 0, coins: raw.prizeSeen.coins | 0, week: String(raw.prizeSeen.week || ''), shown: !!raw.prizeSeen.shown };
   return d;
 }
 
