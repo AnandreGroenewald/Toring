@@ -118,7 +118,7 @@ export async function openRiver(d) {
   current?.close();
   await portraitsReady;   // (the faces on the rings)
   // (the Blender models: the animals; a ride never waits long for them, and works without)
-  const models = await loadModels(['croc', 'hippo', 'monkey', 'builder']);
+  const models = await loadModels(['croc', 'hippo', 'monkey', 'builder', 'dorp']);
   if (!kit) kit = makeKit();
   const view = createRide(kit, { ...d, models });
   current = view;
@@ -145,8 +145,9 @@ export async function openRaid(d) {
 export async function openTown(d) {
   current?.close();
   await portraitsReady;
+  const models = await loadModels(['dorp']);
   if (!kit) kit = makeKit();
-  const view = createTown(kit, d);
+  const view = createTown(kit, { ...d, models });
   current = view;
   await view.ready;
   return view;
@@ -160,6 +161,7 @@ function createTown(K, d) {
   const world = buildRiverWorld(stage, d.scene);   // (the sky of his background skin)
   world.setPool(1e6);   // (all lake: the canyon is far off)
   const things = createThings(scene, pieces);
+  things.models = d.models || {};   // (the Blender models, for the island's town)
   const island = createIsland(things, { radius: 22, plots: true });
   scene.add(island.group);
   // (a night sky: warm floodlights on the towers, from where the camera stands)
@@ -369,6 +371,7 @@ function createRide(K, d) {
   const gameCanvas = document.querySelector('#game > canvas');
   const world = buildRiverWorld(stage, d.scene);   // (the sky of his background skin)
   const things = createThings(scene, pieces);
+  things.models = d.models || {};   // (the Blender models, for the island's town)
   const rider = createRider(bendMaterial, d.models?.builder || null);
   scene.add(rider.group);
   // (the board's own foam and shadow on the water, under him)

@@ -280,7 +280,7 @@ export function createIsland(things, { radius = 26, jetty: withJetty = true, plo
     ...[2.2, 4.25, 5.55].map((a) => ({ kind: 'member', a, r: radius * 0.6, sc: 0.42 })),
     ...[1.05, 2.95, 3.65].map((a) => ({ kind: 'monument', a, r: radius * 0.76, sc: 0.3 })),
   ].map((pl) => ({ ...pl, x: Math.sin(pl.a) * pl.r, z: Math.cos(pl.a) * pl.r })) : [];
-  const village = addVillage(ground, { inner: Math.min(8.5, radius * 0.6), outer: radius * 0.86, people: 10, avoid: PLOTS.map((pl) => ({ x: pl.x, z: pl.z, r: pl.kind === 'member' ? 3.4 : 2.6 })) });
+  const village = addVillage(ground, { inner: Math.min(8.5, radius * 0.6), outer: radius * 0.86, people: 10, avoid: PLOTS.map((pl) => ({ x: pl.x, z: pl.z, r: pl.kind === 'member' ? 3.4 : 2.6 })), dorp: things.models?.dorp || null });
   const plotsG = new THREE.Group();
   plotsG.position.y = 3.6;
   group.add(plotsG);
@@ -489,9 +489,183 @@ function roofTexture() {
  * church with its steeple, flat-topped acacias, street lamps, a boat at the jetty, and the town's people walking. Ring
  * between `inner` and `outer` (m) round the middle. Returns { group, update(t) }.
  */
-export function addVillage(parent, { inner = 9, outer = 18, seed = 7, people = 10, avoid = [] } = {}) {
+/**
+ * (1.20) The Karoo dorp from the Blender models (img/models/dorp.glb): farmhouses, Cape Dutch houses and flat-roofed
+ * houses round the tower, their fronts and stoeps facing out; the NG church with its steeple; a windpomp turning in
+ * the wind beside a water tank; acacias; lamps; the town's people walking. { group, update(t), dispose() }.
+ */
+function addKarooVillage(group, { inner, outer, seed, people, avoid, dorp }) {
+  let s = seed * 9301 + 49297;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const part = (n) => dorp.getObjectByName(n);
+  const kinds = ['huis1', 'huis2', 'huis3'];
+  const at = { huis1: [], huis2: [], huis3: [], kerk: [], windpomp: [], tenk: [] };
+  const spots = [];
+  const m = new THREE.Object3D();
+  const put = (kind, x, z, a, k) => {
+    m.position.set(x, 0, z);
+    m.rotation.set(0, a, 0);
+    m.scale.setScalar(k);
+    m.updateMatrix();
+    at[kind].push(m.matrix.clone());
+  };
+  const free = (x, z, r) => !avoid.some((v) => Math.hypot(v.x - x, v.z - z) < v.r + r) && !spots.some((sp) => Math.hypot(sp.x - x, sp.z - z) < sp.r + r);
+  // the church first, on the far side; then the windpomp and its tank; then the houses round the ring
+  {
+    const a = Math.PI * 1.05;
+    const r = outer - 4.2;
+    put('kerk', Math.sin(a) * r, Math.cos(a) * r, a, 0.72);
+    spots.push({ x: Math.sin(a) * r, z: Math.cos(a) * r, r: 4.2 });
+  }
+  let pomp = null;
+  for (const a of [0.85, 2.3, 4.0, 5.3]) {
+    const r = outer - 2.2;
+    const x = Math.sin(a) * r;
+    const z = Math.cos(a) * r;
+    if (!free(x, z, 2.4)) continue;
+    put('windpomp', x, z, a + 0.6, 0.75);
+    put('tenk', x + Math.cos(a) * 2.2, z - Math.sin(a) * 2.2, 0, 0.7);
+    spots.push({ x, z, r: 2.6 });
+    pomp = { x, z, a: a + 0.6, k: 0.75 };
+    break;
+  }
+  const HOUSES = 10;
+  for (let i = 0; i < HOUSES; i++) {
+    const a = (i / HOUSES) * Math.PI * 2 + rnd() * 0.25;
+    if (Math.abs(Math.sin(a)) < 0.25 && Math.cos(a) > 0) continue;   // (the jetty's side stays open)
+    const r = inner + 1.2 + rnd() * Math.max(0.1, outer - inner - 4.2);
+    const x = Math.sin(a) * r;
+    const z = Math.cos(a) * r;
+    if (!free(x, z, 2.6)) continue;
+    put(kinds[Math.floor(rnd() * kinds.length)], x, z, a + (rnd() - 0.5) * 0.3, 0.68 + rnd() * 0.1);
+    spots.push({ x, z, r: 2.6 });
+  }
+  const meshes = [];
+  for (const [kind, list] of Object.entries(at)) meshes.push(...instancesOf(part(kind), list, group));
+  // the windpomp's rotor, its own (it turns)
+  let rotor = null;
+  if (pomp && part('rotor')) {
+    rotor = part('rotor').clone(true);
+    const holder = new THREE.Group();
+    holder.position.set(pomp.x, 0, pomp.z);
+    holder.rotation.y = pomp.a;
+    holder.scale.setScalar(pomp.k);
+    holder.add(rotor);
+    group.add(holder);
+  }
+  // acacias between the houses
+  const TREES = 7;
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.12, 0.2, 1, 6), bendMaterial(new THREE.MeshStandardMaterial({ color: '#5a4030', roughness: 0.9 })), TREES);
+  const crown = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 6), bendMaterial(new THREE.MeshStandardMaterial({ color: '#5f7a32', roughness: 0.95, flatShading: true })), TREES);
+  let ti = 0;
+  for (let i = 0; i < 40 && ti < TREES; i++) {
+    const a = rnd() * Math.PI * 2;
+    const r = inner * 0.8 + rnd() * (outer - inner * 0.8);
+    const x = Math.sin(a) * r;
+    const z = Math.cos(a) * r;
+    if (!free(x, z, 1.4)) continue;
+    const th = 2.6 + rnd() * 1.6;
+    m.rotation.set(0, rnd() * 3, 0.08);
+    m.position.set(x, th / 2, z);
+    m.scale.set(1, th, 1);
+    m.updateMatrix();
+    trunk.setMatrixAt(ti, m.matrix);
+    m.rotation.set(0, rnd() * 3, 0);
+    m.position.set(x, th + 0.2, z);
+    const cw = 1.8 + rnd() * 1.2;
+    m.scale.set(cw, 0.45, cw * (0.8 + rnd() * 0.3));
+    m.updateMatrix();
+    crown.setMatrixAt(ti++, m.matrix);
+    spots.push({ x, z, r: 1.2 });
+  }
+  trunk.count = crown.count = ti;
+  group.add(trunk, crown);
+  // street lamps on the inner ring
+  const lampMat = bendMaterial(new THREE.MeshStandardMaterial({ color: '#ffd98a', emissive: '#ffb347', emissiveIntensity: 1.4 }));
+  const poleMat = bendMaterial(new THREE.MeshStandardMaterial({ color: '#2e3338', roughness: 0.6, metalness: 0.5 }));
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.3;
+    const r = inner - 1.6;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 3.2, 6), poleMat);
+    pole.position.set(Math.sin(a) * r, 1.6, Math.cos(a) * r);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), lampMat);
+    bulb.position.set(pole.position.x, 3.25, pole.position.z);
+    group.add(pole, bulb);
+  }
+  // the town's people walking round the tower
+  const SHIRTS = ['#2f6db5', '#c8321f', '#3e8f3a', '#e0a21a', '#7a4fb5', '#e05f8c', '#1f8f8a'];
+  const walkers = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.2, 0.75, 3, 6), bendMaterial(new THREE.MeshStandardMaterial({ roughness: 0.8 })), Math.max(1, people));
+  const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.17, 8, 6), bendMaterial(new THREE.MeshStandardMaterial({ color: '#c99773', roughness: 0.7 })), Math.max(1, people));
+  const paths = [];
+  for (let i = 0; i < people; i++) {
+    walkers.setColorAt(i, new THREE.Color(SHIRTS[i % SHIRTS.length]));
+    paths.push({ r: inner - 0.6 + rnd() * 1.4, a: rnd() * Math.PI * 2, v: (0.05 + rnd() * 0.07) * (rnd() < 0.5 ? -1 : 1), ph: rnd() * 6 });
+  }
+  walkers.count = heads.count = people;
+  if (walkers.instanceColor) walkers.instanceColor.needsUpdate = true;
+  group.add(walkers, heads);
+  group.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
+  return {
+    group,
+    update(tt) {
+      if (rotor) rotor.rotation.z = tt * 2.2;
+      for (let i = 0; i < paths.length; i++) {
+        const pth = paths[i];
+        const a = pth.a + tt * pth.v;
+        const bob = Math.abs(Math.sin(tt * 6 + pth.ph)) * 0.06;
+        m.rotation.set(0, a + (pth.v > 0 ? Math.PI / 2 : -Math.PI / 2), 0);
+        m.scale.set(1, 1, 1);
+        m.position.set(Math.sin(a) * pth.r, 0.6 + bob, Math.cos(a) * pth.r);
+        m.updateMatrix();
+        walkers.setMatrixAt(i, m.matrix);
+        m.position.y = 1.32 + bob;
+        m.updateMatrix();
+        heads.setMatrixAt(i, m.matrix);
+      }
+      walkers.instanceMatrix.needsUpdate = true;
+      heads.instanceMatrix.needsUpdate = true;
+    },
+    dispose() {
+      // (the model's own geometry and materials are shared: only what was made here goes)
+      group.traverse((o) => {
+        if (o.userData.shared || (rotor && isIn(o, rotor))) return;
+        o.geometry?.dispose?.();
+        const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+        for (const mm of ms) { mm.map?.dispose?.(); mm.dispose(); }
+      });
+    },
+  };
+}
+const isIn = (o, root) => { for (let p = o; p; p = p.parent) if (p === root) return true; return false; };
+
+/**
+ * Copies of a model part (its meshes, each with its own materials) drawn as instances at the transforms `at`
+ * (Matrix4s): one draw call per mesh of the part, however many copies.
+ */
+function instancesOf(src, at, parent) {
+  if (!src || !at.length) return [];
+  src.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(src.matrixWorld).invert();
+  const out = [];
+  const tmp = new THREE.Matrix4();
+  src.traverse((o) => {
+    if (!o.isMesh) return;
+    const local = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);
+    const im = new THREE.InstancedMesh(o.geometry, o.material, at.length);
+    at.forEach((m, i) => im.setMatrixAt(i, tmp.multiplyMatrices(m, local)));
+    im.instanceMatrix.needsUpdate = true;
+    im.frustumCulled = false;
+    im.userData.shared = true;   // (the geometry and materials are the model's: not disposed with the island)
+    parent.add(im);
+    out.push(im);
+  });
+  return out;
+}
+
+export function addVillage(parent, { inner = 9, outer = 18, seed = 7, people = 10, avoid = [], dorp = null } = {}) {
   const group = new THREE.Group();
   parent.add(group);
+  if (dorp) return addKarooVillage(group, { inner, outer, seed, people, avoid, dorp });
   let s = seed * 9301 + 49297;
   const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
   const wallMat = bendMaterial(new THREE.MeshStandardMaterial({ map: wallTexture(), roughness: 0.9 }));
