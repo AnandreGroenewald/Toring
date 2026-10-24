@@ -146,7 +146,7 @@ detail(boot, 'noise', scale=14, mix=0.3, color2='#3c2614')
 detail(skin, 'noise', scale=20, mix=0.08)
 objs = [b for _, b, _ in BASE]
 highs = [high_copy(b, 1, {'kind': 'STUCCI', 'scale': 0.004, 'strength': 0.003}) if n in ('thigh', 'shin', 'torso', 'upperarm', 'pelvis') else None for n, b, _ in BASE]
-bake_set(objs, 'builder', size=1024, highs=highs)
+bake_set(objs, 'builder', size=512, highs=highs)
 for n, b, det in BASE:
     o = join([b] + det, n) if det else b
     o.name = n

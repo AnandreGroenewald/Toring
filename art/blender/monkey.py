@@ -72,7 +72,7 @@ for s in (1, -1):
 # the fur baked: streaky brown-grey, lighter in front, soft shadows; fine fur in the normal map
 detail(fur, 'stripes', scale=26, mix=0.25, color2='#5a4a38')
 highs = [high_copy(o, 1, {'kind': 'STUCCI', 'scale': 0.01, 'strength': 0.012}) for o in (body, skull, arms)]
-bake_set([body, skull, arms], 'monkey', size=1024, highs=highs)
+bake_set([body, skull, arms], 'monkey', size=512, highs=highs)
 body = join([body] + bodyDetails, 'body')
 head = join([skull] + H, 'head')
 pivot(head, (0, -0.03, 0.8))

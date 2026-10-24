@@ -195,7 +195,7 @@ def detail(mat, kind, scale=20.0, mix=0.35, color2=None):
     return mat
 
 
-def bake_set(objs, name, size=1024, highs=None, samples=24, out_dir=None, ao_dist=0.18, ao_k=0.5):
+def bake_set(objs, name, size=1024, highs=None, samples=24, out_dir=None, ao_dist=0.18, ao_k=0.5, rough_map=False):
     """Bakes `objs` (low-poly parts) into one texture set: colour x ambient occlusion, roughness/metal, and (from
     `highs`, a matching list of finer copies, or None) a normal map. Each part then has one material using them."""
     import numpy as np
@@ -272,7 +272,10 @@ def bake_set(objs, name, size=1024, highs=None, samples=24, out_dir=None, ao_dis
             im.filepath_raw = os.path.join(dbg, f'{name}_{k}.png')
             im.file_format = 'PNG'
             im.save()
-    for k in ('col', 'rough', 'nrm'):
+    # (phones: a roughness map costs as much memory as the colour and shows little at this size: one value instead)
+    rough_mean = float(r[:, 0][r[:, 3] > 0].mean()) if (r[:, 3] > 0).any() else 0.7
+    keep = ('col', 'rough', 'nrm') if rough_map else ('col', 'nrm')
+    for k in keep:
         imgs[k].pack()
     # one material per part: the baked set (keeps any glow the part had)
     for o in objs:
@@ -288,11 +291,14 @@ def bake_set(objs, name, size=1024, highs=None, samples=24, out_dir=None, ao_dis
         tc = nt.nodes.new('ShaderNodeTexImage')
         tc.image = imgs['col']
         nt.links.new(tc.outputs['Color'], b.inputs['Base Color'])
-        tr = nt.nodes.new('ShaderNodeTexImage')
-        tr.image = imgs['rough']
-        sep = nt.nodes.new('ShaderNodeSeparateColor')
-        nt.links.new(tr.outputs['Color'], sep.inputs['Color'])
-        nt.links.new(sep.outputs['Green'], b.inputs['Roughness'])
+        if rough_map:
+            tr = nt.nodes.new('ShaderNodeTexImage')
+            tr.image = imgs['rough']
+            sep = nt.nodes.new('ShaderNodeSeparateColor')
+            nt.links.new(tr.outputs['Color'], sep.inputs['Color'])
+            nt.links.new(sep.outputs['Green'], b.inputs['Roughness'])
+        else:
+            b.inputs['Roughness'].default_value = max(0.3, min(0.95, rough_mean))
         b.inputs['Metallic'].default_value = 0.0
         if highs:
             tn = nt.nodes.new('ShaderNodeTexImage')

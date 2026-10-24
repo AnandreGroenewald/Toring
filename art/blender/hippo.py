@@ -52,7 +52,7 @@ for s in (1, -1):
 detail(skin, 'noise', scale=5, mix=0.25, color2='#5e4f63')
 detail(blush, 'noise', scale=8, mix=0.2, color2='#9a6f78')
 highs = [high_copy(body, 1, {'kind': 'CLOUDS', 'scale': 0.06, 'strength': 0.035}), high_copy(jaw, 1, {'kind': 'CLOUDS', 'scale': 0.05, 'strength': 0.025})]
-bake_set([body, jaw], 'hippo', size=1024, highs=highs)
+bake_set([body, jaw], 'hippo', size=512, highs=highs)
 body = join([body] + parts, 'body')
 jaw = join([jaw] + jparts, 'jaw')
 pivot(jaw, (0, -0.85, 0.12))

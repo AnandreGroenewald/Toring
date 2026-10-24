@@ -78,7 +78,7 @@ while x < 1.56:
 detail(skin, 'noise', scale=7, mix=0.22, color2='#33461f')
 detail(belly, 'stripes', scale=9, mix=0.12)
 highs = [high_copy(body, 2, {'kind': 'VORONOI', 'scale': 0.028, 'strength': 0.03}), high_copy(jaw, 2, {'kind': 'VORONOI', 'scale': 0.024, 'strength': 0.022})]
-bake_set([body, jaw], 'croc', size=1024, highs=highs)
+bake_set([body, jaw], 'croc', size=512, highs=highs)
 body = join([body] + parts, 'body')
 jaw = join([jaw] + jparts, 'jaw')
 pivot(jaw, (0.74, 0, 0.11))
