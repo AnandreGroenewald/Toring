@@ -1105,7 +1105,22 @@ function createRide(K, d) {
     cam.look.lerp(l, a);
     camera.position.copy(cam.pos);
     camera.lookAt(cam.look);
+    // the feel of speed: the view widens a little as the river speeds up and in the rapids (narrower while aiming), and
+    // leans a touch into each carve (none with less motion)
+    if (!reduced && phase === 'run' && !d.debugCam) {
+      const sp = clamp((speedAt(dist, len) - RIVER.speed0) / (RIVER.speed1 - RIVER.speed0), 0, 1);
+      const want = FOV0 + sp * 5 + rapK * 3 - (aiming ? 6 : 0);
+      camera.fov += (want - camera.fov) * (1 - Math.exp(-dt * 3));
+      camera.updateProjectionMatrix();
+      camRoll += (-leanV * 0.045 - camRoll) * (1 - Math.exp(-dt * 6));
+      camera.rotateZ(camRoll);
+    } else if (Math.abs(camera.fov - FOV0) > 0.01) {
+      camera.fov += (FOV0 - camera.fov) * (1 - Math.exp(-dt * 4));
+      camera.updateProjectionMatrix();
+    }
   }
+  const FOV0 = camera.fov;
+  let camRoll = 0;
 
   // ---------------------------------------------------------------------------------------------- the loop
   let pilotOn = !!d.autopilot;
@@ -1407,6 +1422,8 @@ function createRide(K, d) {
     noseMat.dispose();
     for (const g of [rocketBody, rocketNose, rocketFin, rocketFlame]) g.dispose();
     if (raid) setBend(1);
+    camera.fov = FOV0;
+    camera.updateProjectionMatrix();
     audio.setAmbience?.(ambBefore);
     island.dispose();
     beasts.dispose();
