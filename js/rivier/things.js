@@ -266,6 +266,10 @@ export function createIsland(things, { radius = 26 } = {}) {
   const towerG = new THREE.Group();
   towerG.position.y = 3.6;
   group.add(towerG);
+  const ground = new THREE.Group();
+  ground.position.y = 3.6;
+  group.add(ground);
+  const village = addVillage(ground, { inner: 8.5, outer: radius * 0.86, people: 10 });
   group.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
   let height = 0;
 
@@ -273,7 +277,7 @@ export function createIsland(things, { radius = 26 } = {}) {
     for (const c of [...towerG.children]) towerG.remove(c);
     height = addTower(things, towerG, floors);
   }
-  return { group, setFloors, get top() { return height + 3.6; }, radius };
+  return { group, setFloors, get top() { return height + 3.6; }, radius, update: (tt) => village.update(tt), dispose: () => village.dispose() };
 }
 
 /** Floors (js/core/weektower.js) as 3D blocks into `group`, each in its own skin; returns the tower's height (m). */
@@ -323,4 +327,212 @@ export function createStartTower(things, layout, skin = 'kleur') {
   const h = addTower(things, towerG, floors, skin);
   group.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
   return { group, top: (floors.length ? h : 0) + 2.4 };
+}
+
+// ------------------------------------------------------------------------------------------------ the dorp on the island
+/** Whitewashed walls with windows and a door (one picture for every house). */
+function wallTexture() {
+  const c = canvas(128, 96);
+  const g = c.getContext('2d');
+  g.fillStyle = '#efe8da';
+  g.fillRect(0, 0, 128, 96);
+  g.fillStyle = 'rgba(120,100,80,0.10)';
+  for (let i = 0; i < 260; i++) g.fillRect(Math.random() * 128, Math.random() * 96, 2, 1);
+  g.fillStyle = '#c9b89a';
+  g.fillRect(0, 84, 128, 12);   // (the plinth)
+  const win = (x, y) => {
+    g.fillStyle = '#3d5a6b';
+    g.fillRect(x, y, 18, 22);
+    g.fillStyle = '#ffe9a8';
+    g.globalAlpha = 0.55;
+    g.fillRect(x + 2, y + 2, 14, 18);
+    g.globalAlpha = 1;
+    g.fillStyle = '#efe8da';
+    g.fillRect(x + 8, y, 2, 22);
+    g.fillRect(x, y + 10, 18, 2);
+    g.fillStyle = '#5f7f4a';
+    g.fillRect(x - 5, y, 4, 22);
+    g.fillRect(x + 19, y, 4, 22);
+  };
+  win(16, 34);
+  win(94, 34);
+  g.fillStyle = '#6b3f24';
+  g.fillRect(55, 44, 18, 40);   // (the door)
+  g.fillStyle = '#b8894a';
+  g.fillRect(69, 63, 2, 3);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+function roofTexture() {
+  const c = canvas(64, 64);
+  const g = c.getContext('2d');
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, 64, 64);
+  for (let x = 0; x < 64; x += 4) {
+    g.fillStyle = 'rgba(0,0,0,0.16)';
+    g.fillRect(x, 0, 1.5, 64);
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.fillRect(x + 2, 0, 1, 64);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+/**
+ * A little Karoo dorp round the tower's foot: whitewashed houses with corrugated-iron roofs (red oxide, green, grey), a
+ * church with its steeple, flat-topped acacias, street lamps, a boat at the jetty, and the town's people walking. Ring
+ * between `inner` and `outer` (m) round the middle. Returns { group, update(t) }.
+ */
+export function addVillage(parent, { inner = 9, outer = 18, seed = 7, people = 10 } = {}) {
+  const group = new THREE.Group();
+  parent.add(group);
+  let s = seed * 9301 + 49297;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const wallMat = bendMaterial(new THREE.MeshStandardMaterial({ map: wallTexture(), roughness: 0.9 }));
+  const roofMat = bendMaterial(new THREE.MeshStandardMaterial({ map: roofTexture(), roughness: 0.55, metalness: 0.25, vertexColors: false }));
+  const prism = (() => {
+    const sh = new THREE.Shape([new THREE.Vector2(-0.5, 0), new THREE.Vector2(0.5, 0), new THREE.Vector2(0, 0.42)]);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 1, bevelEnabled: false });
+    g.translate(0, 0, -0.5);
+    return g;
+  })();
+  const HOUSES = 9;
+  const body = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), wallMat, HOUSES + 1);
+  const roof = new THREE.InstancedMesh(prism, roofMat, HOUSES + 1);
+  const ROOF = ['#9c3b2a', '#3f6b4a', '#7d8790', '#9c3b2a', '#4c6f8c'].map((c) => new THREE.Color(c));
+  const m = new THREE.Object3D();
+  const spots = [];
+  for (let i = 0; i < HOUSES; i++) {
+    const a = (i / HOUSES) * Math.PI * 2 + rnd() * 0.3;
+    if (Math.abs(Math.sin(a)) < 0.25 && Math.cos(a) > 0) continue;   // (the jetty's side stays open)
+    const r = inner + rnd() * (outer - inner - 3);
+    const w = 3.2 + rnd() * 1.8;
+    const hh = 2.3 + rnd() * 0.6;
+    const dd = 3 + rnd() * 1.2;
+    const x = Math.sin(a) * r;
+    const z = Math.cos(a) * r;
+    m.position.set(x, hh / 2, z);
+    m.rotation.set(0, a + Math.PI, 0);
+    m.scale.set(w, hh, dd);
+    m.updateMatrix();
+    body.setMatrixAt(spots.length, m.matrix);
+    m.position.set(x, hh, z);
+    m.scale.set(w + 0.5, (w + 0.5) * 0.8, dd + 0.4);
+    m.updateMatrix();
+    roof.setMatrixAt(spots.length, m.matrix);
+    roof.setColorAt(spots.length, ROOF[i % ROOF.length]);
+    spots.push({ x, z, a });
+  }
+  // the church: a long white hall and its steeple, on the far side
+  {
+    const a = Math.PI * 1.05;
+    const r = outer - 3.5;
+    const x = Math.sin(a) * r;
+    const z = Math.cos(a) * r;
+    m.position.set(x, 1.8, z);
+    m.rotation.set(0, a, 0);
+    m.scale.set(4.2, 3.6, 8);
+    m.updateMatrix();
+    body.setMatrixAt(spots.length, m.matrix);
+    m.position.set(x, 3.6, z);
+    m.scale.set(4.8, 3.6, 8.4);
+    m.updateMatrix();
+    roof.setMatrixAt(spots.length, m.matrix);
+    roof.setColorAt(spots.length, new THREE.Color('#5a5f66'));
+    spots.push({ x, z, a, church: true });
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(1.8, 6.5, 1.8), wallMat);
+    tower.position.set(x + Math.sin(a) * 4.6, 3.25, z + Math.cos(a) * 4.6);
+    group.add(tower);
+    const spire = new THREE.Mesh(new THREE.ConeGeometry(1.35, 4.2, 4), bendMaterial(new THREE.MeshStandardMaterial({ color: '#5a5f66', roughness: 0.5, metalness: 0.3 })));
+    spire.position.set(tower.position.x, 8.6, tower.position.z);
+    spire.rotation.y = Math.PI / 4 + a;
+    group.add(spire);
+  }
+  body.count = spots.length;
+  roof.count = spots.length;
+  body.instanceMatrix.needsUpdate = true;
+  roof.instanceMatrix.needsUpdate = true;
+  if (roof.instanceColor) roof.instanceColor.needsUpdate = true;
+  group.add(body, roof);
+  // acacias: a thin trunk and a flat, wide crown
+  const TREES = 8;
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.12, 0.2, 1, 6), bendMaterial(new THREE.MeshStandardMaterial({ color: '#5a4030', roughness: 0.9 })), TREES);
+  const crown = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 6), bendMaterial(new THREE.MeshStandardMaterial({ color: '#5f7a32', roughness: 0.95, flatShading: true })), TREES);
+  for (let i = 0; i < TREES; i++) {
+    const a = rnd() * Math.PI * 2;
+    const r = inner * 0.75 + rnd() * (outer + 1 - inner * 0.75);
+    if (spots.some((sp) => Math.hypot(sp.x - Math.sin(a) * r, sp.z - Math.cos(a) * r) < 3.6)) continue;
+    const th = 2.6 + rnd() * 1.6;
+    m.rotation.set(0, rnd() * 3, 0.08);
+    m.position.set(Math.sin(a) * r, th / 2, Math.cos(a) * r);
+    m.scale.set(1, th, 1);
+    m.updateMatrix();
+    trunk.setMatrixAt(i, m.matrix);
+    m.rotation.set(0, rnd() * 3, 0);
+    m.position.set(Math.sin(a) * r, th + 0.2, Math.cos(a) * r);
+    const cw = 1.8 + rnd() * 1.2;
+    m.scale.set(cw, 0.45, cw * (0.8 + rnd() * 0.3));
+    m.updateMatrix();
+    crown.setMatrixAt(i, m.matrix);
+  }
+  group.add(trunk, crown);
+  // street lamps by the houses (their light comes on as the sun sets: a warm glow)
+  const lampMat = bendMaterial(new THREE.MeshStandardMaterial({ color: '#ffd98a', emissive: '#ffb347', emissiveIntensity: 1.4 }));
+  const poleMat = bendMaterial(new THREE.MeshStandardMaterial({ color: '#2e3338', roughness: 0.6, metalness: 0.5 }));
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.3;
+    const r = inner - 1.6;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 3.2, 6), poleMat);
+    pole.position.set(Math.sin(a) * r, 1.6, Math.cos(a) * r);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), lampMat);
+    bulb.position.set(pole.position.x, 3.25, pole.position.z);
+    group.add(pole, bulb);
+  }
+  // a boat at the jetty
+  {
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.7, 4.2), bendMaterial(new THREE.MeshStandardMaterial({ color: '#f2efe8', roughness: 0.5 })));
+    hull.position.set(2.6, -1.0, outer + 9);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.64, 0.14, 4.24), bendMaterial(new THREE.MeshStandardMaterial({ color: '#2f6fae', roughness: 0.5 })));
+    stripe.position.set(2.6, -0.85, outer + 9);
+    group.add(hull, stripe);
+  }
+  // the town's people walking round the tower (small figures in bright shirts)
+  const SHIRTS = ['#2f6db5', '#c8321f', '#3e8f3a', '#e0a21a', '#7a4fb5', '#e05f8c', '#1f8f8a'];
+  const walkers = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.2, 0.75, 3, 6), bendMaterial(new THREE.MeshStandardMaterial({ roughness: 0.8 })), Math.max(1, people));
+  const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.17, 8, 6), bendMaterial(new THREE.MeshStandardMaterial({ color: '#c99773', roughness: 0.7 })), Math.max(1, people));
+  const paths = [];
+  for (let i = 0; i < people; i++) {
+    walkers.setColorAt(i, new THREE.Color(SHIRTS[i % SHIRTS.length]));
+    paths.push({ r: inner - 0.6 + rnd() * 1.4, a: rnd() * Math.PI * 2, v: (0.05 + rnd() * 0.07) * (rnd() < 0.5 ? -1 : 1), ph: rnd() * 6 });
+  }
+  walkers.count = heads.count = people;
+  if (walkers.instanceColor) walkers.instanceColor.needsUpdate = true;
+  group.add(walkers, heads);
+  group.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
+  return {
+    group,
+    update(t) {
+      for (let i = 0; i < paths.length; i++) {
+        const p = paths[i];
+        const a = p.a + t * p.v;
+        const bob = Math.abs(Math.sin(t * 6 + p.ph)) * 0.06;
+        m.rotation.set(0, a + (p.v > 0 ? Math.PI / 2 : -Math.PI / 2), 0);
+        m.scale.set(1, 1, 1);
+        m.position.set(Math.sin(a) * p.r, 0.6 + bob, Math.cos(a) * p.r);
+        m.updateMatrix();
+        walkers.setMatrixAt(i, m.matrix);
+        m.position.y = 1.32 + bob;
+        m.updateMatrix();
+        heads.setMatrixAt(i, m.matrix);
+      }
+      walkers.instanceMatrix.needsUpdate = true;
+      heads.instanceMatrix.needsUpdate = true;
+    },
+    dispose() {
+      group.traverse((o) => { o.geometry?.dispose?.(); const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []; for (const mm of ms) { mm.map?.dispose?.(); mm.dispose(); } });
+    },
+  };
 }

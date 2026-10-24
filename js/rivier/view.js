@@ -139,7 +139,7 @@ function createTown(K, d) {
   const island = createIsland(things, { radius: 22 });
   scene.add(island.group);
   island.setFloors(d.floors || []);
-  const IZ = 60;
+  const IZ = 0;   // (the island at the world's middle: nothing bends)
   let alive = true;
   let raf = 0;
   let last = performance.now();
@@ -189,6 +189,7 @@ function createTown(K, d) {
     camera.position.set(Math.sin(a) * D, mid + D * 0.12, -IZ + Math.cos(a) * D);
     camera.lookAt(0, mid, -IZ);
     island.group.position.set(0, -0.6, -IZ);
+    island.update(t);
     world.update(0, t);
   }
   function loop(now) {
@@ -213,6 +214,7 @@ function createTown(K, d) {
     cancelAnimationFrame(raf);
     removeEventListener('resize', place);
     scene.remove(island.group, things.spray);
+    island.dispose();
     things.dispose();
     world.dispose();
     ov.innerHTML = '';
@@ -653,6 +655,7 @@ function createRide(K, d) {
     }
     // the island ahead, in the lake; your tower behind, at the river's head
     island.group.position.set(0, -0.6, -(islandZ - dist));
+    island.update(t);
     // (your tower stays upstream: behind the camera once you ride)
     start.group.position.set(0, -0.6, dist + START_Z);
     barEl.style.width = `${clamp(dist / (len - RIVER.finishRun), 0, 1) * 100}%`;
@@ -744,6 +747,7 @@ function createRide(K, d) {
     for (const l of live) despawn(l);
     live.length = 0;
     scene.remove(rider.group, island.group, start.group, things.spray);
+    island.dispose();
     beasts.dispose();
     things.dispose();
     world.dispose();
