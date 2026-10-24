@@ -2,7 +2,7 @@
 // fell off your tower, the white water round all of them, the spray, and your crew's island with its Weektoring (every
 // floor in the skin of whoever stacked it). Kept in pools: the river re-uses them as it goes.
 import * as THREE from '../../lib/three.module.min.js';
-import { bendMaterial } from './world.js';
+import { bendMaterial, puffTexture } from './world.js';
 import { portraitDataUrl } from '../game/residents.js';
 import { dimsOf, PX } from '../core/weektower.js';
 import { getGeometry } from '../game/blocks.js';
@@ -233,45 +233,100 @@ export function createThings(scene, pieces) {
     return root;
   }
 
-  // the spray off the board and the splashes: one cloud of soft dots
-  const N = 160;
+  // the spray off the board and the splashes: one cloud of droplets (each its own size, thinning out as it falls) with
+  // a soft puff of mist in every few, so a splash reads as water rather than white balls
+  const N = 360;
   const pos = new Float32Array(N * 3);
   const vel = new Float32Array(N * 3);
   const life = new Float32Array(N);
+  const life0 = new Float32Array(N).fill(1);
+  const alpha = new Float32Array(N);
+  const size = new Float32Array(N);
+  const puff = new Uint8Array(N);
+  const kind = new Float32Array(N);
+  const turn = Float32Array.from({ length: N }, () => Math.random() * 6.28);
   const sprayGeo = new THREE.BufferGeometry();
   sprayGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const sprayMat = new THREE.PointsMaterial({ map: dotTexture(), size: 0.32, transparent: true, depthWrite: false, opacity: 0.85, color: '#ffffff', sizeAttenuation: true });
+  sprayGeo.setAttribute('aA', new THREE.BufferAttribute(alpha, 1));
+  sprayGeo.setAttribute('aS', new THREE.BufferAttribute(size, 1));
+  sprayGeo.setAttribute('aK', new THREE.BufferAttribute(kind, 1));
+  sprayGeo.setAttribute('aR', new THREE.BufferAttribute(turn, 1));
+  const sprayMat = new THREE.ShaderMaterial({
+    uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), map: { value: dotTexture() }, puffMap: { value: puffTexture(41) }, diffuse: { value: new THREE.Color('#f4fbfa') }, uScale: { value: 400 } },
+    vertexShader: `attribute float aA; attribute float aS; attribute float aK; attribute float aR; uniform float uScale; varying float vA; varying float vK; varying float vR;
+      #include <fog_pars_vertex>
+      void main() {
+        vA = aA; vK = aK; vR = aR;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        gl_PointSize = aS * uScale / max(0.1, -mvPosition.z);
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `uniform sampler2D map; uniform sampler2D puffMap; uniform vec3 diffuse; varying float vA; varying float vK; varying float vR;
+      #include <fog_pars_fragment>
+      void main() {
+        vec2 q = gl_PointCoord - 0.5;
+        q = vec2(cos(vR) * q.x - sin(vR) * q.y, sin(vR) * q.x + cos(vR) * q.y) + 0.5;
+        float a = mix(texture2D(map, gl_PointCoord).a, texture2D(puffMap, q).a * 1.6, vK) * vA;
+        if (a < 0.01) discard;
+        gl_FragColor = vec4(diffuse, a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }`,
+    transparent: true, depthWrite: false, fog: true,
+  });
   const spray = new THREE.Points(sprayGeo, sprayMat);
   spray.frustumCulled = false;
+  const dbuf = new THREE.Vector2();
+  spray.onBeforeRender = (renderer) => { renderer.getDrawingBufferSize(dbuf); sprayMat.uniforms.uScale.value = dbuf.y * 0.5; };
   scene.add(spray);
   let next = 0;
   for (let i = 0; i < N; i++) pos[i * 3 + 1] = -50;
   function emit(x, y, z, n, spread = 1.4, up = 2.6) {
+    busy = 2;
     for (let k = 0; k < n; k++) {
       const i = next++ % N;
+      const p = k % 5 === 4;   // (a puff of mist)
+      puff[i] = p ? 1 : 0;
+      kind[i] = puff[i];
       pos[i * 3] = x + (Math.random() - 0.5) * 0.4;
       pos[i * 3 + 1] = y;
       pos[i * 3 + 2] = z + (Math.random() - 0.5) * 0.4;
-      vel[i * 3] = (Math.random() - 0.5) * spread * 2;
-      vel[i * 3 + 1] = up * (0.6 + Math.random() * 0.7);
-      vel[i * 3 + 2] = 1 + Math.random() * 2.5;
-      life[i] = 0.5 + Math.random() * 0.5;
+      const s = p ? 0.4 : 1;
+      vel[i * 3] = (Math.random() - 0.5) * spread * 2 * s;
+      vel[i * 3 + 1] = up * (0.6 + Math.random() * 0.7) * (p ? 0.5 : 1);
+      vel[i * 3 + 2] = (1 + Math.random() * 2.5) * s;
+      life[i] = life0[i] = p ? 0.7 + Math.random() * 0.6 : 0.5 + Math.random() * 0.5;
+      size[i] = p ? (0.6 + Math.random() * 0.5) * Math.min(1.6, 0.5 + spread * 0.5) : 0.07 + Math.random() ** 2 * 0.22;
     }
   }
+  let busy = 0;   // (frames left to upload: none once every drop has gone)
   function updateSpray(dt) {
+    if (!busy) return;
+    let alive = false;
     for (let i = 0; i < N; i++) {
       if (life[i] <= 0) continue;
+      alive = true;
       life[i] -= dt;
-      vel[i * 3 + 1] -= 9 * dt;
+      vel[i * 3 + 1] -= (puff[i] ? 2.5 : 9) * dt;
       pos[i * 3] += vel[i * 3] * dt;
       pos[i * 3 + 1] += vel[i * 3 + 1] * dt;
       pos[i * 3 + 2] += vel[i * 3 + 2] * dt;
+      const k = life[i] / life0[i];
+      alpha[i] = puff[i] ? 0.28 * k : 0.95 * Math.sqrt(k);
+      if (puff[i]) size[i] += dt * 0.6;   // (the mist spreads as it fades)
       if (life[i] <= 0 || pos[i * 3 + 1] < -0.2) {
         life[i] = 0;
+        alpha[i] = 0;
         pos[i * 3 + 1] = -50;
       }
     }
     sprayGeo.attributes.position.needsUpdate = true;
+    sprayGeo.attributes.aA.needsUpdate = true;
+    sprayGeo.attributes.aS.needsUpdate = true;
+    sprayGeo.attributes.aK.needsUpdate = true;
+    if (!alive) busy--;
   }
 
   /** The ride is over: its own copies of the materials and pictures go (Stapel's 3D blocks' own stay with pieces.js). */
@@ -280,7 +335,10 @@ export function createThings(scene, pieces) {
     blockMats.clear();
     for (const tex of faceTex.values()) tex.dispose();
     faceTex.clear();
-    for (const m of [foamMat, rockMat, ringMat, skinMat, ...shirtMats, sprayMat]) { m.map?.dispose?.(); m.dispose(); }
+    for (const m of [foamMat, rockMat, ringMat, skinMat, ...shirtMats]) { m.map?.dispose?.(); m.dispose(); }
+    sprayMat.uniforms.map.value.dispose();
+    sprayMat.uniforms.puffMap.value.dispose();
+    sprayMat.dispose();
     for (const g of [foamGeo, rockGeo, ringGeo, shirtGeo, armGeo, sprayGeo]) g.dispose();
   }
 

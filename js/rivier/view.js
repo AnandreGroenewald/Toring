@@ -170,7 +170,7 @@ function createTown(K, d) {
   const { scene, camera } = stage;
   const reduced = !!d.reducedMotion;
   const gameCanvas = document.querySelector('#game > canvas');
-  const world = buildRiverWorld(stage, d.scene);   // (the sky of his background skin)
+  const world = buildRiverWorld(stage, d.scene, { air: false });   // (the sky of his background skin; no river mist round the island)
   world.setPool(1e6);   // (all lake: the canyon is far off)
   const things = createThings(scene, pieces);
   things.models = d.models || {};   // (the Blender models, for the island's town)
