@@ -7,11 +7,14 @@
 # usage: Blender -b -P art/blender/hippo.py -- img/models/hippo.glb
 import sys, os, math
 sys.path.insert(0, os.path.dirname(__file__))
-from common import reset, out_path, material, skin_body, apply, prim, join, pivot, export, bake_set, high_copy, eye, gradient, palettize
+from common import reset, out_path, material, skin_body, apply, prim, join, pivot, export, bake_set, high_copy, eye, gradient, palettize, detail, bands
 
 reset()
 skin = material('hippo_skin', '#7a6b8c', rough=0.32)
 gradient(skin, '#6a5c80', '#e3a2ad', 0.12, 0.72)
+# (a hippo's hide: soft blotches of darker and lighter, faint folds across the back and neck)
+bands(skin, scale=3.0, mix=0.07, color2='#4f4166', axis='Y', distort=6)
+detail(skin, 'noise', scale=3.0, mix=0.22, color2='#584a72')
 lidm = material('hippo_lid', '#75668a', rough=0.36)
 pink = material('hippo_pink', '#f0a5b0', rough=0.4)
 mouth = material('hippo_mouth', '#e57f8e', rough=0.38)
@@ -21,7 +24,7 @@ dark = material('hippo_dark', '#2a1f2c', rough=0.3)
 
 # the body and the head (x across, y along: the head toward -y, z up); the muzzle's cheeks as side branches
 P = [
-    (0, 1.25, -0.1, 0.6, 0.52), (0, 0.8, 0.0, 0.92, 0.7), (0, 0.25, 0.04, 1.0, 0.74), (0, -0.25, 0.08, 0.9, 0.68),
+    (0, 1.36, -0.1, 0.42, 0.38), (0, 1.15, -0.04, 0.78, 0.62), (0, 0.8, 0.0, 0.94, 0.72), (0, 0.25, 0.06, 1.0, 0.76), (0, -0.25, 0.08, 0.9, 0.68),
     (0, -0.62, 0.24, 0.66, 0.52), (0, -0.95, 0.36, 0.6, 0.44), (0, -1.3, 0.34, 0.6, 0.36), (0, -1.62, 0.33, 0.56, 0.31),
     (0, -1.78, 0.32, 0.44, 0.24),
 ]
@@ -29,7 +32,8 @@ edges = [(i, i + 1) for i in range(len(P) - 1)]
 for s in (1, -1):
     b = len(P)
     P += [(s * 0.34, -1.4, 0.26, 0.4, 0.33), (s * 0.4, -1.62, 0.24, 0.32, 0.26)]
-    edges += [(6, b), (b, b + 1)]
+    edges += [(next(i for i, q in enumerate(P) if q[1] == -1.3), b), (b, b + 1)]   # (from the muzzle's middle)
+
 body = apply(skin_body('body', P, edges, smooth=2), tris=4600)
 body.data.materials.append(skin)
 
@@ -46,7 +50,7 @@ for s, nm in ((1, 'earL'), (-1, 'earR')):
 
 # the skin baked into one texture set (purple-grey over pink, soft shadow in the folds); the wrinkles and pores in the
 # normal map from finer copies
-highs = [high_copy(body, 1, {'kind': 'CLOUDS', 'scale': 0.07, 'strength': 0.02}), high_copy(jaw, 1, {'kind': 'CLOUDS', 'scale': 0.06, 'strength': 0.016}), None, None]
+highs = [high_copy(body, 1, {'kind': 'CLOUDS', 'scale': 0.05, 'strength': 0.03}), high_copy(jaw, 1, {'kind': 'CLOUDS', 'scale': 0.06, 'strength': 0.016}), None, None]
 bake_set([body, jaw] + ears, 'hippo', size=1024, highs=highs, ao_dist=0.3, ao_k=0.5)
 
 det = []

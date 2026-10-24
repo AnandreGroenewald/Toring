@@ -75,15 +75,18 @@ H.append(prim('torus', 'smile', loc=(0, -0.352, 0.885), scale=(0.055, 0.03, 0.04
 H.append(prim('sphere', 'mouth', loc=(0, -0.35, 0.865), scale=(0.045, 0.02, 0.022), mat=pinkm, segments=12, ring_count=6))
 # the bandana: a band round the head with white dots, a knot and two tails behind
 H.append(prim('torus', 'bandana', loc=(0, 0.02, 1.15), scale=(0.27, 0.27, 0.27), rot=(-0.28, 0, 0), mat=band, major_radius=1, minor_radius=0.18, major_segments=28, minor_segments=8))
-for k in range(12):
-    a = k / 12 * math.pi * 2
-    x = math.sin(a) * 0.27
-    y = 0.02 - math.cos(a) * 0.27 * math.cos(0.28)
-    z = 1.15 - math.cos(a) * 0.27 * math.sin(-0.28) * -1
-    H.append(prim('sphere', 'dot', loc=(x * 1.03, y * 1.03, z + 0.01), scale=(0.014, 0.014, 0.014), mat=dot, segments=6, ring_count=4))
+# (the dots on the band's outer face: points on its ring, turned with it)
+TILT = -0.28
+R_DOT = 0.27 + 0.044
+for k in range(14):
+    a = k / 14 * math.pi * 2
+    x = math.sin(a) * R_DOT
+    y = -math.cos(a) * R_DOT
+    H.append(prim('sphere', 'dot', loc=(x, 0.02 + y * math.cos(TILT), 1.15 + y * math.sin(TILT)), scale=(0.016, 0.016, 0.016), mat=dot, segments=8, ring_count=5))
+# the knot at the back, and its two tails hanging down and back from it
 H.append(prim('sphere', 'knot', loc=(0, 0.28, 1.08), scale=(0.06, 0.05, 0.05), mat=band, segments=12, ring_count=6))
 for s in (1, -1):
-    H.append(prim('cone', 'bandtail', loc=(s * 0.07, 0.36, 0.98), scale=(0.05, 0.02, 0.13), rot=(-0.6, s * 0.3, 0), mat=band, vertices=8, radius1=1, depth=1))
+    H.append(prim('cone', 'bandtail', loc=(s * 0.045, 0.33, 1.03), scale=(0.045, 0.018, 0.075), rot=(-2.3, s * 0.3, 0), mat=band, vertices=10, radius1=1, radius2=0.25, depth=2))
 
 AP = []
 for s in (1, -1):

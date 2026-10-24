@@ -189,7 +189,16 @@ def detail(mat, kind, scale=20.0, mix=0.35, color2=None):
     mixn = nt.nodes.new('ShaderNodeMix')
     mixn.data_type = 'RGBA'
     mixn.inputs['Factor'].default_value = mix
-    mixn.inputs['A'].default_value = base
+    # (on top of what the colour already is: a gradient or bands made before keep their place)
+    src = b.inputs['Base Color'].links[0].from_socket if b.inputs['Base Color'].links else None
+    if src is not None:
+        nt.links.new(src, mixn.inputs['A'])
+        # (the detail darkens and lightens what's there, rather than painting its own two colours over it)
+        mixn.blend_type = 'MULTIPLY'
+        ramp.color_ramp.elements[0].color = (0.62, 0.6, 0.66, 1)
+        ramp.color_ramp.elements[1].color = (1, 1, 1, 1)
+    else:
+        mixn.inputs['A'].default_value = base
     nt.links.new(ramp.outputs['Color'], mixn.inputs['B'])
     nt.links.new(mixn.outputs['Result'], b.inputs['Base Color'])
     return mat
