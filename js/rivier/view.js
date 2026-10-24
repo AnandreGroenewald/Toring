@@ -853,12 +853,12 @@ function createRide(K, d) {
       const row = course.rows[rowI++];
       for (const it of row.items) {
         let obj;
-        if (it.kind === 'block') obj = things.floating({ ...it, skin: 'kleur' });
+        if (it.kind === 'block') obj = things.floating({ ...it, skin: d.skin || 'kleur' });
         else if (it.kind === 'rock') obj = things.rock();
         else if (it.kind === 'croc') obj = beasts.croc(it.drift ? Math.sign(it.drift) : (rowI % 2 ? 1 : -1));
         else if (it.kind === 'hippo') obj = beasts.hippo();
         else if (it.kind === 'monkey') {
-          const blk = things.floating({ ...it, skin: 'kleur', spin: 0 });
+          const blk = things.floating({ ...it, skin: d.skin || 'kleur', spin: 0 });
           obj = beasts.monkeyOn(blk, Math.sign(-(it.drift || 1)), blk.userData.top);
         } else obj = things.person(it.who, who.indexOf(it.who));
         scene.add(obj);
@@ -1168,7 +1168,7 @@ function createRide(K, d) {
       let obj;
       if (k === 'croc') obj = beasts.croc(1);
       else if (k === 'hippo') obj = beasts.hippo();
-      else { const blk = things.floating({ ...it, skin: 'kleur', spin: 0 }); obj = beasts.monkeyOn(blk, 1, blk.userData.top); }
+      else { const blk = things.floating({ ...it, skin: d.skin || 'kleur', spin: 0 }); obj = beasts.monkeyOn(blk, 1, blk.userData.top); }
       scene.add(obj);
       live.push({ it, row: { z: 12 }, obj, z: 12, x: lx, done: true, drift: 0, zooX: lx });
     }
