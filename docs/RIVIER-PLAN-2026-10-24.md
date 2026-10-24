@@ -117,6 +117,24 @@ Your town (**Ons dorp**) is your crew's island: the Weektoring in the middle, ev
 - Browser (headless, phone size): the day's loop end to end, the river at 60 fps on a 4x slowed phone, a Saturday run
   with real taps, two phones in one crew, English and Afrikaans, a 360x640 screen.
 
+## 9. Release (only on his word; the quick security scan before each step)
+
+1. **Version**: js/config.js VERSION 1.20.0; sw.js cache stapel-v1.20.0; the app's versionCode 12000 / versionName 1.20.0;
+   release notes af + en (Play's 500 characters each).
+2. **Privacy pages**: the `Version` date on privaatheid.html / privacy.html → the release day (Ons dorp's section 2 is
+   already written: what's sent, what the server keeps, who sees it, six weeks for rivers).
+3. **Worker** (stapel-borge): the live one predates 1.16, so this deploy brings the TownHall and SlagRoom Durable Objects
+   (migration `v2-dorp-kasteel-kamers`) and all the server code since (towns, castles, rooms, Ons dorp). Check
+   `npx wrangler deployments list` first; deploy with `cd server && npx wrangler deploy`; then the front door must say
+   `"span":1` and `/span/ping` `{ok:true}`. Rollback: `npx wrangler rollback`.
+4. **Website**: `node tools/build-pages.mjs && (cd server && npx wrangler pages deploy ../pages-dist --project-name
+   stapelspel --branch main)`; check sw.js says stapel-v1.20.0. Rollback: Pages' previous deployment.
+5. **Play**: `npm run bundle` → the Play folder "Upload 1.20.0 internal" (aab, notes, README) → his own typed "upload".
+   **Data safety** gains: a user ID (the random Ons dorp player number), in-app activity (Daily heights, crew, towers),
+   user-generated names (crew names, checked) — collected, not shared, stored on Cloudflare, deletable on request.
+6. **After**: a real phone: Daily → ride → crane turn → town; a second phone joins by link; Saturday on the next real
+   Saturday (or the home server's test clock before).
+
 ## 8. Status
 
 - 24 Oct: plan written; checkpoint 1 built (the day's loop on one phone) and ready for his play over home Wi-Fi.
