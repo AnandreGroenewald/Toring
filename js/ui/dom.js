@@ -3241,7 +3241,7 @@ export function createUI(bus) {
         h('p', { class: 'week-gain', text: S.wkResGain(fmtM(Math.max(0, v.gain || 0)), v.added | 0) }),
         v.perfects > 0 ? h('p', { class: 'week-line', text: S.wkResPerfect(v.perfects) }) : null,
         h('p', { class: 'week-line', text: S.wkResPeople(fmtInt(v.people | 0)) }),
-        v.turns > 0 ? button('btn-big btn-green', [h('span', { text: S.wkAgain(v.turns) })], () => { closeModal(); bus.emit('ui:week-build'); }) : null,
+        v.turns > 0 ? button('btn-big btn-green', [h('span', { text: S.wkAgain(v.turns) })], () => { closeModal(); bus.emit('ui:week-build', { from: 'town' }); }) : null,
         button('btn-teal', [h('span', { text: S.wkTown })], () => { closeModal(); bus.emit('ui:span'); }),
         button('btn-white', [h('span', { text: S.wkDone })], () => { closeModal(); bus.emit('ui:home'); }))));
     openModal('week');
