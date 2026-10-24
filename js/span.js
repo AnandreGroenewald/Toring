@@ -100,7 +100,10 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
     try {
       const base = api();
       if (!base) return false;
-      const res = await fetchImpl(`${base.replace(/\/$/, '')}/`, { method: 'GET' });
+      // (a server that doesn't answer in time: this visit plays on this phone alone)
+      const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = ctl ? setTimeout(() => ctl.abort(), TIMEOUT_MS) : 0;
+      const res = await fetchImpl(`${base.replace(/\/$/, '')}/`, { method: 'GET', signal: ctl?.signal }).finally(() => clearTimeout(timer));
       const j = await res.json().catch(() => ({}));
       if (!j || !j.span) return false;
       return !!(await sync());
