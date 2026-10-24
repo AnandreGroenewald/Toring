@@ -63,6 +63,7 @@ const PRECACHE = [
   'js/ui/lewendeUi.js',
   'js/dorp.js',
   'js/span.js',
+  'js/ui/spannews.js',
   'js/core/span.js',
   'js/core/weektower.js',
   'js/core/dorp.js',

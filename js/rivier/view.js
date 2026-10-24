@@ -19,6 +19,7 @@ import { floorAt, hit as hitFloor, dimsOf } from '../core/weektower.js';
 import { portraitDataUrl, portraitsReady, CAST } from '../game/residents.js';
 import { S } from '../core/strings.js';
 import { fmtM, fmtInt } from '../core/format.js';
+import { spanNewsLine } from '../ui/spannews.js';
 import { audio, haptics } from '../audio.js';
 
 const AHEAD = 230;       // m: things are made this far ahead...
@@ -163,17 +164,7 @@ function createTown(K, d) {
   let last = performance.now();
   let t = 0;
   /** The screen over the island: the crew and its tower; Saturday's river; the week; the news; what you can do now. */
-  function newsLine(n) {
-    const who = esc(n.who || '');
-    if (n.kind === 'built') return S.nwBuilt(who, fmtM(n.gain || 0));
-    if (n.kind === 'repaired') return S.nwRepaired(who, fmtM(n.gain || 0));
-    if (n.kind === 'bombed') return S.nwBombed(who, fmtM(n.lost || 0), n.people | 0);
-    if (n.kind === 'rescued') return S.nwRescued(who, n.n | 0);
-    if (n.kind === 'joined') return S.nwJoined(who);
-    if (n.kind === 'left' || n.kind === 'removed') return S.nwLeft(who);
-    if (n.kind === 'saturday') return S.nwSaturday(n.place, n.of);
-    return '';
-  }
+  const newsLine = (n) => spanNewsLine(n);
   function paint(v) {
     const crew = v.crew;
     const r = v.river;
@@ -503,13 +494,16 @@ function createRide(K, d) {
     stage.shake(reduced ? 0 : 0.6);
     audio.play('land', { intensity: 1, size: 1 });
     const i = floorAt(isle.floors, f.u, f.v);
+    let mine = { hit: false, lost: 0 };   // (what this side counted: the server's word corrects it)
     if (i < 0) {
       pop(S.rvMissed, 900);
       audio.play('splash');
     } else {
       const res = hitFloor(isle.floors, i);
       bombHits++;
+      mine = { hit: true, lost: res.cracked ? 0 : res.lost };
       if (res.cracked) {
+        setIsleFloors(isle, res.floors);
         bombCracked++;
         pop(S.rvCracked, 1200);
         audio.play('land', { intensity: 0.6, size: 0.6 });
@@ -535,6 +529,16 @@ function createRide(K, d) {
     Promise.resolve(d.onBomb?.(isle.crew, { x: Math.round(f.u * 100) / 100, y: Math.round(f.v * 100) / 100 })).then((r) => {
       if (!alive || !r) return;
       if (r.error === 'leader' || r.error === 'phase') pop(S.rvLeadChanged, 1400);
+      const sh = r.hits?.[0];
+      if (sh) {
+        const hit = !sh.miss;
+        bombHits += (hit ? 1 : 0) - (mine.hit ? 1 : 0);
+        bombLost = Math.max(0, bombLost + (hit && !sh.cracked ? sh.lost || 0 : 0) - mine.lost);
+      } else if (r.error && mine.hit) {
+        // (the server didn't take it: nothing happened to their tower)
+        bombHits--;
+        bombLost = Math.max(0, bombLost - mine.lost);
+      }
       const rv = r.river;
       if (rv?.towers) {
         for (const is of isles) {

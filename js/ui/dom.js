@@ -15,6 +15,7 @@ import * as BLOCKS from '../game/blocks.js';
 import { playCelebration, drawCelebrationIcon } from './celebrate.js';
 import { EMOTES, EMOTE_PICKS } from '../config.js';
 import { fmtM, fmtInt, fmtClock, fmtDuration, dayName, monthName } from '../core/format.js';
+import { spanNewsLine } from './spannews.js';
 import { shareResult } from '../core/share.js';
 import { visitorResultLine, visitorLosses } from '../core/visitorrules.js';
 import { sayingOfTheDay, resultSaying, pauseSaying } from '../core/sayings.js';
@@ -3209,10 +3210,12 @@ export function createUI(bus) {
   /** The menu's way to your crew's island: the Weektoring's height and people; what waits (today's ride, build turns). */
   function spanMenuEl(v) {
     if (!v) return null;
-    const sub = v.heightM > 0 ? S.spanMenuSub(fmtM(v.heightM), fmtInt(v.people | 0)) : S.spanMenuNew;
+    // (news since you last looked comes first: a bomb on your tower, a crewmate's floors)
+    const fresh = (v.news || []).slice(-1)[0];
+    const sub = fresh ? spanNewsLine(fresh, { html: false }) : v.heightM > 0 ? S.spanMenuSub(fmtM(v.heightM), fmtInt(v.people | 0)) : S.spanMenuNew;
     const go = v.rideToday ? S.spanRide : v.turns > 0 ? S.spanTurns(v.turns) : null;
     return h('button', {
-      type: 'button', class: `dorp-btn span-btn${go ? ' has-go' : ''}`, 'aria-label': `${S.spanMenu}: ${sub}${go ? ` · ${go}` : ''}`,
+      type: 'button', class: `dorp-btn span-btn${go ? ' has-go' : ''}${fresh ? ' has-news' : ''}`, 'aria-label': `${S.spanMenu}: ${sub}${go ? ` · ${go}` : ''}`,
       onclick: () => { if (!guard()) return; audio.play('click'); bus.emit(v.rideToday ? 'ui:rivier' : 'ui:span'); },
     },
     h('span', { class: 'dorp-btn-pic dorp-btn-ic span-btn-ic' }, emo('🏝️')),

@@ -980,6 +980,8 @@ export const S = {
   nwJoined: (who) => `👋 ${who} het aangesluit`,
   nwLeft: (who) => `🚪 ${who} het uitgeklim`,
   nwSaturday: (p, of) => `🏆 Saterdag: ${p}de van ${of}`,
+  nwHit: (who, on, m) => `💥 ${who} het ${on} raak gegooi: -${m}`,
+  nwCracked: (who, on) => `💥 ${who} het ${on} se vloere gekraak`,
   rvTarget: '👑 Teiken',
   rvAimHint: 'Hou vas om te mik, sleep, los om te gooi!',
   rvBombsLeft: (n) => `💣 ${n}`,

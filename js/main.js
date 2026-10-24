@@ -2845,7 +2845,8 @@ async function openSpanTown() {
     const mod = await import('./rivier/view.js');
     if (seq !== rideSeq) return;
     const v = span.view();
-    if (span.online) span.sync().then(() => { if (ride?.refresh && screen === 'rivier') ride.refresh(span.view()); });
+    span.newsSeen();
+    if (span.online) span.sync().then(() => { if (ride?.refresh && screen === 'rivier') ride.refresh(span.view()); span.newsSeen(); });
     const r = await mod.openTown({
       ...v, myId: span.id, reducedMotion: !!settings.reducedMotion,
       onRide: () => { closeRide(); startRide(); },

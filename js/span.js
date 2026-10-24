@@ -160,13 +160,24 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
           ...base, week: c.week, floors: c.floors, heightM: heightOf(c.floors), people: c.people | 0, name: c.name,
           turns: sv.me.turns | 0, ticket: !!sv.me.ticket, weekdays: sv.me.weekdays | 0, bombs: sv.me.bombs | 0, metres: sv.me.metres || 0,
           monuments: c.monuments || [], crew: c, river: sv.river, phase: sv.phase, me: sv.me, inRiver: c.inRiver | 0, repair: c.repair | 0,
+          // (news since this phone last opened the town, what you did yourself left out)
+          news: (c.news || []).filter((n) => n.n > (d.seenN | 0) && !(n.who && n.who === sv.me?.name && n.kind !== 'bombed')),
         };
       }
       return {
         ...base, week: d.week, floors: d.floors, heightM: heightOf(d.floors), people: d.people, name: d.name,
         turns: turnsLeft(), ticket: ws.ticket, weekdays: ws.weekdays, bombs: ws.bombs, metres: ws.metres,
-        monuments: d.monuments, crew: null, river: null, phase: null, me: null, inRiver: 0, repair: 0,
+        monuments: d.monuments, crew: null, river: null, phase: null, me: null, inRiver: 0, repair: 0, news: [],
       };
+    },
+    /** The town was opened: its news so far is seen. */
+    newsSeen() {
+      const c = S()?.crew;
+      const top = Math.max(0, ...(c?.news || []).map((n) => n.n | 0));
+      if (top > (d.seenN | 0)) {
+        d.seenN = top;
+        save();
+      }
     },
     /**
      * A Daily was finished (`fell`: who jumped out of its floors). It counts for the week (its best height), gives a build

@@ -575,6 +575,11 @@ export function createSpanServer(store, { now = () => Date.now() } = {}) {
       if (!res.cracked && res.removed.length) await landed(r, target, res, c.name, t);
     }
     await setFloors(r, target, floors);
+    // (your own crew's news: what your bombs did)
+    if (out.some((o) => !o.miss)) {
+      addNews(c, { kind: 'hit', who: p.name || '', on: (await towerOf(r, target)).name, lost: Math.round(lost * 10) / 10 });
+      put(cKey(c.id), c);
+    }
     p.bombsUsed = (p.bombsUsed | 0) + hits.length;
     if (lost > 0) r.log.push({ at: t, kind: 'bomb', by: c.id, on: target, lost: Math.round(lost * 10) / 10 });
     r.log = r.log.slice(-60);

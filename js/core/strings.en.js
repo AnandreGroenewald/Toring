@@ -935,6 +935,8 @@ export const S_EN = {
   nwJoined: (who) => `👋 ${who} joined`,
   nwLeft: (who) => `🚪 ${who} left`,
   nwSaturday: (p, of) => `🏆 Saturday: ${p} of ${of}`,
+  nwHit: (who, on, m) => `💥 ${who} hit ${on}: -${m}`,
+  nwCracked: (who, on) => `💥 ${who} cracked ${on}’s floors`,
   rvTarget: '👑 Target',
   rvAimHint: 'Hold to aim, drag, let go to throw!',
   rvBombsLeft: (n) => `💣 ${n}`,
