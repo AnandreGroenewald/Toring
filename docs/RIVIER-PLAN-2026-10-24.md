@@ -145,3 +145,9 @@ Your town (**Ons dorp**) is your crew's island: the Weektoring in the middle, ev
   menu's button. Rules from the simulation (server/test/span.sim.test.js): the two-floor blast and the noon crane.
   Privacy pages describe Ons dorp's server data. Tests: npm 497, server 298 (incl. the 16-Saturday simulation),
   qa/rivier_raid.mjs 14/14, qa/span1200.mjs 18/18 (two browsers through the home server, Monday to Saturday).
+- 24 Oct (afternoon): checkpoint 3's look built (his "use whatever tool you need ... this needs to be our final build"):
+  Blender models with baked textures (builder + bazooka, crocodile, hippo, Blouaap, Karoo dorp, rock island, life ring,
+  boulders, jetty, boat), background-skin skies, waterfalls, acacias, birds, river sounds, speed feel, the winners'
+  fireworks, the founder's rename/remove, join warnings. Server hardening: unseen Saturdays settle at the new week, late
+  tickets get a river, floating floors dropped, new players limited per address, rivers deleted after 6 weeks.
+  Release notes drafted (docs/RELEASE-NOTES-1.20.md). Waiting: his play at home (link sent on Telegram) and his word.
