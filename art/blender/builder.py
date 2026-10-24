@@ -77,7 +77,7 @@ parts = []
 # --- the thigh: from the hip down to the knee (0.56 m), jeans, a seam
 thigh = apply(skin_body('thigh', [(*T(0, 0, 0), 0.14, 0.14), (*T(0, -0.3, 0.01), 0.125, 0.125), (*T(0, -0.56, 0), 0.1, 0.1)], [(0, 1), (1, 2)], smooth=2), tris=500)
 thigh.data.materials.append(jeans)
-BASE.append(('thigh', thigh, [prim('sphere', 'hipball', loc=(0, 0, 0), scale=(0.142, 0.142, 0.142), mat=jeansJ, segments=16, ring_count=10)]))
+BASE.append(('thigh', thigh, [prim('sphere', 'hipball', loc=(0, 0, 0), scale=(0.13, 0.13, 0.13), mat=jeansJ, segments=16, ring_count=10)]))
 # --- the shin: knee to ankle, then the boot (toe toward three's +z, the way rider.js puts it)
 shin = apply(skin_body('shin', [(*T(0, 0, 0), 0.105, 0.105), (*T(0, -0.3, 0), 0.095, 0.095), (*T(0, -0.5, 0), 0.088, 0.088)], [(0, 1), (1, 2)], smooth=2), tris=420)
 shin.data.materials.append(jeans)
@@ -92,10 +92,12 @@ pel = apply(skin_body('pelvis', [(*T(0, 0, -0.21), 0.16, 0.15), (*T(0, 0.02, 0),
 pel.data.materials.append(jeans)
 bel = shell(pel, 'belt', 0.06, 0.125, 0.006, belt, 0.012)
 bp_, bn_ = on_surface(pel, T(0.6, 0.09, 0), T(-1, 0, 0))
-buckle = prim('cube', 'buckle', loc=tuple(bp_ + bn_ * 0.012), scale=(0.012, 0.04, 0.03), mat=silver)
+brass = material('b_brass', '#d9a441', rough=0.3)
+steel = material('b_steel', '#59606a', rough=0.35)
+buckle = prim('cube', 'buckle', loc=tuple(bp_ + bn_ * 0.012), scale=(0.012, 0.04, 0.03), mat=brass)
 wood = material('b_wood', '#9a6a3c', rough=0.6)
 handle = prim('cyl', 'hammerhandle', loc=T(0.06, -0.08, -0.25), scale=(0.018, 0.018, 0.16), rot=(0, 0, 0), mat=wood, vertices=8)
-hhead = prim('cube', 'hammerhead', loc=T(0.06, 0.08, -0.25), scale=(0.075, 0.022, 0.026), mat=steelish if False else silver)
+hhead = prim('cube', 'hammerhead', loc=T(0.06, 0.08, -0.25), scale=(0.075, 0.022, 0.026), mat=steel)
 loop_ = prim('torus', 'hammerloop', loc=T(0.06, 0.06, -0.25), scale=(0.035, 0.035, 0.04), mat=belt, major_radius=1, minor_radius=0.25, major_segments=12, minor_segments=4)
 BASE.append(('pelvis', pel, [bel, buckle, handle, hhead, loop_]))
 # --- the torso: waist to shoulders under the vest (front = three's +x, shoulders at three's z = ±0.22)
@@ -153,7 +155,7 @@ HEAD = HB + H
 # --- the arms: a sleeve (shoulder to elbow), the forearm and a glove
 up = apply(skin_body('upperarm', [(*T(0, 0, 0), 0.088, 0.088), (*T(0, -0.33, 0), 0.07, 0.07)], [(0, 1)], smooth=2), tris=300)
 up.data.materials.append(shirt)
-BASE.append(('upperarm', up, [prim('sphere', 'shoulder', loc=(0, 0, 0), scale=(0.092, 0.092, 0.092), mat=shirtJ, segments=14, ring_count=8)]))
+BASE.append(('upperarm', up, [prim('sphere', 'shoulder', loc=(0, 0, 0), scale=(0.08, 0.08, 0.08), mat=shirtJ, segments=14, ring_count=8)]))
 fa = apply(skin_body('forearm', [(*T(0, 0, 0), 0.068, 0.068), (*T(0, -0.3, 0), 0.054, 0.054)], [(0, 1)], smooth=2), tris=260)
 fa.data.materials.append(skin)
 gl = prim('sphere', 'glove', loc=T(0, -0.36, 0), scale=(0.072, 0.088, 0.06), mat=glove, segments=12, ring_count=8)
@@ -256,11 +258,22 @@ K = [prim('cyl', 'tankshell', loc=T(TX, TY, 0), scale=(0.13, 0.13, 0.2), mat=cn_
 for dy in (-0.2, 0.2):
     K.append(prim('sphere', 'tankend', loc=T(TX, TY + dy, 0), scale=(0.131, 0.131, 0.065), mat=cn_teal, segments=24, ring_count=10))
 for dy in (-0.12, 0.0, 0.12):
-    K.append(prim('torus', 'tankband', loc=T(TX, TY + dy, 0), scale=(0.134, 0.134, 0.134), mat=cn_black, major_radius=1, minor_radius=0.05, major_segments=28, minor_segments=5))
+    # (a flat band round the tank: an open sleeve just over the shell, with a little thickness)
+    import bpy
+    bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=0.133, depth=0.03, end_fill_type='NOTHING', location=T(TX, TY + dy, 0))
+    bd = bpy.context.active_object
+    bd.name = 'tankband'
+    sl = bd.modifiers.new('Thick', 'SOLIDIFY')
+    sl.thickness = 0.006
+    sl.offset = 1
+    bd = apply(bd)
+    bd.data.materials.append(cn_black)
+    K.append(bd)
 K.append(prim('cyl', 'cap', loc=T(TX, TY + 0.28, 0), scale=(0.04, 0.04, 0.025), mat=cn_chrome, vertices=16))
 K.append(prim('cube', 'frame', loc=T(TX + 0.13, TY, 0), scale=(0.02, 0.2, 0.11), mat=cn_black))
 for s in (-1, 1):
-    K.append(prim('torus', 'strap', loc=T(-0.06, 0.5, s * 0.12), scale=(0.15, 0.15, 0.15), rot=ALONG, mat=cn_black, major_radius=1, minor_radius=0.09, major_segments=20, minor_segments=4))
+    # (a flat webbing strap over each shoulder)
+    K.append(prim('torus', 'strap', loc=T(-0.06, 0.5, s * 0.12), scale=(0.15, 0.15, 0.32), rot=ALONG, mat=cn_black, major_radius=1, minor_radius=0.06, major_segments=24, minor_segments=6))
 palettize([o for o in K if o.name != 'tankshell'], 'tank', rough=0.25)
 tank = join(K, 'tank')
 pivot(tank, (0, 0, 0))

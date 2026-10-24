@@ -234,9 +234,16 @@ def bake_set(objs, name, size=1024, highs=None, samples=24, out_dir=None, ao_dis
 
     def run(kind, img, **kw):
         target(img)
+        # (each part on its own: parts made at the same joint overlap, and would shade each other in blotches)
+        meshes = [m for m in bpy.context.view_layer.objects if m.type == 'MESH']
+        was = {m.name: m.hide_render for m in meshes}
         for o in objs:
+            for m in meshes:
+                m.hide_render = m is not o
             _select([o], o)
             bpy.ops.object.bake(type=kind, **kw)
+        for m in meshes:
+            m.hide_render = was[m.name]
 
     # (the finer copies stay out of the colour, shadow and roughness passes: they'd shade the parts they sit on)
     for hi in (highs or []):

@@ -338,7 +338,8 @@ export function createThings(scene, pieces) {
         vA = aA; vK = aK; vR = aR;
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mvPosition;
-        gl_PointSize = aS * uScale / max(0.1, -mvPosition.z);
+        // (a drop right at the lens stays a drop, not a big white ball)
+        gl_PointSize = min(aS * uScale / max(0.1, -mvPosition.z), uScale * (0.05 + 0.1 * aK));
         #include <fog_vertex>
       }`,
     fragmentShader: `uniform sampler2D map; uniform sampler2D puffMap; uniform vec3 diffuse; varying float vA; varying float vK; varying float vR;
