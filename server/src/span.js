@@ -21,7 +21,7 @@
 // host keeps one queue: a bomb and a build on the same tower never cross). Robot Rikus's crews fill a river and act by
 // catch-up: every call works out what they did since the last one. Writes only when a record changed.
 import {
-  SPAN, sastOf, weekOf, dowOf, plusDays, saturdayOf, sastAt, whistleAt, phaseAt, crewLocked, weekStats,
+  SPAN, sastOf, weekOf, dowOf, plusDays, saturdayOf, sastAt, whistleAt, phaseAt, crewLocked, weekStats, craneOpen,
   isSpanId, isSpanKey, isInvite, newSpanId, newInvite, cleanCrewName, cleanSkin,
 } from '../../js/core/span.js';
 import { addFloors, heightOf, hit, floorAt, moveIn, peopleIn, cleanFloor, withAdds, SHAPE_PX } from '../../js/core/weektower.js';
@@ -489,6 +489,7 @@ export function createSpanServer(store, { now = () => Date.now() } = {}) {
     if (ph.phase === 'uitdaging' && !weekStats(p.days, p.week).ticket) return [403, { error: 'ticket' }];
     if (c.lease && c.lease.until > t && c.lease.by !== p.id) return [409, { error: 'busy', by: c.members.find((m) => m.id === c.lease.by)?.name || '' }];
     const repair = !!b.repair;
+    if (!repair && !craneOpen(t, c.river ? (await get(rKey(c.river)))?.whistle : null)) return [403, { error: 'crane' }];
     if (repair ? !(c.repair > 0) : turnsLeft(p) <= 0) return [403, { error: repair ? 'norepair' : 'noturn' }];
     const blocks = repair ? Math.min(SPAN.turnBlocks, c.repair) : SPAN.turnBlocks;
     const id = newSpanId();

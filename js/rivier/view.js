@@ -176,7 +176,7 @@ function createTown(K, d) {
     if (r) {
       const rows = [...r.rows].sort((a, b) => b.h - a.h).map((x) => `<li class="${x.id === mine ? 'me' : ''}${x.leader ? ' lead' : ''}"><span>${x.leader ? '👑 ' : ''}${esc(x.name)}${x.id === mine ? ` <i>(${S.twYou})</i>` : ''}</span><b>${fmtM(x.h)}</b></li>`).join('');
       const place = over && r.final ? r.final.order.indexOf(mine) + 1 : 0;
-      river = `<div class="tw-river"><h3>${S.twRiver}</h3><ol>${rows}</ol>${over ? `<p class="tw-place">${place === 1 ? S.twPlaceFirst : place ? S.twPlace(place, r.rows.length) : ''}</p>` : `<p class="tw-sat">${iLead ? S.twYouLead : S.twWhistle}</p>`}</div>`;
+      river = `<div class="tw-river"><h3>${S.twRiver}</h3><ol>${rows}</ol>${over ? `<p class="tw-place">${place === 1 ? S.twPlaceFirst : place ? S.twPlace(place, r.rows.length) : ''}</p>` : `<p class="tw-sat">${iLead ? S.twYouLead : S.twWhistle}${v.craneShut ? '' : ` ${S.twCraneNoon}`}</p>`}</div>`;
     }
     const news = (crew?.news || []).slice(-3).reverse().map(newsLine).filter(Boolean).map((s) => `<li>${s}</li>`).join('');
     const members = crew ? `<div class="tw-crew"><span>${S.spanMembers(crew.members.length, 3)}: ${crew.members.map((m) => esc(m.name || '?')).join(' · ')}</span>${crew.members.length < 3 ? `<button class="tw-invite">${S.spanInvite}</button>` : ''}</div>` : '';
@@ -185,7 +185,7 @@ function createTown(K, d) {
     if (sat && !iLead && v.ticket && v.bombs > 0) btns.push(`<button class="tw-bomb">${S.twBomb(v.bombs)}</button>`);
     if (sat && v.ticket && v.repair > 0) btns.push(`<button class="tw-repair">${S.twRepair(v.repair)}</button>`);
     if (v.turns > 0 && !over) btns.push(`<button class="tw-build">${S.twBuild(v.turns)}</button>`);
-    if (!btns.length) btns.push(`<p class="tw-none">${over ? S.twKroning : S.twNoTurn}</p>`);
+    if (!btns.length) btns.push(`<p class="tw-none">${over ? S.twKroning : v.craneShut ? S.twCraneShut : S.twNoTurn}</p>`);
     ov.innerHTML = `<div class="tw-top"><button class="tw-back">${S.twBack}</button><div class="tw-card"><b>🏝️ ${esc(v.name || S.spanMenu)}</b>
         <span>${S.twHeight} <em>${fmtM(v.heightM || 0)}</em> · ${S.twPeople} <em>${fmtInt(v.people | 0)}</em></span></div></div>
       <div class="tw-panel">${river}<p>${v.ticket ? S.twTicketOk : S.twTicket(v.weekdays | 0, 3)}</p><p>${S.twBombs(v.bombs | 0)}</p>${r ? '' : `<p class="tw-sat">${S.twSat}</p>`}

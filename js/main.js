@@ -2768,7 +2768,7 @@ async function startRide() {
 }
 let weekLease = null;      // the crane's lease for this build turn (with the server)
 let weekTurnBusy = false;
-const TURN_ERRORS = { busy: (r) => S.twBusy(r.by), noturn: () => S.twNoTurn, ticket: () => S.twTicketNeeded, kroning: () => S.twKroning, norepair: () => S.twNoRepair };
+const TURN_ERRORS = { busy: (r) => S.twBusy(r.by), noturn: () => S.twNoTurn, ticket: () => S.twTicketNeeded, kroning: () => S.twKroning, norepair: () => S.twNoRepair, crane: () => S.twCraneShut };
 async function startWeekTurn({ repair = false } = {}) {
   if (weekTurnBusy) return;
   weekTurnBusy = true;

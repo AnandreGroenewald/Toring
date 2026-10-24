@@ -27,6 +27,7 @@ export const TOWER = Object.freeze({
   halfWidth: 14.5,      // m: a floor's middle is never further from the tower's line than the screen is wide
   climbMax: 75,         // m: a build turn's floors end at most this far above the tower's top
   stackTol: 0.35,       // m: a floor whose bottom is this close under another's top rests on it
+  blast: 2,             // floors a bomb knocks out: the one it hits and the one on top of it (a Perfek cracks instead)
 });
 
 const round = (v, d = 100) => Math.round(v * d) / d;
@@ -125,8 +126,11 @@ function knockOut(floors, i) {
 }
 
 /**
- * A bomb hit floor `i`: { floors, cracked (a Perfek took its first hit), removed: [ids], lost (m), people (into the
- * river) }. A miss (i < 0) changes nothing.
+ * A bomb hit floor `i`: { floors, cracked (a Perfek took the bomb), removed: [ids], lost (m), people (into the river) }.
+ * A Perfek that's whole cracks and takes the whole bomb. Anything else is knocked out, and the blast takes the floor on
+ * top of it too (TOWER.blast floors; a whole Perfek in the blast cracks and stops it). Past the blast, a crooked (Skeef)
+ * floor that went takes the crooked floor on top of it along. The tower above drops into the gap. A miss (i < 0)
+ * changes nothing.
  */
 export function hit(floors, i) {
   const none = { floors, cracked: false, removed: [], lost: 0, people: 0 };
@@ -137,22 +141,40 @@ export function hit(floors, i) {
     next[i] = { ...f, cr: 1 };
     return { ...none, floors: next, cracked: true };
   }
-  const above = f.q === 'S' ? floorOn(floors, i) : -1;
-  const chain = above >= 0 && floors[above].q === 'S' ? floors[above].id : null;
-  let r = knockOut(floors, i);
-  const removed = [r.id];
-  let { lost, people } = r;
-  if (chain !== null) {
-    const j = r.floors.findIndex((g) => g.id === chain);
-    if (j >= 0) {
-      const r2 = knockOut(r.floors, j);
-      removed.push(r2.id);
-      lost += r2.lost;
-      people += r2.people;
-      r = r2;
-    }
+  let cur = floors;
+  const removed = [];
+  let lost = 0;
+  let people = 0;
+  /** Knocks out the floor with this id; what it was and the id of the floor on top of it (before the drop). */
+  const out = (id) => {
+    const j = cur.findIndex((g) => g.id === id);
+    const was = cur[j];
+    const on = floorOn(cur, j);
+    const topId = on >= 0 ? cur[on].id : null;
+    const r = knockOut(cur, j);
+    cur = r.floors;
+    removed.push(r.id);
+    lost += r.lost;
+    people += r.people;
+    return { was, topId };
+  };
+  let k = out(f.id);
+  let blast = TOWER.blast - 1;
+  while (k.topId !== null) {
+    const j = cur.findIndex((g) => g.id === k.topId);
+    if (j < 0) break;
+    const g = cur[j];
+    if (blast > 0) {
+      blast--;
+      if (g.q === 'P' && !g.cr) {
+        cur = cur.slice();
+        cur[j] = { ...g, cr: 1 };
+        break;
+      }
+    } else if (!(k.was.q === 'S' && g.q === 'S')) break;
+    k = out(g.id);
   }
-  return { floors: r.floors, cracked: false, removed, lost: round(lost), people };
+  return { floors: cur, cracked: false, removed, lost: round(lost), people };
 }
 
 const RATINGS = new Set(['P', 'G', 'S']);

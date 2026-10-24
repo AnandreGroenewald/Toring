@@ -47,16 +47,21 @@ Your town (**Ons dorp**) is your crew's island: the Weektoring in the middle, ev
   A player with no crew has a crew of one (their own island); Robot Rikus fills empty seats on Saturday (weaker).
 - **Week**: Monday 00:00 to Sunday 23:59, South African time (UTC+2, no daylight saving).
 - **Build turns**: every day you finish the Daily (Mon–Sat) gives one turn of 10 blocks on the Weektoring. Turns keep
-  (up to 2 waiting) until Saturday's whistle. One builder at a time per tower (a 4-minute lease).
+  (up to 2 waiting) until **Saturday 12:00, when the crane closes** (repairs go on until the whistle). One builder at a
+  time per tower (a 4-minute lease). *(Added 24 Oct after the Saturday simulation: with the crane open until the whistle,
+  a crew that kept its turns for 20:00 won 6 of 16 Saturdays; with noon, the afternoon is a siege everyone can answer.)*
 - **Bombs**: your best Daily height each day Mon–Sat, added up, 1 bomb per 25 m, at most 10 a week. They're yours (not
   the crew's). Coins never buy bombs or turns.
 - **Ticket**: finish the Daily on 3 of the 5 weekdays (Mon–Fri) to play on Saturday (bomb runs and Saturday building).
   A crew with no ticket holder sits Saturday out. Your Weektoring floors stand either way.
 - **Only the tallest tower can be bombed** (checked when the run starts; a bomb still lands if the lead changed during
   the run). Everyone else is safe to build.
-- **A hit**: the floor at the bomb's height is knocked out and the tower above drops into its place (height lost = what
-  that floor added). A Perfek floor cracks first (two hits). A crooked (Skeef) floor takes the crooked floor above it
-  with it. People in a knocked-out floor fall into the river (your crew can rescue them).
+- **A hit**: the floor at the bomb's height is knocked out, and the blast takes the floor on top of it too; the tower
+  above drops into the gap (height lost = what those floors added). A whole Perfek floor cracks instead and takes the
+  bomb (two hits); a whole Perfek in the blast cracks and stops it. Past the blast, a crooked (Skeef) floor takes the
+  crooked floor above it along. People in a knocked-out floor fall into the river (your crew can rescue them).
+  *(The two-floor blast was added 24 Oct after the simulation: with one floor a hit, repairs undid the bombs and the
+  lead changed hands on 3 of 16 Saturdays; with the blast and the noon crane, on 14 of 16.)*
 - **Repair**: every hit your tower takes gives your crew 1 repair block (a Herbou turn: the crane with those blocks).
 - **The whistle** (anti-sniping, the old "candle auction"): Saturday ends at a random time between 20:00 and 21:00 that
   nobody knows, so waiting to strike in the last second is a gamble.
@@ -115,3 +120,10 @@ Your town (**Ons dorp**) is your crew's island: the Weektoring in the middle, ev
 ## 8. Status
 
 - 24 Oct: plan written; checkpoint 1 built (the day's loop on one phone) and ready for his play over home Wi-Fi.
+- 24 Oct (later): checkpoint 2 built. Server: crews, invites, the crane lease, rides, Saturday's rivers with Rikus,
+  bombs on the tallest only, repairs, the whistle and prizes, monuments; rivers deleted after 6 weeks. Game: the town
+  screen (crew, river standings, news, invite, leave), the invite link (?span=CODE → join sheet), Saturday's bomb run
+  (hold → time slows → drag → let go; four crews' islands, the tallest last; standings on the card), fresh news on the
+  menu's button. Rules from the simulation (server/test/span.sim.test.js): the two-floor blast and the noon crane.
+  Privacy pages describe Ons dorp's server data. Tests: npm 497, server 298 (incl. the 16-Saturday simulation),
+  qa/rivier_raid.mjs 14/14, qa/span1200.mjs 18/18 (two browsers through the home server, Monday to Saturday).

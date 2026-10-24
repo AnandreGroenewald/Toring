@@ -231,11 +231,12 @@ test('span server: floors built while a bomb landed come down with the tower; no
   for (const c of crews.slice(1, 4)) await sync(h, c.p);
   const [, l] = await h.call('POST', '/span/lease', crews[0].p);
   const top = heightOf(l.floors);
-  await h.call('POST', '/span/bomb', { ...crews[1].p, target: crews[0].crew, hits: [{ x: 0, y: 0.8 }] });
+  const [, bombed] = await h.call('POST', '/span/bomb', { ...crews[1].p, target: crews[0].crew, hits: [{ x: 0, y: 0.8 }] });
+  assert.equal(bombed.hits[0].lost, 3.2, 'the blast: two planks');
   const [, b] = await h.call('POST', '/span/build', { ...crews[0].p, lease: l.lease, floors: [plank(top)] });
   const fl = b.crew.floors;
   const newest = fl[fl.length - 1];
-  assert.equal(newest.y, Math.round((top - 1.6) * 100) / 100, 'it sits on the lowered tower');
+  assert.equal(newest.y, Math.round((top - 3.2) * 100) / 100, 'it sits on the lowered tower');
   // rubbish in every route: an answer, never a crash
   for (const [path, body] of [['/span/bomb', { ...crews[1].p, target: 'x', hits: 'y' }], ['/span/build', { ...crews[0].p, lease: 5 }], ['/span/join', { ...crews[1].p, invite: '<b>' }], ['/span/ride', { ...crews[1].p, day: 7 }], ['/span/rename', { ...crews[0].p, name: '' }]]) {
     const [st] = await h.call('POST', path, body);
@@ -260,4 +261,22 @@ test('span server: old weeks\' rivers are deleted six weeks on; last week\'s sta
   assert.ok(!h.data.get('spanr:ROLD'), 'the six-week-old river is gone');
   assert.ok(!h.data.get('spanw:2026-09-14'));
   assert.ok(h.data.get('spanr:RNEW'), 'last week\'s river stays');
+});
+
+test('span server: Saturday noon closes the crane for new floors; repairs go on until the whistle', async () => {
+  const h = harness(sastAt(day(0), 8));
+  const crews = await week5(h);
+  h.clock.t = sastAt(day(5), 9);
+  await sync(h, crews[0].p, { days: { [day(5)]: 30 } });
+  for (const c of crews.slice(1, 4)) await sync(h, c.p);
+  await h.call('POST', '/span/bomb', { ...crews[1].p, target: crews[0].crew, hits: [{ x: 0, y: 0.8 }] });
+  h.clock.t = sastAt(day(5), SPAN.craneClose, 1);
+  const [st, no] = await h.call('POST', '/span/lease', crews[0].p);
+  assert.equal(st, 403);
+  assert.equal(no.error, 'crane');
+  const [st2, rep] = await h.call('POST', '/span/lease', { ...crews[0].p, repair: true });
+  assert.equal(st2, 200, 'a repair still goes');
+  assert.equal(rep.blocks, 1);
+  h.clock.t = sastAt(day(5), SPAN.craneClose - 1, 59);
+  assert.equal((await h.call('POST', '/span/lease', crews[1].p))[0] === 403 && (await h.call('POST', '/span/lease', crews[1].p))[1].error === 'crane', false, 'before noon the crane is open');
 });

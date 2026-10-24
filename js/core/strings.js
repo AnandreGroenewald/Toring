@@ -943,7 +943,9 @@ export const S = {
   twBombs: (n) => `💣 ${n} ${n === 1 ? 'bom' : 'bomme'} vir Saterdag`,
   twBuild: (n) => `🏗️ Bou (${n})`,
   twNoTurn: 'Speel die Daaglikse Toring vir ’n beurt',
-  twSat: '⚔️ Saterdag: 4 spanne op die rivier. Net die hoogste toring kan gebombardeer word.',
+  twSat: '⚔️ Saterdag: 4 spanne op die rivier. Net die hoogste toring kan gebombardeer word. Die kraan sluit Saterdag 12:00.',
+  twCraneNoon: 'Die kraan sluit 12:00: bou nou!',
+  twCraneShut: '🏗️ Die kraan het 12:00 gesluit. Nou net herstel en bomme tot die fluitjie.',
   // --- (1.20) Ons dorp with friends: the crew, invites, Saturday ---
   twBusy: (name) => `${name || '’n Maat'} bou nou aan die Weektoring. Probeer netnou weer.`,
   twTicketNeeded: 'Saterdag bou en bombardeer net wie ’n kaartjie het (3 Daaglikse Torings Maandag tot Vrydag).',

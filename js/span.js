@@ -6,7 +6,7 @@
 // keeps a copy (the last answer) and its own id + key. Without it (an older Worker, or no internet at the start) it plays
 // as a crew of one on this phone alone, as checkpoint 1 did. The ride's gate (once a day) and who fell off your Daily are
 // always this phone's.
-import { SPAN, weekOf, dowOf, weekStats, isSpanId, isSpanKey, newSpanId, newSpanKey } from './core/span.js';
+import { SPAN, weekOf, dowOf, weekStats, isSpanId, isSpanKey, newSpanId, newSpanKey, sastOf } from './core/span.js';
 import { addFloors, heightOf, moveIn, peopleIn, cleanFloor } from './core/weektower.js';
 import { createRng } from './core/rng.js';
 import { safeLocalStorage } from './core/storage.js';
@@ -156,9 +156,11 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
       const base = { rideToday: d.rides[day] === 0, rodeToday: day in d.rides && d.rides[day] !== 0, dow: dowOf(day), online: !!sv };
       if (sv) {
         const c = sv.crew;
+        // (Saturday from noon the crane builds no new floors: turns wait for nothing; repairs go on)
+        const craneShut = sv.phase === 'kroning' || (sv.phase === 'uitdaging' && sastOf(Date.now()).h >= SPAN.craneClose);
         return {
-          ...base, week: c.week, floors: c.floors, heightM: heightOf(c.floors), people: c.people | 0, name: c.name,
-          turns: sv.me.turns | 0, ticket: !!sv.me.ticket, weekdays: sv.me.weekdays | 0, bombs: sv.me.bombs | 0, metres: sv.me.metres || 0,
+          ...base, week: c.week, floors: c.floors, heightM: heightOf(c.floors), people: c.people | 0, name: c.name, craneShut,
+          turns: craneShut ? 0 : sv.me.turns | 0, ticket: !!sv.me.ticket, weekdays: sv.me.weekdays | 0, bombs: sv.me.bombs | 0, metres: sv.me.metres || 0,
           monuments: c.monuments || [], crew: c, river: sv.river, phase: sv.phase, me: sv.me, inRiver: c.inRiver | 0, repair: c.repair | 0,
           // (news since this phone last opened the town, what you did yourself left out)
           news: (c.news || []).filter((n) => n.n > (d.seenN | 0) && !(n.who && n.who === sv.me?.name && n.kind !== 'bombed')),

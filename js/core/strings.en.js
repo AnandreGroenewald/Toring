@@ -898,7 +898,9 @@ export const S_EN = {
   twBombs: (n) => `💣 ${n} ${n === 1 ? 'bomb' : 'bombs'} for Saturday`,
   twBuild: (n) => `🏗️ Build (${n})`,
   twNoTurn: 'Play the Daily Tower for a turn',
-  twSat: '⚔️ Saturday: 4 crews on the river. Only the tallest tower can be bombed.',
+  twSat: '⚔️ Saturday: 4 crews on the river. Only the tallest tower can be bombed. The crane closes Saturday at 12:00.',
+  twCraneNoon: 'The crane closes at 12:00: build now!',
+  twCraneShut: '🏗️ The crane closed at 12:00. Only repairs and bombs now, until the whistle.',
   // --- (1.20) Ons dorp with friends: the crew, invites, Saturday ---
   twBusy: (name) => `${name || 'A teammate'} is building on the Weekly Tower right now. Try again in a moment.`,
   twTicketNeeded: 'On Saturday only players with a ticket build and bomb (3 Daily Towers Monday to Friday).',

@@ -28,6 +28,7 @@ export const SPAN = Object.freeze({
   riverCrews: 4,              // crews on one river on Saturday
   startHour: 6,               // Saturday's challenge opens (SAST)
   whistleFrom: 20,            // ...and the whistle blows between 20:00 and 21:00 (SAST)
+  craneClose: 12,             // Saturday from 12:00 the crane builds no new floors (repairs only): the siege until the whistle
   leaderGraceMs: 90 * 1000,   // a bomb run aimed at the leader still lands if the lead changed this recently
   rescuePerRun: 12,           // people on one river run at most
   riverPeopleMax: 60,         // a crew's people still in the river (from bombs) at most
@@ -94,6 +95,13 @@ export function phaseAt(ms, whistle = null) {
   if (ms < open) return { phase: 'bou', week: wk };
   if (ms < end) return { phase: 'uitdaging', week: wk };
   return { phase: 'kroning', week: wk };
+}
+
+/** A build turn (not a repair) may start: all week until Saturday 18:00 (then only repairs, until the whistle). */
+export function craneOpen(ms, whistle = null) {
+  const ph = phaseAt(ms, whistle);
+  if (ph.phase === 'bou') return true;
+  return ph.phase === 'uitdaging' && sastOf(ms).h < SPAN.craneClose;
 }
 
 /** Changes to a crew (joining, leaving, removing) are closed from Saturday 00:00 to Sunday 23:59. */

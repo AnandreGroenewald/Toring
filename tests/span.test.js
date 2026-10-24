@@ -113,7 +113,7 @@ test('weektower: sizes, corners, height and what each floor added', () => {
   assert.equal(topOf(side[3]), 2.4);
 });
 
-test('weektower: a hit cracks a Perfek first, knocks out the rest; the tower above drops into its place', () => {
+test('weektower: a hit cracks a Perfek first; else the blast knocks out two floors; the tower above drops into the gap', () => {
   const t = stack(['P', 'G', 'G', 'G']);
   assert.equal(floorAt(t, 0, 0.8), 0);
   assert.equal(floorAt(t, 30, 0.8), -1);
@@ -123,28 +123,36 @@ test('weektower: a hit cracks a Perfek first, knocks out the rest; the tower abo
   assert.equal(heightOf(r1.floors), 6.4);
   const r2 = hit(r1.floors, 0);
   assert.equal(r2.cracked, false);
-  assert.deepEqual(r2.removed, [1]);
-  assert.equal(r2.lost, 1.6);
-  assert.equal(heightOf(r2.floors), 4.8);
-  assert.equal(r2.floors[0].y, 0, 'the floor above dropped to the ground');
+  assert.deepEqual(r2.removed, [1, 2], 'the cracked Perfek and the floor on top of it');
+  assert.equal(r2.lost, 3.2);
+  assert.equal(heightOf(r2.floors), 3.2);
+  assert.equal(r2.floors[0].y, 0, 'the floors above dropped to the ground');
   const g = hit(t, 2);
-  assert.deepEqual(g.removed, [3]);
-  assert.equal(heightOf(g.floors), 4.8);
+  assert.deepEqual(g.removed, [3, 4]);
+  assert.equal(heightOf(g.floors), 3.2);
+  // the top floor goes alone (nothing on top of it)
+  assert.deepEqual(hit(t, 3).removed, [4]);
+  // a whole Perfek in the blast cracks and stops it
+  const t2 = stack(['G', 'P', 'G']);
+  const b = hit(t2, 0);
+  assert.deepEqual(b.removed, [1]);
+  assert.equal(b.floors.find((x) => x.id === 2).cr, 1);
+  assert.equal(heightOf(b.floors), 3.2);
   assert.equal(hit(t, -1).floors, t);
   assert.equal(hit(t, 99).removed.length, 0);
 });
 
-test('weektower: a crooked floor takes the crooked floor on top of it along; people fall into the river', () => {
-  const t = stack(['G', 'S', 'S', 'G']).map((f) => ({ ...f, p: 2 }));
+test('weektower: past the blast, a crooked floor takes the crooked floor on top of it along; people fall into the river', () => {
+  const t = stack(['G', 'S', 'S', 'S', 'G']).map((f) => ({ ...f, p: 2 }));
   const r = hit(t, 1);
-  assert.deepEqual(r.removed, [2, 3]);
-  assert.equal(r.lost, 3.2);
-  assert.equal(r.people, 4);
+  assert.deepEqual(r.removed, [2, 3, 4], 'the blast (two floors), then the crooked one on top');
+  assert.equal(r.lost, 4.8);
+  assert.equal(r.people, 6);
   assert.equal(heightOf(r.floors), 3.2);
   assert.equal(peopleIn(r.floors), 4);
-  // a crooked floor under a good one goes alone
-  const t2 = stack(['G', 'S', 'G']);
-  assert.deepEqual(hit(t2, 1).removed, [2]);
+  // past the blast, a crooked floor under a good one stops the chain
+  const t2 = stack(['G', 'S', 'S', 'G', 'G']);
+  assert.deepEqual(hit(t2, 1).removed, [2, 3]);
 });
 
 test('weektower: a build turn\'s floors are cleaned and numbered; nonsense is refused', () => {
