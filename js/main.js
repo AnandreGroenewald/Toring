@@ -585,6 +585,7 @@ function menuModel() {
     slag: SLAG_ON ? slagMenuView() : null,   // (1.17) Vrugteslag (set aside)
     gly: GLYBAAN.on ? glyMenuView() : null,   // (1.19) Glybaan, the slide
     span: span.view(),   // (1.20) Ons dorp
+    has3d: has3d(),       // (1.20) Afgly needs WebGL 2
     kasteel: KASTEEL.on ? kasteelMenuView() : null,   // (1.17) Die Kasteelreeks (off since 18 Oct: config KASTEEL)
   };
 }
@@ -2732,10 +2733,17 @@ function closeRide() {
   ride = null;
   wakeLoop();
 }
-async function startRide() {
+/**
+ * Down the river. The first ride after a Daily brings your people who fell (once a day); any other time it's a free ride
+ * for metres (the owner, 24 Oct 2026: "The game mode needs to be available at all times"). `from`: where Klaar goes back.
+ */
+async function startRide(opts = {}) {
+  const from = opts?.from || 'town';
   const day = todayKey();
-  const rd = span.ride(day);
-  if (!rd) {
+  const rd = span.ride(day) || span.freeRide(day);
+  if (rd.extra && !has3d()) {
+    // (a phone without the 3D the river needs: there's no free ride to have)
+    ui.toast(S.no3dRide, 3600);
     showMenu();
     return;
   }
@@ -2749,17 +2757,19 @@ async function startRide() {
     const v = span.view();
     const r = await mod.openRiver({
       scene: store.getSkins().wear.scene,
-      seed: day, who: rd.who, mine: rd.mine, floors: v.floors, crew: v.name || '', canBuild: v.turns > 0, best: v.rideBest || 0,
+      seed: rd.seed || day, who: rd.who, mine: rd.mine, extra: !!rd.extra, floors: v.floors, crew: v.name || '', canBuild: v.turns > 0, best: v.rideBest || 0,
       // (the shots this ride can still earn for Saturday: 1 per 100 m, up to the week's 10; none on a Sunday)
       shots: { max: SPAN.bombsMax, room: (v.dow | 0) <= 6 ? Math.max(0, SPAN.bombsMax - (v.bombsWeek | 0)) : 0, riverWeek: v.rideMetres | 0, day: (v.dow | 0) <= 6 },
       daily: dayLayout(day), skin: store.getSkins().wear.blocks || 'kleur',
-      reducedMotion: !!settings.reducedMotion, autopilot: DEBUG && params.has('rvauto'),
+      reducedMotion: !!settings.reducedMotion, autopilot: DEBUG && params.has('rvauto'), pilotMetres: DEBUG ? Number(params.get('rvm')) || undefined : undefined,
       onResult: (res) => {
-        span.rideDone(day, res.rescued || [], rd.fromRiver || 0, res.metres || 0).then((out) => { if (out.coins) coinsChanged(); });
+        span.rideDone(day, res.rescued || [], rd.fromRiver || 0, res.metres || 0, !!rd.extra).then((out) => { if (out.coins) coinsChanged(); });
       },
       onDone: (res, next) => {
         closeRide();
         if (next === 'build') startWeekTurn({ from: 'ride' });
+        else if (next === 'again') startRide({ from });
+        else if (from === 'menu') { startIdle(); showMenu(); }
         else openSpanTown();
       },
     });

@@ -17,7 +17,7 @@ const RIDE_MIN = 6;        // people on a ride at least (strays make up the rest
 const RIDE_MAX = 12;       // ...and at most
 const TIMEOUT_MS = 9000;
 
-const blank = (week) => ({ v: 1, week, floors: [], people: 0, days: {}, granted: {}, used: 0, rides: {}, rideM: {}, monuments: [], name: '', id: '', key: '', srv: null, queue: [] });
+const blank = (week) => ({ v: 1, week, floors: [], people: 0, days: {}, granted: {}, used: 0, rides: {}, rideM: {}, runs: {}, rideBest: 0, monuments: [], name: '', id: '', key: '', srv: null, queue: [] });
 
 function clean(raw, week) {
   const d = blank(week);
@@ -25,10 +25,11 @@ function clean(raw, week) {
   if (typeof raw.week === 'string') d.week = raw.week;
   if (Array.isArray(raw.floors)) d.floors = raw.floors.map(cleanFloor).filter(Boolean).slice(0, 600);
   d.people = Math.max(0, Math.min(1e6, raw.people | 0));
-  for (const k of ['days', 'granted', 'rides', 'rideM']) {
+  for (const k of ['days', 'granted', 'rides', 'rideM', 'runs']) {
     if (raw[k] && typeof raw[k] === 'object') for (const [dk, v] of Object.entries(raw[k])) if (/^\d{4}-\d{2}-\d{2}$/.test(dk)) d[k][dk] = Number(v) || 0;
   }
   d.used = Math.max(0, Math.min(99, raw.used | 0));
+  d.rideBest = Math.max(0, Math.min(1e6, raw.rideBest | 0));
   if (Array.isArray(raw.monuments)) d.monuments = raw.monuments.filter((m) => m && typeof m.week === 'string').slice(0, MONUMENTS);
   d.name = typeof raw.name === 'string' ? raw.name.slice(0, 18) : '';
   if (isSpanId(raw.id) && isSpanKey(raw.key)) {
@@ -73,7 +74,7 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
   function roll(wk) {
     if (d.week === wk) return;
     if (d.floors.length) d.monuments = [{ week: d.week, h: heightOf(d.floors), n: d.floors.length, floors: d.floors }, ...d.monuments].slice(0, MONUMENTS);
-    Object.assign(d, { week: wk, floors: [], days: {}, granted: {}, used: 0, rides: {}, rideM: {} });
+    Object.assign(d, { week: wk, floors: [], days: {}, granted: {}, used: 0, rides: {}, rideM: {}, runs: {}, rideBest: 0 });
     if (d.srv && d.srv.crew?.week !== wk) d.srv = null;   // (the server's last answer was last week's)
     save();
   }
@@ -162,9 +163,9 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
       const day = today();
       const ws = weekStats(d.days, d.week, d.rideM);
       const sv = S();
-      // (the endless river: this week's metres down it, your best ride and all of them together)
+      // (the endless river: this week's metres down it, all rides together, and your best single ride)
       const rm = Object.entries(d.rideM || {}).filter(([k]) => weekOf(k) === d.week).map(([, v]) => v | 0);
-      const base = { rideToday: d.rides[day] === 0, rodeToday: day in d.rides && d.rides[day] !== 0, dow: dowOf(day), online: !!sv, rideBest: rm.length ? Math.max(...rm) : 0, rideMetres: rm.reduce((a, b) => a + b, 0) };
+      const base = { rideToday: d.rides[day] === 0, rodeToday: day in d.rides && d.rides[day] !== 0, dow: dowOf(day), online: !!sv, rideBest: d.rideBest | 0, rideMetres: rm.reduce((a, b) => a + b, 0) };
       if (sv) {
         const c = sv.crew;
         // (Saturday from noon the crane builds no new floors: turns wait for nothing; repairs go on. The server says.)
@@ -238,26 +239,52 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
       while (strays.length < want && others.length) strays.push(others.splice(Math.floor(rng.next() * others.length), 1)[0]);
       return { who: [...mine, ...strays], mine: mine.length, fromRiver };
     },
-    /** The ride is over: whoever was saved moves into the Weektoring (its free rooms first) and the town; coins for each. */
-    async rideDone(dateKey, rescued = [], fromRiver = 0, metres = 0) {
+    /**
+     * A free ride down the river (any time, as often as you like: the owner, 24 Oct 2026, "The game mode needs to be
+     * available at all times"): nobody of yours in it, just the metres. Its own river each time.
+     */
+    freeRide(dateKey = today()) {
+      return { who: [], mine: 0, fromRiver: 0, extra: true, seed: `${dateKey}/${(d.runs[dateKey] | 0) + 1}` };
+    },
+    /**
+     * The ride is over: whoever was saved moves into the Weektoring (its free rooms first) and the town; coins for each.
+     * The metres count for the week (Saturday's shots, the crew's river metres). `extra`: a free ride (metres only).
+     */
+    async rideDone(dateKey, rescued = [], fromRiver = 0, metres = 0, extra = false) {
+      const m = Math.max(0, Math.min(40000, metres | 0));
+      if (extra) {
+        d.rideM[dateKey] = (d.rideM[dateKey] | 0) + m;
+        d.runs[dateKey] = (d.runs[dateKey] | 0) + 1;
+        d.rideBest = Math.max(d.rideBest | 0, m);
+        save();
+        if (online && m > 0) {
+          const body = { day: dateKey, rescued: 0, metres: m, extra: true };
+          const r = await call('POST', '/span/ride', body).catch(() => null);
+          if (r?.status === 200 && r.crew && d.srv) d.srv.crew = r.crew;
+          else if (!r || r.status >= 500) d.queue.push({ path: '/span/ride', body });
+          save();
+        }
+        return { placed: 0, coins: 0 };
+      }
       if (d.rides[dateKey] !== 0) return { placed: 0, coins: 0 };
       const n = Math.max(0, rescued.length | 0);
       d.rides[dateKey] = n || -1;
-      d.rideM[dateKey] = Math.max(d.rideM[dateKey] | 0, Math.max(0, Math.min(1e6, metres | 0)));
+      d.rideM[dateKey] = (d.rideM[dateKey] | 0) + m;
+      d.rideBest = Math.max(d.rideBest | 0, m);
       const coins = n ? earn(n * SPAN.coinsPerRescue) : 0;
       if (online) {
-        const body = { day: dateKey, rescued: n, fromRiver: Math.min(fromRiver | 0, n), metres: d.rideM[dateKey] | 0 };
+        const body = { day: dateKey, rescued: n, fromRiver: Math.min(fromRiver | 0, n), metres: m };
         const r = await call('POST', '/span/ride', body).catch(() => null);
         if (r?.status === 200 && r.crew && d.srv) d.srv.crew = r.crew;
         else if (!r || r.status >= 500) d.queue.push({ path: '/span/ride', body });
         save();
         return { placed: n, coins };
       }
-      const m = moveIn(d.floors, n);
-      d.floors = m.floors;
+      const mv = moveIn(d.floors, n);
+      d.floors = mv.floors;
       d.people += n;
       save();
-      return { placed: m.placed, coins };
+      return { placed: mv.placed, coins };
     },
     /**
      * A build turn on the Weektoring: { floors, seed, blocks, lease } or { error } ('busy' with who's building, 'noturn',

@@ -13,7 +13,8 @@
 //   POST /span/rename  {id, key, name}          -> the founder names the crew
 //   POST /span/lease   {id, key, repair?}       -> {lease, floors, seed, blocks}: the crane, one builder at a time
 //   POST /span/build   {id, key, lease, floors} -> the turn's floors join the tower
-//   POST /span/ride    {id, key, day, rescued, fromRiver, metres}  -> today's ride (once a day): people home; the metres
+//   POST /span/ride    {id, key, day, rescued, fromRiver, metres, extra}  -> today's ride (once a day): people home; or
+//                      a free ride (extra: any time, metres only); the metres
 //                      ridden down the endless river count for the player's and the crew's week
 //   POST /span/bomb    {id, key, target, hits: [{x, y}]}    -> Saturday: bombs on the tallest tower of your river
 //   GET  /span/river/<id>                       -> the Saturday standings
@@ -40,6 +41,7 @@ const MONUMENT_MAX = 160;       // ...this many floors each
 const DAILY_MAX = 90;           // a member's latest Daily tower on the island: at most this many blocks
 const BOT_NAMES = ['Robot Rikus se Span', 'Rikus se Rowers', 'Die Blik-Bouers', 'Rikus en Kie'];
 const RIDE_M_MAX = 40000;        // m: the most one ride can count (27 m/s for about 25 minutes)
+const RIDE_DAY_MAX = 200000;     // m: the most a day's rides can count together
 const BOT_ACTS = 6;              // a Rikus crew acts this many times through Saturday...
 /** A player's name as other crews see it on Saturday: kid-clean (js/core/nameRules.js), else none. */
 const cleanName = (s) => { const r = checkName(String(s ?? '').slice(0, 40), { max: 22 }); return r.ok ? r.value : ''; };
@@ -621,14 +623,22 @@ export function createSpanServer(store, { now = () => Date.now(), newPlayer = ()
     if (Array.isArray(p)) return p;
     const day = sastOf(now()).key;
     if (b.day !== day && b.day !== plusDays(day, -1)) return [400, { error: 'day' }];
+    // (a free ride, any time: only its metres count; a day's metres stop at RIDE_DAY_MAX)
+    const m = Math.max(0, Math.min(RIDE_M_MAX, Math.floor(Number(b.metres) || 0), RIDE_DAY_MAX - ((p.rideM || {})[b.day] | 0)));
+    if (b.extra === true) {
+      const c = await crewOf(p);
+      p.rideM = { ...(p.rideM || {}), [b.day]: ((p.rideM || {})[b.day] | 0) + m };
+      c.rideBy = { ...(c.rideBy || {}), [p.id]: ((c.rideBy || {})[p.id] | 0) + m };
+      put(cKey(c.id), c);
+      put(pKey(p.id), p);
+      return [200, { crew: crewView(c), me: meView(p) }];
+    }
     if (p.rides?.[b.day]) return [409, { error: 'done' }];
     const n = Math.max(0, Math.min(SPAN.rescuePerRun, b.rescued | 0));
     const c = await crewOf(p);
     const fromRiver = Math.max(0, Math.min(c.inRiver | 0, b.fromRiver | 0, n));
     p.rides = { ...(p.rides || {}), [b.day]: n || -1 };
-    // (the metres down the endless river: no more than its top speed could ride in 25 minutes)
-    const m = Math.max(0, Math.min(RIDE_M_MAX, Math.floor(Number(b.metres) || 0)));
-    p.rideM = { ...(p.rideM || {}), [b.day]: m };
+    p.rideM = { ...(p.rideM || {}), [b.day]: ((p.rideM || {})[b.day] | 0) + m };
     c.rideBy = { ...(c.rideBy || {}), [p.id]: ((c.rideBy || {})[p.id] | 0) + m };
     const r = moveIn(c.floors, n);
     c.floors = r.floors;

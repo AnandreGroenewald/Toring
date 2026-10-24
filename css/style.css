@@ -3920,3 +3920,25 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .week-sheet .sheet-body { display: flex; flex-direction: column; gap: calc(10 * var(--u)); }
 .week-gain { margin: 0; text-align: center; font-weight: 900; font-size: max(17px, calc(36 * var(--u))); color: #1d7a4a; }
 .week-line { margin: 0; text-align: center; font-weight: 800; color: var(--ink-soft); font-size: max(13px, calc(24 * var(--u))); }
+
+/* (1.20) Ons dorp and Afgly side by side on the menu: one row at the island button's height (small phones still fit) */
+.span-row { display: grid; grid-template-columns: minmax(0, 1.28fr) minmax(0, 1fr); gap: calc(14 * var(--u)); }
+.span-row .dorp-btn { grid-template-columns: auto minmax(0, 1fr); gap: calc(12 * var(--u)); padding-right: calc(12 * var(--u)); min-height: calc(104 * var(--u)); }
+.span-row .dorp-btn-pic { width: calc(92 * var(--u)); height: calc(84 * var(--u)); font-size: calc(46 * var(--u)); }
+.span-row .dorp-btn-arrow { display: none; }
+.span-row .dorp-btn-sub { overflow: hidden; text-overflow: ellipsis; }
+.span-row .dorp-btn-go { position: absolute; top: calc(-14 * var(--u)); right: calc(10 * var(--u)); font-size: max(11px, calc(20 * var(--u))); padding: calc(4 * var(--u)) calc(12 * var(--u)); }
+.rivier-menu-btn { background: linear-gradient(160deg, #2f9bd8 0%, #1d5fa8 55%, #0f3466 130%); box-shadow: 0 calc(6 * var(--u)) 0 #0a2448, inset 0 0 0 1px rgba(255, 255, 255, 0.16); }
+.rivier-menu-btn:active { box-shadow: 0 calc(2 * var(--u)) 0 #0a2448, inset 0 0 0 1px rgba(255, 255, 255, 0.16); }
+.rivier-menu-btn .kasteel-menu-ic { background: rgba(255, 255, 255, 0.16); }
+.rivier-menu-btn .kasteel-menu-txt small { color: #cdeaff; }
+.span-row .rivier-menu-btn { grid-template-columns: auto minmax(0, 1fr); gap: calc(10 * var(--u)); padding: calc(10 * var(--u)) calc(12 * var(--u)) calc(10 * var(--u)) calc(10 * var(--u)); min-height: calc(104 * var(--u)); }
+.span-row .rivier-menu-btn .kasteel-menu-ic { width: calc(66 * var(--u)); height: calc(66 * var(--u)); font-size: calc(40 * var(--u)); }
+.span-row .rivier-menu-btn .kasteel-menu-txt small { font-size: max(11px, calc(20 * var(--u))); }
+.span-row .rivier-menu-btn .kasteel-new { position: absolute; top: calc(-14 * var(--u)); right: calc(10 * var(--u)); }
+/* (1.20) the smallest phones (360x640, the compact layout): the menu's rows a little closer and its logo a little higher,
+   so the bottom row always shows in full */
+#ui.compact .screen-menu .menu-stack { gap: calc(14 * var(--u)); }
+#ui.compact .screen-menu .daily-card { padding-top: calc(22 * var(--u)); padding-bottom: calc(24 * var(--u)); }
+#ui.compact .screen-menu .note { margin: calc(8 * var(--u)) 0 calc(12 * var(--u)); }
+#ui.compact .screen-menu .logo { padding-top: calc(92 * var(--u)); }

@@ -109,6 +109,7 @@ function makeKit() {
   background: rgba(16,30,36,.84); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 18px 50px rgba(0,0,0,.45); transition: opacity .35s, transform .45s cubic-bezier(.2,1.2,.4,1); text-align: center; }
 #rivier .rv-card.on { opacity: 1; transform: translate(-50%, 0); }
 #rivier .rv-card h2 { margin: 0 0 4px; font-size: 24px; font-weight: 900; }
+#rivier .rv-card .rv-link { background: none; color: #8ff4ff; min-height: 40px; font-size: 16px; text-decoration: underline; text-underline-offset: 3px; }
 #rivier .rv-card p.rv-shots { margin: -4px 0 12px; font-size: 15px; font-weight: 900; color: #8ff4ff; }
 #rivier .rv-card .rv-dist { display: flex; align-items: baseline; justify-content: center; gap: 4px; margin: 0; line-height: 1; }
 #rivier .rv-card .rv-dist b { font-size: 46px; font-weight: 900; color: #fff3c4; text-shadow: 0 3px 0 rgba(40,24,0,.45); font-variant-numeric: tabular-nums; }
@@ -287,7 +288,8 @@ function createTown(K, d) {
     const rideLine = rideTot > 0 ? `<p class="tw-ridem">${S.twRideM(fmtInt(rideTot))}${rideRank.length ? `<span>${rideRank.map((x, k) => `${k === 0 && x.m ? '🥇 ' : ''}${esc(x.name)} ${fmtInt(x.m)}`).join(' · ')}</span>` : ''}</p>` : '';
     const renameForm = renaming ? `<form class="tw-rename-form"><input class="tw-name" maxlength="18" value="${esc(crew?.name || '')}" aria-label="${S.twRename}"><button type="submit" class="tw-save">${S.twRenameSave}</button><button type="button" class="tw-cancel">${S.twCancel}</button></form>` : '';
     const btns = [];
-    if (v.rideToday) btns.push(`<button class="tw-ride">${S.rvResGo}</button>`);
+    // (the river at all times: today's ride brings your people; after that it's a free ride for metres)
+    btns.push(`<button class="tw-ride">${v.rideToday ? S.rvResGo : S.rvAgain}</button>`);
     if (sat && !iLead && v.ticket && v.bombs > 0) btns.push(`<button class="tw-bomb">${S.twBomb(v.bombs)}</button>`);
     if (sat && v.ticket && v.repair > 0) btns.push(`<button class="tw-repair">${S.twRepair(v.repair)}</button>`);
     if (v.turns > 0 && !over) btns.push(`<button class="tw-build">${S.twBuild(v.turns)}</button>`);
@@ -1099,6 +1101,10 @@ function createRide(K, d) {
   const countB = countEl.querySelector('b');
   const barEl = ov.querySelector('.rv-bar i');
   const metresEl = ov.querySelector('.rv-metres b');
+  if (!raid && !who.length) {
+    // (a free ride: nobody of yours to count)
+    for (const sel of ['.rv-count', '.rv-faces']) { const el = ov.querySelector(sel); if (el) el.style.display = 'none'; }
+  }
   const heartsEl = ov.querySelector('.rv-hearts');
   function setHearts() {
     heartsEl?.querySelectorAll('i').forEach((h, k) => h.classList.toggle('gone', k >= hearts));
@@ -1515,7 +1521,7 @@ function createRide(K, d) {
         stage.shake(reduced ? 0 : 0.5);
         audio.play('splash');
         audio.music?.(true, { bpm: 104, layers: 1, key: 2 });
-        hint(S.rvHint);
+        hint(who.length ? S.rvHint : S.rvHintFree);
       }
     } else if (phase === 'run') {
       if (pilotOn) pilot();
@@ -1805,13 +1811,24 @@ function createRide(K, d) {
     if (r.all && !fwRide) fwRide = createFireworks(scene, reduced, world.night);
     const mine = Math.min(d.mine ?? who.length, who.length);
     const yours = rescued.filter((id) => who.indexOf(id) < mine).length;
-    cardEl.innerHTML = `${endless ? `<div class="rv-dist"><b>${fmtInt(r.metres)}</b><small>m</small></div><p class="rv-distline">${S.rvDistance}${d.best ? ` · ${S.rvBest(fmtInt(Math.max(d.best, r.metres)))}` : ''}</p>` : ''}<h2>${r.rescued.length ? S.rvSaved(r.rescued.length, who.length) : S.rvNoneSaved}</h2>
+    // (a free ride has nobody of yours in it: just the metres, the shots, and straight back in)
+    const free = who.length === 0;
+    const best = Math.max(d.best | 0, r.metres);
+    const record = endless && r.metres > (d.best | 0) && (d.best | 0) > 0;
+    const distHtml = endless ? `<div class="rv-dist"><b>${fmtInt(r.metres)}</b><small>m</small></div><p class="rv-distline">${record ? S.rvRecord : S.rvDistance}${d.best && !record ? ` · ${S.rvBest(fmtInt(best))}` : ''}</p>` : '';
+    const shotsHtml = endless && d.shots?.day ? `<p class="rv-shots">${shotsEarned(r.metres) > 0 ? S.rvShots(shotsEarned(r.metres)) : d.shots.room <= 0 ? S.rvShotsFull(d.shots.max || 10) : S.rvShotsNext(100 - ((d.shots.riverWeek + r.metres) % 100))}</p>` : '';
+    const peopleHtml = free ? '' : `<h2>${r.rescued.length ? S.rvSaved(r.rescued.length, who.length) : S.rvNoneSaved}</h2>
       <p>${r.rescued.length ? S.rvMovedIn(r.rescued.length, d.crew || '') : S.rvTryTomorrow}${mine && yours < mine ? ` ${S.rvYoursLeft(mine - yours)}` : ''}</p>
-      <div class="rv-row">${who.map((id) => `<img src="${faceUrl(id, 64)}" alt="" class="${rescued.includes(id) ? '' : 'out'}">`).join('')}</div>${endless && d.shots?.day ? `<p class="rv-shots">${shotsEarned(r.metres) > 0 ? S.rvShots(shotsEarned(r.metres)) : d.shots.room <= 0 ? S.rvShotsFull(d.shots.max || 10) : S.rvShotsNext(100 - ((d.shots.riverWeek + r.metres) % 100))}</p>` : ''}
-      ${d.canBuild ? `<button class="rv-go">${S.rvBuild}</button><button class="rv-no">${S.rvLater}</button>` : `<button class="rv-go">${S.rvDone}</button>`}`;
+      <div class="rv-row">${who.map((id) => `<img src="${faceUrl(id, 64)}" alt="" class="${rescued.includes(id) ? '' : 'out'}">`).join('')}</div>`;
+    const btnsHtml = free
+      ? `<button class="rv-go rv-again">${S.rvAgain}</button><button class="rv-no">${S.rvDone}</button>`
+      : `${d.canBuild ? `<button class="rv-go">${S.rvBuild}</button><button class="rv-no">${S.rvLater}</button>` : `<button class="rv-go">${S.rvDone}</button>`}${endless ? `<button class="rv-link rv-again">${S.rvAgain}</button>` : ''}`;
+    cardEl.innerHTML = `${distHtml}${peopleHtml}${shotsHtml}${btnsHtml}`;
     cardEl.classList.add('on');
-    cardEl.querySelector('.rv-go').addEventListener('click', () => d.onDone?.(r, d.canBuild ? 'build' : 'done'));
+    if (free) cardEl.querySelector('.rv-go').addEventListener('click', () => d.onDone?.(r, 'again'));
+    else cardEl.querySelector('.rv-go').addEventListener('click', () => d.onDone?.(r, d.canBuild ? 'build' : 'done'));
     cardEl.querySelector('.rv-no')?.addEventListener('click', () => d.onDone?.(r, 'done'));
+    cardEl.querySelector('.rv-link.rv-again')?.addEventListener('click', () => d.onDone?.(r, 'again'));
     d.onResult?.(r);
   }
   function finishNow() {

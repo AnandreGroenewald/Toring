@@ -144,6 +144,13 @@ test('span server: the metres down the endless river count for the player and th
   assert.equal(r2.crew.rideBy[a.id], 1234);
   assert.equal(r2.crew.rideBy[b.id], 40000, 'one ride counts at most 40 km');
   assert.equal(r2.crew.rideM, 41234);
+  // free rides, any time and as often as you like: their metres add up, nobody moves in, the day's ride stays done
+  const [sx, rx] = await h.call('POST', '/span/ride', { ...a, day: day(0), rescued: 7, metres: 500, extra: true });
+  assert.equal(sx, 200);
+  assert.equal(rx.me.rideM[day(0)], 1734);
+  assert.equal(rx.crew.people, r2.crew.people, 'a free ride brings nobody in');
+  assert.equal((await h.call('POST', '/span/ride', { ...a, day: day(0), rescued: 0, metres: 300, extra: true }))[1].crew.rideBy[a.id], 2034);
+  assert.equal((await h.call('POST', '/span/ride', { ...a, day: day(0), rescued: 5 }))[0], 409, 'the rescue ride is still once a day');
   const c = player('Carla');
   await sync(h, c, { days: { [day(0)]: 20 } });
   await h.call('POST', '/span/join', { ...c, invite: ca.crew.invite });

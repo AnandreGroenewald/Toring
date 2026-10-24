@@ -1048,7 +1048,7 @@ export function createUI(bus) {
       },
     }, coinIc(), h('b', { class: 'wallet-n', text: fmtInt(m.coins || 0) }), m.refill ? h('span', { class: 'wallet-plus', 'aria-hidden': 'true', text: '+' }) : null);
     screens.menu.replaceChildren(brand, gap,
-      h('div', { class: 'menu-stack' }, card, spanMenuEl(m.span), dorpMenuEl(m.dorp), GLYBAAN.on ? glybaanMenuEl(m.gly) : null, BOTSING.on ? botsingMenuEl() : null, kasteelMenuEl(m.kasteel), slagMenuEl(m.slag), playRow, dock, adSlot), langChip, wallet);
+      h('div', { class: 'menu-stack' }, card, spanRowEl(m.span, m.has3d), dorpMenuEl(m.dorp), GLYBAAN.on ? glybaanMenuEl(m.gly) : null, BOTSING.on ? botsingMenuEl() : null, kasteelMenuEl(m.kasteel), slagMenuEl(m.slag), playRow, dock, adSlot), langChip, wallet);
     // the gap shrinks when the sponsor feed adds the ad card later, so re-check whenever it resizes
     if (saying && typeof ResizeObserver === 'function') {
       if (!st.sayingRO) st.sayingRO = new ResizeObserver(() => fitSaying());
@@ -3213,7 +3213,7 @@ export function createUI(bus) {
     if (!v) return null;
     // (news since you last looked comes first: a bomb on your tower, a crewmate's floors)
     const fresh = (v.news || []).slice(-1)[0];
-    const sub = fresh ? spanNewsLine(fresh, { html: false }) : v.heightM > 0 ? S.spanMenuSub(fmtM(v.heightM), fmtInt(v.people | 0)) : S.spanMenuNew;
+    const sub = fresh ? spanNewsLine(fresh, { html: false }) : v.heightM > 0 ? S.spanMenuSub(fmtM(v.heightM), fmtInt(v.people | 0)) : S.spanMenuNewShort;
     const go = v.rideToday ? S.spanRide : v.turns > 0 ? S.spanTurns(v.turns) : null;
     return h('button', {
       type: 'button', class: `dorp-btn span-btn${go ? ' has-go' : ''}${fresh ? ' has-news' : ''}`, 'aria-label': `${S.spanMenu}: ${sub}${go ? ` · ${go}` : ''}`,
@@ -3222,6 +3222,28 @@ export function createUI(bus) {
     h('span', { class: 'dorp-btn-pic dorp-btn-ic span-btn-ic' }, emo('🏝️')),
     h('span', { class: 'dorp-btn-txt' }, h('b', null, h('span', { text: S.spanMenu })), h('span', { class: 'dorp-btn-sub', text: sub })),
     go ? h('span', { class: 'dorp-btn-go', text: go }) : h('span', { class: 'dorp-btn-arrow', 'aria-hidden': 'true', text: '›' }));
+  }
+
+  /**
+   * (1.20) Afgly: the river at all times (the owner, 24 Oct 2026: "The game mode needs to be available at all times").
+   * Today's ride first if it waits (your people in the river); else a free ride for metres. Not without the 3D it needs.
+   */
+  /** Ons dorp and Afgly side by side: one row, the height the island's button always had (small phones fit). */
+  function spanRowEl(v, can3d) {
+    const a = spanMenuEl(v);
+    const b = rivierMenuEl(v, can3d);
+    return a && b ? h('div', { class: 'span-row' }, a, b) : a || b;
+  }
+  function rivierMenuEl(v, can3d) {
+    if (!v || can3d === false) return null;
+    const sub = v.rideBest > 0 ? S.afglyBest(fmtInt(v.rideBest)) : S.afglyMenuSub;
+    return h('button', {
+      type: 'button', class: 'kasteel-menu-btn rivier-menu-btn', 'aria-label': `${S.afgly}: ${sub}`,
+      onclick: () => { if (!guard()) return; audio.play('click'); bus.emit('ui:rivier', { from: 'menu' }); },
+    },
+    h('span', { class: 'kasteel-menu-ic' }, emo('🛟')),
+    h('span', { class: 'kasteel-menu-txt' }, h('b', { text: S.afgly }), h('small', { text: sub })),
+    h('span', { class: 'btn-new-tag kasteel-new', text: S.newTag }));
   }
 
   /** The Daily's results: people fell into the river — ride down and rescue them (today's ride, once). */
