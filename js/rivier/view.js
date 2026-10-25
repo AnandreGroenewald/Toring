@@ -10,7 +10,7 @@
 import * as THREE from '../../lib/three.module.min.js';
 import { createStage, pickQuality } from '../kasteel/stage.js';
 import { createPieces } from '../botsing/pieces.js';
-import { buildRiverWorld, bendMaterial, setBend, BANK, puffTexture } from './world.js';
+import { buildRiverWorld, bendMaterial, setBend, bendX, BANK, puffTexture } from './world.js';
 import { createRider } from './rider.js';
 import { createThings, createIsland, createStartTower, labelSprite, disposeTree } from './things.js';
 import { createBeasts } from './beasts.js';
@@ -24,6 +24,7 @@ import { S } from '../core/strings.js';
 import { fmtM, fmtInt } from '../core/format.js';
 import { spanNewsLine } from '../ui/spannews.js';
 import { audio, haptics } from '../audio.js';
+import { STATE_HZ, COUNT_S, duelWinner } from './duel.js';
 
 const AHEAD = 230;       // m: things are made this far ahead...
 const BEHIND = 14;       // ...and taken away this far behind
@@ -103,6 +104,20 @@ function makeKit() {
 #rivier .rv-fire svg.pips .empty { stroke: rgba(10,40,52,.55); }
 #rivier .rv-fire.pulse { animation: rv-firepulse 1.1s ease-in-out infinite; }
 @keyframes rv-firepulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.18) drop-shadow(0 0 12px rgba(110,240,255,.8)); } }
+#rivier .rv-vs { position: absolute; left: 50%; top: calc(64px + var(--sat, 0px)); transform: translateX(-50%); display: none; align-items: baseline; gap: 5px; padding: 4px 12px; border-radius: 999px; background: rgba(20,60,120,.72); border: 1px solid rgba(140,200,255,.55); color: #e6f2ff; font-weight: 900; font-size: 14px; white-space: nowrap; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); font-variant-numeric: tabular-nums; }
+#rivier .rv-vs.on { display: flex; }
+#rivier .rv-vs b { font-size: 16px; color: #fff; }
+#rivier .rv-vs i { font-style: normal; font-size: 13px; padding: 1px 7px; border-radius: 999px; }
+#rivier .rv-vs i.ahead { background: rgba(60,200,110,.35); color: #b9ffcf; }
+#rivier .rv-vs i.behind { background: rgba(230,70,60,.35); color: #ffd0cb; }
+#rivier .rv-ftag { position: absolute; left: 0; top: 0; display: none; transform: translate(-50%, -100%); padding: 3px 10px; border-radius: 999px; background: rgba(25,90,190,.85); border: 2px solid #8fd0ff; color: #fff; font-weight: 900; font-size: 14px; white-space: nowrap; pointer-events: none; box-shadow: 0 3px 10px rgba(0,0,0,.3); }
+#rivier .rv-ftag.on { display: block; }
+#rivier .rv-ftag.low { top: auto !important; bottom: calc(18px + var(--sab, 0px)); transform: translate(-50%, 0); }
+#rivier .rv-go3 { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); font-size: 110px; font-weight: 900; color: #fff3c4; text-shadow: 0 6px 0 rgba(40,24,0,.5), 0 0 30px rgba(0,0,0,.35); pointer-events: none; display: none; }
+#rivier .rv-go3.on { display: block; animation: rv-go3 .9s cubic-bezier(.2,1.4,.4,1) both; }
+@keyframes rv-go3 { 0% { transform: translate(-50%, -50%) scale(.3); opacity: 0; } 25% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; } 45% { transform: translate(-50%, -50%) scale(1); } 100% { transform: translate(-50%, -50%) scale(1); opacity: .9; } }
+#rivier .rv-card h2.rv-win { margin: 2px 0 6px; color: #ffd65c; }
+#rivier .rv-card p.rv-vsline { margin: 2px 0 10px; font-size: 17px; font-weight: 900; color: #bfe0ff; }
 #rivier .rv-hurt { position: absolute; inset: 0; box-shadow: inset 0 0 90px 20px rgba(200,40,30,.55); opacity: 0; transition: opacity .25s; }
 #rivier .rv-hurt.on { opacity: 1; transition: none; }
 #rivier .rv-fly { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; transition: transform .55s cubic-bezier(.4,0,.6,1), opacity .55s; }
@@ -779,11 +794,13 @@ function createRide(K, d) {
   let last = performance.now();
   let t = 0;
   let dist = 0;
-  let phase = raid ? 'run' : 'dive';   // dive → run → finish → done
+  // (Saam gly: the count first, side by side: the room's maker on the left, the friend on the right)
+  const duel = d.duel || null;
+  let phase = raid ? 'run' : duel ? 'count' : 'dive';   // (count →) dive → run → finish → done
   let phaseT = 0;
   let paused = false;
-  let lane = 1;
-  let x = laneX(1);
+  let lane = duel ? (duel.host ? 0 : 2) : 1;
+  let x = laneX(lane);
   // the glide across: a spring on his x (critically damped, so a quick change of mind flows on without a jerk); the
   // carve's lean and the board's heading come from how fast he's moving across
   let vx = 0;
@@ -1227,7 +1244,7 @@ function createRide(K, d) {
   // ---------------------------------------------------------------------------------------------- the overlay
   ov.innerHTML = `<div class="rv-top"><div class="rv-count"><span class="rv-ring"></span><b>0</b><small>/ ${who.length}</small></div>${endless ? `<div class="rv-metres"><b>0</b><small>m</small></div><div class="rv-hearts">${'<i></i>'.repeat(RIVER.hearts)}</div>` : '<div class="rv-bar"><i></i></div>'}<button class="rv-pause" aria-label="${S.pause}">❚❚</button></div>
     <div class="rv-faces"></div><div class="rv-hint"></div><div class="rv-pop"></div><div class="rv-hurt"></div>
-    <div class="rv-card"></div><div class="rv-scope"><svg viewBox="0 0 132 132" aria-hidden="true"><circle class="ring" cx="66" cy="66" r="54"/><g class="ticks">${Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; const r1 = i % 3 ? 49 : 44; return `<line x1="${(66 + Math.cos(a) * r1).toFixed(1)}" y1="${(66 + Math.sin(a) * r1).toFixed(1)}" x2="${(66 + Math.cos(a) * 54).toFixed(1)}" y2="${(66 + Math.sin(a) * 54).toFixed(1)}"/>`; }).join('')}</g><g class="cross"><line x1="66" y1="24" x2="66" y2="57"/><line x1="66" y1="75" x2="66" y2="108"/><line x1="24" y1="66" x2="57" y2="66"/><line x1="75" y1="66" x2="108" y2="66"/></g><path class="brk" d="M10 32 V10 H32 M100 10 H122 V32 M122 100 V122 H100 M32 122 H10 V100"/><circle class="dot" cx="66" cy="66" r="3.5"/></svg><div class="rng"></div></div><button class="rv-fire" aria-label="${S.rvFire}"><svg class="pips" viewBox="0 0 112 112"></svg><span class="in"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2.5c-.4 0-.7.2-.9.5C9.4 5.6 5.5 10.9 5.5 14.6a6.5 6.5 0 0 0 13 0c0-3.7-3.9-9-5.6-11.6-.2-.3-.5-.5-.9-.5z"/><path fill="#9feaf5" d="M9.2 14.4c.3 1.6 1.4 2.7 3 3" stroke="#0b6f8a" stroke-width="1.6" stroke-linecap="round"/></svg><span>${S.rvFire}</span></span></button><div class="rv-board"></div><div class="rv-arrow"></div><div class="rv-paused"><div><h2>${S.rvPaused}</h2><button class="rv-on">${S.rvResume}</button><button class="rv-off">${S.rvQuit}</button></div></div>`;
+    <div class="rv-vs"></div><div class="rv-ftag"></div><div class="rv-go3"></div><div class="rv-card"></div><div class="rv-scope"><svg viewBox="0 0 132 132" aria-hidden="true"><circle class="ring" cx="66" cy="66" r="54"/><g class="ticks">${Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; const r1 = i % 3 ? 49 : 44; return `<line x1="${(66 + Math.cos(a) * r1).toFixed(1)}" y1="${(66 + Math.sin(a) * r1).toFixed(1)}" x2="${(66 + Math.cos(a) * 54).toFixed(1)}" y2="${(66 + Math.sin(a) * 54).toFixed(1)}"/>`; }).join('')}</g><g class="cross"><line x1="66" y1="24" x2="66" y2="57"/><line x1="66" y1="75" x2="66" y2="108"/><line x1="24" y1="66" x2="57" y2="66"/><line x1="75" y1="66" x2="108" y2="66"/></g><path class="brk" d="M10 32 V10 H32 M100 10 H122 V32 M122 100 V122 H100 M32 122 H10 V100"/><circle class="dot" cx="66" cy="66" r="3.5"/></svg><div class="rng"></div></div><button class="rv-fire" aria-label="${S.rvFire}"><svg class="pips" viewBox="0 0 112 112"></svg><span class="in"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2.5c-.4 0-.7.2-.9.5C9.4 5.6 5.5 10.9 5.5 14.6a6.5 6.5 0 0 0 13 0c0-3.7-3.9-9-5.6-11.6-.2-.3-.5-.5-.9-.5z"/><path fill="#9feaf5" d="M9.2 14.4c.3 1.6 1.4 2.7 3 3" stroke="#0b6f8a" stroke-width="1.6" stroke-linecap="round"/></svg><span>${S.rvFire}</span></span></button><div class="rv-board"></div><div class="rv-arrow"></div><div class="rv-paused"><div><h2>${S.rvPaused}</h2><button class="rv-on">${S.rvResume}</button><button class="rv-off">${S.rvQuit}</button></div></div>`;
   const countEl = ov.querySelector('.rv-count');
   const countB = countEl.querySelector('b');
   const barEl = ov.querySelector('.rv-bar i');
@@ -1248,6 +1265,163 @@ function createRide(K, d) {
   const popEl = ov.querySelector('.rv-pop');
   const hurtEl = ov.querySelector('.rv-hurt');
   const cardEl = ov.querySelector('.rv-card');
+
+  // ---------------------------------------------------------------------------------------------- Saam gly (1.21)
+  // your friend on the same river, live: their rider (in blue), the white water under their board, their name over them;
+  // a pill at the top with their metres and the gap. What their game says comes a few times a second; in between they
+  // ride on at the river's pace (the same river: the same speed), smoothed.
+  const vsEl = ov.querySelector('.rv-vs');
+  const ftagEl = ov.querySelector('.rv-ftag');
+  const go3El = ov.querySelector('.rv-go3');
+  const fname = duel ? duel.friend?.name || S.saamFriend : '';
+  const fr = duel ? {
+    rider: createRider(bendMaterial, d.models?.builder || null, { swap: true }), foam: things.foam(2.6), seen: false, d: 0, sd: 0, at: 0,
+    tx: laneX(duel.host ? 2 : 0), sx: laneX(duel.host ? 2 : 0), y: 0, k: 0, l: 0, out: false, outT: 0, endM: 0, gone: false, blinkT: 0, blinkOn: false,
+  } : null;
+  let watching = false;   // (you're out and they ride on: the camera goes down the river with them)
+  let sentEnd = -1;       // (the metres your 'end' said)
+  let sendT = 0;
+  let goSaid = -1;
+  let counting = false;   // (both rivers are up: the count runs)
+  let readySaid = false;
+  let myEndM = 0;
+  let duelPaintT = 0;
+  let winSaid = false;
+  let tagText = '';
+  let vsHtml = '';
+  let offDuel = null;
+  if (fr) {
+    fr.foam.scale.set(1.9, 1, 3.6);
+    scene.add(fr.rider.group, fr.foam);
+    offDuel = duel.onMsg((m) => {
+      if (!alive) return;
+      if (m.t === 'start') {
+        counting = true;
+      } else if (m.t === 'st') {
+        if (fr.out) return;
+        fr.seen = true;
+        fr.d = m.d;
+        fr.at = t;
+        fr.tx = m.x;
+        fr.y = m.y;
+        fr.k = m.k;
+        fr.l = m.l;
+      } else if (m.t === 'ko') {
+        fr.blinkT = 1;
+        if (phase === 'run') pop(S.saamKo(fname), 800);
+      } else if (m.t === 'end') {
+        if (!fr.out) {
+          fr.out = true;
+          fr.outT = t;
+          if (phase === 'run') pop(S.saamOut(fname, fmtInt(Math.floor(m.m))), 1600);
+        }
+        fr.seen = true;
+        fr.endM = Math.floor(m.m);
+        fr.d = m.m;
+        paintDuel();
+      } else if (m.t === 'gone') {
+        fr.gone = true;
+        if (phase === 'run') pop(S.saamGone(fname), 1600);
+        paintDuel();
+      }
+    });
+  }
+  /** Them on the river this frame, their tag, and the pill. */
+  const _ft = new THREE.Vector3();
+  function stepFriend(dt) {
+    const now = fr.out || !fr.seen ? fr.d : fr.d + speedAt(fr.d, len) * Math.min(0.4, t - fr.at);
+    fr.sd = phase === 'count' ? 0 : fr.sd + (now - fr.sd) * (1 - Math.exp(-dt * 10));
+    fr.sx += (fr.tx - fr.sx) * (1 - Math.exp(-dt * 12));
+    const z = -(fr.sd - dist);
+    const g = fr.rider.group;
+    // (out: head over heels off the board and under, as yours goes)
+    const outK = fr.out ? clamp((t - fr.outT) / 1.2, 0, 1) : 0;
+    g.visible = !fr.gone && outK < 1 && z > -AHEAD && z < 16;
+    g.position.set(fr.sx, fr.out ? Math.sin(outK * Math.PI) * 1.4 - outK * 1.6 : fr.y, z);
+    g.rotation.x = -outK * Math.PI * 1.6;
+    fr.rider.update(dt, { lean: fr.l, duck: fr.k, speed: speedAt(fr.sd, len), tuck: fr.y > 0.15 ? clamp(fr.y / 1.2, 0, 1) : 0 });
+    // (right on top of you: they show through, so neither hides the other; a knock: they blink)
+    fr.blinkT = Math.max(0, fr.blinkT - dt);
+    const blink = (!watching && Math.abs(z) < 2.4 && Math.abs(fr.sx - x) < 1.4) || (fr.blinkT > 0 && Math.floor(t * 10) % 2 === 0);
+    if (blink !== fr.blinkOn) {
+      fr.blinkOn = blink;
+      fr.rider.setBlink(blink);
+    }
+    fr.foam.visible = g.visible && fr.y < 0.3 && !fr.out;
+    fr.foam.position.set(fr.sx, 0.03, z + 0.05);
+    if (fr.foam.visible && phase !== 'count' && z > -70 && Math.random() < 0.5) things.emit(fr.sx, 0.12, z + 0.9, 1, 0.6, 1.4);
+    // their name over them (it winds with the river as they do); off to the side: at that edge, pointing; behind the
+    // camera: at the foot of the screen, how far back
+    let text = '';
+    let low = false;
+    if (!fr.gone && (fr.seen || phase === 'count') && !(fr.out && t - fr.outT > 1.4)) {
+      const W = host.clientWidth;
+      if (z > 10 && !watching) {
+        text = S.saamBehind(fname, fmtInt(Math.round(z)));
+        low = true;
+        ftagEl.style.left = `${clamp(W * (0.5 + (fr.sx - x) / 14), 100, W - 100)}px`;
+      } else {
+        _ft.set(fr.sx + bendX(-z, dist - z), (fr.out ? 0 : fr.y) + 2.45, z).project(camera);
+        if (_ft.z < 1) {
+          const sx = (_ft.x * 0.5 + 0.5) * W;
+          const side = _ft.x > 0.92 ? 1 : _ft.x < -0.92 ? -1 : 0;
+          text = side > 0 ? `${fname} ▶` : side < 0 ? `◀ ${fname}` : fname;
+          ftagEl.style.left = `${side ? clamp(sx, 70, W - 70) : sx}px`;
+          ftagEl.style.top = `${clamp((-_ft.y * 0.5 + 0.5) * host.clientHeight, 120, host.clientHeight - 60)}px`;
+        }
+      }
+    }
+    if (text !== tagText) {
+      tagText = text;
+      ftagEl.textContent = text;
+      ftagEl.classList.toggle('on', !!text);
+    }
+    ftagEl.classList.toggle('low', low);
+    // the pill: their metres, and how far ahead (green) or behind (red) you are
+    let html = '';
+    if (!fr.gone && phase !== 'count' && (phase !== 'done' || watching)) {
+      const m = fr.out ? fr.endM : Math.floor(fr.sd);
+      const gap = Math.round((watching ? myEndM : dist) - (fr.out ? fr.endM : fr.sd));
+      html = `<span>🔵 ${esc(fname)}</span><b>${fmtInt(m)}</b><small>m</small>${fr.out ? '' : `<i class="${gap >= 0 ? 'ahead' : 'behind'}">${gap >= 0 ? '+' : '−'}${fmtInt(Math.abs(gap))} m</i>`}`;
+    }
+    if (html !== vsHtml) {
+      vsHtml = html;
+      vsEl.innerHTML = html;
+      vsEl.classList.toggle('on', !!html);
+    }
+    if (watching && phase === 'done' && (duelPaintT -= dt) <= 0) {
+      duelPaintT = 0.25;
+      paintDuel();
+    }
+  }
+  /** The card's duel lines: who won (once both are out), or how far they are now. */
+  function paintDuel() {
+    if (!duel || phase !== 'done') return;
+    const win = cardEl.querySelector('.rv-win');
+    const line = cardEl.querySelector('.rv-vsline');
+    const again = cardEl.querySelector('.rv-again');
+    if (!win || !line) return;
+    if (fr.out) {
+      const w = duelWinner(myEndM, fr.endM);
+      win.textContent = w === 'me' ? S.saamWin : w === 'tie' ? S.saamTie : S.saamLose(fname);
+      line.textContent = S.saamTheirs(fname, fmtInt(fr.endM));
+      if (!winSaid) {
+        winSaid = true;
+        audio.play(w === 'me' ? 'record' : 'banner');
+        if (w === 'me' && !fwRide) fwRide = createFireworks(scene, reduced, world.night);
+      }
+    } else if (fr.gone || !fr.seen) {
+      win.textContent = '';
+      line.textContent = fr.gone ? S.saamGone(fname) : '';
+    } else {
+      win.textContent = '';
+      line.textContent = S.saamWatch(fname, fmtInt(Math.floor(fr.sd)));
+    }
+    if (again && fr.gone) {
+      again.disabled = true;
+      again.textContent = S.saamGone(fname);
+    }
+  }
   const pausedEl = ov.querySelector('.rv-paused');
   const faceUrl = (id, n = 96) => portraitDataUrl(id, n) || '';
   const scopeEl = ov.querySelector('.rv-scope');
@@ -1461,12 +1635,12 @@ function createRide(K, d) {
   function teach(l, ahead) {
     const k = l.it.kind === 'log' ? 'jump' : 'duck';
     const sp = speedAt(dist, len);
-    if (!taught[k] && !l.taught && ahead < sp * 1.25 && ahead > 0) {
+    if (!taught[k] && !duel && !l.taught && ahead < sp * 1.25 && ahead > 0) {
       l.taught = true;
       lesson = { kind: k, l };
       hint(k === 'jump' ? S.rvTeachJump : S.rvTeachDuck);
       arrowEl.className = `rv-arrow on ${k === 'jump' ? 'up' : 'down'}`;
-    } else if (taught[k] && !l.hinted && ahead < sp * 1.7 && ahead > sp * 0.6) {
+    } else if ((taught[k] || duel) && !l.hinted && ahead < sp * 1.7 && ahead > sp * 0.6) {
       l.hinted = true;
       pop(k === 'jump' ? S.rvJumpShort : S.rvDuckShort, 900);
     }
@@ -1586,7 +1760,7 @@ function createRide(K, d) {
       things.emit(side * st.x + _pp.x, 0.15, -a + _pp.z, 1, 0.6, 1.3);
     }
     // (the pie leaves his hand where it is now, after the pose)
-    if (throwNow) throwPie(l);
+    if (throwNow && phase === 'run') throwPie(l);
   }
   const _up = new THREE.Vector3(0, 1, 0);
   function throwPie(from) {
@@ -1683,6 +1857,7 @@ function createRide(K, d) {
   let lastKnock = null;   // (what knocked you last: for the tests)
   function knock(l) {
     hits++;
+    duel?.send({ t: 'ko' });
     lastKnock = l?.it?.kind ?? null;
     if (endless) {
       hearts = Math.max(0, hearts - 1);
@@ -1715,6 +1890,10 @@ function createRide(K, d) {
   /** The third knock: he goes head over heels into the river, and the ride is over (the card after a moment). */
   function wipeout(l) {
     endLesson();
+    if (duel) {
+      sentEnd = Math.floor(dist);
+      duel.send({ t: 'end', m: sentEnd });
+    }
     phase = 'wipe';
     phaseT = 0;
     for (const x2 of live) x2.done = true;
@@ -1780,7 +1959,11 @@ function createRide(K, d) {
   function cameraFor(dt) {
     let p;
     let l;
-    if (phase === 'dive' && quick) {
+    if (watching) {
+      // (Saam gly, you're out: the riding camera goes on down the river behind your friend)
+      p = new THREE.Vector3(fr.sx * 0.82, 6.4, 11.5);
+      l = new THREE.Vector3(fr.sx * 0.62, 0.4, -22);
+    } else if ((phase === 'dive' && quick) || phase === 'count') {
       // (dropped in: the riding camera from the start)
       p = new THREE.Vector3(x * 0.82, 6.4, 11.5);
       l = new THREE.Vector3(x * 0.62, 0.4, -22);
@@ -1895,7 +2078,46 @@ function createRide(K, d) {
   function step(dt) {
     t += dt;
     phaseT += dt;
-    if (phase === 'dive') {
+    if (phase === 'count' && !counting) {
+      // (Saam gly: the river is up; the count waits for your friend's (or goes alone once they've gone))
+      phaseT = 0;
+      rider.group.position.set(x, 0, 0);
+      if (!readySaid) {
+        readySaid = true;
+        duel.ready();
+        hint(S.saamWaitAgain(fname));
+      }
+      if (fr.gone) counting = true;
+    } else if (phase === 'count') {
+      // (Saam gly: 3, 2, 1 on both phones, side by side on the still water; then GLY! and the river runs)
+      const left = Math.ceil(COUNT_S - phaseT);
+      if (goSaid < 0) hint(null);
+      if (left > 0 && left !== goSaid) {
+        goSaid = left;
+        go3El.textContent = String(left);
+        go3El.classList.remove('on');
+        void go3El.offsetWidth;
+        go3El.classList.add('on');
+        audio.play('click');
+        haptics.tap?.();
+      }
+      rider.group.position.set(x, 0, 0);
+      if (phaseT >= COUNT_S) {
+        go3El.textContent = S.saamGo;
+        go3El.classList.remove('on');
+        void go3El.offsetWidth;
+        go3El.classList.add('on');
+        setTimeout(() => go3El.classList.remove('on'), 800);
+        phase = 'run';
+        phaseT = 0;
+        startGone = t;
+        things.emit(x, 0.2, 0, 40, 2.2, 5);
+        audio.play('splash');
+        audio.music?.(true, { bpm: 104, layers: 1, key: 2 });
+        hint(S.rvHintFree);
+        startHint = true;
+      }
+    } else if (phase === 'dive') {
       // he falls from the top into the river: a splash, and he's up on his board
       const k = clamp(phaseT / DIVE, 0, 1);
       if (quick) {
@@ -2054,16 +2276,20 @@ function createRide(K, d) {
         audio.play('banner');
       }
     }
+    if (watching) dist = Math.max(dist, fr.sd);
     rider.group.position.x = x;
+    rider.group.visible = !watching;
     riderFoam.position.set(x, 0.03, 0.05);
-    riderFoam.visible = (phase !== 'dive' || rider.group.position.y < 0.3) && airY < 0.3;
+    riderFoam.visible = (phase !== 'dive' || rider.group.position.y < 0.3) && airY < 0.3 && !watching;
     rider.update(dt, { lean: leanV, yaw: Math.atan2(-vx, Math.max(4, speedAt(dist, len))) * 0.8, crouch: slowT > 0 ? slowT / RIVER.hitSlowS : 0, speed: speedAt(dist, len), tuck: jumpT >= 0 ? Math.sin(js * Math.PI) : 0, duck: duckK });
     if (lamp) {
       // (from the front of his hat, aimed down the river a little towards the middle: it swings with him, not with his head)
       const hy = rider.group.position.y + rider.headY() + 0.12;
-      lamp.position.set(x, hy, rider.group.position.z - 0.3);
-      lamp.target.position.set(x * 0.6, 0, rider.group.position.z - 26);
-      lampGlow.position.set(x, hy, rider.group.position.z - 0.42);
+      const lx = watching ? fr.sx : x;
+      lamp.position.set(lx, hy, rider.group.position.z - 0.3);
+      lamp.target.position.set(lx * 0.6, 0, rider.group.position.z - 26);
+      lampGlow.position.set(lx, hy, rider.group.position.z - 0.42);
+      lampGlow.visible = !watching;
       world.setLamp(lamp.position, lampDir.subVectors(lamp.target.position, lamp.position), lampCol, 0.5, 0.95);
     }
     // spray off the board's tail
@@ -2198,9 +2424,17 @@ function createRide(K, d) {
     // (your tower stays upstream: behind the camera once you ride)
     start.group.position.set(0, -0.6, dist + START_Z);
     if (barEl) barEl.style.width = `${clamp(dist / (len - RIVER.finishRun), 0, 1) * 100}%`;
-    if (metresEl) {
-      const m = Math.floor(dist);
-      if (metresEl.textContent !== String(m)) metresEl.textContent = fmtInt(m);
+    if (metresEl && !watching) {
+      const m = fmtInt(Math.floor(dist));
+      if (metresEl.textContent !== m) metresEl.textContent = m;
+    }
+    if (fr) {
+      stepFriend(dt);
+      // (yours to them, a few times a second while you ride)
+      if (phase === 'run' && (sendT -= dt) <= 0) {
+        sendT = 1 / STATE_HZ;
+        duel.send({ t: 'st', d: Math.round(dist * 10) / 10, x: Math.round(x * 100) / 100, y: Math.round(airY * 100) / 100, k: Math.round(duckK * 100) / 100, l: Math.round(leanV * 100) / 100, h: hearts });
+      }
     }
     world.update(dist, t, phase === 'dive' ? null : x);
     if (pipes) stepPipes();
@@ -2304,6 +2538,31 @@ function createRide(K, d) {
       return;
     }
     const r = result();
+    if (duel) {
+      // (Saam gly: your metres, theirs (or how far they are now, the camera with them), who won, again together)
+      myEndM = r.metres;
+      if (sentEnd !== r.metres) {
+        sentEnd = r.metres;
+        duel.send({ t: 'end', m: r.metres });
+      }
+      cardEl.innerHTML = `<div class="rv-dist"><b>${fmtInt(r.metres)}</b><small>m</small></div><h2 class="rv-win"></h2><p class="rv-vsline"></p><p class="rv-rank"></p>
+        <button class="rv-go rv-again">${S.saamAgain}</button><button class="rv-no">${S.rvDone}</button>`;
+      if (rankNow) setRank(rankNow);
+      cardEl.classList.add('on');
+      const again = cardEl.querySelector('.rv-again');
+      again.addEventListener('click', () => {
+        if (again.disabled) return;
+        again.disabled = true;
+        again.textContent = S.saamWaitAgain(fname);
+        d.onDone?.(r, 'again');
+      });
+      cardEl.querySelector('.rv-no').addEventListener('click', () => d.onDone?.(r, 'done'));
+      watching = fr.seen && !fr.out && !fr.gone;
+      hint(null);
+      paintDuel();
+      d.onResult?.(r);
+      return;
+    }
     if (r.all) audio.play('record'); else audio.play('banner');
     // (everyone saved: fireworks over the island, the way the winners get them on Saturday)
     if (r.all && !fwRide) fwRide = createFireworks(scene, reduced, world.night);
@@ -2415,6 +2674,11 @@ function createRide(K, d) {
     }
     for (const f of flights) { scene.remove(f.mesh); disposeTree(f.mesh, done); }
     for (const b of debris) { scene.remove(b.g); disposeTree(b.g, done); }
+    if (fr) {
+      offDuel?.();
+      scene.remove(fr.rider.group, fr.foam);
+      disposeTree(fr.rider.group, done);
+    }
     for (const root of [rider.group, start.group, island.group]) disposeTree(root, done);
     for (const fx of flashes) { scene.remove(fx.fl); fx.fl.material.dispose(); }
     for (const m of warmMats) m.dispose();
@@ -2449,7 +2713,8 @@ function createRide(K, d) {
     pause: () => setPaused(true),
     resume: () => setPaused(false),
     /** For tests: where the ride stands. */
-    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, endless, hearts, airY: Math.round(airY * 100) / 100, duckK: Math.round(duckK * 100) / 100, timeK: Math.round(timeK * 100) / 100, lesson: lesson && !lesson.done ? lesson.kind : null, pies: pies.length, clowns: live.filter((l) => l.obj.userData.kind === 'clown').map((l) => ({ z: Math.round(l.z * 10) / 10, x: Math.round(l.obj.position.x * 100) / 100, phase: l.cs?.phase, foot: Math.round((world.footAt?.(l.obj.userData.side || 1, l.z) ?? 0) * 100) / 100 })), pieAt: pies.map((pp) => { const v = pp.mesh.getWorldPosition(new THREE.Vector3()).project(camera); return { t: Math.round(pp.t * 100) / 100, x: Math.round(v.x * 100) / 100, y: Math.round(v.y * 100) / 100, z: Math.round(v.z * 1000) / 1000 }; }), headY: rider.headY?.(), lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, lastKnock, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })) }),
+    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, endless, hearts, airY: Math.round(airY * 100) / 100, duckK: Math.round(duckK * 100) / 100, timeK: Math.round(timeK * 100) / 100, lesson: lesson && !lesson.done ? lesson.kind : null, pies: pies.length, clowns: live.filter((l) => l.obj.userData.kind === 'clown').map((l) => ({ z: Math.round(l.z * 10) / 10, x: Math.round(l.obj.position.x * 100) / 100, phase: l.cs?.phase, foot: Math.round((world.footAt?.(l.obj.userData.side || 1, l.z) ?? 0) * 100) / 100 })), pieAt: pies.map((pp) => { const v = pp.mesh.getWorldPosition(new THREE.Vector3()).project(camera); return { t: Math.round(pp.t * 100) / 100, x: Math.round(v.x * 100) / 100, y: Math.round(v.y * 100) / 100, z: Math.round(v.z * 1000) / 1000 }; }), headY: rider.headY?.(), lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, lastKnock, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })),
+      duel: fr ? { seen: fr.seen, d: Math.round(fr.sd * 10) / 10, x: Math.round(fr.sx * 100) / 100, out: fr.out, endM: fr.endM, gone: fr.gone, watching, counting, shown: fr.rider.group.visible, tag: tagText, round: duel.round } : null }),
     autopilot(on) { pilotOn = !!on; },
     /** For tests (Saturday): where on screen (host px) the tallest tower stands at a share of its height, or null. */
     towerScreen(frac = 0.5) {

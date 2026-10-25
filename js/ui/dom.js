@@ -195,6 +195,7 @@ export function createUI(bus) {
     album: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-album-title', tabindex: '-1' }),   // (1.16) its residents album
     week: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-week-title', tabindex: '-1' }),   // (1.20) a Weektoring turn's result
     spanjoin: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-spanjoin-title', tabindex: '-1' }),   // (1.20) a friend's invite
+    saam: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-saam-title', tabindex: '-1' }),   // (1.21) Saam gly: the invite, the wait
     span2d: h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'stapel-span2d-title', tabindex: '-1' }),   // (1.20) Ons dorp without 3D
   };
   const pauseBtn = h('button', {
@@ -236,7 +237,7 @@ export function createUI(bus) {
   // buttons take taps: a tap anywhere else still drops a block)
   const emoteBar = h('div', { class: 'emote-bar', role: 'group', 'aria-label': S.emoteLabel, hidden: true });
 
-  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, screens.dorp, screens.slag, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, modals.tribe, modals.album, modals.week, modals.spanjoin, modals.span2d, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
+  root.append(screens.menu, screens.results, screens.pause, screens.duel, screens.duelwait, screens.dorp, screens.slag, modals.howto, modals.stats, modals.shop, modals.lang, modals.board, modals.remind, modals.name, modals.settings, modals.pick, modals.offer, modals.tribe, modals.album, modals.week, modals.spanjoin, modals.span2d, modals.saam, pauseBtn, punishBar, tutorBar, searchChip, connChip, powerTray, emoteShield, emoteBar, toastBox);
   for (const el of [...Object.values(screens), ...Object.values(modals)]) setOn(el, false);
 
   // (1.15, the owner: "We need a better way to display the coins please") every 🪙 the UI shows becomes the game's own
@@ -452,6 +453,8 @@ export function createUI(bus) {
       st.trying.querySelector('.try-back')?.click();   // a Try it: back to the Winkel
     } else if (st.modal === 'lang' && st.langFirst) {
       bus.emit('ui:lang', getLanguage());   // the first-start choice can't be skipped: back keeps the language shown
+    } else if (st.modal === 'name' && st.nameFirst) {
+      // (1.21) nor can a player's first name: back stays on it
     } else if (st.modal) {
       closeModal();
     } else if (st.screen === 'pause') {
@@ -2697,9 +2700,14 @@ export function createUI(bus) {
    * (1.12.1) Your nickname, from the ranglys or Statistiek (before, it could only be changed in the
    * Uitdagersreeks). `back`: what to show again once it is saved or closed.
    */
-  function showName({ name = '', placeholder = '', back = null } = {}) {
+  /**
+   * The nickname sheet. `first` (1.21, the owner: "people need to change their name immediately"): a player's first
+   * name, asked before anything else; it closes only with a name typed (no close button, back doesn't skip it).
+   */
+  function showName({ name = '', placeholder = '', back = null, first = false } = {}) {
     st.nameBack = back;
     st.namePlaceholder = placeholder;
+    st.nameFirst = first;
     const input = h('input', {
       class: 'nick-input', type: 'text', maxlength: '16', autocomplete: 'off', autocapitalize: 'words',
       // (1.15, the owner: "The blue shield?") a game name, not a login or your real name: password managers keep out
@@ -2707,9 +2715,17 @@ export function createUI(bus) {
       spellcheck: 'false', enterkeyhint: 'done', 'aria-label': S.duelNick, placeholder,
     });
     input.value = name || '';
-    const msg = h('p', { class: 'nick-msg', role: 'status', 'aria-live': 'polite', text: S.nameHint(placeholder) });
+    const msg = h('p', { class: 'nick-msg', role: 'status', 'aria-live': 'polite', text: first ? S.nameFirstSub : S.nameHint(placeholder) });
     st.nameMsg = msg;
-    const save = () => bus.emit('ui:duel-name', input.value);
+    const save = () => {
+      if (first && !String(input.value || '').trim()) {
+        msg.textContent = S.nameFirstNeed;
+        msg.classList.add('bad');
+        input.focus();
+        return;
+      }
+      bus.emit('ui:duel-name', input.value);
+    };
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -2717,16 +2733,16 @@ export function createUI(bus) {
       }
     });
     input.addEventListener('input', () => {
-      msg.textContent = S.nameHint(placeholder);
+      msg.textContent = first ? S.nameFirstSub : S.nameHint(placeholder);
       msg.classList.remove('bad');
     });
     modals.name.replaceChildren(h('div', { class: 'card sheet name-sheet' },
-      closeX(() => closeName()),
-      h('div', { class: 'sheet-head' }, emo('✏️'), h('h2', { id: 'stapel-name-title', text: S.duelNick })),
+      first ? null : closeX(() => closeName()),
+      h('div', { class: 'sheet-head' }, emo(first ? '👋' : '✏️'), h('h2', { id: 'stapel-name-title', text: first ? S.nameFirstTitle : S.duelNick })),
       h('div', { class: 'sheet-body' }, h('div', { class: 'nick' }, input, msg, h('p', { class: 'name-rules', text: S.nameRules }))),
       h('div', { class: 'sheet-foot name-foot' },
         button('btn-blue', h('span', { text: S.nameSave }), save, { nav: false }),
-        button('btn-white', h('span', { text: S.close }), () => closeName(), { nav: false }))));
+        first ? null : button('btn-white', h('span', { text: S.close }), () => closeName(), { nav: false }))));
     openModal('name');
     setTimeout(() => { if (st.modal === 'name') input.focus(); }, 120);   // the keyboard comes up: it's for typing
   }
@@ -2734,6 +2750,7 @@ export function createUI(bus) {
   function closeName() {
     const back = st.nameBack;
     st.nameBack = null;
+    st.nameFirst = false;
     closeModal();
     if (typeof back === 'function') back();
   }
@@ -3232,9 +3249,21 @@ export function createUI(bus) {
    */
   /** Ons dorp and Afgly side by side: one row, the height the island's button always had (small phones fit). */
   function spanRowEl(v, can3d) {
-    const a = ONS_DORP.on ? spanMenuEl(v) : null;
+    // (without the town: the River run and Saam gly side by side)
+    const a = ONS_DORP.on ? spanMenuEl(v) : saamMenuEl(v, can3d);
     const b = rivierMenuEl(v, can3d);
-    return a && b ? h('div', { class: 'span-row' }, a, b) : a || b;
+    return a && b ? h('div', { class: 'span-row' }, b, a) : a || b;
+  }
+  /** (1.21) Saam gly: ride the river with a friend, at the same time, each seeing the other. */
+  function saamMenuEl(v, can3d) {
+    if (!v || can3d === false) return null;
+    return h('button', {
+      type: 'button', class: 'kasteel-menu-btn rivier-menu-btn saam-menu-btn', 'aria-label': `${S.saam}: ${S.saamMenuSub}`,
+      onclick: () => { if (!guard()) return; audio.play('click'); bus.emit('ui:saam'); },
+    },
+    h('span', { class: 'kasteel-menu-ic' }, emo('👥')),
+    h('span', { class: 'kasteel-menu-txt' }, h('b', { text: S.saam }), h('small', { text: S.saamMenuSub })),
+    h('span', { class: 'btn-new-tag kasteel-new', text: S.newTag }));
   }
   function rivierMenuEl(v, can3d) {
     if (!v || can3d === false) return null;
@@ -3299,6 +3328,33 @@ export function createUI(bus) {
         v.crew && v.crew.members.length < 3 ? button('btn-white', [h('span', { text: S.spanInvite })], () => bus.emit('ui:span-invite')) : null,
         button('btn-white', [h('span', { text: S.wkDone })], () => closeModal()))));
     openModal('span2d');
+  }
+
+  /**
+   * (1.21) Saam gly's sheet: `mode` 'busy' (a room being made), 'host' (the link to send, waiting for the friend), 'join'
+   * (a friend's link: ride with them?), 'wait' (in the room, waiting for the start).
+   */
+  function showSaam({ mode = 'busy', link = '' } = {}) {
+    const waitRow = h('p', { class: 'slag-waiting' }, h('span', { class: 'spinner small', 'aria-hidden': 'true' }), h('span', { text: S.saamWaiting }));
+    const cancel = button('btn-white', [h('span', { text: S.saamCancel })], () => { closeModal(); bus.emit('ui:saam-cancel'); });
+    const body = mode === 'join'
+      ? [h('p', { class: 'week-line', text: S.saamJoinSub }),
+        button('btn-big btn-green', [h('span', { text: S.saamJoinGo })], () => bus.emit('ui:saam-join')),
+        button('btn-white', [h('span', { text: S.saamJoinNo })], () => { closeModal(); bus.emit('ui:saam-cancel'); })]
+      : mode === 'host'
+        ? [h('p', { class: 'week-line', text: S.saamInviteSub }),
+          button('btn-big btn-wa', [icon('chat'), h('span', { text: S.shareWhatsApp })], () => doShare(S.saamInviteText(link), 'whatsapp'), { nav: false }),
+          h('p', { class: 'saam-link', text: link }),
+          waitRow, cancel]
+        : [waitRow, cancel];
+    modals.saam.replaceChildren(h('div', { class: 'card sheet week-sheet saam-sheet' },
+      closeX(() => { closeModal(); bus.emit('ui:saam-cancel'); }),
+      h('div', { class: 'sheet-head' }, emo('👥'), h('h2', { id: 'stapel-saam-title', text: mode === 'join' ? S.saamJoinTitle : S.saam })),
+      h('div', { class: 'sheet-body' }, ...body)));
+    openModal('saam');
+  }
+  function closeSaam() {
+    if (st.modal === 'saam') closeModal();
   }
 
   function showSpanJoin({ code, name = '', n = 1, of = 3, names = [], mineM = 0, alone = true } = {}) {
@@ -4095,6 +4151,8 @@ export function createUI(bus) {
     showDorpScreen,
     showWeekResult,
     showSpanJoin,
+    showSaam,
+    closeSaam,
     showSpanSheet,
     showSlagScreen,
     slagMode,

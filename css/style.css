@@ -3936,6 +3936,12 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .span-row .rivier-menu-btn .kasteel-menu-ic { width: calc(66 * var(--u)); height: calc(66 * var(--u)); font-size: calc(40 * var(--u)); }
 .span-row .rivier-menu-btn .kasteel-menu-txt small { font-size: max(11px, calc(20 * var(--u))); }
 .span-row .rivier-menu-btn .kasteel-new { position: absolute; top: calc(-14 * var(--u)); right: calc(10 * var(--u)); }
+/* (1.21) Saam gly beside the River run: purple, so the two read apart at a glance */
+.saam-menu-btn { background: linear-gradient(160deg, #9a6cf5 0%, #6a3fc8 55%, #34197a 130%); box-shadow: 0 calc(6 * var(--u)) 0 #24104f, inset 0 0 0 1px rgba(255, 255, 255, 0.16); }
+.saam-menu-btn:active { box-shadow: 0 calc(2 * var(--u)) 0 #24104f, inset 0 0 0 1px rgba(255, 255, 255, 0.16); }
+.saam-menu-btn .kasteel-menu-txt small { color: #e6dcff; }
+.saam-sheet .slag-waiting { justify-content: center; gap: calc(14 * var(--u)); }
+.saam-sheet .saam-link { margin: 0; text-align: center; font-size: max(12px, calc(20 * var(--u))); color: var(--ink-soft); word-break: break-all; user-select: all; -webkit-user-select: all; }
 /* (1.20) the smallest phones (360x640, the compact layout): the menu's rows a little closer and its logo a little higher,
    so the bottom row always shows in full */
 #ui.compact .screen-menu .menu-stack { gap: calc(14 * var(--u)); }

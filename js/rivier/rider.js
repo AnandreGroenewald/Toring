@@ -63,9 +63,11 @@ function limb(r, len, mat) {
 
 /**
  * The rider: { group, update(dt, { lean -1..1, crouch 0..1, speed }), setBlink(on) }. `bend(mat)` patches each material
- * so the rider winds with the river like everything else (he stands at its start: he barely moves).
+ * so the rider winds with the river like everything else (he stands at its start: he barely moves). `swap`: a friend's
+ * rider (Saam gly), in his own copies of the materials with the warm colours turned cool: a blue vest, a sky-blue hat
+ * and board stripes (skin, denim and the silver stripes stay as they are).
  */
-export function createRider(bend = (m) => m, model = null) {
+export function createRider(bend = (m) => m, model = null, { swap = false } = {}) {
   const group = new THREE.Group();
   const skin = bend(std('#b98159', { roughness: 0.6 }));
   const vest = bend(std('#ffffff', { map: vestTexture(), roughness: 0.55 }));
@@ -320,6 +322,28 @@ export function createRider(bend = (m) => m, model = null) {
     }
   }
   group.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; } });
+  if (swap) {
+    // (red and blue change places wherever red is well over blue: orange and yellow go blue, nothing else moves)
+    const done = new Map();
+    const cool = (m) => {
+      if (!done.has(m)) {
+        const c = m.clone();
+        const before = m.onBeforeCompile;
+        c.onBeforeCompile = (sh, r) => {
+          before?.call(m, sh, r);
+          sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+if (diffuseColor.r - diffuseColor.b > 0.42) diffuseColor.rgb = diffuseColor.bgr;`);
+        };
+        c.customProgramCacheKey = () => `${m.customProgramCacheKey?.() || ''}-cool`;
+        c.userData = { ...c.userData, model: false };   // (his own copy: it goes with the ride; the pictures stay the model's)
+        done.set(m, c);
+      }
+      return done.get(m);
+    };
+    group.traverse((o) => { if (o.isMesh) o.material = Array.isArray(o.material) ? o.material.map(cool) : cool(o.material); });
+    for (let i = 0; i < mats.length; i++) if (done.has(mats[i])) mats[i] = done.get(mats[i]);
+    for (const m of done.keys()) if (!m.userData?.model) m.dispose();   // (the code-made ones he no longer wears)
+  }
 
   let t0 = 0;
   return {

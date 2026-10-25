@@ -39,6 +39,7 @@ import { DorpScene } from './scenes/DorpScene.js';
 import { SlagScene } from './scenes/SlagScene.js';
 import { makeCastle, castlePeople, battleFruit, battleReward, harvest, addFruit, cleanBasket, newBasket, SLAG } from './core/slag.js';
 import { createSlagNet } from './slagNet.js';
+import { createRiverDuel } from './rivier/duel.js';
 import { createLewendeUi } from './ui/lewendeUi.js';
 import { createLivingStore, CAST_IDS } from './core/living.js';
 import { createDorpClient } from './dorp.js';
@@ -1720,7 +1721,7 @@ bus.on('ui:lang', (lang) => {
     return;
   }
   ui.closeModal();
-  if (first && !openAccountLink() && !openDuelLink()) firstVisit();
+  if (first && !openAccountLink()) askNameFirst(() => { if (!openDuelLink() && !openSaamLink()) firstVisit(); });
 });
 
 /** (1.13) ?rekening (the privacy page's "delete your account" link, for those without the app): the account sheet. */
@@ -1730,6 +1731,16 @@ function openAccountLink() {
   return true;
 }
 
+/**
+ * (1.21) Everyone plays under a name of their own (the owner, 25 Oct 2026: "people need to change their name immediately
+ * if they log-in, so make it a default for anyone who logs in for the first time"): without one, it's asked first, before
+ * the first visit's sheet or a friend's link, and the sheet closes only with a name (then `next`). Players who chose one
+ * are never asked; the tests skip it (window.__stapelNoName, as __stapelPick).
+ */
+function askNameFirst(next) {
+  if (store.getDuel().name || AUTO || globalThis.__stapelNoName) { next(); return; }
+  ui.showName({ name: '', placeholder: sessionNick, back: next, first: true });
+}
 /** A new player's first visit (no link): "Hoe speel ek?" opens by itself, once; its "Kom ons bou!" starts the lesson. */
 function firstVisit() {
   if (store.hasPlayed() || settings.howtoSeen) return;
@@ -2767,7 +2778,9 @@ function veilOff() {
 async function startRide(opts = {}) {
   const from = opts?.from || 'town';
   const day = todayKey();
-  const rd = span.ride(day) || span.freeRide(day);
+  // (Saam gly: a free ride on the river the friend rides too)
+  const duel = opts?.duel || null;
+  const rd = duel ? span.freeRide(day) : span.ride(day) || span.freeRide(day);
   // (the server times the ride from its own ticket; asked now, while the river loads)
   const ticket = span.rideStart().catch(() => '');
   // (this ride's own name: the phone's queue may send it again, the server counts it once)
@@ -2789,7 +2802,7 @@ async function startRide(opts = {}) {
     const v = span.view();
     const r = await mod.openRiver({
       scene: store.getSkins().wear.scene,
-      seed: rd.seed || day, who: rd.who, mine: rd.mine, extra: !!rd.extra, best: v.rideBest || 0,
+      seed: duel ? duel.seed : rd.seed || day, who: rd.who, mine: rd.mine, extra: !!rd.extra, best: v.rideBest || 0, duel,
       // (the town's part of the ride: your crew's tower on the island, a floor to build after, shots for Saturday)
       town: ONS_DORP.on, floors: ONS_DORP.on ? v.floors : [], crew: ONS_DORP.on ? v.name || '' : '', canBuild: ONS_DORP.on && v.turns > 0,
       // (the shots this ride can still earn for Saturday: 1 per 100 m, up to the week's 10; none on a Sunday)
@@ -2805,6 +2818,15 @@ async function startRide(opts = {}) {
       },
       getBoard: () => span.rideBoard(day),
       onDone: (res, next) => {
+        if (duel) {
+          // (again together: the ride stays till the next round's start comes; done: the room goes too)
+          if (next === 'again' && !duel.gone) { duel.again(); return; }
+          closeRide();
+          saamEnd();
+          startIdle();
+          showMenu();
+          return;
+        }
         closeRide();
         if (next === 'build') startWeekTurn({ from: 'ride' });
         else if (next === 'again') startRide({ from });
@@ -2830,6 +2852,86 @@ async function startRide(opts = {}) {
     showMenu();
   }
 }
+// ------------------------------------------------------------------------------------------------ (1.21) Saam gly
+// Two friends on the same river at the same time, each seeing the other (js/rivier/duel.js over the match server's
+// two-seat rooms, /slag/room): the menu's 👥 opens a room and a link to send; the friend's link (?gly=CODE) joins it.
+let saam = null;        // { duel, code }
+let saamTry = 0;
+let saamLinkCode = null;
+function saamEnd() {
+  saamTry++;
+  saam?.duel.close();
+  saam = null;
+}
+function saamWire(duel) {
+  duel.onEvent((e) => {
+    if (saam?.duel !== duel) return;
+    if (e.t === 'hi' && duel.host) duel.start();
+    else if (e.t === 'go') {
+      // (a round starts: the river opens on both phones; a ride still open from the last round closes first)
+      ui.closeSaam();
+      if (ride) closeRide();
+      startRide({ from: 'menu', duel });
+    } else if (e.t === 'gone' && !ride) {
+      ui.closeSaam();
+      ui.toast(duel.friend ? S.saamGone(duel.friend.name || S.saamFriend) : S.saamRoomGone, 3200);
+      saamEnd();
+    }
+  });
+}
+async function saamHost() {
+  if (!has3d()) { ui.toast(S.no3dRideFree, 3600); return; }
+  saamEnd();
+  const mine = saamTry;
+  ui.showSaam({ mode: 'busy' });
+  const net = createSlagNet({ api: matchApiUrl() });
+  const code = await net.create();
+  if (mine !== saamTry) return;
+  if (!code) {
+    ui.closeSaam();
+    ui.toast(S.saamNoServer, 3200);
+    return;
+  }
+  const duel = createRiverDuel(net.connect(code), { host: true, name: duelNick(), skin: store.getSkins().wear.blocks || 'kleur' });
+  saam = { duel, code };
+  saamWire(duel);
+  ui.showSaam({ mode: 'host', link: `${siteUrl()}?gly=${code}` });
+}
+function saamJoin() {
+  const code = saamLinkCode;
+  saamLinkCode = null;
+  if (!code) { ui.closeSaam(); return; }
+  if (!has3d()) { ui.closeSaam(); ui.toast(S.no3dRideFree, 3600); return; }
+  saamEnd();
+  const duel = createRiverDuel(createSlagNet({ api: matchApiUrl() }).connect(code), { host: false, name: duelNick(), skin: store.getSkins().wear.blocks || 'kleur' });
+  saam = { duel, code };
+  saamWire(duel);
+  ui.showSaam({ mode: 'wait' });
+}
+/**
+ * A friend's Saam gly link (?gly=CODE): kept to ask once the menu is up (after a new player's language; instead of the
+ * first visit's "Hoe speel ek?", as a match link does). The code leaves the address: a reload doesn't ask again.
+ */
+function saamStart() {
+  const code = String(params.get('gly') || '').toUpperCase();
+  if (!/^[A-Z0-9]{6}$/.test(code) || !matchApiUrl()) return;
+  try {
+    const q = new URLSearchParams(location.search);
+    q.delete('gly');
+    history.replaceState(history.state, '', location.pathname + (q.toString() ? `?${q}` : '') + location.hash);
+  } catch { /* an old browser: it stays */ }
+  saamLinkCode = code;
+}
+/** The friend's link waiting: ride with them? (false: none) */
+function openSaamLink() {
+  if (!saamLinkCode) return false;
+  ui.showSaam({ mode: 'join' });
+  return true;
+}
+bus.on('ui:saam', saamHost);
+bus.on('ui:saam-join', saamJoin);
+bus.on('ui:saam-cancel', () => { saamLinkCode = null; saamEnd(); });
+
 /** Can this phone draw the 3D river (WebGL 2)? */
 let has3dCache = null;
 function has3d() {
@@ -4138,6 +4240,7 @@ function onReady() {
   showMenu();
   dorpStart();   // (1.16) Jou dorp: only where the server knows the towns
   spanStart();   // (1.20) Ons dorp: the crew on the server (a crew of one on this phone without it)
+  saamStart();   // (1.21) a friend's Saam gly link
   if (SLAG_ON) {
     // (1.17) a friend's Vrugteslag link (?slag=CODE): into their room
     const code = new URLSearchParams(location.search).get('slag');
@@ -4152,7 +4255,7 @@ function onReady() {
   planReminders();
   // a new player chooses a language first; a challenge link waits for that choice
   if (askLanguage) ui.showLanguage({ first: true });
-  else if (!openAccountLink() && !openDuelLink()) firstVisit();
+  else if (!openAccountLink()) askNameFirst(() => { if (!openDuelLink() && !openSaamLink()) firstVisit(); });
   ui.setLoading(false);
   if (recovered.length) ui.toast(recoveredCoins ? `${S.unfinished} +${recoveredCoins} 🪙` : S.unfinished, 3600);
   else if (liveElsewhere(todayKey())) ui.toast(S.otherTab, 3000);
