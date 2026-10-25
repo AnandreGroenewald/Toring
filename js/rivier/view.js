@@ -1283,6 +1283,8 @@ function createRide(K, d) {
   let sendT = 0;
   let goSaid = -1;
   let counting = false;   // (both rivers are up: the count runs)
+  let goAt = 0;           // (when GLY! came: the tests check both phones start together)
+  let countFrom = 0;      // (the count runs on the real clock, not the river's: a slow phone still says GLY! with the other)
   let readySaid = false;
   let myEndM = 0;
   let duelPaintT = 0;
@@ -1297,6 +1299,7 @@ function createRide(K, d) {
       if (!alive) return;
       if (m.t === 'start') {
         counting = true;
+        countFrom = performance.now();
       } else if (m.t === 'st') {
         if (fr.out) return;
         fr.seen = true;
@@ -1954,7 +1957,8 @@ function createRide(K, d) {
   }
 
   // ---------------------------------------------------------------------------------------------- the camera
-  const cam = quick ? { pos: new THREE.Vector3(0, 6.4, 11.5), look: new THREE.Vector3(0, 0.4, -22) } : { pos: new THREE.Vector3(0, 30, 30), look: new THREE.Vector3(0, 0, -20) };
+  const cam = duel ? { pos: new THREE.Vector3(0, 8.4, 17.5), look: new THREE.Vector3(0, 0.6, -11) }
+    : quick ? { pos: new THREE.Vector3(0, 6.4, 11.5), look: new THREE.Vector3(0, 0.4, -22) } : { pos: new THREE.Vector3(0, 30, 30), look: new THREE.Vector3(0, 0, -20) };
   const towerTop = () => island.top;
   function cameraFor(dt) {
     let p;
@@ -1963,7 +1967,11 @@ function createRide(K, d) {
       // (Saam gly, you're out: the riding camera goes on down the river behind your friend)
       p = new THREE.Vector3(fr.sx * 0.82, 6.4, 11.5);
       l = new THREE.Vector3(fr.sx * 0.62, 0.4, -22);
-    } else if ((phase === 'dive' && quick) || phase === 'count') {
+    } else if (phase === 'count') {
+      // (Saam gly's start line: back and up in the middle, both riders side by side in the picture; GLY! swoops in)
+      p = new THREE.Vector3(0, 8.4, 17.5);
+      l = new THREE.Vector3(0, 0.6, -11);
+    } else if (phase === 'dive' && quick) {
       // (dropped in: the riding camera from the start)
       p = new THREE.Vector3(x * 0.82, 6.4, 11.5);
       l = new THREE.Vector3(x * 0.62, 0.4, -22);
@@ -2087,10 +2095,14 @@ function createRide(K, d) {
         duel.ready();
         hint(S.saamWaitAgain(fname));
       }
-      if (fr.gone) counting = true;
+      if (fr.gone) {
+        counting = true;
+        countFrom = performance.now();
+      }
     } else if (phase === 'count') {
       // (Saam gly: 3, 2, 1 on both phones, side by side on the still water; then GLY! and the river runs)
-      const left = Math.ceil(COUNT_S - phaseT);
+      const el = (performance.now() - countFrom) / 1000;
+      const left = Math.ceil(COUNT_S - el);
       if (goSaid < 0) hint(null);
       if (left > 0 && left !== goSaid) {
         goSaid = left;
@@ -2102,14 +2114,19 @@ function createRide(K, d) {
         haptics.tap?.();
       }
       rider.group.position.set(x, 0, 0);
-      if (phaseT >= COUNT_S) {
+      if (el >= COUNT_S) {
         go3El.textContent = S.saamGo;
         go3El.classList.remove('on');
         void go3El.offsetWidth;
         go3El.classList.add('on');
         setTimeout(() => go3El.classList.remove('on'), 800);
+        // (GLY! was due a moment ago if this frame came late: the river catches up, so both rivers keep the real clock)
+        const late = Math.min(1, el - COUNT_S);
+        goAt = Date.now() - late * 1000;
         phase = 'run';
         phaseT = 0;
+        dist += speedAt(dist, len) * late;
+        runS += late;
         startGone = t;
         things.emit(x, 0.2, 0, 40, 2.2, 5);
         audio.play('splash');
@@ -2714,7 +2731,7 @@ function createRide(K, d) {
     resume: () => setPaused(false),
     /** For tests: where the ride stands. */
     state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, endless, hearts, airY: Math.round(airY * 100) / 100, duckK: Math.round(duckK * 100) / 100, timeK: Math.round(timeK * 100) / 100, lesson: lesson && !lesson.done ? lesson.kind : null, pies: pies.length, clowns: live.filter((l) => l.obj.userData.kind === 'clown').map((l) => ({ z: Math.round(l.z * 10) / 10, x: Math.round(l.obj.position.x * 100) / 100, phase: l.cs?.phase, foot: Math.round((world.footAt?.(l.obj.userData.side || 1, l.z) ?? 0) * 100) / 100 })), pieAt: pies.map((pp) => { const v = pp.mesh.getWorldPosition(new THREE.Vector3()).project(camera); return { t: Math.round(pp.t * 100) / 100, x: Math.round(v.x * 100) / 100, y: Math.round(v.y * 100) / 100, z: Math.round(v.z * 1000) / 1000 }; }), headY: rider.headY?.(), lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, lastKnock, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })),
-      duel: fr ? { seen: fr.seen, d: Math.round(fr.sd * 10) / 10, x: Math.round(fr.sx * 100) / 100, out: fr.out, endM: fr.endM, gone: fr.gone, watching, counting, shown: fr.rider.group.visible, tag: tagText, round: duel.round } : null }),
+      duel: fr ? { seen: fr.seen, d: Math.round(fr.sd * 10) / 10, x: Math.round(fr.sx * 100) / 100, out: fr.out, endM: fr.endM, gone: fr.gone, watching, counting, goAt, hits, shown: fr.rider.group.visible, tag: tagText, round: duel.round } : null }),
     autopilot(on) { pilotOn = !!on; },
     /** For tests (Saturday): where on screen (host px) the tallest tower stands at a share of its height, or null. */
     towerScreen(frac = 0.5) {
