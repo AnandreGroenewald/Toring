@@ -1,4 +1,13 @@
-# Stapel 1.21.0 — Saam gly (release notes)
+# Stapel 1.21 — Saam gly (release notes)
+
+1.21.1 (12101): the lanes' marks are now floating pipes on the outer edges, only on open water (the owner: "Its just
+for the outter lines ... just if you exit a canyon"). Notes for 1.21.1:
+
+af (330): Stapel 1.21: Saam gly! Tik 👥 Saam gly en stuur die skakel vir ’n vriend: julle gly dieselfde rivier op dieselfde tyd en sien mekaar op die water. Wie kom die verste? Ook nuut: dryfpype wys die rivier se kante op oop water, ’n kopliggie in die nag, Hanswors se pastei is nou ’n regte roompastei, en nuwe spelers kies eers hul naam.
+
+en (331): Stapel 1.21: Ride with a friend! Tap 👥 and send the link to a friend: you ride the same river at the same time and see each other on the water. Who gets the furthest? Also new: floating pipes show the river’s edges on open water, a headlamp at night, Hanswors’s pie is now a real cream pie, and new players choose their name first.
+
+## 1.21.0 (12100)
 
 Play Console release notes (internal testing), each under 500 characters.
 
