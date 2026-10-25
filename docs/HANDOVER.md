@@ -1453,3 +1453,7 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
 - GitHub claude/trusting-hopper-26qcax → 5d6ec78; Play 12100 (1.21.0) on internal testing 11:28 (0 devices lost).
 - Website: `bash ~/deploy-stapel-1.21.sh` (auto mode refuses Claude's Pages deploy); then check-all live.
 
+### 25 Oct 2026 12:16 — 1.21.1 (his lanes note, then "push")
+- The lanes' edges only, as floating pipes, only on open water (47c7942); 1.21.1 (18623d3) on GitHub and Play internal
+  12101. Website: `bash ~/deploy-stapel-1.21.sh` (deploys 1.21.1) by him; then check-all live.
+
