@@ -1448,3 +1448,8 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
 - Tests: npm 510; qa saam1210 23/23, name1210 10/10, afgly 14/14, edges 15/15, later 21/21, raid 15/15, leak OK.
 - **Next:** his lanes pick (A/B), "release" (1.21 to Play internal + website; Worker unchanged), friends online (asked).
 
+### 25 Oct 2026 ~11:30 — 1.21.0 Saam gly released (his "Please push what you have built")
+- check-all quick ALL CLEAR; live gate (saam1210 against the live Worker) green, GLY! 22 ms apart; Worker unchanged.
+- GitHub claude/trusting-hopper-26qcax → 5d6ec78; Play 12100 (1.21.0) on internal testing 11:28 (0 devices lost).
+- Website: `bash ~/deploy-stapel-1.21.sh` (auto mode refuses Claude's Pages deploy); then check-all live.
+
