@@ -35,7 +35,7 @@ shoe = material('h_shoe', '#d81f2a', rough=0.2)
 black = material('h_black', '#141414', rough=0.3)
 skinC = material('h_skin', '#ffe9dc', rough=0.45)
 tin = material('h_tin', '#c9ced6', rough=0.25, metal=0.8)
-cream = material('h_cream', '#fffaf0', rough=0.5)
+cream = material('h_cream', '#fffaf0', rough=0.5, emit='#fff4e2', emit_k=0.32)   # (a touch of its own light: white even facing away from the sun)
 string = material('h_string', '#f2f2f2', rough=0.6)
 
 # the duck float: a plump body along the river (its head at +y, the way it goes), a tail up behind, a beak
@@ -153,22 +153,72 @@ palettize(AA, 'clownarm', rough=0.4)
 armP = join(AA, 'clownarm')
 pivot(armP, (0.3, -0.15, seatZ + 0.55))
 
+crust = material('h_crust', '#dd9a4c', rough=0.6)
+crustDark = material('h_crust2', '#b06a2a', rough=0.6)
+stem = material('h_stem', '#4f8a2a', rough=0.5)
+
+def rosette(name, loc, r, hgt, mat, n=6, rings=6, twist=2.4):
+    """A piped swirl of whipped cream: a star-shaped cone (n ridges) twisting as it rises to a soft tip."""
+    me = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    x0, y0, z0 = loc
+    prev = None
+    for k in range(rings):
+        t = k / rings
+        rr = r * (1 - t) ** 0.75
+        ring = []
+        for j in range(n * 2):
+            a = j / (n * 2) * math.pi * 2 + twist * t
+            q = rr * (1.0 if j % 2 == 0 else 0.7)
+            ring.append(bm.verts.new((x0 + math.cos(a) * q, y0 + math.sin(a) * q, z0 + hgt * (t - 0.12 * t * t))))
+        if prev:
+            for j in range(n * 2):
+                bm.faces.new((prev[j], prev[(j + 1) % (n * 2)], ring[(j + 1) % (n * 2)], ring[j]))
+        prev = ring
+    tip = bm.verts.new((x0, y0, z0 + hgt))
+    for j in range(n * 2):
+        bm.faces.new((prev[j], prev[(j + 1) % (n * 2)], tip))
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(o)
+    me.materials.append(mat)
+    for p in me.polygons:
+        p.use_smooth = True
+    return o
+
 def pie(name, at):
+    # (a real cream pie: a golden crust crimped round a silver tin, a dome of cream with a ring of piped swirls, a big
+    # swirl in the middle and a glossy cherry with its stem: it has to read as a pie when it fills the screen)
     x, y, z = at
-    P_ = [prim('cyl', 'tin', loc=(x, y, z), scale=(0.17, 0.17, 0.035), mat=tin, vertices=24)]
-    bpy.ops.mesh.primitive_torus_add(major_radius=0.17, minor_radius=0.02, major_segments=36, minor_segments=5, location=(x, y, z + 0.035))
+    P_ = [prim('cyl', 'tin', loc=(x, y, z - 0.005), scale=(0.158, 0.158, 0.03), mat=tin, vertices=24)]
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.162, minor_radius=0.03, major_segments=56, minor_segments=8, location=(x, y, z + 0.03))
     rim = bpy.context.active_object
     for v in rim.data.vertices:
         a = math.atan2(v.co.y, v.co.x)
-        v.co.z += math.sin(a * 18) * 0.008
-    rim.data.materials.append(tin)
+        w = math.sin(a * 16)
+        rad = Vector((math.cos(a), math.sin(a), 0))
+        v.co += rad * (0.009 * w)
+        v.co.z += 0.007 * max(0.0, w)
+    rim.data.materials.append(crust)
+    for p in rim.data.polygons:
+        p.use_smooth = True
     P_.append(rim)
-    cr = prim('sphere', 'cream', loc=(x, y, z + 0.06), scale=(0.16, 0.16, 0.08), mat=cream, segments=20, ring_count=10)
+    # (the crust's underside a shade darker: baked)
+    P_.append(prim('cyl', 'crustbase', loc=(x, y, z + 0.012), scale=(0.17, 0.17, 0.012), mat=crustDark, vertices=32))
+    cr = prim('sphere', 'cream', loc=(x, y, z + 0.035), scale=(0.15, 0.15, 0.06), mat=cream, segments=24, ring_count=10)
+    rnd = random.Random(11)
     for v in cr.data.vertices:
-        a = math.atan2(v.co.y - y, v.co.x - x)
-        v.co.z += max(0, v.co.z - (z + 0.06)) * math.sin(a * 7) * 0.25
+        if v.co.z > z + 0.04:
+            v.co.z += (rnd.random() - 0.5) * 0.008
     P_.append(cr)
-    P_.append(prim('sphere', 'cherry', loc=(x, y, z + 0.15), scale=(0.035, 0.035, 0.035), mat=red, segments=12, ring_count=8))
+    for k in range(9):
+        a = k / 9 * math.pi * 2 + 0.2
+        P_.append(rosette(f'swirl{k}', (x + math.cos(a) * 0.104, y + math.sin(a) * 0.104, z + 0.055), 0.034, 0.06, cream, twist=2.4 + k * 0.1))
+    top = z + 0.07
+    P_.append(rosette('swirlTop', (x, y, top), 0.062, 0.1, cream, n=7, rings=8, twist=3.0))
+    P_.append(prim('sphere', 'cherry', loc=(x + 0.004, y, top + 0.112), scale=(0.034, 0.034, 0.032), mat=red, segments=16, ring_count=10))
+    P_.append(prim('cyl', 'stem', loc=(x + 0.018, y, top + 0.16), scale=(0.0045, 0.0045, 0.03), rot=(0, 0.55, 0), mat=stem, vertices=6))
     palettize(P_, name, rough=0.3)
     o = join(P_, name)
     pivot(o, at)

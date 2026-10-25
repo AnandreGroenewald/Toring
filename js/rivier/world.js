@@ -728,6 +728,7 @@ const WATER_FRAG = `uniform float uT; uniform sampler2D uNoise; uniform vec3 uSu
 uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSkyRefl; uniform vec3 uFoam; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar;
 uniform float uHalf; uniform float uLakeHalf; uniform float uLakeFrom; uniform float uLakeTo; uniform float uDetail; uniform vec2 uRapids; uniform float uPoolTo;
 uniform vec3 uWall; uniform vec2 uRider; uniform sampler2D uRefl; uniform float uReflK;
+uniform vec3 uLampPos; uniform vec3 uLampDir; uniform vec3 uLampCol; uniform vec2 uLampCos;
 varying vec3 vWorld; varying vec2 vRiver; varying float vAhead; varying vec4 vRefl;
 float h(vec2 p) {
   // the surface's height: long swells across, ripples and chop running with the current (stretched along it)
@@ -787,6 +788,17 @@ void main() {
     wk *= smoothstep(0.3, 0.75, texture2D(uNoise, vec2(p.x * 0.8, p.y * 0.6 - uT * 0.6)).r);
     float tr = (1.0 - smoothstep(0.1, 0.5, abs(p.x - uRider.x))) * (1.0 - smoothstep(0.0, 5.0, back));
     col = mix(col, uFoam, clamp(wk * 0.5 + tr * 0.25, 0.0, 0.6));
+  }
+  // (a night: his headlamp, a warm pool of light on the water ahead of him: the foam and the wave tops light up in it,
+  // the steep little faces glint)
+  if (uLampCol.r > 0.0) {
+    vec3 lv = uLampPos - vWorld;
+    float ld = length(lv);
+    float cone = smoothstep(uLampCos.x, uLampCos.y, dot(-lv / ld, uLampDir));
+    float fall = cone * cone / (1.0 + ld * 0.1) * (1.0 - smoothstep(26.0, 52.0, ld)) * smoothstep(1.5, 7.0, ld);
+    float glint = smoothstep(0.035, 0.1, length(n.xz)) * smoothstep(0.45, 0.8, h0);
+    col *= 1.0 + uLampCol * fall * 1.1;
+    col += uLampCol * fall * (0.03 + 0.12 * h0 + 0.75 * glint);
   }
   float f = smoothstep(uFogNear, uFogFar, length(vWorld - cameraPosition));
   col = mix(col, uFog, f);
@@ -897,6 +909,8 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       uBendA: { value: 0 }, uBendB: { value: 0 }, uBendK: bendUniforms.uBendK, uRapids: { value: new THREE.Vector2(-1e6, -1e6) }, uPoolTo: { value: -1e6 },
       uWall: { value: lin(L.wall) }, uRider: { value: new THREE.Vector2(0, -1e6) },
       uRefl: { value: null }, uReflK: { value: 0 }, uReflMat: { value: new THREE.Matrix4() },
+      uLampPos: { value: new THREE.Vector3() }, uLampDir: { value: new THREE.Vector3(0, 0, -1) }, uLampCol: { value: new THREE.Color(0, 0, 0) },
+      uLampCos: { value: new THREE.Vector2(0.9, 0.97) },
     },
     vertexShader: WATER_VERT, fragmentShader: WATER_FRAG,
   });
@@ -1394,6 +1408,8 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
 
   const tmp = new THREE.Object3D();
   let lake = { from: 1e6, to: 1e6 };
+  const night = L.stars > 0 && L.sunI < 1.5;
+  const _yAxis = new THREE.Vector3(0, 1, 0);
   let poolTo = -1e6;
   /** The bank's distance from the middle at course z (it opens out into the lake, and the pool at the river's head). */
   const halfAt = (z) => {
@@ -1511,7 +1527,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
   }
 
   return {
-    group, water, sun, update, halfAt, footAt, setRockClear: (fn) => { rockClear = fn; }, setShadowFocus, shadows, reflect, fxTint, stoneMat, night: L.stars > 0 && L.sunI < 1.5,
+    group, water, sun, update, halfAt, footAt, setRockClear: (fn) => { rockClear = fn; }, setShadowFocus, shadows, reflect, fxTint, stoneMat, night,
     /** Open water at the river's head, up to course z `to` (where your tower stands). */
     setPool(to) {
       poolTo = to;
@@ -1521,6 +1537,26 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     /** White water from course z `from` to `to`. */
     setRapids(from, to) {
       water.uniforms.uRapids.value.set(from, to);
+    },
+    /**
+     * A night: the moon's path on the water turns with the camera (`yaw` rad, + = looking right), so the moonlit water
+     * stays in the picture when the camera looks round at your island (no moon is drawn in the sky to give it away).
+     */
+    turnMoon(yaw) {
+      if (!night) return;
+      water.uniforms.uSun.value.copy(sunDir).applyAxisAngle(_yAxis, -yaw);
+    },
+    /**
+     * His headlamp on the water (a night): from `pos` along `dir` (world), a cone `angle` rad wide (soft over the outer
+     * `penumbra` share), in `color` (a THREE.Color, its strength in it; null = off).
+     */
+    setLamp(pos, dir, color, angle = 0.42, penumbra = 0.6) {
+      const u = water.uniforms;
+      if (!color) { u.uLampCol.value.setRGB(0, 0, 0); return; }
+      u.uLampPos.value.copy(pos);
+      u.uLampDir.value.copy(dir).normalize();
+      u.uLampCol.value.copy(color);
+      u.uLampCos.value.set(Math.cos(angle), Math.cos(angle * (1 - penumbra)));
     },
     /** The river opens into a lake from course z `from` (and narrows again after `to`). */
     setLake(from, to = 1e6) {

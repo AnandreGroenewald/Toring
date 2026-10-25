@@ -111,8 +111,8 @@ function makeKit() {
 #rivier .rv-card.on { opacity: 1; transform: translate(-50%, 0); }
 #rivier .rv-card h2 { margin: 0 0 4px; font-size: 24px; font-weight: 900; }
 #rivier .rv-card .rv-link { background: none; color: #8ff4ff; min-height: 40px; font-size: 16px; text-decoration: underline; text-underline-offset: 3px; }
-#rivier .rv-splat { position: absolute; pointer-events: none; transform-origin: 50% 40%; transform: rotate(var(--r, 0deg)) scale(.4); opacity: 0; animation: rv-splat 2.2s cubic-bezier(.25,.9,.35,1) forwards; filter: drop-shadow(0 8px 14px rgba(0,0,0,.28)); }
-@keyframes rv-splat { 0% { transform: rotate(var(--r)) scale(.4); opacity: 0; } 4% { transform: rotate(var(--r)) scale(1.1, .92); opacity: 1; } 9% { transform: rotate(var(--r)) scale(.97, 1.03); } 14% { transform: rotate(var(--r)) scale(1); } 45% { transform: rotate(var(--r)) translateY(4%) scale(1, 1.02); opacity: 1; } 100% { transform: rotate(var(--r)) translateY(34%) scale(.98, 1.1); opacity: 0; } }
+#rivier .rv-splat { position: absolute; pointer-events: none; transform-origin: 50% 40%; transform: rotate(var(--r, 0deg)) scale(1.2, .86); opacity: 1; animation: rv-splat 2.2s cubic-bezier(.25,.9,.35,1) forwards; filter: drop-shadow(0 8px 14px rgba(0,0,0,.28)); }
+@keyframes rv-splat { 0% { transform: rotate(var(--r)) scale(1.2, .86); opacity: 1; } 5% { transform: rotate(var(--r)) scale(.95, 1.05); } 10% { transform: rotate(var(--r)) scale(1.02, .99); } 15% { transform: rotate(var(--r)) scale(1); } 45% { transform: rotate(var(--r)) translateY(4%) scale(1, 1.02); opacity: 1; } 100% { transform: rotate(var(--r)) translateY(34%) scale(.98, 1.1); opacity: 0; } }
 #rivier .rv-arrow { position: absolute; left: 50%; top: 46%; width: 92px; height: 92px; margin: -46px 0 0 -46px; border-radius: 50%; background: rgba(13,34,40,.6); border: 3px solid #fff3c4; display: none; pointer-events: none; }
 #rivier .rv-arrow.on { display: block; }
 #rivier .rv-arrow::after { content: ''; position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -10px 0 0 -15px; border-left: 8px solid #fff3c4; border-top: 8px solid #fff3c4; transform: rotate(45deg); }
@@ -644,6 +644,27 @@ function createRide(K, d) {
   const riderFoam = things.foam(2.6);
   riderFoam.scale.set(1.9, 1, 3.6);
   scene.add(riderFoam);
+  // a night: the lamp on his hard hat, a warm beam down the river (what comes at you is lit, and the water under it), and
+  // its glow round his head
+  const lamp = world.night ? new THREE.SpotLight('#ffdcaa', 30, 70, 0.62, 0.55, 1) : null;
+  const lampCol = new THREE.Color('#ffe2b8').multiplyScalar(0.75);
+  const lampDir = new THREE.Vector3();
+  let lampGlow = null;
+  if (lamp) {
+    scene.add(lamp, lamp.target);
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,240,215,1)');
+    gr.addColorStop(0.25, 'rgba(255,214,150,.55)');
+    gr.addColorStop(1, 'rgba(255,200,130,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 64, 64);
+    lampGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    lampGlow.scale.setScalar(0.85);
+    scene.add(lampGlow);
+  }
   const beasts = createBeasts(bendMaterial, d.models || {});
   // the tower you just built stands at the river's head: you dive off its top (none: a jump from a rock)
   const start = createStartTower(things, d.daily || [], d.skin || 'kleur');
@@ -695,7 +716,21 @@ function createRide(K, d) {
   let kmSaid = 0;
   const pieShadowGeo = new THREE.CircleGeometry(0.9, 24);
   pieShadowGeo.rotateX(-Math.PI / 2);
-  const pieShadowMat = new THREE.MeshBasicMaterial({ color: '#0b1d22', transparent: true, opacity: 0, depthWrite: false });
+  // (soft: a shade on the water with a darker ring where the pie will land, not a hole in it)
+  const pieShadowTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,255,255,.75)');
+    gr.addColorStop(0.62, 'rgba(255,255,255,.6)');
+    gr.addColorStop(0.8, 'rgba(255,255,255,.85)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  })();
+  const pieShadowMat = new THREE.MeshBasicMaterial({ color: '#0b1d22', map: pieShadowTex, transparent: true, opacity: 0, depthWrite: false });
   const musicNow = { bpm: 0, layers: 0 };
   let runS = 0;   // (the seconds riding: the server checks no ride is faster than the river)
   let islandSaid = false;
@@ -1523,6 +1558,12 @@ function createRide(K, d) {
     from.obj.updateMatrixWorld(true);
     (u.pieHeld || u.head || from.obj).getWorldPosition(start);
     if (u.pieHeld) u.pieHeld.visible = false;
+    // (the cream's picture drawn and decoded now, so it's on the lens the very frame the pie gets there)
+    if (!splatSrc) {
+      splatSrc = splatImage();
+      splatImg.src = splatSrc;
+      splatImg.decode?.().catch(() => {});
+    }
     const tx = laneX(lane);
     const shadow = new THREE.Mesh(pieShadowGeo, pieShadowMat.clone());
     shadow.position.set(tx, 0.07, 0.4);
@@ -1599,6 +1640,7 @@ function createRide(K, d) {
     pop(S.rvPie, 900);
   }
   let splatSrc = '';
+  const splatImg = new Image();
   let lastKnock = null;   // (what knocked you last: for the tests)
   function knock(l) {
     hits++;
@@ -1780,6 +1822,7 @@ function createRide(K, d) {
     cam.look.lerp(l, a);
     camera.position.copy(cam.pos);
     camera.lookAt(cam.look);
+    world.turnMoon?.(Math.atan2(cam.look.x - cam.pos.x, cam.pos.z - cam.look.z));
     // the feel of speed: the view widens a little as the river speeds up and in the rapids (narrower while aiming), and
     // leans a touch into each carve (none with less motion)
     if (!reduced && phase === 'run' && !d.debugCam) {
@@ -1976,6 +2019,14 @@ function createRide(K, d) {
     riderFoam.position.set(x, 0.03, 0.05);
     riderFoam.visible = (phase !== 'dive' || rider.group.position.y < 0.3) && airY < 0.3;
     rider.update(dt, { lean: leanV, yaw: Math.atan2(-vx, Math.max(4, speedAt(dist, len))) * 0.8, crouch: slowT > 0 ? slowT / RIVER.hitSlowS : 0, speed: speedAt(dist, len), tuck: jumpT >= 0 ? Math.sin(js * Math.PI) : 0, duck: duckK });
+    if (lamp) {
+      // (from the front of his hat, aimed down the river a little towards the middle: it swings with him, not with his head)
+      const hy = rider.group.position.y + rider.headY() + 0.12;
+      lamp.position.set(x, hy, rider.group.position.z - 0.3);
+      lamp.target.position.set(x * 0.6, 0, rider.group.position.z - 26);
+      lampGlow.position.set(x, hy, rider.group.position.z - 0.42);
+      world.setLamp(lamp.position, lampDir.subVectors(lamp.target.position, lamp.position), lampCol, 0.5, 0.95);
+    }
     // spray off the board's tail
     if (phase === 'run' && Math.random() < 0.85) things.emit(x - leanV * 0.3, 0.12, 0.9, 1 + Math.round(rapK * 2), 0.6 + rapK, 1.4 + Math.abs(leanV) * 2 + rapK * 1.5);
 
@@ -2333,6 +2384,8 @@ function createRide(K, d) {
     for (const pp of pies) { scene.remove(pp.mesh, pp.shadow); pp.shadow.material.dispose(); disposeTree(pp.mesh, done); }
     pieShadowGeo.dispose();
     pieShadowMat.dispose();
+    pieShadowTex.dispose();
+    if (lampGlow) { lampGlow.material.map.dispose(); lampGlow.material.dispose(); lamp.dispose(); }
     hz.dispose();
     fwRide?.dispose();
     if (raid) setBend(1);

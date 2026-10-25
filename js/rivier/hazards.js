@@ -238,65 +238,111 @@ export function splatImage() {
     g.closePath();
   };
   // the cream: a soft shadow, the body, drips running down, little flecks flung out
+  // (its drop shadow comes from the page's own filter on the picture: one shadow round the whole splat, none inside it)
   g.save();
-  g.shadowColor = 'rgba(80,60,40,.35)';
-  g.shadowBlur = 24;
-  g.shadowOffsetY = 8;
-  g.fillStyle = '#fffaf0';
-  blob(256, 230, 150, 18, 0.45);
+  g.fillStyle = '#fff8ec';
+  blob(256, 222, 148, 18, 0.42);
   g.fill();
-  // (drips: each runs down from the blob's lower edge, narrowing, with a round bead at its end)
-  for (let k = 0; k < 7; k++) {
-    const x = 150 + rnd() * 210;
-    const top = 280 + Math.sin(((x - 256) / 150) * Math.PI / 2) * 0 + 20;
-    const len = 40 + rnd() * 150;
-    const w = 16 + rnd() * 18;
-    const bend = (rnd() - 0.5) * 14;
+  // (drips: thin necks running down from the blob's lower edge into a round bead, each its own length)
+  const drips = [[176, 0.55], [214, 1], [262, 0.4], [300, 0.8], [340, 0.3]];
+  const beads = [];
+  for (const [dx, dl] of drips) {
+    const x = dx + (rnd() - 0.5) * 16;
+    const top = 222 + Math.sqrt(Math.max(0, 148 * 148 - (x - 256) * (x - 256))) * 0.86 - 26;
+    const len = 30 + dl * (70 + rnd() * 50);
+    const w = 11 + rnd() * 6;
+    const bead = w * (0.85 + rnd() * 0.25);
     g.beginPath();
-    g.moveTo(x - w * 0.8, top - 30);
-    g.bezierCurveTo(x - w * 0.55, top + len * 0.3, x - w * 0.3 + bend, top + len * 0.7, x - w * 0.28 + bend, top + len);
-    g.arc(x + bend, top + len, w * 0.42, Math.PI, 0, true);
-    g.bezierCurveTo(x + w * 0.3 + bend, top + len * 0.7, x + w * 0.55, top + len * 0.3, x + w * 0.8, top - 30);
+    g.moveTo(x - w * 1.4, top - 14);
+    g.quadraticCurveTo(x - w * 0.5, top + 6, x - w * 0.42, top + len * 0.6);
+    g.quadraticCurveTo(x - w * 0.5, top + len - bead * 0.5, x - bead * 0.95, top + len);
+    g.arc(x, top + len, bead, Math.PI, 0, true);
+    g.quadraticCurveTo(x + w * 0.5, top + len - bead * 0.5, x + w * 0.42, top + len * 0.6);
+    g.quadraticCurveTo(x + w * 0.5, top + 6, x + w * 1.4, top - 14);
     g.closePath();
     g.fill();
+    beads.push([x, top + len, bead]);
   }
-  for (let k = 0; k < 16; k++) {
+  for (let k = 0; k < 14; k++) {
     const a = rnd() * Math.PI * 2;
-    const d = 170 + rnd() * 70;
-    blob(256 + Math.cos(a) * d, 230 + Math.sin(a) * d * 0.85, 6 + rnd() * 16, 8, 0.5);
+    const d = 168 + rnd() * 66;
+    blob(256 + Math.cos(a) * d, 222 + Math.sin(a) * d * 0.85, 5 + rnd() * 13, 8, 0.5);
     g.fill();
   }
   g.restore();
+  // whipped, not flat: soft peaks over the top, each a highlight with its shade below-right (no outlines; on the cream only)
+  g.globalCompositeOperation = 'source-atop';
+  for (let k = 0; k < 16; k++) {
+    const a = rnd() * Math.PI * 2;
+    const d = Math.sqrt(rnd()) * 105;
+    const px = 256 + Math.cos(a) * d;
+    const py = 222 + Math.sin(a) * d * 0.85;
+    const r = 18 + rnd() * 16;
+    const sd = g.createRadialGradient(px + r * 0.3, py + r * 0.35, 0, px + r * 0.3, py + r * 0.35, r);
+    sd.addColorStop(0, 'rgba(196,170,132,.28)');
+    sd.addColorStop(1, 'rgba(196,170,132,0)');
+    g.fillStyle = sd;
+    g.fillRect(px - r, py - r, r * 2.7, r * 2.7);
+    const pk = g.createRadialGradient(px - r * 0.25, py - r * 0.3, 0, px - r * 0.25, py - r * 0.3, r * 0.8);
+    pk.addColorStop(0, 'rgba(255,255,255,.95)');
+    pk.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = pk;
+    g.fillRect(px - r * 1.1, py - r * 1.1, r * 1.8, r * 1.8);
+  }
   // its shine and shade
-  const sh = g.createRadialGradient(200, 170, 10, 256, 230, 170);
-  sh.addColorStop(0, 'rgba(255,255,255,.9)');
+  const sh = g.createRadialGradient(200, 160, 10, 256, 222, 170);
+  sh.addColorStop(0, 'rgba(255,255,255,.75)');
   sh.addColorStop(0.5, 'rgba(255,255,255,0)');
-  sh.addColorStop(1, 'rgba(210,190,160,.35)');
+  sh.addColorStop(1, 'rgba(206,182,148,.38)');
   g.globalCompositeOperation = 'source-atop';
   g.fillStyle = sh;
   g.fillRect(0, 0, 512, 512);
   g.globalCompositeOperation = 'source-over';
-  // swirls in the cream, and the cherry on top
-  g.strokeStyle = 'rgba(220,200,170,.55)';
-  g.lineWidth = 6;
-  for (let k = 0; k < 3; k++) {
+  // (a shine on every bead)
+  g.fillStyle = 'rgba(255,255,255,.9)';
+  for (const [bx, by, br] of beads) {
     g.beginPath();
-    g.arc(256 + (rnd() - 0.5) * 60, 230 + (rnd() - 0.5) * 50, 40 + k * 28, 0.3 + k, 2.4 + k);
-    g.stroke();
+    g.ellipse(bx - br * 0.35, by - br * 0.3, br * 0.32, br * 0.2, -0.6, 0, Math.PI * 2);
+    g.fill();
   }
-  const ch = g.createRadialGradient(270, 196, 4, 280, 210, 34);
-  ch.addColorStop(0, '#ff8a8a');
-  ch.addColorStop(0.4, '#e3262b');
-  ch.addColorStop(1, '#8a0d12');
+  // bits of the golden crust flung out with it
+  for (let k = 0; k < 9; k++) {
+    const a = Math.PI * (0.9 + rnd() * 1.2) + (k % 2 ? Math.PI : 0) * 0.15;
+    const d = 120 + rnd() * 110;
+    const cx = 256 + Math.cos(a) * d;
+    const cy = 222 + Math.sin(a) * d * 0.8;
+    g.fillStyle = rnd() < 0.5 ? '#d9954a' : '#b8732f';
+    g.save();
+    g.translate(cx, cy);
+    g.rotate(rnd() * Math.PI);
+    g.beginPath();
+    g.moveTo(-8 - rnd() * 6, -4);
+    g.lineTo(6 + rnd() * 6, -6 - rnd() * 3);
+    g.lineTo(9, 5);
+    g.lineTo(-5, 7);
+    g.closePath();
+    g.fill();
+    g.restore();
+  }
+  // the cherry on top (glossy, a shine and its stem), the same as the pie's own
+  const ch = g.createRadialGradient(270, 186, 4, 280, 200, 34);
+  ch.addColorStop(0, '#ff9a9a');
+  ch.addColorStop(0.35, '#e3262b');
+  ch.addColorStop(1, '#7d0a10');
   g.fillStyle = ch;
   g.beginPath();
-  g.arc(280, 210, 32, 0, Math.PI * 2);
+  g.arc(280, 200, 31, 0, Math.PI * 2);
   g.fill();
-  g.strokeStyle = '#4a7a22';
-  g.lineWidth = 5;
+  g.fillStyle = 'rgba(255,255,255,.8)';
   g.beginPath();
-  g.moveTo(282, 180);
-  g.quadraticCurveTo(290, 150, 312, 140);
+  g.ellipse(268, 186, 8, 5, -0.6, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = '#4f8a2a';
+  g.lineWidth = 5;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(283, 171);
+  g.quadraticCurveTo(290, 142, 312, 132);
   g.stroke();
   return c.toDataURL('image/png');
 }
