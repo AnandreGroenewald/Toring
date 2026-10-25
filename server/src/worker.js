@@ -23,6 +23,7 @@ export { MatchLobby, MatchRoom } from './match.js';
 // (1.16-1.18) Jou dorp's towns with the castles (one object), and the friends' Blokbotsing rooms
 export { TownHall } from './towns.js';
 export { SlagRoom } from './slagroom.js';
+import { LOBBY_NAME } from './slagroom.js';
 
 const ROOMS_PER_HOUR = 30;   // friend rooms one address may open
 const SLAG_ROOMS_PER_HOUR = 30;   // (1.18) Blokbotsing rooms one address may open
@@ -211,6 +212,14 @@ export function createWorker({ now = () => Date.now(), fetch: fetchImpl = (...a)
         if (res.status === 200) return json(200, { code });
       }
       throw new HttpError(503, 'busy');
+    }
+    // (1.21.2) Saam gly's lobby: a socket that looks for anyone to ride with (server/src/slagroom.js `seek`)
+    if (path === '/slag/seek') {
+      if (request.method !== 'GET' || (request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') throw new HttpError(426, 'websocket_expected');
+      const key = `slag:${await stats.addressKey({ cfg, now: now() }, request)}`;
+      if (!rate.allow(key, SLAG_ROOMS_PER_HOUR, now())) throw new HttpError(429, 'rate_limited');
+      const q = new URL(request.url).search;
+      return env.SLAG_ROOM.get(env.SLAG_ROOM.idFromName(LOBBY_NAME)).fetch(new Request(`https://room/lobby${q}`, request));
     }
     const m = /^\/slag\/room\/([A-Za-z0-9]+)$/.exec(path);
     if (m && isRoomCode(m[1])) {
