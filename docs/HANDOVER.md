@@ -1462,3 +1462,9 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
 - Worker ae07639c (rollback fb1ce1e9-cbd3-4449-bba9-e60e13005d0b), live gate 35/35, site 1.21.2, GitHub fe24dc8,
   Play 12102 on internal testing. check-all live: all ok.
 
+### 25 Oct 2026 ~15:40 — 1.21.3 (coins, whirlpool at 5 km, elephants at 10 km; his "once you are satisfied please release")
+Commits 201eceb + 1a8ba2b. Coins in the River run (lines, air, stacks of 10, the diamond of 50 over a log) into the
+wallet under the day's cap; coins fly to the counter. The flaw pass fixed: Klaar's double tap, sideways riding, the
+silver coin emoji, the elephants' white tails, overlapping lessons, too-frequent whirlpools/elephants. Tests: npm 518,
+server 311, nonsense 32/32, saam 29/29, seek 6/6, later 21/21, afgly 14/14, edges 15/15. Website: his
+`bash ~/deploy-stapel-1.21.3.sh` (site only). Play: "Upload 1.21.3 internal" (12103).
