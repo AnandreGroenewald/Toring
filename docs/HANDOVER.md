@@ -1468,3 +1468,10 @@ wallet under the day's cap; coins fly to the counter. The flaw pass fixed: Klaar
 silver coin emoji, the elephants' white tails, overlapping lessons, too-frequent whirlpools/elephants. Tests: npm 518,
 server 311, nonsense 32/32, saam 29/29, seek 6/6, later 21/21, afgly 14/14, edges 15/15. Website: his
 `bash ~/deploy-stapel-1.21.3.sh` (site only). Play: "Upload 1.21.3 internal" (12103).
+
+### 25 Oct 2026 ~17:50 — 1.21.4 (Saam gly fixes) on Play internal + closed test (Alpha) sent for review
+His Telegram 14:41: the friend seemed to ski into things (drawn ~0.4 s late: the room's relay ~176 ms one way + 160 ms
+smoothing) and a rider was lost off the screen by the island (the camera's island turn in the wide duel view). Fix:
+'st'.a (the lane, sent at once on a swipe), the friend on the same lane spring, friendWay() takes the way past a rock
+still in their lane at the last moment; no island turn in duel. qa/saamway1213.mjs: ride-throughs 7 → 0. The closed
+test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his `bash ~/deploy-stapel-1.21.4.sh`.
