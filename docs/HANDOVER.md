@@ -1457,3 +1457,8 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
 - The lanes' edges only, as floating pipes, only on open water (47c7942); 1.21.1 (18623d3) on GitHub and Play internal
   12101. Website: `bash ~/deploy-stapel-1.21.sh` (deploys 1.21.1) by him; then check-all live.
 
+### 25 Oct 2026 13:55 — 1.21.2 released (Saam gly on phones, find an opponent)
+- Server e13a23e (rooms take a phone back to its seat with its key; the lobby /slag/seek), client 28484d4, fe24dc8.
+- Worker ae07639c (rollback fb1ce1e9-cbd3-4449-bba9-e60e13005d0b), live gate 35/35, site 1.21.2, GitHub fe24dc8,
+  Play 12102 on internal testing. check-all live: all ok.
+
