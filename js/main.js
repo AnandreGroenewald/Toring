@@ -2826,6 +2826,8 @@ async function startRide(opts = {}) {
         });
       },
       getBoard: () => span.rideBoard(day),
+      // (1.21.3) the river's coins into the wallet (free play's daily limit: EARN.dayCap)
+      onCoins: (n) => { const got = store.earnCoins(n, { capped: true }); coinsChanged(); return got; },
       onDone: (res, next) => {
         if (duel) {
           // (again together: the ride stays till the next round's start comes; done: the room goes too)

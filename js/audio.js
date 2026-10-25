@@ -16,7 +16,7 @@ const LIMIT = {
   hail: 4, land: 3, creak: 1, click: 3, perfect: 3, warning: 1, rain: 1,
   zap: 1, wind: 2, freeze: 2, fog: 1, heat: 1, thunder: 2, splash: 3, gull: 1,
   monkey: 1, shoo: 1, clown: 1, thief: 1, escape: 1, caught: 1,
-  room: 4, chute: 2, milestone: 1, gold: 1, board: 1, pop: 2,
+  room: 4, chute: 2, milestone: 1, gold: 1, board: 1, pop: 2, coin: 4,
 };
 // Minimum ms between two starts of the same sound.
 const THROTTLE = {
@@ -26,12 +26,12 @@ const THROTTLE = {
   monkey: 300, shoo: 250, clown: 250, thief: 300, escape: 400, caught: 400,
   room: 45, chute: 160, milestone: 500, gold: 250, board: 120, pop: 120,
   horn: 1000, drum: 150, clash: 120, fling: 400,
-  jet: 250, splat: 120,
+  jet: 250, splat: 120, coin: 40,
 };
 // At the per-name limit these steal the oldest voice; all others skip the new one.
 const STEAL = new Set([
   'perfect', 'good', 'skew', 'lost', 'land', 'drop', 'click', 'splash',
-  'thunder', 'banner', 'gameover', 'record', 'heart', 'rainbow', 'shoo', 'caught', 'room',
+  'thunder', 'banner', 'gameover', 'record', 'heart', 'rainbow', 'shoo', 'caught', 'room', 'coin',
 ]);
 // Per-sound output trim, balanced with the offline level test (perfect loudest).
 const LEVEL = {
@@ -42,7 +42,7 @@ const LEVEL = {
   monkey: 0.85, shoo: 0.75, clown: 0.55, thief: 0.62, escape: 0.34, caught: 0.5,
   room: 0.85, chute: 0.55, milestone: 0.6, gold: 0.7, board: 0.75, pop: 0.5,
   horn: 0.38, drum: 0.48, clash: 0.5, fling: 2.2,
-  jet: 0.95, splat: 0.85,
+  jet: 0.95, splat: 0.85, coin: 0.55,
 };
 
 const PENTA = [0, 2, 4, 7, 9];   // major pentatonic (semitones)
@@ -471,6 +471,13 @@ const SOUNDS = {
   },
 
   // (1.16) a golden resident: a sparkling run up high and a bell
+  // (1.21.3) a coin on the river: a bright two-note ping, a step higher with each in a row (o.n)
+  coin(v, t, o) {
+    const n = Math.max(0, Math.round(num(o.n, 0)));
+    const f = mtof(pentaNote(12 + Math.min(6, n)));
+    ping(v, t, f, 0.11, 0.12);
+    ping(v, t + 0.05, f * 1.5, 0.09, 0.16);
+  },
   gold(v, t) {
     for (let i = 0; i < 6; i++) ping(v, t + i * 0.045, mtof(pentaNote(10 + i)), 0.12 - i * 0.012, 0.35);
     bell(v, t + 0.28, mtof(pentaNote(15)), 0.16, 0.6, 0.6);

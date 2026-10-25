@@ -1118,8 +1118,16 @@ export function createUI(bus) {
     root.classList.toggle('hc', !!st.settings.highContrast);
     st.nextDayAt = Number(m.nextDayAt) || 0;
     st.resultsDaily = false;
+    // (1.21.3) coming from another screen (a ride's Klaar, a card): the menu takes no tap for a moment, so a second tap
+    // meant for the button that was there doesn't land on what's here now (Klaar → the Winkel under it)
+    const arriving = st.screen !== 'menu';
     renderMenu(m);
     showScreen('menu');
+    if (arriving) {
+      screens.menu.style.pointerEvents = 'none';
+      clearTimeout(st.menuArriveT);
+      st.menuArriveT = setTimeout(() => { screens.menu.style.pointerEvents = ''; }, 420);
+    }
     fitSaying();
     requestAnimationFrame(fitSaying);
   }

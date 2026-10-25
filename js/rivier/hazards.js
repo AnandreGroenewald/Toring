@@ -315,6 +315,93 @@ export function createHazards(bend = (m) => m, models = {}) {
     };
     return g;
   }
+  // ------------------------------------------------------------------------------------------- coins (1.21.3)
+  const coinGeo = geo(new THREE.CylinderGeometry(0.44, 0.44, 0.09, 24));
+  coinGeo.rotateX(Math.PI / 2);   // (standing up, its face to you)
+  const coinMat = std('#ffd23f', { metalness: 0.55, roughness: 0.24, emissive: '#a86e00', emissiveIntensity: 0.62 });
+  // (a warm glow behind each: a coin shows on any water, by day or night, and apart from gold blocks)
+  const glowTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,236,150,0.9)');
+    gr.addColorStop(0.35, 'rgba(255,210,90,0.45)');
+    gr.addColorStop(1, 'rgba(255,190,60,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  })();
+  const glowGeo = geo(new THREE.PlaneGeometry(1, 1));
+  const coinGlow = bend(new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: true }));
+  const gemGlow = bend(new THREE.MeshBasicMaterial({ map: glowTex, color: '#7fe6ff', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: true }));
+  for (const m of [coinGlow, gemGlow]) { m.userData.shared = true; own.push(m); }
+  own.push(glowTex);
+  const gemGeo = geo(new THREE.OctahedronGeometry(0.46, 0));
+  const gemMat = std('#8ff6ff', { metalness: 0.15, roughness: 0.08, emissive: '#22b8d6', emissiveIntensity: 0.75 });
+  /** Where a coin line hangs: on the water, in the air over a log (a jump), low under a tree. */
+  const COIN_Y = [0.85, 2.05, 0.7];
+  /**
+   * A line of coins (or a stack of ten, or the diamond) for a 'coins' item: userData { kind 'coins', coins: [{ m, taken }],
+   * update(t) } — each coin turns; the stack is a pile that turns; the diamond turns and bobs.
+   */
+  function coins(it) {
+    const g = new THREE.Group();
+    const list = [];
+    const y = COIN_Y[it.y | 0] ?? COIN_Y[0];
+    const glow = (at, size, mat = coinGlow) => {
+      const q = new THREE.Mesh(glowGeo, mat);
+      q.scale.setScalar(size);
+      q.position.copy(at);
+      q.position.z += 0.05;
+      q.renderOrder = 4;
+      g.add(q);
+      return q;
+    };
+    if (it.gem) {
+      const m = new THREE.Mesh(gemGeo, gemMat);
+      m.scale.set(1, 1.35, 1);
+      m.position.set(0, y + 0.2, -(it.dz || 0));
+      g.add(m);
+      list.push({ m, taken: false, glow: glow(m.position, 2.4, gemGlow) });
+    } else if (it.stack) {
+      const m = new THREE.Group();
+      for (let k = 0; k < 6; k++) {
+        const c = new THREE.Mesh(coinGeo, coinMat);
+        c.rotation.x = Math.PI / 2;
+        c.position.set((k % 2) * 0.05, k * 0.08, (k % 3) * 0.04);
+        c.scale.setScalar(1.25);
+        m.add(c);
+      }
+      m.position.set(0, y - 0.3, -(it.dz || 0));
+      g.add(m);
+      list.push({ m, taken: false, glow: glow(new THREE.Vector3(0, y, -(it.dz || 0)), 2.6) });
+    } else {
+      for (let k = 0; k < (it.n | 0); k++) {
+        const m = new THREE.Mesh(coinGeo, coinMat);
+        m.position.set(0, y, -((it.dz || 0) + k * (it.sp || 0)));
+        g.add(m);
+        list.push({ m, taken: false, glow: glow(m.position, 1.5) });
+      }
+    }
+    noCull(g);
+    g.traverse((o) => { o.castShadow = false; });
+    g.userData = {
+      kind: 'coins', coins: list, phase: 0, w: 0, d: 0,
+      update(t) {
+        list.forEach((c, k) => {
+          if (c.taken) {
+            if (c.glow) c.glow.visible = false;
+            return;
+          }
+          // (they sway rather than spin: their faces stay to you; the diamond turns)
+          c.m.rotation.y = it.gem ? t * 1.6 : it.stack ? t * 1.2 : Math.sin(t * 3 + k * 0.7) * 0.9;
+          if (it.gem) c.m.position.y = y + 0.2 + Math.sin(t * 2.4) * 0.12;
+        });
+      },
+    };
+    return g;
+  }
   /** Tints the whirlpool's foam with the scene's light (white by day, dim at night), as the river's other foam. */
   function tint(c) {
     whirlFoam.color.copy(c);
@@ -323,7 +410,7 @@ export function createHazards(bend = (m) => m, models = {}) {
     for (const x of own) x.dispose();
     own.length = 0;
   }
-  return { log, branch, clown, pie, whirl, tint, dispose };
+  return { log, branch, clown, pie, whirl, coins, tint, dispose };
 }
 
 /**

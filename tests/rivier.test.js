@@ -2,7 +2,7 @@
 // to rescue in the order given (yours first), Saturday's islands along the way.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RIVER, rescueCourse, raidCourse, passable, speedAt, laneX, inRapids, PACE } from '../js/core/rivier.js';
+import { COINS, RIVER, rescueCourse, raidCourse, passable, speedAt, laneX, inRapids, PACE } from '../js/core/rivier.js';
 import { rideMaxMetres } from '../js/core/riverpace.js';
 
 const WHO = ['boer', 'haai', 'bytjie', 'klippie', 'rissie', 'seekat', 'braai', 'duiker'];
@@ -184,6 +184,34 @@ test('rivier (endless): a whirlpool from 5 km and an elephant cow with her calf 
       assert.equal(open, cow.from > 0 ? 2 : 0, 'the side they came from is open');
     }
     assert.ok(passable(c), `deep-${d}`);
+  }
+});
+
+test('rivier (endless): coins only where they cost something; a stack every 700–900 m; one diamond after 2 km; the river the same', () => {
+  // (the owner, 25 Oct 2026: "should we add tokens, starts or coins, just to make it more intreguing, but afcourse not easy")
+  for (let d = 0; d < 12; d++) {
+    const c = rescueCourse(`coin-${d}`, [], { endless: true });
+    c.extend(6000);
+    const lines = c.rows.flatMap((r) => r.items.filter((it) => it.kind === 'coins').map((it) => ({ r, it })));
+    assert.ok(lines.length > 20, `coins on the river (${lines.length})`);
+    for (const { r, it } of lines) {
+      assert.ok(r.z >= COINS.from && !r.teach, 'not in the first metres, not on a lesson');
+      if (it.y === 1) assert.ok(r.items.some((x) => x.kind === 'log'), 'in the air only over a log');
+      if (it.y === 2) assert.ok(r.items.some((x) => x.kind === 'branch'), 'low only under a tree');
+      if (it.y === 0) assert.ok(r.items.some((x) => x.kind === 'block' && x.lane === it.lane), 'on the water only behind a block in that lane');
+      assert.ok(it.dz + it.sp * (it.n - 1) < 14, 'all of a line before the next row');
+    }
+    const gems = lines.filter(({ it }) => it.gem);
+    assert.equal(gems.length, 1, 'one diamond a ride');
+    assert.ok(gems[0].r.z >= COINS.gemFrom && gems[0].it.val === COINS.gemVal);
+    const stacks = lines.filter(({ it }) => it.stack).map(({ r }) => r.z);
+    for (let i = 1; i < stacks.length; i++) assert.ok(stacks[i] - stacks[i - 1] >= COINS.stackEvery[0] - 1, 'stacks apart');
+    assert.ok(passable(c), `coin-${d}`);
+    // (the river itself is the same as without coins: the same things in the same rows)
+    const bare = c.rows.map((r) => r.items.filter((it) => it.kind !== 'coins').map((it) => `${it.kind}${it.lane}`).join(',')).join('|');
+    const again = rescueCourse(`coin-${d}`, [], { endless: true });
+    again.extend(6000);
+    assert.equal(again.rows.map((r) => r.items.filter((it) => it.kind !== 'coins').map((it) => `${it.kind}${it.lane}`).join(',')).join('|'), bare, 'the same river every time');
   }
 });
 

@@ -63,6 +63,12 @@ function makeKit() {
 #rivier .rv-metres { flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 3px; padding: 5px 12px; border-radius: 999px; background: rgba(13,34,40,.62); border: 1px solid rgba(255,255,255,.28); font-weight: 900; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); font-variant-numeric: tabular-nums; }
 #rivier .rv-metres b { font-size: 20px; color: #fff3c4; }
 #rivier .rv-metres small { font-size: 13px; opacity: .85; }
+#rivier .rv-cn { display: flex; align-items: center; gap: 3px; padding: 5px 9px; border-radius: 999px; background: rgba(13,34,40,.62); border: 1px solid rgba(255,214,92,.45); font-weight: 900; color: #ffe08a; font-variant-numeric: tabular-nums; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+#rivier .rv-cn i.rv-coin-ic { width: 15px; height: 15px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff3b0 0 18%, #ffd23f 40%, #c98a00 100%); box-shadow: inset 0 0 0 2px rgba(150,95,0,.55); }
+#rivier .rv-cn b { font-size: 16px; min-width: 1ch; }
+#rivier .rv-cn.bump { animation: rv-cn .3s ease-out; }
+@keyframes rv-cn { 0% { transform: scale(1); } 40% { transform: scale(1.22); } 100% { transform: scale(1); } }
+#rivier .rv-card p.rv-coinline { margin: -4px 0 10px; font-size: 16px; font-weight: 900; color: #ffe08a; }
 #rivier .rv-hearts { display: flex; gap: 3px; padding: 6px 9px; border-radius: 999px; background: rgba(13,34,40,.62); border: 1px solid rgba(255,255,255,.28); }
 #rivier .rv-hearts i { width: 18px; height: 16px; background: #ff4d5e; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 22'%3E%3Cpath d='M12 21.5 10.3 20C4.2 14.6.2 11 .2 6.6.2 3 3 .2 6.6.2c2 0 4 1 5.4 2.5C13.4 1.2 15.4.2 17.4.2 21 .2 23.8 3 23.8 6.6c0 4.4-4 8-10.1 13.4z'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 22'%3E%3Cpath d='M12 21.5 10.3 20C4.2 14.6.2 11 .2 6.6.2 3 3 .2 6.6.2c2 0 4 1 5.4 2.5C13.4 1.2 15.4.2 17.4.2 21 .2 23.8 3 23.8 6.6c0 4.4-4 8-10.1 13.4z'/%3E%3C/svg%3E") center / contain no-repeat; transition: background .2s, transform .2s; }
 #rivier .rv-hearts i.gone { background: rgba(255,255,255,.25); transform: scale(.85); }
@@ -1280,13 +1286,15 @@ function createRide(K, d) {
   }
 
   // ---------------------------------------------------------------------------------------------- the overlay
-  ov.innerHTML = `<div class="rv-top"><div class="rv-count"><span class="rv-ring"></span><b>0</b><small>/ ${who.length}</small></div>${endless ? `<div class="rv-metres"><b>0</b><small>m</small></div><div class="rv-hearts">${'<i></i>'.repeat(RIVER.hearts)}</div>` : '<div class="rv-bar"><i></i></div>'}<button class="rv-pause" aria-label="${S.pause}">❚❚</button></div>
+  ov.innerHTML = `<div class="rv-top"><div class="rv-count"><span class="rv-ring"></span><b>0</b><small>/ ${who.length}</small></div>${endless ? `<div class="rv-metres"><b>0</b><small>m</small></div><div class="rv-cn"><i class="rv-coin-ic"></i><b>0</b></div><div class="rv-hearts">${'<i></i>'.repeat(RIVER.hearts)}</div>` : '<div class="rv-bar"><i></i></div>'}<button class="rv-pause" aria-label="${S.pause}">❚❚</button></div>
     <div class="rv-faces"></div><div class="rv-hint"></div><div class="rv-pop"></div><div class="rv-hurt"></div>
     <div class="rv-vs"></div><div class="rv-ftag"></div><div class="rv-go3"></div><div class="rv-card"></div><div class="rv-scope"><svg viewBox="0 0 132 132" aria-hidden="true"><circle class="ring" cx="66" cy="66" r="54"/><g class="ticks">${Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; const r1 = i % 3 ? 49 : 44; return `<line x1="${(66 + Math.cos(a) * r1).toFixed(1)}" y1="${(66 + Math.sin(a) * r1).toFixed(1)}" x2="${(66 + Math.cos(a) * 54).toFixed(1)}" y2="${(66 + Math.sin(a) * 54).toFixed(1)}"/>`; }).join('')}</g><g class="cross"><line x1="66" y1="24" x2="66" y2="57"/><line x1="66" y1="75" x2="66" y2="108"/><line x1="24" y1="66" x2="57" y2="66"/><line x1="75" y1="66" x2="108" y2="66"/></g><path class="brk" d="M10 32 V10 H32 M100 10 H122 V32 M122 100 V122 H100 M32 122 H10 V100"/><circle class="dot" cx="66" cy="66" r="3.5"/></svg><div class="rng"></div></div><button class="rv-fire" aria-label="${S.rvFire}"><svg class="pips" viewBox="0 0 112 112"></svg><span class="in"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2.5c-.4 0-.7.2-.9.5C9.4 5.6 5.5 10.9 5.5 14.6a6.5 6.5 0 0 0 13 0c0-3.7-3.9-9-5.6-11.6-.2-.3-.5-.5-.9-.5z"/><path fill="#9feaf5" d="M9.2 14.4c.3 1.6 1.4 2.7 3 3" stroke="#0b6f8a" stroke-width="1.6" stroke-linecap="round"/></svg><span>${S.rvFire}</span></span></button><div class="rv-board"></div><div class="rv-arrow"></div><div class="rv-paused"><div><h2>${S.rvPaused}</h2><button class="rv-on">${S.rvResume}</button><button class="rv-off">${S.rvQuit}</button></div></div>`;
   const countEl = ov.querySelector('.rv-count');
   const countB = countEl.querySelector('b');
   const barEl = ov.querySelector('.rv-bar i');
   const metresEl = ov.querySelector('.rv-metres b');
+  const coinEl = ov.querySelector('.rv-cn');
+  const coinB = coinEl?.querySelector('b');
   if (!raid && !who.length) {
     // (a free ride: nobody of yours to count)
     for (const sel of ['.rv-count', '.rv-faces']) { const el = ov.querySelector(sel); if (el) el.style.display = 'none'; }
@@ -1583,6 +1591,11 @@ function createRide(K, d) {
   }
   const onVis = () => { if (document.hidden && !duel) setPaused(true); };
   document.addEventListener('visibilitychange', onVis);
+  // (a phone turned sideways: Stapel covers the screen with "turn your phone" (#rotate); the ride waits under it, paused;
+  // not a duel: the friend's river doesn't stop)
+  const sideMq = globalThis.matchMedia?.('(orientation: landscape) and (max-height: 540px) and (pointer: coarse)');
+  const onSide = () => { if (sideMq?.matches && !duel && phase !== 'done') setPaused(true); };
+  sideMq?.addEventListener?.('change', onSide);
 
   // ---------------------------------------------------------------------------------------------- input
   let down = null;
@@ -1697,6 +1710,7 @@ function createRide(K, d) {
         else if (it.kind === 'branch') obj = hz.branch(!!it.flip);
         else if (it.kind === 'clown') obj = hz.clown(it.side || 1);
         else if (it.kind === 'whirl') obj = hz.whirl();
+        else if (it.kind === 'coins') obj = hz.coins(it);
         else if (it.kind === 'ele') obj = beasts.elephant({ from: it.from || 1, calf: !!it.calf });
         else if (it.kind === 'monkey') {
           const blk = things.floating({ ...it, skin: d.skin || 'kleur', spin: 0 });
@@ -1720,6 +1734,43 @@ function createRide(K, d) {
     _v.project(camera);
     return { x: (_v.x * 0.5 + 0.5) * host.clientWidth, y: (-_v.y * 0.5 + 0.5) * host.clientHeight };
   }
+
+  // ---------------------------------------------------------------------------------------------- coins (1.21.3)
+  let coinsGot = 0;
+  let coinRun = 0;
+  let coinAt = -9;
+  /** A coin line as you come: in its lane at the right height you take each one (a jump for those in the air). */
+  function coinStep(l, ahead) {
+    if (phase !== 'run') return;
+    const it = l.it;
+    const u = l.obj.userData;
+    if (Math.abs(l.x - x) > 1.15) return;
+    const ok = it.y === 1 ? airY > 0.7 : it.y === 2 ? true : airY < 1.2;
+    if (!ok) return;
+    u.coins.forEach((c, k) => {
+      if (c.taken) return;
+      const a = ahead + (it.dz || 0) + k * (it.sp || 0);
+      if (Math.abs(a) > 0.95) return;
+      c.taken = true;
+      c.m.visible = false;
+      coinsGot += it.val || 1;
+      coinRun = t - coinAt < 0.8 ? coinRun + 1 : 0;
+      coinAt = t;
+      audio.play(it.gem || it.stack ? 'gold' : 'coin', { n: coinRun });
+      haptics.tap?.();
+      things.emit(l.x, COIN_HEIGHT[it.y | 0] ?? 0.85, -a, it.gem ? 30 : it.stack ? 22 : 6, 1.2, 2.6);
+      if (it.gem) pop(S.rvGem(it.val), 1300);
+      else if (it.stack) pop(S.rvStack(it.val), 1000);
+      if (coinB) {
+        coinB.textContent = fmtInt(coinsGot);
+        coinEl.classList.remove('bump');
+        void coinEl.offsetWidth;
+        coinEl.classList.add('bump');
+      }
+    });
+    if (u.coins.every((c) => c.taken)) l.done = true;
+  }
+  const COIN_HEIGHT = [0.85, 2.05, 0.7];
 
   // ---------------------------------------------------------------------------------------------- whirlpools, elephants (1.21.3)
   let pullX = 0;          // (the whirlpools' pull on your lane's middle this frame, m across)
@@ -2086,7 +2137,8 @@ function createRide(K, d) {
     const whirls = live.filter((l) => !l.done && l.it.kind === 'whirl' && l.z > dist - 3 && l.z < dist + 45);
     const eles = live.filter((l) => l.it.kind === 'ele' && l.z > dist - 3 && l.z < dist + 45);
     const blocked = (ln) => pieIn(ln) || whirls.some((l) => l.it.lane === ln || ln === 1) || eles.some((l) => l.it.lane === ln) || ahead.some((l) => !['person', 'log', 'branch', 'clown', 'whirl'].includes(l.it.kind) && (l.it.lane === ln || l.it.lane + l.drift === ln) && l.z < dist + 18);
-    const want = ahead.find((l) => l.it.kind === 'person' && !blocked(l.it.lane));
+    const want = ahead.find((l) => l.it.kind === 'person' && !blocked(l.it.lane))
+      || live.find((l) => l.it.kind === 'coins' && !l.done && l.z + (l.it.dz || 0) > dist + 1 && l.z + (l.it.dz || 0) < dist + 30 && !blocked(l.it.lane));
     let target = want ? want.it.lane : lane;
     if (blocked(target)) target = [lane, lane - 1, lane + 1, 0, 1, 2].find((ln) => ln >= 0 && ln < 3 && !blocked(ln)) ?? lane;
     if (target !== lane) move(target > lane ? 1 : -1);
@@ -2496,6 +2548,11 @@ function createRide(K, d) {
       if (u.arm && u.kind !== 'clown') u.arm.rotation.z = -0.4 + Math.sin(t * 9 + u.phase) * 0.7;
       u.update?.(t, ahead, dt);
       if (phase === 'run') cues(l, ahead);
+      if (u.kind === 'coins') {
+        l.obj.position.y = 0;
+        coinStep(l, ahead);
+        continue;
+      }
       if (u.kind === 'whirl') {
         l.obj.position.y = 0;
         if (phase === 'run') cueLater(l, ahead);
@@ -2722,6 +2779,14 @@ function createRide(K, d) {
     return Math.max(0, Math.min(d.shots.room | 0, Math.floor((w + m) / 100) - Math.floor(w / 100)));
   };
   const result = () => ({ rescued: [...rescued], missed: who.filter((id) => !rescued.includes(id)), hits, all: rescued.length === who.length && who.length > 0, metres: Math.floor(dist), durationMs: Math.round((runS + (phase === 'dive' ? 0 : 2)) * 1000) });
+  /** The coins of this ride into the wallet (once), and the card's line: what went in, and the day's limit if it's met. */
+  let coinPaid = null;
+  function coinLine() {
+    if (!coinsGot) return '';
+    if (!coinPaid) coinPaid = d.onCoins?.(coinsGot) || { added: coinsGot };
+    const added = coinPaid.added | 0;
+    return `<p class="rv-coinline">${esc(added < coinsGot ? S.rvCoinsCapped(fmtInt(added)) : S.rvCoinsGot(fmtInt(added)))}</p>`;
+  }
   function done() {
     if (phase === 'done') return;
     phase = 'done';
@@ -2747,7 +2812,7 @@ function createRide(K, d) {
         sentEnd = r.metres;
         duel.send({ t: 'end', m: r.metres });
       }
-      cardEl.innerHTML = `<div class="rv-dist"><b>${fmtInt(r.metres)}</b><small>m</small></div><h2 class="rv-win"></h2><p class="rv-vsline"></p><p class="rv-rank"></p>
+      cardEl.innerHTML = `<div class="rv-dist"><b>${fmtInt(r.metres)}</b><small>m</small></div>${coinLine()}<h2 class="rv-win"></h2><p class="rv-vsline"></p><p class="rv-rank"></p>
         <button class="rv-go rv-again">${S.saamAgain}</button><button class="rv-no">${S.rvDone}</button>`;
       if (rankNow) setRank(rankNow);
       cardEl.classList.add('on');
@@ -2774,7 +2839,7 @@ function createRide(K, d) {
     const free = who.length === 0;
     const best = Math.max(d.best | 0, r.metres);
     const record = endless && r.metres > (d.best | 0) && (d.best | 0) > 0;
-    const distHtml = endless ? `<div class="rv-dist"><b>${fmtInt(r.metres)}</b><small>m</small></div><p class="rv-distline">${record ? S.rvRecord : S.rvDistance}${d.best && !record ? ` · ${S.rvBest(fmtInt(best))}` : ''}</p>` : '';
+    const distHtml = endless ? `<div class="rv-dist"><b>${fmtInt(r.metres)}</b><small>m</small></div><p class="rv-distline">${record ? S.rvRecord : S.rvDistance}${d.best && !record ? ` · ${S.rvBest(fmtInt(best))}` : ''}</p>${coinLine()}` : '';
     const shotsHtml = endless && d.shots?.day ? `<p class="rv-shots">${shotsEarned(r.metres) > 0 ? S.rvShots(shotsEarned(r.metres)) : d.shots.room <= 0 ? S.rvShotsFull(d.shots.max || 10) : S.rvShotsNext(100 - ((d.shots.riverWeek + r.metres) % 100))}</p>` : '';
     const peopleHtml = free ? '' : `<h2>${r.rescued.length ? S.rvSaved(r.rescued.length, who.length) : S.rvNoneSaved}</h2>
       <p>${r.rescued.length ? (d.town === false ? S.rvSafeOut(r.rescued.length) : S.rvMovedIn(r.rescued.length, d.crew || '')) : S.rvTryTomorrow}${mine && yours < mine ? ` ${S.rvYoursLeft(mine - yours)}` : ''}</p>
@@ -2882,6 +2947,7 @@ function createRide(K, d) {
     removeEventListener('resize', place);
     removeEventListener('keydown', onKey);
     document.removeEventListener('visibilitychange', onVis);
+    sideMq?.removeEventListener?.('change', onSide);
     host.removeEventListener('pointerdown', onDown);
     host.removeEventListener('pointermove', onMoveP);
     host.removeEventListener('pointerup', onUp);
@@ -2939,6 +3005,8 @@ function createRide(K, d) {
     resume: () => setPaused(false),
     /** For tests: where the ride stands. */
     state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, endless, hearts, airY: Math.round(airY * 100) / 100, duckK: Math.round(duckK * 100) / 100, timeK: Math.round(timeK * 100) / 100, lesson: lesson && !lesson.done ? lesson.kind : null, pies: pies.length, clowns: live.filter((l) => l.obj.userData.kind === 'clown').map((l) => ({ z: Math.round(l.z * 10) / 10, x: Math.round(l.obj.position.x * 100) / 100, phase: l.cs?.phase, foot: Math.round((world.footAt?.(l.obj.userData.side || 1, l.z) ?? 0) * 100) / 100 })), pieAt: pies.map((pp) => { const v = pp.mesh.getWorldPosition(new THREE.Vector3()).project(camera); return { t: Math.round(pp.t * 100) / 100, x: Math.round(v.x * 100) / 100, y: Math.round(v.y * 100) / 100, z: Math.round(v.z * 1000) / 1000 }; }), headY: rider.headY?.(), lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, lastKnock, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })),
+      coins: coinsGot,
+      coinLines: live.filter((l) => l.it.kind === 'coins').map((l) => ({ lane: l.it.lane, x: Math.round(l.x * 10) / 10, a: Math.round((l.z + (l.it.dz || 0) - dist) * 10) / 10, y: l.it.y, n: l.it.n, gem: !!l.it.gem, left: l.obj.userData.coins.filter((c) => !c.taken).length })),
       deep: live.filter((l) => l.it.kind === 'whirl' || l.it.kind === 'ele').map((l) => ({ k: l.it.kind, calf: !!l.it.calf, lane: l.it.lane, x: Math.round(l.x * 10) / 10, a: Math.round((l.z - dist) * 10) / 10, done: l.done, model: !!d.models?.elephant })), pullX: Math.round(pullX * 100) / 100, hint: hintEl.textContent, soft: !!soft,
       duel: fr ? { seen: fr.seen, d: Math.round(fr.sd * 10) / 10, x: Math.round(fr.sx * 100) / 100, out: fr.out, endM: fr.endM, gone: fr.gone, watching, counting, goAt, hits, shown: fr.rider.group.visible, tag: tagText, round: duel.round } : null }),
     autopilot(on) { pilotOn = !!on; },

@@ -276,8 +276,12 @@ function buildCourse(key, len, who, crews) {
     }
   }
   if (endless) {
-    fill(1600);
-    return { len, endless: true, rows, islands, rapids, lake, island, people: people.slice(0, pi), extend: fill };
+    // (1.21.3) the river's coins: laid on the rows as they're made, from their own seed (the river itself is the same
+    // with or without them)
+    const coinsOn = addCoins(key, rows, { nearIsland, rapidsAt });
+    const grow = (untilZ) => { fill(untilZ); coinsOn(); };
+    grow(1600);
+    return { len, endless: true, rows, islands, rapids, lake, island, people: people.slice(0, pi), extend: grow };
   }
   fill(stopAt);
   // people left over (a long list): along the calm finish stretch, lane by lane
@@ -315,12 +319,62 @@ export function rapidsWindow(course, z) {
 }
 
 /**
+ * (1.21.3) Coins on the endless river (the owner, 25 Oct 2026: "the objective of the game mode, should we add tokens,
+ * starts or coins, just to make it more intreguing, but afcourse not easy"): only where taking them costs something —
+ * five in the lane just behind a block (back in right after it, out again before the next row), three over a log (jump in
+ * that lane), three under a fallen tree (duck in that lane); a stack of ten behind a block every 700–900 m; once a ride,
+ * a diamond worth fifty over the first long log after 2 km. Each row decides from its own seed (key + its metres), so
+ * the river's things are the same as without coins. Items: { kind 'coins', lane, n, dz (m after the row), sp (m apart),
+ * y (0 on the water, 1 in the air: a jump, 2 low: under a tree), val (each), stack?, gem? }.
+ */
+export const COINS = Object.freeze({ from: 120, behindP: 0.3, logP: 0.45, treeP: 0.4, stackEvery: [700, 900], gemFrom: 2000, stackVal: 10, gemVal: 50 });
+function addCoins(key, rows, { nearIsland, rapidsAt }) {
+  let done = 0;
+  let stackNext = COINS.from + COINS.stackEvery[0];
+  let gem = false;
+  return function coinsOn() {
+    for (; done < rows.length; done++) {
+      const row = rows[done];
+      if (row.z < COINS.from || row.teach || row.finish || nearIsland(row.z) || rapidsAt(row.z)) continue;
+      const items = row.items;
+      if (items.some((it) => it.kind === 'clown' || it.kind === 'whirl' || it.kind === 'ele' || it.kind === 'person')) continue;
+      const r = createRng(`${key}/coins/${Math.round(row.z * 10)}`);
+      const log = items.find((it) => it.kind === 'log');
+      const tree = items.find((it) => it.kind === 'branch');
+      const blocks = items.filter((it) => it.kind === 'block' && !it.drift);
+      // (the diamond: once, over the first long log after 2 km, in the air: a jump at the right moment in its lane)
+      if (!gem && log && log.span === 3 && row.z >= COINS.gemFrom) {
+        gem = true;
+        items.push({ kind: 'coins', lane: r.pick([0, 1, 2]), n: 1, dz: 0, sp: 0, y: 1, val: COINS.gemVal, gem: true });
+        continue;
+      }
+      if (log && r.chance(COINS.logP)) {
+        items.push({ kind: 'coins', lane: log.span === 3 ? r.pick([0, 1, 2]) : log.lane, n: 3, dz: -2.2, sp: 2.2, y: 1, val: 1 });
+        continue;
+      }
+      if (tree && r.chance(COINS.treeP)) {
+        items.push({ kind: 'coins', lane: r.pick([0, 1, 2]), n: 3, dz: -2.2, sp: 2.2, y: 2, val: 1 });
+        continue;
+      }
+      if (!blocks.length || log || tree) continue;
+      const b = r.pick(blocks);
+      if (row.z >= stackNext) {
+        stackNext = row.z + r.int(COINS.stackEvery[0], COINS.stackEvery[1]);
+        items.push({ kind: 'coins', lane: b.lane, n: 1, dz: 6, sp: 0, y: 0, val: COINS.stackVal, stack: true });
+      } else if (r.chance(COINS.behindP)) {
+        items.push({ kind: 'coins', lane: b.lane, n: 5, dz: 4, sp: 2.1, y: 0, val: 1 });
+      }
+    }
+  };
+}
+
+/**
  * Is the course always passable? Every row leaves a lane with nothing hard in it, and from the lane open in the row before,
  * that lane can be reached in time (the gap at full speed holds two lane changes and a moment to react).
  */
 export function passable(course) {
   // (a log is jumped, a fallen tree ducked under, Hanswors's pies dodged: none of them shuts a lane)
-  const hard = (it) => !['person', 'clown', 'log', 'branch'].includes(it.kind);
+  const hard = (it) => !['person', 'clown', 'log', 'branch', 'coins'].includes(it.kind);
   let prevZ = -Infinity;
   for (const row of course.rows) {
     const shut = new Set();
