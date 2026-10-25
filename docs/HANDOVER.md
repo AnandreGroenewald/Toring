@@ -1436,3 +1436,15 @@ version". The plan: docs/RIVIER-PLAN-2026-10-24.md (rules, numbers, checkpoints)
   internal testing. Live check ALL CLEAR.
 - **Next:** his feedback; his play of checkpoints 1+2 at home:
   http://192.168.1.225:8500/?nosw=1&debug=1&meter=0&date=2026-10-26&town=1; the release on his word (plan §8).
+
+### 25 Oct 2026 (day) — 1.21 work on rivier/1.20 (local; not released)
+- c779571: the pie (Blender crust, piped cream, cherry + stem; hazards MODEL_V 5), the splat on the lens the same frame
+  (no blank frame), soft landing shadow; night skies: a headlamp on his hard hat (SpotLight + world.setLamp in the water
+  shader) and world.turnMoon (the moon's path turns with the camera: no more black water passing the island).
+- 8608cc7: lane marks — white-water seams on the water (default) or floating pipes (`laneMarks: 'pipes'`); his pick pending.
+- c85e7a3: Saam gly (js/rivier/duel.js over /slag/room, live already) — two friends on one river, each seeing the other
+  (blue rider, name tag, metres pill), 3-2-1 together, watch the friend after you're out, who won, Weer saam; menu 👥
+  beside the River run, ?gly=CODE links. A player's first name is asked first (required).
+- Tests: npm 510; qa saam1210 23/23, name1210 10/10, afgly 14/14, edges 15/15, later 21/21, raid 15/15, leak OK.
+- **Next:** his lanes pick (A/B), "release" (1.21 to Play internal + website; Worker unchanged), friends online (asked).
+
