@@ -208,11 +208,122 @@ export function createHazards(bend = (m) => m, models = {}) {
     return g;
   }
 
+  // ------------------------------------------------------------------------------------------- the whirlpool (1.21.3)
+  /** A whirlpool's picture: the hollow (`foam` false: dark in the middle, lighter out to the rim), or its foam: three
+   * thick arms spiralling in and a broken white rim. */
+  function whirlTexture(foam) {
+    const N = 512;
+    const C = N / 2;
+    const c = document.createElement('canvas');
+    c.width = c.height = N;
+    const g = c.getContext('2d');
+    if (!foam) {
+      const gr = g.createRadialGradient(C, C, 0, C, C, C);
+      gr.addColorStop(0, 'rgba(0,6,8,1)');
+      gr.addColorStop(0.22, 'rgba(2,16,20,0.97)');
+      gr.addColorStop(0.5, 'rgba(8,40,46,0.8)');
+      gr.addColorStop(0.8, 'rgba(18,70,76,0.4)');
+      gr.addColorStop(1, 'rgba(30,90,96,0)');
+      g.fillStyle = gr;
+      g.fillRect(0, 0, N, N);
+    } else {
+      // (three arms of foam: wide at the rim, curling round and thinning into the hollow)
+      for (let arm = 0; arm < 3; arm++) {
+        g.beginPath();
+        const pts = [];
+        for (let k = 0; k <= 60; k++) {
+          const u = k / 60;
+          const r = C * 0.94 * Math.exp(-2.1 * u);
+          const a = arm * (Math.PI * 2 / 3) + u * Math.PI * 2.4;
+          const w = C * 0.11 * (1 - u * 0.85);
+          pts.push([a, r, w]);
+        }
+        pts.forEach(([a, r, w], i) => { const x = C + Math.cos(a) * (r + w); const y = C + Math.sin(a) * (r + w); if (i) g.lineTo(x, y); else g.moveTo(x, y); });
+        for (let i = pts.length - 1; i >= 0; i--) { const [a, r, w] = pts[i]; g.lineTo(C + Math.cos(a) * (r - w), C + Math.sin(a) * (r - w)); }
+        g.closePath();
+        const gr = g.createRadialGradient(C, C, C * 0.1, C, C, C);
+        gr.addColorStop(0, 'rgba(235,248,248,0.35)');
+        gr.addColorStop(1, 'rgba(250,255,255,0.92)');
+        g.fillStyle = gr;
+        g.fill();
+      }
+      // (the rim: a broken ring of white water)
+      g.lineCap = 'round';
+      for (let k = 0; k < 14; k++) {
+        const a0 = k * (Math.PI * 2 / 14);
+        g.strokeStyle = `rgba(255,255,255,${(0.55 + (k % 3) * 0.15).toFixed(2)})`;
+        g.lineWidth = 10 + (k % 4) * 3;
+        g.beginPath();
+        g.arc(C, C, C * 0.9, a0, a0 + 0.32);
+        g.stroke();
+      }
+      let sd = 5;
+      const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+      g.fillStyle = 'rgba(255,255,255,0.6)';
+      for (let i = 0; i < 300; i++) {
+        const r = C * (0.2 + rnd() * 0.75);
+        const a = rnd() * Math.PI * 2;
+        g.beginPath();
+        g.arc(C + Math.cos(a) * r, C + Math.sin(a) * r, 1 + rnd() * 2.6, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    return t;
+  }
+  const whirlGeo = geo(new THREE.CircleGeometry(1, 40));
+  whirlGeo.rotateX(-Math.PI / 2);
+  const whirlCore = bend(new THREE.MeshBasicMaterial({ map: whirlTexture(false), transparent: true, depthWrite: false, fog: true }));
+  const whirlFoam = bend(new THREE.MeshBasicMaterial({ map: whirlTexture(true), transparent: true, depthWrite: false, fog: true }));
+  for (const m of [whirlCore, whirlFoam]) { m.userData.shared = true; own.push(m, m.map); }
+  const whirlPlankGeo = geo(new THREE.BoxGeometry(1.4, 0.12, 0.32));
+  const whirlPlank = std('#9a6a3c', { roughness: 0.8 });
+  /**
+   * A whirlpool (from 5 km), in a side lane: a dark hollow and foam spiralling in, wide enough to reach the middle lane
+   * (its pull does). userData: { kind 'whirl', w, d, update(t) }.
+   */
+  function whirl() {
+    const g = new THREE.Group();
+    const core = new THREE.Mesh(whirlGeo, whirlCore);
+    core.scale.setScalar(4.2);
+    core.position.y = 0.05;
+    core.renderOrder = 2;
+    const foam = new THREE.Mesh(whirlGeo, whirlFoam);
+    foam.scale.setScalar(4.6);
+    foam.position.y = 0.07;
+    foam.renderOrder = 3;
+    // (a plank going round and round, spiralling in: you see what it does)
+    const plank = new THREE.Mesh(whirlPlankGeo, whirlPlank);
+    plank.position.y = 0.1;
+    g.add(core, foam, plank);
+    noCull(g);
+    g.traverse((o) => { o.castShadow = false; });   // (flat on the water: no shadow of its own)
+    plank.castShadow = true;
+    g.userData = {
+      kind: 'whirl', w: 3.2, d: 3.2, phase: 0,
+      update(t) {
+        foam.rotation.y = t * 2.2;
+        core.rotation.y = t * 0.8;
+        const u = (t * 0.22) % 1;
+        const r = 3.6 * (1 - u * 0.85);
+        const a = t * (1.6 + u * 3);
+        plank.position.set(Math.cos(a) * r, 0.1 - u * 0.4, Math.sin(a) * r);
+        plank.rotation.set(0, -a, u * 0.6);
+      },
+    };
+    return g;
+  }
+  /** Tints the whirlpool's foam with the scene's light (white by day, dim at night), as the river's other foam. */
+  function tint(c) {
+    whirlFoam.color.copy(c);
+  }
   function dispose() {
     for (const x of own) x.dispose();
     own.length = 0;
   }
-  return { log, branch, clown, pie, dispose };
+  return { log, branch, clown, pie, whirl, tint, dispose };
 }
 
 /**

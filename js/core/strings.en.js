@@ -999,7 +999,7 @@ export const S_EN = {
   rvMovedIn: (n, crew) => `${n === 1 ? 'One moves' : `${n} move`} into ${crew ? `${crew}’s` : 'your crew’s'} Weekly Tower.`,
   rvTryTomorrow: 'You’ll ride again tomorrow.',
   // (the River run's how-to line while Ons dorp is off: no Weekly Tower, no week)
-  howToRiverRun: 'River run: after your Daily Tower your builder dives off the top and rides down the river to save your people who fell off your tower; River run on the menu rides again any time. Swipe left and right past blocks, crocodiles, hippos and Blouaap. The river runs on until your third knock (❤️❤️❤️): the further you ride, the higher on the day’s ranking. After 1 km Hanswors comes with his pies, after 2 km logs to jump (swipe up), after 3 km trees to duck under (swipe down).',
+  howToRiverRun: 'River run: after your Daily Tower your builder dives off the top and rides down the river to save your people who fell off your tower; River run on the menu rides again any time. Swipe left and right past blocks, crocodiles, hippos and Blouaap. The river runs on until your third knock (❤️❤️❤️): the further you ride, the higher on the day’s ranking. After 1 km Hanswors comes with his pies, after 2 km logs to jump (swipe up), after 3 km trees to duck under (swipe down), after 5 km whirlpools that pull you in, and after 10 km elephants crossing.',
   rvSafeOut: (n) => (n === 1 ? 'One is safe on the island.' : `All ${n} are safe on the island.`),
   rvSafeIsland: (n) => `🏝️ ${n} safe on the island!`,
   rvYoursLeft: (n) => `${n === 1 ? 'One' : n} of yours drifted off.`,
@@ -1027,6 +1027,12 @@ export const S_EN = {
   rvBoardNone: 'Nobody yet today',
   afglyRank: (r, m) => `🏅 #${r} · ${m} m`,
   rvAgain: '🛟 Ride again',
+  rvTeachWhirl: 'Whirlpool! It pulls you in, even from the middle lane: get to the far side early.',
+  rvTeachEle: 'Elephants! They walk across the river: ride where they won’t be.',
+  rvWhirlShort: 'Whirlpool!',
+  rvEleShort: 'Elephants!',
+  rvWhirlKo: 'Sucked in!',
+  rvEleKo: 'Elephant!',
   // (1.21) Saam gly: two friends on the same river at once
   saam: 'Ride with a friend',
   saamMenuSub: 'Race a friend',

@@ -32,6 +32,7 @@ export function createBeasts(bend = (m) => m, models = {}) {
     hippo: bend(std('#76636f', { roughness: 0.55 })),
     hippoDark: bend(std('#5b4b57', { roughness: 0.6 })),
     hippoPink: bend(std('#d78f99', { roughness: 0.6 })),
+    ele: bend(std('#9d9a95', { roughness: 0.7 })),
     fur: bend(std('#8a5a2e', { roughness: 0.9 })),
     furDark: bend(std('#6b4220', { roughness: 0.9 })),
     face: bend(std('#e7c49a', { roughness: 0.75 })),
@@ -453,9 +454,92 @@ export function createBeasts(bend = (m) => m, models = {}) {
     return g;
   }
 
+  // ------------------------------------------------------------------------------------------- the elephants (1.21.3)
+  /**
+   * An elephant wading across the river (from 10 km): the cow, or her calf (`calf`: the same, smaller). Turned to walk
+   * toward -`from` across the river (`from` +1: she comes from the right). userData: { kind 'ele', w, d, walking (the
+   * ride says), update(t) } — her legs step while she walks, her trunk swings, her ears flap.
+   */
+  function elephant({ from = 1, calf = false } = {}) {
+    const g = new THREE.Group();
+    const inner = new THREE.Group();
+    g.add(inner);
+    const k = calf ? 0.56 : 1;
+    let trunk = null;
+    let ears = [];
+    let legs = [];
+    let body = null;
+    if (models.elephant) {
+      const m = models.elephant.clone(true);
+      inner.add(m);
+      body = m;
+      trunk = m.getObjectByName('trunk');
+      ears = ['earL', 'earR'].map((n) => m.getObjectByName(n)).filter(Boolean);
+      legs = ['legFL', 'legBR', 'legFR', 'legBL'].map((n) => m.getObjectByName(n)).filter(Boolean);
+    } else {
+      // (no model: a grey body, a head, a trunk and four legs)
+      body = new THREE.Group();
+      const torso = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), M.ele);
+      torso.scale.set(1.2, 1.15, 1.9);
+      torso.position.set(0, 2.2, -0.2);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 10), M.ele);
+      head.position.set(0, 2.8, 1.9);
+      body.add(torso, head);
+      trunk = new THREE.Group();
+      trunk.position.set(0, 2.4, 2.5);
+      const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.28, 2.1, 10), M.ele);
+      tr.position.set(0, -1.0, 0.25);
+      tr.rotation.x = 0.2;
+      trunk.add(tr);
+      for (const sx of [-1, 1]) {
+        const ear = new THREE.Mesh(new THREE.SphereGeometry(0.8, 14, 10), M.ele);
+        ear.scale.set(0.08, 1.1, 0.8);
+        ear.position.set(sx * 0.8, 2.6, 1.4);
+        body.add(ear);
+        ears.push(ear);
+      }
+      for (const [x, z] of [[0.58, 0.75], [-0.55, -1.15], [-0.58, 0.75], [0.55, -1.15]]) {
+        const leg = new THREE.Group();
+        leg.position.set(x, 1.7, z);
+        const lm = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.4, 2.2, 10), M.ele);
+        lm.position.y = -1.1;
+        leg.add(lm);
+        body.add(leg);
+        legs.push(leg);
+      }
+      body.add(trunk);
+      inner.add(body);
+    }
+    inner.scale.setScalar(k);
+    // (her head toward where she walks: across the river, away from the side she came from)
+    inner.rotation.y = from > 0 ? -Math.PI / 2 : Math.PI / 2;
+    noCull(g);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    const ph = Math.random() * 6;
+    const base = legs.map((l) => l.rotation.x);
+    let step = 0;
+    g.userData = {
+      kind: 'ele', calf, from, phase: ph, walking: false,
+      // (across the river her length; along it her width: what knocks you)
+      w: 4.4 * k, d: 2.2 * k,
+      update(t, ahead, dt = 1 / 60) {
+        const u = g.userData;
+        step += (dt || 1 / 60) * (u.walking ? (calf ? 3.4 : 2.4) : 0.35);
+        // (the diagonal pairs swing together: front left with back right)
+        legs.forEach((l, i) => { l.rotation.x = base[i] + Math.sin(step * Math.PI + (i < 2 ? 0 : Math.PI)) * (u.walking ? 0.32 : 0.04); });
+        if (trunk) {
+          trunk.rotation.x = Math.sin(t * 1.3 + ph) * 0.12 + (u.walking ? 0.05 : 0);
+          trunk.rotation.z = Math.sin(t * 0.9 + ph * 2) * 0.1;
+        }
+        ears.forEach((e, i) => { e.rotation.z = Math.sin(t * 1.7 + ph + i) * 0.14 * (i ? -1 : 1); });
+        if (body) body.position.y = Math.abs(Math.sin(step * Math.PI)) * (u.walking ? 0.05 : 0.01);
+      },
+    };
+    return g;
+  }
   function dispose() {
     for (const m of [...Object.values(M), bubbleMat]) m.dispose();
     bubbleGeo.dispose();
   }
-  return { croc, hippo, monkeyOn, dispose };
+  return { croc, hippo, monkeyOn, elephant, dispose };
 }

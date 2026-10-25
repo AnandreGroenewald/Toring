@@ -34,7 +34,9 @@ export const RIVER = Object.freeze({
   // (the owner, 25 Oct 2026: "keep it as is for the first 1000 meters, then after that it adds a clown that tries to
   // distract you, after 2000 meters there is a small object that you need to jump over, the first one shows you to
   // jump etc"): what the endless river adds as you get further
-  unlock: Object.freeze({ clown: 1000, log: 2000, branch: 3000 }),
+  // (the owner, 25 Oct 2026: "And then please add objects at 5000 and 10000 meters"): a whirlpool (it pulls you in) and
+  // an elephant cow with her calf wading across
+  unlock: Object.freeze({ clown: 1000, log: 2000, branch: 3000, whirl: 5000, ele: 10000 }),
   clownEvery: [1600, 2400],   // m between Hanswors's visits, once he's come (an event, about once a minute: the owner, 25 Oct 2026, "it appears way too many times")
   lakeFrom: 600,       // m: the river opens into a lake, your crew's island beside it...
   lakeTo: 880,         // ...and narrows into the canyon again
@@ -105,7 +107,7 @@ function buildCourse(key, len, who, crews) {
   const rapids = endless ? { from: 370, to: 460 } : { from: Math.round(len * 0.58), to: Math.round(len * 0.58) + 90 };
   const rapidsAt = (z) => inRapids({ rapids, endless, lake }, z);
   // (the endless river's later things: Hanswors's visits, logs to jump, fallen trees to duck under)
-  const later = { clownNext: RIVER.unlock.clown, taught: { clown: false, log: false, branch: false } };
+  const later = { clownNext: RIVER.unlock.clown, taught: { clown: false, log: false, branch: false, whirl: false, ele: false } };
   /** A row of the later things at z, if one is due (pushed; z moved on as it needs); true when it made one. */
   function laterRow(zz, minGap, deep) {
     // Hanswors: he comes (alone the first time), rides alongside a while lobbing pies, and goes; then again later
@@ -129,6 +131,27 @@ function buildCourse(key, len, who, crews) {
         rows.push({ z: zz, items: [{ lane, kind: 'log', span: 1 }, ...ALL.filter((l) => l !== lane).map((l) => ({ lane: l, ...block() }))] });
       }
       z = zz + minGap * (first ? 2.4 : 1.15);
+      return true;
+    }
+    // (5 km) a whirlpool in a side lane: it pulls you in from the middle lane too, so the far lane is the way past, and
+    // across the pull you move slowly (go early); alone each time
+    if (zz >= RIVER.unlock.whirl && (!later.taught.whirl || rng.chance(0.08 + deep * 0.05))) {
+      const first = !later.taught.whirl;
+      later.taught.whirl = true;
+      rows.push({ z: zz, items: [{ lane: rng.pick([0, 2]), kind: 'whirl' }], teach: first ? 'whirl' : undefined });
+      z = zz + minGap * (first ? 2.4 : 1.3);
+      return true;
+    }
+    // (10 km) an elephant cow and her calf wading across from one side: as you come they walk over; where you meet them
+    // they stand in two lanes and the side they came from is open again (read where they're going)
+    if (zz >= RIVER.unlock.ele && (!later.taught.ele || rng.chance(0.07 + deep * 0.04))) {
+      const first = !later.taught.ele;
+      later.taught.ele = true;
+      const from = rng.chance(0.5) ? 1 : -1;
+      // (the cow leads: she ends furthest across; the calf one lane behind her)
+      const cow = from > 0 ? 0 : 2;
+      rows.push({ z: zz, items: [{ lane: cow, kind: 'ele', from }, { lane: 1, kind: 'ele', from, calf: true }], teach: first ? 'ele' : undefined });
+      z = zz + minGap * (first ? 2.6 : 1.4);
       return true;
     }
     // a fallen tree across the river at head height: duck under it (the first one shows you how)
@@ -305,6 +328,7 @@ export function passable(course) {
       if (!hard(it)) continue;
       shut.add(it.lane);
       if (it.drift) shut.add(it.lane + it.drift);
+      if (it.kind === 'whirl') shut.add(1);   // (its pull reaches the middle lane)
     }
     if (shut.size >= RIVER.lanes) return false;
     // (a jump or a duck needs its time too, before and after)

@@ -157,6 +157,36 @@ test('rivier (endless): the river grows harder further down — Hanswors from 1 
   }
 });
 
+test('rivier (endless): a whirlpool from 5 km and an elephant cow with her calf from 10 km, each first one a lesson; still passable', () => {
+  // (the owner, 25 Oct 2026: "And then please add objects at 5000 and 10000 meters")
+  for (let d = 0; d < 12; d++) {
+    const c = rescueCourse(`deep-${d}`, WHO, { endless: true });
+    c.extend(13500);
+    const at = (kind) => c.rows.filter((r) => r.items.some((it) => it.kind === kind));
+    for (const kind of ['whirl', 'ele']) {
+      const rows = at(kind);
+      assert.ok(rows.length >= 2, `${kind}: more than one by 13.5 km (${d})`);
+      assert.ok(rows[0].z >= RIVER.unlock[kind], `${kind} not before ${RIVER.unlock[kind]} m (${rows[0].z})`);
+      assert.ok(rows[0].z < RIVER.unlock[kind] + 900, `${kind} soon after its mark (${rows[0].z})`);
+      assert.equal(rows[0].teach, kind, `the first ${kind} is a lesson`);
+      assert.ok(rows.slice(1).every((r) => r.teach !== kind), `only the first ${kind} teaches`);
+      // (alone in their row: nothing else to dodge at the same time)
+      for (const r of rows) assert.ok(r.items.every((it) => it.kind === kind), `${kind} alone`);
+    }
+    // a whirlpool sits in a side lane (its pull takes the middle too: the far lane is the way past)
+    for (const r of at('whirl')) assert.ok([0, 2].includes(r.items[0].lane));
+    // the cow and her calf come from one side and leave that side's lane open where you meet them
+    for (const r of at('ele')) {
+      const [cow, calf] = r.items;
+      assert.equal(cow.from, calf.from);
+      assert.ok(calf.calf && !cow.calf);
+      const open = [0, 1, 2].find((l) => l !== cow.lane && l !== calf.lane);
+      assert.equal(open, cow.from > 0 ? 2 : 0, 'the side they came from is open');
+    }
+    assert.ok(passable(c), `deep-${d}`);
+  }
+});
+
 test('rivier (endless): what crosses the river crosses both ways — blocks, Blouaap and the crocodiles', () => {
   // (the owner, 25 Oct 2026: "every object goes from left to right")
   const ways = { block: new Set(), monkey: new Set(), croc: new Set() };

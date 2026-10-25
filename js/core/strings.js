@@ -1044,7 +1044,7 @@ export const S = {
   rvMovedIn: (n, crew) => `${n === 1 ? 'Een trek' : `${n} trek`} in by ${crew ? `${crew} se` : 'julle'} Weektoring.`,
   rvTryTomorrow: 'Môre gly jy weer.',
   // (the River run's how-to line while Ons dorp is off: no Weektoring, no week)
-  howToRiverRun: 'Afgly: ná jou Daaglikse Toring duik jou bouer van die top af en gly die rivier af om jou mense te red wat van jou toring afgeval het; Afgly op die kieslys gly enige tyd weer. Swiep links en regs verby blokke, krokodille, seekoeie en Blouaap. Die rivier hou aan tot jou derde stamp (❤️❤️❤️): hoe verder jy gly, hoe hoër op die dag se ranglys. Ná 1 km kom Hanswors met sy pasteie, ná 2 km stompe om oor te spring (swiep op), ná 3 km bome om onder deur te koes (swiep af).',
+  howToRiverRun: 'Afgly: ná jou Daaglikse Toring duik jou bouer van die top af en gly die rivier af om jou mense te red wat van jou toring afgeval het; Afgly op die kieslys gly enige tyd weer. Swiep links en regs verby blokke, krokodille, seekoeie en Blouaap. Die rivier hou aan tot jou derde stamp (❤️❤️❤️): hoe verder jy gly, hoe hoër op die dag se ranglys. Ná 1 km kom Hanswors met sy pasteie, ná 2 km stompe om oor te spring (swiep op), ná 3 km bome om onder deur te koes (swiep af), ná 5 km draaikolke wat jou intrek, en ná 10 km olifante wat oorstap.',
   rvSafeOut: (n) => (n === 1 ? 'Een is veilig op die eiland.' : `Al ${n} is veilig op die eiland.`),
   rvSafeIsland: (n) => `🏝️ ${n} veilig op die eiland!`,
   rvYoursLeft: (n) => `${n === 1 ? 'Een' : n} van joune het weggedryf.`,
@@ -1072,6 +1072,12 @@ export const S = {
   rvBoardNone: 'Nog niemand vandag nie',
   afglyRank: (r, m) => `🏅 #${r} · ${m} m`,
   rvAgain: '🛟 Gly weer',
+  rvTeachWhirl: 'Draaikolk! Hy trek jou in, ook uit die middelbaan: gly vroeg na die ver kant toe.',
+  rvTeachEle: 'Olifante! Hulle stap oor die rivier: gly waar hulle nie gaan wees nie.',
+  rvWhirlShort: 'Draaikolk!',
+  rvEleShort: 'Olifante!',
+  rvWhirlKo: 'Ingesuig!',
+  rvEleKo: 'Olifant!',
   // (1.21) Saam gly: two friends on the same river at once
   saam: 'Saam gly',
   saamMenuSub: 'Teen ’n vriend',

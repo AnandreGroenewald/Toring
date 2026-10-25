@@ -775,6 +775,23 @@ function createRide(K, d) {
   let hearts = RIVER.hearts;
   // (the endless river's later things: a jump over a log, a duck under a fallen tree, Hanswors's pies)
   const hz = createHazards(bendMaterial, d.models || {});
+  hz.tint?.(world.fxTint);
+  // (the elephants come from 10 km: their model is fetched on the way, from 8 km, and its shaders made ready at once)
+  let eleAsked = false;
+  function askElephant() {
+    if (eleAsked || !endless) return;
+    eleAsked = true;
+    loadModels(['elephant']).then((m) => {
+      if (!alive || !m?.elephant) return;
+      if (d.models) d.models.elephant = m.elephant;
+      const tmp = beasts.elephant({ from: 1 });
+      tmp.position.set(0, -40, -60);
+      scene.add(tmp);
+      (stage.renderer.compileAsync ? stage.renderer.compileAsync(scene, camera) : Promise.resolve(stage.renderer.compile(scene, camera))).catch(() => {}).finally(() => {
+        scene.remove(tmp);
+      });
+    }).catch(() => {});
+  }
   const JUMP_S = 0.62;   // s in the air...
   const JUMP_H = 1.45;   // ...this high at the top
   const DUCK_S = 0.8;    // s ducked
@@ -1679,6 +1696,8 @@ function createRide(K, d) {
         else if (it.kind === 'log') obj = hz.log(it.span || 1);
         else if (it.kind === 'branch') obj = hz.branch(!!it.flip);
         else if (it.kind === 'clown') obj = hz.clown(it.side || 1);
+        else if (it.kind === 'whirl') obj = hz.whirl();
+        else if (it.kind === 'ele') obj = beasts.elephant({ from: it.from || 1, calf: !!it.calf });
         else if (it.kind === 'monkey') {
           const blk = things.floating({ ...it, skin: d.skin || 'kleur', spin: 0 });
           obj = beasts.monkeyOn(blk, Math.sign(-(it.drift || 1)), blk.userData.top);
@@ -1702,6 +1721,53 @@ function createRide(K, d) {
     return { x: (_v.x * 0.5 + 0.5) * host.clientWidth, y: (-_v.y * 0.5 + 0.5) * host.clientHeight };
   }
 
+  // ---------------------------------------------------------------------------------------------- whirlpools, elephants (1.21.3)
+  let pullX = 0;          // (the whirlpools' pull on your lane's middle this frame, m across)
+  let pullNext = 0;
+  /**
+   * A whirlpool: from 26 m before it, it pulls you toward its middle, harder the nearer you are (the middle lane too;
+   * the far lane hardly); in its hollow you're spun round: a knock.
+   */
+  function whirlStep(l, ahead) {
+    const wx = l.x;
+    if (phase === 'run' && ahead < 26 && ahead > -4) {
+      const near = clamp((26 - ahead) / 18, 0, 1) * clamp((ahead + 4) / 4, 0, 1);
+      const dx = wx - x;
+      const fall = clamp(1 - (Math.abs(dx) - 1.2) / 5.4, 0, 1);
+      pullNext += Math.sign(dx) * 3.3 * near * fall;
+      if (!l.done && Math.abs(ahead) < 2.4 && Math.abs(dx) < 2.1) {
+        l.done = true;
+        if (graceT <= 0) knock(l);
+      }
+    }
+    // (its foam and a little spray round its rim)
+    if (ahead < 70 && ahead > -6 && Math.random() < 0.35) {
+      const a = t * 3 + Math.random() * 6.28;
+      things.emit(wx + Math.cos(a) * 3.4, 0.15, -ahead + Math.sin(a) * 3.4, 1, 0.5, 1.2);
+    }
+  }
+  /**
+   * The whirlpool's and the elephants' first coming: the river slows while they're near and the word shows (not in a
+   * duel: the friend's river doesn't slow); later ones get a quick word.
+   */
+  let soft = null;   // { l, kind }
+  function cueLater(l, ahead) {
+    const k = l.it.kind;
+    const sp = speedAt(dist, len);
+    if (!taught[k] && !l.taught && ahead < sp * 2.4 && ahead > 0 && !(k === 'ele' && l.it.calf)) {
+      l.taught = true;
+      if (!duel) soft = { l, kind: k };
+      hint(k === 'whirl' ? S.rvTeachWhirl : S.rvTeachEle);
+      teachDone(k);
+    } else if (taught[k] && !l.hinted && ahead < sp * 1.8 && ahead > sp * 0.8 && !(k === 'ele' && l.it.calf)) {
+      l.hinted = true;
+      pop(k === 'whirl' ? S.rvWhirlShort : S.rvEleShort, 900);
+    }
+    if (soft?.l === l && ahead < -2) {
+      soft = null;
+      hint(null);
+    }
+  }
   /** A log or a tree coming: the first one ever stops the river nearly still and shows you; later ones get a quick word. */
   function teach(l, ahead) {
     const k = l.it.kind === 'log' ? 'jump' : 'duck';
@@ -1955,7 +2021,7 @@ function createRide(K, d) {
       setCount();
       pop(S.rvSlipped(CAST[back]?.name || ''), 1400);
     } else {
-      pop(({ croc: S.rvCroc, hippo: S.rvHippo, monkey: S.rvMonkey })[l.it.kind] || S.rvOuch, 1000);
+      pop(({ croc: S.rvCroc, hippo: S.rvHippo, monkey: S.rvMonkey, whirl: S.rvWhirlKo, ele: S.rvEleKo })[l.it.kind] || S.rvOuch, 1000);
     }
   }
   /** The third knock: he goes head over heels into the river, and the ride is over (the card after a moment). */
@@ -1977,7 +2043,7 @@ function createRide(K, d) {
     hurtEl.classList.add('on');
     setTimeout(() => hurtEl.classList.remove('on'), 220);
     hint(null);
-    pop(({ croc: S.rvCroc, hippo: S.rvHippo, monkey: S.rvMonkey })[l?.it?.kind] || S.rvWipeout, 1300);
+    pop(({ croc: S.rvCroc, hippo: S.rvHippo, monkey: S.rvMonkey, whirl: S.rvWhirlKo, ele: S.rvEleKo })[l?.it?.kind] || S.rvWipeout, 1300);
   }
   function grab(l) {
     l.done = true;
@@ -2013,11 +2079,13 @@ function createRide(K, d) {
         if (l.it.kind === 'branch' && duckT < 0) duck();
       }
     }
-    if (Math.abs(laneX(lane) - x) > 0.3) return;   // (tests' autopilot: one glide at a time)
+    if (Math.abs(laneX(lane) + pullX - x) > 0.3) return;   // (tests' autopilot: one glide at a time)
     const ahead = live.filter((l) => !l.done && l.z > dist + 1 && l.z < dist + 22);
     // (a pie coming down in a lane: that lane is out)
     const pieIn = (ln) => pies.some((pp) => Math.abs(pp.tx - laneX(ln)) < 1 && pp.t > 0.15);
-    const blocked = (ln) => pieIn(ln) || ahead.some((l) => !['person', 'log', 'branch', 'clown'].includes(l.it.kind) && (l.it.lane === ln || l.it.lane + l.drift === ln) && l.z < dist + 18);
+    const whirls = live.filter((l) => !l.done && l.it.kind === 'whirl' && l.z > dist - 3 && l.z < dist + 45);
+    const eles = live.filter((l) => l.it.kind === 'ele' && l.z > dist - 3 && l.z < dist + 45);
+    const blocked = (ln) => pieIn(ln) || whirls.some((l) => l.it.lane === ln || ln === 1) || eles.some((l) => l.it.lane === ln) || ahead.some((l) => !['person', 'log', 'branch', 'clown', 'whirl'].includes(l.it.kind) && (l.it.lane === ln || l.it.lane + l.drift === ln) && l.z < dist + 18);
     const want = ahead.find((l) => l.it.kind === 'person' && !blocked(l.it.lane));
     let target = want ? want.it.lane : lane;
     if (blocked(target)) target = [lane, lane - 1, lane + 1, 0, 1, 2].find((ln) => ln >= 0 && ln < 3 && !blocked(ln)) ?? lane;
@@ -2344,7 +2412,7 @@ function createRide(K, d) {
     // the lane: the spring glides him across (small steps: steady on a slow phone too)
     for (let left = dt; left > 1e-6;) {
       const h = Math.min(left, 1 / 120);
-      aimX += (laneX(lane) - aimX) * (1 - Math.exp(-h * 20));
+      aimX += (laneX(lane) + pullX - aimX) * (1 - Math.exp(-h * 20));
       vx += (LANE_W0 * LANE_W0 * (aimX - x) - 2 * LANE_Z * LANE_W0 * vx) * h;
       x += vx * h;
       left -= h;
@@ -2400,11 +2468,24 @@ function createRide(K, d) {
     if (phase === 'run' && Math.random() < 0.85) things.emit(x - leanV * 0.3, 0.12, 0.9, 1 + Math.round(rapK * 2), 0.6 + rapK, 1.4 + Math.abs(leanV) * 2 + rapK * 1.5);
 
     if (phase !== 'zoo') spawn();
+    if (endless && dist > 8000) askElephant();
+    pullNext = 0;
     for (const l of live) {
       const ahead = phase === 'zoo' ? 12 - (t % 14) : l.z - dist;
       // a drifting block crosses as you come (it's in its own lane when it's level with you)
       let lx = l.zooX ?? laneX(l.it.lane);
       if (l.drift) lx = laneX(l.it.lane) + l.drift * RIVER.laneW * ease(clamp((ahead - 4) / 46, 0, 1));
+      // (the cow and her calf wade in from the side they came from as you come: where you meet them, they stand in
+      // their lanes; the calf starts nearer the bank and a moment later)
+      if (l.it.kind === 'ele') {
+        const from = l.it.from || 1;
+        const start = from * (l.it.calf ? 7.8 : 5.6);
+        // (they're across by 18 m before you, and stand: the way past shows in time to take it)
+        const p = ease(clamp((72 - ahead) / 54, 0, 1));
+        const pk = l.it.calf ? clamp((p - 0.22) / 0.78, 0, 1) : p;
+        lx = start + (laneX(l.it.lane) - start) * pk;
+        l.obj.userData.walking = pk > 0.001 && pk < 0.999;
+      }
       l.x = lx;
       const u = l.obj.userData;
       l.obj.position.set(lx, u.kind === 'croc' || u.kind === 'hippo' ? 0 : Math.sin(t * 1.9 + (u.phase || 0)) * 0.08, phase === 'zoo' ? -12 : -ahead);
@@ -2415,6 +2496,16 @@ function createRide(K, d) {
       if (u.arm && u.kind !== 'clown') u.arm.rotation.z = -0.4 + Math.sin(t * 9 + u.phase) * 0.7;
       u.update?.(t, ahead, dt);
       if (phase === 'run') cues(l, ahead);
+      if (u.kind === 'whirl') {
+        l.obj.position.y = 0;
+        if (phase === 'run') cueLater(l, ahead);
+        whirlStep(l, ahead);
+        continue;
+      }
+      if (u.kind === 'ele') {
+        l.obj.position.y = 0;
+        if (phase === 'run') cueLater(l, ahead);
+      }
       if (u.kind === 'clown') {
         clownStep(l, ahead, dt);
         continue;
@@ -2455,6 +2546,8 @@ function createRide(K, d) {
         }
       }
     }
+    // (the whirlpools' pull, eased: it grows on you and lets go)
+    pullX += (pullNext - pullX) * (1 - Math.exp(-dt * 6));
     for (let i = live.length - 1; i >= 0; i--) {
       if (live[i].z < dist - BEHIND) {
         despawn(live[i]);
@@ -2584,6 +2677,11 @@ function createRide(K, d) {
       const a = lesson.l.z - dist;
       const ideal = speedAt(dist, len) * (lesson.kind === 'jump' ? 0.3 : 0.16) + 1;
       want = a <= ideal ? 0.015 : Math.min(0.45, 0.015 + 0.45 * (a - ideal) / (ideal * 2.5));
+    }
+    // (the first whirlpool, the first elephants: the river slows while they're near, so you see what they do)
+    if (soft) {
+      const a = soft.l.z - dist;
+      if (a > 3 && a < 55) want = Math.min(want, 0.42);
     }
     timeK += (want - timeK) * Math.min(1, dt * (want < timeK ? 7 : 14));
     if (!paused || duel) step(dt * timeK);   // (Saam gly: the friend's river doesn't stop, so neither does yours)
@@ -2726,7 +2824,7 @@ function createRide(K, d) {
     try {
       const blk = things.floating({ shape: 'cube', skin, color: 0, spin: 0 });
       const kinds = [beasts.croc(1), beasts.hippo(), things.rock(), things.person(who[0] || 'boer', 0), things.floating({ shape: 'plank', skin, color: 1 }), beasts.monkeyOn(blk, 1, blk.userData.top)];
-      if (endless) kinds.push(hz.log(1), hz.log(3), hz.branch(), hz.clown(1), hz.pie());
+      if (endless) kinds.push(hz.log(1), hz.log(3), hz.branch(), hz.clown(1), hz.pie(), hz.whirl());
       kinds.forEach((o, i) => { o.position.set(i * 3 - 8, 0, -30); tmp.add(o); });
       if (raid) {
         const jm = new THREE.Mesh(jetGeometry(new THREE.Vector3(0, 1, -5), new THREE.Vector3(0, 5, -40), 1), jetMat);
@@ -2841,6 +2939,7 @@ function createRide(K, d) {
     resume: () => setPaused(false),
     /** For tests: where the ride stands. */
     state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, endless, hearts, airY: Math.round(airY * 100) / 100, duckK: Math.round(duckK * 100) / 100, timeK: Math.round(timeK * 100) / 100, lesson: lesson && !lesson.done ? lesson.kind : null, pies: pies.length, clowns: live.filter((l) => l.obj.userData.kind === 'clown').map((l) => ({ z: Math.round(l.z * 10) / 10, x: Math.round(l.obj.position.x * 100) / 100, phase: l.cs?.phase, foot: Math.round((world.footAt?.(l.obj.userData.side || 1, l.z) ?? 0) * 100) / 100 })), pieAt: pies.map((pp) => { const v = pp.mesh.getWorldPosition(new THREE.Vector3()).project(camera); return { t: Math.round(pp.t * 100) / 100, x: Math.round(v.x * 100) / 100, y: Math.round(v.y * 100) / 100, z: Math.round(v.z * 1000) / 1000 }; }), headY: rider.headY?.(), lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, lastKnock, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })),
+      deep: live.filter((l) => l.it.kind === 'whirl' || l.it.kind === 'ele').map((l) => ({ k: l.it.kind, calf: !!l.it.calf, lane: l.it.lane, x: Math.round(l.x * 10) / 10, a: Math.round((l.z - dist) * 10) / 10, done: l.done, model: !!d.models?.elephant })), pullX: Math.round(pullX * 100) / 100, hint: hintEl.textContent, soft: !!soft,
       duel: fr ? { seen: fr.seen, d: Math.round(fr.sd * 10) / 10, x: Math.round(fr.sx * 100) / 100, out: fr.out, endM: fr.endM, gone: fr.gone, watching, counting, goAt, hits, shown: fr.rider.group.visible, tag: tagText, round: duel.round } : null }),
     autopilot(on) { pilotOn = !!on; },
     /** For tests (Saturday): where on screen (host px) the tallest tower stands at a share of its height, or null. */
