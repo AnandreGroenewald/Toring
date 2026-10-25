@@ -659,9 +659,11 @@ function createRide(K, d) {
   const riderFoam = things.foam(2.6);
   riderFoam.scale.set(1.9, 1, 3.6);
   scene.add(riderFoam);
-  // the lanes' marks: seams of white water between the lanes and along their edges (`laneMarks` 'foam', the default), or
-  // floating pipes along both sides ('pipes': for the owner's pick), or none
-  const marks = d.laneMarks || 'foam';
+  // the lanes' edges (the owner, 25 Oct 2026: "Its just for the outter lines, where the lanes end, not for every lane ...
+  // also not inbetween the canyons just if you exit a canyon"): floating pipes along both sides where the river opens
+  // out (the pool at its head, the lake by your island), where the canyon walls no longer show where it ends ('pipes',
+  // the default); 'foam' = white-water seams between and beside the lanes everywhere (1.21.0); 'none'
+  const marks = d.laneMarks || 'pipes';
   world.setLanes(RIVER.laneW / 2, RIVER.laneW * 1.5, marks === 'foam' ? 1 : 0);
   const PIPE = { len: 5.6, every: 6, r: 0.22, x: RIVER.laneW * 1.5 + 0.45, n: 40 };
   let pipes = null;
@@ -684,15 +686,31 @@ function createRide(K, d) {
     scene.add(pipes);
   }
   const _pm = new THREE.Matrix4();
-  /** The pipes float along both sides, riding on the swell, joint to joint (in course metres: they pass at the river's pace). */
+  const _hide = new THREE.Matrix4().makeScale(0, 0, 0);
+  /**
+   * The pipes float along both sides, riding on the swell, joint to joint (in course metres: they pass at the river's
+   * pace) — only on open water; a gap where something drifts in from that side (a monkey's block comes through it).
+   */
   function stepPipes() {
     const first = Math.floor((dist - 30) / PIPE.every);
+    const gaps = [];
+    for (const l of live) {
+      if (!l.drift || l.done) continue;
+      const from = laneX(l.it.lane) + l.drift * RIVER.laneW;
+      if (Math.abs(from) > PIPE.x - 0.6) gaps.push({ z: l.z, side: Math.sign(from) });
+    }
     for (let j = 0; j < PIPE.n; j++) {
-      const zc = (first + j) * PIPE.every;
+      const zc = (first + j) * PIPE.every + PIPE.every / 2;
+      const open = world.halfAt(zc) > BANK.half + 6;
       for (let sd = 0; sd < 2; sd++) {
+        const side = sd ? 1 : -1;
+        if (!open || gaps.some((g) => g.side === side && Math.abs(g.z - zc) < PIPE.every / 2 + 1.6)) {
+          pipes.setMatrixAt(j * 2 + sd, _hide);
+          continue;
+        }
         const bob = Math.sin(t * 1.6 + zc * 0.7 + sd * 2) * 0.03;
         _pm.makeRotationZ(Math.sin(t * 1.1 + zc) * 0.05);
-        _pm.setPosition(sd ? PIPE.x : -PIPE.x, 0.07 + bob, -(zc + PIPE.every / 2 - dist));
+        _pm.setPosition(side * PIPE.x, 0.07 + bob, -(zc - dist));
         pipes.setMatrixAt(j * 2 + sd, _pm);
       }
     }
