@@ -728,7 +728,7 @@ const WATER_FRAG = `uniform float uT; uniform sampler2D uNoise; uniform vec3 uSu
 uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSkyRefl; uniform vec3 uFoam; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar;
 uniform float uHalf; uniform float uLakeHalf; uniform float uLakeFrom; uniform float uLakeTo; uniform float uDetail; uniform vec2 uRapids; uniform float uPoolTo;
 uniform vec3 uWall; uniform vec2 uRider; uniform sampler2D uRefl; uniform float uReflK;
-uniform vec3 uLampPos; uniform vec3 uLampDir; uniform vec3 uLampCol; uniform vec2 uLampCos;
+uniform vec3 uLampPos; uniform vec3 uLampDir; uniform vec3 uLampCol; uniform vec2 uLampCos; uniform vec3 uLanes;
 varying vec3 vWorld; varying vec2 vRiver; varying float vAhead; varying vec4 vRefl;
 float h(vec2 p) {
   // the surface's height: long swells across, ripples and chop running with the current (stretched along it)
@@ -778,6 +778,16 @@ void main() {
   float lace = smoothstep(0.42, 0.72, texture2D(uNoise, vec2(p.x * 1.3, p.y * 0.16 - uT * 0.5)).g * 0.6 + h0 * 0.4);
   float bankFoam = smoothstep(0.95, 1.0, edge) * (1.0 - smoothstep(1.0, 1.06, edge)) * lace * 0.6;
   col = mix(col, uFoam, clamp(foamLine * smoothstep(0.3, 0.6, h0) + bankFoam, 0.0, 0.9));
+  // the lanes: seams of white water between them and along their outer edges (the current running in lines), broken
+  // into streaks and bubbles that flow with the river, so you always see where the three lanes are
+  if (uLanes.z > 0.0) {
+    float ax = abs(p.x);
+    float wob = (texture2D(uNoise, vec2(p.y * 0.013, 0.3)).r - 0.5) * 0.5;
+    float seam = max(1.0 - smoothstep(0.04, 0.24, abs(ax + wob * 0.4 - uLanes.x)), 0.6 * (1.0 - smoothstep(0.06, 0.3, abs(ax + wob - uLanes.y))));
+    float streak2 = smoothstep(0.42, 0.7, texture2D(uNoise, vec2(p.x * 0.3 + 0.37, p.y * 0.055 - uT * 0.35)).g);
+    float fizz = smoothstep(0.52, 0.8, texture2D(uNoise, vec2(p.x * 2.7, p.y * 0.42 - uT * 1.3)).r);
+    col = mix(col, uFoam, clamp(seam * (0.08 + 0.55 * streak2 + 0.4 * fizz) * uLanes.z, 0.0, 0.8));
+  }
   // his wake: two lines of foam opening out behind the board, and the churned water right behind it
   float back = uRider.y - p.y;
   if (back > 0.2 && back < 9.0) {
@@ -911,6 +921,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       uRefl: { value: null }, uReflK: { value: 0 }, uReflMat: { value: new THREE.Matrix4() },
       uLampPos: { value: new THREE.Vector3() }, uLampDir: { value: new THREE.Vector3(0, 0, -1) }, uLampCol: { value: new THREE.Color(0, 0, 0) },
       uLampCos: { value: new THREE.Vector2(0.9, 0.97) },
+      uLanes: { value: new THREE.Vector3(0, 0, 0) },
     },
     vertexShader: WATER_VERT, fragmentShader: WATER_FRAG,
   });
@@ -1537,6 +1548,10 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     /** White water from course z `from` to `to`. */
     setRapids(from, to) {
       water.uniforms.uRapids.value.set(from, to);
+    },
+    /** The lanes' white-water seams: between the lanes at ±`div` m, along their outer edges at ±`outer` m (`k` 0 = none). */
+    setLanes(div, outer, k = 1) {
+      water.uniforms.uLanes.value.set(div, outer, k);
     },
     /**
      * A night: the moon's path on the water turns with the camera (`yaw` rad, + = looking right), so the moonlit water

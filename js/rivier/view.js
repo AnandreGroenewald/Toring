@@ -644,6 +644,45 @@ function createRide(K, d) {
   const riderFoam = things.foam(2.6);
   riderFoam.scale.set(1.9, 1, 3.6);
   scene.add(riderFoam);
+  // the lanes' marks: seams of white water between the lanes and along their edges (`laneMarks` 'foam', the default), or
+  // floating pipes along both sides ('pipes': for the owner's pick), or none
+  const marks = d.laneMarks || 'foam';
+  world.setLanes(RIVER.laneW / 2, RIVER.laneW * 1.5, marks === 'foam' ? 1 : 0);
+  const PIPE = { len: 5.6, every: 6, r: 0.22, x: RIVER.laneW * 1.5 + 0.45, n: 40 };
+  let pipes = null;
+  if (marks === 'pipes') {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 256;
+    const g = c.getContext('2d');
+    g.fillStyle = '#ff7a1a';
+    g.fillRect(0, 0, 64, 256);
+    g.fillStyle = '#fbfbf5';
+    for (let k = 0; k < 4; k++) g.fillRect(0, k * 64 + 40, 64, 18);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const geo = new THREE.CylinderGeometry(PIPE.r, PIPE.r, PIPE.len, 14, 1);
+    geo.rotateX(Math.PI / 2);
+    pipes = new THREE.InstancedMesh(geo, bendMaterial(new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4, metalness: 0.05 })), PIPE.n * 2);
+    pipes.frustumCulled = false;
+    pipes.castShadow = true;
+    scene.add(pipes);
+  }
+  const _pm = new THREE.Matrix4();
+  /** The pipes float along both sides, riding on the swell, joint to joint (in course metres: they pass at the river's pace). */
+  function stepPipes() {
+    const first = Math.floor((dist - 30) / PIPE.every);
+    for (let j = 0; j < PIPE.n; j++) {
+      const zc = (first + j) * PIPE.every;
+      for (let sd = 0; sd < 2; sd++) {
+        const bob = Math.sin(t * 1.6 + zc * 0.7 + sd * 2) * 0.03;
+        _pm.makeRotationZ(Math.sin(t * 1.1 + zc) * 0.05);
+        _pm.setPosition(sd ? PIPE.x : -PIPE.x, 0.07 + bob, -(zc + PIPE.every / 2 - dist));
+        pipes.setMatrixAt(j * 2 + sd, _pm);
+      }
+    }
+    pipes.instanceMatrix.needsUpdate = true;
+  }
   // a night: the lamp on his hard hat, a warm beam down the river (what comes at you is lit, and the water under it), and
   // its glow round his head
   const lamp = world.night ? new THREE.SpotLight('#ffdcaa', 30, 70, 0.62, 0.55, 1) : null;
@@ -2164,6 +2203,7 @@ function createRide(K, d) {
       if (metresEl.textContent !== String(m)) metresEl.textContent = fmtInt(m);
     }
     world.update(dist, t, phase === 'dive' ? null : x);
+    if (pipes) stepPipes();
     // (the shadows follow the action: your tower while you dive, the river just ahead while you ride)
     if (phase === 'dive' && !quick) world.setShadowFocus(0, START_Z * 0.5, 46);
     else world.setShadowFocus(x * 0.6, raid ? -40 : -24, raid ? 60 : 40);
@@ -2385,6 +2425,7 @@ function createRide(K, d) {
     pieShadowGeo.dispose();
     pieShadowMat.dispose();
     pieShadowTex.dispose();
+    if (pipes) { pipes.geometry.dispose(); pipes.material.map.dispose(); pipes.material.dispose(); }
     if (lampGlow) { lampGlow.material.map.dispose(); lampGlow.material.dispose(); lamp.dispose(); }
     hz.dispose();
     fwRide?.dispose();
