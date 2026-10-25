@@ -8,7 +8,11 @@ import { cleanDuelMsg, duelWinner, duelSeed, createRiverDuel } from '../js/rivie
 import { connectSaam, seekSaam, saamKey, FAIL_MS } from '../js/rivier/saamNet.js';
 
 test('a friend’s message is cleaned: numbers clamped, unknown kinds and bad seeds dropped', () => {
-  assert.deepEqual(cleanDuelMsg({ t: 'st', n: 0, d: 120.5, x: 99, y: -3, k: 2, l: -7, h: 2.9 }), { t: 'st', n: 0, d: 120.5, x: 8, y: 0, k: 1, l: -1, h: 2 });
+  assert.deepEqual(cleanDuelMsg({ t: 'st', n: 0, d: 120.5, x: 99, y: -3, k: 2, l: -7, h: 2.9 }), { t: 'st', n: 0, d: 120.5, x: 8, a: NaN, y: 0, k: 1, l: -1, h: 2 });
+  // (1.21.4: the lane it glides to, clamped; an older phone sends none)
+  assert.equal(cleanDuelMsg({ t: 'st', n: 0, d: 1, x: 0, a: -3.4 }).a, -3.4);
+  assert.equal(cleanDuelMsg({ t: 'st', n: 0, d: 1, x: 0, a: 50 }).a, 8);
+  assert.ok(Number.isNaN(cleanDuelMsg({ t: 'st', n: 0, d: 1, x: 0, a: 'x' }).a));
   assert.equal(cleanDuelMsg({ t: 'st', n: -1, d: 1 }), null);
   assert.equal(cleanDuelMsg({ t: 'st', n: 0, d: NaN }).d, 0);
   assert.equal(cleanDuelMsg({ t: 'go', n: 0, seed: '../../evil' }), null);

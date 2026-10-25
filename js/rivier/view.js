@@ -1328,12 +1328,17 @@ function createRide(K, d) {
   const fr = duel ? {
     rider: createRider(bendMaterial, d.models?.builder || null, { swap: true }), foam: things.foam(2.6), seen: false, d: 0, sd: 0, at: 0,
     tx: laneX(duel.host ? 2 : 0), sx: laneX(duel.host ? 2 : 0), y: 0, k: 0, l: 0, h: RIVER.hearts, out: false, outT: 0, endM: 0, gone: false, blinkT: 0, blinkOn: false,
-    samples: [], off: 0, away: false,
+    samples: [], off: 0, away: false, md: 0, dodge: null, pj: null, mute: null, svx: 0, tvx: 0, ptx: laneX(duel.host ? 2 : 0),
   } : null;
   let meLost = false;     // (our own connection went: it comes back by itself)
   let watching = false;   // (you're out and they ride on: the camera goes down the river with them)
   let sentEnd = -1;       // (the metres your 'end' said)
   let sendT = 0;
+  let sentAt = 0;   // (performance.now() of the last 'st': a swipe sends at once, but never two within 70 ms (the room's 20 a second))
+  /** A swipe, a jump or a duck: tell the other phone now, not at the next tick. */
+  function sendSoon() {
+    if (duel) sendT = Math.min(sendT, Math.max(0, 0.07 - (performance.now() - sentAt) / 1000));
+  }
   let goSaid = -1;
   let counting = false;   // (both rivers are up: the count runs)
   let goAt = 0;           // (when GLY! came: the tests check both phones start together)
@@ -1374,10 +1379,11 @@ function createRide(K, d) {
         fr.d = m.d;
         fr.h = m.h;
         // (their lane, jump, duck and lean, smoothed: drawn a moment behind, between the last two that came)
-        fr.samples.push({ at: performance.now(), x: m.x, y: m.y, k: m.k, l: m.l });
+        fr.samples.push({ at: performance.now(), d: m.d, x: m.x, a: m.a, y: m.y, k: m.k, l: m.l });
         if (fr.samples.length > 12) fr.samples.shift();
       } else if (m.t === 'ko') {
         fr.blinkT = 1;
+        wayLog.kos++;
         if (phase === 'run') pop(S.saamKo(fname), 800);
       } else if (m.t === 'end') {
         if (!fr.out) {
@@ -1406,6 +1412,125 @@ function createRide(K, d) {
       }
     });
   }
+  // (what you see of them is a moment old: the room's relay (about 0.18 s from here) and SMOOTH_MS. Level with you, a
+  // dodge they made at the last moment would show as a ride straight into the rock (the owner, 25 Oct 2026: "It looks
+  // like the other user is skiing into the objects"). So the board you see already takes the way past: a rock or a block
+  // in their lane within SEE_S of them sends it to the free lane nearest them, it jumps the log and ducks the tree in
+  // time; their own moves take over once those are behind them. A real knock still shows: their 'ko' makes them blink.)
+  const SEE_S = 0.4;
+  const wayBlocks = (l) => !['person', 'coins', 'log', 'branch', 'clown'].includes(l.it.kind);
+  const wayReach = (l) => (l.it.kind === 'whirl' ? 2.1 : (l.obj.userData.w || 2.4) / 2 + HIT_R) + 0.2;
+  /** Where to draw them this frame: { x, y (a jump), k (a duck), l (lean) }. */
+  function friendWay(dt) {
+    const real = { x: fr.tx, y: fr.y, k: fr.k, l: fr.l };
+    if (phase === 'count' || fr.out || !fr.seen || d.noFriendWay) {
+      fr.dodge = fr.pj = fr.mute = null;
+      return real;
+    }
+    const D = fr.sd;
+    const sp = speedAt(D, len) * (1 + 0.24 * rapK);
+    const look = sp * SEE_S + 2;
+    const free = (ln) => !live.some((o) => wayBlocks(o) && o.z - D > -2 && o.z - D < look + 8 && Math.abs(o.x - laneX(ln)) < wayReach(o));
+    // (theirs again once their own board is there too; or the rock is past them and their own move isn't on its way
+    // there: never back towards it first)
+    fr.tvx += ((fr.tx - fr.ptx) / Math.max(dt, 1e-3) - fr.tvx) * (1 - Math.exp(-dt * 12));
+    fr.ptx = fr.tx;
+    const dg = fr.dodge;
+    if (dg) {
+      dg.t += dt;
+      const there = Math.abs(fr.tx - dg.x) < 0.6;
+      const past = dg.l.z - D < -((dg.l.obj.userData.d || 1.4) / 2 + 1);
+      const coming = Math.abs(fr.tvx) > 0.5 && Math.sign(fr.tvx) === Math.sign(dg.x - fr.tx);
+      if (there || (past && !coming) || dg.t > 1.6) {
+        // (tests: did they really go round it that side?)
+        if (Math.abs(fr.tx - dg.l.x) >= wayReach(dg.l) && Math.sign(fr.tx - dg.l.x) !== Math.sign(dg.x - dg.l.x)) wayLog.wrong++;
+        fr.dodge = null;
+      }
+    }
+    if (!fr.dodge) {
+      const hit = live.find((l) => wayBlocks(l) && l.z - D > -0.5 && l.z - D < look && Math.abs(l.x - fr.tx) < wayReach(l));
+      if (hit) {
+        // (already on their way somewhere: that way; else where a swimmer or coins are coming (what people go for);
+        // else the nearest free lane, the middle first)
+        const going = Math.abs(fr.tvx) > 0.5 ? Math.sign(fr.tvx) : 0;
+        const lure = (ln) => live.some((o) => (o.it.kind === 'person' || (o.it.kind === 'coins' && !o.done)) && o.z - D > 0 && o.z - D < look + 25 && Math.abs(o.x - laneX(ln)) < 1.2);
+        const ln = [0, 1, 2].sort((a, b) => (going ? (Math.sign(laneX(b) - fr.tx) === going) - (Math.sign(laneX(a) - fr.tx) === going) : 0) || lure(b) - lure(a) || Math.abs(laneX(a) - fr.tx) - Math.abs(laneX(b) - fr.tx) || Math.abs(a - 1) - Math.abs(b - 1)).find(free);
+        if (ln !== undefined) {
+          fr.dodge = { l: hit, x: laneX(ln), t: 0 };
+          wayLog.guesses++;
+        }
+      }
+    }
+    const wx = fr.dodge ? fr.dodge.x : fr.tx;
+    // (a log or a tree across their way: up, or down, as it comes; their own jump for it (a moment later) is left out)
+    if (!fr.pj) {
+      const lg = live.find((l) => (l.it.kind === 'log' || l.it.kind === 'branch') && l.z - D > 0 && l.z - D < sp * 0.3 + 0.5 && Math.abs(l.x - wx) < (l.obj.userData.w || 2.4) / 2 + HIT_R * 0.4 + 0.3 && fr.mute?.z !== l.z);
+      if (lg) {
+        fr.pj = { jump: lg.it.kind === 'log', t: 0 };
+        // (their own, a moment later, is left out until they're well past it: no second jump, no drop mid-air)
+        fr.mute = { jump: fr.pj.jump, z: lg.z, end: lg.z + (fr.pj.jump ? 9 : 12) };
+      }
+    }
+    let y = fr.y;
+    let k = fr.k;
+    if (fr.mute && !fr.pj && fr.md > fr.mute.end) fr.mute = null;
+    if (fr.mute) {
+      if (fr.mute.jump) y = 0;
+      else k = 0;
+    }
+    if (fr.pj) {
+      const pj = fr.pj;
+      pj.t += dt;
+      if (pj.jump) {
+        const s = Math.min(1, pj.t / JUMP_S);
+        y = JUMP_H * 4 * s * (1 - s);
+      } else {
+        k = Math.min(1, pj.t / 0.09, Math.max(0, DUCK_S - pj.t) / 0.14);
+      }
+      if (pj.t >= (pj.jump ? JUMP_S : DUCK_S)) fr.pj = null;
+    }
+    const l = fr.dodge ? clamp(fr.svx / 13, -1, 1) : fr.l;
+    return { x: wx, y, k, l };
+  }
+  // (tests: their board on your screen against the river: a rock under it, a log or a tree it didn't clear (each thing
+  // once); and frames where you or they are off the screen's edge)
+  const wayLog = { clips: 0, kos: 0, offMe: 0, offFr: 0, frames: 0, seen: new Set(), kinds: [], maxV: 0, flips: 0, guesses: 0, wrong: 0, dir: 0, segX: 0, segT: 0, prev: null };
+  const _wc = new THREE.Vector3();
+  function wayCheck(way) {
+    const D = fr.sd;
+    for (const l of live) {
+      const a = l.z - D;
+      const u = l.obj.userData;
+      let clip = false;
+      if (l.it.kind === 'log' || l.it.kind === 'branch') {
+        clip = Math.abs(a) < (u.d || 1) / 2 + 0.3 && Math.abs(l.x - fr.sx) < (u.w || 2.4) / 2 + HIT_R * 0.4 - 0.2 && !(l.it.kind === 'log' ? way.y > LOG_TOP - 0.2 : way.k > 0.5);
+      } else if (wayBlocks(l) && l.it.kind !== 'whirl') {
+        clip = Math.abs(a) < (u.d || 1.4) / 2 + 0.3 && Math.abs(l.x - fr.sx) < (u.w || 2.4) / 2 + HIT_R - 0.3 && (l.it.kind !== 'hippo' || u.surfaced?.());
+      }
+      if (clip && !wayLog.seen.has(l)) {
+        wayLog.seen.add(l);
+        wayLog.clips++;
+        wayLog.kinds.push(`${l.it.kind}@${Math.round(l.z)}${fr.dodge ? ' dodging' : ''}`);
+      }
+    }
+    wayLog.frames++;
+    // (their board's own sideways speed; a swing over a metre one way and straight back over a metre the other)
+    wayLog.maxV = Math.max(wayLog.maxV, Math.abs(fr.svx));
+    const dir = Math.abs(fr.svx) > 1.5 ? Math.sign(fr.svx) : 0;
+    if (dir && wayLog.dir && dir !== wayLog.dir) {
+      const seg = { len: Math.abs(fr.sx - wayLog.segX), dur: t - wayLog.segT };
+      if (wayLog.prev && wayLog.prev.len > 1 && seg.len > 1 && seg.dur < 0.6) wayLog.flips++;
+      wayLog.prev = seg;
+      wayLog.segX = fr.sx;
+      wayLog.segT = t;
+    }
+    if (dir) wayLog.dir = dir;
+    for (const [g, k] of [[rider.group, 'offMe'], [fr.rider.group, 'offFr']]) {
+      if (!g.visible) continue;
+      _wc.set(g.position.x + bendX(-g.position.z, dist - g.position.z), g.position.y + 0.9, g.position.z).project(camera);
+      if (Math.abs(_wc.x) > 0.97 || _wc.y < -0.97) wayLog[k]++;
+    }
+  }
   /** Them on the river this frame, their tag, and the pill. */
   const _ft = new THREE.Vector3();
   function stepFriend(dt) {
@@ -1424,20 +1549,32 @@ function createRide(K, d) {
       fr.y = a.y + (b.y - a.y) * k;
       fr.k = a.k + (b.k - a.k) * k;
       fr.l = a.l + (b.l - a.l) * k;
+      fr.md = a.d + (b.d - a.d) * k;
+      // (1.21.4 phones say the lane they're gliding to, at once on a swipe: that, fresh, not where they were a moment
+      // ago; their board glides there on the same spring as theirs did)
+      const last = sm[sm.length - 1];
+      if (Number.isFinite(last.a)) fr.tx = last.a;
     }
+    const way = friendWay(dt);
     // (in your lane, level with you: drawn a board's width beside you, not on top of you (the room's maker on the
     // left, the friend on the right), so you always see each other)
-    const offTo = !watching && Math.abs(fr.tx - x) < 1.3 ? (duel.host ? 1.05 : -1.05) : 0;
+    const offTo = !watching && Math.abs(way.x - x) < 1.3 ? (duel.host ? 1.05 : -1.05) : 0;
     fr.off += (offTo - fr.off) * (1 - Math.exp(-dt * 6));
-    fr.sx += (fr.tx + fr.off - fr.sx) * (1 - Math.exp(-dt * 18));
+    // (their board glides as yours does: the same spring, about 0.3 s across a lane)
+    const aim = way.x + fr.off;
+    for (let rem = Math.min(dt, 0.1); rem > 1e-6; rem -= 1 / 120) {
+      const h = Math.min(rem, 1 / 120);
+      fr.svx += (LANE_W0 * LANE_W0 * (aim - fr.sx) - 2 * LANE_Z * LANE_W0 * fr.svx) * h;
+      fr.sx += fr.svx * h;
+    }
     const z = -(fr.sd - dist);
     const g = fr.rider.group;
     // (out: head over heels off the board and under, as yours goes)
     const outK = fr.out ? clamp((t - fr.outT) / 1.2, 0, 1) : 0;
     g.visible = !fr.gone && outK < 1 && z > -AHEAD && z < 16;
-    g.position.set(fr.sx, fr.out ? Math.sin(outK * Math.PI) * 1.4 - outK * 1.6 : fr.y, z);
+    g.position.set(fr.sx, fr.out ? Math.sin(outK * Math.PI) * 1.4 - outK * 1.6 : way.y, z);
     g.rotation.x = -outK * Math.PI * 1.6;
-    fr.rider.update(dt, { lean: fr.l, duck: fr.k, speed: speedAt(fr.sd, len), tuck: fr.y > 0.15 ? clamp(fr.y / 1.2, 0, 1) : 0 });
+    fr.rider.update(dt, { lean: way.l, duck: way.k, speed: speedAt(fr.sd, len), tuck: way.y > 0.15 ? clamp(way.y / 1.2, 0, 1) : 0 });
     // (right on top of you: they show through, so neither hides the other; a knock: they blink)
     fr.blinkT = Math.max(0, fr.blinkT - dt);
     const blink = (!watching && Math.abs(z) < 2.4 && Math.abs(fr.sx - x) < 0.6) || (fr.blinkT > 0 && Math.floor(t * 10) % 2 === 0);
@@ -1445,7 +1582,8 @@ function createRide(K, d) {
       fr.blinkOn = blink;
       fr.rider.setBlink(blink);
     }
-    fr.foam.visible = g.visible && fr.y < 0.3 && !fr.out;
+    fr.foam.visible = g.visible && way.y < 0.3 && !fr.out;
+    if (phase === 'run' && fr.seen && !fr.out) wayCheck(way);
     fr.foam.position.set(fr.sx, 0.03, z + 0.05);
     if (fr.foam.visible && phase !== 'count' && z > -70 && Math.random() < 0.5) things.emit(fr.sx, 0.12, z + 0.9, 1, 0.6, 1.4);
     // their name over them (it winds with the river as they do); off to the side: at that edge, pointing; behind the
@@ -1459,7 +1597,7 @@ function createRide(K, d) {
         low = true;
         ftagEl.style.left = `${clamp(W * (0.5 + (fr.sx - x) / 14), 100, W - 100)}px`;
       } else {
-        _ft.set(fr.sx + bendX(-z, dist - z), (fr.out ? 0 : fr.y) + 2.45, z).project(camera);
+        _ft.set(fr.sx + bendX(-z, dist - z), (fr.out ? 0 : way.y) + 2.45, z).project(camera);
         if (_ft.z < 1) {
           const sx = (_ft.x * 0.5 + 0.5) * W;
           const side = _ft.x > 0.92 ? 1 : _ft.x < -0.92 ? -1 : 0;
@@ -1629,6 +1767,7 @@ function createRide(K, d) {
       return;
     }
     lane = to;
+    sendSoon();
     haptics.tap?.();
     hint(null);
   }
@@ -1886,6 +2025,7 @@ function createRide(K, d) {
     }
     duckT = -1;
     jumpT = 0;
+    sendSoon();
     things.emit(x, 0.15, 0.6, 18, 1.4, 2.6);
     audio.play('fling');
     haptics.tap?.();
@@ -1896,6 +2036,7 @@ function createRide(K, d) {
     if (phase !== 'run' || paused || raid) return;
     if (jumpT >= 0) jumpT = Math.max(jumpT, JUMP_S * 0.8);
     duckT = 0;
+    sendSoon();
     audio.play('click');
     haptics.tap?.();
     if (lesson?.kind === 'duck' && !lesson.done) { lesson.done = true; teachDone('duck'); hint(null); arrowEl.className = 'rv-arrow'; timeK = 1; }
@@ -2162,12 +2303,14 @@ function createRide(K, d) {
       }
     }
     if (Math.abs(laneX(lane) + pullX - x) > 0.3) return;   // (tests' autopilot: one glide at a time)
-    const ahead = live.filter((l) => !l.done && l.z > dist + 1 && l.z < dist + 22);
+    // (tests: `pilotLate` dodges at the last moment, as people do)
+    const near = d.pilotLate ? 9 : 22;
+    const ahead = live.filter((l) => !l.done && l.z > dist + 1 && l.z < dist + near);
     // (a pie coming down in a lane: that lane is out)
     const pieIn = (ln) => pies.some((pp) => Math.abs(pp.tx - laneX(ln)) < 1 && pp.t > 0.15);
     const whirls = live.filter((l) => !l.done && l.it.kind === 'whirl' && l.z > dist - 3 && l.z < dist + 45);
     const eles = live.filter((l) => l.it.kind === 'ele' && l.z > dist - 3 && l.z < dist + 45);
-    const blocked = (ln) => pieIn(ln) || whirls.some((l) => l.it.lane === ln || ln === 1) || eles.some((l) => l.it.lane === ln) || ahead.some((l) => !['person', 'log', 'branch', 'clown', 'whirl'].includes(l.it.kind) && (l.it.lane === ln || l.it.lane + l.drift === ln) && l.z < dist + 18);
+    const blocked = (ln) => pieIn(ln) || whirls.some((l) => l.it.lane === ln || ln === 1) || eles.some((l) => l.it.lane === ln) || ahead.some((l) => !['person', 'log', 'branch', 'clown', 'whirl'].includes(l.it.kind) && (l.it.lane === ln || l.it.lane + l.drift === ln) && l.z < dist + near - 4);
     const want = ahead.find((l) => l.it.kind === 'person' && !blocked(l.it.lane))
       || live.find((l) => l.it.kind === 'coins' && !l.done && l.z + (l.it.dz || 0) > dist + 1 && l.z + (l.it.dz || 0) < dist + 30 && !blocked(l.it.lane));
     let target = want ? want.it.lane : lane;
@@ -2236,7 +2379,9 @@ function createRide(K, d) {
       // looking down a little, so he and the tower's lower part are both in the picture (a phone held upright is narrow)
       const tgt = raid ? targetIsle() : null;
       // (the endless ride: your crew's island coming by turns the camera a little towards it, so you see your tower)
-      if (endless && phase === 'run') {
+      // (not in Saam gly: its view is wide and high; turned, a rider in the right lane went off the screen's edge (the
+      // owner, 25 Oct 2026: "I lost myself there for a few secoonds when we were close to the island"))
+      if (endless && phase === 'run' && !duel) {
         const ahead = islandZ - dist;
         const k = clamp((150 - ahead) / 40, 0, 1) * clamp((ahead + 10) / 40, 0, 1) * 0.28;
         if (k > 0) {
@@ -2723,7 +2868,8 @@ function createRide(K, d) {
       // (yours to them, a few times a second while you ride)
       if (phase === 'run' && (sendT -= dt) <= 0) {
         sendT = 1 / STATE_HZ;
-        duel.send({ t: 'st', d: Math.round(dist * 10) / 10, x: Math.round(x * 100) / 100, y: Math.round(airY * 100) / 100, k: Math.round(duckK * 100) / 100, l: Math.round(leanV * 100) / 100, h: hearts });
+        sentAt = performance.now();
+        duel.send({ t: 'st', d: Math.round(dist * 10) / 10, x: Math.round(x * 100) / 100, a: Math.round((laneX(lane) + pullX) * 100) / 100, y: Math.round(airY * 100) / 100, k: Math.round(duckK * 100) / 100, l: Math.round(leanV * 100) / 100, h: hearts });
       }
     }
     world.update(dist, t, phase === 'dive' ? null : x);
@@ -3044,7 +3190,7 @@ function createRide(K, d) {
       coins: coinsGot,
       coinLines: live.filter((l) => l.it.kind === 'coins').map((l) => ({ lane: l.it.lane, x: Math.round(l.x * 10) / 10, a: Math.round((l.z + (l.it.dz || 0) - dist) * 10) / 10, y: l.it.y, n: l.it.n, gem: !!l.it.gem, left: l.obj.userData.coins.filter((c) => !c.taken).length })),
       deep: live.filter((l) => l.it.kind === 'whirl' || l.it.kind === 'ele').map((l) => ({ k: l.it.kind, calf: !!l.it.calf, lane: l.it.lane, x: Math.round(l.x * 10) / 10, a: Math.round((l.z - dist) * 10) / 10, done: l.done, model: !!d.models?.elephant })), pullX: Math.round(pullX * 100) / 100, hint: hintEl.textContent, soft: !!soft,
-      duel: fr ? { seen: fr.seen, d: Math.round(fr.sd * 10) / 10, x: Math.round(fr.sx * 100) / 100, out: fr.out, endM: fr.endM, gone: fr.gone, watching, counting, goAt, hits, shown: fr.rider.group.visible, tag: tagText, round: duel.round } : null }),
+      duel: fr ? { seen: fr.seen, d: Math.round(fr.sd * 10) / 10, x: Math.round(fr.sx * 100) / 100, out: fr.out, endM: fr.endM, gone: fr.gone, watching, counting, goAt, hits, shown: fr.rider.group.visible, tag: tagText, round: duel.round, way: { clips: wayLog.clips, kos: wayLog.kos, offMe: wayLog.offMe, offFr: wayLog.offFr, frames: wayLog.frames, kinds: wayLog.kinds.slice(0, 6), maxV: Math.round(wayLog.maxV * 10) / 10, flips: wayLog.flips, guesses: wayLog.guesses, wrong: wayLog.wrong, dodging: !!fr.dodge, up: !!fr.pj, y: Math.round((fr.rider.group.position.y) * 100) / 100, tx: Math.round(fr.tx * 100) / 100, wx: Math.round((fr.dodge ? fr.dodge.x : fr.tx) * 100) / 100, off: Math.round(fr.off * 100) / 100, me: Math.round(x * 100) / 100 } } : null }),
     autopilot(on) { pilotOn = !!on; },
     /** For tests (Saturday): where on screen (host px) the tallest tower stands at a share of its height, or null. */
     towerScreen(frac = 0.5) {

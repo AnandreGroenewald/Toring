@@ -5,7 +5,8 @@
 //   {t:'hi', v, name, skin}          each, whenever both are in (again after every return)
 //   {t:'go', n, seed}                the room's maker: round n on this river (again after every return)
 //   {t:'rdy', n}                     this phone's river is on the screen (both ready: both count 3, 2, 1 together)
-//   {t:'st', n, x, y, k, l, h, d}    ten times a second while riding: across, up (a jump), duck, lean, hearts, metres
+//   {t:'st', n, x, y, k, l, h, d, a} ten times a second while riding (and at once on a swipe, 1.21.4): across, up (a
+//                                    jump), duck, lean, hearts, metres, and (1.21.4) the lane it's gliding to
 //   {t:'ko', n}                      a knock
 //   {t:'end', n, m}                  out at m metres (again after every return)
 //   {t:'again', n}                   once more (when both have said it, the maker starts round n + 1)
@@ -38,7 +39,7 @@ export function cleanDuelMsg(m) {
   switch (m.t) {
     case 'hi': return { t: 'hi', v: num(m.v, 0, 99) | 0, name: cleanNickname(m.name) || '', skin: typeof m.skin === 'string' && /^[a-z-]{1,24}$/.test(m.skin) ? m.skin : 'kleur' };
     case 'go': return round(m.n) >= 0 && typeof m.seed === 'string' && SEED_RE.test(m.seed) ? { t: 'go', n: m.n, seed: m.seed } : null;
-    case 'st': return round(m.n) >= 0 ? { t: 'st', n: m.n, d: num(m.d, 0, 1e6), x: num(m.x, -8, 8), y: num(m.y, 0, 6), k: num(m.k, 0, 1), l: num(m.l, -1, 1), h: num(m.h, 0, 9) | 0 } : null;
+    case 'st': return round(m.n) >= 0 ? { t: 'st', n: m.n, d: num(m.d, 0, 1e6), x: num(m.x, -8, 8), a: num(m.a, -8, 8, NaN), y: num(m.y, 0, 6), k: num(m.k, 0, 1), l: num(m.l, -1, 1), h: num(m.h, 0, 9) | 0 } : null;
     case 'ko': return round(m.n) >= 0 ? { t: 'ko', n: m.n } : null;
     case 'rdy': return round(m.n) >= 0 ? { t: 'rdy', n: m.n } : null;
     case 'end': return round(m.n) >= 0 ? { t: 'end', n: m.n, m: num(m.m, 0, 1e6) } : null;

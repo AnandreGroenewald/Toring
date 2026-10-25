@@ -2817,7 +2817,7 @@ async function startRide(opts = {}) {
       // (the shots this ride can still earn for Saturday: 1 per 100 m, up to the week's 10; none on a Sunday)
       shots: { max: SPAN.bombsMax, room: ONS_DORP.on && (v.dow | 0) <= 6 ? Math.max(0, SPAN.bombsMax - (v.bombsWeek | 0)) : 0, riverWeek: v.rideMetres | 0, day: ONS_DORP.on && (v.dow | 0) <= 6 },
       daily: dayLayout(day), skin: store.getSkins().wear.blocks || 'kleur',
-      reducedMotion: !!settings.reducedMotion, autopilot: DEBUG && params.has('rvauto'), pilotMetres: DEBUG ? Number(params.get('rvm')) || undefined : undefined,
+      reducedMotion: !!settings.reducedMotion, autopilot: DEBUG && params.has('rvauto'), pilotMetres: DEBUG ? Number(params.get('rvm')) || undefined : undefined, noFriendWay: DEBUG && params.has('nofway'), pilotLate: DEBUG && params.has('rvlate'),
       onResult: (res) => {
         ticket.then((tk) => span.rideDone(day, res.rescued || [], rd.fromRiver || 0, res.metres || 0, !!rd.extra, { durationMs: res.durationMs || 0, hidden: store.getBoardHidden(), ticket: tk, rid })).then((out) => {
           if (out.coins) coinsChanged();
