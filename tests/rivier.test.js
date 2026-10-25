@@ -173,6 +173,11 @@ test('rivier (endless): a whirlpool from 5 km and an elephant cow with her calf 
       // (alone in their row: nothing else to dodge at the same time)
       for (const r of rows) assert.ok(r.items.every((it) => it.kind === kind), `${kind} alone`);
     }
+    // (events, not a slalom: whirlpools 450+ m apart, the elephants 650+ m apart)
+    const wz = at('whirl').map((r) => r.z);
+    for (let i = 1; i < wz.length; i++) assert.ok(wz[i] - wz[i - 1] >= RIVER.whirlEvery[0] - 1, `whirlpools ${Math.round(wz[i] - wz[i - 1])} m apart`);
+    const ez = at('ele').map((r) => r.z);
+    for (let i = 1; i < ez.length; i++) assert.ok(ez[i] - ez[i - 1] >= RIVER.eleEvery[0] - 1, `elephants ${Math.round(ez[i] - ez[i - 1])} m apart`);
     // a whirlpool sits in a side lane (its pull takes the middle too: the far lane is the way past)
     for (const r of at('whirl')) assert.ok([0, 2].includes(r.items[0].lane));
     // the cow and her calf come from one side and leave that side's lane open where you meet them

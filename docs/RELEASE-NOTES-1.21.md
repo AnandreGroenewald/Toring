@@ -1,5 +1,14 @@
 # Stapel 1.21 — Saam gly (release notes)
 
+1.21.3 (12103): the River run's coins (lines, coins in the air, stacks of 10, the rare diamond of 50 over a log; into
+the wallet under the day's cap, flying up to the counter), a whirlpool from 5 km, elephants with calves from 10 km, and
+the flaw pass (a double tap on Klaar no longer opens the Winkel, the ride pauses when the phone turns sideways, lessons
+never overlap). Notes:
+
+af (405): Stapel 1.21.3: Die rivier het nou munte! Gly deur muntlyne, spring vir dié in die lug, vang ’n stapel van 10 en waag ’n sprong oor ’n stomp vir die skaars diamant van 50. Alles gaan in jou beursie. Verby 5 km wag ’n draaikolk wat jou intrek: gly vroeg na die ver kant toe. Verby 10 km stap olifante met hul kalwers dwarsoor die rivier. Munte vlieg nou na jou teller, en baie klein dingetjies is reggemaak.
+
+en (396): Stapel 1.21.3: The river has coins now! Ride through coin lines, jump for the ones in the air, grab a stack of 10, and risk a jump over a log for the rare diamond worth 50. It all goes into your wallet. Past 5 km a whirlpool pulls you in: get to the far side early. Past 10 km elephants and their calves walk across the river. Coins now fly up to your counter, and lots of small things are fixed.
+
 1.21.2 (12102): Saam gly holds on phones (back after WhatsApp), side by side, find an opponent (the server's lobby),
 the River run opens without a freeze. Notes:
 

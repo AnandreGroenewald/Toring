@@ -68,7 +68,8 @@ function makeKit() {
 #rivier .rv-cn b { font-size: 16px; min-width: 1ch; }
 #rivier .rv-cn.bump { animation: rv-cn .3s ease-out; }
 @keyframes rv-cn { 0% { transform: scale(1); } 40% { transform: scale(1.22); } 100% { transform: scale(1); } }
-#rivier .rv-card p.rv-coinline { margin: -4px 0 10px; font-size: 16px; font-weight: 900; color: #ffe08a; }
+#rivier .rv-card p.rv-coinline { display: flex; align-items: center; justify-content: center; gap: 6px; margin: -4px 0 10px; font-size: 16px; font-weight: 900; color: #ffe08a; }
+#rivier .rv-card p.rv-coinline i.rv-coin-ic { width: 18px; height: 18px; flex: none; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff3b0 0 18%, #ffd23f 40%, #c98a00 100%); box-shadow: inset 0 0 0 2px rgba(150,95,0,.55); }
 #rivier .rv-hearts { display: flex; gap: 3px; padding: 6px 9px; border-radius: 999px; background: rgba(13,34,40,.62); border: 1px solid rgba(255,255,255,.28); }
 #rivier .rv-hearts i { width: 18px; height: 16px; background: #ff4d5e; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 22'%3E%3Cpath d='M12 21.5 10.3 20C4.2 14.6.2 11 .2 6.6.2 3 3 .2 6.6.2c2 0 4 1 5.4 2.5C13.4 1.2 15.4.2 17.4.2 21 .2 23.8 3 23.8 6.6c0 4.4-4 8-10.1 13.4z'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 22'%3E%3Cpath d='M12 21.5 10.3 20C4.2 14.6.2 11 .2 6.6.2 3 3 .2 6.6.2c2 0 4 1 5.4 2.5C13.4 1.2 15.4.2 17.4.2 21 .2 23.8 3 23.8 6.6c0 4.4-4 8-10.1 13.4z'/%3E%3C/svg%3E") center / contain no-repeat; transition: background .2s, transform .2s; }
 #rivier .rv-hearts i.gone { background: rgba(255,255,255,.25); transform: scale(.85); }
@@ -127,6 +128,9 @@ function makeKit() {
 #rivier .rv-card p.rv-vsline { margin: 2px 0 10px; font-size: 17px; font-weight: 900; color: #bfe0ff; }
 #rivier .rv-hurt { position: absolute; inset: 0; box-shadow: inset 0 0 90px 20px rgba(200,40,30,.55); opacity: 0; transition: opacity .25s; }
 #rivier .rv-hurt.on { opacity: 1; transition: none; }
+#rivier .rv-flycoin { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; pointer-events: none; background: radial-gradient(circle at 35% 35%, #fff6c2 0 18%, #ffd23f 42%, #c98a00 100%); box-shadow: inset 0 0 0 2px rgba(150,95,0,.55), 0 0 12px rgba(255,210,80,.8); transition: transform .5s cubic-bezier(.5,0,.75,.4), opacity .5s; }
+#rivier .rv-flycoin.big { width: 40px; height: 40px; margin: -20px 0 0 -20px; }
+#rivier .rv-flycoin.gem { border-radius: 6px; transform: rotate(45deg); background: linear-gradient(135deg, #e8fdff, #7fe6ff 45%, #2aa9c8); box-shadow: 0 0 16px rgba(120,230,255,.9); }
 #rivier .rv-fly { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; transition: transform .55s cubic-bezier(.4,0,.6,1), opacity .55s; }
 #rivier .rv-card { pointer-events: auto; position: absolute; left: 50%; bottom: calc(20px + var(--sab, 0px)); transform: translate(-50%, 30px); opacity: 0; width: min(92%, 420px); padding: 18px 18px 16px; border-radius: 22px;
   background: rgba(16,30,36,.84); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 18px 50px rgba(0,0,0,.45); transition: opacity .35s, transform .45s cubic-bezier(.2,1.2,.4,1); text-align: center; }
@@ -1562,6 +1566,23 @@ function createRide(K, d) {
     facesEl.querySelectorAll('img').forEach((im) => im.classList.toggle('out', !rescued.includes(who[Number(im.dataset.i)])));
   }
   /** A face flies from where the person was on screen up to the counter. */
+  /** A taken coin flies up into the counter (the stack and the diamond bigger). */
+  function flyCoin(mesh, kind = '') {
+    if (reduced || !coinEl) return;
+    const from = screenOf(mesh);
+    const el = document.createElement('i');
+    el.className = `rv-flycoin ${kind}`.trim();
+    el.style.left = `${from.x}px`;
+    el.style.top = `${from.y - 30}px`;
+    ov.appendChild(el);
+    const r = coinEl.getBoundingClientRect();
+    const h = host.getBoundingClientRect();
+    requestAnimationFrame(() => {
+      el.style.transform = `translate(${r.left - h.left + 14 - from.x}px, ${r.top - h.top + 14 - (from.y - 30)}px) scale(.6)${kind === 'gem' ? ' rotate(45deg)' : ''}`;
+      el.style.opacity = '0.3';
+    });
+    setTimeout(() => el.remove(), 520);
+  }
   function flyFace(id, from) {
     if (reduced) return;
     const el = document.createElement('img');
@@ -1711,7 +1732,15 @@ function createRide(K, d) {
         else if (it.kind === 'clown') obj = hz.clown(it.side || 1);
         else if (it.kind === 'whirl') obj = hz.whirl();
         else if (it.kind === 'coins') obj = hz.coins(it);
-        else if (it.kind === 'ele') obj = beasts.elephant({ from: it.from || 1, calf: !!it.calf });
+        else if (it.kind === 'ele') {
+          obj = beasts.elephant({ from: it.from || 1, calf: !!it.calf });
+          // (white water round their legs: they wade, they don't stand on the river)
+          const k = it.calf ? 0.56 : 1;
+          const f = things.foam(1);
+          f.scale.set(5.4 * k, 1, 3.0 * k);
+          f.position.y = 0.04;
+          obj.add(f);
+        }
         else if (it.kind === 'monkey') {
           const blk = things.floating({ ...it, skin: d.skin || 'kleur', spin: 0 });
           obj = beasts.monkeyOn(blk, Math.sign(-(it.drift || 1)), blk.userData.top);
@@ -1759,6 +1788,7 @@ function createRide(K, d) {
       audio.play(it.gem || it.stack ? 'gold' : 'coin', { n: coinRun });
       haptics.tap?.();
       things.emit(l.x, COIN_HEIGHT[it.y | 0] ?? 0.85, -a, it.gem ? 30 : it.stack ? 22 : 6, 1.2, 2.6);
+      flyCoin(c.m, it.gem ? 'gem' : it.stack ? 'big' : '');
       if (it.gem) pop(S.rvGem(it.val), 1300);
       else if (it.stack) pop(S.rvStack(it.val), 1000);
       if (coinB) {
@@ -1805,12 +1835,13 @@ function createRide(K, d) {
   function cueLater(l, ahead) {
     const k = l.it.kind;
     const sp = speedAt(dist, len);
-    if (!taught[k] && !l.taught && ahead < sp * 2.4 && ahead > 0 && !(k === 'ele' && l.it.calf)) {
+    // (never over another lesson: a log or tree waiting for your swipe keeps its own words)
+    if (!taught[k] && !l.taught && ahead < sp * 2.4 && ahead > 0 && !(k === 'ele' && l.it.calf) && !(lesson && !lesson.done)) {
       l.taught = true;
       if (!duel) soft = { l, kind: k };
       hint(k === 'whirl' ? S.rvTeachWhirl : S.rvTeachEle);
       teachDone(k);
-    } else if (taught[k] && !l.hinted && ahead < sp * 1.8 && ahead > sp * 0.8 && !(k === 'ele' && l.it.calf)) {
+    } else if (taught[k] && !l.taught && !l.hinted && ahead < sp * 1.8 && ahead > sp * 0.8 && !(k === 'ele' && l.it.calf)) {
       l.hinted = true;
       pop(k === 'whirl' ? S.rvWhirlShort : S.rvEleShort, 900);
     }
@@ -2537,6 +2568,11 @@ function createRide(K, d) {
         const pk = l.it.calf ? clamp((p - 0.22) / 0.78, 0, 1) : p;
         lx = start + (laneX(l.it.lane) - start) * pk;
         l.obj.userData.walking = pk > 0.001 && pk < 0.999;
+        // (the water they kick up as they walk)
+        if (l.obj.userData.walking && ahead < 120 && Math.random() < (l.it.calf ? 0.25 : 0.45)) {
+          const k = l.it.calf ? 0.56 : 1;
+          things.emit(lx + (Math.random() - 0.5) * 3.2 * k, 0.15, -ahead + (Math.random() - 0.5) * 1.6 * k, 2, 0.8, 1.6);
+        }
       }
       l.x = lx;
       const u = l.obj.userData;
@@ -2785,7 +2821,7 @@ function createRide(K, d) {
     if (!coinsGot) return '';
     if (!coinPaid) coinPaid = d.onCoins?.(coinsGot) || { added: coinsGot };
     const added = coinPaid.added | 0;
-    return `<p class="rv-coinline">${esc(added < coinsGot ? S.rvCoinsCapped(fmtInt(added)) : S.rvCoinsGot(fmtInt(added)))}</p>`;
+    return `<p class="rv-coinline"><i class="rv-coin-ic"></i><span>${esc(added < coinsGot ? S.rvCoinsCapped(fmtInt(added)) : S.rvCoinsGot(fmtInt(added)))}</span></p>`;
   }
   function done() {
     if (phase === 'done') return;

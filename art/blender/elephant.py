@@ -24,6 +24,7 @@ ivory = material('ele_ivory', '#efe5cb', rough=0.3)
 lid = material('ele_lid', '#7e7873', rough=0.6)
 dark = material('ele_dark', '#1f1b19', rough=0.4)
 tuft = material('ele_tuft', '#2b2522', rough=0.8)
+tailSkin = material('ele_tail', '#625f5a', rough=0.7)
 
 # the body: rump to the domed head (x across, y along: the head toward -y, z up); belly about 0.9 m over the water
 P = [
@@ -35,7 +36,7 @@ body = apply(skin_body('body', P, edges, smooth=2), tris=5200)
 body.data.materials.append(skin)
 # the tail: thin, hanging from the rump, a dark tuft at its end
 tail = apply(skin_body('tail', [(0, 2.2, 2.45, 0.08, 0.08), (0, 2.45, 1.85, 0.05, 0.05), (0, 2.5, 1.2, 0.045, 0.045)], [(0, 1), (1, 2)], smooth=1), tris=160)
-tail.data.materials.append(skin)
+tail.data.materials.append(tailSkin)   # (a flat colour of its own: the bake leaves it out, so it can't pick up a stray patch)
 
 # the trunk: from the face down to the water, its tip curling forward
 T = [(0, -2.55, 2.32, 0.34, 0.32), (0, -2.78, 1.75, 0.27, 0.26), (0, -2.9, 1.18, 0.21, 0.2), (0, -2.88, 0.66, 0.16, 0.16), (0, -2.72, 0.36, 0.13, 0.13), (0, -2.55, 0.42, 0.11, 0.11)]
@@ -72,9 +73,10 @@ for s in (1, -1):
     tk = apply(skin_body(f'tusk{s}', [(s * 0.27, -2.42, 2.02, 0.09, 0.09), (s * 0.33, -2.72, 1.72, 0.08, 0.08), (s * 0.35, -3.05, 1.6, 0.065, 0.065), (s * 0.32, -3.32, 1.72, 0.045, 0.045), (s * 0.28, -3.45, 1.92, 0.025, 0.025)], [(0, 1), (1, 2), (2, 3), (3, 4)], smooth=2), tris=300)
     tk.data.materials.append(ivory)
     det.append(tk)
+det.append(tail)
 det.append(prim('sphere', 'tuft', loc=(0, 2.5, 1.12), scale=(0.08, 0.06, 0.13), mat=tuft, segments=10, ring_count=6))
 palettize(det, 'elephant', rough=0.4)
-body = join([body, tail] + det, 'body')
+body = join([body] + det, 'body')
 pivot(trunk, (0, -2.5, 2.35))
 for e, s in zip(ears, (1, -1)):
     pivot(e, (s * 0.62, -1.95, 2.7))
