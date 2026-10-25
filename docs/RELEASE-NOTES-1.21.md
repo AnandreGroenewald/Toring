@@ -1,5 +1,18 @@
 # Stapel 1.21 — Saam gly (release notes)
 
+1.21.4 (12104): Saam gly — the friend's lane comes at once on a swipe and their board takes the way past in time
+(no more riding through rocks on your screen); no camera turn by the island in Saam gly. Internal notes:
+
+af (248): Stapel 1.21.4: Saam gly is gladder. Jou vriend se plank wys nou dadelik waarheen hulle swaai, so hulle ry nie meer deur rotse en blokke op jou skerm nie, en hulle spring en koes betyds. Naby jou span se eiland gly niemand meer van die skerm af nie.
+
+en (263): Stapel 1.21.4: Smoother Saam gly. Your friend’s board now shows straight away where they swerve, so they no longer seem to ride through rocks and blocks on your screen, and they jump and duck in time. Near your crew’s island nobody slides off the screen any more.
+
+Closed testing (Alpha, from 1.15.1) notes:
+
+af (383): Stapel 1.21: Afgly! Ná jou Daaglikse Toring duik jou bouer af en gly die rivier af om jou mense te red. Swiep, spring en koes verby krokodille, seekoeie, stompe en Hanswors se roomterte. Vang munte vir jou beursie; verby 5 km wag ’n draaikolk en verby 10 km olifante. Nuut: Saam gly! Tik 👥, nooi ’n vriend of soek iemand, en gly langs mekaar op dieselfde rivier. Wie hou die langste?
+
+en (394): Stapel 1.21: River run! After your Daily Tower your builder dives off and rides down the river to rescue your people. Swipe, jump and duck past crocodiles, hippos, logs and Hanswors’s cream pies. Grab coins for your wallet; past 5 km a whirlpool waits, past 10 km elephants. New: Ride together! Tap 👥, invite a friend or find someone, and ride side by side on the same river. Who lasts longest?
+
 1.21.3 (12103): the River run's coins (lines, coins in the air, stacks of 10, the rare diamond of 50 over a log; into
 the wallet under the day's cap, flying up to the counter), a whirlpool from 5 km, elephants with calves from 10 km, and
 the flaw pass (a double tap on Klaar no longer opens the Winkel, the ride pauses when the phone turns sideways, lessons
