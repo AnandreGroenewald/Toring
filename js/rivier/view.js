@@ -107,6 +107,7 @@ function makeKit() {
 #rivier .rv-vs { position: absolute; left: 50%; top: calc(64px + var(--sat, 0px)); transform: translateX(-50%); display: none; align-items: baseline; gap: 5px; padding: 4px 12px; border-radius: 999px; background: rgba(20,60,120,.72); border: 1px solid rgba(140,200,255,.55); color: #e6f2ff; font-weight: 900; font-size: 14px; white-space: nowrap; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); font-variant-numeric: tabular-nums; }
 #rivier .rv-vs.on { display: flex; }
 #rivier .rv-vs b { font-size: 16px; color: #fff; }
+#rivier .rv-vs b.rv-vs-h { font-size: 14px; letter-spacing: 1px; }
 #rivier .rv-vs i { font-style: normal; font-size: 13px; padding: 1px 7px; border-radius: 999px; }
 #rivier .rv-vs i.ahead { background: rgba(60,200,110,.35); color: #b9ffcf; }
 #rivier .rv-vs i.behind { background: rgba(230,70,60,.35); color: #ffd0cb; }
@@ -205,8 +206,10 @@ export async function openRiver(d) {
   await portraitsReady;   // (the faces on the rings)
   // (the Blender models: the animals; a ride never waits long for them, and works without)
   const models = await loadModels(['croc', 'hippo', 'monkey', 'builder', 'dorp', 'island', 'props', 'hazards']);
+  performance.mark?.('rv:models');
   if (!kit) kit = makeKit();
   const view = createRide(kit, { ...d, models });
+  performance.mark?.('rv:built');
   current = view;
   await view.ready;
   return view;
@@ -1292,10 +1295,13 @@ function createRide(K, d) {
   const ftagEl = ov.querySelector('.rv-ftag');
   const go3El = ov.querySelector('.rv-go3');
   const fname = duel ? duel.friend?.name || S.saamFriend : '';
+  const SMOOTH_MS = 160;   // (the friend's moves are drawn this far behind: between two that came, never a guess)
   const fr = duel ? {
     rider: createRider(bendMaterial, d.models?.builder || null, { swap: true }), foam: things.foam(2.6), seen: false, d: 0, sd: 0, at: 0,
-    tx: laneX(duel.host ? 2 : 0), sx: laneX(duel.host ? 2 : 0), y: 0, k: 0, l: 0, out: false, outT: 0, endM: 0, gone: false, blinkT: 0, blinkOn: false,
+    tx: laneX(duel.host ? 2 : 0), sx: laneX(duel.host ? 2 : 0), y: 0, k: 0, l: 0, h: RIVER.hearts, out: false, outT: 0, endM: 0, gone: false, blinkT: 0, blinkOn: false,
+    samples: [], off: 0, away: false,
   } : null;
+  let meLost = false;     // (our own connection went: it comes back by itself)
   let watching = false;   // (you're out and they ride on: the camera goes down the river with them)
   let sentEnd = -1;       // (the metres your 'end' said)
   let sendT = 0;
@@ -1303,6 +1309,21 @@ function createRide(K, d) {
   let counting = false;   // (both rivers are up: the count runs)
   let goAt = 0;           // (when GLY! came: the tests check both phones start together)
   let countFrom = 0;      // (the count runs on the real clock, not the river's: a slow phone still says GLY! with the other)
+  let duelDist = 0;       // (where the river is by the real clock since GLY!: both phones' rivers keep to it)
+  let duelAt = 0;
+  /** The duel's river on to now by the real clock (in small steps: its speed changes with the metres); the seconds. */
+  function duelAdvance() {
+    const now = performance.now();
+    let real = Math.min(5, Math.max(0, (now - duelAt) / 1000));
+    duelAt = now;
+    const secs = real;
+    while (real > 1e-6) {
+      const h = Math.min(real, 1 / 60);
+      duelDist += speedAt(duelDist, len) * (1 + 0.24 * rapK) * h;
+      real -= h;
+    }
+    return secs;
+  }
   let readySaid = false;
   let myEndM = 0;
   let duelPaintT = 0;
@@ -1322,11 +1343,10 @@ function createRide(K, d) {
         if (fr.out) return;
         fr.seen = true;
         fr.d = m.d;
-        fr.at = t;
-        fr.tx = m.x;
-        fr.y = m.y;
-        fr.k = m.k;
-        fr.l = m.l;
+        fr.h = m.h;
+        // (their lane, jump, duck and lean, smoothed: drawn a moment behind, between the last two that came)
+        fr.samples.push({ at: performance.now(), x: m.x, y: m.y, k: m.k, l: m.l });
+        if (fr.samples.length > 12) fr.samples.shift();
       } else if (m.t === 'ko') {
         fr.blinkT = 1;
         if (phase === 'run') pop(S.saamKo(fname), 800);
@@ -1344,15 +1364,43 @@ function createRide(K, d) {
         fr.gone = true;
         if (phase === 'run') pop(S.saamGone(fname), 1600);
         paintDuel();
+      } else if (m.t === 'away') {
+        fr.away = true;
+      } else if (m.t === 'here') {
+        fr.away = false;
+      } else if (m.t === 'meLost') {
+        meLost = true;
+        hint(S.saamLost);
+      } else if (m.t === 'meBack') {
+        meLost = false;
+        if (hintEl.textContent === S.saamLost) hint(null);
       }
     });
   }
   /** Them on the river this frame, their tag, and the pill. */
   const _ft = new THREE.Vector3();
   function stepFriend(dt) {
-    const now = fr.out || !fr.seen ? fr.d : fr.d + speedAt(fr.d, len) * Math.min(0.4, t - fr.at);
-    fr.sd = phase === 'count' ? 0 : fr.sd + (now - fr.sd) * (1 - Math.exp(-dt * 10));
-    fr.sx += (fr.tx - fr.sx) * (1 - Math.exp(-dt * 12));
+    // (riding: on the same river clock as you, so level with you, however the network is; out: where they went in)
+    fr.sd = phase === 'count' ? 0 : fr.out ? fr.endM : Math.max(duelDist, dist);
+    // their lane, jump, duck and lean: a moment behind (SMOOTH_MS), between the two samples round that moment
+    const at = performance.now() - SMOOTH_MS;
+    const sm = fr.samples;
+    if (sm.length) {
+      let i = sm.length - 1;
+      while (i > 0 && sm[i - 1].at > at) i--;
+      const b = sm[i];
+      const a = i > 0 ? sm[i - 1] : b;
+      const k = b.at > a.at ? clamp((at - a.at) / (b.at - a.at), 0, 1) : 1;
+      fr.tx = a.x + (b.x - a.x) * k;
+      fr.y = a.y + (b.y - a.y) * k;
+      fr.k = a.k + (b.k - a.k) * k;
+      fr.l = a.l + (b.l - a.l) * k;
+    }
+    // (in your lane, level with you: drawn a board's width beside you, not on top of you (the room's maker on the
+    // left, the friend on the right), so you always see each other)
+    const offTo = !watching && Math.abs(fr.tx - x) < 1.3 ? (duel.host ? 1.05 : -1.05) : 0;
+    fr.off += (offTo - fr.off) * (1 - Math.exp(-dt * 6));
+    fr.sx += (fr.tx + fr.off - fr.sx) * (1 - Math.exp(-dt * 18));
     const z = -(fr.sd - dist);
     const g = fr.rider.group;
     // (out: head over heels off the board and under, as yours goes)
@@ -1363,7 +1411,7 @@ function createRide(K, d) {
     fr.rider.update(dt, { lean: fr.l, duck: fr.k, speed: speedAt(fr.sd, len), tuck: fr.y > 0.15 ? clamp(fr.y / 1.2, 0, 1) : 0 });
     // (right on top of you: they show through, so neither hides the other; a knock: they blink)
     fr.blinkT = Math.max(0, fr.blinkT - dt);
-    const blink = (!watching && Math.abs(z) < 2.4 && Math.abs(fr.sx - x) < 1.4) || (fr.blinkT > 0 && Math.floor(t * 10) % 2 === 0);
+    const blink = (!watching && Math.abs(z) < 2.4 && Math.abs(fr.sx - x) < 0.6) || (fr.blinkT > 0 && Math.floor(t * 10) % 2 === 0);
     if (blink !== fr.blinkOn) {
       fr.blinkOn = blink;
       fr.rider.setBlink(blink);
@@ -1401,9 +1449,10 @@ function createRide(K, d) {
     // the pill: their metres, and how far ahead (green) or behind (red) you are
     let html = '';
     if (!fr.gone && phase !== 'count' && (phase !== 'done' || watching)) {
-      const m = fr.out ? fr.endM : Math.floor(fr.sd);
-      const gap = Math.round((watching ? myEndM : dist) - (fr.out ? fr.endM : fr.sd));
-      html = `<span>🔵 ${esc(fname)}</span><b>${fmtInt(m)}</b><small>m</small>${fr.out ? '' : `<i class="${gap >= 0 ? 'ahead' : 'behind'}">${gap >= 0 ? '+' : '−'}${fmtInt(Math.abs(gap))} m</i>`}`;
+      // (level all the way: their hearts say how they stand; out: where they went in)
+      const hearts = '❤️'.repeat(Math.max(0, Math.min(RIVER.hearts, fr.h))) + '🤍'.repeat(Math.max(0, RIVER.hearts - fr.h));
+      html = fr.out ? `<span>🔵 ${esc(fname)}</span><i class="behind">${esc(S.saamOutAt(fmtInt(fr.endM)))}</i>`
+        : `<span>🔵 ${esc(fname)}</span><b class="rv-vs-h">${fr.away ? '⏳' : hearts}</b>`;
     }
     if (html !== vsHtml) {
       vsHtml = html;
@@ -1512,9 +1561,10 @@ function createRide(K, d) {
     if (phase === 'done') return;
     paused = !!on;
     pausedEl.classList.toggle('on', paused);
+    if (duel) return;   // (Saam gly: the menu is only a way out; the river and its sound run on)
     if (paused) audio.suspend?.(); else { audio.resume?.(); last = performance.now(); }
   }
-  const onVis = () => { if (document.hidden) setPaused(true); };
+  const onVis = () => { if (document.hidden && !duel) setPaused(true); };
   document.addEventListener('visibilitychange', onVis);
 
   // ---------------------------------------------------------------------------------------------- input
@@ -1975,7 +2025,7 @@ function createRide(K, d) {
   }
 
   // ---------------------------------------------------------------------------------------------- the camera
-  const cam = duel ? { pos: new THREE.Vector3(0, 8.4, 17.5), look: new THREE.Vector3(0, 0.6, -11) }
+  const cam = duel ? { pos: new THREE.Vector3(0, 8.2, 17), look: new THREE.Vector3(0, 0.6, -14) }
     : quick ? { pos: new THREE.Vector3(0, 6.4, 11.5), look: new THREE.Vector3(0, 0.4, -22) } : { pos: new THREE.Vector3(0, 30, 30), look: new THREE.Vector3(0, 0, -20) };
   const towerTop = () => island.top;
   function cameraFor(dt) {
@@ -1983,12 +2033,12 @@ function createRide(K, d) {
     let l;
     if (watching) {
       // (Saam gly, you're out: the riding camera goes on down the river behind your friend)
-      p = new THREE.Vector3(fr.sx * 0.82, 6.4, 11.5);
-      l = new THREE.Vector3(fr.sx * 0.62, 0.4, -22);
+      p = new THREE.Vector3(fr.sx * 0.15, 8.2, 17);
+      l = new THREE.Vector3(fr.sx * 0.1, 0.6, -14);
     } else if (phase === 'count') {
-      // (Saam gly's start line: back and up in the middle, both riders side by side in the picture; GLY! swoops in)
-      p = new THREE.Vector3(0, 8.4, 17.5);
-      l = new THREE.Vector3(0, 0.6, -11);
+      // (Saam gly's start line: back and up in the middle, both riders side by side in the picture)
+      p = new THREE.Vector3(0, 8.2, 17);
+      l = new THREE.Vector3(0, 0.6, -14);
     } else if (phase === 'dive' && quick) {
       // (dropped in: the riding camera from the start)
       p = new THREE.Vector3(x * 0.82, 6.4, 11.5);
@@ -2025,6 +2075,12 @@ function createRide(K, d) {
       // follows most of a lane change, so the move still shows)
       p = new THREE.Vector3(x * 0.82, 6.4, 11.5);
       l = new THREE.Vector3(x * 0.62, 0.4, -22);
+      // (Saam gly: back and up over the middle, all three lanes in the picture, so you always see each other; the
+      // start line's own view, so GLY! doesn't swing the camera)
+      if (duel) {
+        p.set(x * 0.15, 8.2, 17);
+        l.set(x * 0.1, 0.6, -14);
+      }
       // Saturday: the tallest tower coming by turns the camera halfway towards it (a little more while you aim), still
       // looking down a little, so he and the tower's lower part are both in the picture (a phone held upright is narrow)
       const tgt = raid ? targetIsle() : null;
@@ -2145,6 +2201,8 @@ function createRide(K, d) {
         phaseT = 0;
         dist += speedAt(dist, len) * late;
         runS += late;
+        duelDist = dist;
+        duelAt = performance.now();
         startGone = t;
         things.emit(x, 0.2, 0, 40, 2.2, 5);
         audio.play('splash');
@@ -2232,9 +2290,17 @@ function createRide(K, d) {
       }
       rapK += ((rap ? 1 : 0) - rapK) * Math.min(1, dt * 2.5);
       if (rapK > 0.3) stage.shake(reduced ? 0 : 0.04 * rapK);
-      runS += dt;
-      const sp = speedAt(dist, len) * (slowT > 0 ? RIVER.hitSlowK : 1) * (1 + 0.24 * rapK);
-      dist += sp * dt;
+      if (duel) {
+        // (Saam gly: both rivers run on the real clock at the same speed and a knock costs no ground, so the two of
+        // you ride side by side all the way (the owner: "you need to ride with eachother"); a phone that falls behind,
+        // e.g. a slow frame, catches up a few metres a frame)
+        runS += duelAdvance();
+        dist = Math.min(duelDist, dist + 2.5);
+      } else {
+        runS += dt;
+        const sp = speedAt(dist, len) * (slowT > 0 ? RIVER.hitSlowK : 1) * (1 + 0.24 * rapK);
+        dist += sp * dt;
+      }
       slowT = Math.max(0, slowT - dt);
       graceT = Math.max(0, graceT - dt);
       rider.setBlink(graceT > 0 && Math.floor(t * 10) % 2 === 0);
@@ -2311,7 +2377,10 @@ function createRide(K, d) {
         audio.play('banner');
       }
     }
-    if (watching) dist = Math.max(dist, fr.sd);
+    if (watching) {
+      duelAdvance();
+      dist = duelDist;
+    }
     rider.group.position.x = x;
     rider.group.visible = !watching;
     riderFoam.position.set(x, 0.03, 0.05);
@@ -2517,7 +2586,7 @@ function createRide(K, d) {
       want = a <= ideal ? 0.015 : Math.min(0.45, 0.015 + 0.45 * (a - ideal) / (ideal * 2.5));
     }
     timeK += (want - timeK) * Math.min(1, dt * (want < timeK ? 7 : 14));
-    if (!paused) step(dt * timeK);
+    if (!paused || duel) step(dt * timeK);   // (Saam gly: the friend's river doesn't stop, so neither does yours)
     world.reflect(stage.renderer, camera);
     stage.render(dt);
   }
@@ -2650,7 +2719,8 @@ function createRide(K, d) {
   for (let i = 0; i < 30; i++) cameraFor(0.1);   // (the first frame already looks at the tower top)
   /** Every kind of thing the river brings, put out once out of sight so its shaders compile now (no stutter mid-ride). */
   const warmMats = [];   // (their own materials stay until the ride closes: freed while still compiling, WebGL complains)
-  function warmUp() {
+  async function warmUp() {
+    performance.mark?.('rv:prewarm');
     const tmp = new THREE.Group();
     const skin = d.skin || 'kleur';
     try {
@@ -2663,8 +2733,24 @@ function createRide(K, d) {
         tmp.add(jm);
         tmp.add(new THREE.Sprite(new THREE.SpriteMaterial({ map: burstTex, transparent: true, depthWrite: false })));
       }
-      scene.add(tmp);
-      stage.renderer.compile(scene, camera);
+      // (in three goes, a breath between: the river and its rider, the animals and blocks, the later things)
+      if (stage.renderer.compileAsync) {
+        const later = [...tmp.children];
+        for (const o of later) tmp.remove(o);
+        scene.add(tmp);
+        await stage.renderer.compileAsync(scene, camera);
+        for (const part of [later.slice(0, 6), later.slice(6)]) {
+          await new Promise((res) => requestAnimationFrame(res));
+          for (const o of part) tmp.add(o);
+          await stage.renderer.compileAsync(scene, camera);
+        }
+      }
+      // (in parallel where the phone can: the screen keeps moving while the shaders compile; the owner, 25 Oct 2026: "if I
+      // log in then the screen freezes for a second or two, just on river run")
+      if (!stage.renderer.compileAsync) {
+        scene.add(tmp);
+        stage.renderer.compile(scene, camera);
+      }
     } catch (e) {
       console.warn?.('[rivier] warm-up', e?.message);
     }
@@ -2677,9 +2763,14 @@ function createRide(K, d) {
   }
   const warmGeos = [];
   const ready = (async () => {
-    // a first frame before it shows (the shaders compile behind Stapel's page)
-    warmUp();
+    // a first frame before it shows (the shaders compile behind the river's cover); a breath between the building and the
+    // compiling, so neither holds the screen long
+    await new Promise((res) => requestAnimationFrame(res));
+    await warmUp();
+    performance.mark?.('rv:warm');
+    if (!alive) return;
     stage.render(0);
+    performance.mark?.('rv:frame');
     await new Promise((res) => requestAnimationFrame(res));
     raf = requestAnimationFrame(loop);
   })();
@@ -2724,8 +2815,9 @@ function createRide(K, d) {
     pieShadowGeo.dispose();
     pieShadowMat.dispose();
     pieShadowTex.dispose();
-    if (pipes) { pipes.geometry.dispose(); pipes.material.map.dispose(); pipes.material.dispose(); }
-    if (lampGlow) { lampGlow.material.map.dispose(); lampGlow.material.dispose(); lamp.dispose(); }
+    // (out of the scene too: the next ride draws in the same one)
+    if (pipes) { scene.remove(pipes); pipes.geometry.dispose(); pipes.material.map.dispose(); pipes.material.dispose(); pipes.dispose(); }
+    if (lampGlow) { scene.remove(lamp, lamp.target, lampGlow); lampGlow.material.map.dispose(); lampGlow.material.dispose(); lamp.dispose(); }
     hz.dispose();
     fwRide?.dispose();
     if (raid) setBend(1);

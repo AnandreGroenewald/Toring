@@ -3331,22 +3331,31 @@ export function createUI(bus) {
   }
 
   /**
-   * (1.21) Saam gly's sheet: `mode` 'busy' (a room being made), 'host' (the link to send, waiting for the friend), 'join'
-   * (a friend's link: ride with them?), 'wait' (in the room, waiting for the start).
+   * (1.21) Saam gly's sheet: `mode` 'choose' (a friend or anyone?), 'busy' (a room being made), 'host' (the link to send,
+   * waiting for the friend), 'seek' (looking for anyone), 'none' (nobody looking: a friend, or look again), 'join' (a
+   * friend's link: ride with them?), 'wait' (in the room, waiting for the start).
    */
   function showSaam({ mode = 'busy', link = '' } = {}) {
-    const waitRow = h('p', { class: 'slag-waiting' }, h('span', { class: 'spinner small', 'aria-hidden': 'true' }), h('span', { text: S.saamWaiting }));
+    const spin = (text) => h('p', { class: 'slag-waiting' }, h('span', { class: 'spinner small', 'aria-hidden': 'true' }), h('span', { text }));
     const cancel = button('btn-white', [h('span', { text: S.saamCancel })], () => { closeModal(); bus.emit('ui:saam-cancel'); });
+    const seekBtn = (text) => button('btn-big btn-green', [h('span', { text })], () => bus.emit('ui:saam-seek'));
+    const inviteBtn = () => button('btn-big btn-purple', [h('span', { text: S.saamInvite })], () => bus.emit('ui:saam-invite'));
     const body = mode === 'join'
       ? [h('p', { class: 'week-line', text: S.saamJoinSub }),
         button('btn-big btn-green', [h('span', { text: S.saamJoinGo })], () => bus.emit('ui:saam-join')),
         button('btn-white', [h('span', { text: S.saamJoinNo })], () => { closeModal(); bus.emit('ui:saam-cancel'); })]
-      : mode === 'host'
-        ? [h('p', { class: 'week-line', text: S.saamInviteSub }),
-          button('btn-big btn-wa', [icon('chat'), h('span', { text: S.shareWhatsApp })], () => doShare(S.saamInviteText(link), 'whatsapp'), { nav: false }),
-          h('p', { class: 'saam-link', text: link }),
-          waitRow, cancel]
-        : [waitRow, cancel];
+      : mode === 'choose'
+        ? [h('p', { class: 'week-line', text: S.saamChooseSub }), seekBtn(S.saamSeek), inviteBtn(), cancel]
+        : mode === 'seek'
+          ? [spin(S.saamSeeking), cancel]
+          : mode === 'none'
+            ? [h('p', { class: 'week-line', text: S.saamNobody }), inviteBtn(), seekBtn(S.saamSeekAgain), cancel]
+            : mode === 'host'
+              ? [h('p', { class: 'week-line', text: S.saamInviteSub }),
+                button('btn-big btn-wa', [icon('chat'), h('span', { text: S.shareWhatsApp })], () => doShare(S.saamInviteText(link), 'whatsapp'), { nav: false }),
+                h('p', { class: 'saam-link', text: link }),
+                spin(S.saamWaiting), cancel]
+              : [spin(S.saamWaiting), cancel];
     modals.saam.replaceChildren(h('div', { class: 'card sheet week-sheet saam-sheet' },
       closeX(() => { closeModal(); bus.emit('ui:saam-cancel'); }),
       h('div', { class: 'sheet-head' }, emo('👥'), h('h2', { id: 'stapel-saam-title', text: mode === 'join' ? S.saamJoinTitle : S.saam })),

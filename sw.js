@@ -73,6 +73,7 @@ const PRECACHE = [
   'js/core/slag.js',
   'js/slagNet.js',
   'js/rivier/duel.js',
+  'js/rivier/saamNet.js',
   'js/game/weather.js',
   'js/game/visitors.js',
   'js/game/crane.js',

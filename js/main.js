@@ -40,6 +40,7 @@ import { SlagScene } from './scenes/SlagScene.js';
 import { makeCastle, castlePeople, battleFruit, battleReward, harvest, addFruit, cleanBasket, newBasket, SLAG } from './core/slag.js';
 import { createSlagNet } from './slagNet.js';
 import { createRiverDuel } from './rivier/duel.js';
+import { connectSaam, seekSaam } from './rivier/saamNet.js';
 import { createLewendeUi } from './ui/lewendeUi.js';
 import { createLivingStore, CAST_IDS } from './core/living.js';
 import { createDorpClient } from './dorp.js';
@@ -2758,6 +2759,14 @@ function veilOn() {
   if (rideVeil) return;
   rideVeil = document.createElement('div');
   rideVeil.className = 'rv-veil';
+  // (a ring that turns while the river is made: the cover is loading, not stuck; it turns on the screen's own thread)
+  if (!document.getElementById('rv-veil-css')) {
+    const st = document.createElement('style');
+    st.id = 'rv-veil-css';
+    st.textContent = '.rv-veil-spin{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;border:5px solid rgba(255,255,255,.35);border-top-color:#fff;animation:rv-veil-spin .8s linear infinite;will-change:transform}@keyframes rv-veil-spin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.rv-veil-spin{animation-duration:2.4s}}';
+    document.head.appendChild(st);
+  }
+  rideVeil.innerHTML = '<div class="rv-veil-spin"></div>';
   rideVeil.style.cssText = 'position:fixed;inset:0;z-index:4;pointer-events:none;opacity:1;transition:opacity .25s ease;background:linear-gradient(180deg,#f4dfc4 0%,#e6c9a1 44%,#3a9a96 56%,#1f6f72 100%);';
   document.body.appendChild(rideVeil);
 }
@@ -2853,49 +2862,116 @@ async function startRide(opts = {}) {
   }
 }
 // ------------------------------------------------------------------------------------------------ (1.21) Saam gly
-// Two friends on the same river at the same time, each seeing the other (js/rivier/duel.js over the match server's
-// two-seat rooms, /slag/room): the menu's 👥 opens a room and a link to send; the friend's link (?gly=CODE) joins it.
+// Two players on the same river at the same time, side by side, each seeing the other (js/rivier/duel.js over the
+// match server's two-seat rooms, js/rivier/saamNet.js): the menu's 👥 asks "a friend, or anyone?"; a friend gets a link
+// (?gly=CODE) to the room; anyone is found in the lobby (/slag/seek). The room survives a phone's trip to WhatsApp.
 let saam = null;        // { duel, code }
 let saamTry = 0;
 let saamLinkCode = null;
+let saamSeeker = null;  // (the lobby search, while it runs)
+let saamSeekTimer = 0;
+const SAAM_SEEK_MS = 45000;   // (nobody found in this long: say so)
+const SAAM_SHOW_MS = 20000;   // (a match from the lobby that doesn't come into the room in this long: look again)
 function saamEnd() {
   saamTry++;
+  clearTimeout(saamSeekTimer);
+  saamSeeker?.close();
+  saamSeeker = null;
   saam?.duel.close();
   saam = null;
 }
-function saamWire(duel) {
+const saamSkin = () => store.getSkins().wear.blocks || 'kleur';
+function saamWire(duel, { fromSeek = false } = {}) {
+  // (a pair from the lobby whose other half never comes in: look again)
+  let noShow = fromSeek ? setTimeout(() => {
+    if (saam?.duel !== duel || duel.friend) return;
+    ui.toast(S.saamNoShow, 2600);
+    saamSeek();
+  }, SAAM_SHOW_MS) : 0;
   duel.onEvent((e) => {
     if (saam?.duel !== duel) return;
-    if (e.t === 'hi' && duel.host) duel.start();
-    else if (e.t === 'go') {
+    if (e.t === 'hi') {
+      clearTimeout(noShow);
+      noShow = 0;
+      if (fromSeek) ui.toast(S.saamFound(e.friend?.name || S.saamFriend), 1800);
+      if (duel.host) duel.start();
+    } else if (e.t === 'go') {
       // (a round starts: the river opens on both phones; a ride still open from the last round closes first)
       ui.closeSaam();
       if (ride) closeRide();
       startRide({ from: 'menu', duel });
     } else if (e.t === 'gone' && !ride) {
+      clearTimeout(noShow);
       ui.closeSaam();
       ui.toast(duel.friend ? S.saamGone(duel.friend.name || S.saamFriend) : S.saamRoomGone, 3200);
       saamEnd();
     }
   });
 }
+/** The room's link, made: a duel waiting in it for the friend. */
+function saamRoom(code, host, { fromSeek = false } = {}) {
+  const link = connectSaam(code, { api: matchApiUrl() });
+  const duel = createRiverDuel(link, { host, name: duelNick(), skin: saamSkin() });
+  saam = { duel, code, link };
+  saamWire(duel, { fromSeek });
+  return duel;
+}
+/** 👥 on the menu: a friend (a link to send), or anyone looking right now. */
+function saamChoose() {
+  if (!has3d()) { ui.toast(S.no3dRideFree, 3600); return; }
+  saamEnd();
+  ui.showSaam({ mode: 'choose' });
+}
 async function saamHost() {
   if (!has3d()) { ui.toast(S.no3dRideFree, 3600); return; }
   saamEnd();
   const mine = saamTry;
   ui.showSaam({ mode: 'busy' });
-  const net = createSlagNet({ api: matchApiUrl() });
-  const code = await net.create();
+  const code = await createSlagNet({ api: matchApiUrl() }).create();
   if (mine !== saamTry) return;
   if (!code) {
     ui.closeSaam();
     ui.toast(S.saamNoServer, 3200);
     return;
   }
-  const duel = createRiverDuel(net.connect(code), { host: true, name: duelNick(), skin: store.getSkins().wear.blocks || 'kleur' });
-  saam = { duel, code };
-  saamWire(duel);
+  saamRoom(code, true);
   ui.showSaam({ mode: 'host', link: `${siteUrl()}?gly=${code}` });
+}
+/** Anyone looking right now: the lobby pairs two; nobody in SAAM_SEEK_MS: say so (a friend instead, or look again). */
+function saamSeek() {
+  if (!has3d()) { ui.toast(S.no3dRideFree, 3600); return; }
+  saamEnd();
+  const mine = saamTry;
+  ui.showSaam({ mode: 'seek' });
+  let tries = 0;
+  const look = () => {
+    if (mine !== saamTry) return;
+    const sk = seekSaam({ api: matchApiUrl(), name: duelNick() });
+    saamSeeker = sk;
+    sk.on((e) => {
+      if (mine !== saamTry || saamSeeker !== sk) return;
+      if (e.t === 'match') {
+        clearTimeout(saamSeekTimer);
+        saamSeeker = null;
+        sk.close();
+        saamRoom(e.code, e.host, { fromSeek: true });
+        ui.showSaam({ mode: 'wait' });
+      } else if (e.t === 'fail') {
+        // (the lobby's socket went, e.g. the phone slept: look again, at once if on the screen, else when it's back)
+        saamSeeker = null;
+        if (tries++ > 5) { ui.showSaam({ mode: 'none' }); return; }
+        if (document.visibilityState === 'hidden') document.addEventListener('visibilitychange', look, { once: true });
+        else setTimeout(look, 1200);
+      }
+    });
+  };
+  look();
+  saamSeekTimer = setTimeout(() => {
+    if (mine !== saamTry || saam) return;
+    saamSeeker?.close();
+    saamSeeker = null;
+    ui.showSaam({ mode: 'none' });
+  }, SAAM_SEEK_MS);
 }
 function saamJoin() {
   const code = saamLinkCode;
@@ -2903,9 +2979,7 @@ function saamJoin() {
   if (!code) { ui.closeSaam(); return; }
   if (!has3d()) { ui.closeSaam(); ui.toast(S.no3dRideFree, 3600); return; }
   saamEnd();
-  const duel = createRiverDuel(createSlagNet({ api: matchApiUrl() }).connect(code), { host: false, name: duelNick(), skin: store.getSkins().wear.blocks || 'kleur' });
-  saam = { duel, code };
-  saamWire(duel);
+  saamRoom(code, false);
   ui.showSaam({ mode: 'wait' });
 }
 /**
@@ -2928,7 +3002,10 @@ function openSaamLink() {
   ui.showSaam({ mode: 'join' });
   return true;
 }
-bus.on('ui:saam', saamHost);
+if (DEBUG) Object.defineProperty(window.__stapel, 'saam', { get: () => saam, configurable: true });   // (tests: drop the socket)
+bus.on('ui:saam', saamChoose);
+bus.on('ui:saam-invite', saamHost);
+bus.on('ui:saam-seek', saamSeek);
 bus.on('ui:saam-join', saamJoin);
 bus.on('ui:saam-cancel', () => { saamLinkCode = null; saamEnd(); });
 
