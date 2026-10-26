@@ -1,0 +1,35 @@
+// (1.22) The Ranglys sheet's Afgly tab: a short free ride (pilot to ~160 m), then the menu's 🏆 → Afgly shows the ride.
+// Server :8318 + matchhost :8791. usage: node glyboard122.mjs <outdir> [lang]   (GPU=1)
+import { launch, openPage, sleep } from './lib.mjs';
+import { mkdirSync } from 'node:fs';
+const out = process.argv[2] || '/tmp/stapel-shots/glyboard122';
+mkdirSync(out, { recursive: true });
+const browser = await launch({ gpu: process.env.GPU === '1' });
+const { page, problems } = await openPage(browser, 'tall', 'index.html?nosw=1&debug=1&board=1&rvauto=1&rvm=160', { base: 'http://127.0.0.1:8318/', lang: process.argv[3] || 'af' });
+const ok = [], bad = [];
+const check = (c, what) => (c ? ok : bad).push(what);
+await sleep(2500);
+await page.evaluate(() => window.__stapel.bus.emit('ui:rivier', { from: 'menu' }));
+await page.waitForSelector('#rivier .rv-card.on', { timeout: 150000 });
+await sleep(1500);
+await page.click('#rivier .rv-card .rv-no');
+await sleep(1500);
+await page.evaluate(() => window.__stapel.bus.emit('ui:board'));
+await sleep(1200);
+await page.screenshot({ path: `${out}/1-tower-tab.jpg`, quality: 85 });
+check(await page.$('.board-tabs .board-tab'), 'the sheet has its tabs');
+await page.click('.board-tab:not(.on)');
+await page.waitForFunction(() => !document.querySelector('.board-sheet .board-msg') || document.querySelector('.board-list'), null, { timeout: 15000 }).catch(() => {});
+await sleep(800);
+await page.screenshot({ path: `${out}/2-gly-tab.jpg`, quality: 85 });
+const txt = await page.evaluate(() => document.querySelector('.board-sheet')?.innerText || '');
+check(/\d+\s*m/.test(txt) && /\(/.test(txt), `the Afgly tab lists the ride (${txt.replace(/\s+/g, ' ').slice(0, 120)})`);
+await page.evaluate(() => window.__stapel.bus.emit('ui:board'));
+await sleep(600);
+check(await page.evaluate(() => document.querySelector('.board-tab.on')?.innerText.includes('Afgly') || document.querySelector('.board-tab.on')?.innerText.includes('River')), 'opened again: the last tab');
+check(problems.length === 0, `no errors (${problems.slice(0, 2).join(' | ')})`);
+for (const o of ok) console.log(' ✓', o);
+for (const b of bad) console.log(' ✗', b);
+console.log(bad.length ? `FAIL ${bad.length}` : `ALL OK ${ok.length}/${ok.length}`);
+await browser.close();
+process.exit(bad.length ? 1 : 0);

@@ -466,12 +466,27 @@ function showBoardPlace(result) {
   });
 }
 
+let boardKind = 'tower';   // (1.22) the Ranglys sheet's tab: 'tower' (the Daily) or 'gly' (Afgly), the last one chosen
+let glyBoard = null;       // (1.22) Afgly's ranking for the sheet: { day, board, at }
+/** (1.22) Afgly's ranking for `day` into the sheet (its tab shows it when it comes). */
+function loadGlyBoard(day) {
+  return span.rideBoard(day).then((b) => {
+    glyBoard = { day, board: b, at: Date.now() };
+    if (boardDate === day && boardKind === 'gly') renderBoard();
+  }).catch(() => {});
+}
+/** Afgly's tab on the sheet: only where the river can be ridden and there's a server to rank it. */
+const glyTabs = () => has3d() && !!matchApiUrl();
+
 /** The Ranglys sheet as it stands: the last answer for its day, the player's choice, and any change on its way. */
 function renderBoard({ loading = false, refresh = true } = {}) {
   if (!boardDate) return;
-  const last = boardLast?.dateKey === boardDate ? boardLast.board : null;
+  const gly = boardKind === 'gly' && glyTabs();
+  const last = gly ? (glyBoard?.day === boardDate ? glyBoard.board : null) : boardLast?.dateKey === boardDate ? boardLast.board : null;
   const mine = store.getBoardPosted() === boardDate;
   ui.showBoard({
+    kind: gly ? 'gly' : 'tower',
+    tabs: glyTabs(),
     board: last,
     loading: loading && !last,
     name: duelNick(),
@@ -488,12 +503,19 @@ function openBoard(dateKey) {
   if (!BOARD_ON) return;
   boardDate = isDateKey(dateKey) ? dateKey : todayKey();
   renderBoard({ loading: true, refresh: false });
-  if (boardFresh(boardDate)) return;
   const day = boardDate;
+  if (boardKind === 'gly' && glyTabs()) loadGlyBoard(day);
+  if (boardFresh(boardDate)) return;
   syncBoard(day).then(() => {
     if (boardDate === day) renderBoard();
   });
 }
+// (1.22) the sheet's tabs: the Daily tower's ranking, or Afgly's (asked each time it's opened: it moves all day)
+bus.on('ui:board-kind', (kind) => {
+  boardKind = kind === 'gly' ? 'gly' : 'tower';
+  renderBoard({ loading: true });
+  if (boardKind === 'gly') loadGlyBoard(boardDate);
+});
 
 /**
  * A new nickname or "show me" choice: the latest result on the board (today's or yesterday's) takes it
@@ -521,8 +543,13 @@ bus.on('ui:board-hide', (hide) => {
   store.setBoardHidden(!!hide);
   boardChanged();
   account.soon();
-  // (the same switch for Afgly's daily ranking)
-  span.rideBoard(todayKey(), !!hide).catch(() => {});
+  // (the same switch for Afgly's daily ranking; its tab shows the change)
+  const day = todayKey();
+  span.rideBoard(day, !!hide).then((b) => {
+    if (!b) return;
+    glyBoard = { day, board: b, at: Date.now() };
+    if (boardDate === day && boardKind === 'gly') renderBoard();
+  }).catch(() => {});
 });
 
 /** At start: a change that didn't reach the server last time goes now (one about an older day is let go). */

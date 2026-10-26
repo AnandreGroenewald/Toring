@@ -651,16 +651,22 @@ uniform float uStars; uniform float uAurora; uniform float uClouds; varying vec3
 void main() {
   vec3 d = normalize(vDir);
   float h = clamp(d.y, -0.2, 1.0);
-  vec3 col = mix(uHorizon, uZenith, pow(smoothstep(-0.02, 0.62, h), 0.7));
+  // (1.22: haze on the horizon, a light blue over it, the deep blue high up. The ride's camera sees only the sky's lowest
+  // 15°, and the old straight mix of horizon cream and deep blue made a flat grey-beige there)
+  vec3 low = min(uZenith * 1.9 + uHorizon * 0.12, vec3(1.0));
+  vec3 col = mix(uHorizon, low, smoothstep(-0.01, 0.15, h));
+  col = mix(col, uZenith, smoothstep(0.12, 0.7, h));
   float s = max(dot(d, uSun), 0.0);
   // high soft clouds drifting, lit warm on the sun's side (none straight up, thinning to the horizon)
   if (d.y > 0.0) {
     vec2 cp = d.xz / (d.y + 0.16) * 0.16 + vec2(uT * 0.0015, uT * 0.0004);
     float n = texture2D(uNoise, cp).r * 0.62 + texture2D(uNoise, cp * 2.7 + 0.37).b * 0.38;
-    float cl = smoothstep(0.5, 0.74, n) * smoothstep(0.02, 0.2, d.y) * (1.0 - smoothstep(0.5, 0.85, d.y));
-    vec3 lit = mix(vec3(1.0, 0.95, 0.88), uSunCol, 0.35) * (0.95 + 0.5 * pow(s, 5.0));
-    vec3 shade = mix(uHorizon, uZenith, 0.35) * 0.92;
-    col = mix(col, mix(shade, lit, smoothstep(0.52, 0.82, n)), cl * 0.8 * uClouds);
+    // (1.22: fewer, whiter clouds with the blue between them: the old cover lay over nearly all the sky the ride sees,
+    // a grey-lilac overcast)
+    float cl = smoothstep(0.58, 0.76, n) * smoothstep(0.02, 0.2, d.y) * (1.0 - smoothstep(0.5, 0.85, d.y));
+    vec3 lit = mix(vec3(1.0, 0.96, 0.9), uSunCol, 0.3) * (1.0 + 0.5 * pow(s, 5.0));
+    vec3 shade = mix(uHorizon, vec3(0.86, 0.88, 0.92), 0.5) * 0.9;
+    col = mix(col, mix(shade, lit, smoothstep(0.6, 0.8, n)), cl * 0.85 * uClouds);
   }
   // stars (the night skies): a fixed field, twinkling a little, fading near the horizon
   if (uStars > 0.0 && d.y > 0.0) {

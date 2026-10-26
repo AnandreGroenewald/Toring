@@ -867,6 +867,7 @@ export const S_EN = {
   boardMailSubject: 'Stapel leaderboard',
   boardPlace: (rank, n) => `You’re #${fmtInt(rank)} of ${fmtInt(n)} today`,
   boardEmpty: 'Nobody on the leaderboard yet. Be the first!',
+  boardTabTower: 'Tower',
   boardLoading: 'Loading the leaderboard…',
   boardOffline: 'The leaderboard can’t load right now. Try again later.',
   boardReport: 'Unsuitable nickname? Let us know:',

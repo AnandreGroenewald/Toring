@@ -911,6 +911,7 @@ export const S = {
   boardMailSubject: 'Stapel ranglys',   // (1.15) the leaderboard's report e-mail
   boardPlace: (rank, n) => `Jy is #${fmtInt(rank)} van ${fmtInt(n)} vandag`,
   boardEmpty: 'Nog niemand op die ranglys nie. Wees die eerste!',
+  boardTabTower: 'Toring',   // (1.22) the Ranglys sheet's tabs: the Daily tower, and Afgly (S.afgly)
   boardLoading: 'Laai die ranglys…',
   boardOffline: 'Die ranglys kan nie nou laai nie. Probeer later weer.',
   boardReport: 'Onvanpaste bynaam? Laat weet ons:',

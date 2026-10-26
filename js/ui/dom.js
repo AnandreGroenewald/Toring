@@ -3842,21 +3842,21 @@ export function createUI(bus) {
    * without it when the server can't be reached. `state`: 'saving' while a change is on its way,
    * 'retry' when it didn't arrive (it goes again later). `title` names the day (today's by default).
    */
-  function showBoard({ board = null, loading = false, name = '', hidden = false, tester = false, state = null, title = '', refresh = false } = {}) {
+  function showBoard({ board = null, loading = false, name = '', hidden = false, tester = false, state = null, title = '', refresh = false, kind = 'tower', tabs = false } = {}) {
     if (refresh && st.modal !== 'board') return;   // an answer that came after the sheet was closed
     const MEDAL = ['🥇', '🥈', '🥉'];
     const row = (t) => h('li', { class: `board-row${t.you ? ' is-you' : ''}` },
       h('span', { class: 'board-rank' }, t.rank <= 3 ? [emo(MEDAL[t.rank - 1]), h('span', { class: 'sr', text: `#${t.rank}` })] : h('b', { text: `#${t.rank}` })),
       h('span', { class: 'board-name', text: `${t.you ? `${t.name} (${S.boardYou})` : t.name}${t.retried ? ` 🔁${(t.tries || 2) > 2 ? t.tries - 1 : ''}` : ''}`, title: t.retried ? S.retryMark((t.tries || 2) - 1) : null }),
-      h('b', { class: 'board-h', text: fmtM(t.heightM) }));
+      h('b', { class: 'board-h', text: kind === 'gly' ? `${fmtInt(t.m)} m` : fmtM(t.heightM) }));
     let body;
     if (loading) body = h('p', { class: 'board-msg', text: S.boardLoading });
     else if (!board) body = h('p', { class: 'board-msg', text: S.boardOffline });
-    else if (!board.top.length && !board.you) body = h('p', { class: 'board-msg', text: S.boardEmpty });
+    else if (!board.top.length && !board.you) body = h('p', { class: 'board-msg', text: kind === 'gly' ? S.rvBoardNone : S.boardEmpty });
     else {
       // your own row (hidden, or below the top) goes in its place; "⋯" when it is far below the list
       const list = board.top.slice();
-      if (board.you && !list.some((t) => t.you)) list.push({ rank: board.you.rank, name: name || S.boardYou, heightM: board.you.heightM, you: true });
+      if (board.you && !list.some((t) => t.you)) list.push({ rank: board.you.rank, name: name || S.boardYou, heightM: board.you.heightM, m: board.you.m, you: true });
       list.sort((a, b) => a.rank - b.rank);
       const rows = [];
       list.forEach((t, k) => {
@@ -3880,6 +3880,13 @@ export function createUI(bus) {
     modals.board.replaceChildren(h('div', { class: 'card sheet board-sheet' },
       h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); } }, icon('close')),
       h('div', { class: 'sheet-head' }, emo('🏆'), h('h2', { id: 'stapel-board-title', text: title || S.boardTitle })),
+      // (1.22, the owner: "there is no daily leaderboard that is easy accessible for the Afgly") the Daily tower's
+      // ranking and Afgly's, side by side on one sheet
+      tabs ? h('div', { class: 'board-tabs', role: 'group', 'aria-label': S.boardTitle },
+        [['tower', '🏗️', S.boardTabTower], ['gly', '🛟', S.afgly]].map(([k, ic, label]) => h('button', {
+          type: 'button', class: `board-tab${kind === k ? ' on' : ''}`, 'aria-pressed': String(kind === k),
+          onclick: () => { if (kind === k) return; audio.play('click'); bus.emit('ui:board-kind', k); },
+        }, emo(ic), h('span', { text: label })))) : null,
       h('div', { class: 'sheet-body' }, body),
       h('div', { class: 'sheet-foot board-foot' },
         h('label', { class: 'board-toggle' }, toggle, h('span', { text: S.boardShowMe })),

@@ -2350,6 +2350,10 @@ svg.ic {
   cursor: pointer;
 }
 .board-list { margin: 0; padding: 0; list-style: none; display: grid; gap: calc(8 * var(--u)); }
+/* (1.22) the Ranglys sheet's tabs: the Daily tower and Afgly */
+.board-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: calc(6 * var(--u)); padding: calc(4 * var(--u)); margin: 0 0 calc(10 * var(--u)); border-radius: calc(16 * var(--u)); background: rgba(0, 0, 0, 0.22); }
+.board-tab { display: flex; align-items: center; justify-content: center; gap: calc(6 * var(--u)); min-height: calc(42 * var(--u)); border: 0; border-radius: calc(12 * var(--u)); background: transparent; color: rgba(255, 255, 255, 0.72); font: inherit; font-weight: 900; font-size: calc(18 * var(--u)); cursor: pointer; }
+.board-tab.on { background: #fff; color: #1d2b45; box-shadow: 0 calc(2 * var(--u)) 0 rgba(0, 0, 0, 0.18); }
 .board-row {
   display: grid;
   grid-template-columns: calc(56 * var(--u)) 1fr auto;
