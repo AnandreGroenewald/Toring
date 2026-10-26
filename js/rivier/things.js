@@ -19,14 +19,18 @@ function canvas(w, h) {
  * The foam round a floating thing: lace, not a ring of dots — thousands of tiny bubbles, thick at the waterline and
  * thinning outwards, on a soft milky band; a faint shade under it (the sun's real shadow does the rest).
  */
-function foamTexture() {
+/**
+ * Froth on the water round something floating: a ring of bubbles at its waterline. `hull` (1.22, the boards): churned
+ * white right up to the hull instead of the shade inside the ring, which round a board read as a dark hole in the river.
+ */
+function foamTexture({ hull = false } = {}) {
   const N = 256;
   const C = N / 2;
   const c = canvas(N, N);
   const g = c.getContext('2d');
-  const sh = g.createRadialGradient(C, C, 8, C, C, 84);
-  sh.addColorStop(0, 'rgba(6,26,30,0.2)');
-  sh.addColorStop(1, 'rgba(6,26,30,0)');
+  const sh = g.createRadialGradient(C, C, 8, C, C, hull ? 70 : 84);
+  sh.addColorStop(0, hull ? 'rgba(236,248,248,0.34)' : 'rgba(6,26,30,0.2)');
+  sh.addColorStop(1, hull ? 'rgba(236,248,248,0)' : 'rgba(6,26,30,0)');
   g.fillStyle = sh;
   g.fillRect(0, 0, N, N);
   const band = g.createRadialGradient(C, C, 46, C, C, 122);
@@ -43,12 +47,13 @@ function foamTexture() {
     const a = rnd() * Math.PI * 2;
     // (most bubbles hug the waterline at ~56 px; the rest drift out in patches)
     const k = Math.abs(gauss());
-    const r = 54 + k * k * 64 + Math.sin(a * 5 + k * 3) * 4;
+    // (a hull's froth also fills the middle: a third of its bubbles churn inside the ring)
+    const r = hull && rnd() < 0.33 ? 14 + rnd() * 40 : 54 + k * k * 64 + Math.sin(a * 5 + k * 3) * 4;
     if (r > 124) continue;
     const x = C + Math.cos(a) * r;
     const y = C + Math.sin(a) * r;
     const br = 0.5 + rnd() * (r < 70 ? 2.2 : 1.4);
-    const al = (0.25 + rnd() * 0.55) * (1 - (r - 54) / 80);
+    const al = (0.25 + rnd() * 0.55) * (1 - Math.max(0, r - 54) / 80);
     g.strokeStyle = `rgba(255,255,255,${Math.max(0.05, al)})`;
     g.lineWidth = 0.6 + rnd() * 0.6;
     g.beginPath();
@@ -92,6 +97,7 @@ function dotTexture() {
  */
 export function createThings(scene, pieces) {
   const foamMat = bendMaterial(new THREE.MeshBasicMaterial({ map: foamTexture(), transparent: true, depthWrite: false, fog: true, opacity: 0.9 }));
+  const hullFoamMat = bendMaterial(new THREE.MeshBasicMaterial({ map: foamTexture({ hull: true }), transparent: true, depthWrite: false, fog: true, opacity: 0.9 }));
   const foamGeo = new THREE.PlaneGeometry(1, 1);
   foamGeo.rotateX(-Math.PI / 2);
   const rockMat = bendMaterial(new THREE.MeshStandardMaterial({ color: '#9c7d62', roughness: 0.9, flatShading: true }));
@@ -204,14 +210,15 @@ export function createThings(scene, pieces) {
     });
     return g;
   }
-  function foam(size) {
-    const m = new THREE.Mesh(foamGeo, foamMat);
+  function foam(size, { hull = false } = {}) {
+    const m = new THREE.Mesh(foamGeo, hull ? hullFoamMat : foamMat);
     m.scale.set(size, 1, size);
     m.renderOrder = 2;
     m.frustumCulled = false;
     return m;
   }
 
+  let blockN = 0;
   /** A block floating down: { obj, w (m across), d (m along), top } . */
   function floating(it) {
     const root = new THREE.Group();
@@ -226,7 +233,7 @@ export function createThings(scene, pieces) {
     const f = foam(Math.max(W, H) * k * 1.7);
     f.position.y = 0.04;
     root.add(f);
-    root.userData = { block: g, w: W * k * 0.82, d: 3.2 * k * 0.8, phase: (it.spin || 0) * 10, top: H * k * 0.68 };
+    root.userData = { block: g, w: W * k * 0.82, d: 3.2 * k * 0.8, phase: (it.spin || 0) * 10 + (blockN++ % 7) * 0.9, top: H * k * 0.68 };   // (1.22: each its own sway)
     return root;
   }
   let rockN = 0;
@@ -416,7 +423,7 @@ export function createThings(scene, pieces) {
     blockMats.clear();
     for (const tex of faceTex.values()) tex.dispose();
     faceTex.clear();
-    for (const m of [foamMat, rockMat, ringMat, skinMat, ...shirtMats]) { m.map?.dispose?.(); m.dispose(); }
+    for (const m of [foamMat, hullFoamMat, rockMat, ringMat, skinMat, ...shirtMats]) { m.map?.dispose?.(); m.dispose(); }
     sprayMat.uniforms.map.value.dispose();
     sprayMat.uniforms.puffMap.value.dispose();
     sprayMat.dispose();

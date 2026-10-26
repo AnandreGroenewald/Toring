@@ -86,8 +86,9 @@
   // LAUNCH_ONCE_MS is let go. One that comes while the game runs is handed over as 'stapel:link' (no
   // reload: a tower in progress stays); the starting link, which Capacitor also hands over, isn't.
   var LAUNCH_ONCE_MS = 12 * 60 * 60 * 1000;
-  // (1.13: ?rekening, the privacy page's deletion link, opens the account sheet)
-  var LINK_RE = /[?&](?:(?:kamer|teen|klop|toetser)=|rekening(?:[=&#]|$))/;
+  // (1.13: ?rekening, the privacy page's deletion link, opens the account sheet; 1.22: ?gly=, a friend's Saam gly
+  // invite, was missing here, so it opened the app on the menu instead of their room)
+  var LINK_RE = /[?&](?:(?:kamer|teen|klop|toetser|gly)=|rekening(?:[=&#]|$))/;
   function linkQuery(url) {
     try {
       var q = new URL(url).search;

@@ -1,0 +1,37 @@
+// (1.22) A friend's Saam gly link while the game is open (the app hands it over as 'stapel:link'): on the menu, the
+// join sheet at once; mid-ride, a toast and the sheet when the menu is back. Server :8318 (+ matchhost). usage: node saamlink122.mjs
+import { launch, openPage, sleep } from './lib.mjs';
+const browser = await launch({ gpu: process.env.GPU === '1' });
+const { page, problems } = await openPage(browser, 'tall', 'index.html?nosw=1&debug=1&date=2026-10-27&rvauto=1', { base: 'http://127.0.0.1:8318/' });
+const ok = [], bad = [];
+const check = (c, what) => (c ? ok : bad).push(what);
+const join = () => page.evaluate((t) => [...document.querySelectorAll('.modal, .sheet, [role=dialog]')].some((m) => getComputedStyle(m).display !== 'none' && m.innerText.includes(t)), 'S');
+const sheetText = () => page.evaluate(() => document.body.innerText);
+await sleep(2500);
+const sub = await page.evaluate(() => window.__stapel && true);
+const send = (code) => page.evaluate((c) => window.dispatchEvent(new CustomEvent('stapel:link', { detail: `https://stapelspel.pages.dev/?gly=${c}` })), code);
+const joinSub = await page.evaluate(async () => (await import('/js/core/strings.js')).S.saamJoinSub);
+await send('ABC123');
+await sleep(900);
+check((await sheetText()).includes(joinSub), 'on the menu: the join sheet opens');
+await page.evaluate(() => window.__stapel.bus.emit('ui:saam-cancel'));
+await page.keyboard.press('Escape');
+await sleep(600);
+await page.evaluate(() => window.__stapel.bus.emit('ui:rivier'));
+await page.waitForFunction(() => window.__stapel.where.screen === 'rivier', null, { timeout: 60000 });
+await sleep(1500);
+await send('XYZ789');
+await sleep(700);
+const mid = await sheetText();
+check(!mid.includes(joinSub), 'mid-ride: no sheet over the ride');
+check(await page.evaluate(() => window.__stapel.ride?.state?.().phase === 'run'), 'mid-ride: the ride goes on');
+await page.evaluate(() => { window.__stapel.ride?.close?.(); });
+await page.evaluate(() => window.__stapel.bus.emit('ui:home'));
+await sleep(1800);
+check((await sheetText()).includes(joinSub), 'back on the menu: the waiting link asks');
+check(problems.length === 0, `no errors (${problems.slice(0, 2).join(' | ')})`);
+for (const o of ok) console.log(' ✓', o);
+for (const b of bad) console.log(' ✗', b);
+console.log(bad.length ? `FAIL ${bad.length}` : `ALL OK ${ok.length}/${ok.length}`);
+await browser.close();
+process.exit(bad.length ? 1 : 0);

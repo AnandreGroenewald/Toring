@@ -32,7 +32,7 @@ export function createBeasts(bend = (m) => m, models = {}) {
     hippo: bend(std('#76636f', { roughness: 0.55 })),
     hippoDark: bend(std('#5b4b57', { roughness: 0.6 })),
     hippoPink: bend(std('#d78f99', { roughness: 0.6 })),
-    ele: bend(std('#9d9a95', { roughness: 0.7 })),
+    ele: bend(std('#6c6864', { roughness: 0.8 })),   // (1.22: darker: in the low sun the stand-in read as white clay)
     fur: bend(std('#8a5a2e', { roughness: 0.9 })),
     furDark: bend(std('#6b4220', { roughness: 0.9 })),
     face: bend(std('#e7c49a', { roughness: 0.75 })),

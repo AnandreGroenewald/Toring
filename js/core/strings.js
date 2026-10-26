@@ -856,6 +856,7 @@ export const S = {
   remind4: 'Hoe hoog kan jy vandag bou? 🔥',
   remind5: '⚔️ Daag ’n vriend uit vir ’n wedstryd!',
   linkLater: 'Die uitdaging wag: bou eers jou toring klaar.',
+  saamLater: 'Jou vriend se Saam gly wag: klaar eers hierdie een.',
   openInApp: 'Maak oop in die Stapel-app',
   versionNote: (v) => `Weergawe ${v}`,
   // Sign in with Google: the saved progress (1.13, js/account.js)

@@ -816,6 +816,7 @@ export const S_EN = {
   remind4: 'How high can you build today? 🔥',
   remind5: '⚔️ Challenge a friend to a match!',
   linkLater: 'The challenge is waiting: finish your tower first.',
+  saamLater: "Your friend's ride is waiting: finish this one first.",
   openInApp: 'Open in the Stapel app',
   versionNote: (v) => `Version ${v}`,
   accountButton: (signedIn) => (signedIn ? 'Your account' : 'Save your progress'),

@@ -603,7 +603,7 @@ export class GameScene extends Phaser.Scene {
 
     this.island = createIsland(this);
     this.billboard = null;
-    safely(() => { this.billboard = createBillboard(this, this.billboardData); });
+    this.placeBillboard();
     this.water = new Water(this, { width: GAME_W });
     this.crane = new Crane(this, { top: this.st });
     this.effects = new Effects(this, { reducedMotion: this.reducedMotion });
@@ -1135,7 +1135,18 @@ export class GameScene extends Phaser.Scene {
     this.billboardData = { premium: billboard?.premium || null, salesOn: !!billboard?.salesOn };
     if (this.billboard) safely(() => this.billboard.destroy());
     this.billboard = null;
-    safely(() => { this.billboard = createBillboard(this, this.billboardData); });
+    this.placeBillboard();
+  }
+
+  /**
+   * (1.22) The island board stands only for a sponsor (or while sponsorships are on sale). With neither it showed the
+   * Stapel logo, which stood over the tower's right side (blocks and score pops ran over it) and, on the menu, over the
+   * proverb of the day.
+   */
+  placeBillboard() {
+    const d = this.billboardData;
+    if (!d?.premium && !d?.salesOn) return;
+    safely(() => { this.billboard = createBillboard(this, d); });
   }
 
   /** Trolley swing for block i: a gentle first swing that widens to the full amplitude. */

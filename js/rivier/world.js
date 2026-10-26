@@ -22,8 +22,10 @@ export const BANK = { half: 8.2, lake: 46, fogNear: 90, fogFar: 520 };
  * sunset, under the moon and stars, the northern lights, deep space, pastel candy, cherry blossom, the aquarium and
  * retro neon. Unknown ids look like the day.
  */
+// (1.22: the day's sun a little higher, 26° instead of 20°: the shadows on the water were long dark streaks, about three
+// times the height of what made them, the rider's running away behind him)
 const DAY = {
-  zenith: COLORS.zenith, horizon: COLORS.horizon, haze: COLORS.haze, sun: COLORS.sun, sunDir: [-0.45, 0.34, -0.83], sunI: 2.6,
+  zenith: COLORS.zenith, horizon: COLORS.horizon, haze: COLORS.haze, sun: COLORS.sun, sunDir: [-0.45, 0.46, -0.83], sunI: 2.6,
   fill: '#ffd9b0', fillI: 0.9, hemiSky: '#bcd6ff', hemiGround: '#7a5a3a', hemiI: 0.75, deep: COLORS.deep, shallow: COLORS.shallow,
   skyRefl: COLORS.skyRefl, wall: COLORS.wall, stars: 0, aurora: 0, clouds: 1, exposure: 1.06, envI: 0.7,
 };
@@ -96,12 +98,13 @@ export function bendMaterial(m) {
  */
 const rkClock = { value: 0 };   // (the walls' and stones' own clock: the light dancing off the water)
 const rkSun = { value: 1 };     // (how strong that light is: the look's sun)
-function rockDetail(m, noise, bank, { tri = false, wet = 1.15 } = {}) {
+function rockDetail(m, noise, bank, { tri = false, wall = false, wet = 1.15, triS = [0.11, 0.08] } = {}) {
   const bend = m.onBeforeCompile;
   m.onBeforeCompile = (sh, r) => {
     bend(sh, r);
     sh.uniforms.uRkNoise = { value: noise };
     sh.uniforms.uRkWet = { value: wet };
+    sh.uniforms.uRkTriS = { value: new THREE.Vector2(triS[0], triS[1]) };
     sh.uniforms.uRkT = rkClock;
     sh.uniforms.uRkSun = rkSun;
     Object.assign(sh.uniforms, bank);
@@ -126,12 +129,19 @@ float rkOpen(float z) {
   vRkL = transformed;
   vRkN = objectNormal;`);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRkL;\nvarying vec3 vRkN;\nuniform sampler2D uRkNoise;\nuniform float uRkWet;\nuniform float uRkT;\nuniform float uRkSun;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRkL;\nvarying vec3 vRkN;\nuniform sampler2D uRkNoise;\nuniform float uRkWet;\nuniform float uRkT;\nuniform float uRkSun;\nuniform vec2 uRkTriS;')
       // (a stone in the river: the picture wrapped round it from three sides, no seams)
-      .replace('#include <map_fragment>', tri ? `#ifdef USE_MAP
+      // (1.22, the walls: the layers by height, the picture along the wall by how far along and how far out, one picture
+      // for every face: wherever the face turned along the river, or lay flat on a ledge, the other ways of laying it on
+      // dragged it into upright streaks and comb teeth)
+      .replace('#include <map_fragment>', wall ? `#ifdef USE_MAP
+  diffuseColor *= texture2D(map, vec2(vRkL.z + vRkL.x, vRkL.y) * uRkTriS);
+#endif` : tri ? `#ifdef USE_MAP
   vec3 rkB = pow(abs(normalize(vRkN)), vec3(4.0));
   rkB /= (rkB.x + rkB.y + rkB.z);
-  vec2 rkS = vec2(0.42, 0.3);
+  // (1.22: stones four times larger than before: a 3 m stone showed four or five layers, which the three sides blended
+  // into rings like wood grain; now one or two layers of sandstone. The walls their own size: see rockMat)
+  vec2 rkS = uRkTriS;
   vec4 sampledDiffuseColor = texture2D(map, vRkL.zy * rkS) * rkB.x + texture2D(map, vRkL.xz * rkS * 1.3) * rkB.y + texture2D(map, vRkL.xy * rkS) * rkB.z;
   diffuseColor *= sampledDiffuseColor;
 #endif` : '#include <map_fragment>')
@@ -170,7 +180,7 @@ float rkOpen(float z) {
   }
   #include <opaque_fragment>`);
   };
-  m.customProgramCacheKey = () => (tri ? 'rivier-bend-rock-tri' : 'rivier-bend-rock');
+  m.customProgramCacheKey = () => (wall ? 'rivier-bend-rock-wall' : tri ? 'rivier-bend-rock-tri' : 'rivier-bend-rock');   // (the size is a uniform)
   return m;
 }
 
@@ -376,7 +386,7 @@ function rockTextures() {
       wrapX((dx) => {
         let x = jx + dx;
         let y = bd.y;
-        g.strokeStyle = 'rgba(48,22,10,0.55)';
+        g.strokeStyle = 'rgba(48,22,10,0.32)';   // (1.22: softer: down the canyon, side-on, they squeezed into dark lines)
         gb.strokeStyle = 'rgba(10,10,10,0.9)';
         g.lineWidth = gb.lineWidth = 1.2 + rnd() * 1.2;
         g.beginPath();
@@ -419,13 +429,14 @@ function rockTextures() {
     });
   }
   // desert varnish: dark streaks running down the face from the ledges
+  // (1.22: fewer and fainter: seen side-on they made the faces look like wood grain)
   for (let i = 0; i < 36; i++) {
     const bd = bands[Math.floor(rnd() * bands.length)];
     const x = rnd() * N;
     const y = bd.y + warp[Math.floor(x) % N] * -1;
     const w = 1.5 + rnd() * 6;
     const len = 30 + rnd() * 160;
-    const a = 0.08 + rnd() * 0.16;
+    const a = (0.08 + rnd() * 0.16) * (i % 3 ? 0 : 0.6);
     wrapX((dx) => {
       for (const dy of [-N, 0]) {
         const gr = g.createLinearGradient(0, y + dy, 0, y + dy + len);
@@ -735,7 +746,9 @@ float h(vec2 p) {
   float a = texture2D(uNoise, vec2(p.x * 0.07, p.y * 0.022 - uT * 0.05)).r;
   float b = texture2D(uNoise, vec2(p.x * 0.23, p.y * 0.075 - uT * 0.16)).b;
   float c = texture2D(uNoise, vec2(p.x * 0.61, p.y * 0.21 - uT * 0.42)).r;
-  return a * 0.55 + b * 0.32 + c * 0.13 * uDetail;
+  // (1.22: less of the long swell, more of the small chop: the swells tilted whole patches to the pale sky, creamy
+  // blotches on the water; now a finer sparkle)
+  return a * 0.36 + b * 0.4 + c * 0.24 * uDetail;
 }
 void main() {
   vec2 p = vRiver;
@@ -743,6 +756,13 @@ void main() {
   float h0 = h(p);
   vec3 n = normalize(vec3((h0 - h(p + vec2(e, 0.0))) * 2.4, 1.0, (h0 - h(p + vec2(0.0, e))) * 2.4));
   vec3 v = normalize(cameraPosition - vWorld);
+  // (1.22: fine ripples close by, smaller than the waves above can show: near the camera the water went smooth, and
+  // the sky lay on it in big golden blobs)
+  {
+    float nearK = (1.0 - smoothstep(6.0, 26.0, length(cameraPosition - vWorld))) * uDetail;
+    vec2 rp = texture2D(uNoise, vec2(p.x * 1.9, p.y * 0.9 - uT * 0.9)).rg + texture2D(uNoise, vec2(p.x * 3.7 + 0.31, p.y * 2.1 - uT * 1.6)).gb - 1.0;
+    n = normalize(n + vec3(rp.x, 0.0, rp.y) * 0.32 * nearK);
+  }
   float lake = smoothstep(uLakeFrom, uLakeFrom + 40.0, p.y) * (1.0 - smoothstep(uLakeTo, uLakeTo + 30.0, p.y));
   lake = max(lake, 1.0 - smoothstep(uPoolTo, uPoolTo + 40.0, p.y));
   float half_ = mix(uHalf, uLakeHalf, lake);
@@ -760,7 +780,7 @@ void main() {
     vec3 rc = texture2D(uRefl, clamp(ruv, 0.001, 0.999)).rgb;
     sky = mix(sky, rc, uReflK);
   }
-  vec3 col = mix(base, sky, clamp(fres, 0.0, 0.5 + 0.22 * uReflK));
+  vec3 col = mix(base, sky, clamp(fres, 0.0, 0.42 + 0.3 * uReflK));
   // light in the water itself (it's never black, even looking straight down into it)
   col += uShallow * 0.18 * (1.0 - fres);
   // the sandstone walls mirrored near the banks: warmer and darker there (not in the open lake; less with the real one)
@@ -768,11 +788,13 @@ void main() {
   col = mix(col, uWall, wall * (0.22 + 0.4 * fres));
   // the low sun ahead: a path of glitter down the river
   float s = max(dot(r, uSun), 0.0);
-  col += uSunCol * (pow(s, 260.0) * 3.2 + pow(s, 40.0) * 0.22);
+  // (1.22: softer: at 3.2 the glints burnt to white smears down the left of the river)
+  col += uSunCol * (pow(s, 260.0) * 1.7 + pow(s, 40.0) * 0.13);
   // white water: foam along the banks and streaks where the current breaks (thin, along the flow)
   float streak = texture2D(uNoise, vec2(p.x * 0.9, p.y * 0.02 - uT * 0.11)).b;
   float rap = smoothstep(uRapids.x - 12.0, uRapids.x + 8.0, p.y) * (1.0 - smoothstep(uRapids.y - 8.0, uRapids.y + 12.0, p.y));
-  float foamLine = smoothstep(0.66 - rap * 0.2, 0.74, streak) * (1.0 - smoothstep(0.74, 0.86 + rap * 0.1, streak)) * (0.55 + rap * 0.4) * (1.0 - lake);
+  // (1.22: fainter outside the rapids: close to you they were big white smears down the side of the river)
+  float foamLine = smoothstep(0.66 - rap * 0.2, 0.74, streak) * (1.0 - smoothstep(0.74, 0.86 + rap * 0.1, streak)) * (0.32 + rap * 0.63) * (1.0 - lake);
   foamLine += rap * smoothstep(0.55, 0.85, h0) * 0.6;
   // (lace, not a solid band: broken up by fast noise running with the current)
   float lace = smoothstep(0.42, 0.72, texture2D(uNoise, vec2(p.x * 1.3, p.y * 0.16 - uT * 0.5)).g * 0.6 + h0 * 0.4);
@@ -794,9 +816,11 @@ void main() {
     float spread = 0.4 + back * 0.2;
     float dx = abs(abs(p.x - uRider.x) - spread);
     float fade = 1.0 - back / 9.0;
+    // (1.22: both fade in over the first metre behind the board: their hard start showed whenever he jumped)
+    fade *= smoothstep(0.2, 1.3, back);
     float wk = (1.0 - smoothstep(0.0, 0.14 + back * 0.02, dx)) * fade * fade;
     wk *= smoothstep(0.3, 0.75, texture2D(uNoise, vec2(p.x * 0.8, p.y * 0.6 - uT * 0.6)).r);
-    float tr = (1.0 - smoothstep(0.1, 0.5, abs(p.x - uRider.x))) * (1.0 - smoothstep(0.0, 5.0, back));
+    float tr = (1.0 - smoothstep(0.1, 0.5, abs(p.x - uRider.x))) * (1.0 - smoothstep(0.0, 5.0, back)) * smoothstep(0.2, 1.3, back);
     col = mix(col, uFoam, clamp(wk * 0.5 + tr * 0.25, 0.0, 0.6));
   }
   // (a night: his headlamp, a warm pool of light on the water ahead of him: the foam and the wave tops light up in it,
@@ -1008,7 +1032,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     const cg = town ? new THREE.PlaneGeometry(200, 200, 20, 20) : new THREE.PlaneGeometry(140, 260, 28, 52);
     cg.rotateX(-Math.PI / 2);
     cg.translate(0, 0.05, town ? 0 : -100);
-    const catcher = new THREE.Mesh(cg, bendMaterial(new THREE.ShadowMaterial({ color: '#06262a', opacity: 0.42, depthWrite: false })));
+    const catcher = new THREE.Mesh(cg, bendMaterial(new THREE.ShadowMaterial({ color: '#06262a', opacity: 0.34, depthWrite: false })));
     catcher.receiveShadow = true;
     catcher.frustumCulled = false;
     catcher.renderOrder = 1;
@@ -1023,11 +1047,16 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
   // banks' opening)
   const stoneMat = rockDetail(bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, roughness: 0.82, metalness: 0, color: '#e6c3a0', flatShading: true })), noise, { uPoolTo: { value: -1e6 }, uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uLakeW: { value: 0 } }, { tri: true, wet: 0.18 });
   stoneMat.userData.shared = true;
-  const rockMat = rockDetail(bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, bumpMap: rockTex.bump, bumpScale: 2.2, roughness: 0.9, metalness: 0, vertexColors: true, side: THREE.DoubleSide })), noise, bankU);
+  // (1.22: the walls' picture laid on by height and distance along (rockDetail `wall`), at the old size: two along a 48 m
+  // piece, three quarters of it up the 34 m face. Laid on by the piece's own along-and-up it ran into long upright
+  // streaks wherever the face turned along the river, which read as wood grain; the bumps did the same, so they're off:
+  // the crags and ledges are in the shape itself)
+  const rockMat = rockDetail(bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, roughness: 0.9, metalness: 0, vertexColors: true, side: THREE.DoubleSide })), noise, bankU, { wall: true, triS: [2 / 48, 0.75 / 34] });
   const SEG_L = 48;
   const N_SEG = 13;
   function cliffGeometry(side, seed) {
-    const g = new THREE.PlaneGeometry(SEG_L, 34, 44, 30);
+    // (1.22: a finer mesh, 56 × 40 instead of 44 × 30: the ledges' edges ran in a sawtooth)
+    const g = new THREE.PlaneGeometry(SEG_L, 34, 56, 52);
     const pos = g.attributes.position;
     const col = [];
     let s = seed * 7919 + 13;
@@ -1049,14 +1078,19 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       const v = pos.getY(i) + 17;   // height 0..34
       // the face leans back as it climbs, in steps: layers that stand out and undercut feet (the sandstone's ledges)
       const step = (v % 7.5) / 7.5;
+      // (1.22: each layer's ledge rounded over its top 1.6 m and the layer's own lean eased into the next: both jumped at
+      // the layer's edge, a step too sharp for the mesh, which shaded as a row of teeth along every ledge)
+      const lay = Math.floor(v / 7.5) + sm(Math.min(1, Math.max(0, (step - 0.79) / 0.21)));
+      const lip = step < 0.18 ? 1 - step / 0.18 : sm(Math.min(1, Math.max(0, (step - 0.79) / 0.21)));
       // (every piece shares one profile at its two ends, so the pieces join without a slit; their own shape grows in
       // over the last 7 m)
       const e0 = Math.min(1, Math.max(0, (SEG_L / 2 - Math.abs(u)) / 7));
       const ends = e0 * e0 * (3 - 2 * e0);
-      const common = Math.pow(v / 34, 1.6) * 7 + (step < 0.18 ? -0.7 * (1 - step / 0.18) : 0) + Math.sin(Math.floor(v / 7.5) * 2.7) * 0.35 + Math.sin(v * 0.6) * 0.45;
-      let own = Math.sin(Math.floor(v / 7.5) * 2.7 + seed) * 0.35 - Math.sin(Math.floor(v / 7.5) * 2.7) * 0.35 + Math.sin(u * 0.21 + seed) * 0.9 + (Math.sin(v * 0.6 + u * 0.05) - Math.sin(v * 0.6)) * 0.45 + Math.sin(u * 0.83 + v * 0.31 + seed) * 0.22;
+      const common = Math.pow(v / 34, 1.6) * 7 - 0.7 * lip + Math.sin(lay * 2.7) * 0.35 + Math.sin(v * 0.6) * 0.45;
+      let own = Math.sin(lay * 2.7 + seed) * 0.35 - Math.sin(lay * 2.7) * 0.35 + Math.sin(u * 0.21 + seed) * 0.9 + (Math.sin(v * 0.6 + u * 0.05) - Math.sin(v * 0.6)) * 0.45 + Math.sin(u * 0.83 + v * 0.31 + seed) * 0.22;
       for (const [bu, bv, br] of bumps) own -= Math.exp(-((u - bu) ** 2 + (v - bv) ** 2) / (br * br * 2)) * 1.6;
-      if (v > 1.4) own += (fbm(u * 0.14 + 3, v * 0.2) - 0.5) * 2.6;
+      // (1.22: the crags without the finest size: smaller than the mesh, it zigzagged every layer's edge)
+      if (v > 1.4) own += (vn2(u * 0.14 + 3, v * 0.2) * 0.66 + vn2(u * 0.294 + 3, v * 0.42) * 0.34 - 0.5) * 2.6;
       let out = common + own * ends;
       // (no deep bulge at the water: something riding along the bank, Hanswors on his duck, stays clear of the rock. The
       // limit eases off above a rider's height, and the rock eases into it rather than being cut flat)

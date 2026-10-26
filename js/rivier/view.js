@@ -669,7 +669,7 @@ function createRide(K, d) {
   const rider = createRider(bendMaterial, d.models?.builder || null);
   scene.add(rider.group);
   // (the board's own foam and shadow on the water, under him)
-  const riderFoam = things.foam(2.6);
+  const riderFoam = things.foam(2.6, { hull: true });
   riderFoam.scale.set(1.9, 1, 3.6);
   scene.add(riderFoam);
   // the lanes' edges (the owner, 25 Oct 2026: "Its just for the outter lines, where the lanes end, not for every lane ...
@@ -1326,7 +1326,7 @@ function createRide(K, d) {
   const fname = duel ? duel.friend?.name || S.saamFriend : '';
   const SMOOTH_MS = 160;   // (the friend's moves are drawn this far behind: between two that came, never a guess)
   const fr = duel ? {
-    rider: createRider(bendMaterial, d.models?.builder || null, { swap: true }), foam: things.foam(2.6), seen: false, d: 0, sd: 0, at: 0,
+    rider: createRider(bendMaterial, d.models?.builder || null, { swap: true }), foam: things.foam(2.6, { hull: true }), seen: false, d: 0, sd: 0, at: 0,
     tx: laneX(duel.host ? 2 : 0), sx: laneX(duel.host ? 2 : 0), y: 0, k: 0, l: 0, h: RIVER.hearts, out: false, outT: 0, endM: 0, gone: false, blinkT: 0, blinkOn: false,
     samples: [], off: 0, away: false, md: 0, dodge: null, pj: null, mute: null, svx: 0, tvx: 0, ptx: laneX(duel.host ? 2 : 0),
   } : null;
@@ -2723,8 +2723,12 @@ function createRide(K, d) {
       const u = l.obj.userData;
       l.obj.position.set(lx, u.kind === 'croc' || u.kind === 'hippo' ? 0 : Math.sin(t * 1.9 + (u.phase || 0)) * 0.08, phase === 'zoo' ? -12 : -ahead);
       if (u.block && u.kind !== 'monkey') {
-        u.block.rotation.y += dt * 0.2;
+        // (1.22: it sways on the current instead of turning round and round: turned 40° by the time it reached you, a
+        // block seemed to lie across two lanes)
+        u.yaw0 ??= u.block.rotation.y;
+        u.block.rotation.y = u.yaw0 + Math.sin(t * 0.8 + u.phase) * 0.09;
         u.block.rotation.z = Math.sin(t * 1.3 + u.phase) * 0.05;
+        u.block.rotation.x = Math.sin(t * 1.05 + u.phase * 1.7) * 0.03;
       }
       if (u.arm && u.kind !== 'clown') u.arm.rotation.z = -0.4 + Math.sin(t * 9 + u.phase) * 0.7;
       u.update?.(t, ahead, dt);

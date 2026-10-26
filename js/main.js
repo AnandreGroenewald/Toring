@@ -917,6 +917,10 @@ function showMenu() {
   wakeLoop();
   armMenuSleep();
   requestAnimationFrame(updateMenuAnchor);
+  if (saamLinkWaiting && !saam) {
+    saamLinkWaiting = false;
+    setTimeout(() => { if (screen === 'menu' && !saam) openSaamLink(); }, 400);
+  }
   // (1.12) the 🏆 shows today's place: asked once a session, after the day's daily was played
   const dk = todayKey();
   if (BOARD_ON && store.getDailyBest(dk) && !boardFresh(dk) && boardAskedFor !== dk) {
@@ -1557,6 +1561,7 @@ bus.on('ui:lesson-daily', () => {
 // A challenge link opened while the app was already running (app/shim.js): straight to it, or, in the
 // middle of a tower, once that tower is done (the home button).
 let linkWaiting = false;
+let saamLinkWaiting = false;   // (1.22) a Saam gly invite came mid-tower or mid-ride: asked when the menu is back
 window.addEventListener('stapel:link', (e) => {
   let q = '';
   try {
@@ -1570,6 +1575,20 @@ window.addEventListener('stapel:link', (e) => {
   // (1.14) ?rekening (the privacy page's deletion link) opened the app: the account sheet
   if (/[?&]rekening(?:[=&#]|$)/.test(q) && account.on) {
     ui.showAccount(accountStatus());
+    return;
+  }
+  // (1.22) a friend's Saam gly invite (?gly=CODE) while the app runs: their room now, or after this tower or ride
+  const gly = String(new URLSearchParams(q).get('gly') || '').toUpperCase();
+  if (/^[A-Z0-9]{6}$/.test(gly) && matchApiUrl()) {
+    if (saam?.code === gly) return;   // (riding with them already)
+    saamLinkCode = gly;
+    if (screen === 'rivier' || saam || (run.mode !== 'idle' && screen !== 'results' && screen !== 'menu') || (screen === 'duelwait' && !!duel.match)) {
+      saamLinkWaiting = true;
+      ui.toast(S.saamLater, 3200);
+      return;
+    }
+    ui.closeModal();
+    openSaamLink();
     return;
   }
   const klop = /[?&]klop=/.test(q) ? loadChallenge(q, todayKey()) : null;
@@ -2774,6 +2793,8 @@ function veilOff() {
   const v = rideVeil;
   if (!v) return;
   rideVeil = null;
+  // (1.22) the ring goes at once: on a busy phone the cover's fade ran into the dive, a ring over the builder's jump
+  v.firstChild?.remove();
   // (two frames: the river's first picture is on the screen before the cover lifts)
   requestAnimationFrame(() => requestAnimationFrame(() => {
     v.style.opacity = '0';
