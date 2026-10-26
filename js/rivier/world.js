@@ -174,8 +174,9 @@ float rkOpen(float z) {
       vec2 cp = vec2(vRkL.z + vRkL.x, vRkL.y * 1.6) * 0.13;
       float c1 = texture2D(uRkNoise, cp + vec2(uRkT * 0.045, uRkT * 0.02)).r;
       float c2 = texture2D(uRkNoise, cp * 1.37 + vec2(-uRkT * 0.035, uRkT * 0.03) + 0.41).g;
-      float ca = pow(max(0.0, 1.0 - abs(c1 - c2) * 2.2), 5.0);
-      outgoingLight += vec3(1.0, 0.92, 0.74) * ca * rkBand * 0.2 * uRkSun * (1.0 - 0.6 * step(uRkWet, 0.5));
+      float ca = pow(max(0.0, 1.0 - abs(c1 - c2) * 2.2), 7.0);
+      // (1.22: softer: at 0.2 the dancing light read as white scribbles along the foot of every wall)
+      outgoingLight += vec3(1.0, 0.92, 0.74) * ca * rkBand * 0.085 * uRkSun * (1.0 - 0.6 * step(uRkWet, 0.5));
     }
   }
   #include <opaque_fragment>`);
@@ -777,9 +778,13 @@ void main() {
   vec3 base = mix(uDeep, uShallow, smoothstep(0.45, 1.0, edge) * 0.85);
   base *= 0.9 + h0 * 0.36;
   // the sky in it: more at a glancing look (Fresnel), never more than half
-  float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
+  // (1.22: further off, the ripples even out in the sky's reflection, as on real water: up close they tilt it patch by
+  // patch, but at 20-60 m that made a repeating cream mosaic across the river. The sun's glitter keeps every ripple)
+  vec3 nr = normalize(mix(n, vec3(0.0, 1.0, 0.0), smoothstep(14.0, 60.0, length(cameraPosition - vWorld)) * 0.7));
+  float fres = 0.02 + 0.98 * pow(1.0 - max(dot(nr, v), 0.0), 5.0);
+  vec3 rr = reflect(-v, nr);
   vec3 r = reflect(-v, n);
-  vec3 sky = mix(uHorizon, uSkyRefl, smoothstep(0.0, 0.35, r.y));
+  vec3 sky = mix(uHorizon, uSkyRefl, smoothstep(0.0, 0.35, rr.y));
   // (strong phones: the real mirror image, the canyon, the towers and the sky, rippled by the waves)
   if (uReflK > 0.0) {
     vec2 ruv = vRefl.xy / vRefl.w + n.xz * 0.05;
@@ -1051,7 +1056,8 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
   const bankU = { uPoolTo: { value: -1e6 }, uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uLakeW: { value: lakeHalf - BANK.half } };
   // (the stones in the river: the same sandstone, wrapped round them, wet to just over the water, never moved by the
   // banks' opening)
-  const stoneMat = rockDetail(bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, roughness: 0.82, metalness: 0, color: '#e6c3a0', flatShading: true })), noise, { uPoolTo: { value: -1e6 }, uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uLakeW: { value: 0 } }, { tri: true, wet: 0.18 });
+  // (1.22: a little darker and rougher, and wet higher up: the stones looked like plastic laid on the water)
+  const stoneMat = rockDetail(bendMaterial(new THREE.MeshStandardMaterial({ map: rockTex.map, roughness: 0.92, metalness: 0, color: '#cfa88a', flatShading: true })), noise, { uPoolTo: { value: -1e6 }, uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uLakeW: { value: 0 } }, { tri: true, wet: 0.42 });
   stoneMat.userData.shared = true;
   // (1.22: the walls' picture laid on by height and distance along (rockDetail `wall`), at the old size: two along a 48 m
   // piece, three quarters of it up the 34 m face. Laid on by the piece's own along-and-up it ran into long upright

@@ -254,7 +254,8 @@ export function createThings(scene, pieces) {
     }
     m.traverse((o) => { o.frustumCulled = false; });
     root.add(m);
-    const f = foam(4.2);
+    // (1.22: wide enough to show: its ring lay 0.9 m out, under a stone 3 m across, which seemed to sit on the water)
+    const f = foam(bo ? 7.2 : 4.2);
     f.position.y = 0.05;
     root.add(f);
     root.userData = { w: 2.4, d: 2.4, phase: 0 };
