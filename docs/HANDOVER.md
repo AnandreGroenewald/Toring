@@ -1475,3 +1475,5 @@ smoothing) and a rider was lost off the screen by the island (the camera's islan
 'st'.a (the lane, sent at once on a swipe), the friend on the same lane spring, friendWay() takes the way past a rock
 still in their lane at the last moment; no island turn in duel. qa/saamway1213.mjs: ride-throughs 7 → 0. The closed
 test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his `bash ~/deploy-stapel-1.21.4.sh`.
+
+- 26 Oct 2026 (1.22 polish, local, nothing live): see docs/POLISH-1.22.md. Commits 2020c96, bbfee95, 2bf37b6 on rivier/1.20. check-all quick ALL CLEAR.
