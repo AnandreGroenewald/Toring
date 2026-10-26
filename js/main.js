@@ -1358,6 +1358,12 @@ let cementTipAt = 0;
 bus.on('game:cement', () => {
   // (read from storage each time: another tab may have shown it already)
   if (store.getSettings().cementSeen || run.mode === 'idle' || cementTipAt) return;
+  // (1.22) a first game's coach says it already ("Perfek! Alles onder hom is nou sement"): the same words twice at once
+  // filled the screen, so this one is counted as seen
+  if (!store.tutorialSeen()) {
+    settings = store.setSettings({ cementSeen: true });
+    return;
+  }
   cementTipAt = setTimeout(() => {
     cementTipAt = 0;
     if (store.getSettings().cementSeen || screen !== 'game' || run.paused || run.over || run.mode === 'idle') return;

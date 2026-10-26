@@ -1061,7 +1061,7 @@ export class GameScene extends Phaser.Scene {
     const geo = this.curGeom;
     this.ghostMiss = false;
     this.ghost.setTexture(key).setOrigin(geo.originX, geo.originY).setTintFill(0xffffff).setAlpha(GHOST_A);
-    this.ghostEdge.setTexture(key).setOrigin(geo.originX, geo.originY).setTintFill(0x1d2b45)
+    this.ghostEdge.setTexture(key).setOrigin(geo.originX, geo.originY).setTintFill(0x1d2b45).setAlpha(GHOST_EDGE_A)
       .setScale((geo.w + GHOST_PAD) / geo.w, (geo.h + GHOST_PAD) / geo.h);
     this.planAutoplay();
   }
@@ -2728,7 +2728,7 @@ export class GameScene extends Phaser.Scene {
     this.crane.setBlock(spec, key, geo);
     this.ghostMiss = false;
     this.ghost.setTexture(key).setOrigin(geo.originX, geo.originY).setTintFill(0xffffff).setAlpha(GHOST_A);
-    this.ghostEdge.setTexture(key).setOrigin(geo.originX, geo.originY).setTintFill(0x1d2b45)
+    this.ghostEdge.setTexture(key).setOrigin(geo.originX, geo.originY).setTintFill(0x1d2b45).setAlpha(GHOST_EDGE_A)
       .setScale((geo.w + GHOST_PAD) / geo.w, (geo.h + GHOST_PAD) / geo.h);
     this.planAutoplay();
     audio.play('banner');
@@ -3326,8 +3326,14 @@ export class GameScene extends Phaser.Scene {
       // A drop that would miss the tower shows a red ghost dropping past it.
       if (p.miss !== this.ghostMiss) {
         this.ghostMiss = p.miss;
-        if (p.miss) this.ghost.setTintFill(GHOST_MISS_TINT).setAlpha(0.45);
-        else this.ghost.setTintFill(0xffffff).setAlpha(GHOST_A);
+        // (1.22: a clear red outline round a light red shape; the red over the navy rim read as a dull maroon box)
+        if (p.miss) {
+          this.ghost.setTintFill(GHOST_MISS_TINT).setAlpha(0.3);
+          this.ghostEdge.setTintFill(0xe8322a).setAlpha(0.9);
+        } else {
+          this.ghost.setTintFill(0xffffff).setAlpha(GHOST_A);
+          this.ghostEdge.setTintFill(0x1d2b45).setAlpha(GHOST_EDGE_A);
+        }
       }
       this.ghost.setPosition(p.x, p.y);
       this.ghostEdge.setPosition(p.x, p.y);
@@ -4128,6 +4134,7 @@ export class GameScene extends Phaser.Scene {
     cam.zoomTo(z, REVEAL_MS, 'Sine.easeInOut');
     cam.pan(GAME_W / 2, (top + bottom) / 2, REVEAL_MS, 'Sine.easeInOut');
     if (this.billboard) safely(() => this.billboard.reveal(z, REVEAL_MS));
+    safely(() => this.weather.clearSky());   // (1.22: the tower clear of fog and rain in its picture)
     safely(() => this.buildRuler(z, bestY));
   }
 

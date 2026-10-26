@@ -510,6 +510,15 @@ export class Weather {
     if (ev.type === 'rainbow' && this.bus) this.bus.emit('weather:rainbow');
   }
 
+  /**
+   * (1.22) The game is over and the whole tower is shown: the weather clears off it (no new turn; fog, rain and the
+   * gloom fade out). In fog the end's picture of the tower was nearly white.
+   */
+  clearSky() {
+    this._endEvent();
+    this._clearing = true;
+  }
+
   _endEvent() {
     this._active = null;
     this._storm.nextAt = null;  // a warning already showing still finishes
@@ -580,6 +589,7 @@ export class Weather {
     this._H = ctx.H || (this.scene.scale ? this.scene.scale.height : 1280);
     if (Number.isFinite(ctx.craneTop)) this._top = ctx.craneTop;
     this._time += dt;
+    if (this._clearing) this._updateLevels(dt * 1.5);   // (the steps that fade it have stopped)
 
     this._updateAmbient(dt);
     this._syncLayers(cam);
