@@ -3,12 +3,6 @@
 // balance. He carves into every lane change (board tilts, knees bend, spray), crouches and wobbles after a knock, and
 // rides the swell. Built from simple shapes (it reads at phone size from behind and costs a few draw calls).
 import * as THREE from '../../lib/three.module.min.js';
-const LEG_APART = 0.075;   // (1.22) each foot's step off the board's middle line (m)
-const LEG_SPLAY = 0.1;     // (1.22) each leg's tilt outwards (rad)
-const BODY_Y = 0.12;       // the body's place over the board (m)
-const LEG_L = 0.56;        // hip to knee, knee to ankle (the shins and boots hang this far: see the legs below)
-const ANKLE_Y = 0.17;      // (1.22) where the ankle sits over the board: the boot's sole on the board's top
-const HIP_RAISE = 0.12;    // (1.22) the hips this much higher than the old pose when riding (none when ducking)
 
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.72, metalness: 0, ...o });
 
@@ -91,11 +85,14 @@ export function createRider(bend = (m) => m, model = null, { swap = false } = {}
   board.rotation.x = Math.PI / 2;
   board.scale.set(1, 1, 0.13);
   board.position.y = 0.07;
-  tilt.add(board);
+  // (1.22) the board and its picture in a rig of their own: in a jump it comes up under his boots
+  const boardRig = new THREE.Group();
+  tilt.add(boardRig);
+  boardRig.add(board);
 
   // the stance: feet along the board, knees bent; hips square to the side (+x), the chest turned down the river
   const body = new THREE.Group();
-  body.position.y = BODY_Y;
+  body.position.y = 0.12;
   tilt.add(body);
   const hips = new THREE.Group();
   body.add(hips);
@@ -113,12 +110,8 @@ export function createRider(bend = (m) => m, model = null, { swap = false } = {}
     s.add(b);
   }
   hips.add(legF, legB);
-  // (1.22) the feet a little apart across the board too and the legs splayed (LEG_SPLAY): from behind, the camera's
-  // view, two legs in an A instead of one leg (the knees bend along the board, which the camera looks along)
-  legF.position.set(LEG_APART, 0, -0.2);
-  legB.position.set(-LEG_APART, 0, 0.2);
-  legF.rotation.z = LEG_SPLAY;
-  legB.rotation.z = -LEG_SPLAY;
+  legF.position.set(0, 0, -0.2);
+  legB.position.set(0, 0, 0.2);
   const pelvis = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.22, 4, 8), jeans);
   pelvis.rotation.x = Math.PI / 2;
   hips.add(pelvis);
@@ -315,7 +308,7 @@ export function createRider(bend = (m) => m, model = null, { swap = false } = {}
     dress(foreB, 'forearm', foreB.children.filter((c) => c.isMesh));
     board.geometry = EMPTY;
     const bp = part('board');
-    if (bp) tilt.add(bp);
+    if (bp) boardRig.add(bp);
     const gp = part('cannon');
     if (gp) {
       for (const m of [barrel, muzzleRing, sight, grip, ...tube.children.filter((c) => c.isMesh && c.geometry.type === 'CylinderGeometry' && c !== barrel)]) m.visible = false;
@@ -373,19 +366,18 @@ if (diffuseColor.r - diffuseColor.b > 0.42) diffuseColor.rgb = diffuseColor.bgr;
       tilt.position.y = swell + 0.03;   // (the group's own place is the ride's: the dive moves it)
       // knees bend with the speed, more in a carve and after a knock
       const knee = 0.45 + Math.abs(lean) * 0.25 + crouch * 0.5 + Math.min(0.15, speed / 140) + tuck * 0.55 + duck * 0.95;
-      // (1.22) the boots stay on the board: the hips' height sets how far each knee bends, the foot under the hip.
-      // Before, the legs kept their own bend whatever the hips did and the boots sank through the board, which showed
-      // in every jump. A little taller than before when riding, as low as before when ducking.
-      const hipY = 1.0 - knee * 0.38 + HIP_RAISE * (1 - duck);
-      hips.position.y = hipY;
-      const bend = Math.acos(Math.min(0.995, (BODY_Y + hipY - ANKLE_Y) / (2 * LEG_L)));
-      legF.rotation.x = bend;
-      legB.rotation.x = -bend * 0.9;
-      // (the A opens a little more as he gets low, and leans with the carve)
-      legF.rotation.z = LEG_SPLAY * (1 + knee * 0.35) + lean * 0.05;
-      legB.rotation.z = -LEG_SPLAY * (1 + knee * 0.35) + lean * 0.05;
-      shinF.rotation.x = -2 * bend;
-      shinB.rotation.x = 1.8 * bend;
+      hips.position.y = 1.0 - knee * 0.38;
+      legF.rotation.x = knee * 0.55;
+      legB.rotation.x = -knee * 0.45;
+      shinF.rotation.x = -knee * 1.0;
+      shinB.rotation.x = knee * 0.85;
+      // (1.22) in a jump the board rises to his boots as he pulls his knees up: it stayed down at the knees' old
+      // height, the boots hanging under it (when he rides, the water and the froth hide where they meet)
+      if (tuck > 0.001) {
+        const reach = 0.56 * Math.max(Math.cos(knee * 0.55) + Math.cos(knee * 0.45), Math.cos(knee * 0.45) + Math.cos(knee * 0.4));
+        const sole = 0.12 + hips.position.y - reach - 0.06;
+        boardRig.position.y = Math.min(0, sole - 0.109) * Math.min(1, tuck);
+      } else if (boardRig.position.y !== 0) boardRig.position.y = 0;
       // upper body: leans into the carve, ducks after a knock, breathes with the swell
       torso.rotation.z = -0.16 - crouch * 0.45 + lean * 0.22 - duck * 0.85 - tuck * 0.2;
       torso.rotation.x = Math.sin(t0 * 2.6) * 0.03;
