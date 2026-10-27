@@ -1477,3 +1477,18 @@ still in their lane at the last moment; no island turn in duel. qa/saamway1213.m
 test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his `bash ~/deploy-stapel-1.21.4.sh`.
 
 - 26 Oct 2026 (1.22 polish, local, nothing live): see docs/POLISH-1.22.md. Commits 2020c96, bbfee95, 2bf37b6 on rivier/1.20. check-all quick ALL CLEAR.
+
+### 27 Oct 2026 ~20:00 — news notifications for the app (branch push-notifications, e043f32; local, not pushed)
+- Owner: "Can you send updates on the app through pop-ups?" → Firebase project **Lekker Local Games**
+  (`lekker-local-games`, account sportscardza, Spark plan, Analytics/Gemini off; Stapel + Handjie Tennis registered).
+- App only (the website is untouched): `StapelPushPlugin.java` (Capacitor plugin "StapelPush", `join({topic})`), registered in
+  MainActivity; `firebase-messaging:26.0.1` in app/build.gradle; manifest: Firebase auto-start OFF, reminder icon, channel
+  "news" ("Nuus / News"). `app/shim.js`: a phone that allows notifications joins topic **news** (the daily reminder's Android
+  question: wrapped `reminders.ask`); players who have played (`stapel.v1.econ` / `rvTaught`) are asked once at a later start
+  (`stapel.v1.newsAsked`).
+- `app/android/app/google-services.json` is local only (in .git/info/exclude here, and app/android/.gitignore on the branch).
+- Tested: `npm run bundle` builds; the AAB holds the plugin, Firebase, POST_NOTIFICATIONS, auto-start off and the new shim.
+  Not yet on a phone. Sending: Firebase console › Messaging › New campaign › Notifications › Target: topic `news`.
+- Next (his word): merge into the next app release (VERSION bump, after Google decides on 1.22.0), Play data safety
+  (Device or other IDs: notifications), privacy page.
+
