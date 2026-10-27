@@ -2978,6 +2978,9 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
   box-shadow: 0 calc(6 * var(--u)) calc(16 * var(--u)) rgba(5, 10, 30, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 .week-strip .wk-title { color: #ffd75a; }
+/* (1.23) "WEEKLY CHEST" took a row of its own above the chests (and pushed the menu's dock under Android's buttons on a
+   small phone): a narrow column beside them instead, on two lines when it must ("WEEKKIS" stays one) */
+.week-strip .wk-title { width: min-content; text-align: center; line-height: 1.15; }   /* (as narrow as its longest word) */
 .week-strip .wk-amt { color: #e6ecfa; opacity: 0.9; }
 .week-strip .wk-chest.is-done .wk-amt { color: #6ee08f; }
 .week-strip .wk-line { color: #fff; }

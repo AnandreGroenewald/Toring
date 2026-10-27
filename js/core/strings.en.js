@@ -1047,7 +1047,7 @@ export const S_EN = {
   rvWhirlKo: 'Sucked in!',
   rvEleKo: 'Elephant!',
   // (1.21) Saam gly: two friends on the same river at once
-  saam: 'Ride together',   // (1.23: one line on the menu tile; was 'Ride with a friend', with 'Race a friend' under it)
+  saam: 'Duo ride',   // (1.23: one line on the menu tile, even on a 360 phone; 'Ride together' wrapped; with 'Race a friend' under it)
   saamMenuSub: 'Race a friend',
   saamGo: 'GO!',
   saamInviteSub: 'Send the link to a friend. You ride the same river at the same time and see each other on the water.',
