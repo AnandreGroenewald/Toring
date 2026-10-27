@@ -1492,3 +1492,12 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
 - Next (his word): merge into the next app release (VERSION bump, after Google decides on 1.22.0), Play data safety
   (Device or other IDs: notifications), privacy page.
 
+### 27 Oct 2026 ~21:20 — 1.22.1 (12201) on Play internal testing: news notifications
+- His "Lets do the same for stapel" (after Handjie's test worked) and "yes". c108d8d pushed to claude/trusting-hopper-26qcax;
+  check-all quick ALL CLEAR (518 + 311 + boot); website NOT deployed (unchanged, still 1.22.0). AAB uploaded by Claude
+  (file_upload), notes af + en-AU/CA/GB/US/ZA; internal "Available to internal testers". Play folder "Upload 1.22.1 internal (notifications)".
+- Topic is **stapel** (Firebase topics are project-wide; Handjie Tennis uses news). Test note "Stapel / Toets: kennisgewings werk! 🧱"
+  sent 21:16 from the Firebase console (Lekker Local Games > Messaging > New campaign > Notifications > Topic stapel).
+- Play Data safety: Device or other IDs + "Developer communications" SAVED, not sent (1.22.0's closed/open review untouched);
+  it goes with the next submission. Next: his phone check; closed/open/production after Google decides on 1.22.0.
+
