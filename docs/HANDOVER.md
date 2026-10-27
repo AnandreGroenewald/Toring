@@ -1511,3 +1511,9 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   (Developer communications): "Changes in review" ~21:40. Managed publishing off: live when Google approves.
 - Next: after approval, the "Nuwe weergawe!" card for older apps (Worker APP_LATEST 1.22.1; a Worker deploy ends live matches).
 
+### 27 Oct 2026 ~21:50 — production PULLED BACK (his "Please remove now")
+- His reasons: "the free skins are still there, I do not think the payfast is ready, and I think we should run one more check
+  on the app". Publishing overview › Remove changes: production 12201 + Data safety are back under "Changes not yet submitted"
+  (saved, not in review). Nothing public. Internal testing keeps 1.22.1; website 1.22.1 + privacy §2e stay live (harmless).
+- Next: his free skins / payments decisions, then a full app check, then resubmit (Publishing overview › Submit) on his word.
+
