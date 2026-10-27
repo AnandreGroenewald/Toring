@@ -341,7 +341,8 @@ export const DAILY_TRIES = Object.freeze({ free: 3, from: '2026-10-12', maxFree:
 // (22:08-22:09) "Make it work 3 times." … "Make it 3 times a day for 5 days.": `times` presses a day, on the `days` days from
 // `from` (South African dates: Mon 12 - Fri 16 Oct 2026); from the day after, the button is gone by itself.
 // (12 Oct 04:05, the owner in the Stapel terminal: "if the skin is 2000 coins lets give them 4000 coins per reload") up to 4 000
-export const REFILL = Object.freeze({ on: true, to: 4000, times: 3, per: 'day', from: '2026-10-12', days: 5 });
+// (1.23, the public launch: off for good; coins are earned by playing)
+export const REFILL = Object.freeze({ on: false, to: 4000, times: 3, per: 'day', from: '2026-10-12', days: 5 });
 // (1.15.6, the owner 15 Oct: "build all three with which one do you like most option for the testers. Then at the end of
 // the week we can see who voted for what"; "The vote invite" in "Wedloop, BvB + 3 ideas") the Living Tower preview
 // (lewende-toring/, the vote on the server's /idees/stem): its three ideas in the Uitdagersreeks, an invite on a match's
@@ -369,8 +370,10 @@ export const ONS_DORP = Object.freeze({ on: false });
 
 // (1.18, the owner 18 Oct 2026: "for now all skins needs to be free ... For people to test it") every skin and look in the
 // Winkel costs nothing while `on`; what testers take stays theirs when the prices come back (`on: false`).
-export const SKINS_FREE = Object.freeze({ on: true });
-export const TESTER_GIFT = Object.freeze({ on: true, coins: 100000, hash: '7b325f2da84141879a5a4b6ab2f0a72a0386a3d7a3519ece2f6a5a075553792d' });
+// (1.23, the owner 27 Oct 2026: "the free skins are still there" ... "skins done") the prices are back for the launch.
+export const SKINS_FREE = Object.freeze({ on: false });
+// (1.23) the testers' 100 000-coin code: off for the launch (everyone starts from scratch; js/core/launch.js)
+export const TESTER_GIFT = Object.freeze({ on: false, coins: 100000, hash: '7b325f2da84141879a5a4b6ab2f0a72a0386a3d7a3519ece2f6a5a075553792d' });
 
 // (1.13) Sign in with Google (js/account.js): the web client ID from Google Cloud (Google Auth Platform >
 // Clients > "Stapel web"; public, not a secret; the Worker's GOOGLE_CLIENT_ID is the same). Empty: the
@@ -382,6 +385,12 @@ export const AUTH = Object.freeze({ googleClientId: '338179953021-qocupp0icc6764
 // ---------------------------------------------------------------------------
 export const EPOCH_DATE_KEY = '2026-10-06';   // Daaglikse Toring #1
 export const STORAGE_KEY = 'stapel.v1';
+
+// (1.23, the owner 27 Oct 2026: "Everyone starts from scratch", and "a really nice looking skin for everyone that tested the
+// app that will not be released") The public launch. A device, or a signed-in account's save, with progress from before it
+// starts again from nothing, and whoever had played gets the testers' block skin, never sold (js/core/launch.js). `id`
+// marks every save made from the launch on.
+export const LAUNCH = Object.freeze({ id: '2026-10-28', skin: 'stigter' });
 export const SITE_URL_FALLBACK = 'https://stapelspel.pages.dev/';
 
 // ---------------------------------------------------------------------------

@@ -14,7 +14,7 @@ test('every player starts with each kind\'s free default, worn', () => {
     assert.equal(e.skins.wear[kind], DEFAULT_SKIN[kind]);
     assert.equal(SKINS[kind][0].id, DEFAULT_SKIN[kind], 'the default is listed first');
     assert.equal(SKINS[kind][0].price, 0, 'the default is free');
-    assert.ok(SKINS[kind].slice(1).every((c) => c.price > 0), 'every other skin costs coins');
+    assert.ok(SKINS[kind].slice(1).every((c) => c.price > 0 || c.tester), 'every other skin costs coins (the testers\' own is never sold)');
   }
 });
 

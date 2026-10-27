@@ -19,6 +19,7 @@ import { cleanSave } from './storage.js';
 import { addDays, daysBetween, isDateKey } from './daily.js';
 import { MAX_COINS, MAX_STOCK, POWERUP_IDS, COSMETIC_KINDS, DEFAULT_LOOK, RANK_MODES, RANK_RULES, EARN, LADDER, ladderAt, ladderIndex, cleanModeRank, rolloverSeason, SKIN_KINDS, DEFAULT_SKIN, TRIBE_IDS } from './economy.js';
 import { WEEK } from './week.js';
+import { LAUNCH } from '../config.js';
 
 const KEEP_DAILY_DAYS = 90;   // as js/core/storage.js keeps them
 const EMPTY = cleanSave(null);
@@ -253,6 +254,7 @@ export function mergeSaves(localRaw, cloudRaw, baseRaw = null, { today = null } 
   };
 
   return cleanSave({
+    launch: LAUNCH.id,   // (1.23) a merge is made from the launch on (an older account save came through launchSave first)
     main: { tutorialSeen: L.main.tutorialSeen || C.main.tutorialSeen, daily, stats, practice, duel },
     econ,
     retry,

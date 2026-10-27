@@ -162,5 +162,5 @@ export function cleanCrewName(raw) {
 }
 
 /** The skins a floor can be drawn in (looks only: the owner, 24 Oct 2026, "Building material ... its what skin they have"). */
-export const BLOCK_SKIN_IDS = Object.freeze(['kleur', 'lekkergoed', 'klip', 'piksel', 'neon', 'koolstof', 'ys', 'marmer', 'goud', 'lawa', 'chroom', 'holo', 'heelal']);
+export const BLOCK_SKIN_IDS = Object.freeze(['kleur', 'lekkergoed', 'klip', 'piksel', 'neon', 'koolstof', 'ys', 'marmer', 'goud', 'lawa', 'chroom', 'holo', 'heelal', 'stigter']);
 export const cleanSkin = (s) => (BLOCK_SKIN_IDS.includes(s) ? s : 'kleur');

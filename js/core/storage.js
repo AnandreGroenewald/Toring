@@ -3,7 +3,7 @@
 // the source of truth, so a missing or throwing localStorage (private mode,
 // quota, blocked cookies) never breaks the game — it just won't persist.
 
-import { STORAGE_KEY } from '../config.js';
+import { STORAGE_KEY, LAUNCH } from '../config.js';
 import { dateKeyFor, dayNumber, addDays, daysBetween, isDateKey } from './daily.js';
 import { cleanVisits } from './visitorrules.js';
 import { cleanNickname } from './duel.js';
@@ -248,6 +248,8 @@ export function cleanSave(raw) {
   const count = (x) => (Number.isInteger(x) && x >= 0 && x <= 100000 ? x : 0);
   return {
     v: SAVE_V,
+    // (1.23) made from the public launch on (js/core/launch.js launchSave turns an older account save into a fresh one)
+    ...(s.launch === LAUNCH.id ? { launch: LAUNCH.id } : {}),
     main: { tutorialSeen: d.tutorialSeen, daily: sortedMap(daily), stats: d.stats, practice: d.practice, duel: d.duel },
     econ,
     retry: sortedMap(retry),
@@ -1362,7 +1364,7 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
     /** This device's progress as a save (js/core/storage.js cleanSave). */
     exportSave() {
       sync();
-      return cleanSave({ main: data, econ, retry: retries, week: readWeek(), board: readBoard(), refill: readRefill() });
+      return cleanSave({ launch: LAUNCH.id, main: data, econ, retry: retries, week: readWeek(), board: readBoard(), refill: readRefill() });
     },
 
     /**

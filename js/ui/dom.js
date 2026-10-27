@@ -1009,6 +1009,21 @@ export function createUI(bus) {
       () => bus.emit('ui:duel'), { attrs: { 'aria-label': `${S.duel}: ${S.duelSub}` } });
     if (ideasOpen()) duelBtn.append(h('span', { class: 'btn-new-tag', text: S.newTag }));
     const playRow = h('div', { class: 'play-row' }, practice, duelBtn);
+    // (1.23, the owner 27 Oct 2026: "the tower shooting every Saterday. But for now its should say 'Under construction, Keep
+    // your eye on the water' or something funny") a slim strip in hazard tape; a tap says one of the builders' excuses
+    const satStrip = h('button', {
+      type: 'button', class: 'sat-strip', 'aria-label': `${S.satTitle}: ${S.satSub}`,
+      onclick: () => {
+        if (!guard()) return;
+        audio.play('click');
+        const lines = S.satSoon;
+        st.satLine = ((st.satLine ?? -1) + 1) % lines.length;
+        toast(lines[st.satLine], 3600);
+      },
+    },
+    h('span', { class: 'sat-ic' }, emo('🚧')),
+    h('span', { class: 'sat-txt' }, h('b', { text: S.satTitle }), h('small', { text: S.satSub })),
+    h('span', { class: 'sat-ic sat-ic-end' }, emo('💦')));
 
     const dock = h('div', { class: 'dock dock-menu' },
       dockBtn('help', S.howToShort, () => { audio.play('click'); showHowTo(); }, { 'aria-label': S.howTo, title: S.howTo }),
@@ -1051,7 +1066,7 @@ export function createUI(bus) {
       },
     }, coinIc(), h('b', { class: 'wallet-n', text: fmtInt(m.coins || 0) }), m.refill ? h('span', { class: 'wallet-plus', 'aria-hidden': 'true', text: '+' }) : null);
     screens.menu.replaceChildren(brand, gap,
-      h('div', { class: 'menu-stack' }, card, spanRowEl(m.span, m.has3d), dorpMenuEl(m.dorp), GLYBAAN.on ? glybaanMenuEl(m.gly) : null, BOTSING.on ? botsingMenuEl() : null, kasteelMenuEl(m.kasteel), slagMenuEl(m.slag), playRow, dock, adSlot), langChip, wallet);
+      h('div', { class: 'menu-stack' }, card, spanRowEl(m.span, m.has3d), dorpMenuEl(m.dorp), GLYBAAN.on ? glybaanMenuEl(m.gly) : null, BOTSING.on ? botsingMenuEl() : null, kasteelMenuEl(m.kasteel), slagMenuEl(m.slag), playRow, satStrip, dock, adSlot), langChip, wallet);
     // the gap shrinks when the sponsor feed adds the ad card later, so re-check whenever it resizes
     if (saying && typeof ResizeObserver === 'function') {
       if (!st.sayingRO) st.sayingRO = new ResizeObserver(() => fitSaying());
@@ -1060,9 +1075,24 @@ export function createUI(bus) {
     }
   }
 
+  /**
+   * (1.23) The Saturday strip steps back on a tight screen (a small phone, longer English words): one line first, then out of
+   * the way, so the dock always stays in sight.
+   */
+  function fitMenu() {
+    const strip = screens.menu.querySelector('.sat-strip');
+    const dock = screens.menu.querySelector('.dock-menu');
+    if (!strip || !dock) return;
+    strip.classList.remove('is-tight', 'is-off');
+    const over = () => dock.getBoundingClientRect().bottom > root.getBoundingClientRect().bottom + 1;
+    if (over()) strip.classList.add('is-tight');
+    if (over()) strip.classList.add('is-off');
+  }
+
   /** Show the saying of the day only if it fits the gap above the daily card. */
   function fitSaying() {
     if (st.screen !== 'menu') return;
+    fitMenu();
     const slot = screens.menu.querySelector('.saying-day');
     const inner = slot && slot.firstElementChild;
     if (!inner || !slot.parentElement) return;
@@ -1573,11 +1603,12 @@ export function createUI(bus) {
     'celebration:laser', 'celebration:sterrestof']);
   /** (1.15) A shop tile's corner tags: how rare it is (not on the free defaults) and "Nuut". */
   function tierTags(item, key) {
-    const free = !item.price && !item.rank && !item.week;
+    const free = !item.price && !item.rank && !item.week && !item.tester;
     const tier = tierOf(item);
     return h('span', { class: 'shop-tags' },
       free ? null : h('span', { class: `shop-tier tier-${tier}`, text: S.tierNames[tier] }),
-      NEW_ITEMS.has(key) ? h('span', { class: 'shop-new', text: S.newTag }) : null);
+      item.tester ? h('span', { class: 'shop-new shop-tester', text: S.testerTag })
+        : NEW_ITEMS.has(key) ? h('span', { class: 'shop-new', text: S.newTag }) : null);
   }
 
   function buyBtn(price, coins, onBuy) {
@@ -1637,7 +1668,8 @@ export function createUI(bus) {
       body.append(h('p', { class: 'shop-note', text: S.shopSkinsNote }));
       for (const kind of SKIN_KINDS) {
         body.append(h('h3', { class: 'label shop-kind', text: S.skinKinds[kind] }),
-          h('div', { class: 'shop-grid' }, SKINS[kind].map((c) => {
+          // (1.23) the testers' own skin (never sold) shows only to those who own it
+          h('div', { class: 'shop-grid' }, SKINS[kind].filter((c) => !c.tester || m.skins?.owned?.[kind]?.includes(c.id)).map((c) => {
             const owned = !!m.skins?.owned?.[kind]?.includes(c.id);
             const on = m.skins?.wear?.[kind] === c.id;
             let action;
@@ -1724,7 +1756,7 @@ export function createUI(bus) {
     else action = buyBtn(priceOf(item), m.coins, () => { stopTry(false); bus.emit('ui:skin-buy', { kind, id: item.id }); });
     // (1.15, the owner: "can we make it that they can go next and back ... instead of clicking try then go back the try
     // then go back") ‹ and › step through this kind's styles right here
-    const list = SKINS[kind] || [];
+    const list = (SKINS[kind] || []).filter((c) => !c.tester || m.skins?.owned?.[kind]?.includes(c.id));
     const at = list.findIndex((c) => c.id === item.id);
     const step = (d) => {
       const next = list[(at + d + list.length) % list.length];

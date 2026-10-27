@@ -6,7 +6,8 @@ import { GAME_W, computeGameHeight, SITE_URL_FALLBACK, STORAGE_KEY, DUEL, TESTER
 import { bus } from './core/bus.js';
 import { S, POWERUP_INFO, COSMETIC_INFO, RANK_INFO } from './core/strings.js';
 import { fmtDateKey, fmtM, fmtInt } from './core/format.js';
-import { createStore } from './core/storage.js';
+import { createStore, safeLocalStorage } from './core/storage.js';
+import { launchReset } from './core/launch.js';
 import { dateKeyFor, dayNumber, seedFor, nextDayTimestamp, parseDebugDate, isDateKey, addDays, daysBetween } from './core/daily.js';
 import { createSequence } from './core/sequence.js';
 import { buildShareText, buildDuelShareText } from './core/share.js';
@@ -124,6 +125,9 @@ function nextDayFor(dateKey) {
 // ---------------------------------------------------------------------------
 // Store, settings, UI
 // ---------------------------------------------------------------------------
+// (1.23) the public launch: this device's progress from the testing weeks goes, and a tester gets the Stigter blocks
+// (js/core/launch.js; once per device, before the store reads anything; a debug session keeps its own save)
+const launch = DEBUG ? { done: false, founder: false } : launchReset(safeLocalStorage());
 const store = createStore(undefined, DEBUG ? { key: `${STORAGE_KEY}.debug` } : {});
 // (1.20) Ons dorp: your crew's week on this phone (the Weektoring, build turns, today's ride, the town's people)
 const span = createSpan({
@@ -1159,6 +1163,8 @@ function offerUpdate(version) {
     try { localStorage.setItem(UPDATE_SEEN, version); } catch { /* fine */ }
   }
 }
+// (1.23) the launch's thank-you to a tester, once, on the menu (?debug=1&founder=1 shows it on a test page)
+if (launch.founder || (DEBUG && params.get('founder') === '1')) setTimeout(() => ui.toast(S.launchFounder, 9000), 1800);
 // (a test page: ?debug=1&update=1.99.0 shows the card as an older app would)
 if (DEBUG && /^\d+\.\d+\.\d+$/.test(params.get('update') || '')) setTimeout(() => offerUpdate(params.get('update')), 1500);
 if (DEBUG && /^\d+(,\d{4}-\d{2}-\d{2})?$/.test(params.get('tries') || '')) {

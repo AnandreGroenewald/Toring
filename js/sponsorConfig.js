@@ -18,7 +18,7 @@ export const SPONSOR = {
   // together whenever the text changes: the server records which version each
   // sponsor accepted.
   termsVersion: '2026-10-06',
-  privacyVersion: '2026-10-18',
+  privacyVersion: '2026-10-27',   // (1.23: the app's news notifications, section 2e)
   // Shown on adverteer.html. Must match the Paystack plan for the premium tier.
   // (The block tier's price is deliberately never shown on the site.)
   premiumPriceLabel: 'R1 499 per maand',

@@ -607,7 +607,7 @@ export const S_EN = {
     scene: { dag: 'Cape day', sonsondergang: 'Safari', lekkergoed: 'Candy sky', nag: 'Starry night', kersieblom: 'Cherry blossom',
       noorderlig: 'Northern lights', ruimte: 'Deep space', akwarium: 'Aquarium', sintgolf: 'Retro neon' },
     crane: { geel: 'Classic yellow', rooi: 'Fire-engine red', blou: 'Ocean blue', pienk: 'Pink fun', goud: 'Gold', neon: 'Neon' },
-    blocks: { kleur: 'Colourful', lekkergoed: 'Candy', klip: 'Stone', neon: 'Neon', goud: 'Gold bars', piksel: 'Retro pixel',
+    blocks: { stigter: 'Founder', kleur: 'Colourful', lekkergoed: 'Candy', klip: 'Stone', neon: 'Neon', goud: 'Gold bars', piksel: 'Retro pixel',
       koolstof: 'Carbon fibre', ys: 'Ice crystal', marmer: 'Marble', lawa: 'Lava', chroom: 'Chrome', holo: 'Holographic', heelal: 'Galaxy' },
   },
   shopPowerupsNote: 'Daily Tower: bring one power-up to each tower. Practice: use as many as you have.',
@@ -623,6 +623,13 @@ export const S_EN = {
   tryNext: 'Next',
   tierNames: { common: 'Common', rare: 'Rare', epic: 'Epic', legendary: 'Legendary' },
   newTag: 'New',
+  testerTag: 'Tester',   // (1.23) on the testers' own skin in the Winkel
+  // (1.23) Saturday's tower blast, still being built (the menu's hazard-tape strip)
+  satTitle: 'Saturday Tower Blast',
+  satSub: 'Under construction · watch the water!',
+  satSoon: ['🚧 The water cannons are still being loaded. Keep your eye on the water!', '💦 Someone borrowed the garden hose. Check back on Saturday!',
+    '☕ The builders are still on their tea break. Keep your eye on the water!', '🦛 A hippo is sitting on the button. We are trying to talk him off it…'],
+  launchFounder: '💎 Stapel is now open to everyone, and everyone starts from scratch. Thanks for testing: your blocks now wear Founder, for testers only.',
   ideasTitle: 'New: The Living Tower',
   ideasTag: 'preview',
   ideasSub: 'Three new ideas: play them against Robot Rikus and vote for your favourite.',
@@ -1040,7 +1047,7 @@ export const S_EN = {
   rvWhirlKo: 'Sucked in!',
   rvEleKo: 'Elephant!',
   // (1.21) Saam gly: two friends on the same river at once
-  saam: 'Ride with a friend',
+  saam: 'Ride together',   // (1.23: one line on the menu tile; was 'Ride with a friend', with 'Race a friend' under it)
   saamMenuSub: 'Race a friend',
   saamGo: 'GO!',
   saamInviteSub: 'Send the link to a friend. You ride the same river at the same time and see each other on the water.',

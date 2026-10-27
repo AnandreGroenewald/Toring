@@ -246,6 +246,16 @@ const BLOCK_SKINS = {
       [0x857a6a, 0x66a530, 0x28221a, 0xd2ee6a, 0xff6a5a], [0x8a8378, 0x45a248, 0x26221b, 0xa6ef8a, 0xb99cff],
       [0x7b7266, 0x3a923e, 0x221d17, 0x8fdc6a, 0xffd23f], [0x92887a, 0x54b447, 0x2c271e, 0xbaf58c, 0xffffff]],
   },
+  // (1.23, the owner 27 Oct 2026: "a really nice looking skin for everyone that tested the app that will not be released")
+  // Stigter, the testers' own, never sold: a jewel in an art-deco gold frame. [gem, the gem's light, outline]; the gold is
+  // the same on every colour (FOUNDER_GOLD). Rose, amber, onyx (black and gold), emerald, aquamarine, amethyst, sapphire, ruby.
+  stigter: {
+    pattern: 'founder',
+    seam: 0.55,
+    pal: [[0x7a1240, 0xd2457e, 0x2a0414], [0x8a3a06, 0xe0802a, 0x2e1202], [0x1e1b24, 0x56505f, 0x050407],
+      [0x0b5a3a, 0x27a874, 0x02200f], [0x0a5560, 0x26a7b4, 0x021f24], [0x40136e, 0x8a4ad0, 0x14052a],
+      [0x0e2a72, 0x3a6ade, 0x040c2a], [0x6e0a12, 0xcf3038, 0x260205]],
+  },
   // galaxy: [deep space, nebula, outline, second nebula]
   heelal: {
     pattern: 'galaxy',
@@ -2122,6 +2132,123 @@ function paintGalaxy(ctx, g, pal, rnd) {
   ctx.restore();
 }
 
+// --- stigter: the testers' own (1.23) ------------------------------------------------
+// A gem lit from the top, gold rays fanning up from the foot of each cell (art deco), a gold star in the middle with a soft
+// glow, a few gold sparkles, a glossy sheen, and a frame: a darker band round the edge between two fine gold lines.
+
+const FOUNDER_GOLD = 0xf2c94c;
+const FOUNDER_GOLD_HI = 0xfff3c4;
+const FOUNDER_GOLD_LO = 0xa8771f;
+
+function founderStar(ctx, x, y, r) {
+  ctx.beginPath();
+  for (let k = 0; k < 10; k++) {
+    const a = -Math.PI / 2 + (k * Math.PI) / 5;
+    const rr = k % 2 ? r * 0.42 : r;
+    if (k === 0) ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    else ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  const fill = ctx.createLinearGradient(x, y - r, x, y + r);
+  fill.addColorStop(0, hex(FOUNDER_GOLD_HI));
+  fill.addColorStop(0.5, hex(FOUNDER_GOLD));
+  fill.addColorStop(1, hex(FOUNDER_GOLD_LO));
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(0.8, r * 0.12);
+  ctx.strokeStyle = rgba(0x3a2400, 0.55);
+  ctx.stroke();
+}
+
+function paintFounder(ctx, g, pal, rnd) {
+  const { w, h } = g;
+  const gem = ctx.createLinearGradient(0, 0, 0, h);
+  gem.addColorStop(0, hex(mix(pal.light, pal.fill, 0.3)));
+  gem.addColorStop(0.55, hex(pal.fill));
+  gem.addColorStop(1, hex(mix(pal.fill, pal.dark, 0.65)));
+  ctx.fillStyle = gem;
+  ctx.fillRect(0, 0, w, h);
+  const cells = faceCells(g);
+  // the rays: a fan of thin gold wedges from the foot of each cell, added like light
+  for (const c of cells) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(c.x, c.y, c.w, c.h);
+    ctx.clip();
+    ctx.globalCompositeOperation = 'lighter';
+    const fx = c.x + c.w / 2;
+    const fy = c.y + c.h + 2;
+    const len = Math.hypot(c.w, c.h) * 1.15;
+    const rays = 9;
+    for (let k = 0; k < rays; k++) {
+      const a = Math.PI + ((k + 0.5) * Math.PI) / rays;
+      const spread = 0.05;
+      ctx.beginPath();
+      ctx.moveTo(fx, fy);
+      ctx.lineTo(fx + Math.cos(a - spread) * len, fy + Math.sin(a - spread) * len);
+      ctx.lineTo(fx + Math.cos(a + spread) * len, fy + Math.sin(a + spread) * len);
+      ctx.closePath();
+      const gr = ctx.createLinearGradient(fx, fy, fx + Math.cos(a) * len, fy + Math.sin(a) * len);
+      gr.addColorStop(0, rgba(FOUNDER_GOLD, 0));
+      gr.addColorStop(0.3, rgba(FOUNDER_GOLD, k % 2 ? 0.1 : 0.2));
+      gr.addColorStop(1, rgba(FOUNDER_GOLD, 0));
+      ctx.fillStyle = gr;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  // the star in the middle of each cell, on a soft gold glow
+  for (const c of cells) {
+    const r = Math.min(c.w, c.h) * 0.2;
+    if (r < 3.5) continue;
+    const cx = c.x + c.w / 2;
+    const cy = c.y + c.h / 2;
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.4);
+    glow.addColorStop(0, rgba(FOUNDER_GOLD_HI, 0.32));
+    glow.addColorStop(1, rgba(FOUNDER_GOLD, 0));
+    ctx.fillStyle = glow;
+    ctx.fillRect(cx - r * 2.4, cy - r * 2.4, r * 4.8, r * 4.8);
+    founderStar(ctx, cx, cy, r);
+  }
+  // a few gold sparkles, away from the star
+  const sparks = 2 + Math.round((w * h) / 2600);
+  for (let k = 0; k < sparks; k++) {
+    const c = cells[Math.floor(rnd() * cells.length)];
+    const x = c.x + between(rnd, 0.12, 0.88) * c.w;
+    const y = c.y + between(rnd, 0.15, 0.85) * c.h;
+    if (Math.abs(x - (c.x + c.w / 2)) < c.w * 0.18 && Math.abs(y - (c.y + c.h / 2)) < c.h * 0.25) continue;
+    drawGlint(ctx, x, y, between(rnd, 3, 5.5), FOUNDER_GOLD_HI, 0.85);
+  }
+  // the gloss: one soft diagonal band
+  const sheen = ctx.createLinearGradient(0, 0, w, h);
+  sheen.addColorStop(0, 'rgba(255,255,255,0)');
+  sheen.addColorStop(0.36, 'rgba(255,255,255,0)');
+  sheen.addColorStop(0.46, 'rgba(255,255,255,0.22)');
+  sheen.addColorStop(0.56, 'rgba(255,255,255,0)');
+  sheen.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sheen;
+  ctx.fillRect(0, 0, w, h);
+  drawBevel(ctx, g, 0.22, 0.32, 3);
+  // the frame (strokes on the clipped outline only paint inside it): gold line, dark band, gold line, dark edge
+  ctx.save();
+  roundedPolyPath(ctx, g.outline, CORNER_R);
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = hex(FOUNDER_GOLD_LO);
+  ctx.lineWidth = 10.4;
+  ctx.stroke();
+  ctx.strokeStyle = hex(mix(pal.fill, pal.dark, 0.55));
+  ctx.lineWidth = 8.6;
+  ctx.stroke();
+  ctx.strokeStyle = hex(FOUNDER_GOLD);
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  ctx.strokeStyle = hex(mix(pal.fill, pal.dark, 0.75));
+  ctx.lineWidth = 2.6;
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** (1.15) The premium skins that paint the whole face (instead of the game's colours plus a pattern). */
 const SKIN_FACE = {
   carbon: paintCarbon,
@@ -2133,6 +2260,7 @@ const SKIN_FACE = {
   chrome: paintChrome,
   holo: paintHolo,
   galaxy: paintGalaxy,
+  founder: paintFounder,
 };
 
 function drawBlock(ctx, g, pal, key, name = null) {

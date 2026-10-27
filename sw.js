@@ -43,6 +43,7 @@ const PRECACHE = [
   'js/core/emojifit.js',
   'js/core/storage.js',
   'js/core/cloudsave.js',
+  'js/core/launch.js',
   'js/core/share.js',
   'js/core/nameRules.js',
   'js/core/sponsors.js',

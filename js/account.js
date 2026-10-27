@@ -15,6 +15,7 @@
 import { base } from './audience.js';
 import { mergeSaves, sameSave, fitSave } from './core/cloudsave.js';
 import { safeLocalStorage } from './core/storage.js';
+import { launchSave } from './core/launch.js';
 
 const TEXT = 'text/plain;charset=UTF-8';   // a "simple" request: no CORS preflight (like the leaderboard)
 const TIMEOUT_MS = 15000;
@@ -125,6 +126,11 @@ export function createAccount({
    */
   async function mergeLoop(cloud) {
     for (let tries = 0; tries < 4; tries++) {
+      // (1.23) an account save from before the public launch comes in as a fresh one with the testers' skin (and is always
+      // written back, so the server no longer holds the testers' progress)
+      const fresh = launchSave(cloud.save);
+      const wasOld = fresh !== cloud.save;
+      cloud = { ...cloud, save: fresh };
       if (!canApply()) {
         state.later = true;
         return 'later';
@@ -132,12 +138,12 @@ export function createAccount({
       let link = readLink();
       if (!link?.token) return 'out';
       const local = store.exportSave();
-      const merged = fitSave(mergeSaves(local, cloud.save, link.base, { today: today() }));
+      const merged = fitSave(mergeSaves(local, cloud.save, launchSave(link.base), { today: today() }));
       const here = !sameSave(merged, local);
       if (here) store.importSave(merged);
       // from here on this device holds the account's version `cloud` plus its own changes
       link = { ...link, base: cloud.save, rev: cloud.rev, pending: null };
-      if (sameSave(merged, cloud.save)) {
+      if (!wasOld && sameSave(merged, cloud.save)) {
         writeLink({ ...link, at: now() });
         state.synced = true;
         if (here) changed('merged');

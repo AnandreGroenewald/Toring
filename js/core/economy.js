@@ -131,6 +131,9 @@ export const SKINS = Object.freeze({
     { id: 'chroom', price: 2400, tier: 'epic' },     // (1.15) mirror chrome
     { id: 'holo', price: 3200, tier: 'legendary' },  // (1.15) holographic foil
     { id: 'heelal', price: 3500, tier: 'legendary' }, // (1.15) a galaxy in every block
+    // (1.23, the owner 27 Oct 2026: "a really nice looking skin for everyone that tested the app that will not be released")
+    // never sold: the launch gives it to everyone who played before it (js/core/launch.js); the Winkel shows it only to them
+    { id: 'stigter', price: 0, tester: true, tier: 'legendary' },
   ]),
 });
 export const SKIN_KINDS = Object.freeze(Object.keys(SKINS));

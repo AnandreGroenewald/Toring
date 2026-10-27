@@ -2475,6 +2475,26 @@ svg.ic {
 .shop-tier.tier-epic { background: var(--t-epic); }
 .shop-tier.tier-legendary { background: linear-gradient(90deg, #f2a516, #ffd76a, #f2a516); color: #4a2d00; }
 .shop-new { margin-left: auto; background: #e0234a; box-shadow: 0 0 calc(8 * var(--u)) rgba(255, 59, 92, 0.6); }
+/* (1.23) Saturday's tower blast, still being built: a slim strip framed in hazard tape under the game buttons */
+.sat-strip {
+  position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: calc(14 * var(--u)); width: 100%;
+  padding: calc(8 * var(--u)) calc(16 * var(--u)); border: calc(6 * var(--u)) solid transparent; border-radius: calc(24 * var(--u)); cursor: pointer; font: inherit; color: #fff; text-align: left;
+  background: linear-gradient(160deg, #24496e 0%, #13304d 60%, #0c2036 100%) padding-box,
+    repeating-linear-gradient(-45deg, #ffc93c 0 calc(12 * var(--u)), #1d1d24 calc(12 * var(--u)) calc(24 * var(--u))) border-box;
+  box-shadow: 0 calc(5 * var(--u)) 0 #0a1828;
+}
+.sat-strip:active { transform: translateY(calc(3 * var(--u))); box-shadow: 0 calc(2 * var(--u)) 0 #0a1828; }
+.sat-ic { display: flex; align-items: center; justify-content: center; font-size: calc(40 * var(--u)); line-height: 1; }
+.sat-txt { display: flex; flex-direction: column; min-width: 0; }
+.sat-txt b { font-weight: 900; font-size: calc(28 * var(--u)); line-height: 1.15; }
+.sat-txt small { font-weight: 700; font-size: max(11px, calc(20 * var(--u))); line-height: 1.25; color: #ffe08a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#ui.compact .sat-strip { padding-top: calc(5 * var(--u)); padding-bottom: calc(5 * var(--u)); }
+.sat-strip.is-tight { padding-top: calc(3 * var(--u)); padding-bottom: calc(3 * var(--u)); }
+.sat-strip.is-tight .sat-txt small { display: none; }
+.sat-strip.is-tight .sat-ic { font-size: calc(32 * var(--u)); }
+.sat-strip.is-off { display: none; }
+/* (1.23) the testers' own skin: a gold tag */
+.shop-new.shop-tester { background: linear-gradient(180deg, #ffe08a, #c99a2e); color: #3a2400; box-shadow: 0 0 calc(8 * var(--u)) rgba(242, 201, 76, 0.7); }
 .shop-prev { height: calc(92 * var(--u)); }
 /* the real blocks in a block skin (drawn by js/game/blocks.js) */
 .skin-prev.has-swatch { width: calc(132 * var(--u)); height: calc(92 * var(--u)); background: transparent; box-shadow: none; }

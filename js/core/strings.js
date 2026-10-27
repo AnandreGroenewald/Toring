@@ -631,7 +631,7 @@ export const S = {
     scene: { dag: 'Kaapse dag', sonsondergang: 'Safari', lekkergoed: 'Lekkergoedlug', nag: 'Sterrenag', kersieblom: 'Kersiebloeisels',
       noorderlig: 'Noorderlig', ruimte: 'Diep ruimte', akwarium: 'Akwarium', sintgolf: 'Retro-neon' },
     crane: { geel: 'Klassieke geel', rooi: 'Brandweer-rooi', blou: 'Oseaanblou', pienk: 'Pienk pret', goud: 'Goud', neon: 'Neon' },
-    blocks: { kleur: 'Kleurvol', lekkergoed: 'Lekkergoed', klip: 'Klip', neon: 'Neon', goud: 'Goudstawe', piksel: 'Retro-piksel',
+    blocks: { stigter: 'Stigter', kleur: 'Kleurvol', lekkergoed: 'Lekkergoed', klip: 'Klip', neon: 'Neon', goud: 'Goudstawe', piksel: 'Retro-piksel',
       koolstof: 'Koolstofvesel', ys: 'Yskristal', marmer: 'Marmer', lawa: 'Lawa', chroom: 'Chroom', holo: 'Holografies', heelal: 'Sterrestelsel' },
   },
   // (1.15.3, the owner: "People get confused how to use the Power-ups") the Daily Tower's free pick, then Oefen's stock
@@ -649,6 +649,13 @@ export const S = {
   // (1.15) how rare a shop item is (its colour in the Winkel), and the label on what's new
   tierNames: { common: 'Gewoon', rare: 'Skaars', epic: 'Epies', legendary: 'Legendaries' },
   newTag: 'Nuut',
+  testerTag: 'Toetser',   // (1.23) on the testers' own skin in the Winkel
+  // (1.23) Saturday's tower blast, still being built (the menu's hazard-tape strip)
+  satTitle: 'Saterdag-toringskiet',
+  satSub: 'Onder konstruksie · hou die water dop!',
+  satSoon: ['🚧 Die waterkanonne word nog gelaai. Hou die water dop!', '💦 Iemand het die tuinslang geleen. Kom loer Saterdag weer!',
+    '☕ Die bouers is nog op teetyd. Hou die water dop!', '🦛 Seekoei sit op die knoppie. Ons probeer hom oorreed…'],
+  launchFounder: '💎 Stapel is nou vir almal oop, en almal begin van voor af. Dankie dat jy getoets het: jou blokke dra nou Stigter, net vir toetsers.',
   // (1.15.6) the Living Tower preview and the testers' vote (js/ui/dom.js ideasBox / ideasInvite)
   ideasTitle: 'Nuut: Die Lewende Toring',
   ideasTag: 'proef',
