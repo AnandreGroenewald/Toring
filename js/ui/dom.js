@@ -1084,7 +1084,9 @@ export function createUI(bus) {
     const dock = screens.menu.querySelector('.dock-menu');
     if (!strip || !dock) return;
     strip.classList.remove('is-tight', 'is-off');
-    const over = () => dock.getBoundingClientRect().bottom > root.getBoundingClientRect().bottom + 1;
+    // (the screen's padded edge: above Android's Back/Home bar, --sab, plus the screen's own margin)
+    const edge = () => screens.menu.getBoundingClientRect().bottom - (parseFloat(getComputedStyle(screens.menu).paddingBottom) || 0);
+    const over = () => dock.getBoundingClientRect().bottom > edge() + 1;
     if (over()) strip.classList.add('is-tight');
     if (over()) strip.classList.add('is-off');
   }
@@ -1596,11 +1598,9 @@ export function createUI(bus) {
     return c;
   }
 
-  // (1.15) what's new in this version: a "Nuut" tag in the Winkel
-  const NEW_ITEMS = new Set(['scene:akwarium', 'scene:kersieblom', 'scene:noorderlig', 'scene:ruimte', 'scene:sintgolf', 'blocks:piksel', 'blocks:koolstof',
-    'crane:neon', 'blocks:ys', 'blocks:marmer', 'blocks:lawa', 'blocks:chroom', 'blocks:holo', 'blocks:heelal', 'frame:neon', 'frame:holo', 'badge:weerlig',
-    'badge:haai', 'badge:vuurpyl', 'badge:goat', 'badge:draak', 'title:ikoon', 'celebration:weerlig', 'celebration:goudreen',
-    'celebration:laser', 'celebration:sterrestof']);
+  // (1.15) what's new in this version: a "Nuut" tag in the Winkel ('blocks:piksel', 'scene:ruimte', ...). (1.23, the public
+  // launch: everything is new to everyone, so no tags; name the items a later version adds here.)
+  const NEW_ITEMS = new Set([]);
   /** (1.15) A shop tile's corner tags: how rare it is (not on the free defaults) and "Nuut". */
   function tierTags(item, key) {
     const free = !item.price && !item.rank && !item.week && !item.tester;

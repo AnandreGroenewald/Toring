@@ -64,12 +64,12 @@ function makeKit() {
 #rivier .rv-metres b { font-size: 20px; color: #fff3c4; }
 #rivier .rv-metres small { font-size: 13px; opacity: .85; }
 #rivier .rv-cn { display: flex; align-items: center; gap: 3px; padding: 5px 9px; border-radius: 999px; background: rgba(13,34,40,.62); border: 1px solid rgba(255,214,92,.45); font-weight: 900; color: #ffe08a; font-variant-numeric: tabular-nums; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-#rivier .rv-cn i.rv-coin-ic { width: 15px; height: 15px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff3b0 0 18%, #ffd23f 40%, #c98a00 100%); box-shadow: inset 0 0 0 2px rgba(150,95,0,.55); }
+#rivier .rv-cn i.rv-coin-ic { width: 17px; height: 17px; border-radius: 50%; background: var(--coin-img) center / 100% 100% no-repeat; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
 #rivier .rv-cn b { font-size: 16px; min-width: 1ch; }
 #rivier .rv-cn.bump { animation: rv-cn .3s ease-out; }
 @keyframes rv-cn { 0% { transform: scale(1); } 40% { transform: scale(1.22); } 100% { transform: scale(1); } }
 #rivier .rv-card p.rv-coinline { display: flex; align-items: center; justify-content: center; gap: 6px; margin: -4px 0 10px; font-size: 16px; font-weight: 900; color: #ffe08a; }
-#rivier .rv-card p.rv-coinline i.rv-coin-ic { width: 18px; height: 18px; flex: none; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff3b0 0 18%, #ffd23f 40%, #c98a00 100%); box-shadow: inset 0 0 0 2px rgba(150,95,0,.55); }
+#rivier .rv-card p.rv-coinline i.rv-coin-ic { width: 20px; height: 20px; flex: none; border-radius: 50%; background: var(--coin-img) center / 100% 100% no-repeat; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
 #rivier .rv-hearts { display: flex; gap: 3px; padding: 6px 9px; border-radius: 999px; background: rgba(13,34,40,.62); border: 1px solid rgba(255,255,255,.28); }
 #rivier .rv-hearts i { width: 18px; height: 16px; background: #ff4d5e; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 22'%3E%3Cpath d='M12 21.5 10.3 20C4.2 14.6.2 11 .2 6.6.2 3 3 .2 6.6.2c2 0 4 1 5.4 2.5C13.4 1.2 15.4.2 17.4.2 21 .2 23.8 3 23.8 6.6c0 4.4-4 8-10.1 13.4z'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 22'%3E%3Cpath d='M12 21.5 10.3 20C4.2 14.6.2 11 .2 6.6.2 3 3 .2 6.6.2c2 0 4 1 5.4 2.5C13.4 1.2 15.4.2 17.4.2 21 .2 23.8 3 23.8 6.6c0 4.4-4 8-10.1 13.4z'/%3E%3C/svg%3E") center / contain no-repeat; transition: background .2s, transform .2s; }
 #rivier .rv-hearts i.gone { background: rgba(255,255,255,.25); transform: scale(.85); }
@@ -128,7 +128,7 @@ function makeKit() {
 #rivier .rv-card p.rv-vsline { margin: 2px 0 10px; font-size: 17px; font-weight: 900; color: #bfe0ff; }
 #rivier .rv-hurt { position: absolute; inset: 0; box-shadow: inset 0 0 90px 20px rgba(200,40,30,.55); opacity: 0; transition: opacity .25s; }
 #rivier .rv-hurt.on { opacity: 1; transition: none; }
-#rivier .rv-flycoin { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; pointer-events: none; background: radial-gradient(circle at 35% 35%, #fff6c2 0 18%, #ffd23f 42%, #c98a00 100%); box-shadow: inset 0 0 0 2px rgba(150,95,0,.55), 0 0 12px rgba(255,210,80,.8); transition: transform .5s cubic-bezier(.5,0,.75,.4), opacity .5s; }
+#rivier .rv-flycoin { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; pointer-events: none; background: var(--coin-img) center / 100% 100% no-repeat; box-shadow: 0 0 12px rgba(255,210,80,.8); transition: transform .5s cubic-bezier(.5,0,.75,.4), opacity .5s; }
 #rivier .rv-flycoin.big { width: 40px; height: 40px; margin: -20px 0 0 -20px; }
 #rivier .rv-flycoin.gem { border-radius: 6px; transform: rotate(45deg); background: linear-gradient(135deg, #e8fdff, #7fe6ff 45%, #2aa9c8); box-shadow: 0 0 16px rgba(120,230,255,.9); }
 #rivier .rv-fly { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; transition: transform .55s cubic-bezier(.4,0,.6,1), opacity .55s; }

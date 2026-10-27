@@ -28,6 +28,8 @@
 
   /* effective safe-area insets inside the canvas rect (dom.js measures them) */
   --sat: 0px; --sar: 0px; --sab: 0px; --sal: 0px;
+  /* (1.23) the minted coin (.coin-ic, and the River run's counter and flying coins in js/rivier/view.js) */
+  --coin-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='r' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23fff0a0'/%3E%3Cstop offset='.45' stop-color='%23f1b52a'/%3E%3Cstop offset='1' stop-color='%23a86200'/%3E%3C/linearGradient%3E%3CradialGradient id='f' cx='.4' cy='.32' r='.78'%3E%3Cstop offset='0' stop-color='%23fff7cf'/%3E%3Cstop offset='.3' stop-color='%23ffdd55'/%3E%3Cstop offset='.72' stop-color='%23f3ae1f'/%3E%3Cstop offset='1' stop-color='%23cf8508'/%3E%3C/radialGradient%3E%3ClinearGradient id='e' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23a85f00'/%3E%3Cstop offset='1' stop-color='%23c77c06'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='32' cy='32' r='31.5' fill='%236e3d00'/%3E%3Ccircle cx='32' cy='32' r='30' fill='url(%23r)'/%3E%3Ccircle cx='32' cy='32' r='28' fill='none' stroke='%23b06d06' stroke-width='2.4' stroke-dasharray='1.6 1.33'/%3E%3Ccircle cx='32' cy='32' r='24.6' fill='%239a5600'/%3E%3Ccircle cx='32' cy='32' r='23.6' fill='url(%23f)'/%3E%3Cg fill='%23fff2a6' opacity='.9'%3E%3Crect x='19.8' y='37.2' width='25' height='8.6' rx='2'/%3E%3Crect x='23.8' y='28.2' width='18' height='8.6' rx='2'/%3E%3Crect x='26.8' y='19.2' width='11' height='8.6' rx='2'/%3E%3C/g%3E%3Cg fill='url(%23e)'%3E%3Crect x='19' y='36.4' width='25' height='8.6' rx='2'/%3E%3Crect x='23' y='27.4' width='18' height='8.6' rx='2'/%3E%3Crect x='26' y='18.4' width='11' height='8.6' rx='2'/%3E%3C/g%3E%3Cpath d='M13.5 25 A19.5 19.5 0 0 1 27 12.6' fill='none' stroke='%23fffdf0' stroke-opacity='.9' stroke-width='3' stroke-linecap='round'/%3E%3Ccircle cx='45' cy='18' r='1.6' fill='%23fffef5'/%3E%3C/svg%3E");
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -926,7 +928,8 @@ svg.ic {
 .sheet-foot { margin-top: calc(24 * var(--u)); }
 .sheet-link {
   display: block;
-  margin-top: calc(18 * var(--u));
+  padding: 12px 0;   /* (1.23: a thumb-sized tap, 40 px, round a 16 px line) */
+  margin-top: max(0px, calc(18 * var(--u) - 12px));
   text-align: center;
   font-size: max(13px, calc(24 * var(--u)));
   font-weight: 800;
@@ -1059,7 +1062,7 @@ svg.ic {
   font-family: var(--font);
   font-weight: 800;
 }
-.nick-input { font-size: max(16px, calc(30 * var(--u))); padding: calc(16 * var(--u)) calc(22 * var(--u)); border-radius: calc(24 * var(--u)); }
+.nick-input { min-height: 44px; font-size: max(16px, calc(30 * var(--u))); padding: calc(16 * var(--u)) calc(22 * var(--u)); border-radius: calc(24 * var(--u)); }
 /* (1.12.1) the name sheet: room for the box's focus ring (14u) inside the scrolling body */
 .name-sheet .sheet-body { margin: 0 calc(-20 * var(--u)); padding: calc(16 * var(--u)) calc(20 * var(--u)) calc(8 * var(--u)); }
 /* (1.12.1) Stoor and Maak toe side by side: with the keyboard up on a small phone the name rule stays in sight */
@@ -2305,7 +2308,7 @@ svg.ic {
 .account-msg { margin: calc(12 * var(--u)) 0; font-weight: 700; line-height: 1.4; color: var(--klei-d); }
 .account-foot { display: flex; flex-direction: column; gap: calc(12 * var(--u)); }
 .account-delete {
-  appearance: none; border: 0; background: none; padding: 8px; margin: 0; align-self: center;
+  appearance: none; border: 0; background: none; min-height: 40px; padding: 8px 12px; margin: 0; align-self: center;
   font: inherit; font-size: max(13px, calc(24 * var(--u))); font-weight: 700; color: var(--klei-d);
   text-decoration: underline; cursor: pointer;
 }
@@ -2468,7 +2471,7 @@ svg.ic {
 /* (1.15) on a narrow phone "LEGENDARIES" + "NUUT" don't fit one row: Nuut then drops to its own row, right, over the
    picture's corner (the tags sit above the picture) */
 .shop-tags { z-index: 3; position: absolute !important; top: calc(6 * var(--u)); left: calc(6 * var(--u)); right: calc(6 * var(--u)); display: flex; flex-wrap: wrap; justify-content: space-between; gap: calc(4 * var(--u)); pointer-events: none; }
-.shop-tier, .shop-new { padding: calc(2 * var(--u)) calc(9 * var(--u)); border-radius: 999px; font: 900 max(9px, calc(15 * var(--u))) / 1.2 var(--font); letter-spacing: 0.02em; text-transform: uppercase; color: #fff; white-space: nowrap; }
+.shop-tier, .shop-new { padding: calc(2 * var(--u)) calc(9 * var(--u)); border-radius: 999px; font: 900 max(10px, calc(15 * var(--u))) / 1.2 var(--font); letter-spacing: 0.02em; text-transform: uppercase; color: #fff; white-space: nowrap; }
 /* the tags' small white words at 4.5:1 or more (the tier colours stay for the tiles and the try bar) */
 .shop-tier.tier-common { background: #64768c; }
 .shop-tier.tier-rare { background: #1c6fd9; }
@@ -2572,7 +2575,7 @@ svg.ic {
 }
 /* (1.15) the "Nuut" dot on the menu's Winkel button */
 .dock-ic { position: relative; }
-.dock-new { position: absolute; top: calc(-12 * var(--u)); left: calc(-22 * var(--u)); padding: calc(2 * var(--u)) calc(7 * var(--u)); border-radius: 999px; background: #ff3b5c; color: #fff; font: 900 max(9px, calc(14 * var(--u))) / 1.2 var(--font); text-transform: uppercase; box-shadow: 0 0 0 calc(2 * var(--u)) #fff, 0 0 calc(10 * var(--u)) rgba(255, 59, 92, 0.6); animation: dock-new-pulse 1.8s ease-in-out infinite; }
+.dock-new { position: absolute; top: calc(-12 * var(--u)); left: calc(-22 * var(--u)); padding: calc(2 * var(--u)) calc(7 * var(--u)); border-radius: 999px; background: #e0234a; color: #fff; font: 900 max(10px, calc(14 * var(--u))) / 1.2 var(--font); text-transform: uppercase; box-shadow: 0 0 0 calc(2 * var(--u)) #fff, 0 0 calc(10 * var(--u)) rgba(255, 59, 92, 0.6); animation: dock-new-pulse 1.8s ease-in-out infinite; }
 @keyframes dock-new-pulse { 50% { transform: scale(1.12); } }
 @media (prefers-reduced-motion: reduce) { .dock-new { animation: none; } }
 /* (1.15) a celebration's shop tile art (js/ui/celebrate.js drawCelebrationIcon) */
@@ -2581,10 +2584,22 @@ svg.ic {
 /* (1.15, the owner: "We need a better way to display the coins please") the game's own gold coin, and the menu's wallet */
 .coin-ic {
   position: relative; display: inline-block; flex: none; width: 1.15em; height: 1.15em; border-radius: 50%; vertical-align: -0.2em; font-style: normal;
-  background: radial-gradient(circle at 34% 28%, #fffbe0 0 9%, rgba(255, 251, 224, 0) 30%), radial-gradient(circle, #ffe25c 0 50%, #f0b41a 51% 60%, #ffd23f 61% 100%);
-  box-shadow: inset 0 -0.08em 0 #b67b00, inset 0 0 0 0.06em #c98d07, 0 0.05em 0.14em rgba(0, 0, 0, 0.3);
+  /* (1.23, the owner 27 Oct 2026: "the coins, it looks really bland ... really make this special") a minted coin: a reeded gold
+     rim, a domed face, the Stapel tower (three stacked blocks) engraved in it, a polished highlight. The river's coins wear
+     the same face (js/rivier/hazards.js coinFace). */
+  background: var(--coin-img) center / 100% 100% no-repeat;
+  box-shadow: 0 0.05em 0.12em rgba(0, 0, 0, 0.35);
 }
-.coin-ic::after { content: '★'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 0.6em; line-height: 1; color: #d39500; text-shadow: 0 0.05em 0 #fff2a8; }
+/* the wallet's coin catches the light now and then (still in reduced motion; never in the shop's long lists) */
+.menu-wallet .coin-ic { overflow: hidden; }
+.menu-wallet .coin-ic::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0) 38%, rgba(255, 255, 255, 0.9) 50%, rgba(255, 255, 255, 0) 62%) no-repeat;
+  background-size: 250% 100%; background-position: 160% 0; animation: coin-shine 5s ease-in-out 1.5s infinite;
+}
+@keyframes coin-shine { 0%, 72% { background-position: 160% 0; } 90%, 100% { background-position: -60% 0; } }
+@media (prefers-reduced-motion: reduce) { .menu-wallet .coin-ic::after { animation: none; opacity: 0; } }
+#ui.rm .menu-wallet .coin-ic::after { animation: none; opacity: 0; }
 .menu-wallet {
   position: absolute; top: calc(var(--sat) + 14 * var(--u)); right: calc(var(--sar) + 16 * var(--u)); z-index: 2;
   display: inline-flex; align-items: center; gap: calc(8 * var(--u)); min-height: 44px;
@@ -2616,7 +2631,7 @@ button.chip { font: inherit; border: 0; cursor: pointer; -webkit-tap-highlight-c
   display: inline-flex; flex-direction: column; align-items: center; gap: calc(2 * var(--u)); min-width: 30px; min-height: 44px;
   padding: calc(4 * var(--u)) 0 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
-.wk-amt { font-size: max(9px, calc(15 * var(--u))); font-weight: 900; line-height: 1; opacity: 0.85; }
+.wk-amt { font-size: max(10px, calc(15 * var(--u))); font-weight: 900; line-height: 1; opacity: 0.85; }
 .chest { --cw: calc(34 * var(--u)); position: relative; display: block; width: var(--cw); height: calc(var(--cw) * 0.82); font-style: normal; }
 /* the body: dark wood, a gold band, two gold straps */
 .chest::before {
@@ -2680,7 +2695,7 @@ button.chip { font: inherit; border: 0; cursor: pointer; -webkit-tap-highlight-c
 /* (1.15) today's chest waits for a tap: it shakes, glows and says "Tik!" */
 .wk-chest.is-ready .chest, .rw-chest.is-ready .chest { filter: drop-shadow(0 0 calc(8 * var(--u)) rgba(255, 196, 40, 1)); animation: chest-shake 1.4s ease-in-out infinite; transform-origin: 50% 100%; }
 @keyframes chest-shake { 0%, 55%, 100% { transform: rotate(0) scale(1); } 60% { transform: rotate(-9deg) scale(1.08); } 66% { transform: rotate(8deg) scale(1.08); } 72% { transform: rotate(-6deg) scale(1.05); } 78% { transform: rotate(4deg); } 84% { transform: rotate(-2deg); } }
-.wk-chest.is-ready .wk-amt { color: #fff; background: #ff3b5c; padding: calc(2 * var(--u)) calc(6 * var(--u)); border-radius: 999px; opacity: 1; }
+.wk-chest.is-ready .wk-amt { color: #fff; background: #e0234a; padding: calc(2 * var(--u)) calc(6 * var(--u)); border-radius: 999px; opacity: 1; }
 .rw-chest { border: 0; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .rw-chest.is-ready { background: #ffe9a8; box-shadow: 0 0 0 calc(3 * var(--u)) #ffc928, 0 0 calc(16 * var(--u)) rgba(255, 201, 40, 0.7); }
 .wk-chest.is-opened-now .chest, .rw-chest.is-opened-now .chest { animation: chest-pop 0.9s ease-out both; }
@@ -2856,12 +2871,12 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .duel-card .stake-pick > .label { color: #ffd75a; }
 .duel-card .stake-btn { color: #c9d4ea; }
 .duel-card .stake-what { color: #fff; }
-.duel-card .stake-have, .duel-card .duel-record { color: #8fa0c4; }
-.duel-card .label { color: #9fb0d0; }
+.duel-card .stake-have, .duel-card .duel-record { color: #a9b8d8; }
+.duel-card .label { color: #b0c0dd; }
 .duel-card .rank-box { background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07); }
 .duel-card .rank-season, .duel-card .rank-next, .duel-card .rank-now span { color: #b4c2e0; }
 .duel-card .rank-now { color: #fff; }
-.duel-card .rank-note, .duel-card .nick-msg, .duel-card .name-rules, .duel-card .note, .duel-card .rank-badges { color: #8fa0c4; }
+.duel-card .rank-note, .duel-card .nick-msg, .duel-card .name-rules, .duel-card .note, .duel-card .rank-badges { color: #a9b8d8; }
 .duel-card .rank-bar { background: rgba(255, 255, 255, 0.12); }
 .duel-card .nick-input { background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.16); }
 .duel-card .nick-input::placeholder { color: rgba(255, 255, 255, 0.45); }
@@ -2920,8 +2935,8 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .ideas-invite .pl-go { color: rgba(42, 29, 0, 0.6); }
 .ideas-inv-ic { background: linear-gradient(145deg, #ff7a5c, #d9402a); }
 .btn-duel { position: relative; }
-.btn-new-tag { position: absolute; top: calc(-12 * var(--u)); right: calc(14 * var(--u)); padding: calc(2 * var(--u)) calc(9 * var(--u)); border-radius: 999px; background: #ff3b5c; color: #fff;
-  font: 900 max(9px, calc(15 * var(--u))) / 1.2 var(--font); text-transform: uppercase; box-shadow: 0 0 0 calc(2 * var(--u)) #fff, 0 0 calc(10 * var(--u)) rgba(255, 59, 92, 0.6); pointer-events: none; }
+.btn-new-tag { position: absolute; top: calc(-12 * var(--u)); right: calc(14 * var(--u)); padding: calc(2 * var(--u)) calc(9 * var(--u)); border-radius: 999px; background: #e0234a; color: #fff;
+  font: 900 max(10px, calc(15 * var(--u))) / 1.2 var(--font); text-transform: uppercase; box-shadow: 0 0 0 calc(2 * var(--u)) #fff, 0 0 calc(10 * var(--u)) rgba(255, 59, 92, 0.6); pointer-events: none; }
 
 /* (1.15, the owner: "Please fix this, it looks bland") the day done: a dark glass card like the Uitdagersreeks, a gold tick,
    the tower in tiles, the countdown in a pill */
@@ -2940,7 +2955,7 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .done-tile-top { display: inline-flex; align-items: center; gap: calc(6 * var(--u)); }
 .done-tile-top .emoji { font-size: max(16px, calc(30 * var(--u))); }
 .done-tile b { font-size: max(18px, calc(36 * var(--u))); font-weight: 900; font-variant-numeric: tabular-nums; }
-.done-tile small { font-size: max(10px, calc(18 * var(--u))); font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #9fb0d0; }
+.done-tile small { font-size: max(10px, calc(18 * var(--u))); font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #b0c0dd; }
 .countdown.done-count { padding: calc(8 * var(--u)) calc(18 * var(--u)); border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: #b4c2e0; align-items: center; }
 .countdown.done-count b { color: #ffd75a; }
 .duel-card .stake-btn[aria-pressed="true"] { color: #3a2800; }
@@ -3038,7 +3053,8 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
    light colours of their own get their dark-glass twins below. The colourful buttons stay colourful.
    ======================================================================================================================== */
 .card {
-  --ink: #f2f5ff; --ink-soft: #c9d4ea; --muted: #9fb0d0; --line: rgba(255, 255, 255, 0.12); --panel: rgba(255, 255, 255, 0.07); --card: #17213f;
+  /* (1.23: --muted lifted from #9fb0d0, 4.1:1 on the sheets' tiles, to 4.9:1) */
+  --ink: #f2f5ff; --ink-soft: #c9d4ea; --muted: #b0c0dd; --line: rgba(255, 255, 255, 0.12); --panel: rgba(255, 255, 255, 0.07); --card: #17213f;
   color: var(--ink);
   background: radial-gradient(120% 55% at 50% 0%, #2a3a68 0%, #17213f 48%, #0d1328 100%);
   box-shadow: 0 calc(26 * var(--u)) calc(50 * var(--u)) rgba(5, 10, 30, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
@@ -3048,7 +3064,7 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .card .btn-white > .emoji:first-child { background: rgba(255, 255, 255, 0.1); }
 /* (1.15.3) a heart power-up while every heart is full: dimmed, "VOL", still tappable for the why */
 .power-btn.is-full { opacity: 0.75; filter: grayscale(0.5); }
-.power-btn.is-full .power-tag { background: #6b7a99; }
+.power-btn.is-full .power-tag { background: #94a1bb; }
 /* (1.15.3, the owner: "Can you make this show up infront, Its hard to realize who won") the Tower button a round eye (its
    word only while the tower shows), clear of the chip; a match's outcome big, gold for a win */
 .peek-btn { padding: 0; width: max(44px, calc(64 * var(--u))); justify-content: center; }
@@ -3078,7 +3094,7 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .again-stakes > .label { font-size: max(11px, calc(20 * var(--u))); color: #c9d4ea; }
 .again-stakes .stake-btn { min-height: 40px; padding: calc(4 * var(--u)) 2px; font-size: max(12px, calc(22 * var(--u))); color: #e6ecfa; }
 .again-stakes .stake-btn[aria-pressed="true"] { color: #6b4d00; }
-.again-stakes .stake-btn:disabled { color: #9fb0d0; }
+.again-stakes .stake-btn:disabled { color: #b0c0dd; }
 /* the grid's key: how many of the lost blocks a visitor took (no heart) */
 .grid-free { margin-left: calc(4 * var(--u)); font-weight: 700; color: #c9d4ea; }
 /* (1.15.3, the contrast sweep qa/contrast1153.mjs after the owner's three finds) the last low words on the dark sheets:
@@ -3097,7 +3113,7 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .card a { color: #9fd0ff; }
 /* the Winkel: dark tiles with their tier's colour in the edge and a glow, the tabs on smoked glass */
 .card .shop-tabs { background: rgba(255, 255, 255, 0.07); }
-.card .shop-tab { color: #9fb0d0; }
+.card .shop-tab { color: #b0c0dd; }
 .card .shop-tab.on { background: #fff; color: #1d2b45; }
 .card .shop-item { background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04)); border-color: rgba(255, 255, 255, 0.1); }
 .card .shop-item.tier-rare { background: linear-gradient(180deg, rgba(47, 128, 237, 0.28), rgba(255, 255, 255, 0.04) 60%); border-color: rgba(90, 160, 255, 0.6); }
@@ -3111,7 +3127,7 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .card .title-plate { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1); }
 /* the menu's daily card: its strip, forecast and notes */
 .card .forecast { background: rgba(255, 255, 255, 0.06); }
-.card .daily-date { color: #9fb0d0; }
+.card .daily-date { color: #b0c0dd; }
 .card .lang-btn { background: rgba(255, 255, 255, 0.08); color: #f2f5ff; border-color: rgba(255, 255, 255, 0.18); }
 /* (1.15.3) the lobby's offer: who, what and for how much, then Speel or keep looking (and the time left) */
 .offer-text { margin: 0 0 calc(8 * var(--u)); text-align: center; color: #f2f5ff; font-weight: 800; font-size: max(15px, calc(30 * var(--u))); line-height: 1.3; }
@@ -3141,7 +3157,7 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .pick-row .pick-btn .pick-ic { grid-row: 1 / 4; }
 .pick-btn:disabled { opacity: 0.55; cursor: default; border-color: rgba(255, 255, 255, 0.16); }
 .pick-have { color: #ffd75a; font-weight: 900; font-size: max(12px, calc(22 * var(--u))); }
-.pick-row:not(.has) .pick-have { color: #9fb0d0; }
+.pick-row:not(.has) .pick-have { color: #b0c0dd; }
 .pick-buy {
   display: grid; grid-auto-flow: row; place-items: center; align-content: center; gap: calc(2 * var(--u));
   min-width: calc(110 * var(--u)); min-height: 48px; padding: calc(8 * var(--u)) calc(10 * var(--u));
@@ -3191,7 +3207,7 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .try-bar { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px 12px; background: rgba(13, 19, 40, 0.94); color: #f2f5ff; box-shadow: 0 10px 30px rgba(5, 10, 30, 0.5), inset 0 0 0 2px var(--tier, rgba(255, 255, 255, 0.18)); }
 .try-top { display: flex; align-items: center; gap: 8px; }
 .try-top .try-txt { align-items: center; text-align: center; }
-.try-txt small { color: #9fb0d0; }
+.try-txt small { color: #b0c0dd; }
 .try-txt b { color: #fff; }
 .try-step { flex: none; width: 46px; height: 46px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.12); color: #fff; font: 900 30px / 1 var(--font); cursor: pointer; padding-bottom: 4px; }
 .try-step:active { transform: scale(0.94); }
@@ -3213,17 +3229,17 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .card .shop-item:active { transform: translateY(calc(2 * var(--u))) scale(0.985); }
 .card .shop-name { color: #fff; font-weight: 800; letter-spacing: 0.01em; }
 .card .shop-item .shop-buy {
-  min-height: 36px; padding: calc(6 * var(--u)) calc(18 * var(--u)) calc(6 * var(--u)) calc(8 * var(--u)); gap: calc(6 * var(--u));
+  min-height: 40px; padding: calc(6 * var(--u)) calc(18 * var(--u)) calc(6 * var(--u)) calc(8 * var(--u)); gap: calc(6 * var(--u));
   background: linear-gradient(180deg, #ffe58f, #f5b800); color: #2a1d00; font-size: max(13px, calc(23 * var(--u)));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 0 1px rgba(255, 220, 120, 0.6), 0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(245, 184, 0, 0.3);
 }
 .card .shop-item .shop-buy.is-poor { opacity: 1; background: rgba(255, 255, 255, 0.06); color: #ffd75a; box-shadow: inset 0 0 0 1px rgba(255, 215, 90, 0.45); }
 .card .shop-item .shop-wear {
-  min-height: 36px; padding: calc(6 * var(--u)) calc(22 * var(--u)); background: transparent; color: #fff; font-size: max(13px, calc(23 * var(--u)));
+  min-height: 40px; padding: calc(6 * var(--u)) calc(22 * var(--u)); background: transparent; color: #fff; font-size: max(13px, calc(23 * var(--u)));
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.75);
 }
 .card .shop-item .shop-buy:active, .card .shop-item .shop-wear:active { transform: scale(0.96); }
-.card .shop-item .shop-try { min-height: 32px; padding: 2px 10px; border: 0; background: none; color: #9fd0ff; font-size: max(12px, calc(20 * var(--u))); text-decoration: underline; text-underline-offset: 3px; }
+.card .shop-item .shop-try { min-height: 40px; padding: 2px 10px; border: 0; background: none; color: #c4e2ff; font-size: max(12px, calc(20 * var(--u))); text-decoration: underline; text-underline-offset: 3px; }
 /* (1.15, the owner: "This needs to be more to the right and a little more tilted") the flame on the strip's corner, orange */
 .card .week-strip > .streak {
   right: calc(-14 * var(--u)); top: calc(-24 * var(--u)); transform: rotate(9deg);
@@ -3370,6 +3386,14 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
    eye on both sides (it stays centred); its title a little smaller on narrow phones so it still fits on one line */
 .screen-results .res-duel { max-width: calc(100vw - 2 * (var(--sal) + 20 * var(--u) + max(44px, 64 * var(--u)))); }
 .screen-results .res-duel .res-title { font-size: min(calc(62 * var(--u)), 7.4vw); }
+/* (1.23) the same for a tower's results: a wide saying made the head's dark box run under the eye on a 360 phone. The
+   box now starts under the day's chip (the chip floats above it, as a label), so the eye only ever meets the chip's row */
+.screen-results .res-head:not(.res-duel) { position: relative; z-index: 0; background: none; }
+.screen-results .res-head:not(.res-duel) .chip { margin-bottom: calc(20 * var(--u)); }   /* (8 px of the box above the title on a 360 phone) */
+.screen-results .res-head:not(.res-duel)::before {
+  content: ''; position: absolute; z-index: -1; left: 0; right: 0; bottom: 0; top: calc(72 * var(--u));
+  border-radius: calc(36 * var(--u)); background: rgba(12, 32, 66, 0.55);
+}
 /* (1.15.4, the game-tester: endless shines still played in screens that scroll: the Winkel's pinned card, the
    Uitdagersreeks card, a long-time player's holo frame) a player card's shine, rays and holo play three times and rest
    (the 1.15.2 rule: endless work in a scrolling screen is what Android's WebView loses tiles over) */
@@ -3662,7 +3686,7 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .dorp-btn-sub { font-size: max(12px, calc(21 * var(--u))); font-weight: 800; color: #cfd6ff; white-space: nowrap; }
 .dorp-btn-arrow { font-size: calc(48 * var(--u)); font-weight: 900; color: rgba(255, 255, 255, 0.55); }
 .dorp-btn-badge, .dorp-btn-go { padding: calc(6 * var(--u)) calc(14 * var(--u)); border-radius: 999px; font-weight: 900; white-space: nowrap; font-size: max(12px, calc(22 * var(--u))); }
-.dorp-btn-badge { background: #ff3b5c; color: #fff; box-shadow: 0 0 calc(16 * var(--u)) rgba(255, 59, 92, 0.7); animation: dorp-ping 0.9s ease-out 3; }
+.dorp-btn-badge { background: #e0234a; color: #fff; box-shadow: 0 0 calc(16 * var(--u)) rgba(255, 59, 92, 0.7); animation: dorp-ping 0.9s ease-out 3; }
 .dorp-btn-go { background: linear-gradient(160deg, #ffd23f, #ff9f1c); color: #3b2400; animation: dorp-ping 0.9s ease-out 3; }
 .dorp-btn.has-news { box-shadow: 0 calc(6 * var(--u)) 0 #0e0820, 0 0 0 calc(3 * var(--u)) #ff3b5c; }
 .dorp-btn.has-go { box-shadow: 0 calc(6 * var(--u)) 0 #0e0820, 0 0 0 calc(3 * var(--u)) #ffd23f; }
@@ -3952,18 +3976,20 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 .span-row .dorp-btn-arrow { display: none; }
 .span-row .dorp-btn-sub { overflow: hidden; text-overflow: ellipsis; }
 .span-row .dorp-btn-go { position: absolute; top: calc(-14 * var(--u)); right: calc(10 * var(--u)); font-size: max(11px, calc(20 * var(--u))); padding: calc(4 * var(--u)) calc(12 * var(--u)); }
-.rivier-menu-btn { background: linear-gradient(160deg, #2f9bd8 0%, #1d5fa8 55%, #0f3466 130%); box-shadow: 0 calc(6 * var(--u)) 0 #0a2448, inset 0 0 0 1px rgba(255, 255, 255, 0.16); }
+/* (1.23) a deeper start, so the small white line reads (4.7:1 at the lightest corner; was 2.5:1) */
+.rivier-menu-btn { background: linear-gradient(160deg, #1c78b8 0%, #17529a 55%, #0d2e5e 130%); box-shadow: 0 calc(6 * var(--u)) 0 #0a2448, inset 0 0 0 1px rgba(255, 255, 255, 0.16); }
 .rivier-menu-btn:active { box-shadow: 0 calc(2 * var(--u)) 0 #0a2448, inset 0 0 0 1px rgba(255, 255, 255, 0.16); }
 .rivier-menu-btn .kasteel-menu-ic { background: rgba(255, 255, 255, 0.16); }
-.rivier-menu-btn .kasteel-menu-txt small { color: #cdeaff; }
+.rivier-menu-btn .kasteel-menu-txt small { color: #ffffff; }
 .span-row .rivier-menu-btn { grid-template-columns: auto minmax(0, 1fr); gap: calc(10 * var(--u)); padding: calc(10 * var(--u)) calc(12 * var(--u)) calc(10 * var(--u)) calc(10 * var(--u)); min-height: calc(104 * var(--u)); }
 .span-row .rivier-menu-btn .kasteel-menu-ic { width: calc(66 * var(--u)); height: calc(66 * var(--u)); font-size: calc(40 * var(--u)); }
 .span-row .rivier-menu-btn .kasteel-menu-txt small { font-size: max(11px, calc(20 * var(--u))); }
 .span-row .rivier-menu-btn .kasteel-new { position: absolute; top: calc(-14 * var(--u)); right: calc(10 * var(--u)); }
 /* (1.21) Saam gly beside the River run: purple, so the two read apart at a glance */
-.saam-menu-btn { background: linear-gradient(160deg, #9a6cf5 0%, #6a3fc8 55%, #34197a 130%); box-shadow: 0 calc(6 * var(--u)) 0 #24104f, inset 0 0 0 1px rgba(255, 255, 255, 0.16); }
+/* (1.23) deeper too: the small white line 4.6:1 (was 2.75:1) */
+.saam-menu-btn { background: linear-gradient(160deg, #8459e4 0%, #5f37bd 55%, #301672 130%); box-shadow: 0 calc(6 * var(--u)) 0 #24104f, inset 0 0 0 1px rgba(255, 255, 255, 0.16); }
 .saam-menu-btn:active { box-shadow: 0 calc(2 * var(--u)) 0 #24104f, inset 0 0 0 1px rgba(255, 255, 255, 0.16); }
-.saam-menu-btn .kasteel-menu-txt small { color: #e6dcff; }
+.saam-menu-btn .kasteel-menu-txt small { color: #ffffff; }
 .saam-sheet .slag-waiting { justify-content: center; gap: calc(14 * var(--u)); }
 .saam-sheet .saam-link { margin: 0; text-align: center; font-size: max(12px, calc(20 * var(--u))); color: var(--ink-soft); word-break: break-all; user-select: all; -webkit-user-select: all; }
 /* (1.20) the smallest phones (360x640, the compact layout): the menu's rows a little closer and its logo a little higher,
@@ -3972,3 +3998,6 @@ button.done-tile small::after { content: ' ⓘ'; opacity: 0.8; }
 #ui.compact .screen-menu .daily-card { padding-top: calc(22 * var(--u)); padding-bottom: calc(24 * var(--u)); }
 #ui.compact .screen-menu .note { margin: calc(8 * var(--u)) 0 calc(12 * var(--u)); }
 #ui.compact .screen-menu .logo { padding-top: calc(92 * var(--u)); }
+/* (1.23) on short phones the logo sits higher and the wallet (44 px at least) reached over the dangling L: the L hangs
+   only as high as clears the wallet (6 px under it; on a 360x640 phone level with the others, its rope behind the wallet) */
+#ui.compact .screen-menu .lb.hang { --y: max(calc(-46 * var(--u)), calc(max(44px, 64 * var(--u)) + 6px - 100 * var(--u))); }
