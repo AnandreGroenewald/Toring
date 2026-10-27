@@ -1501,3 +1501,13 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
 - Play Data safety: Device or other IDs + "Developer communications" SAVED, not sent (1.22.0's closed/open review untouched);
   it goes with the next submission. Next: his phone check; closed/open/production after Google decides on 1.22.0.
 
+### 27 Oct 2026 ~21:40 — 1.22.1 sent to PRODUCTION (first public release) + privacy pages live
+- His "Lets push Stapel and SportCard live, what do you think?" → privacy.html + privaatheid.html got section 2e "News on
+  your phone" (+ contents, operator Google/Firebase Cloud Messaging, retention), d90ea3c pushed; website deployed by him with
+  `bash ~/deploy-stapel-1.22.1.sh` (site 1.22.1; /privacy and /privaatheid show #p2e; note: Pages 308-redirects
+  privacy.html → /privacy, so checks need curl -L).
+- Play: 1.22.0's closed/open review had finished (nothing in review). Production track (was inactive, 11 countries) new
+  release 12201 (1.22.1) from the library, full rollout, notes af + en-AU/CA/GB/US/ZA ("Stapel is hier!…"), + Data safety
+  (Developer communications): "Changes in review" ~21:40. Managed publishing off: live when Google approves.
+- Next: after approval, the "Nuwe weergawe!" card for older apps (Worker APP_LATEST 1.22.1; a Worker deploy ends live matches).
+
