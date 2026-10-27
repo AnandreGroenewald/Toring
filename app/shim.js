@@ -62,10 +62,10 @@
   };
 
   // (27 Oct 2026) News on the phone (Firebase Cloud Messaging, project "Lekker Local Games"): a phone that allows
-  // notifications joins the topic "news" (StapelPushPlugin), so one message from the Firebase console reaches every
+  // notifications joins the topic "stapel" (StapelPushPlugin), so one message from the Firebase console reaches every
   // player. It is the daily reminder's Android question: a player who allowed that is in; the others are asked once,
   // at a start after they have played (never at the very first start). Firebase stays asleep until then.
-  var NEWS = 'news';
+  var NEWS = 'stapel';   // (its own topic: Firebase topics are shared by every app in the project; Handjie Tennis uses "news")
   function joinNews() {
     return cap.nativePromise('StapelPush', 'join', { topic: NEWS }).catch(function () {});
   }

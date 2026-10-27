@@ -1481,7 +1481,7 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
 ### 27 Oct 2026 ~20:00 — news notifications for the app (branch push-notifications, e043f32; local, not pushed)
 - Owner: "Can you send updates on the app through pop-ups?" → Firebase project **Lekker Local Games**
   (`lekker-local-games`, account sportscardza, Spark plan, Analytics/Gemini off; Stapel + Handjie Tennis registered).
-- App only (the website is untouched): `StapelPushPlugin.java` (Capacitor plugin "StapelPush", `join({topic})`), registered in
+- App only (the website is untouched): `StapelPushPlugin.java` (Capacitor plugin "StapelPush", `join({topic})`, topic **stapel** since 27 Oct ~20:30: Firebase topics are project-wide and Handjie uses "news"), registered in
   MainActivity; `firebase-messaging:26.0.1` in app/build.gradle; manifest: Firebase auto-start OFF, reminder icon, channel
   "news" ("Nuus / News"). `app/shim.js`: a phone that allows notifications joins topic **news** (the daily reminder's Android
   question: wrapped `reminders.ask`); players who have played (`stapel.v1.econ` / `rvTaught`) are asked once at a later start
