@@ -25,6 +25,8 @@ public class MainActivity extends BridgeActivity {
         EdgeToEdge.enable(this);
         // (1.14) Sign in with Google: the app's own plugin (StapelGooglePlugin), registered before the bridge starts
         registerPlugin(StapelGooglePlugin.class);
+        // (27 Oct 2026) News on the phone: Firebase Cloud Messaging, only once the player allows notifications
+        registerPlugin(StapelPushPlugin.class);
         super.onCreate(savedInstanceState);
         hideNavigationBar();
     }

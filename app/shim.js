@@ -61,6 +61,26 @@
     },
   };
 
+  // (27 Oct 2026) News on the phone (Firebase Cloud Messaging, project "Lekker Local Games"): a phone that allows
+  // notifications joins the topic "news" (StapelPushPlugin), so one message from the Firebase console reaches every
+  // player. It is the daily reminder's Android question: a player who allowed that is in; the others are asked once,
+  // at a start after they have played (never at the very first start). Firebase stays asleep until then.
+  var NEWS = 'news';
+  function joinNews() {
+    return cap.nativePromise('StapelPush', 'join', { topic: NEWS }).catch(function () {});
+  }
+  var askReminder = window.stapelApp.reminders.ask;
+  window.stapelApp.reminders.ask = function () {
+    return askReminder().then(function (ok) { if (ok) joinNews(); return ok; });
+  };
+  window.stapelApp.reminders.permission().then(function (p) {
+    if (p === 'granted') return joinNews();
+    var played = localStorage.getItem('stapel.v1.econ') || localStorage.getItem('stapel.v1.rvTaught');
+    if (String(p).indexOf('prompt') !== 0 || !played || localStorage.getItem('stapel.v1.newsAsked')) return null;
+    localStorage.setItem('stapel.v1.newsAsked', '1');
+    return window.stapelApp.reminders.ask();
+  }).catch(function () {});
+
   // (1.13) Sign in with Google: the phone's own Google sign-in (StapelGooglePlugin, registered in MainActivity),
   // because Google doesn't allow its web sign-in inside an app. js/account.js gets only Google's ID token,
   // which the game's server checks. A failure comes back as an Error whose message is its code
