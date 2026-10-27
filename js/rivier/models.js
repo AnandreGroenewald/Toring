@@ -20,7 +20,13 @@ const partOf = (o) => { for (let p = o; p; p = p.parent) if (RIM_PARTS.has(p.nam
 function load(name) {
   if (!cache.has(name)) {
     const url = new URL(`../../img/models/${name}.glb?v=${MODEL_V[name] || 1}`, import.meta.url).href;
-    const once = () => new GLTFLoader().loadAsync(url);
+    // (1.23) the file comes by a plain fetch, then the loader parses it: three's own FileLoader reads a download through a
+    // stream of its own that nothing holds on to, and a garbage collection mid-download cancelled it (ERR_ABORTED; seen on a
+    // slow line, the ride then ran with the simple shapes and fetched the models again)
+    const once = () => fetch(url).then((r) => {
+      if (!r.ok) throw new Error(`${name}.glb: ${r.status}`);
+      return r.arrayBuffer();
+    }).then((buf) => new GLTFLoader().parseAsync(buf, new URL('./', url).href));
     // (a download the browser dropped is tried once more; a model that still can't be had isn't remembered as
     // missing: the next ride asks again)
     cache.set(name, once().catch(() => new Promise((res) => setTimeout(res, 400)).then(once)).then((g) => {

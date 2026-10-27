@@ -3110,7 +3110,7 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 /* (1.15.3, the owner: "Its not readable") the Google card in Instellings: the same dark glass as the rows under it (it stayed
    white while its words turned light with the 1.15 sheets); Google's own sign-in button stays white */
 .card .settings-account { background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.14); }
-.card .account-delete, .card .account-msg { color: #ff9a8f; }
+.card .account-delete, .card .account-msg { color: #ffaea5; }   /* (1.23: 4.4:1 -> 5:1) */
 .card .chip { background: rgba(255, 255, 255, 0.12); color: #fff; }
 .card input, .card select, .card textarea { background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.6); }
 .card a { color: #9fd0ff; }
@@ -3123,7 +3123,7 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 .card .shop-item.tier-epic { background: linear-gradient(180deg, rgba(155, 81, 224, 0.32), rgba(255, 255, 255, 0.04) 60%); border-color: rgba(185, 125, 255, 0.65); box-shadow: 0 0 calc(10 * var(--u)) rgba(155, 81, 224, 0.3); }
 .card .shop-item.tier-legendary { background: linear-gradient(180deg, rgba(242, 165, 22, 0.32), rgba(255, 255, 255, 0.04) 62%); border-color: rgba(255, 200, 60, 0.85); box-shadow: 0 0 calc(16 * var(--u)) rgba(242, 165, 22, 0.45); }
 .card .shop-item.is-on { border-color: #4fd66a; }
-.card .shop-on { color: #6ee08f; }
+.card .shop-on { color: #9ff2b6; }   /* (1.23: "Aan" on the gold-brown tiles 3.9:1 -> 4.9:1) */
 .card .shop-try { background: transparent; color: #cfe3ff; border-color: rgba(207, 227, 255, 0.7); }
 .card .shop-row { background: rgba(255, 255, 255, 0.06); }
 .card .shop-coins { background: rgba(0, 0, 0, 0.35); }
