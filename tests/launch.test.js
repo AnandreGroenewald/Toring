@@ -6,7 +6,7 @@ import { launchReset, launchSave, playedBefore, MODE_KEYS } from '../js/core/lau
 import { createStore, memoryBackend, cleanSave } from '../js/core/storage.js';
 import { mergeSaves, sameSave } from '../js/core/cloudsave.js';
 import { LAUNCH, STORAGE_KEY } from '../js/config.js';
-import { priceOf, skin } from '../js/core/economy.js';
+import { priceOf, skin, defaultEconomy } from '../js/core/economy.js';
 
 function testerDevice() {
   const be = memoryBackend();
@@ -72,6 +72,18 @@ test('a new player gets no testers skin', () => {
   assert.equal(launchReset(be2).founder, false);
   assert.equal(playedBefore(null, null, true), true, 'another mode played counts');
   assert.ok(MODE_KEYS.includes('stapel.v1.dorp'));
+});
+
+test('a device that only took free skins or looks (no tower finished) starts again too, with the testers skin', () => {
+  const be = memoryBackend();
+  be.setItem(`${STORAGE_KEY}.econ`, JSON.stringify({ coins: 0, skins: { owned: { blocks: ['kleur', 'neon'] }, wear: { blocks: 'neon' } } }));
+  assert.equal(launchReset(be).founder, true);
+  assert.deepEqual(JSON.parse(be.getItem(`${STORAGE_KEY}.econ`)).skins.owned.blocks, ['kleur', LAUNCH.skin]);
+  // a look, a tribe or a power-up counts too; a new wallet doesn't
+  assert.equal(playedBefore(null, { owned: { badge: ['geen', 'draak'] } }), true);
+  assert.equal(playedBefore(null, { tribes: { owned: ['vuur'] } }), true);
+  assert.equal(playedBefore(null, { stock: { skild: 2 } }), true);
+  assert.equal(playedBefore(null, defaultEconomy()), false);
 });
 
 test('an account save from before the launch merges in as a fresh one with the testers skin, and is written back', () => {

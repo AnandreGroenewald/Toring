@@ -16,6 +16,7 @@ import { base } from './audience.js';
 import { mergeSaves, sameSave, fitSave } from './core/cloudsave.js';
 import { safeLocalStorage } from './core/storage.js';
 import { launchSave } from './core/launch.js';
+import { LAUNCH } from './config.js';
 
 const TEXT = 'text/plain;charset=UTF-8';   // a "simple" request: no CORS preflight (like the leaderboard)
 const TIMEOUT_MS = 15000;
@@ -127,8 +128,12 @@ export function createAccount({
   async function mergeLoop(cloud) {
     for (let tries = 0; tries < 4; tries++) {
       // (1.23) an account save from before the public launch comes in as a fresh one with the testers' skin (and is always
-      // written back, so the server no longer holds the testers' progress)
-      const fresh = launchSave(cloud.save);
+      // written back, so the server no longer holds the testers' progress). One without the mark while this device's own
+      // last sync had it was stored by an older game on the same account (a testing-weeks app): this device's last sync
+      // stands in for it, so the testing weeks' progress stays out and nothing of ours is counted away; ours goes back up.
+      const ours = readLink()?.base;
+      const older = !!cloud.save && cloud.save.launch !== LAUNCH.id && ours?.launch === LAUNCH.id;
+      const fresh = older ? ours : launchSave(cloud.save);
       const wasOld = fresh !== cloud.save;
       cloud = { ...cloud, save: fresh };
       if (!canApply()) {

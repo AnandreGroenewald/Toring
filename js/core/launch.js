@@ -6,6 +6,7 @@
 // "seen it" marks (lessons, tips, the Winkel's new tags). A signed-in account's save from before the launch goes the same way
 // when it next comes in (launchSave, from js/account.js), so the testers' coins never come back through the merge.
 import { STORAGE_KEY, LAUNCH } from '../config.js';
+import { DEFAULT_SKIN, DEFAULT_LOOK } from './economy.js';
 
 /** The store's own keys that are progress (`${key}.<name>`): wiped. The main blob and `.board` are rewritten. */
 const PROGRESS = ['econ', 'ranks', 'retry', 'week', 'tries', 'refill'];
@@ -37,12 +38,24 @@ function drop(be, k) {
 
 const count = (x) => (Number.isFinite(x) ? x : 0);
 
-/** Did this device play before the launch? A finished tower, practice or match, coins, or another mode's progress. */
+/** Does the wallet hold anything a new one doesn't? A skin or look (taken while they were free), a tribe, a power-up. */
+function ownsExtras(econ) {
+  const more = (lists, unset) => !!lists && typeof lists === 'object'
+    && Object.entries(lists).some(([k, ids]) => Array.isArray(ids) && ids.some((id) => id !== unset[k]));
+  if (more(econ?.skins?.owned, DEFAULT_SKIN) || more(econ?.owned, DEFAULT_LOOK)) return true;
+  if (Array.isArray(econ?.tribes?.owned) && econ.tribes.owned.length > 0) return true;
+  return !!econ?.stock && typeof econ.stock === 'object' && Object.values(econ.stock).some((n) => count(n) > 0);
+}
+
+/**
+ * Did this device play before the launch? A finished tower, practice or match, coins, anything from the Winkel, or another
+ * mode's progress.
+ */
 export function playedBefore(main, econ, hasModeProgress = false) {
   const st = main?.stats || {};
   if (count(st.played) > 0 || count(main?.practice?.played) > 0 || count(main?.duel?.played) > 0) return true;
   if (main?.daily && typeof main.daily === 'object' && Object.keys(main.daily).length > 0) return true;
-  if (count(econ?.coins) > 0) return true;
+  if (count(econ?.coins) > 0 || ownsExtras(econ)) return true;
   return hasModeProgress;
 }
 

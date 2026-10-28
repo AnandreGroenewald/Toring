@@ -22,6 +22,7 @@ import { hmacHex, sha256Hex, randomHex } from './crypto.js';
 import { verifyGoogleIdToken } from './google.js';
 import { metre } from './board.js';
 import { COSMETIC_KINDS, SKIN_KINDS, DEFAULT_LOOK, DEFAULT_SKIN, TRIBE_IDS, cosmetic, skin } from '../../js/core/economy.js';
+import { LAUNCH } from '../../js/config.js';
 
 export const SAVE_MAX_BYTES = 256 * 1024;
 export const SESSIONS_MAX = 10;              // devices signed in at once; the longest unused goes first
@@ -90,8 +91,11 @@ function cleanSave(save) {
  * (1.16) The same for the Living Tower's tribes (the first is free, each other one 1000 coins): a 1.15 game leaves
  * `tribes` out of its copy altogether. Every tribe the kept save owned stays owned; the new copy's worn tribe stays
  * when it owns it, else the kept save's.
+ * (1.23) The public launch: a save made from the launch on (it carries LAUNCH.id) over one from the testing weeks (without
+ * it) is the account starting again, so nothing of the testing weeks' comes back.
  */
 export function keepOwned(save, kept) {
+  if (save?.launch === LAUNCH.id && kept?.launch !== LAUNCH.id) return save;
   const e = save?.econ;
   const k = kept?.econ;
   const obj = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
