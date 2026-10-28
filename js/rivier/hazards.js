@@ -318,10 +318,13 @@ export function createHazards(bend = (m) => m, models = {}) {
   // ------------------------------------------------------------------------------------------- coins (1.21.3)
   const coinGeo = geo(new THREE.CylinderGeometry(0.44, 0.44, 0.09, 24));
   coinGeo.rotateX(Math.PI / 2);   // (standing up, its face to you)
-  const coinMat = std('#ffd23f', { metalness: 0.55, roughness: 0.24, emissive: '#a86e00', emissiveIntensity: 0.62 });
+  // (one draw call a coin: the edge's UVs all point at a corner of the face's texture, which stays gold, so one material paints
+  // the edge and both faces; a cylinder's (24 + 1) x 2 edge vertices come first)
+  for (let i = 0; i < (24 + 1) * 2; i++) coinGeo.attributes.uv.setXY(i, 0.04, 0.04);
+  coinGeo.clearGroups();
   // (1.23, the owner 27 Oct 2026: "the coins, it looks really bland ... really make this special") both faces wear the game's
   // minted coin (the Stapel tower engraved in it, a reeded rim: css/style.css --coin-img), drawn once into a texture, turned a
-  // quarter so it stands upright on the cap; the edge stays polished gold (coinMat). Plain gold until the picture is in.
+  // quarter so it stands upright on the cap, on polished gold (the edge's). Plain gold until the picture is in.
   const coinFaceTex = (() => {
     const c = document.createElement('canvas');
     c.width = c.height = 256;
@@ -329,20 +332,23 @@ export function createHazards(bend = (m) => m, models = {}) {
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = 4;
     const g = c.getContext('2d');
+    // (the edge reads a corner, which the faces never show: a deeper gold there, like the polished edge before)
+    const edge = () => { g.fillStyle = '#d99a26'; for (const [x, y] of [[0, 0], [222, 0], [0, 222], [222, 222]]) g.fillRect(x, y, 34, 34); };
     g.fillStyle = '#ffd23f';
     g.fillRect(0, 0, 256, 256);
+    edge();
     const raw = typeof getComputedStyle === 'function' ? getComputedStyle(document.documentElement).getPropertyValue('--coin-img') : '';
     // (the picture's own words hold ' and ) (url(#r)): read up to the quote that opened it)
     const src = /url\(\s*(["'])(data:image\/svg\+xml,.*?)\1\s*\)/s.exec(raw || '')?.[2];
     if (src) {
       const img = new Image();
       img.onload = () => {
-        g.clearRect(0, 0, 256, 256);
         g.save();
         g.translate(128, 128);
         g.rotate(-Math.PI / 2);   // (a cylinder's cap maps the picture a quarter turn round: this puts the tower upright)
         g.drawImage(img, -128, -128, 256, 256);
         g.restore();
+        edge();
         t.needsUpdate = true;
       };
       img.src = src;
@@ -350,8 +356,7 @@ export function createHazards(bend = (m) => m, models = {}) {
     return t;
   })();
   own.push(coinFaceTex);
-  const coinFaceMat = std('#ffffff', { map: coinFaceTex, metalness: 0.5, roughness: 0.28, emissive: '#ffffff', emissiveMap: coinFaceTex, emissiveIntensity: 0.42 });
-  const coinMats = [coinMat, coinFaceMat, coinFaceMat];   // (a cylinder's groups: the edge, then its two faces)
+  const coinMat = std('#ffffff', { map: coinFaceTex, metalness: 0.5, roughness: 0.28, emissive: '#ffffff', emissiveMap: coinFaceTex, emissiveIntensity: 0.42 });
   // (a warm glow behind each: a coin shows on any water, by day or night, and apart from gold blocks)
   const glowTex = (() => {
     const c = document.createElement('canvas');
@@ -400,7 +405,7 @@ export function createHazards(bend = (m) => m, models = {}) {
     } else if (it.stack) {
       const m = new THREE.Group();
       for (let k = 0; k < 6; k++) {
-        const c = new THREE.Mesh(coinGeo, coinMats);
+        const c = new THREE.Mesh(coinGeo, coinMat);
         c.rotation.x = Math.PI / 2;
         c.position.set((k % 2) * 0.05, k * 0.08, (k % 3) * 0.04);
         c.scale.setScalar(1.25);
@@ -411,7 +416,7 @@ export function createHazards(bend = (m) => m, models = {}) {
       list.push({ m, taken: false, glow: glow(new THREE.Vector3(0, y, -(it.dz || 0)), 2.6) });
     } else {
       for (let k = 0; k < (it.n | 0); k++) {
-        const m = new THREE.Mesh(coinGeo, coinMats);
+        const m = new THREE.Mesh(coinGeo, coinMat);
         m.position.set(0, y, -((it.dz || 0) + k * (it.sp || 0)));
         g.add(m);
         list.push({ m, taken: false, glow: glow(m.position, 1.5) });
