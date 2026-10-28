@@ -8,6 +8,7 @@ import { createAccount } from '../js/account.js';
 import { createHarness, ORIGIN } from '../server/test/support/harness.js';
 import { fakeGoogle, CLIENT_ID, AUTH_SECRET } from '../server/test/support/google.js';
 import { LAUNCH } from '../js/config.js';
+import { launchReset } from '../js/core/launch.js';
 
 const D1 = '2026-10-06';
 const at = (key, h = 10) => Date.UTC(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10), h);
@@ -330,22 +331,67 @@ test('1.15.5 a tester: "the prompt didn\'t go away" — from Google\'s answer un
   assert.deepEqual(web.events.map(([, why]) => why), ['signing-in', 'error']);
 });
 
-test('1.23 an older game on the same account (a testing-weeks app) stores its copy: the 1.23 device keeps its own and puts it back', async () => {
+// (1.23) The public launch with a signed-in account on two phones, one still on a testing-weeks app (it knows no launch mark)
+const testingSave = () => ({ v: 1, main: { stats: { played: 40 } }, econ: { coins: 5000, skins: { owned: { blocks: ['kleur', 'heelal'] }, wear: { blocks: 'heelal' } } } });
+const keptSave = (h) => JSON.parse(h.db.q('SELECT save FROM accounts')[0].save);
+
+test('1.23 an older game on the same account: its copy is refused, the 1.23 phone keeps its own', async () => {
   const { device, token, h } = await world();
   const post = (path, body) => h.request('POST', path, { body, headers: { 'Content-Type': 'text/plain;charset=UTF-8' } });
   const phone = device();
   phone.store.earnCoins(120, { capped: false });
   assert.equal(await phone.account.signInWithToken(await token()), 'saved');
-  // the testing-weeks app, signed in to the same account: its copy has no launch mark, its own coins and the free skins
   const old = (await post('/account/google', { idToken: await token() })).json;
-  const testing = { v: 1, main: { stats: { played: 40 } }, econ: { coins: 5000, skins: { owned: { blocks: ['kleur', 'heelal'] }, wear: { blocks: 'heelal' } } } };
-  assert.equal((await post('/account/store', { token: old.token, rev: old.rev, save: testing, push: 'push122000000009' })).status, 200);
+  assert.equal((await post('/account/store', { token: old.token, rev: old.rev, save: testingSave(), push: 'push122000000009' })).status, 400);
+  phone.store.earnCoins(5, { capped: false });
+  assert.equal(await phone.account.sync(), 'saved');
+  assert.equal(phone.store.getEconomy().coins, 125);
+  assert.equal(keptSave(h).econ.coins, 125);
+  assert.ok(!keptSave(h).econ.skins.owned.blocks.includes('heelal'));
+});
+
+test('1.23 the backstop: an account save without the mark after this phone\'s launch sync (an older server took it) leaves ours as it is', async () => {
+  const { device, token, h } = await world();
+  const phone = device();
+  phone.store.earnCoins(120, { capped: false });
+  assert.equal(await phone.account.signInWithToken(await token()), 'saved');
+  // what an older Worker let an older game store on top
+  h.db.db.prepare('UPDATE accounts SET save = ?1, rev = rev + 1').run(JSON.stringify(testingSave()));
   phone.store.earnCoins(5, { capped: false });
   assert.equal(await phone.account.sync(), 'saved', 'ours goes back up');
   assert.equal(phone.store.getEconomy().coins, 125, 'nothing counted away, nothing of the testing weeks added');
   assert.ok(!phone.store.getSkins().owned.blocks.includes('heelal'));
-  const kept = JSON.parse(h.db.q('SELECT save FROM accounts')[0].save);
-  assert.equal(kept.launch, LAUNCH.id);
-  assert.equal(kept.econ.coins, 125);
-  assert.ok(!kept.econ.skins.owned.blocks.includes('heelal'), 'the server gave none back');
+  assert.equal(keptSave(h).launch, LAUNCH.id);
+  assert.equal(keptSave(h).econ.coins, 125);
+  assert.ok(!keptSave(h).econ.skins.owned.blocks.includes('heelal'), 'the server gave none back');
+});
+
+test('1.23 the older phone updates later: its start from scratch costs the account nothing', async () => {
+  const { device, token, h } = await world();
+  const post = (path, body) => h.request('POST', path, { body, headers: { 'Content-Type': 'text/plain;charset=UTF-8' } });
+  const phone = device();
+  phone.store.earnCoins(120, { capped: false });
+  assert.equal(await phone.account.signInWithToken(await token()), 'saved');
+  // the testing-weeks app reads the launch save (its sync base, as it came), merges it into its own and is refused
+  const old = (await post('/account/google', { idToken: await token() })).json;
+  const read = (await post('/account/load', { token: old.token })).json;
+  assert.equal((await post('/account/store', { token: old.token, rev: read.rev, save: testingSave(), push: 'push122000000021' })).status, 400);
+  // that phone updates to 1.23: the launch step runs on what the old app left, before anything reads it
+  const be = memoryBackend();
+  be.setItem('stapel.v1', JSON.stringify({ v: 1, settings: {}, stats: { played: 40 }, duel: { name: 'Ou' } }));
+  be.setItem('stapel.v1.econ', JSON.stringify({ coins: 5120, skins: { owned: { blocks: ['kleur', 'heelal'] }, wear: { blocks: 'heelal' } } }));
+  be.setItem('stapel.v1.cloud', JSON.stringify({ token: old.token, base: read.save, rev: read.rev, pending: null }));
+  assert.equal(launchReset(be).founder, true);
+  const clock = { t: at(D1) };
+  const store = createStore(be, { now: () => clock.t });
+  const updated = createAccount({
+    store, bus: { emit() {} }, apiUrl: 'https://api.test', clientId: CLIENT_ID, storageKey: 'stapel.v1', today: () => D1, canApply: () => true,
+    backend: be, fetchImpl: phone.fetchImpl, now: () => clock.t, native: () => null,
+  });
+  assert.ok(['saved', 'same'].includes(await updated.sync()));
+  assert.equal(store.getEconomy().coins, 120, 'it has the account\'s coins');
+  assert.equal(keptSave(h).econ.coins, 120, 'the account kept them');
+  assert.ok(!keptSave(h).econ.skins.owned.blocks.includes('heelal'));
+  assert.ok(['saved', 'same'].includes(await phone.account.sync()));
+  assert.equal(phone.store.getEconomy().coins, 120, 'the 1.23 phone keeps its coins');
 });

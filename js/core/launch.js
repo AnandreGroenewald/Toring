@@ -106,6 +106,18 @@ export function launchReset(be, key = STORAGE_KEY, { modeKeys = MODE_KEYS } = {}
       tester: null,
     });
     write(be, `${key}.econ`, founderEconomy());
+    // a signed-in device's last sync: its base becomes this fresh start, so the next merge doesn't read the start from
+    // scratch as coins spent (a launch save another device stored keeps its progress); without its rev the next sync
+    // fetches the account's whole save; a store from before the launch still on its way is dropped
+    const link = read(be, `${key}.cloud`);
+    if (link && typeof link === 'object' && link.base && typeof link.base === 'object') {
+      write(be, `${key}.cloud`, {
+        ...link,
+        base: launchSave({ ...link.base, launch: null }),
+        rev: null,
+        pending: link.pending?.save?.launch === LAUNCH.id ? link.pending : null,
+      });
+    }
   }
   write(be, mark, LAUNCH.id);
   return { done: true, founder };

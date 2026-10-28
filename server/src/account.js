@@ -212,14 +212,20 @@ async function store(request, ctx) {
   if (before !== null) return json(200, { ok: true, rev: before, again: true });
   // (1.15) built on the kept save: what it owned stays owned and on (keepOwned; an older game drops looks it doesn't know)
   const kept = await ctx.db.prepare('SELECT rev, save FROM accounts WHERE id = ?1').bind(account).first();
-  if (kept && kept.rev === body.rev && typeof kept.save === 'string') {
-    let old = null;
+  let old = null;
+  if (kept && typeof kept.save === 'string') {
     try {
       old = JSON.parse(kept.save);
     } catch {
       old = null;
     }
-    const merged = old ? JSON.stringify(keepOwned(body.save, old)) : text;
+  }
+  // (1.23) once the account keeps a save from the public launch on (LAUNCH.id), a copy without the mark (an older game's,
+  // with the testing weeks' progress) is refused for good: an older game drops a store the server answers 400 to, and the
+  // launch save stays as it is (whatever the rev)
+  if (old?.launch === LAUNCH.id && body.save.launch !== LAUNCH.id) throw new HttpError(400, 'invalid_field', { field: 'save.launch' });
+  if (kept && kept.rev === body.rev && old) {
+    const merged = JSON.stringify(keepOwned(body.save, old));
     if (merged.length <= SAVE_MAX_BYTES) text = merged;
   }
   // only on top of the version the game read: otherwise it gets the newer one back to merge with. The store and

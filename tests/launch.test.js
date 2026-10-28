@@ -86,6 +86,21 @@ test('a device that only took free skins or looks (no tower finished) starts aga
   assert.equal(playedBefore(null, defaultEconomy()), false);
 });
 
+test('a signed-in tester device: the sync base becomes the fresh start, without its rev; an old store on its way is dropped', () => {
+  const be = testerDevice();
+  const newer = { launch: LAUNCH.id, v: 1, main: { duel: { name: 'Toetser1' } }, econ: { coins: 640, skins: { owned: { blocks: ['kleur', LAUNCH.skin, 'neon'] }, wear: { blocks: 'neon' } } } };
+  be.setItem(`${STORAGE_KEY}.cloud`, JSON.stringify({ token: 't', base: newer, rev: 7, pending: { push: 'p1', rev: 7, save: { v: 1, econ: { coins: 99000 } } } }));
+  launchReset(be);
+  const link = JSON.parse(be.getItem(`${STORAGE_KEY}.cloud`));
+  assert.equal(link.token, 't', 'still signed in');
+  assert.equal(link.rev, null, 'the next sync fetches the whole save');
+  assert.equal(link.pending, null, 'the testing weeks\' store goes');
+  assert.equal(link.base.launch, LAUNCH.id);
+  assert.deepEqual(link.base.econ.skins.owned.blocks, ['kleur', LAUNCH.skin]);
+  assert.equal(link.base.econ.coins ?? 0, 0, 'the base is the fresh start, not the other device\'s coins');
+  assert.equal(link.base.main.duel.name, 'Toetser1');
+});
+
 test('an account save from before the launch merges in as a fresh one with the testers skin, and is written back', () => {
   const old = cleanSave({ main: { duel: { name: 'Ou Toetser', played: 9 }, stats: { played: 30 } }, econ: { coins: 99999, skins: { owned: { blocks: ['kleur', 'goud'] }, wear: { blocks: 'goud' } } }, board: { player: 'zzzzzzzzzzzz9999', tester: '2026-10-14' } });
   assert.equal(old.launch, undefined, 'an old save carries no launch mark');

@@ -64,3 +64,23 @@ test('the account path: a tester signs in on 1.23, the launch save is kept witho
   assert.equal(kept.econ.tribes, undefined, 'no testing-weeks tribes back');
   assert.equal(kept.econ.coins ?? 0, 0);
 });
+
+test('the account path: once a launch save is kept, an older game’s copy without the mark is refused, whatever its rev', async () => {
+  const h = createHarness({ GOOGLE_CLIENT_ID: CLIENT_ID, AUTH_SECRET });
+  const google = await fakeGoogle();
+  h.outside.google = google;
+  const post = (path, body) => h.request('POST', path, { body, headers: { 'Content-Type': 'text/plain;charset=UTF-8' } });
+  const token = (await post('/account/google', { idToken: await google.token('109876543210987654321', h.clock.now) })).json.token;
+  assert.equal((await post('/account/store', { token, rev: 0, save: tester(), push: 'push122000000011' })).json.rev, 1);
+  assert.equal((await post('/account/store', { token, rev: 1, save: launchSave(tester()), push: 'push123000000011' })).json.rev, 2);
+  const keptBefore = h.db.q('SELECT rev, save FROM accounts')[0];
+  // the testing-weeks app sends its copy: on the kept rev, and on an older one
+  const a = await post('/account/store', { token, rev: 2, save: tester(), push: 'push122000000012' });
+  assert.equal(a.status, 400);
+  const b = await post('/account/store', { token, rev: 1, save: tester(), push: 'push122000000013' });
+  assert.equal(b.status, 400);
+  assert.deepEqual(h.db.q('SELECT rev, save FROM accounts')[0], keptBefore, 'the launch save stays as it is');
+  // the 1.23 game still saves on it
+  const next = { ...launchSave(tester()), econ: { ...launchSave(tester()).econ, coins: 30 } };
+  assert.equal((await post('/account/store', { token, rev: 2, save: next, push: 'push123000000012' })).json.rev, 3);
+});
