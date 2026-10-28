@@ -1517,3 +1517,24 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   (saved, not in review). Nothing public. Internal testing keeps 1.22.1; website 1.22.1 + privacy §2e stay live (harmless).
 - Next: his free skins / payments decisions, then a full app check, then resubmit (Publishing overview › Submit) on his word.
 
+
+### 28 Oct 2026 ~06:30-08:30 — 1.23.0 (the public launch): the full check, the review's fixes (local, 8f641ac)
+- His asks (27 Oct night): "skins done" (prices back), a never-sold skin for the testers (Stigter), "Everyone starts from
+  scratch", a Saturday "under construction" strip, special coins, "dig deep", and "release it with confidence that you do
+  not even need my aporval". Commits on rivier/1.20 since ad4158a: f30c251 launch prep, eedbce0 polish, b4ed66a the
+  English menu fits 360, 26d9929 River models fetched whole (three's stream was cancelled by GC: simple shapes on slow
+  lines), 5537fae a ?debug=1 page talks to the crews' server only when it is local (a test ride or autopilot could reach
+  Afgly's live ranking) + two colours past 4.5:1, 25ec7b0 + 9aef2a3 the review's account fixes, 8f641ac each coin one
+  draw call again.
+- The full check (check-all.sh full) froze 01:30-06:50 on the parked Glybaan check (no time limit). check-all.sh now has
+  a watchdog per check (TEST_MAX_S 900), OFF_CHECKS for switched-off features (battles, Glybaan, Jou dorp, Blokbotsing,
+  owner18) and ONLY="a b" for re-runs. Every other red was an outdated test (tester gifts/refill off, Stigter hidden,
+  1.22's cement tip, 1.21's first name step, the tribe row, refill-based sign-in, the town as a ready mark): updated;
+  the re-run all OK. launch123 ALL OK; contrast 0 words under 4.5:1; River coins/coinfly/coinwallet/leak/perf OK (4x
+  slower CPU, mid: 60 fps avg, 59 min); River/Saam 15/15; unit 528 + server 315; sign-in checks OK on 8f641ac.
+- The Backup terminal's review (5 findings, all fixed and OK'd): the Worker's keepOwned gave a signed-in tester's testing
+  skins back over the launch save; an older app on the same account counted the 1.23 phone's coins away; the server now
+  refuses (400) a save without LAUNCH.id over one with it; launchReset resets a signed-in device's sync base (and its
+  rev) so an older phone that updates later costs the account nothing; playedBefore counts Winkel items; coin draw calls.
+- Needs a Worker deploy WITH the site (before any 1.23 client syncs an account): `bash ~/deploy-stapel-1.23.0.sh`
+  (server tests → ./wr.sh deploy → Pages). The AAB goes to Play internal only after it.
