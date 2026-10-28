@@ -136,7 +136,9 @@ const span = createSpan({
   // (rescued people count towards the day's coin cap; Saturday's prize doesn't)
   earn: (n, o) => store.earnCoins(n, { capped: !o?.prize }).added,
   today: () => todayKey(),
-  api: () => matchApiUrl(),
+  // (1.23) a debug session (the tests, their autopilots and ?date=) talks only to a server on this computer: the live
+  // crews and Afgly's daily ranking never hear a test ride
+  api: () => (DEBUG && !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/.test(matchApiUrl()) ? '' : matchApiUrl()),
   who: () => ({ name: duelNick(), skin: store.getSkins().wear.blocks || 'kleur', tower: latestDailyTower() }),
 });
 let settings = store.getSettings();
