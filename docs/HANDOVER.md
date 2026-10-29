@@ -1741,3 +1741,14 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   1.24.2). Play: internal 12404 since 17:32; Closed testing - Alpha 12404 sent for review (1.24.3 had been approved there
   at 16:37) with production's unsent 1.24.2 "Save for later" first. Production stays 12401 (1.24.1) live.
 
+### 29 Oct 2026 ~17:55 — "Can you publish it please": 1.24.4 to production and the website READY, his two clicks
+- His words: "Can you publish it please" (1.24.4 to everyone).
+- Play: production release 12404 (1.24.4, full rollout; notes af + 5 English covering everything since 1.24.1) created
+  from the library, replacing the unsent 1.24.2 one, and SAVED in the Publishing overview. Auto mode refused "Submit 1
+  change for review" (Production Deploy): **his click**: Play Console › Stapel › Publishing overview › Submit 1 change
+  for review › Send changes for review. Closed Alpha 12404 is in review; internal 12404 live.
+- Website: pages-dist built at 1.24.4 and scanned clear; auto mode refused the deploy: **his command**
+  `bash ~/deploy-stapel-1.24.4.sh` (the site, then the old address: it pushes HEAD to claude/trusting-hopper-26qcax).
+  Until then stapelspel.pages.dev and the old address serve 1.24.2.
+- After Google approves production: the update card (Worker APP_LATEST 1.24.4; a Worker deploy ends live matches).
+
