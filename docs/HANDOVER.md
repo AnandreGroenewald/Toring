@@ -1560,3 +1560,12 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   `~/Documents/Test Reports/Stapel/2026-10-28 2305 (1.24.0 local)/report.md`.
 - His calls: a hung piece costs a heart (or free?); tower matches across 1.23/1.24 stay allowed (rules 112) or split;
   which of the sweep's polish items; "make 1.24.0" (internal testing first).
+
+### 29 Oct 2026 ~07:52 — 1.24.0 RELEASED: the website, the old address and Play internal 12400 (his word, remote)
+- His words: "push the 1.24 to my phone and to the website or the internal testing for this one". VERSION 1.24.0 (fe8da2a);
+  check-all quick ALL CLEAR; security scans clear; `~/deploy-stapel-1.24.0.sh` (the site only: no server change, the Worker
+  stays 8643046e, live matches untouched): stapelspel.pages.dev serves stapel-v1.24.0; GitHub origin/rivier/1.20 and
+  claude/trusting-hopper-26qcax (the old address) = fe8da2a. check-all live ALL CLEAR (board-live's hidden row removed).
+- Play: internal testing 12400 (1.24.0) since 07:51 (notes af + 5 English). Production stays 12300 (1.23.0).
+- A 1.23 phone and a 1.24 phone in one Duo ride: the room ends at once with "update" (protocol 3); tower matches still mix
+  (rules 112), his call whether to split them.
