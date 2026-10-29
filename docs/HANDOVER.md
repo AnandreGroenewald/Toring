@@ -1753,7 +1753,7 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
 - After Google approves production: the update card (Worker APP_LATEST 1.24.4; a Worker deploy ends live matches).
 
 
-### 29 Oct 2026 ~21:30 — 1.24.5: his evening notes; RELEASING to Play internal + closed and the website (his "Yes please")
+### 29 Oct 2026 ~19:50 — 1.24.5: his evening notes; RELEASING to Play internal + closed and the website (his "Yes please")
 - His words, in order: the water "has a line ... looks vaal", "make the pool noodles come out of the Canyons", "if you get
   a perfect on some of the blocks it still wobbles", the home menu "jumps back up", "the loading screen is still taking
   too long", the Flip's pause button, "Why is bytjie showing twice?" (two phones: the River board keeps one row per phone
@@ -1780,3 +1780,6 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   menu_scroll, hud_fit). A 55 s music sample for his ear (the session scratchpad).
 - Release: VERSION 1.24.5 (versionCode 12405); the website by his `bash ~/deploy-stapel-1.24.5.sh`; Play internal + closed
   from "Upload 1.24.5 internal + closed"; production stays 12404 (1.24.4) waiting on his own Submit click.
+- ~20:05: Play internal 12405 (1.24.5) "Available to internal testers"; closed Alpha 12405 saved and sent: "Changes in
+  review" (the only change). Production = 12404 (1.24.4) live (his Submit click went through; the overview was empty).
+  The website waits on **his** `bash ~/deploy-stapel-1.24.5.sh` (auto mode refuses Pages deploys).
