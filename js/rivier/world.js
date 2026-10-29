@@ -53,32 +53,60 @@ export const LOOKS = {
   },
 };
 
-/** How far across the world bends `d` metres ahead (m): a gentle winding that changes with the course. */
+/**
+ * (29 Oct 2026, the owner: "The twist and turns should change, it looks like the background is merging with the
+ * frontend, it needs to be smooth as if you are in between mountains") The river winds along its own course, fixed in
+ * the world: its middle runs `riverPathX(z)` metres across at course metre z. Before, each thing ahead was pushed across
+ * by an amount that grew with its distance and its own spot, not yours: the far canyon swung up to ~100 m aside even on a
+ * straight stretch, folded into the near walls, and slid straight again as you came near (walls stepped into the river
+ * and out again). Now the canyon stays where it is and the view turns through it: everything is drawn across from the
+ * line you are heading along (straight under you, so the lanes stay put), a bend comes towards you and you ride round it,
+ * and the sky and the far mountains turn with your heading (riverHeading). A turn every ~280 m, ~20° each way, none
+ * tighter than ~170 m across, so the river stays in sight ~100 m round a bend.
+ */
+const PATH = [[32, 0.0112, 0.6], [45, 0.0033, 1.7], [3.5, 0.021, 2.1]];   // [metres across, per metre, phase]
+export function riverPathX(z) {
+  let x = 0;
+  for (const [a, w, p] of PATH) x += a * Math.sin(z * w + p);
+  return x;
+}
+export function riverSlope(z) {
+  let s = 0;
+  for (const [a, w, p] of PATH) s += a * w * Math.cos(z * w + p);
+  return s;
+}
 export let bendK = 1;   // (Saturday's run: 0, so a bomb's aim lands where the tower is drawn)
 export function setBend(k) {
   bendK = k;
   bendUniforms.uBendK.value = k;
 }
-// (28 Oct 2026, the owner: "it needs to have more twists and turns") a turn every ~370 m (was ~750), sharper (up to ~30 m
-// across 160 m ahead, was 9), on a slow sweep so no two stretches turn alike, and a short S-wiggle; still straight under
-// the rider (a = 0 there), so the lanes stay where they are. The GLSL twin below must stay the same sum.
+/** How far across a thing `d` metres ahead of you (at course metre z) is drawn: the river's course seen along your heading. */
 export function bendX(d, z) {
-  if (!bendK) return 0;
-  const a = Math.max(0, d) / 160;
-  return (Math.sin(z * 0.0085 + 0.6) * 20 + Math.sin(z * 0.0031 + 1.7) * 10) * a * a + Math.sin(z * 0.023 + 2.1) * 3 * a;
+  if (!bendK || d <= 0) return 0;
+  const r = z - d;
+  return bendK * (riverPathX(z) - riverPathX(r) - riverSlope(r) * d);
+}
+/** Which way the river heads where you are (rad, + = to the right of the course's own line): the sky and the far mountains turn by it. */
+export function riverHeading(dist) {
+  return bendK ? Math.atan(riverSlope(dist) * bendK) : 0;
 }
 /**
  * The same bend for every lit thing in the river: its material's vertex shader moves each vertex across by bendX (from
- * its world position: `ahead` = -z), so what's placed straight in course space winds with the water. One shared clock.
+ * its world position: `ahead` = -z), so what's placed straight in course space winds with the water. One shared clock;
+ * uPath0 = where you are on the course (riverPathX, riverSlope at uDist), set once a frame. The GLSL is made from PATH.
  */
-export const bendUniforms = { uDist: { value: 0 }, uBendK: { value: 1 } };
-const BEND_GLSL = `uniform float uDist;
+export const bendUniforms = { uDist: { value: 0 }, uBendK: { value: 1 }, uPath0: { value: new THREE.Vector2() } };
+const PATH_GLSL = `float rvPathX(float z) { return ${PATH.map(([a, w, p]) => `${a.toFixed(3)} * sin(z * ${w.toFixed(5)} + ${p.toFixed(3)})`).join(' + ')}; }
+float rvBend(float d, float z) { return d > 0.0 ? uBendK * (rvPathX(z) - uPath0.x - uPath0.y * d) : 0.0; }`;
+export const BEND_GLSL = `uniform float uDist;
 uniform float uBendK;
-float rvBend(float d, float z) { float a = max(0.0, d) / 160.0; return uBendK * ((sin(z * 0.0085 + 0.6) * 20.0 + sin(z * 0.0031 + 1.7) * 10.0) * a * a + sin(z * 0.023 + 2.1) * 3.0 * a); }`;
+uniform vec2 uPath0;
+${PATH_GLSL}`;
 export function bendMaterial(m) {
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uDist = bendUniforms.uDist;
     sh.uniforms.uBendK = bendUniforms.uBendK;
+    sh.uniforms.uPath0 = bendUniforms.uPath0;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>\n${BEND_GLSL}`)
       .replace('#include <project_vertex>', `vec4 mvPosition = vec4(transformed, 1.0);
@@ -91,6 +119,34 @@ export function bendMaterial(m) {
   gl_Position = projectionMatrix * mvPosition;`);
   };
   m.customProgramCacheKey = () => 'rivier-bend';
+  return m;
+}
+/** (29 Oct 2026) A sprite (the face over a swimmer) drawn where the bend draws the body under it, not on the straight line. */
+export function bendSprite(m) {
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uDist = bendUniforms.uDist;
+    sh.uniforms.uBendK = bendUniforms.uBendK;
+    sh.uniforms.uPath0 = bendUniforms.uPath0;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>\n${BEND_GLSL}`)
+      .replace('vec4 mvPosition = modelViewMatrix[ 3 ];', `vec4 rvW = modelMatrix[ 3 ];
+  rvW.x += rvBend(-rvW.z, uDist - rvW.z);
+  vec4 mvPosition = viewMatrix * rvW;`);
+  };
+  m.customProgramCacheKey = () => 'rivier-bend-sprite';
+  return m;
+}
+/**
+ * (29 Oct 2026) The far mountains are a backdrop: their depth is squeezed into the last sliver before the sky (in their
+ * own order), so everything of the river draws in front of them, however the canyon winds. Before, a bend could carry the
+ * canyon walls through a mountain standing still ahead: the background merging into the front.
+ */
+export function farMaterial(m) {
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+  gl_Position.z = (0.999 + 0.0008 * clamp(-mvPosition.z / 1000.0, 0.0, 1.0)) * gl_Position.w;`);
+  };
+  m.customProgramCacheKey = () => 'rivier-far';
   return m;
 }
 
@@ -137,9 +193,18 @@ float rkOpen(float z) {
       // (1.22, the walls: the layers by height, the picture along the wall by how far along and how far out, one picture
       // for every face: wherever the face turned along the river, or lay flat on a ledge, the other ways of laying it on
       // dragged it into upright streaks and comb teeth)
+      // (29 Oct 2026: up close one picture spans most of the screen and read as smears: the sandstone's fine bedding
+      // and grain laid over it, fading out with distance)
       .replace('#include <map_fragment>', wall ? `#ifdef USE_MAP
   diffuseColor *= texture2D(map, vec2(vRkL.z + vRkL.x, vRkL.y) * uRkTriS);
-#endif` : tri ? `#ifdef USE_MAP
+#endif
+  {
+    float rkAlong = vRkL.z + vRkL.x;
+    float rkBed = texture2D(uRkNoise, vec2(rkAlong * 0.07, vRkL.y * 0.85)).r;
+    float rkGrain = texture2D(uRkNoise, vec2(rkAlong * 0.42, vRkL.y * 0.42) + 0.61).g;
+    float rkNear = 1.0 - smoothstep(25.0, 90.0, length(vViewPosition));
+    diffuseColor.rgb *= 1.0 + ((rkBed - 0.5) * 0.3 + (rkGrain - 0.5) * 0.16) * rkNear;
+  }` : tri ? `#ifdef USE_MAP
   vec3 rkB = pow(abs(normalize(vRkN)), vec3(4.0));
   rkB /= (rkB.x + rkB.y + rkB.z);
   // (1.22: stones four times larger than before: a 3 m stone showed four or five layers, which the three sides blended
@@ -717,16 +782,21 @@ void main() {
   float n = texture2D(uNoise, vec2(x * 0.9 * uRep.x, vUv.y * 0.5 * uRep.y + uT * 0.55)).r;
   float n2 = texture2D(uNoise, vec2(x * 2.3 * uRep.x + 0.3, vUv.y * 1.4 * uRep.y + uT * 1.25)).b;
   float st = smoothstep(0.3, 0.75, n * 0.55 + n2 * 0.45);
-  float a = edge * mix(0.35 + 0.65 * st, 0.6 + 0.4 * st, uSolid);
+  // (29 Oct 2026: a river-wide fall clear between its streaks, the canyon showing through: at 0.6 everywhere it lay
+  // over the river like frosted glass and washed out everything behind it)
+  float a = edge * mix(0.35 + 0.65 * st, 0.16 + 0.8 * st, uSolid);
   a *= smoothstep(1.0, 0.95, vUv.y);
   // (the body of the fall a cool green-grey with bright white streaks, glossier near the lip)
   vec3 col = mix(vec3(0.5, 0.64, 0.64), vec3(1.0), smoothstep(0.38, 0.82, n2) * (0.6 + 0.4 * st));
-  // white water where it lands
-  float foot = smoothstep(0.14, 0.0, vUv.y);
+  // white water where it lands (across the river a ragged edge, not a ruled white line)
+  float foot = smoothstep(0.14 + (n - 0.5) * 0.14 * uSolid, 0.0, vUv.y);
   col = mix(col, vec3(1.0), foot);
-  a = max(a, foot * edge * 0.9);
+  a = max(a, foot * edge * mix(0.9, 0.75, uSolid));
   col *= uTint;
   col = mix(col, uFog, smoothstep(uFogNear, uFogFar, vDepth));
+  // (and it thins away as you reach it, so it never lies over the screen: you burst through, the splash and spray; its
+  // foot is soft where it meets the river, no ruled line across the water)
+  a *= mix(1.0, (0.06 + 0.94 * smoothstep(2.0, 22.0, vDepth)) * smoothstep(0.0, 0.06, vUv.y), uSolid);
   gl_FragColor = vec4(col, a * 0.9);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -735,7 +805,9 @@ void main() {
 // ------------------------------------------------------------------------------------------------ the water
 const WATER_VERT = `uniform float uDist; uniform float uBendA; uniform float uBendB; uniform float uBendK; uniform mat4 uReflMat;
 varying vec3 vWorld; varying vec2 vRiver; varying float vAhead; varying vec4 vRefl;
-float bendX(float d, float z) { float a = max(0.0, d) / 160.0; return uBendK * ((sin(z * 0.0085 + 0.6) * 20.0 + sin(z * 0.0031 + 1.7) * 10.0) * a * a + sin(z * 0.023 + 2.1) * 3.0 * a); }
+uniform vec2 uPath0;
+${PATH_GLSL}
+float bendX(float d, float z) { return rvBend(d, z); }
 void main() {
   vec3 p = position;
   float ahead = -p.z;
@@ -868,6 +940,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
   const { scene, renderer, quality } = stage;
   const L = LOOKS[lookId] || LOOKS.dag;
   const sunDir = new THREE.Vector3(...L.sunDir).normalize();
+  const sunNow = sunDir.clone();   // (29 Oct 2026: the light turns a little with the river's heading, see update)
   const exposure = renderer.toneMappingExposure;
   renderer.toneMappingExposure = L.exposure;
   const group = new THREE.Group();
@@ -932,7 +1005,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
   function setShadowFocus(x, z, r = 42) {
     if (!shadows) return;
     sun.target.position.set(x, 0, z);
-    sun.position.set(x, 0, z).addScaledVector(sunDir, 200);
+    sun.position.set(x, 0, z).addScaledVector(sunNow, 200);
     if (r !== shadowR) {
       shadowR = r;
       const sc = sun.shadow.camera;
@@ -957,7 +1030,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       uHorizon: { value: lin(L.horizon) }, uSkyRefl: { value: lin(L.skyRefl) }, uFoam: { value: lin(COLORS.foam).multiply(fxTint) }, uFog: { value: fog },
       uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uHalf: { value: BANK.half }, uLakeHalf: { value: lakeHalf },
       uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uDetail: { value: quality.name === 'low' ? 0 : 1 },
-      uBendA: { value: 0 }, uBendB: { value: 0 }, uBendK: bendUniforms.uBendK, uRapids: { value: new THREE.Vector2(-1e6, -1e6) }, uPoolTo: { value: -1e6 },
+      uBendA: { value: 0 }, uBendB: { value: 0 }, uBendK: bendUniforms.uBendK, uPath0: bendUniforms.uPath0, uRapids: { value: new THREE.Vector2(-1e6, -1e6) }, uPoolTo: { value: -1e6 },
       uWall: { value: lin(L.wall) }, uRider: { value: new THREE.Vector2(0, -1e6) },
       uRefl: { value: null }, uReflK: { value: 0 }, uReflMat: { value: new THREE.Matrix4() },
       uLampPos: { value: new THREE.Vector3() }, uLampDir: { value: new THREE.Vector3(0, 0, -1) }, uLampCol: { value: new THREE.Color(0, 0, 0) },
@@ -1178,7 +1251,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
   }
   const wallGeos = { '-1': cliffGeos['-1'].map((g, k) => mergeGeometries([g, plateauGeometry(-1, k + 1)])), 1: cliffGeos[1].map((g, k) => mergeGeometries([g, plateauGeometry(1, k + 4)])) };
   const fallMat = new THREE.ShaderMaterial({
-    uniforms: { uDist: bendUniforms.uDist, uBendK: bendUniforms.uBendK, uNoise: { value: noise }, uT: { value: 0 }, uFog: { value: fog }, uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uTint: { value: fxTint }, uRep: { value: new THREE.Vector2(1, 1) }, uSolid: { value: 0 } },
+    uniforms: { uDist: bendUniforms.uDist, uBendK: bendUniforms.uBendK, uPath0: bendUniforms.uPath0, uNoise: { value: noise }, uT: { value: 0 }, uFog: { value: fog }, uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uTint: { value: fxTint }, uRep: { value: new THREE.Vector2(1, 1) }, uSolid: { value: 0 } },
     vertexShader: FALL_VERT, fragmentShader: FALL_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
   });
   // (28 Oct 2026) Afgly's falls across the river: the same water (the walls' clock and fog: the same uniform objects), with
@@ -1306,7 +1379,10 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       if (k % 4 === 1) ringSpots.push([Math.sin(a + 0.07) * (d + 30), Math.cos(a + 0.07) * (d + 30), 16, 44, k + 21]);
     }
   }
-  for (const [x, z, r, h, s] of town ? ringSpots : [[-120, -330, 22, 44, 1], [-78, -350, 18, 52, 2], [-38, -338, 20, 40, 3], [96, -300, 24, 36, 4], [190, -360, 28, 46, 5], [-230, -360, 30, 42, 6], [300, -320, 22, 30, 7]]) {
+  // (29 Oct 2026: they turn with your heading now, so more of them, out to the sides, for the view round a bend)
+  const rideSpots = [[-120, -330, 22, 44, 1], [-78, -350, 18, 52, 2], [-38, -338, 20, 40, 3], [96, -300, 24, 36, 4], [190, -360, 28, 46, 5], [-230, -360, 30, 42, 6], [300, -320, 22, 30, 7],
+    [-282, -254, 24, 38, 8], [-318, -169, 20, 46, 9], [-386, -104, 28, 34, 10], [303, -212, 26, 44, 11], [359, -152, 20, 36, 12], [355, -63, 24, 40, 13], [36, -408, 26, 48, 14]];
+  for (const [x, z, r, h, s] of town ? ringSpots : rideSpots) {
     const geo = rondavelGeometry(r, h, s);
     const drum = new THREE.Mesh(geo.drum, mesaMat);
     drum.position.set(x, h / 2 + 6, z);
@@ -1346,6 +1422,39 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     const ridge = new THREE.Mesh(new THREE.BoxGeometry(1400, 30, 120), new THREE.MeshStandardMaterial({ color: '#9a6a52', roughness: 1, map: ridgeMap }));
     ridge.position.set(0, -6, -380);
     hills.add(ridge);
+    // (29 Oct 2026) behind them a long range of mountains in the haze, all round the front: the end of the valley you
+    // ride between, wherever a bend points you. Three rows: foot, shoulder, crest.
+    const N = 150;
+    const pos = [];
+    const col = [];
+    const idx = [];
+    for (let i = 0; i <= N; i++) {
+      const a = -1.6 + (i / N) * 3.2;   // (its bearing from straight ahead, rad)
+      const r = 430 + Math.sin(a * 3.7 + 0.4) * 28;
+      // (peaks on shoulders: sharp crests, a ragged edge)
+      const top = 30 + 26 * Math.pow(0.5 + 0.5 * Math.sin(a * 4.3 + 1.1), 1.4) + 18 * Math.pow(Math.abs(Math.sin(a * 9.7 + 0.3)), 3) + 9 * Math.pow(Math.abs(Math.sin(a * 23.1 + 1.7)), 2) + 3 * Math.sin(a * 61 + 2);
+      const rows = [[r, -14, 1.04], [r + 26, top * 0.62 + Math.sin(a * 23 + 1) * 4, 0.96 + Math.sin(a * 31) * 0.03], [r + 48, top, 0.86 + Math.sin(a * 17 + 0.5) * 0.04]];
+      for (const [rr, y, k] of rows) {
+        pos.push(Math.sin(a) * rr, y, -Math.cos(a) * rr);
+        col.push(k, k, k);
+      }
+      if (i < N) {
+        for (let j = 0; j < 2; j++) {
+          const b = i * 3 + j;
+          idx.push(b, b + 3, b + 1, b + 1, b + 3, b + 4);
+        }
+      }
+    }
+    const rg = new THREE.BufferGeometry();
+    rg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    rg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    rg.setIndex(idx);
+    // (in the air's own colour, as far mountains are: the look's haze a little cooler and darker than the sky behind;
+    // the foot fades into the haze, the crests stand out. Unlit and out of the fog, the same at every hour)
+    const rangeCol = lin(L.haze).multiplyScalar(0.72).add(lin(L.zenith).multiplyScalar(0.36));
+    hills.add(new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: rangeCol, vertexColors: true, fog: false, side: THREE.DoubleSide })));
+    // (and all of it is a backdrop: drawn behind everything of the river, however the canyon winds; see farMaterial)
+    hills.traverse((o) => { if (o.material) farMaterial(o.material); });
   }
   group.add(hills);
   // ---- the air: mist drifting low over the water (patches you ride through), shafts of sun slanting down through the
@@ -1540,6 +1649,17 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       bd.r.rotation.z = -beat;
     }
     bendUniforms.uDist.value = dist;
+    bendUniforms.uPath0.value.set(riverPathX(dist), riverSlope(dist));
+    // (29 Oct 2026) the sky and the far mountains turn with the river's heading: round a bend they swing across the view
+    // the other way, as far-off things do, while the canyon turns through the bend in the shader
+    const heading = town ? 0 : riverHeading(dist);
+    sky.rotation.y = heading;
+    hills.rotation.y = heading;
+    if (!night) water.uniforms.uSun.value.copy(sunDir).applyAxisAngle(_yAxis, heading);
+    // (the light on the rock most of the way with them: it moves on the walls as you wind through, yet never comes from
+    // straight ahead, where what comes at you would stand dark against it)
+    sunNow.copy(sunDir).applyAxisAngle(_yAxis, heading * 0.6);
+    if (!shadows) sun.position.copy(sunNow).multiplyScalar(120);
     // the cliff pieces: each takes its slot ahead of the camera (SEG_L apart), from 40 m behind (the shader bends them)
     const first = Math.floor((dist - 40) / SEG_L);
     let bi = 0;

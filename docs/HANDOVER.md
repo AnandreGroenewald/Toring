@@ -1569,3 +1569,40 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
 - Play: internal testing 12400 (1.24.0) since 07:51 (notes af + 5 English). Production stays 12300 (1.23.0).
 - A 1.23 phone and a 1.24 phone in one Duo ride: the room ends at once with "update" (protocol 3); tower matches still mix
   (rules 112), his call whether to split them.
+
+### 29 Oct 2026 ~12:30 — the River's turns rebuilt: a fixed winding canyon you steer through (local, not released)
+- His words (remote, after playing 1.24.0): "The twist and turns should change, it looks like the background is merging
+  with the frontend, it needs to be smooth as if you are in between mountains. Please play the game yourself and look for
+  texture issues and 3D modeling, and movement."
+- Played on this Mac (proto/rivier.html, autopilot, GPU, 60 fps recordings, `qa/rivier_ride1241.mjs`). Found:
+  - The turns were a "curved world": each thing ahead pushed across by an amount growing with its distance and its own
+    spot, not yours. Even on a straight stretch the far canyon sat up to ~100 m aside and folded into the near walls (a V
+    of rock in the middle), and every wall slid sideways as you came near (walls stepped into the river, then out).
+  - The far mountains stood still while the canyon bent, so a bend could carry the walls through them.
+  - A waterfall across the river was frosted glass (at least 54 % white everywhere): everything behind it washed out,
+    a ruled white line across the water, and riding through it put a repeating grid of white dots over the screen
+    (the CSS spray: two tiled dot patterns).
+  - Up close one wall picture spans most of the screen: smears.
+  - The face badges over swimmers and the spray particles ignored the bend (far ahead they floated beside the canyon).
+- Fixed (js/rivier/world.js, view.js, things.js):
+  - world.js `PATH` / riverPathX / riverSlope: the river's own winding course, fixed in the world. bendX(d, z) now draws a
+    thing across from the line you are heading along (straight under you: the lanes, hazards and collisions are untouched,
+    still course space); the GLSL (BEND_GLSL, the water, the falls) is made from PATH, with uPath0 = where you are (set in
+    update). A turn every ~280 m, up to ~30°, none tighter than 166 m across. The sky and the far mountains turn with
+    riverHeading(dist) (and the day's sun glitter on the water with them). Saturday's run and the town stay straight.
+  - farMaterial: the far mountains are a backdrop, their depth squeezed into the last sliver before the sky, so the river
+    always draws in front of them. 14 rondavels (was 7) out to ±80°, and a range of jagged mountains in the haze behind
+    them (unlit, the look's haze a little cooler: right at every hour).
+  - The waterfall across the river: clear between its streaks, a ragged soft foot, thinning away from 22 m to 2 m from the
+    camera; the lens spray: 16 clear drops with bright rims scattered by hand, running down, a wash from above (reduced
+    motion: a fade only).
+  - The walls: the sandstone's fine bedding and grain over the picture up close (fades out by 90 m).
+  - bendSprite (the swimmers' faces) and the spray particles follow the bend; the camera's look at your island too; the
+    camera's bank into a bend full from 12 m across 60 m ahead (was 8).
+  - The sunlight turns with 0.6 of the heading (it moves on the walls as you wind through, never from straight ahead).
+- Tested: River nonsense 32/32 and Saam gly 29/29 (serve2 :8318 + matchhost :8791), unit 531/531, the ride's speed at
+  phone speed (CPU x4, mid) 59 fps on average; rides recorded and looked at frame by frame (bends, the lake, the falls,
+  the pass through a fall, night and sunset, the animals close up). A before/after clip for him:
+  `~/Desktop/Studies/Stapel/Stapel app (Google Play)/River bends 29 Oct/River bends before-after.mp4` (16 s, sent only on
+  his "open it").
+- Not released: VERSION stays 1.24.0, nothing committed or pushed; his word decides (website + Play internal as 1.24.1).

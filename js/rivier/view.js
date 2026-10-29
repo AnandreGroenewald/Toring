@@ -184,13 +184,30 @@ function makeKit() {
 #rivier .rv-paused button { display: block; width: 100%; min-height: 48px; margin-top: 8px; border-radius: 14px; border: 0; font: inherit; font-weight: 900; font-size: 17px; }
 #rivier .rv-paused .rv-on { background: #ffd65c; color: #2b1a00; }
 #rivier .rv-paused .rv-off { background: rgba(255,255,255,.14); color: #fff; }
+/* (29 Oct 2026) water on the lens after a waterfall: clear drops with bright rims, scattered by hand and running down,
+   a wash from above (a repeating grid of white dots read as a polka-dot pattern, not water) */
 #rivier .rv-spray { position: absolute; inset: 0; pointer-events: none; opacity: 0; background:
-  radial-gradient(circle at 30% 40%, rgba(255,255,255,.75) 0 5px, transparent 6px) 0 0 / 58px 58px,
-  radial-gradient(circle at 70% 75%, rgba(225,246,255,.7) 0 3px, transparent 4px) 0 0 / 41px 41px,
-  radial-gradient(ellipse at 50% 45%, rgba(240,250,255,.55), rgba(205,236,248,.25)); }
+  radial-gradient(4px 7px at 14% 22%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(6px 10px at 31% 9%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(3px 5px at 52% 16%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(5px 9px at 71% 7%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(4px 8px at 88% 19%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(5px 9px at 9% 46%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(3px 6px at 26% 61%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(7px 12px at 43% 38%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(4px 7px at 62% 52%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(6px 11px at 83% 41%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(3px 5px at 93% 66%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(6px 10px at 18% 79%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(4px 7px at 39% 88%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(5px 9px at 58% 74%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(4px 8px at 76% 86%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(3px 5px at 48% 63%, rgba(235,247,255,.2) 0 48%, rgba(250,253,255,.78) 72%, transparent),
+  radial-gradient(130% 75% at 50% -12%, rgba(240,250,255,.62), rgba(215,238,250,.2) 58%, transparent 82%); }
 #rivier .rv-spray.on { animation: rv-spray 1.3s ease-out; }
-@keyframes rv-spray { 0% { opacity: 1; transform: scale(1.04); } 100% { opacity: 0; transform: scale(1); } }
-@media (prefers-reduced-motion: reduce) { #rivier .rv-count.bump { animation: none; } #rivier .rv-spray.on { animation-duration: .45s; } }`;
+@keyframes rv-spray { 0% { opacity: 1; transform: translateY(-4px); } 100% { opacity: 0; transform: translateY(22px); } }
+@keyframes rv-spray-still { 0% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #rivier .rv-count.bump { animation: none; } #rivier .rv-spray.on { animation: rv-spray-still .45s ease-out; } }`;
     document.head.appendChild(st);
   }
   (document.getElementById('game') || document.body).appendChild(host);
@@ -2424,7 +2441,8 @@ function createRide(K, d) {
         l.set(x * 0.1, 0.6, -14);
       }
       // (28 Oct 2026, the owner: "more twists and turns") the view looks a little into the bend ahead, and banks with it
-      // below (not in Saam gly: its wide view keeps both riders in the picture)
+      // below (not in Saam gly: its wide view keeps both riders in the picture). (29 Oct: the bends are real now, the
+      // canyon fixed and the view turning through it; 60 m ahead lies up to ~11 m across, the bank full from 12 m)
       turnAhead = phase === 'run' && !duel && !d.debugCam ? bendX(60, dist + 60) : 0;
       l.x += turnAhead * 0.35;
       // Saturday: the tallest tower coming by turns the camera halfway towards it (a little more while you aim), still
@@ -2438,7 +2456,8 @@ function createRide(K, d) {
         const k = clamp((150 - ahead) / 40, 0, 1) * clamp((ahead + 10) / 40, 0, 1) * 0.28;
         if (k > 0) {
           const far = 11.5 + ahead;
-          l.lerp(new THREE.Vector3(islandX, 6.4 - 0.1 * far + Math.min(18, towerTop() * 0.3), -ahead), k);
+          // (29 Oct 2026: where the bend draws it)
+          l.lerp(new THREE.Vector3(islandX + bendX(ahead, islandZ), 6.4 - 0.1 * far + Math.min(18, towerTop() * 0.3), -ahead), k);
         }
       }
       if (tgt) {
@@ -2483,7 +2502,7 @@ function createRide(K, d) {
       const want = FOV0 + sp * 5 + rapK * 3 - (aiming ? 6 : 0);
       camera.fov += (want - camera.fov) * (1 - Math.exp(-dt * 3));
       camera.updateProjectionMatrix();
-      camRoll += (-leanV * 0.045 - clamp(turnAhead / 8, -1, 1) * 0.05 - camRoll) * (1 - Math.exp(-dt * 6));
+      camRoll += (-leanV * 0.045 - clamp(turnAhead / 12, -1, 1) * 0.05 - camRoll) * (1 - Math.exp(-dt * 6));
       camera.rotateZ(camRoll);
     } else if (Math.abs(camera.fov - FOV0) > 0.01) {
       camera.fov += (FOV0 - camera.fov) * (1 - Math.exp(-dt * 4));

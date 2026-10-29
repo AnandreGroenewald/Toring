@@ -2,7 +2,7 @@
 // fell off your tower, the white water round all of them, the spray, and your crew's island with its Weektoring (every
 // floor in the skin of whoever stacked it). Kept in pools: the river re-uses them as it goes.
 import * as THREE from '../../lib/three.module.min.js';
-import { bendMaterial, puffTexture, wetMaterial } from './world.js';
+import { BEND_GLSL, bendMaterial, bendSprite, bendUniforms, puffTexture, wetMaterial } from './world.js';
 import { portraitDataUrl } from '../game/residents.js';
 import { dimsOf, PX } from '../core/weektower.js';
 import { getGeometry } from '../game/blocks.js';
@@ -310,7 +310,7 @@ export function createThings(scene, pieces) {
       tex = faceBadge(who);
       faceTex.set(who, tex);
     }
-    const face = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: true, fog: true }));
+    const face = new THREE.Sprite(bendSprite(new THREE.SpriteMaterial({ map: tex, depthTest: true, fog: true })));
     face.scale.set(1.12, 1.12, 1);
     face.position.y = 1.32;
     root.add(face);
@@ -340,12 +340,16 @@ export function createThings(scene, pieces) {
   sprayGeo.setAttribute('aK', new THREE.BufferAttribute(kind, 1));
   sprayGeo.setAttribute('aR', new THREE.BufferAttribute(turn, 1));
   const sprayMat = new THREE.ShaderMaterial({
-    uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), map: { value: dotTexture() }, puffMap: { value: puffTexture(41) }, diffuse: { value: new THREE.Color('#f4fbfa') }, uScale: { value: 400 } },
-    vertexShader: `attribute float aA; attribute float aS; attribute float aK; attribute float aR; uniform float uScale; varying float vA; varying float vK; varying float vR;
+    uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), uDist: bendUniforms.uDist, uBendK: bendUniforms.uBendK, uPath0: bendUniforms.uPath0, map: { value: dotTexture() }, puffMap: { value: puffTexture(41) }, diffuse: { value: new THREE.Color('#f4fbfa') }, uScale: { value: 400 } },
+    vertexShader: `${BEND_GLSL}
+attribute float aA; attribute float aS; attribute float aK; attribute float aR; uniform float uScale; varying float vA; varying float vK; varying float vR;
       #include <fog_pars_vertex>
       void main() {
         vA = aA; vK = aK; vR = aR;
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        // (29 Oct 2026: where the river's bend draws it, like everything on the water)
+        vec4 rvW = modelMatrix * vec4(position, 1.0);
+        rvW.x += rvBend(-rvW.z, uDist - rvW.z);
+        vec4 mvPosition = viewMatrix * rvW;
         gl_Position = projectionMatrix * mvPosition;
         // (a drop right at the lens stays a drop, not a big white ball)
         gl_PointSize = min(aS * uScale / max(0.1, -mvPosition.z), uScale * (0.05 + 0.1 * aK));
