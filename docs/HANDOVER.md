@@ -1731,3 +1731,13 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   the long rain (~17 s with the build-up), a real play-through 3.46 km (tailwind, Hanswors twice, rain, the end card),
   check-all quick ALL CLEAR, River 32/32, Saam gly 29/29, later 21/21.
 
+### 29 Oct 2026 ~17:40 — 1.24.4 RELEASED to Play internal and closed testing (his "Please test it again and if you are happy please release it.")
+- Tested again first: every weather's shaders compile (qa/rivier_shaders1244.mjs, 0 errors); all seven weathers close up;
+  a real 5.2 km ride from the menu (tailwind 864 m, Hanswors 982 / 3133 / 5134 m, rain 2102 m, hail 3591 m, a
+  thunderstorm 4900 m, the end card; no game errors); Restart (tower: practice, the Daily's same and next try; River);
+  the pie dodge (Close one!, no cream); 60 fps in wind and in a storm (CPU x4); River nonsense 32/32, Saam gly 29/29,
+  later 21/21; check-all quick ALL CLEAR.
+- VERSION 1.24.4; scans clear; commit b9f9ed4 pushed to origin/rivier/1.20 only (the Pages branch and the website stay
+  1.24.2). Play: internal 12404 since 17:32; Closed testing - Alpha 12404 sent for review (1.24.3 had been approved there
+  at 16:37) with production's unsent 1.24.2 "Save for later" first. Production stays 12401 (1.24.1) live.
+
