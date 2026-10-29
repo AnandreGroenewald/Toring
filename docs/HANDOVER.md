@@ -1538,3 +1538,25 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   rev) so an older phone that updates later costs the account nothing; playedBefore counts Winkel items; coin draw calls.
 - Needs a Worker deploy WITH the site (before any 1.23 client syncs an account): `bash ~/deploy-stapel-1.23.0.sh`
   (server tests → ./wr.sh deploy → Pages). The AAB goes to Play internal only after it.
+
+### 29 Oct 2026 ~07:30 — the 1.24.0 work committed (7efc075) and pushed to GitHub as its own branch (his "please push")
+- What: his 2 phone bugs (a hooked T hanging beside the tower, never cemented now: it slides off and costs its heart; the
+  River's top row under the status bar in the app), the River's foam rings kept over the water (crates, rocks, swimmers),
+  the dig's 13 fixes (River Back, Saam gly invite/cancel/60 s, the notification ask, Back twice to close, Statistiek's
+  Afgly row, a fresh WebView when the renderer dies, minWebViewVersion 93 + webview-oud.html, …), the River's bends and
+  waterfalls, Robot Rikus on the river, Saam gly protocol 3, and his 3 River notes of 29 Oct 04:46: coins never
+  impossible (core/rivier.js COINS.windowS + `unreachableCoins`: 1.23.0's rivers 45% unreachable, now 0), the rocks'
+  rings, the load time.
+- Load time, measured (qa/loadtime1240.mjs, qa/bootprof1240.mjs; CPU x4): a cold start reaches the menu in ~1.25 s, the
+  game engine's boot (Phaser textures) the biggest part; the River from the menu 1.2 s, 0.95 s with its code already in
+  (the app now fetches it while the menu is up, and only then). Squeezing the app's code with esbuild was tried: 25 ms
+  sooner to the menu, the River 0.5 s later, so app/build-www.mjs copies the files as written again.
+- VERSION is still 1.23.0: the release ("make 1.24.0") bumps it in js/config.js + sw.js. Pushed to `origin/rivier/1.20`
+  only: `claude/trusting-hopper-26qcax` is the old address's GitHub Pages source, so it stays at ad44151 (= live 1.23.0)
+  until the release, when the site and the old address go to 1.24.0 together.
+- Tested on this tree: check-all full ALL CLEAR (03:00, before the coins/load work), perf 60 fps at 169 m, the screen
+  sweep (nothing new against 1.23.0); after it: unit 531/531, rvfix1240 foam (rocks' lowest ring 0.05 m), the River
+  32/32 and Saam gly 29/29 on the app's files, hearts1153 3/3 (with its hanging check). Report:
+  `~/Documents/Test Reports/Stapel/2026-10-28 2305 (1.24.0 local)/report.md`.
+- His calls: a hung piece costs a heart (or free?); tower matches across 1.23/1.24 stay allowed (rules 112) or split;
+  which of the sweep's polish items; "make 1.24.0" (internal testing first).
