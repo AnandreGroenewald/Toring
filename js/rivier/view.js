@@ -773,10 +773,23 @@ function createRide(K, d) {
     scene.add(pipes);
   }
   const _pm = new THREE.Matrix4();
+  const _pe = new THREE.Euler();
   const _hide = new THREE.Matrix4().makeScale(0, 0, 0);
+  // (29 Oct 2026, the owner's pick, "wide by the walls, then closer": the noodles come out of a canyon's end floating wide,
+  // by its walls, for its last ~75 m, and close in to the lanes as it opens out; across the open water at the lanes; none
+  // inside a canyon's start, they stop where its walls close in. Before, they reached 75 m into both ends.)
+  const PIPE_WIDE = 6.8;   // m out: by a canyon's walls (their foot stands 7.65 m out or more)
+  const narrowAt = (z) => world.halfAt(z) <= BANK.half + 0.5;
+  /** How far out the pipes float at course metre z (m), or 0 where there are none. */
+  function pipeX(z) {
+    if (narrowAt(z)) return [10, 30, 50, 70, 85].some((dz) => !narrowAt(z + dz)) ? PIPE_WIDE : 0;
+    const h = world.halfAt(z);
+    if (world.halfAt(z + 3) <= world.halfAt(z - 3)) return PIPE.x;   // open water, or a canyon closing in
+    return PIPE_WIDE + (PIPE.x - PIPE_WIDE) * Math.min(1, (h - BANK.half) / (BANK.lake - BANK.half));
+  }
   /**
    * The pipes float along both sides, riding on the swell, joint to joint (in course metres: they pass at the river's
-   * pace) — on open water and out of the canyons' mouths; a gap where something drifts in from that side (a monkey's
+   * pace) — on open water and out of the canyons' ends; a gap where something drifts in from that side (a monkey's
    * block comes through it).
    */
   function stepPipes() {
@@ -789,18 +802,20 @@ function createRide(K, d) {
     }
     for (let j = 0; j < PIPE.n; j++) {
       const zc = (first + j) * PIPE.every + PIPE.every / 2;
-      // (29 Oct 2026, the owner: "make the pool noodles come out of the Canyons to make the flow better": they start 75 m
-      // inside the canyon's mouth and lead you out onto the open water, and back into the next canyon after it)
-      const open = [0, 25, 50, 75].some((dz) => world.halfAt(zc + dz) > BANK.half + 6 || world.halfAt(zc - dz) > BANK.half + 6);
+      const px = pipeX(zc);
+      // (a piece lies along the line where it closes in: from where its neighbours float, either end)
+      const pa = px && pipeX(zc - 3);
+      const pb = px && pipeX(zc + 3);
+      const yaw = pa && pb ? Math.atan2(pa - pb, 6) : 0;
       for (let sd = 0; sd < 2; sd++) {
         const side = sd ? 1 : -1;
-        if (!open || gaps.some((g) => g.side === side && Math.abs(g.z - zc) < PIPE.every / 2 + 1.6)) {
+        if (!px || gaps.some((g) => g.side === side && Math.abs(g.z - zc) < PIPE.every / 2 + 1.6)) {
           pipes.setMatrixAt(j * 2 + sd, _hide);
           continue;
         }
         const bob = Math.sin(t * 1.6 + zc * 0.7 + sd * 2) * 0.03;
-        _pm.makeRotationZ(Math.sin(t * 1.1 + zc) * 0.05);
-        _pm.setPosition(side * PIPE.x, 0.07 + bob, -(zc - dist));
+        _pm.makeRotationFromEuler(_pe.set(0, side * yaw, Math.sin(t * 1.1 + zc) * 0.05, 'YXZ'));
+        _pm.setPosition(side * px, 0.07 + bob, -(zc - dist));
         pipes.setMatrixAt(j * 2 + sd, _pm);
       }
     }
@@ -2264,7 +2279,8 @@ function createRide(K, d) {
         clownBanks.push({ side: it.side || 1, from: r.z - 40, to: r.z + secs * speedAt(r.z + 400, Infinity) * 1.25 + 30 });
       }
     }
-    return clownBanks.some((c) => c.side === side && z > c.from && z < c.to);
+    // (and where the pool noodles float wide, by a canyon's walls)
+    return clownBanks.some((c) => c.side === side && z > c.from && z < c.to) || (!!pipes && pipeX(z) > PIPE.x + 0.3);
   });
   /** How far out he can sit at course metre z: clear of the wall's foot all along his duck and a little ahead of it. */
   function clownRoom(side, z) {
@@ -2632,6 +2648,9 @@ function createRide(K, d) {
     } else if (d.debugCam === 'face') {   // (tests: his face, close)
       p = new THREE.Vector3(x + 0.55, 1.95, -1.05);
       l = new THREE.Vector3(x + 0.05, 1.82, 0);
+    } else if (d.debugCam === 'top') {   // (tests: the river from above, the pool noodles' lines)
+      p = new THREE.Vector3(0, 60, 8);
+      l = new THREE.Vector3(0, 0, -50);
     } else if (d.debugCam === 'left') {
       p = new THREE.Vector3(x - 1.9, 1.75, -0.6);
       l = new THREE.Vector3(x, 1.35, 0);

@@ -1794,3 +1794,13 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   main.js relayout() calls `ride?.fit?.()` / `dorp3d?.fit?.()` after every re-fit, and the ride measures again in ready().
   qa/rv_refit1246.mjs: the released 1.24.5 copy OFF in 4 of 5 steps, the fix ok 5/5.
 - Not released: VERSION still 1.24.5; release only on his word (website by his deploy script, Play internal + closed).
+
+### 29-30 Oct 2026 ~00:20 — 1.24.7: the pool noodles "wide by the walls, then closer" (his pick)
+- His words: the noodles "should be at the end of the canyons not starting in the canyons ... it is wide spread then
+  comes closer"; he picked the picture "Wide by the walls, then closer". view.js pipeX(): the last ~75 m of a canyon
+  before it opens out = 6.8 m out (by the walls; their foot stands 7.65 m out or more), closing in to the lanes (5.55 m)
+  as the walls draw back (the same S-curve as halfAt), each piece turned along the line (yaw); open water at the lanes;
+  none inside a canyon's start (the pool's and the lake's far end): they stop where the walls close in. The bank's
+  boulders make way where they float wide (rockClear). debugCam 'top' for tests.
+- Tested: qa/noodle_look1247.mjs (rider + top shots at 540/548/585/842/850 m and the head), check-all quick ALL CLEAR,
+  rivier_nonsense1213 32/32 (GPU=1, private matchhost).
