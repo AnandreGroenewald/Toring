@@ -1605,4 +1605,17 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   the pass through a fall, night and sunset, the animals close up). A before/after clip for him:
   `~/Desktop/Studies/Stapel/Stapel app (Google Play)/River bends 29 Oct/River bends before-after.mp4` (16 s, sent only on
   his "open it").
-- Not released: VERSION stays 1.24.0, nothing committed or pushed; his word decides (website + Play internal as 1.24.1).
+- Released the same hour as 1.24.1 on his "Yes please" / "Release" (next entry).
+
+### 29 Oct 2026 ~12:35 — 1.24.1 RELEASED: the website, the old address and Play internal 12401 (his "Release")
+- His words: "Yes please" (to "release it as 1.24.1 to the website and Play internal testing") and then "Release".
+- VERSION 1.24.1 (js/config.js + sw.js); check-all quick ALL CLEAR (game 531, server 315, boot); security scans clear
+  (pages-dist, js/rivier, the changed files, the Play folder); commit c47aa3c pushed to origin/rivier/1.20 and
+  claude/trusting-hopper-26qcax (the old address serves stapel-v1.24.1).
+- The site: `~/deploy-stapel-1.24.1.sh` (the site only: no server change, the Worker stays 8643046e, live matches
+  untouched): stapelspel.pages.dev serves stapel-v1.24.1.
+- Play: internal testing 12401 (1.24.1) since 12:35 (notes af + 5 English; the usual two warnings: no deobfuscation file,
+  no native debug symbols; devices unchanged). Production stays 12300 (1.23.0). Files: `Stapel app (Google Play)/Upload
+  1.24.1 internal/` (aab, notes, README), `Stapel-1.24.1-toets.apk` (1.24.0's in Older builds).
+- check-all live ALL CLEAR (board-live's hidden row removed).
+- A 1.24.0 phone and a 1.24.1 phone in one Duo ride: the room ends at once with "update" (protocol 3), as before.
