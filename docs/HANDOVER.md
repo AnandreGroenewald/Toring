@@ -1629,4 +1629,36 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   public; his call if he wants it resumed).
 - After Google approves: the update card (Worker APP_LATEST to 1.24.1: a Worker deploy ends live matches, a quiet moment,
   his word) and production phones leave 1.23.0 (Duo rides between versions end with "update" until then).
+- **13:39: Google approved both: production = 12401 (1.24.1, 11 countries) and Closed testing - Alpha = 12401** (Play
+  Console's track pages; "App update published"). The update card (Worker APP_LATEST) waits for his word (a Worker
+  deploy ends live matches).
+
+### 29 Oct 2026 ~14:30 — his four notes after 1.24.1: the pie, notifications lag, a restart button, rain (local, not released)
+- His words: "Hanswors, if you dogde quickly once its on your face then it disappears. So it looks like it hits you but
+  then nothing happens altough it shows Pie. Also if someone gets notifications it lags, then there are no restart button
+  for Stapel or for Gly baan." Then: "Also it looks like the waterfall comes out of thin air. Maybe we should just make it
+  a rain scene".
+- The pie (view.js stepPies): hit or miss was settled 0.23 s before it reached you (s 0.82), so a dodge in that moment
+  still said "Pie!" and its cream landed beside you (seen frame by frame). Now settled when it reaches your face (your
+  lane then: `lane === pp.lane`): still there = it flies into the lens, "Pie!", the cream a third bigger (125 % of the
+  width, ~1.3 s full, gone by 2.9 s) and under the words; swiped out = it flies on past your head into the water, "Close
+  one!". Still no heart lost (his clown "tries to distract you"; later1200 checks it).
+- The lag: the game ignores phone notifications (only hiding the app sends it to pause) and the app only re-hides the
+  navigation bar on focus (a no-op when hidden), so nothing of ours runs then. The ride's four top pills blurred the 3D
+  view behind them (backdrop-filter, redone every frame, heavy on Android): gone, a little darker instead, so the phone
+  has room when a notification (or a pop-up) needs it. Not provable on this Mac: his phone says.
+- Restart: the tower's pause card has "Restart" (Practice: a fresh tower; the Daily before its first block: the same try;
+  after: "Restart · free try" or "Restart · N 🪙" when the coins are there, the next try as "Nog 'n kans" buys it; none
+  in matches or the Weektoring) (dom.js showPause `restart`, main.js restartLabel / ui:restart / restartNext,
+  storage.js retryPriceAfterThis). The River run's pause sheet has "Restart" between "Keep riding" and "Get out" (the
+  ride ends as "Get out" ends it, then 'again'; not the Daily's rescue ride, not Saam gly).
+- Rain: the falls across the river (core/rivier.js FALLS, unchanged) are rain showers now: world.js rain() (streaks
+  falling from 60 m, from 40 m before the spot to 70 m after, bent with the river) and setRain(k) (the rain round you,
+  the sun at half, the sky and haze greyer, exposure -18 %); view.js updateShowers (the light turns over 50 m in and 40 m
+  out, "🌧️ Reënbui!/Rain shower!", a soft thunder, the rain sound, drops splashing on the water and running down the
+  screen). The walls' own waterfalls stay.
+- Tested: the pie probe (qa/rivier_pie1242.mjs: dodged at 1.12 s = "Close one!", no cream; stayed = "Pie!" + cream),
+  later1200 21/21, River nonsense 32/32, Saam gly 29/29, unit 531/531, restart (qa/restart1242.mjs: Practice, the Daily
+  before and after its first block; qa/rvrestart1242.mjs: the River run), rides through a shower looked at frame by
+  frame, 60 fps through a shower at CPU x4 (mid).
 

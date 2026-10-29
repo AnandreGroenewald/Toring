@@ -802,6 +802,39 @@ void main() {
   #include <colorspace_fragment>
 }`;
 
+// ------------------------------------------------------------------------------------------------ rain
+// (29 Oct 2026, the owner: "it looks like the waterfall comes out of thin air. Maybe we should just make it a rain scene")
+// Rain as streaks: each a point drawn as a thin line, falling from high over the canyon (out of the picture) to the
+// water, in course space (the river's bend), fogged like the rest. aSeed: x, phase, z, speed (m/s). uNear: the rain
+// round you, wrapped through a box ahead of the camera as the river flows past.
+const RAIN_VERT = `${BEND_GLSL}
+uniform float uT; uniform float uScale; uniform float uH; uniform float uWrap; uniform float uNear;
+attribute vec4 aSeed;
+varying float vDepth; varying float vA;
+void main() {
+  float f = fract(aSeed.y + uT * aSeed.w / uH);
+  float z = uNear > 0.5 ? 6.0 - mod(aSeed.z - uDist, uWrap) : aSeed.z;
+  vec4 w = modelMatrix * vec4(aSeed.x + f * 0.9, uH * (1.0 - f), z, 1.0);
+  w.x += rvBend(-w.z, uDist - w.z);
+  vec4 mv = viewMatrix * w;
+  vDepth = -mv.z;
+  vA = smoothstep(0.0, 0.05, f) * (1.0 - smoothstep(0.95, 1.0, f));
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = clamp(1.3 * uScale / max(0.5, vDepth), 2.0, 56.0);
+}`;
+const RAIN_FRAG = `uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar; uniform vec3 uTint; uniform float uK;
+varying float vDepth; varying float vA;
+void main() {
+  vec2 c = gl_PointCoord - 0.5;
+  // (a thin line down the middle of the point, soft at its ends)
+  float a = exp(-c.x * c.x / 0.0028) * smoothstep(0.5, 0.15, abs(c.y)) * vA * uK;
+  if (a < 0.02) discard;
+  vec3 col = mix(vec3(0.86, 0.9, 0.94) * uTint, uFog, smoothstep(uFogNear, uFogFar, vDepth));
+  gl_FragColor = vec4(col, a * 0.6);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+
 // ------------------------------------------------------------------------------------------------ the water
 const WATER_VERT = `uniform float uDist; uniform float uBendA; uniform float uBendB; uniform float uBendK; uniform mat4 uReflMat;
 varying vec3 vWorld; varying vec2 vRiver; varying float vAhead; varying vec4 vRefl;
@@ -1254,12 +1287,52 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     uniforms: { uDist: bendUniforms.uDist, uBendK: bendUniforms.uBendK, uPath0: bendUniforms.uPath0, uNoise: { value: noise }, uT: { value: 0 }, uFog: { value: fog }, uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uTint: { value: fxTint }, uRep: { value: new THREE.Vector2(1, 1) }, uSolid: { value: 0 } },
     vertexShader: FALL_VERT, fragmentShader: FALL_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
   });
-  // (28 Oct 2026) Afgly's falls across the river: the same water (the walls' clock and fog: the same uniform objects), with
-  // fine streaks all the way across and fuller
-  const curtainMat = new THREE.ShaderMaterial({
-    uniforms: { ...fallMat.uniforms, uRep: { value: new THREE.Vector2(9, 2.6) }, uSolid: { value: 1 } },
-    vertexShader: FALL_VERT, fragmentShader: FALL_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  // (29 Oct 2026) the rain (in place of the 28 Oct falls across the river): a shower's streaks over its stretch of the
+  // river, and the rain round you while you're in one (setRain); one clock with the walls, the same fog
+  const rainScale = { value: 400 };
+  const _rb = new THREE.Vector2();
+  const rainSize = (r) => { r.getDrawingBufferSize(_rb); rainScale.value = _rb.y * 0.5; };
+  const rainMat = (near) => new THREE.ShaderMaterial({
+    uniforms: {
+      uDist: bendUniforms.uDist, uBendK: bendUniforms.uBendK, uPath0: bendUniforms.uPath0, uT: rkClock, uScale: rainScale,
+      uH: { value: near ? 26 : 60 }, uWrap: { value: 44 }, uNear: { value: near ? 1 : 0 }, uFog: { value: fog },
+      uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uTint: { value: fxTint }, uK: { value: near ? 0 : 1 },
+    },
+    vertexShader: RAIN_VERT, fragmentShader: RAIN_FRAG, transparent: true, depthWrite: false,
   });
+  const rainGeo = (n, x, z0, z1) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
+    const seed = new Float32Array(n * 4);
+    let rs = 97;
+    const rnd = () => ((rs = (rs * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < n; i++) seed.set([(rnd() - 0.5) * 2 * x, rnd(), z0 + rnd() * (z1 - z0), 14 + rnd() * 5], i * 4);
+    g.setAttribute('aSeed', new THREE.Float32BufferAttribute(seed, 4));
+    return g;
+  };
+  const lowQ = quality.name === 'low';
+  const showerMat = rainMat(false);
+  const showerGeo = rainGeo(lowQ ? 1200 : 2600, 14, -70, 40);   // (from 70 m past its spot to 40 m before it)
+  showerMat.userData.shared = true;   // (the world frees them; a ride's warm-up leaves them be)
+  showerGeo.userData.shared = true;
+  const nearRainMat = rainMat(true);
+  const nearRain = new THREE.Points(rainGeo(lowQ ? 360 : 900, 10, 0, 44), nearRainMat);
+  nearRain.frustumCulled = false;
+  nearRain.renderOrder = 3;
+  nearRain.visible = false;
+  nearRain.onBeforeRender = rainSize;
+  group.add(nearRain);
+  // (in a shower the sun goes in (its light half, the sky's a little more), the haze turns a cooler grey, the sky clouds
+  // over)
+  const hemi = group.children.find((o) => o.isHemisphereLight);
+  const fog0 = fog.clone();
+  const rainFog = fog0.clone().multiply(new THREE.Color(0.78, 0.82, 0.88));
+  const zen0 = skyMat.uniforms.uZenith.value.clone();
+  const hor0 = skyMat.uniforms.uHorizon.value.clone();
+  const grey = (c, k) => { const l = c.r * 0.3 + c.g * 0.59 + c.b * 0.11; return new THREE.Color(l, l, l * 1.05).multiplyScalar(k); };
+  const rainZen = grey(zen0, 0.8);
+  const rainHor = grey(hor0, 0.82);
+  let rainNow = 0;
   /** A strip of falling water on the wall `geo` (side ±1), 2.8 m wide, from the rim to the river, a little off the rock. */
   function fallGeometry(geo, side) {
     const pos = geo.attributes.position;
@@ -1718,21 +1791,33 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
   return {
     group, water, sun, update, halfAt, footAt, setRockClear: (fn) => { rockClear = fn; }, setShadowFocus, shadows, reflect, fxTint, stoneMat, night,
     /**
-     * (28 Oct 2026, the owner's pick: ride through a waterfall) Water pouring across the whole river from the cliff tops:
-     * one sheet of the walls' own falling water (the same streaks, white where it lands, the fog, the river's bend), 30 m
-     * across (its sides fade into the rock) and 34 m from the rims to the river. The ride places it (its z) and drops it
-     * after (`dispose`: its shape; the material is the walls' and stays).
+     * (29 Oct 2026, the owner: "it looks like the waterfall comes out of thin air. Maybe we should just make it a rain
+     * scene") A shower over the river where a fall across it was: streaks falling from high over the canyon (out of the
+     * picture) to the water, from 40 m before its spot to 70 m after it, with the river's bend. The ride places it (its
+     * z) and sets the rain round you with setRain while you're in it. Its shape and material are shared (they stay).
      */
-    curtain() {
+    rain() {
       const g = new THREE.Group();
-      const geo = new THREE.PlaneGeometry(30, 34, 12, 24);
-      geo.translate(0, 17, 0);
-      const sheet = new THREE.Mesh(geo, curtainMat);
-      sheet.renderOrder = 2;
-      sheet.frustumCulled = false;   // (the bend moves it sideways in the shader: its box would cull it wrongly)
-      g.add(sheet);
-      g.userData.dispose = () => geo.dispose();
+      const pts = new THREE.Points(showerGeo, showerMat);
+      pts.frustumCulled = false;   // (the bend moves it sideways in the shader: its box would cull it wrongly)
+      pts.renderOrder = 2;
+      pts.onBeforeRender = rainSize;
+      g.add(pts);
       return g;
+    },
+    /** How deep in a shower you are (0-1): the rain round you, the light a little dimmer, the haze and the sky greyer. */
+    setRain(k) {
+      if (Math.abs(k - rainNow) < 0.002) return;
+      rainNow = k;
+      nearRainMat.uniforms.uK.value = k;
+      nearRain.visible = k > 0.01;
+      renderer.toneMappingExposure = L.exposure * (1 - 0.18 * k);
+      sun.intensity = L.sunI * (1 - 0.5 * k);
+      if (hemi) hemi.intensity = L.hemiI * (1 + 0.25 * k);
+      fog.copy(fog0).lerp(rainFog, k);
+      scene.fog?.color.copy(fog);
+      skyMat.uniforms.uZenith.value.copy(zen0).lerp(rainZen, 0.6 * k);
+      skyMat.uniforms.uHorizon.value.copy(hor0).lerp(rainHor, 0.5 * k);
     },
     /** Open water at the river's head, up to course z `to` (where your tower stands). */
     setPool(to) {
@@ -1788,7 +1873,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       reflRT?.dispose();
       sun.dispose();   // (its shadow map too)
       stoneMat.dispose();
-      curtainMat.dispose();   // (28 Oct 2026: Afgly's falls)
+      for (const x of [showerGeo, showerMat]) x.dispose();   // (29 Oct 2026: the showers' shared shape)
       for (const x of [...cliffGeos[-1], ...cliffGeos[1], mistTex, rayTex, dustTex, fallPuff, mistGeo, mistMat, rayMat, dustGeo, dustMat, fallMistGeo, fallFoamGeo, fallMistMat, fallFoamMat]) x.dispose();
       scene.environment = null;
       scene.fog = null;

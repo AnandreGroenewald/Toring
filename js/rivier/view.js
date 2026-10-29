@@ -54,16 +54,19 @@ function makeKit() {
     st.textContent = `
 #rivier .rv-ov { position: absolute; inset: 0; pointer-events: none; font-family: var(--font, "Trebuchet MS", system-ui, sans-serif); color: #fff; }
 #rivier .rv-top { position: absolute; left: 10px; right: 10px; top: calc(10px + var(--sat, 0px)); display: flex; align-items: center; gap: 8px; }
-#rivier .rv-count { display: flex; align-items: center; gap: 6px; padding: 6px 12px 6px 8px; border-radius: 999px; background: rgba(13,34,40,.62); border: 1px solid rgba(255,255,255,.28); font-weight: 900; font-size: 18px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+/* (29 Oct 2026, the owner: "if someone gets notifications it lags") the ride's pills without a blur of the river behind them: a
+   blur over the 3D view is redone every frame (heavy on Android), the time a notification or a pop-up needs; a little
+   darker instead */
+#rivier .rv-count { display: flex; align-items: center; gap: 6px; padding: 6px 12px 6px 8px; border-radius: 999px; background: rgba(13,34,40,.74); border: 1px solid rgba(255,255,255,.28); font-weight: 900; font-size: 18px; }
 #rivier .rv-count .rv-ring { width: 24px; height: 24px; border-radius: 50%; background: repeating-conic-gradient(#e2382c 0 45deg, #f6f2ea 45deg 90deg); -webkit-mask: radial-gradient(circle, transparent 38%, #000 40%); mask: radial-gradient(circle, transparent 38%, #000 40%); }
 #rivier .rv-count b { font-size: 20px; }
 #rivier .rv-count small { font-size: 13px; opacity: .8; font-weight: 800; }
 #rivier .rv-count.bump { animation: rv-bump .32s ease-out; }
 @keyframes rv-bump { 40% { transform: scale(1.18); } }
-#rivier .rv-metres { flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 3px; padding: 5px 12px; border-radius: 999px; background: rgba(13,34,40,.62); border: 1px solid rgba(255,255,255,.28); font-weight: 900; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); font-variant-numeric: tabular-nums; }
+#rivier .rv-metres { flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 3px; padding: 5px 12px; border-radius: 999px; background: rgba(13,34,40,.74); border: 1px solid rgba(255,255,255,.28); font-weight: 900; font-variant-numeric: tabular-nums; }
 #rivier .rv-metres b { font-size: 20px; color: #fff3c4; }
 #rivier .rv-metres small { font-size: 13px; opacity: .85; }
-#rivier .rv-cn { display: flex; align-items: center; gap: 3px; padding: 5px 9px; border-radius: 999px; background: rgba(13,34,40,.62); border: 1px solid rgba(255,214,92,.45); font-weight: 900; color: #ffe08a; font-variant-numeric: tabular-nums; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+#rivier .rv-cn { display: flex; align-items: center; gap: 3px; padding: 5px 9px; border-radius: 999px; background: rgba(13,34,40,.74); border: 1px solid rgba(255,214,92,.45); font-weight: 900; color: #ffe08a; font-variant-numeric: tabular-nums; }
 #rivier .rv-cn i.rv-coin-ic { width: 17px; height: 17px; border-radius: 50%; background: var(--coin-img) center / 100% 100% no-repeat; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
 #rivier .rv-cn b { font-size: 16px; min-width: 1ch; }
 #rivier .rv-cn.bump { animation: rv-cn .3s ease-out; }
@@ -111,7 +114,7 @@ function makeKit() {
 #rivier .rv-fire svg.pips .empty { stroke: rgba(10,40,52,.55); }
 #rivier .rv-fire.pulse { animation: rv-firepulse 1.1s ease-in-out infinite; }
 @keyframes rv-firepulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.18) drop-shadow(0 0 12px rgba(110,240,255,.8)); } }
-#rivier .rv-vs { position: absolute; left: 50%; top: calc(64px + var(--sat, 0px)); transform: translateX(-50%); display: none; align-items: baseline; gap: 5px; padding: 4px 12px; border-radius: 999px; background: rgba(20,60,120,.72); border: 1px solid rgba(140,200,255,.55); color: #e6f2ff; font-weight: 900; font-size: 14px; white-space: nowrap; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); font-variant-numeric: tabular-nums; }
+#rivier .rv-vs { position: absolute; left: 50%; top: calc(64px + var(--sat, 0px)); transform: translateX(-50%); display: none; align-items: baseline; gap: 5px; padding: 4px 12px; border-radius: 999px; background: rgba(20,60,120,.8); border: 1px solid rgba(140,200,255,.55); color: #e6f2ff; font-weight: 900; font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 #rivier .rv-vs.on { display: flex; }
 #rivier .rv-vs b { font-size: 16px; color: #fff; }
 #rivier .rv-vs b.rv-vs-h { font-size: 14px; letter-spacing: 1px; }
@@ -137,7 +140,7 @@ function makeKit() {
 #rivier .rv-card.on { opacity: 1; transform: translate(-50%, 0); }
 #rivier .rv-card h2 { margin: 0 0 4px; font-size: 24px; font-weight: 900; }
 #rivier .rv-card .rv-link { background: none; color: #8ff4ff; min-height: 40px; font-size: 16px; text-decoration: underline; text-underline-offset: 3px; }
-#rivier .rv-splat { position: absolute; pointer-events: none; transform-origin: 50% 40%; transform: rotate(var(--r, 0deg)) scale(1.2, .86); opacity: 1; animation: rv-splat 2.2s cubic-bezier(.25,.9,.35,1) forwards; filter: drop-shadow(0 8px 14px rgba(0,0,0,.28)); }
+#rivier .rv-splat { position: absolute; pointer-events: none; transform-origin: 50% 40%; transform: rotate(var(--r, 0deg)) scale(1.2, .86); opacity: 1; animation: rv-splat 2.9s cubic-bezier(.25,.9,.35,1) forwards; filter: drop-shadow(0 8px 14px rgba(0,0,0,.28)); }
 @keyframes rv-splat { 0% { transform: rotate(var(--r)) scale(1.2, .86); opacity: 1; } 5% { transform: rotate(var(--r)) scale(.95, 1.05); } 10% { transform: rotate(var(--r)) scale(1.02, .99); } 15% { transform: rotate(var(--r)) scale(1); } 45% { transform: rotate(var(--r)) translateY(4%) scale(1, 1.02); opacity: 1; } 100% { transform: rotate(var(--r)) translateY(34%) scale(.98, 1.1); opacity: 0; } }
 #rivier .rv-arrow { position: absolute; left: 50%; top: 46%; width: 92px; height: 92px; margin: -46px 0 0 -46px; border-radius: 50%; background: rgba(13,34,40,.6); border: 3px solid #fff3c4; display: none; pointer-events: none; }
 #rivier .rv-arrow.on { display: block; }
@@ -183,7 +186,7 @@ function makeKit() {
 #rivier .rv-paused h2 { margin: 0 0 12px; }
 #rivier .rv-paused button { display: block; width: 100%; min-height: 48px; margin-top: 8px; border-radius: 14px; border: 0; font: inherit; font-weight: 900; font-size: 17px; }
 #rivier .rv-paused .rv-on { background: #ffd65c; color: #2b1a00; }
-#rivier .rv-paused .rv-off { background: rgba(255,255,255,.14); color: #fff; }
+#rivier .rv-paused .rv-off, #rivier .rv-paused .rv-redo { background: rgba(255,255,255,.14); color: #fff; }
 /* (29 Oct 2026) water on the lens after a waterfall: clear drops with bright rims, scattered by hand and running down,
    a wash from above (a repeating grid of white dots read as a polka-dot pattern, not water) */
 #rivier .rv-spray { position: absolute; inset: 0; pointer-events: none; opacity: 0; background:
@@ -1315,7 +1318,7 @@ function createRide(K, d) {
   // ---------------------------------------------------------------------------------------------- the overlay
   ov.innerHTML = `<div class="rv-top"><div class="rv-count"><span class="rv-ring"></span><b>0</b><small>/ ${who.length}</small></div>${endless ? `<div class="rv-metres"><b>0</b><small>m</small></div><div class="rv-cn"><i class="rv-coin-ic"></i><b>0</b></div><div class="rv-hearts">${'<i></i>'.repeat(RIVER.hearts)}</div>` : '<div class="rv-bar"><i></i></div>'}<button class="rv-pause" aria-label="${S.pause}">❚❚</button></div>
     <div class="rv-faces"></div><div class="rv-hint"></div><div class="rv-pop"></div><div class="rv-hurt"></div>
-    <div class="rv-vs"></div><div class="rv-ftag"></div><div class="rv-go3"></div><div class="rv-card"></div><div class="rv-scope"><svg viewBox="0 0 132 132" aria-hidden="true"><circle class="ring" cx="66" cy="66" r="54"/><g class="ticks">${Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; const r1 = i % 3 ? 49 : 44; return `<line x1="${(66 + Math.cos(a) * r1).toFixed(1)}" y1="${(66 + Math.sin(a) * r1).toFixed(1)}" x2="${(66 + Math.cos(a) * 54).toFixed(1)}" y2="${(66 + Math.sin(a) * 54).toFixed(1)}"/>`; }).join('')}</g><g class="cross"><line x1="66" y1="24" x2="66" y2="57"/><line x1="66" y1="75" x2="66" y2="108"/><line x1="24" y1="66" x2="57" y2="66"/><line x1="75" y1="66" x2="108" y2="66"/></g><path class="brk" d="M10 32 V10 H32 M100 10 H122 V32 M122 100 V122 H100 M32 122 H10 V100"/><circle class="dot" cx="66" cy="66" r="3.5"/></svg><div class="rng"></div></div><button class="rv-fire" aria-label="${S.rvFire}"><svg class="pips" viewBox="0 0 112 112"></svg><span class="in"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2.5c-.4 0-.7.2-.9.5C9.4 5.6 5.5 10.9 5.5 14.6a6.5 6.5 0 0 0 13 0c0-3.7-3.9-9-5.6-11.6-.2-.3-.5-.5-.9-.5z"/><path fill="#9feaf5" d="M9.2 14.4c.3 1.6 1.4 2.7 3 3" stroke="#0b6f8a" stroke-width="1.6" stroke-linecap="round"/></svg><span>${S.rvFire}</span></span></button><div class="rv-board"></div><div class="rv-arrow"></div><div class="rv-paused"><div><h2>${S.rvPaused}</h2><button class="rv-on">${S.rvResume}</button><button class="rv-off">${S.rvQuit}</button></div></div>`;
+    <div class="rv-vs"></div><div class="rv-ftag"></div><div class="rv-go3"></div><div class="rv-card"></div><div class="rv-scope"><svg viewBox="0 0 132 132" aria-hidden="true"><circle class="ring" cx="66" cy="66" r="54"/><g class="ticks">${Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; const r1 = i % 3 ? 49 : 44; return `<line x1="${(66 + Math.cos(a) * r1).toFixed(1)}" y1="${(66 + Math.sin(a) * r1).toFixed(1)}" x2="${(66 + Math.cos(a) * 54).toFixed(1)}" y2="${(66 + Math.sin(a) * 54).toFixed(1)}"/>`; }).join('')}</g><g class="cross"><line x1="66" y1="24" x2="66" y2="57"/><line x1="66" y1="75" x2="66" y2="108"/><line x1="24" y1="66" x2="57" y2="66"/><line x1="75" y1="66" x2="108" y2="66"/></g><path class="brk" d="M10 32 V10 H32 M100 10 H122 V32 M122 100 V122 H100 M32 122 H10 V100"/><circle class="dot" cx="66" cy="66" r="3.5"/></svg><div class="rng"></div></div><button class="rv-fire" aria-label="${S.rvFire}"><svg class="pips" viewBox="0 0 112 112"></svg><span class="in"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2.5c-.4 0-.7.2-.9.5C9.4 5.6 5.5 10.9 5.5 14.6a6.5 6.5 0 0 0 13 0c0-3.7-3.9-9-5.6-11.6-.2-.3-.5-.5-.9-.5z"/><path fill="#9feaf5" d="M9.2 14.4c.3 1.6 1.4 2.7 3 3" stroke="#0b6f8a" stroke-width="1.6" stroke-linecap="round"/></svg><span>${S.rvFire}</span></span></button><div class="rv-board"></div><div class="rv-arrow"></div><div class="rv-paused"><div><h2>${S.rvPaused}</h2><button class="rv-on">${S.rvResume}</button>${endless && !duel ? `<button class="rv-redo">${S.rvRestart}</button>` : ''}<button class="rv-off">${S.rvQuit}</button></div></div>`;
   const countEl = ov.querySelector('.rv-count');
   const countB = countEl.querySelector('b');
   const barEl = ov.querySelector('.rv-bar i');
@@ -1683,7 +1686,7 @@ function createRide(K, d) {
     }
   }
   const pausedEl = ov.querySelector('.rv-paused');
-  // (28 Oct 2026) the screen through a waterfall: white spray that clears (updateCurtains)
+  // (28 Oct 2026) the screen through a waterfall, (29 Oct) in a shower: drops that run down and clear (updateShowers)
   const sprayEl = document.createElement('div');
   sprayEl.className = 'rv-spray';
   ov.appendChild(sprayEl);
@@ -1767,6 +1770,14 @@ function createRide(K, d) {
   ov.querySelector('.rv-pause').addEventListener('click', () => setPaused(true));
   pausedEl.querySelector('.rv-on').addEventListener('click', () => setPaused(false));
   pausedEl.querySelector('.rv-off').addEventListener('click', () => { if (alive) { finishNow(); } });
+  // (29 Oct 2026, the owner: "there are no restart button for ... Gly baan") the river run: this ride ends as "Klim uit"
+  // ends it (its metres and coins count), and the next starts at once, as the card's "Gly weer" does
+  pausedEl.querySelector('.rv-redo')?.addEventListener('click', () => {
+    if (!alive) return;
+    finishNow();
+    if (lastR) d.onDone?.(lastR, 'again');
+  });
+  let lastR = null;   // (the ride's result once done() has it)
 
   function setPaused(on) {
     if (phase === 'done') return;
@@ -1886,7 +1897,7 @@ function createRide(K, d) {
     if (endless && course.rows.at(-1).z < dist + AHEAD + 300) course.extend(dist + AHEAD + 1500);
     while (rowI < course.rows.length && course.rows[rowI].z < dist + AHEAD) {
       const row = course.rows[rowI++];
-      if (row.fall) addCurtain(row.z);
+      if (row.fall) addShower(row.z);
       for (const it of row.items) {
         let obj;
         if (it.kind === 'block') obj = things.floating({ ...it, skin: d.skin || 'kleur' });
@@ -1917,41 +1928,63 @@ function createRide(K, d) {
       }
     }
   }
-  // (28 Oct 2026, the owner's pick: ride through a waterfall) the endless river's falls (core/rivier.js FALLS): drawn
-  // from AHEAD, misting near, ridden through (Waterval!, a splash, spray on the screen), gone once well behind
-  const curtains = [];
-  function addCurtain(z) {
-    const obj = world.curtain();
+  // (29 Oct 2026, the owner: "it looks like the waterfall comes out of thin air. Maybe we should just make it a rain
+  // scene") the endless river's showers, where its falls across the river were (core/rivier.js FALLS): drawn from AHEAD;
+  // riding in, the light dims and greys, rain falls round you, splashes on the water and runs down the screen (🌧️ Rain
+  // shower!), and it all lifts again after
+  const SHOWER_IN = 40;    // m before its spot the rain starts
+  const SHOWER_OUT = 70;   // m after its spot it stops
+  const showers = [];
+  let rainK = 0;
+  let rainSoundT = 0;
+  let rainDropT = 0;
+  let rainSplashT = 0;
+  function addShower(z) {
+    const obj = world.rain();
     scene.add(obj);
-    curtains.push({ z, obj, hit: false, mistT: 0 });
+    showers.push({ z, obj, said: false });
   }
-  function dropCurtain(c) {
+  function dropShower(c) {
     scene.remove(c.obj);
-    c.obj.userData.dispose?.();
   }
-  function updateCurtains(dt) {
-    for (let i = curtains.length - 1; i >= 0; i--) {
-      const c = curtains[i];
+  function updateShowers(dt) {
+    let k = 0;
+    for (let i = showers.length - 1; i >= 0; i--) {
+      const c = showers[i];
       const ahead = c.z - dist;
       c.obj.position.set(0, 0, -ahead);
-      if (ahead > 8 && ahead < 140 && !reduced && (c.mistT -= dt) <= 0) {
-        c.mistT = 0.28;
-        things.emit((Math.random() - 0.5) * 12, 0.5, -ahead, 5, 1.4, 2);
-      }
-      if (!c.hit && ahead <= 0 && phase === 'run') {
-        c.hit = true;
+      // (how deep in you are: it thickens over the 50 m before the rain starts and thins over the 40 m after it stops)
+      const kin = clamp((SHOWER_IN + 50 - ahead) / 50, 0, 1) * clamp((ahead + SHOWER_OUT + 40) / 40, 0, 1);
+      k = Math.max(k, kin * kin * (3 - 2 * kin));
+      if (!c.said && ahead <= SHOWER_IN && phase === 'run') {
+        c.said = true;
         pop(S.rvFall, 1300);
-        audio.play('splash');
-        haptics.heavy?.();
-        things.emit(x, 1.2, 0, 22, 1.6, 3);
-        sprayEl.classList.remove('on');
-        void sprayEl.offsetWidth;   // (the spray again, from the start)
-        sprayEl.classList.add('on');
+        audio.play('thunder', { intensity: 0.35 });
       }
-      if (ahead < -60) {
-        dropCurtain(c);
-        curtains.splice(i, 1);
+      if (ahead < -SHOWER_OUT - 60) {
+        dropShower(c);
+        showers.splice(i, 1);
       }
+    }
+    rainK += (k - rainK) * (1 - Math.exp(-dt * 3));
+    if (rainK < 0.003 && k === 0) rainK = 0;
+    world.setRain(rainK);
+    if (rainK < 0.3 || phase !== 'run') return;
+    if ((rainSoundT -= dt) <= 0) {
+      rainSoundT = 0.7;
+      audio.play('rain', { intensity: rainK });
+    }
+    // (drops landing on the water round you)
+    if (!reduced && (rainSplashT -= dt) <= 0) {
+      rainSplashT = 0.09;
+      things.emit(x + (Math.random() - 0.5) * 9, 0.05, -2 - Math.random() * 18, 2, 0.35, 0.5);
+    }
+    // (and on the lens, running down)
+    if (rainK > 0.7 && (rainDropT -= dt) <= 0) {
+      rainDropT = 1.4;
+      sprayEl.classList.remove('on');
+      void sprayEl.offsetWidth;   // (the drops again, from the start)
+      sprayEl.classList.add('on');
     }
   }
   function despawn(l) {
@@ -2207,29 +2240,36 @@ function createRide(K, d) {
     shadow.position.set(tx, 0.07, 0.4);
     shadow.renderOrder = 3;
     scene.add(mesh, shadow);
-    pies.push({ mesh, shadow, from, start, tx, t: 0, dur: 1.25, hit: null, mid: new THREE.Vector3() });
+    pies.push({ mesh, shadow, from, start, tx, lane, t: 0, hit: null, mid: new THREE.Vector3() });
     audio.play('fling');
   }
   const _pp = new THREE.Vector3();
   const _lens = new THREE.Vector3();
-  /** Where the pie's arc ends: just in front of you, over your lane (then into the lens, or down into the water). */
-  const PIE_DOWN = 0.82;
+  // (29 Oct 2026, the owner: "if you dodge quickly once its on your face then it disappears. So it looks like it hits you
+  // but then nothing happens although it shows Pie": hit or miss was settled 0.23 s before the pie got there, so a dodge
+  // in that last moment still said Pie! and its cream landed beside you. Now it is settled when the pie reaches your
+  // face: still in its lane, it bursts over the screen (you can't see for a moment); swiped out, it flies on past your
+  // head into the water behind you: Close one!)
+  const PIE_FLY = 1.25;     // s from his hand to your face, over the lane you were in (the shadow on the water marks it)
+  const PIE_AFTER = 0.14;   // s: on into the lens, or past you into the water
   function stepPies(dt) {
     for (let i = pies.length - 1; i >= 0; i--) {
       const pp = pies[i];
       pp.t += dt;
-      const s = Math.min(1, pp.t / pp.dur);
-      if (s < PIE_DOWN) {
-        // the lob: up out of his hand, over, and down towards you
-        const k = s / PIE_DOWN;
-        _pp.set(pp.start.x + (pp.tx - pp.start.x) * k, pp.start.y + (1.5 - pp.start.y) * k + Math.sin(k * Math.PI) * 3.4, pp.start.z + (-0.8 - pp.start.z) * k);
+      const s = Math.min(1, pp.t / PIE_FLY);
+      if (pp.t < PIE_FLY) {
+        // the lob: up out of his hand, over, and down at your face
+        _pp.set(pp.start.x + (pp.tx - pp.start.x) * s, pp.start.y + (1.6 - pp.start.y) * s + Math.sin(s * Math.PI) * 3.4, pp.start.z + (-0.5 - pp.start.z) * s);
         pp.mid.copy(_pp);
         // (flat, cream up, wobbling as it flies)
         pp.mesh.rotation.set(Math.sin(pp.t * 11) * 0.22, pp.t * 6, Math.sin(pp.t * 8) * 0.18);
       } else {
-        // the last moment: still in its lane, it comes straight at you (into the lens); out of it, down into the water
-        if (pp.hit === null) pp.hit = phase === 'run' && Math.abs(x - pp.tx) < 1.5;
-        const k = (s - PIE_DOWN) / (1 - PIE_DOWN);
+        // at your face: still in its lane it's a hit; swiped out of it, a dodge
+        if (pp.hit === null) {
+          pp.hit = phase === 'run' && lane === pp.lane && Math.abs(x - pp.tx) < 1.5;
+          if (!pp.hit && phase === 'run') pop(S.rvClose, 700);
+        }
+        const k = Math.min(1, (pp.t - PIE_FLY) / PIE_AFTER);
         if (pp.hit) {
           camera.getWorldDirection(_lens);
           _lens.multiplyScalar(1.25).add(camera.position);
@@ -2237,16 +2277,17 @@ function createRide(K, d) {
           // (the cream turns to face you)
           pp.mesh.rotation.set(k * Math.PI * 0.5, pp.mesh.rotation.y, 0);
         } else {
-          _pp.set(pp.tx, 1.5 * (1 - k), -0.8 + 1.2 * k);
+          // (on past where your head was, down into the water behind you)
+          _pp.set(pp.tx, pp.mid.y * (1 - k * k), pp.mid.z + 2.4 * k);
         }
       }
       pp.mesh.position.copy(_pp);
       pp.shadow.material.opacity = 0.15 + 0.5 * s;
       pp.shadow.scale.setScalar(0.55 + 0.65 * s);
-      if (s >= 1) {
+      if (pp.t >= PIE_FLY + PIE_AFTER) {
         if (pp.hit) splat();
         else {
-          things.emit(pp.tx, 0.2, 0.4, 24, 1.6, 2.4);
+          things.emit(pp.tx, 0.2, 1.9, 24, 1.6, 2.4);
           audio.play('splash');
         }
         scene.remove(pp.mesh, pp.shadow);
@@ -2257,21 +2298,23 @@ function createRide(K, d) {
       }
     }
   }
-  /** Cream on the camera: it covers part of the view a moment (no heart lost), slides down and fades. */
+  /** Cream on the camera: it covers most of the view a moment (no heart lost), slides down and fades. */
   function splat() {
     const el = document.createElement('img');
     el.className = 'rv-splat';
     el.src = splatSrc || (splatSrc = splatImage());
-    // (the pie hit the lens: the cream is big, near the middle, and slides off within two seconds)
+    // (the pie hit the lens: the cream is big, over the middle and the rider, and slides off within three seconds)
+    // (29 Oct 2026: a third bigger and a little longer: at 84 % of the width, in the middle, it read as a pie that landed
+    // on the river, "nothing happens")
     const w = host.clientWidth;
     const h = host.clientHeight;
-    const sw = Math.min(w * 0.84, 470);
+    const sw = Math.min(w * 1.25, 660);
     el.style.width = `${sw}px`;
-    el.style.left = `${(w - sw) / 2 + (Math.random() - 0.5) * w * 0.12}px`;
-    el.style.top = `${h * (0.47 + Math.random() * 0.06) - sw * 0.45}px`;
+    el.style.left = `${(w - sw) / 2 + (Math.random() - 0.5) * w * 0.08}px`;
+    el.style.top = `${h * (0.5 + Math.random() * 0.05) - sw * 0.5}px`;
     el.style.setProperty('--r', `${(Math.random() - 0.5) * 30}deg`);
-    ov.appendChild(el);
-    setTimeout(() => el.remove(), 2300);
+    ov.prepend(el);   // (under the words and buttons: Pie! reads on top of the cream)
+    setTimeout(() => el.remove(), 3000);
     audio.play('splat', { intensity: 0.7 });
     stage.shake(reduced ? 0 : 0.2);
     haptics.lost?.();
@@ -2768,7 +2811,7 @@ function createRide(K, d) {
     if (phase === 'run' && Math.random() < 0.85) things.emit(x - leanV * 0.3, 0.12, 0.9, 1 + Math.round(rapK * 2), 0.6 + rapK, 1.4 + Math.abs(leanV) * 2 + rapK * 1.5);
 
     if (phase !== 'zoo') spawn();
-    if (curtains.length) updateCurtains(dt);
+    if (showers.length || rainK > 0) updateShowers(dt);
     if (endless && dist > 8000) askElephant();
     pullNext = 0;
     for (const l of live) {
@@ -3068,6 +3111,7 @@ function createRide(K, d) {
       return;
     }
     const r = result();
+    lastR = r;
     if (duel) {
       // (Saam gly: your metres, theirs (or how far they are now, the camera with them), who won, again together)
       myEndM = r.metres;
@@ -3152,7 +3196,7 @@ function createRide(K, d) {
     try {
       const blk = things.floating({ shape: 'cube', skin, color: 0, spin: 0 });
       const kinds = [beasts.croc(1), beasts.hippo(), things.rock(), things.person(who[0] || 'boer', 0), things.floating({ shape: 'plank', skin, color: 1 }), beasts.monkeyOn(blk, 1, blk.userData.top)];
-      if (endless) kinds.push(hz.log(1), hz.log(3), hz.branch(), hz.clown(1), hz.pie(), hz.whirl());
+      if (endless) kinds.push(hz.log(1), hz.log(3), hz.branch(), hz.clown(1), hz.pie(), hz.whirl(), world.rain());
       kinds.forEach((o, i) => { o.position.set(i * 3 - 8, 0, -30); tmp.add(o); });
       if (raid) {
         const jm = new THREE.Mesh(jetGeometry(new THREE.Vector3(0, 1, -5), new THREE.Vector3(0, 5, -40), 1), jetMat);
@@ -3210,7 +3254,7 @@ function createRide(K, d) {
     removeEventListener('resize', place);
     removeEventListener('keydown', onKey);
     document.removeEventListener('visibilitychange', onVis);
-    for (const c of curtains.splice(0)) dropCurtain(c);
+    for (const c of showers.splice(0)) dropShower(c);
     sideMq?.removeEventListener?.('change', onSide);
     host.removeEventListener('pointerdown', onDown);
     host.removeEventListener('pointermove', onMoveP);

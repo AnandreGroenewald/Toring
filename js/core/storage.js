@@ -734,6 +734,19 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       return k < lad.length ? lad[k] : null;
     },
 
+    /**
+     * (29 Oct 2026) What the day's next try will cost once the one being played ends (the pause card's "Begin oor"):
+     * 0 = free, null = none left.
+     */
+    retryPriceAfterThis(dateKey) {
+      sync();
+      if (!isDateKey(dateKey)) return null;
+      const r = retries[dateKey];
+      const k = r ? r.n : 0;
+      const lad = ladder(dateKey);
+      return k < lad.length ? lad[k] : null;
+    },
+
     /** (1.13.1) The day's tries: { free, played, extra, maxExtra } (`extra` the extra tries taken so far, played or not). */
     dailyTries(dateKey) {
       sync();

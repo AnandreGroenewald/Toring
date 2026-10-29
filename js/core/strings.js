@@ -301,6 +301,10 @@ export const S = {
   quit: 'Gee die wedstryd op',
   // (1.13.4, the owner) the pause card outside a match: straight back to the menu (the tower is saved)
   quitHome: 'Terug na die hoofkieslys',
+  // (29 Oct 2026) the pause card's "Begin oor" (Oefen; the Daily's next try)
+  restartGame: 'Begin oor',
+  restartFree: 'Begin oor · gratis poging',
+  restartCost: (n) => `Begin oor · ${n} 🪙`,
   quitWarnDaily: 'As jy nou teruggaan, tel hierdie poging as jou Daaglikse Toring.',
   // (1.13) a coin match: quitting gives the other player both stakes
   quitWarnStake: (name, n) => `As jy nou opgee, kry ${name} jou ${n} 🪙.`,
@@ -1052,9 +1056,10 @@ export const S = {
   rvPaused: 'Gepouseer',
   rvResume: 'Ry verder',
   rvQuit: 'Klim uit',
+  rvRestart: 'Begin oor',
   rvSlipped: (name) => `Oeps! ${name} het weer ingeval`,
   rvOuch: 'Eina!',
-  rvFall: '💦 Waterval!',
+  rvFall: '🌧️ Reënbui!',
   rvAll: 'Almal gered! 🛟',
   rvSaved: (n, t) => `🛟 ${n} van ${t} gered!`,
   rvNoneSaved: 'Niemand gered nie…',

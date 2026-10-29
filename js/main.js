@@ -841,8 +841,10 @@ function startGame(data) {
 }
 
 let quitHome = false;   // (1.13.4) "Terug na die hoofkieslys": this run ends on the menu instead of its results
+let restartNext = null;   // (29 Oct 2026) "Begin oor": the mode to start again once this run has ended ('practice' | 'daily')
 function resetRun(mode, dateKey = null) {
   quitHome = false;
+  restartNext = null;
   pw.effects = {};
   pw.free = false;
   pw.pick = null;
@@ -1250,7 +1252,7 @@ function pauseLocal() {
   let now = null;
   try { now = gameScene()?.getState?.() || null; } catch { now = null; }
   ui.showPause({ mode: run.mode, started: run.started, stake: atStake ? { n: m.stake, name: m.oppName } : null,
-    sofar: now && run.started ? { heightM: now.heightM, score: now.score, perfects: now.perfects } : null });
+    sofar: now && run.started ? { heightM: now.heightM, score: now.score, perfects: now.perfects } : null, restart: restartLabel() });
   // (1.12, the owner: "If i pause while looking for an opponent make it stop looking") a pause, or the
   // game out of sight, ends the search: nobody is paired with a player who isn't there
   if (duel.searching) {
@@ -1742,6 +1744,27 @@ bus.on('ui:quit', () => {
 // A match keeps "Hou op" ('ui:quit'): it goes on to the match's result.
 bus.on('ui:quit-home', () => {
   if (run.mode !== 'duel' && run.mode !== 'idle' && !run.over) quitHome = true;
+  bus.emit('ui:quit');
+});
+/**
+ * (29 Oct 2026, the owner: "there are no restart button for Stapel") The pause card's "Begin oor": Oefen always; the
+ * Daily when another try is there (before the first drop nothing counted: the same try again; after it, the day's next
+ * try, free or bought with coins the player has, as "Nog 'n kans" on the menu). null: no button.
+ */
+function restartLabel() {
+  if (run.over) return null;
+  if (run.mode === 'practice') return S.restartGame;
+  if (run.mode !== 'daily') return null;
+  if (!run.started) return S.restartGame;
+  const price = store.retryPriceAfterThis(run.dateKey || todayKey());
+  if (price === 0) return S.restartFree;
+  return price != null && price <= store.getEconomy().coins ? S.restartCost(fmtInt(price)) : null;
+}
+// It ends this tower the way "Terug na die hoofkieslys" does (a Daily's try counts), then starts the next at once.
+bus.on('ui:restart', () => {
+  if (!restartLabel()) return;
+  restartNext = run.mode;
+  quitHome = true;
   bus.emit('ui:quit');
 });
 bus.on('ui:home', () => {
@@ -3427,7 +3450,25 @@ bus.on('game:over', (result) => {
   if (f.aborted || quitHome) {
     const home = quitHome && !f.aborted;
     const added = f.coins?.added || 0;
+    const again = restartNext;
+    restartNext = null;
     startIdle();
+    // (29 Oct 2026) "Begin oor": straight into the next tower (the Daily's next try, as "Nog 'n kans" buys it)
+    if (again === 'practice') {
+      playPractice();
+      return;
+    }
+    if (again === 'daily') {
+      if (f.aborted) {
+        playDaily();
+        return;
+      }
+      const price = store.nextRetryPrice(todayKey());
+      if (price != null && price <= store.getEconomy().coins) {
+        bus.emit('ui:daily-retry');
+        return;
+      }
+    }
     showMenu();
     if (home && added > 0) ui.toast(`+${fmtInt(added)} 🪙`, 2400);
     if (home && result.mode === 'daily') planReminders();   // today is built: no reminder today

@@ -301,6 +301,10 @@ export const S_EN = {
   resume: 'Keep playing',
   quit: 'Give up the match',
   quitHome: 'Back to the main menu',
+  // (29 Oct 2026) the pause card's "Restart" (Practice; the Daily's next try)
+  restartGame: 'Restart',
+  restartFree: 'Restart · free try',
+  restartCost: (n) => `Restart · ${n} 🪙`,
   quitWarnDaily: 'If you go back now, this try counts as your Daily Tower.',
   // (1.13) a coin match: quitting gives the other player both stakes
   quitWarnStake: (name, n) => `If you give up now, ${name} gets your ${n} 🪙.`,
@@ -1006,9 +1010,10 @@ export const S_EN = {
   rvPaused: 'Paused',
   rvResume: 'Keep riding',
   rvQuit: 'Get out',
+  rvRestart: 'Restart',
   rvSlipped: (name) => `Oops! ${name} fell back in`,
   rvOuch: 'Ouch!',
-  rvFall: '💦 Waterfall!',
+  rvFall: '🌧️ Rain shower!',
   rvAll: 'Everyone saved! 🛟',
   rvSaved: (n, t) => `🛟 ${n} of ${t} saved!`,
   rvNoneSaved: 'Nobody saved…',

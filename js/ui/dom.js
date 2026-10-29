@@ -1833,7 +1833,7 @@ export function createUI(bus) {
   // ---------------------------------------------------------------------------
   // Pause
   // ---------------------------------------------------------------------------
-  function showPause({ mode, started = true, note = '', stake = null, sofar = null } = {}) {
+  function showPause({ mode, started = true, note = '', stake = null, sofar = null, restart = null } = {}) {
     if (st.modal) closeModal();
     // (1.15, the owner: "This window still doesnt look like a pause menu, it looks plain") a game's pause: a dark glass card,
     // a gold title band, and the tower so far (height, points, Perfeks)
@@ -1854,6 +1854,9 @@ export function createUI(bus) {
       // (1.13) a coin match: "Hou op" gives the other player both stakes
       stake && stake.n ? h('p', { class: 'warn' }, emo('⚠️'), h('span', { text: S.quitWarnStake(stake.name || S.duelSomeone, fmtInt(stake.n)) })) : null,
       button('btn-big btn-green', [icon('play'), h('span', { text: S.resume })], () => bus.emit('ui:resume')),
+      // (29 Oct 2026, the owner: "there are no restart button for Stapel") Oefen and the Daily: a fresh tower at once (the
+      // Daily: its next try, free or for the coins the button says; main.js decides when it shows)
+      restart ? button('btn-white btn-restart', [icon('again'), h('span', { text: restart })], () => bus.emit('ui:restart')) : null,
       // (1.13.4, the owner) outside a match: "Terug na die hoofkieslys", straight to the menu (the tower is saved first);
       // a match keeps its own way out (it goes on to the match's result): (1.15, the owner: "it should not show Stop
       // please") "🏳️ Gee die wedstryd op", which says what it does
