@@ -316,8 +316,12 @@ export function createBeasts(bend = (m) => m, models = {}) {
           b.m.position.set(b.x, -0.05 + life * 0.25, b.z);
           b.m.scale.setScalar(0.6 + life * 0.9);
         }
-        // a big yawn when you're near
-        jaw.rotation.x = ahead < 14 && ahead > -2 ? Math.min(0.75, (14 - ahead) / 8) : 0.05 + Math.sin(t * 0.8) * 0.03;
+        // a big yawn when you're near; (29 Oct 2026) its head lifts, nose up, the way a hippo yawns, so the open mouth
+        // (the pink, the tongue, the tusks) shows over the water instead of the jaw dropping into it
+        const yawn = ahead < 14 && ahead > -2 ? Math.min(1, (14 - ahead) / 6) : 0;
+        jaw.rotation.x = yawn ? 0.75 * yawn : 0.05 + Math.sin(t * 0.8) * 0.03;
+        inner.position.y += 0.3 * yawn * k;
+        inner.rotation.x -= 0.36 * yawn * k;
         head.rotation.y = Math.sin(t * 0.9 + g.id) * 0.1;
         // its ears flick now and then (a quick double twitch)
         const fl = (t * 0.7 + g.id * 0.37) % 2.3;
@@ -531,7 +535,9 @@ export function createBeasts(bend = (m) => m, models = {}) {
           trunk.rotation.x = Math.sin(t * 1.3 + ph) * 0.12 + (u.walking ? 0.05 : 0);
           trunk.rotation.z = Math.sin(t * 0.9 + ph * 2) * 0.1;
         }
-        ears.forEach((e, i) => { e.rotation.z = Math.sin(t * 1.7 + ph + i) * 0.14 * (i ? -1 : 1); });
+        // (29 Oct 2026, the new model: each ear fans out from her head about its front edge and back, never into her
+        // shoulders)
+        ears.forEach((e, i) => { e.rotation.y = (i ? 1 : -1) * 0.26 * (0.5 + 0.5 * Math.sin(t * 1.7 + ph + i * 0.5)); });
         if (body) body.position.y = Math.abs(Math.sin(step * Math.PI)) * (u.walking ? 0.05 : 0.01);
       },
     };

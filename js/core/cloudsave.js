@@ -17,7 +17,7 @@
 //     counter, for the later day. A coin match's held stake is never in a save (js/core/storage.js cleanSave).
 import { cleanSave } from './storage.js';
 import { addDays, daysBetween, isDateKey } from './daily.js';
-import { MAX_COINS, MAX_STOCK, POWERUP_IDS, COSMETIC_KINDS, DEFAULT_LOOK, RANK_MODES, RANK_RULES, EARN, LADDER, ladderAt, ladderIndex, cleanModeRank, rolloverSeason, SKIN_KINDS, DEFAULT_SKIN, TRIBE_IDS } from './economy.js';
+import { MAX_COINS, MAX_STARS, MAX_STOCK, POWERUP_IDS, COSMETIC_KINDS, DEFAULT_LOOK, RANK_MODES, RANK_RULES, EARN, LADDER, ladderAt, ladderIndex, cleanModeRank, rolloverSeason, SKIN_KINDS, DEFAULT_SKIN, TRIBE_IDS } from './economy.js';
 import { WEEK } from './week.js';
 import { LAUNCH } from '../config.js';
 
@@ -189,6 +189,7 @@ export function mergeSaves(localRaw, cloudRaw, baseRaw = null, { today = null } 
   const tribes = { owned: trOwned, wear: trOwned.includes(trWear) ? trWear : (trOwned[0] || null) };
   const econ = {
     coins: add(le.coins, ce.coins, be.coins, MAX_COINS),
+    stars: add(le.stars, ce.stars, be.stars, MAX_STARS),
     earned: { day: earnDay, n: earnDay ? clamp(nOn(ce) + Math.max(0, nOn(le) - nOn(be)), 0, EARN.dayCap) : 0 },
     stock,
     owned,
@@ -281,7 +282,12 @@ export function fitSave(raw, maxChars = 240 * 1024) {
   return s;
 }
 
+// (29 Oct 2026) the same progress in a different key order is the same save: a merge builds its object in its own
+// order, and compared as plain text every sync looked like a change (the owner's menu redrew and jumped back up every
+// ~4 s, each time with a save to the server)
+const stableJson = (x) => JSON.stringify(x, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((kk) => [kk, v[kk]])) : v));
+
 /** Do two saves hold the same progress? */
 export function sameSave(a, b) {
-  return json(cleanSave(a)) === json(cleanSave(b));
+  return stableJson(cleanSave(a)) === stableJson(cleanSave(b));
 }

@@ -1,11 +1,12 @@
 # (1.20) Shared helpers for Stapel's Blender models (run headless: Blender -b -P <model>.py -- <out.glb>).
 # Each model is built from code (no hand work): a skin-modifier skeleton made smooth with subdivision, small parts from
 # primitives, plain PBR materials, exported as .glb (Y up) into img/models/ for three.js (js/rivier/models.js).
+import math
 import os
 import sys
 import bpy
 import bmesh
-from mathutils import Vector
+from mathutils import Vector, Matrix
 
 
 def reset():
@@ -550,3 +551,119 @@ def palettize(objs, name, cell=8, cols=8, rough=0.32):
         o.data.materials.clear()
         o.data.materials.append(m)
     return m
+
+
+# ------------------------------------------------------------------------------------------------ organic shapes (29 Oct 2026)
+def blob(name, shapes, voxel=0.03, smooth=22, mat=None):
+    """One smooth hide from overlapping ellipsoids [(centre, radii, tilt about x)]: joined, remeshed into one skin, the
+    seams smoothed into soft folds."""
+    objs = [prim('sphere', f'{name}_{i}', loc=c, scale=r, rot=(t, 0, 0), segments=40, ring_count=20) for i, (c, r, t) in enumerate(shapes)]
+    o = join(objs, name)
+    bpy.ops.object.transform_apply(location=True, rotation=False, scale=False)
+    rm = o.modifiers.new('Remesh', 'REMESH')
+    rm.mode = 'VOXEL'
+    rm.voxel_size = voxel
+    sm = o.modifiers.new('Smooth', 'SMOOTH')
+    sm.factor = 0.9
+    sm.iterations = smooth
+    if mat:
+        o.data.materials.clear()
+        o.data.materials.append(mat)
+    return o
+
+
+def _path(pts, ds):
+    """Points every `ds` along a smooth curve (Catmull-Rom) through `pts`, each with how far along the points it is (0..n-1)."""
+    P = [Vector(p) for p in pts]
+    ext = [P[0] * 2 - P[1]] + P + [P[-1] * 2 - P[-2]]
+    dense = []
+    for i in range(len(P) - 1):
+        p0, p1, p2, p3 = ext[i:i + 4]
+        for k in range(40):
+            t = k / 40
+            dense.append((0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (3 * p1 - p0 - 3 * p2 + p3) * t ** 3), i + t))
+    dense.append((P[-1].copy(), len(P) - 1.0))
+    acc = [0.0]
+    for a, b in zip(dense, dense[1:]):
+        acc.append(acc[-1] + (b[0] - a[0]).length)
+    n = max(2, round(acc[-1] / ds) + 1)
+    out, j = [], 0
+    for k in range(n):
+        s = acc[-1] * k / (n - 1)
+        while j < len(acc) - 2 and acc[j + 1] < s:
+            j += 1
+        f = (s - acc[j]) / max(1e-9, acc[j + 1] - acc[j])
+        out.append((dense[j][0].lerp(dense[j + 1][0], f), dense[j][1] + (dense[j + 1][1] - dense[j][1]) * f, s))
+    return out, acc[-1]
+
+
+def tube(name, pts, radii, ds=0.06, ring=18, ridge=None, mat=None, tip=0.5, flat=1.0):
+    """A tube along a smooth path through `pts`, its radius from `radii` (one per point, eased between), closed at both
+    ends (the end rounded by `tip`). `ridge` (spacing, depth, from, to, outward): rings pressed round it every `spacing`
+    metres between those fractions of its length, deepest on the side facing `outward` (a trunk's folds, a knee's).
+    `flat`: the cross-section's depth against its width (a trunk is a little flattened front to back)."""
+    C, L = _path(pts, ds)
+    n = len(C)
+    T = [(C[min(n - 1, j + 1)][0] - C[max(0, j - 1)][0]).normalized() for j in range(n)]
+    ref = Vector((1, 0, 0)) if abs(T[0].x) < 0.9 else Vector((0, 0, 1))
+    N = (ref - T[0] * ref.dot(T[0])).normalized()
+    frames = []
+    for j in range(n):
+        if j:
+            ax = T[j - 1].cross(T[j])
+            if ax.length > 1e-7:
+                N = Matrix.Rotation(T[j - 1].angle(T[j]), 3, ax.normalized()) @ N
+        B = T[j].cross(N).normalized()
+        N = B.cross(T[j]).normalized()
+        frames.append((N, B))
+
+    def rad(u):
+        i = min(int(u), len(radii) - 2)
+        t = u - i
+        t = t * t * (3 - 2 * t)
+        return radii[i] * (1 - t) + radii[i + 1] * t
+    bm = bmesh.new()
+    rings = []
+    for j, (c, u, s) in enumerate(C):
+        Nn, Bb = frames[j]
+        r0 = rad(u)
+        vs = []
+        for a in range(ring):
+            th = 2 * math.pi * a / ring
+            d = Nn * math.cos(th) + Bb * math.sin(th) * flat
+            r = r0
+            if ridge:
+                sp, depth, f0, f1, out = ridge
+                f = s / L
+                if f0 <= f <= f1:
+                    w = max(0.0, d.normalized().dot(Vector(out).normalized())) ** 0.5
+                    edge = min(1.0, (f - f0) / 0.08, (f1 - f) / 0.08)
+                    r *= 1 - depth * w * edge * max(0.0, math.cos(2 * math.pi * s / sp)) ** 6
+            vs.append(bm.verts.new(c + d * r))
+        rings.append(vs)
+    for j in range(n - 1):
+        for a in range(ring):
+            b = (a + 1) % ring
+            bm.faces.new((rings[j][a], rings[j][b], rings[j + 1][b], rings[j + 1][a]))
+    c0 = bm.verts.new(C[0][0] - T[0] * radii[0] * 0.2)
+    c1 = bm.verts.new(C[-1][0] + T[-1] * radii[-1] * tip)
+    for a in range(ring):
+        b = (a + 1) % ring
+        bm.faces.new((rings[0][b], rings[0][a], c0))
+        bm.faces.new((rings[-1][a], rings[-1][b], c1))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    o = link(bpy.data.objects.new(name, me))
+    for p in o.data.polygons:
+        p.use_smooth = True
+    if mat:
+        o.data.materials.append(mat)
+    return o
+
+
+def surface(obj, origin, direction):
+    """Where a ray from `origin` along `direction` meets `obj` (world space; the object sits at the origin)."""
+    ok, at, nrm, _ = obj.ray_cast(Vector(origin), Vector(direction).normalized())
+    return (at, nrm) if ok else (Vector(origin), Vector(direction))

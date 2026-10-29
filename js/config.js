@@ -3,7 +3,7 @@
 // World units are pixels. The world y-axis points down; the top of the base
 // platform is world y = 0 and the tower grows into negative y.
 
-export const VERSION = '1.24.4';
+export const VERSION = '1.24.5';
 
 // ---------------------------------------------------------------------------
 // Screen / layout
@@ -239,7 +239,7 @@ export function stageAt(i) {
 // ---------------------------------------------------------------------------
 export const DUEL = {
   goalM: 50,               // the first to 50 m wins
-  rules: 112,              // the game's rules (stages, blocks, visitors, physics, hearts: 1.12 three hearts): the lobby pairs only the same
+  rules: 113,              // the game's rules (stages, blocks, visitors, physics, hearts: 1.12 three hearts): the lobby pairs only the same (29 Oct 2026: 113, a Perfek holds its angle a moment)
                            // (1.13.3 kept 112 on purpose: waking blocks left hanging tilted changes no block, stage or visitor; a
                            // Blok vir Blok tower is set from the dropping game's report after every turn either way; a bump would
                            // keep web players from the Play app's 1.12.0 players until the app upload)

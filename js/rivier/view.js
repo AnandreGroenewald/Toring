@@ -38,6 +38,14 @@ const ease = (k) => k * k * (3 - 2 * k);
 
 // ------------------------------------------------------------------------------------------------- the stage (once)
 let kit = null;
+// (29 Oct 2026, the owner: "the loading screen is still taking too long") a ride's materials are let go only once the
+// next ride has made its own: three.js keeps a compiled shader program while any material still uses it, so "Ride again"
+// finds its ~70 programs ready instead of compiling them all again (most of its wait on a phone)
+const retired = [];
+// (29 Oct 2026, the owner: "it needs to be more upbeat") the ride's music: a bright major tune (the key had been asked
+// as 2, which the band took as its lowest, E2: a bass too low for a phone to play, the tune muddy) with its bass and
+// arpeggio from the start, the melody joining further down
+const RIDE_MUSIC = Object.freeze({ bpm: 114, layers: 2, key: 62, mode: 'major', wx: null });
 function makeKit() {
   const host = document.createElement('div');
   host.id = 'rivier';
@@ -80,6 +88,37 @@ function makeKit() {
 #rivier .rv-bar { flex: 1; height: 8px; border-radius: 6px; background: rgba(13,34,40,.45); overflow: hidden; border: 1px solid rgba(255,255,255,.22); }
 #rivier .rv-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #8fe3d3, #fff3c4); }
 #rivier .rv-pause { pointer-events: auto; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.35); background: rgba(13,34,40,.62); color: #fff; font-size: 18px; font-weight: 900; }
+/* (29 Oct 2026, the owner's Samsung flip phone: the pause button pushed off the screen's edge, five things in one row
+   wider than a narrow phone) the pills may give way, the pause button never; on a narrow phone they pack closer */
+#rivier .rv-top > * { min-width: 0; }
+#rivier .rv-top > .rv-pause { flex: none; }
+#rivier .rv-metres { white-space: nowrap; overflow: hidden; }
+@media (max-width: 430px) {
+  #rivier .rv-top { gap: 5px; left: 8px; right: 8px; }
+  #rivier .rv-count { padding: 5px 9px 5px 6px; gap: 4px; }
+  #rivier .rv-count .rv-ring { width: 20px; height: 20px; }
+  #rivier .rv-count b, #rivier .rv-metres b { font-size: 17px; }
+  #rivier .rv-metres { padding: 5px 8px; }
+  #rivier .rv-cn { padding: 5px 7px; }
+  #rivier .rv-cn b { font-size: 15px; }
+  #rivier .rv-hearts { padding: 6px 7px; gap: 2px; }
+  #rivier .rv-hearts i { width: 15px; height: 14px; }
+  #rivier .rv-pause { width: 40px; height: 40px; }
+}
+@media (max-width: 345px) {
+  #rivier .rv-top { gap: 4px; left: 6px; right: 6px; }
+  #rivier .rv-count { padding: 4px 7px 4px 5px; gap: 3px; }
+  #rivier .rv-count .rv-ring { width: 17px; height: 17px; }
+  #rivier .rv-count b, #rivier .rv-metres b { font-size: 15px; }
+  #rivier .rv-count small, #rivier .rv-metres small { font-size: 11px; }
+  #rivier .rv-metres { padding: 4px 6px; }
+  #rivier .rv-cn { padding: 4px 6px; }
+  #rivier .rv-cn i.rv-coin-ic { width: 14px; height: 14px; }
+  #rivier .rv-cn b { font-size: 13px; }
+  #rivier .rv-hearts { padding: 5px 6px; }
+  #rivier .rv-hearts i { width: 13px; height: 12px; }
+  #rivier .rv-pause { width: 36px; height: 36px; }
+}
 #rivier .rv-faces { position: absolute; left: 12px; right: 12px; top: calc(62px + var(--sat, 0px)); display: flex; flex-wrap: wrap; gap: 4px; }
 /* (eight faces on one line on any phone; more than eight wrap) */
 #rivier .rv-faces img { width: min(30px, calc((100vw - 24px - 7 * 4px) / 8)); aspect-ratio: 1; height: auto; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
@@ -730,7 +769,8 @@ function createRide(K, d) {
   const _hide = new THREE.Matrix4().makeScale(0, 0, 0);
   /**
    * The pipes float along both sides, riding on the swell, joint to joint (in course metres: they pass at the river's
-   * pace) — only on open water; a gap where something drifts in from that side (a monkey's block comes through it).
+   * pace) — on open water and out of the canyons' mouths; a gap where something drifts in from that side (a monkey's
+   * block comes through it).
    */
   function stepPipes() {
     const first = Math.floor((dist - 30) / PIPE.every);
@@ -742,7 +782,9 @@ function createRide(K, d) {
     }
     for (let j = 0; j < PIPE.n; j++) {
       const zc = (first + j) * PIPE.every + PIPE.every / 2;
-      const open = world.halfAt(zc) > BANK.half + 6;
+      // (29 Oct 2026, the owner: "make the pool noodles come out of the Canyons to make the flow better": they start 75 m
+      // inside the canyon's mouth and lead you out onto the open water, and back into the next canyon after it)
+      const open = [0, 25, 50, 75].some((dz) => world.halfAt(zc + dz) > BANK.half + 6 || world.halfAt(zc - dz) > BANK.half + 6);
       for (let sd = 0; sd < 2; sd++) {
         const side = sd ? 1 : -1;
         if (!open || gaps.some((g) => g.side === side && Math.abs(g.z - zc) < PIPE.every / 2 + 1.6)) {
@@ -1952,7 +1994,7 @@ function createRide(K, d) {
   let wxKind = null;
   let wxDir = 1;
   let wxSpeed = 0;      // (the wind's share on your speed: + a tailwind, - a headwind)
-  let wxSoundT = 0;
+  const musicWx = { kind: null, k: 0 };   // (what the music was last told of the weather)
   let wxDropT = 0;
   let wxSplashT = 0;
   let boltT = 2;
@@ -2019,12 +2061,17 @@ function createRide(K, d) {
       world.setRainbow(clamp(rainbowT / 2, 0, 1) * clamp((14 - rainbowT) / 4, 0, 1));
       if (rainbowT > 14) rainbowT = -1;
     }
+    // (29 Oct 2026, the owner: the weather's sounds should fit "all the weather and the riding ... more upbeat") the
+    // weather plays in the ride's music, on its beat and in its key (js/audio.js weatherStep), not as noise over it
+    const mk = phase === 'run' ? (kind && wxK > 0.05 ? kind : rainbowT >= 0 ? 'rainbow' : null) : null;
+    const mv = mk === 'rainbow' ? clamp(rainbowT / 2, 0, 1) * clamp((14 - rainbowT) / 4, 0, 1) : mk ? Math.round(wxK * 10) / 10 : 0;
+    if (mk !== musicWx.kind || mv !== musicWx.k) {
+      musicWx.kind = mk;
+      musicWx.k = mv;
+      audio.musicSet?.({ wx: mk ? { kind: mk, k: mv } : null });
+    }
     if (!kind || wxK < 0.3 || phase !== 'run') return;
     const wet = kind === 'rain' || kind === 'storm';
-    if ((wxSoundT -= dt) <= 0) {
-      wxSoundT = wet ? 0.7 : kind === 'hail' ? 0.5 : kind === 'wind' || kind === 'gust' ? 1.1 : 99;
-      if (wet || kind === 'hail' || kind === 'wind' || kind === 'gust') audio.play(wet ? 'rain' : kind === 'hail' ? 'hail' : 'wind', { intensity: wxK });
-    }
     // (drops, or hailstones bouncing, on the water round you)
     if ((wet || kind === 'hail') && !reduced && (wxSplashT -= dt) <= 0) {
       wxSplashT = kind === 'hail' ? 0.05 : kind === 'storm' ? 0.06 : 0.09;
@@ -2668,7 +2715,7 @@ function createRide(K, d) {
         startGone = t;
         things.emit(x, 0.2, 0, 40, 2.2, 5);
         audio.play('splash');
-        audio.music?.(true, { bpm: 104, layers: 1, key: 2 });
+        audio.music?.(true, { ...RIDE_MUSIC });
         hint(S.rvHintFree);
         startHint = true;
       }
@@ -2698,7 +2745,7 @@ function createRide(K, d) {
         things.emit(0, 0.2, 0, 60, 2.6, 7);
         stage.shake(reduced ? 0 : 0.5);
         audio.play('splash');
-        audio.music?.(true, { bpm: 104, layers: 1, key: 2 });
+        audio.music?.(true, { ...RIDE_MUSIC });
         hint(who.length ? S.rvHint : S.rvHintFree);
         startHint = true;
       }
@@ -2774,14 +2821,14 @@ function createRide(K, d) {
       if (startHint && phaseT > 7) { startHint = false; if (hintEl.textContent === (who.length ? S.rvHint : S.rvHintFree)) hint(null); }
       if (endless) {
         // (the music keeps pace with the river: a layer more early on, then faster and faster)
-        const bpm = Math.round(Math.min(150, 104 + (speedAt(dist, len) - PACE.start) * 2.2));
-        const layers = dist > 1000 ? 3 : dist > 300 ? 2 : 1;
+        const bpm = Math.round(Math.min(150, RIDE_MUSIC.bpm + (speedAt(dist, len) - PACE.start) * 2.2));
+        const layers = dist > 600 ? 3 : 2;
         if (bpm !== musicNow.bpm || layers !== musicNow.layers) {
           musicNow.bpm = bpm;
           musicNow.layers = layers;
           audio.musicSet?.({ layers, bpm });
         }
-      } else if (dist > len * 0.4) audio.musicSet?.({ layers: 2, bpm: 112 });
+      } else if (dist > len * 0.4) audio.musicSet?.({ layers: 3, bpm: RIDE_MUSIC.bpm + 6 });
       if (dist >= len - RIVER.finishRun + 10) {
         phase = 'finish';
         phaseT = 0;
@@ -2892,7 +2939,8 @@ function createRide(K, d) {
       }
       l.x = lx;
       const u = l.obj.userData;
-      l.obj.position.set(lx, u.kind === 'croc' || u.kind === 'hippo' ? 0 : Math.sin(t * 1.9 + (u.phase || 0)) * 0.08, phase === 'zoo' ? -12 : -ahead);
+      // (the animals stand or swim in the river; what floats bobs on it)
+      l.obj.position.set(lx, u.kind === 'croc' || u.kind === 'hippo' || u.kind === 'ele' ? 0 : Math.sin(t * 1.9 + (u.phase || 0)) * 0.08, phase === 'zoo' ? -12 : -ahead);
       // (29 Oct 2026, the owner: the white water round a floating block "disappears as you get closer and comes back")
       // its ring lay 4 cm over the water and bobbed with it, 8 cm each way: a third of each bob under the water. It
       // stays on the water now while the block, the rock or the swimmer bobs in it
@@ -3065,7 +3113,20 @@ function createRide(K, d) {
     phase = 'zoo';
     rider.group.visible = false;
     start.group.visible = false;
-    const kinds = [['croc', -3.4], ['hippo', 0], ['monkey', 3.4]];
+    // (tests: ?zoo=ele, the elephant cow and her calf instead)
+    const kinds = d.zoo === 'ele' ? [] : [['croc', -3.4], ['hippo', 0], ['monkey', 3.4]];
+    if (d.zoo === 'ele') {
+      loadModels(['elephant']).then((m) => {
+        if (!alive || !m?.elephant) return;
+        if (d.models) d.models.elephant = m.elephant;
+        for (const [calf, lane] of [[false, 0], [true, 2]]) {
+          const it = { kind: 'ele', lane, from: 1, calf };
+          const obj = beasts.elephant({ from: 1, calf });
+          scene.add(obj);
+          live.push({ it, row: { z: 12 }, obj, z: 12, x: laneX(lane), done: true, drift: 0 });
+        }
+      }).catch(() => {});
+    }
     for (const [k, lx] of kinds) {
       const it = k === 'monkey' ? { kind: k, lane: 1, shape: 'crate', color: 3, scale: 1, drift: 0 } : { kind: k, lane: 1 };
       let obj;
@@ -3294,6 +3355,8 @@ function createRide(K, d) {
     await warmUp();
     performance.mark?.('rv:warm');
     if (!alive) return;
+    // (the last ride's materials: their programs are this ride's now)
+    for (const m of retired.splice(0)) m.dispose();
     stage.render(0);
     performance.mark?.('rv:frame');
     await new Promise((res) => requestAnimationFrame(res));
@@ -3318,45 +3381,52 @@ function createRide(K, d) {
     for (const l of live) despawn(l);
     live.length = 0;
     scene.remove(rider.group, riderFoam, island.group, start.group, things.spray);
-    // (everything this ride made goes from the graphics chip; the models and block pieces stay for the next)
-    const done = new Set();
-    for (const isle of isles) {
-      scene.remove(isle.group);
-      isle.island.dispose();
-      disposeTree(isle.group, done);
+    // (everything this ride made goes from the graphics chip; the models and block pieces stay for the next. Its
+    // materials wait in `retired` for the next ride's warm-up; the shapes and pictures go now)
+    const disposeMat = THREE.Material.prototype.dispose;
+    THREE.Material.prototype.dispose = function () { retired.push(this); };
+    try {
+      const done = new Set();
+      for (const isle of isles) {
+        scene.remove(isle.group);
+        isle.island.dispose();
+        disposeTree(isle.group, done);
+      }
+      for (const f of flights) { scene.remove(f.mesh); disposeTree(f.mesh, done); }
+      for (const b of debris) { scene.remove(b.g); disposeTree(b.g, done); }
+      if (fr) {
+        offDuel?.();
+        scene.remove(fr.rider.group, fr.foam);
+        disposeTree(fr.rider.group, done);
+      }
+      for (const root of [rider.group, start.group, island.group]) disposeTree(root, done);
+      for (const fx of flashes) { scene.remove(fx.fl); fx.fl.material.dispose(); }
+      for (const m of warmMats) m.dispose();
+      for (const g of new Set(warmGeos)) g.dispose();
+      burstTex.dispose();
+      jetMat.dispose();
+      for (const pp of pies) { scene.remove(pp.mesh, pp.shadow); pp.shadow.material.dispose(); disposeTree(pp.mesh, done); }
+      pieShadowGeo.dispose();
+      pieShadowMat.dispose();
+      pieShadowTex.dispose();
+      // (out of the scene too: the next ride draws in the same one)
+      if (pipes) { scene.remove(pipes); pipes.geometry.dispose(); pipes.material.map.dispose(); pipes.material.dispose(); pipes.dispose(); }
+      if (lampGlow) { scene.remove(lamp, lamp.target, lampGlow); lampGlow.material.map.dispose(); lampGlow.material.dispose(); lamp.dispose(); }
+      hz.dispose();
+      fwRide?.dispose();
+      if (raid) setBend(1);
+      camera.fov = FOV0;
+      camera.updateProjectionMatrix();
+      audio.setAmbience?.(ambBefore);
+      island.dispose();
+      beasts.dispose();
+      things.dispose();
+      world.dispose();
+      // (the block looks this screen painted: the most recent stay for the next, the rest go off the graphics chip)
+      pieces.trim?.(24);
+    } finally {
+      THREE.Material.prototype.dispose = disposeMat;
     }
-    for (const f of flights) { scene.remove(f.mesh); disposeTree(f.mesh, done); }
-    for (const b of debris) { scene.remove(b.g); disposeTree(b.g, done); }
-    if (fr) {
-      offDuel?.();
-      scene.remove(fr.rider.group, fr.foam);
-      disposeTree(fr.rider.group, done);
-    }
-    for (const root of [rider.group, start.group, island.group]) disposeTree(root, done);
-    for (const fx of flashes) { scene.remove(fx.fl); fx.fl.material.dispose(); }
-    for (const m of warmMats) m.dispose();
-    for (const g of new Set(warmGeos)) g.dispose();
-    burstTex.dispose();
-    jetMat.dispose();
-    for (const pp of pies) { scene.remove(pp.mesh, pp.shadow); pp.shadow.material.dispose(); disposeTree(pp.mesh, done); }
-    pieShadowGeo.dispose();
-    pieShadowMat.dispose();
-    pieShadowTex.dispose();
-    // (out of the scene too: the next ride draws in the same one)
-    if (pipes) { scene.remove(pipes); pipes.geometry.dispose(); pipes.material.map.dispose(); pipes.material.dispose(); pipes.dispose(); }
-    if (lampGlow) { scene.remove(lamp, lamp.target, lampGlow); lampGlow.material.map.dispose(); lampGlow.material.dispose(); lamp.dispose(); }
-    hz.dispose();
-    fwRide?.dispose();
-    if (raid) setBend(1);
-    camera.fov = FOV0;
-    camera.updateProjectionMatrix();
-    audio.setAmbience?.(ambBefore);
-    island.dispose();
-    beasts.dispose();
-    things.dispose();
-    world.dispose();
-    // (the block looks this screen painted: the most recent stay for the next, the rest go off the graphics chip)
-    pieces.trim?.(24);
     ov.innerHTML = '';
     host.style.display = 'none';
     if (current === api) current = null;
@@ -3381,7 +3451,7 @@ function createRide(K, d) {
       setPaused(!paused);
     },
     /** For tests: where the ride stands. */
-    state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, endless, hearts, airY: Math.round(airY * 100) / 100, duckK: Math.round(duckK * 100) / 100, timeK: Math.round(timeK * 100) / 100, lesson: lesson && !lesson.done ? lesson.kind : null, pies: pies.length, clowns: live.filter((l) => l.obj.userData.kind === 'clown').map((l) => ({ z: Math.round(l.z * 10) / 10, x: Math.round(l.obj.position.x * 100) / 100, phase: l.cs?.phase, foot: Math.round((world.footAt?.(l.obj.userData.side || 1, l.z) ?? 0) * 100) / 100 })), pieAt: pies.map((pp) => { const v = pp.mesh.getWorldPosition(new THREE.Vector3()).project(camera); return { t: Math.round(pp.t * 100) / 100, x: Math.round(v.x * 100) / 100, y: Math.round(v.y * 100) / 100, z: Math.round(v.z * 1000) / 1000 }; }), headY: rider.headY?.(), lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, lastKnock, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })),
+    state: () => ({ phase, q: stage.quality?.name, dist: Math.round(dist * 10) / 10, len, endless, hearts, airY: Math.round(airY * 100) / 100, duckK: Math.round(duckK * 100) / 100, timeK: Math.round(timeK * 100) / 100, lesson: lesson && !lesson.done ? lesson.kind : null, pies: pies.length, clowns: live.filter((l) => l.obj.userData.kind === 'clown').map((l) => ({ z: Math.round(l.z * 10) / 10, x: Math.round(l.obj.position.x * 100) / 100, phase: l.cs?.phase, foot: Math.round((world.footAt?.(l.obj.userData.side || 1, l.z) ?? 0) * 100) / 100 })), pieAt: pies.map((pp) => { const v = pp.mesh.getWorldPosition(new THREE.Vector3()).project(camera); return { t: Math.round(pp.t * 100) / 100, x: Math.round(v.x * 100) / 100, y: Math.round(v.y * 100) / 100, z: Math.round(v.z * 1000) / 1000 }; }), headY: rider.headY?.(), lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, lastKnock, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })),
       coins: coinsGot,
       // (tests: the white water rings on the river now, and the lowest one's height over the water: never under it)
       foams: live.filter((l) => l.obj.userData.foam).length,

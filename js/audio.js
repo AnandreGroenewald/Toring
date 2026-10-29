@@ -1321,6 +1321,12 @@ let mus = null;              // { bus, nextT, step, timer, bpm, layers, key }
 const M_ROOT = [0, -4, 3, -2];
 const M_CHORD = [[0, 3, 7], [-4, 0, 3], [3, 7, 10], [-2, 2, 5]];
 const M_LEAD = [[12, null, 10, 7, 10, null, 12, null], [8, null, 7, 3, 5, null, 3, null], [7, 10, 12, null, 15, null, 12, 10], [14, null, 12, 10, 7, null, null, null]];
+// (29 Oct 2026, the owner: the River's sounds "needs to be more upbeat") `mode: 'major'`: I - V - vi - IV, the bass
+// walking down to each root, a bright tune over it
+const M_ROOT_MAJ = [0, -5, -3, -7];
+const M_CHORD_MAJ = [[0, 4, 7], [-5, -1, 2], [-3, 0, 4], [-7, -3, 0]];
+const M_LEAD_MAJ = [[7, null, 4, 7, 9, 7, 4, null], [2, null, 7, null, 11, 9, 7, null], [9, null, 12, 9, 7, null, 4, null], [5, 7, 9, null, 12, null, 7, null]];
+const M_PENTA = [0, 2, 4, 7, 9];
 const mHz = (n) => 440 * Math.pow(2, (n - 69) / 12);
 function mTone(t, freq, dur, type, peak, cutoff) {
   const o = ctx.createOscillator();
@@ -1369,6 +1375,59 @@ function mNoise(t, dur, type, freq, peak, B) {
   s.start(t, Math.random() * 0.5);
   s.stop(t + dur + 0.02);
 }
+function mSweep(t, dur, f0, f1, peak, B, type = 'bandpass') {
+  const s = ctx.createBufferSource();
+  s.buffer = B.white;
+  s.loop = true;
+  const f = ctx.createBiquadFilter();
+  f.type = type;
+  f.Q.value = type === 'bandpass' ? 1.2 : 0.7;
+  f.frequency.setValueAtTime(f0, t);
+  f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(FLOOR, t);
+  g.gain.linearRampToValueAtTime(peak, t + dur * 0.7);
+  g.gain.exponentialRampToValueAtTime(FLOOR, t + dur);
+  s.connect(f);
+  f.connect(g);
+  g.connect(mus.bus);
+  s.start(t, Math.random() * 0.5);
+  s.stop(t + dur + 0.05);
+}
+/**
+ * (29 Oct 2026, the owner: "the sounds doesnt fit with the rain, please make sure it fits with all the weather and the
+ * riding, it needs to be more upbeat") the weather plays in the band, on the beat, in the key: rain a shaker and drops,
+ * a storm drives the kick with toms and a roll of thunder on the bar, hail ticks and a cowbell, wind a whoosh every two
+ * bars, fog an echo, heat a marimba, the rainbow chimes. `w`: { kind, k 0..1 }.
+ */
+function weatherStep(w, s, bar, t, sixteenth, B, chord) {
+  const k = w.k;
+  const key = mus.key;
+  if (w.kind === 'rain' || w.kind === 'storm') {
+    mNoise(t, 0.035, 'highpass', 7000, (s % 2 ? 0.045 : s % 4 === 0 ? 0.1 : 0.075) * k, B);
+    if (s === 3 || s === 6 || s === 11 || s === 14) mTone(t, mHz(key + 24 + M_PENTA[(s * 7 + bar * 3) % 5]), 0.12, 'sine', 0.06 * k, 6000);
+  }
+  if (w.kind === 'storm') {
+    if (s % 4 === 0) mKick(t, 0.55 * k);
+    if (bar === 3 && s >= 12) mTone(t, [196, 165, 131, 110][s - 12], sixteenth * 1.8, 'triangle', 0.22 * k, 1200);
+    if (s === 0 && (bar & 1) === 0) mSweep(t, sixteenth * 14, 260, 60, 0.32 * k, B, 'lowpass');
+  }
+  if (w.kind === 'hail') {
+    mNoise(t, 0.025, 'highpass', 9500, (s % 4 === 2 ? 0.11 : 0.06) * k, B);
+    if (s === 6 || s === 14) mTone(t, 820, 0.07, 'square', 0.045 * k, 3200);
+  }
+  if ((w.kind === 'wind' || w.kind === 'gust') && s === 0 && (w.kind === 'gust' || (bar & 1) === 0)) {
+    mSweep(t, sixteenth * (w.kind === 'gust' ? 12 : 28), 380, 2600, 0.12 * k, B);
+  }
+  if (w.kind === 'fog' && mus.layers >= 2 && s % 2 === 1) {
+    const n = [chord[0], chord[1], chord[2], chord[0] + 12][(s >> 1) & 3] + 12;
+    mTone(t, mHz(key + n), sixteenth * 4, 'triangle', 0.05 * k, 2200);
+  }
+  if (w.kind === 'heat' && (s === 0 || s === 3 || s === 6 || s === 10 || s === 12)) {
+    mTone(t, mHz(key + 12 + chord[(s >> 2) % 3]), 0.16, 'sine', 0.12 * k, 5000);
+  }
+  if (w.kind === 'rainbow' && s % 2 === 0) mTone(t, mHz(key + 24 + chord[(s >> 1) % 3] + ((s >> 1) > 3 ? 12 : 0)), 0.3, 'triangle', 0.05 * k, 7000);
+}
 /** One sixteenth of the music at time t. */
 function musicStep(step, t, B) {
   const bar = (step >> 4) & 3;
@@ -1376,6 +1435,10 @@ function musicStep(step, t, B) {
   const L = mus.layers;
   const key = mus.key;
   const sixteenth = 60 / mus.bpm / 4;
+  const major = mus.mode === 'major';
+  const ROOT = major ? M_ROOT_MAJ : M_ROOT;
+  const CHORD = major ? M_CHORD_MAJ : M_CHORD;
+  const LEAD = major ? M_LEAD_MAJ : M_LEAD;
   // drums: the kick on the beat (on every beat once it's going), the snare on 2 and 4, hats on the eighths (sixteenths at full)
   if (s % 8 === 0 || (L >= 2 && s % 4 === 0)) mKick(t, 0.85);
   if (s === 4 || s === 12) { mNoise(t, 0.13, 'bandpass', 1900, 0.32, B); mTone(t, 190, 0.07, 'triangle', 0.18, 2000); }
@@ -1383,19 +1446,20 @@ function musicStep(step, t, B) {
   // the bass: eighths on the chord's root, an octave up now and then
   if (L >= 1 && s % 2 === 0) {
     const up = s === 4 || s === 10 || s === 14 ? 12 : 0;
-    mTone(t, mHz(key - 24 + M_ROOT[bar] + up), sixteenth * 1.7, 'sawtooth', 0.3, 700 + L * 160);
+    mTone(t, mHz(key - 24 + ROOT[bar] + up), sixteenth * 1.7, 'sawtooth', 0.3, 700 + L * 160);
   }
   // the arpeggio: up the chord, a sixteenth each
   if (L >= 2) {
-    const c = M_CHORD[bar];
+    const c = CHORD[bar];
     const n = [c[0], c[1], c[2], c[0] + 12][s & 3] + (s >= 8 ? 12 : 0);
     mTone(t, mHz(key + n), sixteenth * 0.9, 'square', 0.07, 2600);
   }
   // the melody, over the chords
   if (L >= 3 && s % 2 === 0) {
-    const n = M_LEAD[bar][s >> 1];
+    const n = LEAD[bar][s >> 1];
     if (n !== null) { mTone(t, mHz(key + 12 + n), sixteenth * 3.2, 'triangle', 0.17, 3800); mTone(t, mHz(key + 12 + n) * 1.004, sixteenth * 3.2, 'square', 0.035, 2400); }
   }
+  if (mus.wx && mus.wx.k > 0.02) weatherStep(mus.wx, s, bar, t, sixteenth, B, CHORD[bar]);
 }
 function musicTick() {
   if (!mus || !ctx || !master) return;
@@ -1413,11 +1477,14 @@ function musicTick() {
     }
   } catch (e) { /* music is optional */ }
 }
+const MUSIC_WX = new Set(['rain', 'storm', 'hail', 'wind', 'gust', 'fog', 'heat', 'rainbow']);
 const musicOpts = (o = {}) => {
   const out = {};
   if (Number.isFinite(o.bpm)) out.bpm = clamp(o.bpm, 70, 170);
   if (Number.isFinite(o.layers)) out.layers = clamp(Math.round(o.layers), 0, 3);
   if (Number.isFinite(o.key)) out.key = clamp(Math.round(o.key), 40, 76);
+  if (o.mode === 'major' || o.mode === 'minor') out.mode = o.mode;
+  if ('wx' in o) out.wx = o.wx && MUSIC_WX.has(o.wx.kind) ? { kind: o.wx.kind, k: clamp(num(o.wx.k, 0), 0, 1) } : null;
   return out;
 };
 
@@ -1485,7 +1552,7 @@ export const audio = {
   /** (1.19) Glybaan's music: on (with { bpm, layers 0-3, key }) or off (a fade). */
   music(on, opts = {}) {
     if (on) {
-      if (!mus) mus = { bus: null, nextT: 0, step: 0, timer: 0, bpm: 112, layers: 0, key: 57 };
+      if (!mus) mus = { bus: null, nextT: 0, step: 0, timer: 0, bpm: 112, layers: 0, key: 57, mode: 'minor', wx: null };
       Object.assign(mus, musicOpts(opts));
       if (mus.bus && ctx) mus.bus.gain.setTargetAtTime(MUSIC_LEVEL, ctx.currentTime, 0.3);
       if (!mus.timer) mus.timer = setInterval(musicTick, 50);
@@ -1506,7 +1573,7 @@ export const audio = {
   },
   /** (tests) The music now: null when off. */
   get musicState() {
-    return mus ? { bpm: Math.round(mus.bpm), layers: mus.layers, key: mus.key, step: mus.step, playing: !!mus.bus && !!mus.nextT } : null;
+    return mus ? { bpm: Math.round(mus.bpm), layers: mus.layers, key: mus.key, mode: mus.mode, wx: mus.wx, step: mus.step, playing: !!mus.bus && !!mus.nextT } : null;
   },
 
   /**

@@ -25,6 +25,7 @@ export const SLOW_BLOCKS = 5;
 export const SLOW_MUL = 0.6;
 export const MAX_STOCK = 99;
 export const MAX_COINS = 999999;
+export const MAX_STARS = 999999999;
 
 /**
  * Uitdagersreeks looks. `price` 0 = everyone has it; `rank` = unlocked by reaching that rank in a
@@ -338,6 +339,9 @@ export const EARN = Object.freeze({
   perPerfect: 1 / 5,         // a coin for every 5 Perfeks
   duel: Object.freeze({ liveWin: 15, liveLoss: 5, otherWin: 8, otherLoss: 2 }),
   dayCap: 150,               // coins a day from Oefen and duels (the daily tower always pays in full)
+  // (29 Oct 2026, the owner: stars "trade it in for coins"; his rate) a tower's stars go into the player's bank; 100 of
+  // them trade for a coin, counted towards dayCap like Oefen's
+  starsPerCoin: 100,
 });
 
 /**
@@ -374,6 +378,7 @@ export function coinsForGame(game) {
 export function defaultEconomy() {
   return {
     coins: 0,
+    stars: 0,               // (29 Oct 2026) the stars of every tower that paid, to trade for coins
     earned: { day: null, n: 0 },
     stock: Object.fromEntries(POWERUP_IDS.map((id) => [id, 0])),
     owned: Object.fromEntries(COSMETIC_KINDS.map((k) => [k, [DEFAULT_LOOK[k]]])),
@@ -412,6 +417,7 @@ export function cleanEconomy(raw) {
   const e = defaultEconomy();
   const r = raw && typeof raw === 'object' ? raw : {};
   e.coins = Math.max(0, Math.min(MAX_COINS, Math.floor(Number(r.coins) || 0)));
+  e.stars = Math.max(0, Math.min(MAX_STARS, Math.floor(Number(r.stars) || 0)));
   if (r.earned && isDateKey(r.earned.day)) e.earned = { day: r.earned.day, n: Math.max(0, Math.floor(Number(r.earned.n) || 0)) };
   for (const id of POWERUP_IDS) e.stock[id] = Math.max(0, Math.min(MAX_STOCK, Math.floor(Number(r.stock?.[id]) || 0)));
   for (const kind of COSMETIC_KINDS) {
@@ -511,6 +517,27 @@ export function earnCoins(eco, n, { capped = true, dayKey = null } = {}) {
   const added = Math.min(want, MAX_COINS - e.coins);
   e.coins += added;
   return { economy: e, added };
+}
+
+/** (29 Oct 2026) A tower's stars into the bank: { economy, added }. */
+export function addStars(eco, n) {
+  const e = cleanEconomy(eco);
+  const added = Math.min(Math.max(0, Math.floor(Number(n) || 0)), MAX_STARS - e.stars);
+  e.stars += added;
+  return { economy: e, added };
+}
+
+/**
+ * (29 Oct 2026) The stars traded for as many coins as they buy (EARN.starsPerCoin each), as far as the day's cap and
+ * the wallet allow; only the stars of the coins paid go: { economy, coins, stars }.
+ */
+export function tradeStars(eco, { dayKey = null } = {}) {
+  const e = cleanEconomy(eco);
+  const want = Math.floor(e.stars / EARN.starsPerCoin);
+  if (!want) return { economy: e, coins: 0, stars: 0 };
+  const r = earnCoins(e, want, { capped: true, dayKey });
+  r.economy.stars -= r.added * EARN.starsPerCoin;
+  return { economy: r.economy, coins: r.added, stars: r.added * EARN.starsPerCoin };
 }
 
 /** (1.12) Spend `n` coins on something that isn't a power-up or a look ("Nog 'n kans"): { economy, ok }. */

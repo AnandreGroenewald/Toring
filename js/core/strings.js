@@ -626,6 +626,13 @@ export const S = {
   // --- Muntstukke, kragte en rang (1.8; js/core/economy.js) ---
   coinsTotal: (n) => `jy het ${n}`,
   coinsCapped: 'genoeg vir vandag, kom môre weer',
+  // (29 Oct 2026) the tower's stars: into the bank at the end, 100 trade for a coin
+  starsYours: 'Jou sterre',
+  starsBank: (n) => `jou sterre: ${n}`,
+  starsTrade: (s, c) => `Ruil ${s} ⭐ vir ${c} 🪙`,
+  starsToFirst: (n) => `nog ${n} ⭐ tot jou eerste munt`,
+  starsCapHit: 'vandag se munte is vol: ruil môre weer',
+  starsTraded: (c) => `+${c} 🪙 vir jou sterre`,
   rankUp: (name) => `Nuwe rang: ${name}!`,
   powerups: 'Kragte',
   powerOn: 'AAN',

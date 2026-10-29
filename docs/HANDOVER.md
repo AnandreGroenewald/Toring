@@ -1752,3 +1752,31 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   Until then stapelspel.pages.dev and the old address serve 1.24.2.
 - After Google approves production: the update card (Worker APP_LATEST 1.24.4; a Worker deploy ends live matches).
 
+
+### 29 Oct 2026 ~21:30 — 1.24.5: his evening notes; RELEASING to Play internal + closed and the website (his "Yes please")
+- His words, in order: the water "has a line ... looks vaal", "make the pool noodles come out of the Canyons", "if you get
+  a perfect on some of the blocks it still wobbles", the home menu "jumps back up", "the loading screen is still taking
+  too long", the Flip's pause button, "Why is bytjie showing twice?" (two phones: the River board keeps one row per phone
+  until sign-in joins them; no change), "The elephants graphics are also very poor", "The hippo also needs improvement",
+  the stars "moves from the top left corner to the middle ... numbers adding up ... trade it in for coins" (his rate: 100 ⭐
+  = 1 coin inside the 150/day cap), "the sounds doesnt fit with the rain ... it needs to be more upbeat", then "Yes please"
+  to releasing it all as 1.24.5.
+- River: WATER_FRAG's low reflection (wall + sky, fog by distance); noodles only where the canyon opens; view.js `retired`
+  (a ride's materials are disposed after the next ride's warm-up: Ride again links 2-3 programs instead of 64-78; veil
+  ~1.25 s → 0.6-0.9 s at CPU x4); world.js `paintedOnce` (rock, noise, foam canvases once a visit); the lowest quality
+  draws the sun's shadow every 3rd frame (switching castShadow off recompiled every lit material at once); elephant.py and
+  hippo.py rebuilt with common.py's new blob()/tube()/surface() (MODEL_V elephant 4, hippo 8); beasts.js: ears fan out
+  about their front edge, the hippo lifts its head to yawn, elephants don't bob; audio.js: `mode: 'major'` (I-V-vi-IV)
+  and `wx` (weatherStep: the weather on the beat and in the key); the ride's music RIDE_MUSIC {bpm 114, layers 2, key 62,
+  major} (it had asked for key 2, clamped to 40: E2); the old rain/hail/wind noise pulses gone; proto ?zoo=ele.
+- Tower: GameScene Perfek hold 450 ms (DUEL.rules 113: 1.24.4 and 1.24.5 players aren't paired); economy addStars /
+  tradeStars + EARN.starsPerCoin 100, storage addStars/starsQuote/tradeStars, cloudsave merges stars, main.js awardStars +
+  showTowerResults + hudStarsRect + 'ui:stars-trade', dom.js starsFly + starsLine (tests/stars.test.js); Restart in the
+  pause sheet. Menu: showScreen keeps the scroll, renderMenu keepScroll, showBoard keepTop, account.soon only on arriving,
+  cloudsave stableJson sameSave. HUD CSS for ≤430 / ≤345 px.
+- Tests: unit 535/535; check-all quick ALL CLEAR (twice, the second on 1.24.5); GPU=1 rivier_nonsense1213 32/32,
+  later1200 21/21, saam1210 29/29 (without GPU=1 the software drawing runs at ~3 fps and timed checks fail); shaders 0
+  errors; qa/*1245.mjs (stars_fly, gl_count, veil_time, rivier_lowstep, rivier_music, rivier_zoo_any, perfect_wobble,
+  menu_scroll, hud_fit). A 55 s music sample for his ear (the session scratchpad).
+- Release: VERSION 1.24.5 (versionCode 12405); the website by his `bash ~/deploy-stapel-1.24.5.sh`; Play internal + closed
+  from "Upload 1.24.5 internal + closed"; production stays 12404 (1.24.4) waiting on his own Submit click.

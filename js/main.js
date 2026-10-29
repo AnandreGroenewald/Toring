@@ -944,11 +944,14 @@ function openTodaysChest() {
 
 let boardAskedFor = null;   // (1.12) the day whose place the menu's 🏆 asked for this session
 function showMenu() {
+  // (29 Oct 2026, the owner: the menu jumped back up every ~4 s: a sync it asked for redrew it, which asked again) a
+  // sync is asked for on arriving at the menu, not on each redraw
+  const arriving = screen !== 'menu';
   openTodaysChest();
   screen = 'menu';
   pushSkyline();
   ui.showMenu(menuModel());
-  account.soon();
+  if (arriving) account.soon();
   wakeLoop();
   armMenuSleep();
   requestAnimationFrame(updateMenuAnchor);
@@ -2691,6 +2694,13 @@ function awardCoins(game) {
   return { added: r.added, total: r.coins, short: r.added < earned.coins };
 }
 
+/** (29 Oct 2026) A tower's stars into the bank: { before, added, stars } (null when it had none). */
+function awardStars(n) {
+  const before = store.getEconomy().stars;
+  const r = n > 0 ? store.addStars(n) : null;
+  return r?.added ? { before, added: r.added, stars: r.stars } : null;
+}
+
 /**
  * Dailies that ended without their results (the page was closed, the app killed or crashed mid-game)
  * count as they were when they stopped, and pay their coins like any finished daily. Returns the coins.
@@ -2767,10 +2777,12 @@ function finalize(result) {
   }
   // coins: the daily tower pays in full (once); Oefen counts towards the day's cap
   let coins = null;
+  let stars = null;   // (29 Oct 2026) the tower's stars into the bank, with the coins: { before, added, stars }
   let week = null;
   let slagGain = null;
   if (result.mode === 'daily' && stats?.applied && !run.retry) {   // (the second try was bought: it pays nothing)
     coins = awardCoins({ mode: 'daily', heightM: shown.heightM, perfects: shown.perfects, streak: stats.currentStreak });
+    stars = awardStars(shown.score);
     // (1.17) the fruit basket fills from the Daily Tower: a banana per 5 Perfeks, a juice box per 10, a watermelon per 3 days
     const g = SLAG_ON ? harvest({ perfects: shown.perfects, streak: stats.currentStreak }) : {};
     if (g.piesang || g.sap || g.waatlemoen) {
@@ -2783,8 +2795,9 @@ function finalize(result) {
     // weekkis opens on the day's first visit (openTodaysChest), no longer here
   } else if (result.mode === 'practice') {
     coins = awardCoins({ mode: 'practice', heightM: result.heightM, perfects: result.perfects });
+    stars = awardStars(result.score);
   }
-  run.final = { result: { ...(town && !aborted ? { ...shown, living: town } : shown), ...(dorpGain && !aborted ? { dorp: dorpGain } : {}), ...(slagGain ? { slagGain } : {}) }, stats, isNewBest, aborted, coins, week };
+  run.final = { result: { ...(town && !aborted ? { ...shown, living: town } : shown), ...(dorpGain && !aborted ? { dorp: dorpGain } : {}), ...(slagGain ? { slagGain } : {}) }, stats, isNewBest, aborted, coins, stars, week };
   return run.final;
 }
 
@@ -3489,11 +3502,25 @@ bus.on('game:over', (result) => {
   if (f.isNewBest) audio.play('record');
   screen = 'results';
   const r = f.result;
+  // (29 Oct 2026, the owner) the tower's stars fly to the middle and count on to the bank first (a tap skips it)
+  if (f.stars) {
+    const from = hudStarsRect();
+    game.scene.getScene('Hud')?.scoreTxt?.setAlpha?.(0);
+    ui.starsFly({ from, before: f.stars.before, added: f.stars.added }).then(() => { if (screen === 'results') showTowerResults(f); });
+    return;
+  }
+  showTowerResults(f);
+});
+
+/** A finished tower's results card (the Daily and Oefen), with what comes with it. */
+function showTowerResults(f) {
+  const r = f.result;
+  resultReward = f.coins || f.week || f.stars ? { coins: f.coins, week: f.week, stars: f.stars ? { ...f.stars, quote: store.starsQuote() } : null } : null;
   ui.showResults({
     result: r,
     stats: f.stats,
     isNewBest: f.isNewBest,
-    reward: f.coins || f.week ? { coins: f.coins, week: f.week } : null,
+    reward: resultReward,
     shareText: shareTextFor(r),
     nextDayAt: r.mode === 'daily' ? nextDayFor(r.dateKey) : 0,
     mode: r.mode,
@@ -3511,6 +3538,32 @@ bus.on('game:over', (result) => {
     planReminders();   // today is built: no reminder today
     if (REMIND && !store.getReminder().asked) setTimeout(askReminder, 2600);
   }
+}
+
+/** (29 Oct 2026) Where the HUD's stars stand on the screen (the start of their flight), or null. */
+function hudStarsRect() {
+  const t = game.scene.getScene('Hud')?.scoreTxt;
+  const rect = game.canvas?.getBoundingClientRect();
+  if (!t?.active || !(rect?.width > 0)) return null;
+  const b = t.getBounds();
+  const k = rect.width / GAME_W;
+  return { left: rect.left + b.x * k, top: rect.top + b.y * k, width: b.width * k, height: b.height * k };
+}
+
+// (29 Oct 2026) the results card's "Ruil ⭐ vir 🪙": the bank's stars for as many coins as today allows
+let resultReward = null;
+bus.on('ui:stars-trade', () => {
+  const t = store.tradeStars();
+  if (!t.coins) return;
+  audio.play('coin');
+  ui.toast(S.starsTraded(fmtInt(t.coins)), 2400);
+  if (screen !== 'results' || !resultReward?.stars) return;
+  resultReward = {
+    ...resultReward,
+    coins: resultReward.coins ? { ...resultReward.coins, total: t.total } : null,
+    stars: { ...resultReward.stars, stars: t.left, quote: store.starsQuote() },
+  };
+  ui.setResultReward(resultReward);
 });
 
 // Tab hidden / app switched away mid-tower: pause like the button does, and save. A friend room

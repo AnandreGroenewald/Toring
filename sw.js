@@ -2,7 +2,7 @@
 // the network first so a new version reaches players on their next visit.
 // Bump VERSION (and VERSION in js/config.js) when shipping; old caches are deleted on activate.
 
-const VERSION = 'stapel-v1.24.4';
+const VERSION = 'stapel-v1.24.5';
 const MODELS = 'stapel-models';   // (1.20) the 3D models' own cache: kept when VERSION changes
 
 const PRECACHE = [

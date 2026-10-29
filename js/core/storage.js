@@ -11,7 +11,7 @@ import { WEEK, cleanWeek, openBox, addShield } from './week.js';
 import { DAILY_RETRY, DUEL } from '../config.js';
 import { cleanTries, triesLadder, freeTriesFor, MAX_EXTRA } from './tries.js';
 import {
-  defaultEconomy, cleanEconomy, earnCoins, buyPowerup, usePowerup, buyCosmetic, wearCosmetic, grantRankLooks, spendCoins, chooseTribe,
+  defaultEconomy, cleanEconomy, earnCoins, addStars, tradeStars, buyPowerup, usePowerup, buyCosmetic, wearCosmetic, grantRankLooks, spendCoins, chooseTribe,
   buySkin, wearSkin,
   rankAfterMatch, rolloverSeason, seasonOf, cardOf, ladderAt, bestTier, RANK_MODES, RANK_RULES, cleanModeRank,
   rankIndex, holdStake, settleStake, touchStake,
@@ -1272,6 +1272,31 @@ export function createStore(backend = safeLocalStorage(), { now = () => Date.now
       econ = r.economy;
       if (r.added) persistEcon();
       return { added: r.added, coins: econ.coins };
+    },
+
+    /** (29 Oct 2026) A tower's stars into the bank: { added, stars } (the bank after). */
+    addStars(n) {
+      sync();
+      const r = addStars(econ, n);
+      econ = r.economy;
+      if (r.added) persistEcon();
+      return { added: r.added, stars: econ.stars };
+    },
+
+    /** (29 Oct 2026) What a trade would give now: { coins, stars } (the bank stays as it is). */
+    starsQuote() {
+      sync();
+      const r = tradeStars(econ, { dayKey: today() });
+      return { coins: r.coins, stars: r.stars };
+    },
+
+    /** (29 Oct 2026) The bank's stars traded for coins, as far as today's cap allows: { coins, stars, left, total }. */
+    tradeStars() {
+      sync();
+      const r = tradeStars(econ, { dayKey: today() });
+      econ = r.economy;
+      if (r.coins) persistEcon();
+      return { coins: r.coins, stars: r.stars, left: econ.stars, total: econ.coins };
     },
 
     /** (1.16) Coins spent on something the wallet doesn't keep itself (Jou dorp's landmarks): { ok, coins }. */

@@ -38,6 +38,7 @@ import { SLOW_BLOCKS, SLOW_MUL } from '../core/economy.js';
 import { DORP } from '../core/dorp.js';
 
 const FIXED = PHYSICS.fixedDtMs;
+const PERFECT_HOLD_MS = 450;   // (29 Oct 2026) a Perfek block keeps its snapped angle this long while the stack settles
 const WEEK_BASE = 10000;          // (1.20) the Weektoring's restored floors' block indexes start here (the turn's are 0 .. n-1)
 const MAX_FRAME_MS = 100;
 const SETTLE = PHYSICS.settle;
@@ -536,6 +537,7 @@ export class GameScene extends Phaser.Scene {
     this.calmCap = 0;
     this.stepTimers = [];
     this.eases = [];
+    this.holds = [];   // (29 Oct 2026: Perfek blocks holding still, stepHolds)
     this.risingShown = false;
     this.dangerShown = false;
     this.lastFrictionMul = 1;
@@ -882,6 +884,7 @@ export class GameScene extends Phaser.Scene {
     this.timers.length = 0;
     this.stepTimers.length = 0;
     this.eases.length = 0;
+    this.holds.length = 0;
     this.spawnDue = null;
     this.game.events.off('visible', this.resetClock, this);
     this.events.off('resume', this.resetClock, this);
@@ -1927,6 +1930,7 @@ export class GameScene extends Phaser.Scene {
   applySnapshot(snap, turnIndex, r) {
     const M = this.M;
     this.eases.length = 0;   // a Goed or rain slide still going here stops where the report has the block
+    this.holds.length = 0;   // (and a Perfek's hold: the report has its angle)
     safely(() => this.weather.clearHail?.());   // (hail never outlives its turn: the next drop starts the same)
     const listed = new Set(snap.blocks.map((e) => e[0]));
     for (const b of [...this.tower]) if (b.state !== 'frozen' && !listed.has(b.index)) this.removeQuietly(b);
@@ -2128,7 +2132,10 @@ export class GameScene extends Phaser.Scene {
       this.visitorsFailed(err);
     }
     // Blok vir Blok: between drops nothing moves, so both games start the next drop from the same tower
-    if (!this.turnHold) this.matter.world.step(FIXED * this.timeScale);
+    if (!this.turnHold) {
+      this.matter.world.step(FIXED * this.timeScale);
+      if (this.holds.length) this.stepHolds();
+    }
     const dyn = this.dyn;
     for (let k = 0; k < dyn.length; k++) {
       const b = dyn[k];
@@ -2151,6 +2158,29 @@ export class GameScene extends Phaser.Scene {
     this.updateFriction();
     this.updateWater(FIXED * (this.over ? this.timeScale : 1));
     this.runStepTimers();
+  }
+
+  /**
+   * (29 Oct 2026, the owner: "if you get a perfect on some of the blocks it still wobbles": a Perfek snapped straight
+   * onto a support still moving from its own landing rocked with it, up to 4°) for a moment after its Perfek the block
+   * keeps its snapped angle and stops sliding while the stack under it settles; a tower that is tipping lets it go.
+   */
+  stepHolds() {
+    const M = this.M;
+    const list = this.holds;
+    for (let k = list.length - 1; k >= 0; k--) {
+      const hd = list[k];
+      const b = hd.block;
+      if (b.destroyed || (b.state !== 'landed' && b.state !== 'settled') || hd.left <= 0 || this.tipping?.has(b)) {
+        list.splice(k, 1);
+        continue;
+      }
+      const body = b.body;
+      M.Body.setAngle(body, hd.angle);
+      M.Body.setAngularVelocity(body, 0);
+      M.Body.setVelocity(body, { x: body.velocity.x * 0.5, y: body.velocity.y });
+      hd.left--;
+    }
   }
 
   /** Goed landings slide part of the way to the centre (a few px per step, no velocity added). */
@@ -2395,6 +2425,7 @@ export class GameScene extends Phaser.Scene {
     M.Body.setVelocity(f.body, { x: 0, y: 0 });
     M.Body.setAngularVelocity(f.body, 0);
     f.sync();
+    this.holds.push({ block: f, angle: ang, left: Math.round(PERFECT_HOLD_MS / FIXED) });
   }
 
   /**

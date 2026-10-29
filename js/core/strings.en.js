@@ -602,6 +602,13 @@ export const S_EN = {
   // --- Coins, power-ups and rank (1.8; js/core/economy.js) ---
   coinsTotal: (n) => `you have ${n}`,
   coinsCapped: 'enough for today, come back tomorrow',
+  // (29 Oct 2026) the tower's stars: into the bank at the end, 100 trade for a coin
+  starsYours: 'Your stars',
+  starsBank: (n) => `your stars: ${n}`,
+  starsTrade: (s, c) => `Trade ${s} ⭐ for ${c} 🪙`,
+  starsToFirst: (n) => `${n} ⭐ more to your first coin`,
+  starsCapHit: "today's coins are full: trade again tomorrow",
+  starsTraded: (c) => `+${c} 🪙 for your stars`,
   rankUp: (name) => `New rank: ${name}!`,
   powerups: 'Power-ups',
   powerOn: 'ON',

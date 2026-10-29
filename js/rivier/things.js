@@ -2,7 +2,7 @@
 // fell off your tower, the white water round all of them, the spray, and your crew's island with its Weektoring (every
 // floor in the skin of whoever stacked it). Kept in pools: the river re-uses them as it goes.
 import * as THREE from '../../lib/three.module.min.js';
-import { BEND_GLSL, bendMaterial, bendSprite, bendUniforms, puffTexture, wetMaterial } from './world.js';
+import { BEND_GLSL, bendMaterial, bendSprite, bendUniforms, paintedOnce, puffTexture, wetMaterial } from './world.js';
 import { portraitDataUrl } from '../game/residents.js';
 import { dimsOf, PX } from '../core/weektower.js';
 import { getGeometry } from '../game/blocks.js';
@@ -24,6 +24,12 @@ function canvas(w, h) {
  * white right up to the hull instead of the shade inside the ring, which round a board read as a dark hole in the river.
  */
 function foamTexture({ hull = false } = {}) {
+  const t = new THREE.CanvasTexture(paintedOnce(`foam${hull ? 'Hull' : ''}`, () => paintFoam(hull)));
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+function paintFoam(hull) {
   const N = 256;
   const C = N / 2;
   const c = canvas(N, N);
@@ -60,10 +66,7 @@ function foamTexture({ hull = false } = {}) {
     g.arc(x, y, br, 0, Math.PI * 2);
     if (rnd() < 0.35) { g.fillStyle = g.strokeStyle; g.fill(); } else g.stroke();
   }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
+  return c;
 }
 function ringTexture() {
   const c = canvas(256, 16);

@@ -302,6 +302,11 @@ function canvas(w, h) {
   c.height = h;
   return c;
 }
+// (29 Oct 2026, the owner: "the loading screen is still taking too long") the river's pictures are painted once a visit:
+// every ride takes new textures of the same canvases instead of painting them pixel by pixel again
+const paintings = new Map();
+/** The canvas(es) `paint()` makes, painted the first time `key` is asked for. */
+export const paintedOnce = (key, paint) => paintings.get(key) || paintings.set(key, paint()).get(key);
 /** A soft lumpy puff (white, alpha only): spray mist, the mist at a waterfall's foot, splashes. */
 export function puffTexture(seed = 5) {
   const c = canvas(128, 128);
@@ -326,6 +331,14 @@ export function puffTexture(seed = 5) {
 }
 /** A tileable two-channel noise (value noise, four octaves): the water's ripples. */
 function noiseTexture(n = 128) {
+  const t = new THREE.CanvasTexture(paintedOnce(`noise${n}`, () => paintNoise(n)));
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.NoColorSpace;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  return t;
+}
+function paintNoise(n) {
   const c = canvas(n, n);
   const g = c.getContext('2d');
   const img = g.createImageData(n, n);
@@ -359,12 +372,7 @@ function noiseTexture(n = 128) {
     }
   }
   g.putImageData(img, 0, 0);
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.colorSpace = THREE.NoColorSpace;
-  t.minFilter = THREE.LinearMipmapLinearFilter;
-  t.generateMipmaps = true;
-  return t;
+  return c;
 }
 /**
  * Sandstone in layers, the way the Blyde River Canyon looks (the cliffs' picture and its bumps): flat strata of warm
@@ -373,6 +381,20 @@ function noiseTexture(n = 128) {
  * ledges, a little lichen, grain. Built pixel by pixel; tiles both ways. { map, bump }.
  */
 function rockTextures() {
+  const [c, b] = paintedOnce('rock', paintRock);
+  const map = new THREE.CanvasTexture(c);
+  map.colorSpace = THREE.SRGBColorSpace;
+  const bump = new THREE.CanvasTexture(b);
+  bump.colorSpace = THREE.NoColorSpace;
+  for (const tx of [map, bump]) {
+    tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
+    tx.anisotropy = 8;
+    tx.repeat.set(2, 0.75);   // (a whole number along a 48 m piece: the picture runs on across the joins)
+  }
+  return { map, bump };
+}
+/** The rock's picture and its bumps: [canvas, canvas]. */
+function paintRock() {
   const N = 512;
   let s = 99;
   const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
@@ -530,16 +552,7 @@ function rockTextures() {
       g.fillRect(x + dx - r, y - r, r * 2, r * 2);
     });
   }
-  const map = new THREE.CanvasTexture(c);
-  map.colorSpace = THREE.SRGBColorSpace;
-  const bump = new THREE.CanvasTexture(b);
-  bump.colorSpace = THREE.NoColorSpace;
-  for (const tx of [map, bump]) {
-    tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
-    tx.anisotropy = 8;
-    tx.repeat.set(2, 0.75);   // (a whole number along a 48 m piece: the picture runs on across the joins)
-  }
-  return { map, bump };
+  return [c, b];
 }
 
 /** A boulder: a rough, faceted lump of sandstone, flat where it sits, a broken face or two, darker and wet at its foot. */
@@ -924,14 +937,19 @@ void main() {
   float fres = 0.02 + 0.98 * pow(1.0 - max(dot(nr, v), 0.0), 5.0);
   vec3 rr = reflect(-v, nr);
   vec3 r = reflect(-v, n);
-  vec3 sky = mix(uHorizon, uSkyRefl, smoothstep(0.0, 0.35, rr.y));
+  // (29 Oct 2026, the owner: "the water looks like it has a line sometimes and then the water looks 'vaal'": low down it
+  // mirrored the pale horizon, ~18 % of it at 20 m and 42 % from 40 m on, a quick change that read as a line and a dull
+  // grey-green beyond. Down a canyon the water mirrors the warm walls low down and the blue strip of sky over them; the
+  // open lake mirrors the sky, its far shore low down; and less of it all, so the river keeps its own colour far off)
+  vec3 lowRefl = mix(mix(uWall * 1.45, uSkyRefl, 0.3), mix(uSkyRefl, uHorizon, 0.45), lake);
+  vec3 sky = mix(lowRefl, mix(uSkyRefl, uZenith, 0.25), smoothstep(0.03, 0.32, rr.y));
   // (strong phones: the real mirror image, the canyon, the towers and the sky, rippled by the waves)
   if (uReflK > 0.0) {
     vec2 ruv = vRefl.xy / vRefl.w + n.xz * 0.05;
     vec3 rc = texture2D(uRefl, clamp(ruv, 0.001, 0.999)).rgb;
     sky = mix(sky, rc, uReflK);
   }
-  vec3 col = mix(base, sky, clamp(fres, 0.0, 0.42 + 0.3 * uReflK));
+  vec3 col = mix(base, sky, clamp(fres, 0.0, 0.32 + 0.4 * uReflK));
   // light in the water itself (it's never black, even looking straight down into it)
   col += uShallow * 0.18 * (1.0 - fres);
   // the sandstone walls mirrored near the banks: warmer and darker there (not in the open lake; less with the real one)
@@ -985,7 +1003,8 @@ void main() {
     col *= 1.0 + uLampCol * fall * 1.1;
     col += uLampCol * fall * (0.03 + 0.12 * h0 + 0.75 * glint);
   }
-  float f = smoothstep(uFogNear, uFogFar, length(vWorld - cameraPosition));
+  // (the haze on the river begins further off than on the rock: the water keeps its colour down the canyon)
+  float f = smoothstep(uFogNear * 1.4, uFogFar * 1.25, length(vWorld - cameraPosition));
   col = mix(col, uFog, f);
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
@@ -1079,9 +1098,16 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     }
   }
   setShadowFocus(0, -28);
-  // (29 Oct 2026: on the lowest step the sun casts no shadows: a slow phone saves a whole drawing of the river each frame
-  // before its picture has to go soft)
-  stage.onQuality?.((q) => { if (shadows) sun.castShadow = q.name !== 'low'; });
+  // (29 Oct 2026) on the lowest step the sun's shadows are drawn every third frame: a slow phone saves most of a whole
+  // drawing of the river each frame before its picture has to go soft. (Switching them off instead made every lit
+  // material compile again in one frame: a second's freeze on the phone that was already struggling.)
+  let shadowEvery = 1;
+  let shadowTick = 0;
+  stage.onQuality?.((q) => {
+    if (!shadows) return;
+    shadowEvery = q.name === 'low' ? 3 : 1;
+    sun.shadow.autoUpdate = shadowEvery === 1;
+  });
   const fill = new THREE.DirectionalLight(L.fill, L.fillI);   // (from behind the camera: what comes at you is lit)
   fill.position.set(6, 10, 30);
   group.add(fill);
@@ -1751,6 +1777,7 @@ void main() {
   }
   let rockClear = null;
   function update(dist, t, riderX = null) {
+    if (shadowEvery > 1) sun.shadow.needsUpdate = ++shadowTick % shadowEvery === 0;
     water.uniforms.uT.value = t;
     rkClock.value = t;
     water.uniforms.uDist.value = dist;

@@ -1316,6 +1316,21 @@ svg.ic {
 .res-reward b { font-size: max(14px, calc(26 * var(--u))); }
 .res-reward .rw-sub { font-weight: 700; opacity: 0.8; }
 .res-reward .rw-rank { background: #ece6ff; color: #45308f; }
+/* (29 Oct 2026) the tower's stars: what it brought, the bank, and the trade for coins (its own row: it can be long) */
+.res-reward .rw-stars { flex-wrap: wrap; justify-content: center; border-radius: calc(22 * var(--u)); background: #fff1c2; color: #6b4d00; }
+.res-reward .rw-stars .star-ic { font-style: normal; font-size: calc(26 * var(--u)); }
+.res-reward .rw-trade { flex-basis: 100%; margin-top: calc(4 * var(--u)); padding: calc(9 * var(--u)) calc(18 * var(--u)); min-height: 40px; border: 0; border-radius: 999px; background: linear-gradient(180deg, #ffd75a, #f5b833); color: #4a3300; font: inherit; font-size: max(13px, calc(22 * var(--u))); font-weight: 900; box-shadow: 0 2px 0 #c98c12; cursor: pointer; }
+.res-reward .rw-trade:active { transform: translateY(1px); box-shadow: 0 1px 0 #c98c12; }
+.res-reward .rw-note { flex-basis: 100%; text-align: center; font-weight: 700; opacity: 0.8; }
+/* (29 Oct 2026) the stars' flight from the HUD to the middle, their pop and count (a tap skips it) */
+.stars-fly { position: fixed; inset: 0; z-index: 60; pointer-events: auto; background: radial-gradient(circle at 50% 42%, rgba(10, 18, 40, 0.55), rgba(10, 18, 40, 0.25) 60%, rgba(10, 18, 40, 0)); opacity: 0; transition: opacity 0.3s ease; }
+.stars-fly.is-on { opacity: 1; }
+.stars-fly.is-gone { opacity: 0; transition-duration: 0.25s; }
+.stars-fly .sf-pill { position: fixed; display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 8px; border-radius: 999px; background: rgba(255, 241, 194, 0.96); color: #6b4d00; font-size: 20px; font-weight: 900; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); transform-origin: 50% 50%; white-space: nowrap; will-change: transform; }
+.stars-fly .sf-pill b { font-variant-numeric: tabular-nums; }
+.stars-fly .sf-cap { position: fixed; left: 0; right: 0; top: calc(42% + 44px); text-align: center; color: #fff; font-size: 20px; font-weight: 900; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); opacity: 0; transition: opacity 0.25s ease 0.1s; }
+.stars-fly.is-popped .sf-cap { opacity: 1; }
+.stars-fly .sf-spark { position: fixed; font-style: normal; font-size: 22px; pointer-events: none; }
 /* (1.13) a coin match: won (gold) or lost (grey) */
 .res-reward .rw-stake.is-won { background: #ffe9a8; color: #6b4d00; }
 .res-reward .rw-stake.is-lost { background: #eef1f6; color: var(--ink-soft); }

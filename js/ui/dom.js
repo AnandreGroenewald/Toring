@@ -10,7 +10,7 @@ const WEEK_COINS = WEEK.coins;
 const WEEK_SHIELD_MAX = WEEK.shieldMax;
 const WEEK_SHIELD_PRICE = WEEK.shieldPrice;
 import { S, WEATHER_INFO, VISITOR_INFO, PUNISH_INFO, RANK_INFO, POWERUP_INFO, COSMETIC_INFO } from '../core/strings.js';
-import { COIN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic, SKINS, SKIN_KINDS, tierOf, shownPoints, shownDelta, TRIBE_PRICE, priceOf } from '../core/economy.js';
+import { COIN, EARN, LADDER, LADDER_IDS, ladderIndex, RANK_RULES, POWERUPS, POWERUP_IDS, COSMETICS, cosmetic, SKINS, SKIN_KINDS, tierOf, shownPoints, shownDelta, TRIBE_PRICE, priceOf } from '../core/economy.js';
 import * as BLOCKS from '../game/blocks.js';
 import { playCelebration, drawCelebrationIcon } from './celebrate.js';
 import { EMOTES, EMOTE_PICKS } from '../config.js';
@@ -337,6 +337,10 @@ export function createUI(bus) {
 
   function showScreen(name) {
     stopTry(true);
+    // (29 Oct 2026, the owner: "if I drag the menu down then after a second or two it jumps back up": a screen shown
+    // again while it's already up (the menu refreshed when the day's place or the account came in) keeps its scroll;
+    // only arriving on a screen starts it at the top)
+    const arriving = st.screen !== name;
     st.screen = name;
     if (name) st.revealing = false;
     bus.emit('ui:view');
@@ -351,7 +355,7 @@ export function createUI(bus) {
     }
     renderEmotes();   // (the emoji button belongs to a match on screen; it comes back after a pause)
     syncTutor();
-    if (name && screens[name]) {
+    if (name && screens[name] && arriving) {
       screens[name].scrollTop = 0;
       if (st.keyboard && !st.modal) focusQuietly(screens[name]);
     }
@@ -1075,8 +1079,10 @@ export function createUI(bus) {
         bus.emit('ui:shop');
       },
     }, coinIc(), h('b', { class: 'wallet-n', text: fmtInt(m.coins || 0) }), m.refill ? h('span', { class: 'wallet-plus', 'aria-hidden': 'true', text: '+' }) : null);
+    const keepScroll = screens.menu.scrollTop;   // (29 Oct 2026: a refresh redraws it where you'd scrolled to)
     screens.menu.replaceChildren(brand, gap,
       h('div', { class: 'menu-stack' }, card, spanRowEl(m.span, m.has3d), dorpMenuEl(m.dorp), GLYBAAN.on ? glybaanMenuEl(m.gly) : null, BOTSING.on ? botsingMenuEl() : null, kasteelMenuEl(m.kasteel), slagMenuEl(m.slag), playRow, satStrip, dock, adSlot), langChip, wallet);
+    screens.menu.scrollTop = keepScroll;
     // the gap shrinks when the sponsor feed adds the ad card later, so re-check whenever it resizes
     if (saying && typeof ResizeObserver === 'function') {
       if (!st.sayingRO) st.sayingRO = new ResizeObserver(() => fitSaying());
@@ -2691,7 +2697,7 @@ export function createUI(bus) {
     const c = reward?.coins;
     const rk = reward?.rank;
     const sk = reward?.stake;   // (1.13) a coin match: { n, paid, outcome, name }
-    if (!c && !rk && !sk) return null;
+    if (!c && !rk && !sk && !reward?.stars) return null;
     const kids = [];
     if (sk && sk.n) {
       // won: both stakes; back: the match played for none; else lost (a loss, or the connection didn't come back)
@@ -2711,6 +2717,7 @@ export function createUI(bus) {
       kids.push(h('span', { class: 'rw-coins' }, coinIc(), h('b', { text: `+${fmtInt(c.added)}` }),
         h('span', { class: 'rw-sub', text: c.short ? S.coinsCapped : S.coinsTotal(fmtInt(c.total)) })));
     }
+    if (reward?.stars) kids.push(starsLine(reward.stars));
     if (rk && LADDER_IDS.includes(rk.id)) {
       // (1.12) the mode's rank: up, down, saved by the shield, or not counted (Robot Rikus, a recording)
       const name = rankName(rk.id);
@@ -2731,6 +2738,98 @@ export function createUI(bus) {
       }
     }
     return h('div', { class: 'res-reward', role: 'status' }, kids);
+  }
+
+  /**
+   * (29 Oct 2026) The tower's stars on the results card: what it brought, the bank, and the trade for coins (a button
+   * when the bank buys a coin today, else what's missing). st: { added, stars, quote: { coins, stars } }
+   */
+  function starsLine(st) {
+    const q = st.quote || { coins: 0, stars: 0 };
+    const act = q.coins
+      ? h('button', { type: 'button', class: 'rw-trade', onclick: () => { audio.play('click'); bus.emit('ui:stars-trade'); } }, S.starsTrade(fmtInt(q.stars), fmtInt(q.coins)))
+      : h('span', { class: 'rw-note', text: st.stars < EARN.starsPerCoin ? S.starsToFirst(fmtInt(EARN.starsPerCoin - st.stars)) : S.starsCapHit });
+    return h('span', { class: 'rw-stars' }, h('i', { class: 'star-ic', 'aria-hidden': 'true', text: '⭐' }),
+      h('b', { text: `+${fmtInt(st.added)}` }), h('span', { class: 'rw-sub', text: S.starsBank(fmtInt(st.stars)) }), act);
+  }
+
+  /**
+   * (29 Oct 2026, the owner: "The stars in Stapel needs to be prominent once you dont have any life's left ... it moves
+   * from the top left corner to the middle of the screen and then pops out with numbers adding up to your current amount
+   * of stars") the tower's stars fly from the HUD (`from`, a screen rect) to the middle, pop, and count on from the bank
+   * (`before`) to its new total. A tap skips to the end. Resolves once it has gone.
+   */
+  function starsFly({ from = null, before = 0, added = 0 } = {}) {
+    return new Promise((done) => {
+      const still = matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      const num = h('b', { text: `+${fmtInt(added)}` });
+      const pill = h('div', { class: 'sf-pill' }, h('span', { class: 'sf-star', 'aria-hidden': 'true', text: '⭐' }), num);
+      const cap = h('div', { class: 'sf-cap', text: S.starsYours });
+      const ov = h('div', { class: 'stars-fly', role: 'status' }, pill, cap);
+      document.body.appendChild(ov);
+      const W = innerWidth;
+      const H = innerHeight;
+      const f = from && from.width > 0 ? from : { left: 16, top: 24, width: 90, height: 30 };
+      pill.style.left = `${f.left}px`;
+      pill.style.top = `${f.top}px`;
+      const pr = pill.getBoundingClientRect();
+      const dx = W / 2 - (pr.left + pr.width / 2);
+      const dy = H * 0.42 - (pr.top + pr.height / 2);
+      const big = Math.min(2.4, (W * 0.62) / Math.max(1, pr.width));
+      const total = before + added;
+      let ended = false;
+      let raf = 0;
+      const timers = [];
+      const later = (ms, fn) => timers.push(setTimeout(fn, ms));
+      const end = () => {
+        if (ended) return;
+        ended = true;
+        cancelAnimationFrame(raf);
+        timers.forEach(clearTimeout);
+        num.textContent = fmtInt(total);
+        ov.classList.add('is-gone');
+        setTimeout(() => { ov.remove(); done(); }, 260);
+      };
+      ov.addEventListener('pointerdown', end);
+      const at = `translate(${dx}px, ${dy}px) scale(${big})`;
+      if (still) {
+        pill.style.transform = at;
+        num.textContent = fmtInt(total);
+        ov.classList.add('is-on', 'is-popped');
+        later(1400, end);
+        return;
+      }
+      requestAnimationFrame(() => ov.classList.add('is-on'));
+      pill.animate([{ transform: 'translate(0, 0) scale(1)' }, { transform: at }], { duration: 560, easing: 'cubic-bezier(.2,.85,.25,1.08)', fill: 'forwards' });
+      later(560, () => {
+        // the pop: a bounce, a ring of little stars, then the count from the bank to the new total
+        audio.play('pop');
+        pill.animate([{ transform: at }, { transform: `translate(${dx}px, ${dy}px) scale(${big * 1.22})` }, { transform: at }], { duration: 300, easing: 'ease-out', fill: 'forwards' });
+        ov.classList.add('is-popped');
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2 + Math.random() * 0.3;
+          const r = 90 + Math.random() * 70;
+          const sp = h('i', { class: 'sf-spark', 'aria-hidden': 'true', text: '⭐' });
+          sp.style.left = `${W / 2}px`;
+          sp.style.top = `${H * 0.42}px`;
+          ov.appendChild(sp);
+          sp.animate([{ transform: 'translate(-50%, -50%) scale(.4)', opacity: 1 }, { transform: `translate(calc(-50% + ${Math.cos(a) * r}px), calc(-50% + ${Math.sin(a) * r}px)) scale(1)`, opacity: 0 }], { duration: 700 + Math.random() * 300, easing: 'cubic-bezier(.1,.7,.3,1)', fill: 'forwards' });
+        }
+        const t0 = performance.now();
+        const COUNT_MS = 1100;
+        let ticks = 0;
+        const step = (now) => {
+          const k = Math.min(1, (now - t0) / COUNT_MS);
+          const e = 1 - Math.pow(1 - k, 3);
+          num.textContent = fmtInt(Math.round(before + added * e));
+          if (k * 8 >= ticks + 1 && ticks < 8) { ticks++; audio.play('coin'); }
+          if (k < 1) raf = requestAnimationFrame(step);
+          else later(700, end);
+        };
+        num.textContent = fmtInt(before);
+        raf = requestAnimationFrame(step);
+      });
+    });
   }
 
   /** (1.13) The results card's coins line again (a coin match settled after the card was drawn). */
@@ -3934,6 +4033,11 @@ export function createUI(bus) {
       audio.play('click');
       bus.emit('ui:board-hide', !toggle.checked);
     });
+    // (29 Oct 2026, the owner: "if I drag the menu down then after a second or two it jumps back up": the fresh ranking
+    // (or "saving..." / saved) rebuilt the sheet, its list back at the top; it keeps your place while it's open)
+    const prevBody = st.modal === 'board' && modals.board.dataset.kind === kind ? modals.board.querySelector('.sheet-body') : null;
+    const keepTop = prevBody ? prevBody.scrollTop : 0;
+    modals.board.dataset.kind = kind;
     modals.board.replaceChildren(h('div', { class: 'card sheet board-sheet' },
       h('button', { type: 'button', class: 'icon-btn close', 'aria-label': S.close, title: S.close, onclick: () => { audio.play('click'); closeModal(); } }, icon('close')),
       h('div', { class: 'sheet-head' }, emo('🏆'), h('h2', { id: 'stapel-board-title', text: title || S.boardTitle })),
@@ -3954,7 +4058,10 @@ export function createUI(bus) {
           h('a', { href: `mailto:${SPONSOR.contactEmail}?subject=${encodeURIComponent(S.boardMailSubject)}`, text: SPONSOR.contactEmail })) : null,
         button('btn-white', h('span', { text: S.close }), () => closeModal(), { nav: false }))));
     if (st.modal !== 'board') openModal('board');
-    else if (focused) modals.board.querySelector(`.${focused}`)?.focus();
+    else {
+      if (keepTop) modals.board.querySelector('.sheet-body').scrollTop = keepTop;
+      if (focused) modals.board.querySelector(`.${focused}`)?.focus();
+    }
   }
 
   /**
@@ -4226,6 +4333,7 @@ export function createUI(bus) {
     showStats,
     showPause,
     showResults,
+    starsFly,
     setLiving,
     showTribe,
     showAlbum,
