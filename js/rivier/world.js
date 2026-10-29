@@ -808,29 +808,36 @@ void main() {
 // water, in course space (the river's bend), fogged like the rest. aSeed: x, phase, z, speed (m/s). uNear: the rain
 // round you, wrapped through a box ahead of the camera as the river flows past.
 const RAIN_VERT = `${BEND_GLSL}
-uniform float uT; uniform float uScale; uniform float uH; uniform float uWrap; uniform float uNear;
+uniform float uT; uniform float uScale; uniform float uH; uniform float uWrap; uniform float uNear; uniform float uFall;
+uniform float uWindX; uniform float uLen;
 attribute vec4 aSeed;
 varying float vDepth; varying float vA;
 void main() {
-  float f = fract(aSeed.y + uT * aSeed.w / uH);
+  float f = fract(aSeed.y + uT * aSeed.w * uFall / uH);
   float z = uNear > 0.5 ? 6.0 - mod(aSeed.z - uDist, uWrap) : aSeed.z;
-  vec4 w = modelMatrix * vec4(aSeed.x + f * 0.9, uH * (1.0 - f), z, 1.0);
+  // (29 Oct 2026: the wind blows it across, each a little faster or slower)
+  float x = uWindX == 0.0 ? aSeed.x + f * 0.9 : mod(aSeed.x + uWindX * uT * (0.75 + 0.5 * fract(aSeed.w * 7.13)) + 12.0, 24.0) - 12.0;
+  vec4 w = modelMatrix * vec4(x, uH * (1.0 - f), z, 1.0);
   w.x += rvBend(-w.z, uDist - w.z);
   vec4 mv = viewMatrix * w;
   vDepth = -mv.z;
   vA = smoothstep(0.0, 0.05, f) * (1.0 - smoothstep(0.95, 1.0, f));
   gl_Position = projectionMatrix * mv;
-  gl_PointSize = clamp(1.3 * uScale / max(0.5, vDepth), 2.0, 56.0);
+  gl_PointSize = clamp(uLen * uScale / max(0.5, vDepth), 2.0, 56.0);
 }`;
-const RAIN_FRAG = `uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar; uniform vec3 uTint; uniform float uK;
+// (uShape 0: a streak falling; 1: a hail pellet; 2: a streak blowing across)
+const RAIN_FRAG = `uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar; uniform vec3 uTint; uniform float uK; uniform float uShape;
+uniform vec3 uCol;
 varying float vDepth; varying float vA;
 void main() {
   vec2 c = gl_PointCoord - 0.5;
-  // (a thin line down the middle of the point, soft at its ends)
-  float a = exp(-c.x * c.x / 0.0028) * smoothstep(0.5, 0.15, abs(c.y)) * vA * uK;
+  float a = uShape < 0.5 ? exp(-c.x * c.x / 0.0028) * smoothstep(0.5, 0.15, abs(c.y))
+    : uShape < 1.5 ? smoothstep(0.34, 0.2, length(c))
+    : exp(-c.y * c.y / 0.0028) * smoothstep(0.5, 0.15, abs(c.x));
+  a *= vA * uK;
   if (a < 0.02) discard;
-  vec3 col = mix(vec3(0.86, 0.9, 0.94) * uTint, uFog, smoothstep(uFogNear, uFogFar, vDepth));
-  gl_FragColor = vec4(col, a * 0.6);
+  vec3 col = mix(uCol * uTint, uFog, smoothstep(uFogNear, uFogFar, vDepth));
+  gl_FragColor = vec4(col, min(1.0, a * 0.6));
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -1050,6 +1057,9 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     }
   }
   setShadowFocus(0, -28);
+  // (29 Oct 2026: on the lowest step the sun casts no shadows: a slow phone saves a whole drawing of the river each frame
+  // before its picture has to go soft)
+  stage.onQuality?.((q) => { if (shadows) sun.castShadow = q.name !== 'low'; });
   const fill = new THREE.DirectionalLight(L.fill, L.fillI);   // (from behind the camera: what comes at you is lit)
   fill.position.set(6, 10, 30);
   group.add(fill);
@@ -1297,6 +1307,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       uDist: bendUniforms.uDist, uBendK: bendUniforms.uBendK, uPath0: bendUniforms.uPath0, uT: rkClock, uScale: rainScale,
       uH: { value: near ? 26 : 60 }, uWrap: { value: 44 }, uNear: { value: near ? 1 : 0 }, uFog: { value: fog },
       uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uTint: { value: fxTint }, uK: { value: near ? 0 : 1 },
+      uFall: { value: 1 }, uWindX: { value: 0 }, uLen: { value: 1.3 }, uShape: { value: 0 }, uCol: { value: new THREE.Color(0.86, 0.9, 0.94) },
     },
     vertexShader: RAIN_VERT, fragmentShader: RAIN_FRAG, transparent: true, depthWrite: false,
   });
@@ -1311,10 +1322,13 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     return g;
   };
   const lowQ = quality.name === 'low';
-  const showerMat = rainMat(false);
-  const showerGeo = rainGeo(lowQ ? 1200 : 2600, 14, -70, 40);   // (from 70 m past its spot to 40 m before it)
-  showerMat.userData.shared = true;   // (the world frees them; a ride's warm-up leaves them be)
-  showerGeo.userData.shared = true;
+  const showerGeo = rainGeo(lowQ ? 1200 : 2600, 14, -90, 40);   // (from 90 m past its spot to 40 m before it)
+  showerGeo.userData.shared = true;   // (the world frees them; a ride's warm-up leaves them be)
+  // (29 Oct 2026: the weather that falls: rain, a storm's heavier rain, hail: white pellets falling fast)
+  const FALLS_LOOK = { rain: {}, storm: { uFall: 1.25, uK: 1.25 }, hail: { uFall: 1.7, uLen: 0.38, uShape: 1, uK: 1.4, uCol: new THREE.Color(0.97, 0.98, 1) } };
+  const lookMat = (m, look) => { for (const [k, v] of Object.entries(look)) { if (v?.isColor) m.uniforms[k].value.copy(v); else m.uniforms[k].value = v; } return m; };
+  const showerMats = Object.fromEntries(Object.entries(FALLS_LOOK).map(([k, look]) => [k, lookMat(rainMat(false), look)]));
+  for (const m of Object.values(showerMats)) m.userData.shared = true;
   const nearRainMat = rainMat(true);
   const nearRain = new THREE.Points(rainGeo(lowQ ? 360 : 900, 10, 0, 44), nearRainMat);
   nearRain.frustumCulled = false;
@@ -1332,7 +1346,17 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
   const grey = (c, k) => { const l = c.r * 0.3 + c.g * 0.59 + c.b * 0.11; return new THREE.Color(l, l, l * 1.05).multiplyScalar(k); };
   const rainZen = grey(zen0, 0.8);
   const rainHor = grey(hor0, 0.82);
+  // (29 Oct 2026: the rest of Stapel's weather: a storm darker still, fog the light grey of a cloud low in the canyon,
+  // heat a warm glare; the custom-drawn things keep their own fog distances, moved with the scene's)
+  const stormZen = grey(zen0, 0.45);
+  const stormHor = grey(hor0, 0.5);
+  const fogWhite = fog0.clone().lerp(new THREE.Color(0.86, 0.87, 0.88), 0.75);
+  const heatHaze = fog0.clone().multiply(new THREE.Color(1.16, 0.98, 0.76));
+  const heatHor = hor0.clone().multiply(new THREE.Color(1.08, 0.96, 0.84));
+  const fogUs = () => [water.uniforms, fallMat.uniforms, nearRainMat.uniforms, ...Object.values(showerMats).map((m) => m.uniforms)];
+  let wxNow = '';
   let rainNow = 0;
+  let flashNow = 0;
   /** A strip of falling water on the wall `geo` (side ±1), 2.8 m wide, from the rim to the river, a little off the rock. */
   function fallGeometry(geo, side) {
     const pos = geo.attributes.position;
@@ -1530,6 +1554,30 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     hills.traverse((o) => { if (o.material) farMaterial(o.material); });
   }
   group.add(hills);
+  // (29 Oct 2026) a rainbow over the far end after the rain (setRainbow): a ring's upper half in the sky, its feet behind
+  // the canyon's walls, its colours soft and added to the sky's
+  const rainbowMat = new THREE.ShaderMaterial({
+    uniforms: { uK: { value: 0 } },
+    vertexShader: 'varying vec2 vP; void main() { vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform float uK; varying vec2 vP;
+vec3 hue(float h) { return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
+void main() {
+  float t = (length(vP) - 147.0) / 24.0;
+  float a = smoothstep(0.0, 0.18, t) * smoothstep(1.0, 0.82, t) * uK * 0.55;
+  gl_FragColor = vec4(hue((1.0 - t) * 0.78), a);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  // (straight ahead of you, its top ~14° up at 500 m: in the strip of sky over the canyon, its feet behind the walls;
+  // with the far mountains it swung out of sight round a bend)
+  const rainbow = new THREE.Mesh(new THREE.RingGeometry(147, 171, 96, 1, 0, Math.PI), rainbowMat);
+  rainbow.position.set(0, -40, -500);
+  rainbow.visible = false;
+  rainbow.frustumCulled = false;
+  rainbow.renderOrder = -5;
+  group.add(rainbow);
   // ---- the air: mist drifting low over the water (patches you ride through), shafts of sun slanting down through the
   // canyon, and dust glinting in the light near you (not on the lowest quality)
   const airOn = air && quality.name !== 'low';
@@ -1796,28 +1844,67 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
      * picture) to the water, from 40 m before its spot to 70 m after it, with the river's bend. The ride places it (its
      * z) and sets the rain round you with setRain while you're in it. Its shape and material are shared (they stay).
      */
-    rain() {
+    rain(kind = 'rain') {
       const g = new THREE.Group();
-      const pts = new THREE.Points(showerGeo, showerMat);
+      const pts = new THREE.Points(showerGeo, showerMats[kind] || showerMats.rain);
       pts.frustumCulled = false;   // (the bend moves it sideways in the shader: its box would cull it wrongly)
       pts.renderOrder = 2;
       pts.onBeforeRender = rainSize;
       g.add(pts);
       return g;
     },
-    /** How deep in a shower you are (0-1): the rain round you, the light a little dimmer, the haze and the sky greyer. */
-    setRain(k) {
-      if (Math.abs(k - rainNow) < 0.002) return;
-      rainNow = k;
-      nearRainMat.uniforms.uK.value = k;
-      nearRain.visible = k > 0.01;
-      renderer.toneMappingExposure = L.exposure * (1 - 0.18 * k);
-      sun.intensity = L.sunI * (1 - 0.5 * k);
-      if (hemi) hemi.intensity = L.hemiI * (1 + 0.25 * k);
-      fog.copy(fog0).lerp(rainFog, k);
+    /**
+     * (29 Oct 2026, the owner: "can you add thunderstorms, hail, wind, basically the same weather as stapel") The weather
+     * round you: `kind` (rain, storm, hail, wind, gust, fog, heat) at strength k (0-1), one at a time; `dir` the wind's way
+     * (+1 = to the right), `flash` a lightning flash (0-1). setWeather(null, 0) is a clear day again.
+     */
+    setWeather(kind, k, { dir = 1, flash = 0 } = {}) {
+      const key = `${kind}:${k.toFixed(3)}:${dir}:${flash.toFixed(2)}`;
+      if (key === wxNow) return;
+      wxNow = key;
+      rainNow = kind === 'rain' || kind === 'storm' || kind === 'hail' ? k : 0;
+      flashNow = flash;
+      const wet = kind === 'rain' || kind === 'storm';
+      const windy = kind === 'wind' || kind === 'gust';
+      // what falls or blows round you
+      const nu = nearRainMat.uniforms;
+      const near = wet || kind === 'hail' || windy ? k : 0;
+      nu.uK.value = near * (kind === 'storm' ? 1.6 : kind === 'hail' ? 1.4 : windy ? 1.6 : 1);
+      nu.uShape.value = kind === 'hail' ? 1 : windy ? 2 : 0;
+      nu.uFall.value = kind === 'hail' ? 1.7 : kind === 'storm' ? 1.25 : windy ? 0.12 : 1;
+      nu.uLen.value = kind === 'hail' ? 0.38 : windy ? 1.7 : 1.3;
+      nu.uWindX.value = windy ? dir * (kind === 'gust' ? 19 : 14) : 0;
+      nu.uCol.value.setRGB(...(kind === 'hail' ? [0.97, 0.98, 1] : windy ? [0.98, 0.84, 0.64] : [0.86, 0.9, 0.94]));
+      nearRain.visible = near > 0.01;
+      // the light: the sun goes in for rain, a storm and hail; heat glares
+      const dim = { rain: 0.5, storm: 0.85, hail: 0.35, fog: 0.3, heat: -0.25 }[kind] || 0;
+      sun.intensity = L.sunI * (1 - dim * k) * (1 + 2.5 * flash);
+      if (hemi) hemi.intensity = L.hemiI * (1 + (kind === 'heat' ? 0.1 : kind === 'storm' ? -0.15 : 0.25) * k) * (1 + 1.5 * flash);
+      const expo = { rain: -0.18, storm: -0.45, hail: -0.1, fog: 0.04, heat: 0.2 }[kind] || 0;
+      renderer.toneMappingExposure = L.exposure * (1 + expo * k) * (1 + 0.8 * flash);
+      // the haze and the sky
+      fog.copy(fog0);
+      if (wet || kind === 'hail') fog.lerp(rainFog, k * (kind === 'storm' ? 1.2 : 1));
+      else if (kind === 'fog') fog.lerp(fogWhite, k);
+      else if (kind === 'heat') fog.lerp(heatHaze, k);
       scene.fog?.color.copy(fog);
-      skyMat.uniforms.uZenith.value.copy(zen0).lerp(rainZen, 0.6 * k);
-      skyMat.uniforms.uHorizon.value.copy(hor0).lerp(rainHor, 0.5 * k);
+      const zen = skyMat.uniforms.uZenith.value.copy(zen0);
+      const hor = skyMat.uniforms.uHorizon.value.copy(hor0);
+      if (kind === 'storm') { zen.lerp(stormZen, 0.8 * k); hor.lerp(stormHor, 0.7 * k); } else if (wet || kind === 'hail') { zen.lerp(rainZen, 0.6 * k); hor.lerp(rainHor, 0.5 * k); } else if (kind === 'fog') { zen.lerp(fogWhite, 0.5 * k); hor.lerp(fogWhite, 0.8 * k); } else if (kind === 'heat') hor.lerp(heatHor, k);
+      if (flash) { zen.lerp(new THREE.Color(0.9, 0.92, 1), flash * 0.6); hor.lerp(new THREE.Color(1, 1, 1), flash * 0.5); }
+      // fog closes in (you see things later): the scene's and the custom-drawn things' distances together
+      const fk = kind === 'fog' ? k : 0;
+      const nearD = BANK.fogNear + (16 - BANK.fogNear) * fk;
+      const farD = BANK.fogFar + (170 - BANK.fogFar) * fk;
+      if (scene.fog) { scene.fog.near = nearD; scene.fog.far = farD; }
+      for (const u of fogUs()) { u.uFogNear.value = nearD; u.uFogFar.value = farD; }
+    },
+    /** (rain kept for the rides' old calls: setWeather('rain', k)) */
+    setRain(k) { this.setWeather('rain', k); },
+    /** (29 Oct 2026) A rainbow over the far end after the rain, strength k (0-1). */
+    setRainbow(k) {
+      rainbowMat.uniforms.uK.value = k;
+      rainbow.visible = k > 0.005;
     },
     /** Open water at the river's head, up to course z `to` (where your tower stands). */
     setPool(to) {
@@ -1873,7 +1960,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       reflRT?.dispose();
       sun.dispose();   // (its shadow map too)
       stoneMat.dispose();
-      for (const x of [showerGeo, showerMat]) x.dispose();   // (29 Oct 2026: the showers' shared shape)
+      for (const x of [showerGeo, ...Object.values(showerMats), rainbowMat, rainbow.geometry]) x.dispose();   // (29 Oct 2026: the weather's shared shapes)
       for (const x of [...cliffGeos[-1], ...cliffGeos[1], mistTex, rayTex, dustTex, fallPuff, mistGeo, mistMat, rayMat, dustGeo, dustMat, fallMistGeo, fallFoamGeo, fallMistMat, fallFoamMat]) x.dispose();
       scene.environment = null;
       scene.fog = null;

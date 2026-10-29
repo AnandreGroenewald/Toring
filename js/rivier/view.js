@@ -20,7 +20,7 @@ import { RIVER, rescueCourse, raidCourse, speedAt, laneX, inRapids, rapidsWindow
 import { floorAt, hit as hitFloor, dimsOf } from '../core/weektower.js';
 import { weekOf, plusDays } from '../core/span.js';
 import { portraitDataUrl, portraitsReady, CAST } from '../game/residents.js';
-import { S } from '../core/strings.js';
+import { S, WEATHER_INFO } from '../core/strings.js';
 import { fmtM, fmtInt } from '../core/format.js';
 import { spanNewsLine } from '../ui/spannews.js';
 import { audio, haptics } from '../audio.js';
@@ -129,7 +129,7 @@ function makeKit() {
 @keyframes rv-go3 { 0% { transform: translate(-50%, -50%) scale(.3); opacity: 0; } 25% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; } 45% { transform: translate(-50%, -50%) scale(1); } 100% { transform: translate(-50%, -50%) scale(1); opacity: .9; } }
 #rivier .rv-card h2.rv-win { margin: 2px 0 6px; color: #ffd65c; }
 #rivier .rv-card p.rv-vsline { margin: 2px 0 10px; font-size: 17px; font-weight: 900; color: #bfe0ff; }
-#rivier .rv-hurt { position: absolute; inset: 0; box-shadow: inset 0 0 90px 20px rgba(200,40,30,.55); opacity: 0; transition: opacity .25s; }
+#rivier .rv-hurt { position: absolute; inset: 0; background: radial-gradient(ellipse 72% 62% at 50% 50%, rgba(200,40,30,0) 55%, rgba(200,40,30,.5) 100%); opacity: 0; transition: opacity .25s; pointer-events: none; }
 #rivier .rv-hurt.on { opacity: 1; transition: none; }
 #rivier .rv-flycoin { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; pointer-events: none; background: var(--coin-img) center / 100% 100% no-repeat; box-shadow: 0 0 12px rgba(255,210,80,.8); transition: transform .5s cubic-bezier(.5,0,.75,.4), opacity .5s; }
 #rivier .rv-flycoin.big { width: 40px; height: 40px; margin: -20px 0 0 -20px; }
@@ -140,7 +140,7 @@ function makeKit() {
 #rivier .rv-card.on { opacity: 1; transform: translate(-50%, 0); }
 #rivier .rv-card h2 { margin: 0 0 4px; font-size: 24px; font-weight: 900; }
 #rivier .rv-card .rv-link { background: none; color: #8ff4ff; min-height: 40px; font-size: 16px; text-decoration: underline; text-underline-offset: 3px; }
-#rivier .rv-splat { position: absolute; pointer-events: none; transform-origin: 50% 40%; transform: rotate(var(--r, 0deg)) scale(1.2, .86); opacity: 1; animation: rv-splat 2.9s cubic-bezier(.25,.9,.35,1) forwards; filter: drop-shadow(0 8px 14px rgba(0,0,0,.28)); }
+#rivier .rv-splat { position: absolute; pointer-events: none; transform-origin: 50% 40%; transform: rotate(var(--r, 0deg)) scale(1.2, .86); opacity: 1; animation: rv-splat 2.9s cubic-bezier(.25,.9,.35,1) forwards; }
 @keyframes rv-splat { 0% { transform: rotate(var(--r)) scale(1.2, .86); opacity: 1; } 5% { transform: rotate(var(--r)) scale(.95, 1.05); } 10% { transform: rotate(var(--r)) scale(1.02, .99); } 15% { transform: rotate(var(--r)) scale(1); } 45% { transform: rotate(var(--r)) translateY(4%) scale(1, 1.02); opacity: 1; } 100% { transform: rotate(var(--r)) translateY(34%) scale(.98, 1.1); opacity: 0; } }
 #rivier .rv-arrow { position: absolute; left: 50%; top: 46%; width: 92px; height: 92px; margin: -46px 0 0 -46px; border-radius: 50%; background: rgba(13,34,40,.6); border: 3px solid #fff3c4; display: none; pointer-events: none; }
 #rivier .rv-arrow.on { display: block; }
@@ -216,7 +216,9 @@ function makeKit() {
   (document.getElementById('game') || document.body).appendChild(host);
   const quality = pickQuality();
   if (quality.name === 'mid' && !quality.forced) Object.assign(quality, { dpr: 1.35 });
-  const stage = createStage({ fov: 58, quality, canvas, stageEl: host });
+  // (29 Oct 2026, the owner's Samsung A53: "it blurs": a slow phone went down to 0.85 of a pixel, blocky; the River keeps
+  // at least 1:1 and lets its shadows go first, world.js)
+  const stage = createStage({ fov: 58, quality, canvas, stageEl: host, minDpr: 1 });
   const pieces = createPieces(stage.renderer);
   return { host, ov, stage, pieces };
 }
@@ -1929,59 +1931,101 @@ function createRide(K, d) {
     }
   }
   // (29 Oct 2026, the owner: "it looks like the waterfall comes out of thin air. Maybe we should just make it a rain
-  // scene") the endless river's showers, where its falls across the river were (core/rivier.js FALLS): drawn from AHEAD;
-  // riding in, the light dims and greys, rain falls round you, splashes on the water and runs down the screen (🌧️ Rain
-  // shower!), and it all lifts again after
-  const SHOWER_IN = 40;    // m before its spot the rain starts
-  const SHOWER_OUT = 70;   // m after its spot it stops
-  const showers = [];
-  let rainK = 0;
-  let rainSoundT = 0;
-  let rainDropT = 0;
-  let rainSplashT = 0;
+  // scene", then "can you add thunderstorms, hail, wind, basically the same weather as stapel") the endless river's
+  // weather, where its falls across the river were (core/rivier.js FALLS): each spot its own kind, the same for everyone
+  // (from where it is), the first ones mild as in Stapel (rain, wind, fog), from 3 km storms, hail, whirlwinds and heat
+  // too. Riding in it builds over 50 m and lifts over 40 m after; rain leaves a rainbow behind.
+  const WX_EARLY = ['rain', 'wind', 'fog', 'rain'];
+  const WX_LATE = ['rain', 'storm', 'hail', 'wind', 'gust', 'fog', 'heat'];
+  const WX_SPAN = { rain: [40, 70], storm: [40, 90], hail: [40, 70], wind: [60, 200], gust: [60, 200], fog: [80, 220], heat: [60, 220] };   // (m before its spot, m after)
+  function weatherAt(z) {
+    if (WX_SPAN[d.wx]) return d.wx;   // (tests: ?wx=storm on the River's test page)
+    const h = Math.abs(Math.sin(Math.round(z) * 12.9898) * 43758.5453) % 1;
+    const list = z < 3000 ? WX_EARLY : WX_LATE;
+    return list[Math.floor(h * list.length)];
+  }
+  const showers = [];   // (the weather spots ahead and just behind: { z, kind, obj, said, dir })
+  let wxK = 0;          // (how deep in the weather you are, 0-1)
+  let wxKind = null;
+  let wxDir = 1;
+  let wxPush = 0;       // (the wind's push on your lane's middle, m across: see the whirlpools' pull)
+  let wxSoundT = 0;
+  let wxDropT = 0;
+  let wxSplashT = 0;
+  let boltT = 2;
+  let flashK = 0;
+  let thunderT = -1;
+  let rainbowT = -1;
   function addShower(z) {
-    const obj = world.rain();
-    scene.add(obj);
-    showers.push({ z, obj, said: false });
+    const kind = weatherAt(z);
+    const obj = kind === 'rain' || kind === 'storm' || kind === 'hail' ? world.rain(kind) : null;
+    if (obj) scene.add(obj);
+    showers.push({ z, kind, obj, said: false, bow: false, dir: Math.sin(z * 0.37) < 0 ? -1 : 1 });
   }
   function dropShower(c) {
-    scene.remove(c.obj);
+    if (c.obj) scene.remove(c.obj);
   }
   function updateShowers(dt) {
     let k = 0;
     for (let i = showers.length - 1; i >= 0; i--) {
       const c = showers[i];
+      const [IN, OUT] = WX_SPAN[c.kind];
       const ahead = c.z - dist;
-      c.obj.position.set(0, 0, -ahead);
-      // (how deep in you are: it thickens over the 50 m before the rain starts and thins over the 40 m after it stops)
-      const kin = clamp((SHOWER_IN + 50 - ahead) / 50, 0, 1) * clamp((ahead + SHOWER_OUT + 40) / 40, 0, 1);
-      k = Math.max(k, kin * kin * (3 - 2 * kin));
-      if (!c.said && ahead <= SHOWER_IN && phase === 'run') {
+      c.obj?.position.set(0, 0, -ahead);
+      const kin = clamp((IN + 50 - ahead) / 50, 0, 1) * clamp((ahead + OUT + 40) / 40, 0, 1);
+      const kk = kin * kin * (3 - 2 * kin);
+      if (kk > k || (kk > 0 && c.kind !== wxKind && wxK < 0.05)) { k = kk; wxKind = c.kind; wxDir = c.dir; }
+      if (!c.said && ahead <= IN && phase === 'run') {
         c.said = true;
-        pop(S.rvFall, 1300);
-        audio.play('thunder', { intensity: 0.35 });
+        const info = WEATHER_INFO[c.kind];
+        pop(c.kind === 'rain' ? S.rvFall : `${info.emoji} ${info.name}!`, 1300);
+        if (c.kind === 'rain' || c.kind === 'storm') audio.play('thunder', { intensity: c.kind === 'storm' ? 0.75 : 0.35 });
+        else if (c.kind === 'fog' || c.kind === 'heat') audio.play(c.kind, { intensity: 0.8 });
       }
-      if (ahead < -SHOWER_OUT - 60) {
+      // (rain behind you: a rainbow over the far end)
+      if (!c.bow && c.kind === 'rain' && ahead < -OUT - 40) {
+        c.bow = true;
+        rainbowT = 0;
+      }
+      if (ahead < -OUT - 60) {
         dropShower(c);
         showers.splice(i, 1);
       }
     }
-    rainK += (k - rainK) * (1 - Math.exp(-dt * 3));
-    if (rainK < 0.003 && k === 0) rainK = 0;
-    world.setRain(rainK);
-    if (rainK < 0.3 || phase !== 'run') return;
-    if ((rainSoundT -= dt) <= 0) {
-      rainSoundT = 0.7;
-      audio.play('rain', { intensity: rainK });
+    wxK += (k - wxK) * (1 - Math.exp(-dt * 3));
+    if (wxK < 0.003 && k === 0) wxK = 0;
+    const kind = wxK > 0 ? wxKind : null;
+    // (a storm's lightning: one flash every few seconds, the thunder after it; none with less motion)
+    if (kind === 'storm' && wxK > 0.5 && !reduced && phase === 'run' && (boltT -= dt) <= 0) {
+      boltT = 2.6 + Math.random() * 3.2;
+      flashK = 1;
+      thunderT = 0.35 + Math.random() * 0.9;
     }
-    // (drops landing on the water round you)
-    if (!reduced && (rainSplashT -= dt) <= 0) {
-      rainSplashT = 0.09;
-      things.emit(x + (Math.random() - 0.5) * 9, 0.05, -2 - Math.random() * 18, 2, 0.35, 0.5);
+    flashK = Math.max(0, flashK - dt * 4.5);
+    if (thunderT >= 0 && (thunderT -= dt) < 0) audio.play('thunder', { intensity: 0.9 });
+    world.setWeather(kind, wxK, { dir: wxDir, flash: flashK * flashK });
+    // (the wind leans on you: a steady push its way, a whirlwind's to and fro)
+    wxPush = kind === 'wind' ? wxDir * wxK * 0.35 : kind === 'gust' ? Math.sin(t * 1.7) * wxK * 0.45 : 0;
+    // (the rainbow: in over 2 s, gone after 14)
+    if (rainbowT >= 0) {
+      rainbowT += dt;
+      world.setRainbow(clamp(rainbowT / 2, 0, 1) * clamp((14 - rainbowT) / 4, 0, 1));
+      if (rainbowT > 14) rainbowT = -1;
+    }
+    if (!kind || wxK < 0.3 || phase !== 'run') return;
+    const wet = kind === 'rain' || kind === 'storm';
+    if ((wxSoundT -= dt) <= 0) {
+      wxSoundT = wet ? 0.7 : kind === 'hail' ? 0.5 : kind === 'wind' || kind === 'gust' ? 1.1 : 99;
+      if (wet || kind === 'hail' || kind === 'wind' || kind === 'gust') audio.play(wet ? 'rain' : kind === 'hail' ? 'hail' : 'wind', { intensity: wxK });
+    }
+    // (drops, or hailstones bouncing, on the water round you)
+    if ((wet || kind === 'hail') && !reduced && (wxSplashT -= dt) <= 0) {
+      wxSplashT = kind === 'hail' ? 0.05 : kind === 'storm' ? 0.06 : 0.09;
+      things.emit(x + (Math.random() - 0.5) * 9, 0.05, -2 - Math.random() * 18, 2, 0.35, kind === 'hail' ? 1.3 : 0.5);
     }
     // (and on the lens, running down)
-    if (rainK > 0.7 && (rainDropT -= dt) <= 0) {
-      rainDropT = 1.4;
+    if (wet && wxK > 0.7 && (wxDropT -= dt) <= 0) {
+      wxDropT = kind === 'storm' ? 1.0 : 1.4;
       sprayEl.classList.remove('on');
       void sprayEl.offsetWidth;   // (the drops again, from the start)
       sprayEl.classList.add('on');
@@ -2709,7 +2753,11 @@ function createRide(K, d) {
         dist = Math.min(duelDist, dist + 2.5);
       } else {
         runS += dt;
-        const sp = speedAt(dist, len) * (slowT > 0 ? RIVER.hitSlowK : 1) * (1 + 0.24 * rapK);
+        // (29 Oct 2026, the owner: "if I run into an object then it lags, it doesnt feel natural": the knock's slow-down
+        // came all at once and went all at once; now it dips over a tenth of a second and eases back)
+        const hk = slowT > 0 ? 1 - slowT / RIVER.hitSlowS : 1;
+        const dip = hk < 0.12 ? hk / 0.12 : 1 - (hk - 0.12) / 0.88 * ((hk - 0.12) / 0.88) * (3 - 2 * ((hk - 0.12) / 0.88));
+        const sp = speedAt(dist, len) * (1 - (1 - RIVER.hitSlowK) * (slowT > 0 ? dip : 0)) * (1 + 0.24 * rapK);
         dist += sp * dt;
       }
       slowT = Math.max(0, slowT - dt);
@@ -2811,7 +2859,7 @@ function createRide(K, d) {
     if (phase === 'run' && Math.random() < 0.85) things.emit(x - leanV * 0.3, 0.12, 0.9, 1 + Math.round(rapK * 2), 0.6 + rapK, 1.4 + Math.abs(leanV) * 2 + rapK * 1.5);
 
     if (phase !== 'zoo') spawn();
-    if (showers.length || rainK > 0) updateShowers(dt);
+    if (showers.length || wxK > 0 || rainbowT >= 0) updateShowers(dt);
     if (endless && dist > 8000) askElephant();
     pullNext = 0;
     for (const l of live) {
@@ -2908,8 +2956,8 @@ function createRide(K, d) {
         }
       }
     }
-    // (the whirlpools' pull, eased: it grows on you and lets go)
-    pullX += (pullNext - pullX) * (1 - Math.exp(-dt * 6));
+    // (the whirlpools' pull, eased: it grows on you and lets go; 29 Oct 2026: the wind's push with it)
+    pullX += (pullNext + wxPush - pullX) * (1 - Math.exp(-dt * 6));
     for (let i = live.length - 1; i >= 0; i--) {
       if (live[i].z < dist - BEHIND) {
         despawn(live[i]);

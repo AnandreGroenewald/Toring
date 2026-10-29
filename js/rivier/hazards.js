@@ -474,7 +474,7 @@ export function splatImage() {
     g.closePath();
   };
   // the cream: a soft shadow, the body, drips running down, little flecks flung out
-  // (its drop shadow comes from the page's own filter on the picture: one shadow round the whole splat, none inside it)
+  // (its drop shadow is drawn in at the end: one shadow round the whole splat, none inside it)
   g.save();
   g.fillStyle = '#fff8ec';
   blob(256, 222, 148, 18, 0.42);
@@ -580,5 +580,14 @@ export function splatImage() {
   g.moveTo(283, 171);
   g.quadraticCurveTo(290, 142, 312, 132);
   g.stroke();
-  return c.toDataURL('image/png');
+  // (29 Oct 2026: its soft shadow drawn in once, round the whole splat: the page's drop-shadow filter on it was redone
+  // every frame of its slide, a stutter on a phone (the owner: "if the pie hits me ... then it lags"))
+  const out = document.createElement('canvas');
+  out.width = out.height = 512;
+  const o = out.getContext('2d');
+  o.shadowColor = 'rgba(0,0,0,.28)';
+  o.shadowBlur = 16;
+  o.shadowOffsetY = 9;
+  o.drawImage(c, 0, 0);
+  return out.toDataURL('image/png');
 }

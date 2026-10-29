@@ -1673,3 +1673,32 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   Send changes for review). Files: `Stapel app (Google Play)/Upload 1.24.2 all tracks/`, `Stapel-1.24.2-toets.apk`.
 - After approval: the update card (APP_LATEST 1.24.2, a Worker deploy: his word).
 
+### 29 Oct 2026 ~16:30 — his Samsung A53 notes: the blur, the hit stutter, and Stapel's weather on the River (local, not released)
+- His words (with a screenshot from his Samsung A53, 15:14, a River run at 19 m, the 3D picture blocky and soft): "This is
+  on a Samsung A53, it blurs, also if the the pie hits me or if I run into an object then it lags, it doesnt feel
+  natural. Then can you add thunderstorms, hail, wind, basically the same weather as stapel". Then: "Please play it once
+  done to make sure everything is in order."
+- The blur: the 3D stage steps its quality down when a phone keeps under 45 fps (mid 1.35 -> low 1.15 -> 1.0 -> 0.85 of
+  a pixel), the shadows on all the way: his A53 sat at 0.85, blocky. Now (kasteel/stage.js `minDpr`, view.js 1) the River
+  never goes under 1:1, and on its lowest step the sun casts no shadows (world.js onQuality): a whole drawing of the river
+  saved each frame before the picture has to go soft. Other 3D screens keep 0.85.
+- The hit stutter: a knock cut your speed to 55 % at once for 0.6 s and gave it back at once (a jolt, felt as lag); now
+  a dip over 0.1 s that eases back over 0.9 s (core/rivier.js hitSlowS 0.9, view.js). The cream's drop shadow was a
+  page filter redone every frame of its slide (hazards.js splatImage draws it in now); the red hurt flash an inset
+  box-shadow (now a radial gradient).
+- Weather (his "the same weather as stapel"): the weather spots (core/rivier.js FALLS, unchanged) each get a kind from
+  where they are (the same for everyone): before 3 km rain, wind or fog; after, rain, storm, hail, wind, whirlwind, fog
+  or heat (Stapel's EARLY/LATE). world.js setWeather(kind, k, { dir, flash }): rain as before; storm darker, heavier rain,
+  lightning (one flash every 2.6-5.8 s, the thunder after; none with less motion); hail white pellets falling fast and
+  bouncing on the water; wind and whirlwind sand blowing across and a push on your lane (0.35 m, a whirlwind's to and
+  fro, through the whirlpools' pullX); fog closing in (16-170 m); heat a warm glare. A rainbow after rain (setRainbow,
+  straight ahead in the strip of sky over the canyon). Banners from WEATHER_INFO (Stapel's own names and emoji),
+  sounds rain / hail / wind / thunder / fog / heat. view.js weatherAt, updateShowers; ?wx=kind on the test page.
+- Played it (his ask): the real game, the River run from the menu, 4.27 km with the autopilot (qa/rivier_play1243.mjs:
+  wind, Hanswors twice, rain and its rainbow, hail, rapids, logs, branches, crashes, the end card; no game errors), each
+  weather close up (qa/rivier_weather1243.mjs), the low step's picture (no shadows) in rain and storm, Restart (tower and
+  River) and the pie dodge again, 60 fps through a storm (mid) and fog (low) at CPU x4. check-all quick ALL CLEAR, River
+  32/32, later 21/21, Saam gly 29/29 (its first run had GLY! 1.9 s apart between the two test tabs, the re-run passed).
+- Not released: 1.24.2's production + closed releases still wait for his Submit click; this would be 1.24.3 (supersede
+  the saved 1.24.2 releases so he presses Submit once).
+

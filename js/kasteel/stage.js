@@ -49,7 +49,7 @@ export function pickQuality() {
   return { ...QUALITY[phone ? 'mid' : 'high'] };
 }
 
-export function createStage({ fov = 50, quality = pickQuality(), canvas = document.getElementById('k-canvas'), stageEl = document.getElementById('k-stage') } = {}) {
+export function createStage({ fov = 50, quality = pickQuality(), canvas = document.getElementById('k-canvas'), stageEl = document.getElementById('k-stage'), minDpr = 0.85 } = {}) {
   const size = () => [stageEl.clientWidth || window.innerWidth, stageEl.clientHeight || window.innerHeight];
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   const q = quality;
@@ -115,8 +115,8 @@ export function createStage({ fov = 50, quality = pickQuality(), canvas = docume
     const i = ORDER.indexOf(q.name);
     if (i >= 0 && i < ORDER.length - 1) {
       Object.assign(q, QUALITY[ORDER[i + 1]], { name: ORDER[i + 1] });
-    } else if (q.dpr > 0.85) {
-      q.dpr = Math.max(0.85, q.dpr - 0.15);
+    } else if (q.dpr > minDpr + 0.001) {
+      q.dpr = Math.max(minDpr, q.dpr - 0.15);   // (minDpr: how soft the picture may get; the River keeps 1:1)
     } else return false;
     apply();
     return true;

@@ -23,7 +23,7 @@ export const RIVER = Object.freeze({
   gapMin: 17,          // m between rows (two lane changes and a moment to see it)
   gapMax: 27,
   finishRun: 60,       // m of calm water before the finish
-  hitSlowS: 0.6,       // a knock slows you this long...
+  hitSlowS: 0.9,       // a knock slows you this long (29 Oct 2026: 0.6 at once; now a quick dip that eases back over it)...
   hitSlowK: 0.55,      // ...to this share of the speed
   graceS: 1.2,         // ...and you can't be knocked again for this long
   laneS: 0.16,         // a lane change takes this long
