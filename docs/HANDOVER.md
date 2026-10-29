@@ -1702,3 +1702,14 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
 - Not released: 1.24.2's production + closed releases still wait for his Submit click; this would be 1.24.3 (supersede
   the saved 1.24.2 releases so he presses Submit once).
 
+### 29 Oct 2026 ~16:20 — 1.24.3 RELEASED to Play internal and closed testing only (his "Please release it internal and external testing.")
+- VERSION 1.24.3 (js/config.js + sw.js); check-all quick ALL CLEAR; scans clear; commit 03b5d1c pushed to
+  origin/rivier/1.20 only: **not** claude/trusting-hopper-26qcax (the old address = a website release) and **no website
+  deploy**: stapelspel.pages.dev and the old address stay on 1.24.2.
+- Play: internal 12403 since 16:11 (notes af 257 / en 266, the usual two warnings, devices unchanged). Closed testing -
+  Alpha 12403 (it replaced the unsent 1.24.2 release there) sent for review: in the Publishing overview the production
+  1.24.2 change was put "Save for later" first, so only the closed change went ("Submit 1 change for review" › Send).
+  Production stays 12401 (1.24.1) live; its 1.24.2 release is saved, NOT sent (when he wants the public app updated,
+  replace it with the newest build first).
+- A 1.24.2 phone (website) and a 1.24.3 phone in one Duo ride: the room ends with "update" (protocol 3).
+
