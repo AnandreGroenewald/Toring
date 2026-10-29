@@ -72,7 +72,9 @@ const TIP_LEAN = 1.02;           // a block whose load is this far past the midd
 // be `margin` px past its contacts before it must move; contacts narrower than `point` px are a single corner: a block
 // lying still on one is woken and given a little turn (`nudge` rad a step) towards its weight (or, centred, towards flat);
 // `samples` even steps across its width besides the corners
-const UNSUP = Object.freeze({ gap: 2.5, rel: 0.75, margin: 1, point: 4, nudge: 0.003, samples: 8 });
+// (stuck: looks (every 4 steps) a block held up at its side stays still before it loses its grip; push: px/step away
+// from what holds it, 29 Oct 2026)
+const UNSUP = Object.freeze({ gap: 2.5, rel: 0.75, margin: 1, point: 4, nudge: 0.003, samples: 8, stuck: 5, push: 0.6 });
 const SET_AFTER_MS = 1500;       // a deep block still stirred by wind sets this long after landing...
 const SET_MAX_SPEED = 0.3;       // ...if it moves slower than this (px/step)
 const SET_MAX_SPIN = 0.01;       // ...and turns slower than this (rad/step)
@@ -1942,6 +1944,7 @@ export class GameScene extends Phaser.Scene {
         M.Body.setVelocity(b.body, { x: 0, y: 0 });
         M.Body.setAngularVelocity(b.body, 0);
         b.quietSteps = SETTLE.steps;
+        this.grip(b);   // (both games start the next drop with the same grips)
         if (b.state === 'landed') b.state = 'settled';
         b.sync();
       }
@@ -2499,6 +2502,7 @@ export class GameScene extends Phaser.Scene {
       const body = o.body;
       if (body.speed > LOCK_MAX_SPEED || body.angularSpeed > LOCK_MAX_SPIN) continue;
       if (this.tipping?.has(o)) continue;   // a stack past its edge is never set in cement (it must tip)
+      if (o.unsup) continue;   // (nor one hanging at the tower's side: heldUp)
       if (o.pendingRate && !o.rating) this.applyRating(o, 'S');
       if (o.state === 'landed') o.state = 'settled';
       this.freezeBlock(o, n > 0);
@@ -2876,6 +2880,7 @@ export class GameScene extends Phaser.Scene {
     for (const o of this.tower) {
       if (o.state === 'frozen' || o.state === 'lost' || o.destroyed) continue;
       if (o.body.speed > CEMENT_MAX_SPEED) continue;
+      if (o.unsup) continue;   // (hanging at the tower's side, its weight over nothing: it falls, heldUp)
       if (o.pendingRate && !o.rating) this.applyRating(o, 'S');
       if (o.state === 'landed') o.state = 'settled';
       this.freezeBlock(o, true);
@@ -3084,6 +3089,7 @@ export class GameScene extends Phaser.Scene {
 
   canSet(b) {
     if (this.tipping?.has(b)) return false;   // past its edge: it tips, it doesn't set
+    if (b.unsup) return false;   // (its weight over nothing under it: held at its side, heldUp)
     const body = b.body;
     if (b.state === 'settled' && (b.quietSteps >= SETTLE.steps || body.isSleeping)) return true;
     return this.now - b.landedAt >= SET_AFTER_MS && body.speed < SET_MAX_SPEED && body.angularSpeed < SET_MAX_SPIN;
@@ -3249,7 +3255,7 @@ export class GameScene extends Phaser.Scene {
     const fm = this.weather.frictionMul;
     if (fm === this.lastFrictionMul) return;
     this.lastFrictionMul = fm;
-    for (let k = 0; k < this.dyn.length; k++) this.dyn[k].setFriction(fm);
+    for (let k = 0; k < this.dyn.length; k++) if (!this.dyn[k].slip) this.dyn[k].setFriction(fm);   // (one sliding off its hold keeps sliding: heldUp)
     if (this.falling) this.falling.setFriction(fm);
   }
 
@@ -3768,32 +3774,91 @@ export class GameScene extends Phaser.Scene {
       }
       if (c0 === Infinity) {
         // touching nothing under it: on its way down (checkBlocks follows it) — unless it fell asleep there (both stones
-        // it lay on melted): then it goes on falling
+        // it lay on melted): then it goes on falling; or something at its side holds it there (heldUp)
         if (b.body.isSleeping) {
           n++;
           Sl.set(b.body, false);
         }
+        this.heldUp(b, Math.sign(cx - BASE_CX) || 1);
         continue;
       }
       if (cx < c0 - UNSUP.margin || cx > c1 + UNSUP.margin) {
         n++;
         if (b.body.isSleeping) Sl.set(b.body, false);
-      } else if (c1 - c0 < UNSUP.point && (b.body.isSleeping || (b.calmSteps || 0) >= SETTLE.steps)) {
-        // lying still on a single corner: real blocks don't stay balanced there; a little turn towards its weight (or,
-        // with its weight right over the corner, towards lying flat) and gravity does the rest
-        n++;
-        const body = b.body;
-        if (body.isSleeping) Sl.set(body, false);
-        if (Math.abs(body.angularVelocity) < UNSUP.nudge / 4) {
-          const off = body.angle - Math.round(body.angle / (Math.PI / 2)) * (Math.PI / 2);
-          const lean = cx - (c0 + c1) / 2;
-          const dir = Math.abs(lean) >= 0.5 ? Math.sign(lean) : -Math.sign(off) || 1;
-          this.M.Body.setAngularVelocity(body, dir * UNSUP.nudge);
+        // (it slips only with its own middle past what's under it: the floor a piece hangs on keeps its grip)
+        const ox = b.body.position.x;
+        this.heldUp(b, Math.sign(cx - (c0 + c1) / 2) || 1, ox < c0 - UNSUP.margin || ox > c1 + UNSUP.margin);
+      } else if (c1 - c0 < UNSUP.point) {
+        b.unsup = true;   // (balanced on a single corner it must tip: it never sets in cement there)
+        if (b.body.isSleeping || (b.calmSteps || 0) >= SETTLE.steps) {
+          // lying still on a single corner: real blocks don't stay balanced there; a little turn towards its weight (or,
+          // with its weight right over the corner, towards lying flat) and gravity does the rest
+          n++;
+          const body = b.body;
+          if (body.isSleeping) Sl.set(body, false);
+          if (Math.abs(body.angularVelocity) < UNSUP.nudge / 4) {
+            const off = body.angle - Math.round(body.angle / (Math.PI / 2)) * (Math.PI / 2);
+            const lean = cx - (c0 + c1) / 2;
+            const dir = Math.abs(lean) >= 0.5 ? Math.sign(lean) : -Math.sign(off) || 1;
+            this.M.Body.setAngularVelocity(body, dir * UNSUP.nudge);
+          }
         }
-      }
+      } else this.grip(b);
     }
     this.unsupNow = n;
     return n;
+  }
+
+  /**
+   * (29 Oct 2026, the owner's photo, "the block did not fall": a piece hooked by its notch over the corner of the top
+   * floor hung tilted in the air beside the tower, held there by its grip on that corner and the wall under it) a block
+   * whose weight isn't over anything under it never sets in cement (canSet, lockBelow, cementTower); when it stays still
+   * there anyway (held at its side: a hook, a wedge), it loses its grip and a small push away from its hold starts it,
+   * so it slides off and falls as it would have. On the physics clock (wakeUnsupported), the same in both games.
+   */
+  heldUp(b, dir, slip = true) {
+    if (!slip) {
+      this.grip(b);
+      b.unsup = true;
+      return;
+    }
+    b.unsup = true;
+    const body = b.body;
+    const still = body.isSleeping || (body.speed < SETTLE.speed && body.angularSpeed * (body.sleepRadius || 1) < SETTLE.speed);
+    b.stuck = still ? (b.stuck || 0) + 1 : 0;
+    if (b.stuck < UNSUP.stuck) return;
+    b.stuck = 0;
+    if (this.onHail(b)) return;   // (a hailstone under it holds it till it melts: then it settles, 1.13.3)
+    if (!b.slip) {
+      b.slip = { s: body.frictionStatic };
+      body.friction = 0;
+      body.frictionStatic = 0;
+    }
+    if (body.isSleeping) this.M.Sleeping.set(body, false);
+    this.M.Body.setVelocity(body, { x: body.velocity.x + dir * UNSUP.push, y: body.velocity.y });
+  }
+
+  /** A hailstone touching `b` now (Matter's contacts: a stone isn't one of the tower's blocks, wakeUnsupported can't see it). */
+  onHail(b) {
+    const list = this.matter.world.engine.pairs?.list || [];
+    for (const p of list) {
+      if (!p.isActive) continue;
+      const A = p.bodyA.parent || p.bodyA;
+      const B = p.bodyB.parent || p.bodyB;
+      if ((A === b.body && B.label === 'hail') || (B === b.body && A.label === 'hail')) return true;
+    }
+    return false;
+  }
+
+  /** Its grip back: it rests on what's under it again (or a turn's report put it where it lies). */
+  grip(b) {
+    b.unsup = false;
+    b.stuck = 0;
+    if (b.slip) {
+      b.body.frictionStatic = b.slip.s;
+      b.slip = null;
+      b.setFriction(this.weather.frictionMul);   // (the grip the weather gives every block now)
+    }
   }
 
   updateWobble(dtS) {

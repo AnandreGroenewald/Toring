@@ -455,6 +455,11 @@ export function createUI(bus) {
       bus.emit('ui:lang', getLanguage());   // the first-start choice can't be skipped: back keeps the language shown
     } else if (st.modal === 'name' && st.nameFirst) {
       // (1.21) nor can a player's first name: back stays on it
+    } else if (st.modal === 'saam') {
+      // (28 Oct 2026, two players on a private server: Back only hid the invite, the room stayed open, and the friend's
+      // tap pulled the host into a ride later) Back cancels it, as its ✕ and Kanselleer do
+      closeModal();
+      bus.emit('ui:saam-cancel');
     } else if (st.modal) {
       closeModal();
     } else if (st.screen === 'pause') {
@@ -525,6 +530,11 @@ export function createUI(bus) {
     style.setProperty('--sab', inset(cs.paddingBottom, vh - (top + height)));
     style.setProperty('--sal', inset(cs.paddingLeft, left));
     style.setProperty('--sar', inset(cs.paddingRight, vw - (left + width)));
+    // (29 Oct 2026, the owner's River photo: the phone's clock over the lifebuoy pill, its battery over the hearts) the
+    // River run draws its HUD outside #ui (js/rivier/view.js, inside #game), where these read the stylesheet's 0: the
+    // page's root carries the same insets
+    const rootStyle = document.documentElement.style;
+    for (const k of ['--sat', '--sab', '--sal', '--sar']) rootStyle.setProperty(k, style.getPropertyValue(k));
     // (1.15.4, the game-tester: on a 360x640 phone with Android's 3-button bar the menu's bottom row sat 14 px under the
     // buttons) little room left between the bars: 'tight' (the menu leaves out its saying)
     const room = height - (parseFloat(style.getPropertyValue('--sat')) || 0) - (parseFloat(style.getPropertyValue('--sab')) || 0);
@@ -1309,6 +1319,15 @@ export function createUI(bus) {
       tile(fmtInt(s.totalPerfects || 0), S.totalPerfects));
 
     const body = h('div', { class: 'sheet-body' }, tiles);
+    // (28 Oct 2026, the emulator: after rides down the river Statistiek said 0 everywhere) the River's own row
+    const sp = st.model?.span || null;
+    if (sp && ((sp.rideCount | 0) > 0 || (sp.rideTop | 0) > 0)) {
+      body.append(h('h3', { class: 'label chart-title', text: S.statsRiver }),
+        h('div', { class: 'tiles' },
+          tile(fmtInt(sp.rideCount | 0), S.statsRides),
+          tile(`${fmtInt(sp.rideTop | 0)} m`, S.statsRideTop),
+          tile(`${fmtInt(sp.rideBest | 0)} m`, S.statsRideWeek)));
+    }
     if (played > 0 && history.length) {
       const max = Math.max(1, ...history.map((d) => (d && d.heightM != null ? d.heightM : 0)));
       const last = history.length - 1;
@@ -2752,7 +2771,8 @@ export function createUI(bus) {
       class: 'nick-input', type: 'text', maxlength: '16', autocomplete: 'off', autocapitalize: 'words',
       // (1.15, the owner: "The blue shield?") a game name, not a login or your real name: password managers keep out
       'data-bwignore': 'true', 'data-1p-ignore': 'true', 'data-lpignore': 'true', 'data-form-type': 'other',
-      spellcheck: 'false', enterkeyhint: 'done', 'aria-label': S.duelNick, placeholder,
+      spellcheck: 'false', enterkeyhint: 'done', 'aria-label': S.duelNick,
+      placeholder: first && placeholder ? S.nameFirstEg(placeholder) : placeholder,
     });
     input.value = name || '';
     const msg = h('p', { class: 'nick-msg', role: 'status', 'aria-live': 'polite', text: first ? S.nameFirstSub : S.nameHint(placeholder) });
@@ -3380,6 +3400,8 @@ export function createUI(bus) {
     const cancel = button('btn-white', [h('span', { text: S.saamCancel })], () => { closeModal(); bus.emit('ui:saam-cancel'); });
     const seekBtn = (text) => button('btn-big btn-green', [h('span', { text })], () => bus.emit('ui:saam-seek'));
     const inviteBtn = () => button('btn-big btn-purple', [h('span', { text: S.saamInvite })], () => bus.emit('ui:saam-invite'));
+    // (28 Oct 2026) nobody looking (or no wait wanted): Robot Rikus rides along
+    const rikusBtn = (big = false) => button(big ? 'btn-big btn-green' : 'btn-white', [emo('🤖'), h('span', { text: S.saamRikus })], () => bus.emit('ui:saam-rikus'));
     const body = mode === 'join'
       ? [h('p', { class: 'week-line', text: S.saamJoinSub }),
         button('btn-big btn-green', [h('span', { text: S.saamJoinGo })], () => bus.emit('ui:saam-join')),
@@ -3387,9 +3409,9 @@ export function createUI(bus) {
       : mode === 'choose'
         ? [h('p', { class: 'week-line', text: S.saamChooseSub }), seekBtn(S.saamSeek), inviteBtn(), cancel]
         : mode === 'seek'
-          ? [spin(S.saamSeeking), cancel]
+          ? [spin(S.saamSeeking), rikusBtn(), cancel]
           : mode === 'none'
-            ? [h('p', { class: 'week-line', text: S.saamNobody }), inviteBtn(), seekBtn(S.saamSeekAgain), cancel]
+            ? [h('p', { class: 'week-line', text: S.saamNobody }), rikusBtn(true), inviteBtn(), seekBtn(S.saamSeekAgain), cancel]
             : mode === 'host'
               ? [h('p', { class: 'week-line', text: S.saamInviteSub }),
                 button('btn-big btn-wa', [icon('chat'), h('span', { text: S.shareWhatsApp })], () => doShare(S.saamInviteText(link), 'whatsapp'), { nav: false }),

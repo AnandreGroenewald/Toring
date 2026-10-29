@@ -4,7 +4,7 @@
 // stand; "bye" or a long absence ends it. The room connection comes back by itself and takes its own seat again.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanDuelMsg, duelWinner, duelSeed, createRiverDuel } from '../js/rivier/duel.js';
+import { cleanDuelMsg, duelWinner, duelSeed, createRiverDuel, DUEL_V } from '../js/rivier/duel.js';
 import { connectSaam, seekSaam, saamKey, FAIL_MS } from '../js/rivier/saamNet.js';
 
 test('a friend’s message is cleaned: numbers clamped, unknown kinds and bad seeds dropped', () => {
@@ -318,4 +318,30 @@ test('the lobby: waiting, then a match (its code checked, the name cleaned); a s
   s2.on((m) => got2.push(m.t));
   w2.made[0].die();
   assert.deepEqual(got2, ['fail']);
+});
+
+test('a friend on another version (another river) ends the room at once: bye to them, "version" to us', async () => {
+  // (28 Oct 2026: 3 = the river with its waterfalls; an older phone would ride a different river)
+  const { a, b } = room();
+  const events = [];
+  const da = createRiverDuel(a, { host: true, name: 'Nuut' });
+  da.onEvent((e) => events.push(e));
+  a.enter();
+  b.enter();
+  await tick();
+  b.send({ t: 'hi', v: DUEL_V - 1, name: 'Oud', skin: 'kleur' });
+  await tick();
+  assert.ok(a.sent.some((m) => m.t === 'bye'), 'the older phone hears bye');
+  assert.ok(events.some((e) => e.t === 'gone' && e.why === 'version'), 'ours hears why');
+  assert.equal(da.friend, null, 'no friend made');
+  assert.ok(!a.sent.some((m) => m.t === 'go'), 'no round started');
+  // (the same version: the round starts as ever)
+  const r2 = room();
+  const d1 = createRiverDuel(r2.a, { host: true, name: 'A' });
+  const d2 = createRiverDuel(r2.b, { host: false, name: 'B' });
+  d1.onEvent((e) => { if (e.t === 'hi') d1.start(); });
+  r2.a.enter();
+  r2.b.enter();
+  await tick(); await tick(); await tick();
+  assert.ok(d1.friend && d2.friend && d1.round === 0 && d2.round === 0, 'same version: in, round 0');
 });

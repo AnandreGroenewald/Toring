@@ -14,7 +14,10 @@
 // Nothing here is trusted: the friend's game could send anything, so every field is checked and clamped.
 import { cleanNickname } from '../core/duel.js';
 
-export const DUEL_V = 2;
+// (28 Oct 2026) 3: the river with its waterfalls (core/rivier.js FALLS) and its sharper bends: a phone on 2 would ride a
+// different river beside you, so a 'hi' of another version ends the room at once (a 'bye' first: the older phone, which
+// checks nothing, stops waiting too)
+export const DUEL_V = 3;
 /** How often a rider's place goes to the other phone (a second): under the room's 20 messages a second. */
 export const STATE_HZ = 10;
 /** The count before the river runs (s). */
@@ -94,12 +97,12 @@ export function createRiverDuel(link, { host, name = '', skin = 'kleur', rand = 
       emit(msgFns, { t: 'start', n });
     }
   }
-  function goneForGood() {
+  function goneForGood(why = '') {
     if (isGone) return;
     isGone = true;
     timers.clearTimeout(away);
-    emit(msgFns, { t: 'gone' });
-    emit(eventFns, { t: 'gone' });
+    emit(msgFns, { t: 'gone', why });
+    emit(eventFns, { t: 'gone', why });
     link.close();
   }
   link.on((raw) => {
@@ -137,6 +140,11 @@ export function createRiverDuel(link, { host, name = '', skin = 'kleur', rand = 
     if (!m) return;
     if (m.t === 'bye') { goneForGood(); return; }
     if (m.t === 'hi') {
+      if (m.v !== DUEL_V) {
+        send({ t: 'bye' });
+        goneForGood('version');
+        return;
+      }
       const first = !friend;
       friend = { name: m.name, skin: m.skin };
       if (first) emit(eventFns, { t: 'hi', friend });

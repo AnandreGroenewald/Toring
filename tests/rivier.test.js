@@ -2,7 +2,7 @@
 // to rescue in the order given (yours first), Saturday's islands along the way.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { COINS, RIVER, rescueCourse, raidCourse, passable, speedAt, laneX, inRapids, PACE } from '../js/core/rivier.js';
+import { COINS, FALLS, RIVER, rescueCourse, raidCourse, passable, unreachableCoins, speedAt, laneX, inRapids, PACE } from '../js/core/rivier.js';
 import { rideMaxMetres } from '../js/core/riverpace.js';
 
 const WHO = ['boer', 'haai', 'bytjie', 'klippie', 'rissie', 'seekat', 'braai', 'duiker'];
@@ -97,9 +97,10 @@ test('rivier (endless): the river never ends — always passable at its speed, e
       if (inRapids(c, r.z)) assert.ok(r.items.filter((it) => it.kind !== 'person').length <= 1, 'one at a time in the rapids');
     }
     // (the same day: the same river, however far it's made)
+    // (29 Oct 2026: but for the newest row, whose coins wait for the row after it)
     const c2 = rescueCourse(`end-${d}`, WHO, { endless: true });
     c2.extend(3000);
-    assert.deepEqual(c2.rows, c.rows.filter((r) => r.z <= c2.rows.at(-1).z));
+    assert.deepEqual(c2.rows.slice(0, -1), c.rows.filter((r) => r.z <= c2.rows.at(-2).z));
   }
   // (the owner: "it begins VERY slow and then the speed stays the same": a brisk start, and always getting faster)
   assert.equal(speedAt(0, Infinity), PACE.start);
@@ -203,8 +204,11 @@ test('rivier (endless): coins only where they cost something; a stack every 700�
       assert.ok(r.z >= COINS.from && !r.teach, 'not in the first metres, not on a lesson');
       if (it.y === 1) assert.ok(r.items.some((x) => x.kind === 'log'), 'in the air only over a log');
       if (it.y === 2) assert.ok(r.items.some((x) => x.kind === 'branch'), 'low only under a tree');
-      if (it.y === 0) assert.ok(r.items.some((x) => x.kind === 'block' && x.lane === it.lane), 'on the water only behind a block in that lane');
-      assert.ok(it.dz + it.sp * (it.n - 1) < 14, 'all of a line before the next row');
+      // (28 Oct 2026: a waterfall's own line through its spray is the one line on open water, `spray`)
+      if (it.y === 0 && !r.spray) assert.ok(r.items.some((x) => x.kind === 'block' && x.lane === it.lane), 'on the water only behind a block in that lane');
+      // (a waterfall's line runs through its fall and the stretch it cleared)
+      const next = c.rows.find((q) => q.z > r.z && q.items.some((x) => x.kind !== 'coins'));
+      assert.ok(!next || r.z + it.dz + it.sp * (it.n - 1) < next.z, 'all of a line before the next row');
     }
     const gems = lines.filter(({ it }) => it.gem);
     assert.equal(gems.length, 1, 'one diamond a ride');
@@ -218,6 +222,29 @@ test('rivier (endless): coins only where they cost something; a stack every 700�
     again.extend(6000);
     assert.equal(again.rows.map((r) => r.items.filter((it) => it.kind !== 'coins').map((it) => `${it.kind}${it.lane}`).join(',')).join('|'), bare, 'the same river every time');
   }
+});
+
+test('rivier (endless): every coin can be taken — hard sometimes, never impossible — and each line is laid once', () => {
+  // (29 Oct 2026, the owner: "Sometimes the coins are impossible to get which feels like a trap, the coins should be hard
+  // to get sometimes not impossible"; 1.23.0's lines began 4 m behind their block: at 20-40 m/s there was no time to
+  // move in, two lane changes none at all)
+  let lines = 0;
+  for (let d = 0; d < 24; d++) {
+    const c = rescueCourse(`reach-${d}`, [], { endless: true });
+    for (let z = 2000; z <= 12000; z += 1500) c.extend(z);   // (grown bit by bit, as the ride does)
+    assert.deepEqual(unreachableCoins(c), [], `reach-${d}`);
+    for (const r of c.rows) {
+      const keys = r.items.filter((it) => it.kind === 'coins').map((it) => `${it.lane}/${it.dz}/${it.y}`);
+      lines += keys.length;
+      assert.equal(new Set(keys).size, keys.length, `each line once (${r.z} m: the waterfalls' rows spliced in)`);
+    }
+    assert.ok(passable(c), `reach-${d}`);
+  }
+  assert.ok(lines > 24 * 40, `coins all the way down (${lines} lines)`);
+  // (the check sees the trap: a line 4 m behind a block at 3 km, the lane beside it shut too)
+  const trap = { endless: true, rows: [{ z: 3000, items: [{ kind: 'block', lane: 0 }, { kind: 'block', lane: 1 }, { kind: 'coins', lane: 0, n: 5, dz: 4, sp: 2.1, y: 0 }] }, { z: 3030, items: [] }] };
+  assert.ok(unreachableCoins(trap).length >= 3);
+  assert.ok(unreachableCoins(trap).every((b) => b.why === 'no time to move in'));
 });
 
 test('rivier (endless): what crosses the river crosses both ways — blocks, Blouaap and the crocodiles', () => {
@@ -258,4 +285,34 @@ test('rivier (endless): however many people (up to 24), all of them fit before t
       assert.ok(passable(c));
     }
   }
+});
+
+test('rivier (endless): waterfalls to ride through — never in white water or by the lake, a clear stretch, coins in the spray, the same on every phone', () => {
+  // (28 Oct 2026, the owner: "maybe even a waterfall or two"; his pick: ride through one)
+  for (let d = 0; d < 12; d++) {
+    const c = rescueCourse(`fall-${d}`, [], { endless: true });
+    c.extend(6000);
+    assert.ok(c.falls.length >= 3, `falls on 6 km (${c.falls.length})`);
+    assert.ok(c.falls[0] >= FALLS.first, 'not before the first');
+    for (let i = 1; i < c.falls.length; i++) assert.ok(c.falls[i] - c.falls[i - 1] >= FALLS.every - 200, 'apart');
+    for (const f of c.falls) {
+      for (const z of [f - FALLS.before, f, f + FALLS.after]) {
+        assert.ok(!inRapids(c, z), `${f}: no white water`);
+        assert.ok(!(z > c.lake.from - 20 && z < c.lake.to), `${f}: not by the lake`);
+      }
+      const near = c.rows.filter((r) => r.z >= f - FALLS.before && r.z <= f + FALLS.after && !r.teach && !r.items.some((it) => it.gem));
+      for (const r of near) for (const it of r.items) assert.ok(it.kind === 'person' || (it.kind === 'coins' && r.spray), `${f}: only people and its own coins (${it.kind})`);
+      assert.equal(near.filter((r) => r.fall).length, 1, `${f}: its row`);
+      assert.equal(near.filter((r) => r.spray).length, 1, `${f}: its coins`);
+    }
+    let sorted = true;
+    for (let i = 1; i < c.rows.length; i++) if (c.rows[i].z < c.rows[i - 1].z) sorted = false;
+    assert.ok(sorted, 'the rows stay in order');
+    assert.ok(passable(c), `fall-${d}`);
+    const again = rescueCourse(`fall-${d}`, [], { endless: true });
+    again.extend(6000);
+    assert.deepEqual(again.falls, c.falls, 'the same falls every time');
+  }
+  // (the fixed rescue course has none)
+  assert.equal(rescueCourse('fall-x', []).falls, undefined);
 });

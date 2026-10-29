@@ -1805,6 +1805,9 @@ function askNameFirst(next) {
 /** A new player's first visit (no link): "Hoe speel ek?" opens by itself, once; its "Kom ons bou!" starts the lesson. */
 function firstVisit() {
   if (store.hasPlayed() || settings.howtoSeen) return;
+  // (28 Oct 2026: tried starting the lesson at once here, to spare a new player a screen; taken back the same evening:
+  // it hid the menu, so a friend's link (or anything else on the menu) waited behind a lesson. The notification question
+  // that came first was the bigger load, and that is gone: app/shim.js)
   ui.showHowTo({ lesson: true });
   settings = store.setSettings({ howtoSeen: true });
 }
@@ -2936,6 +2939,7 @@ let saamSeeker = null;  // (the lobby search, while it runs)
 let saamSeekTimer = 0;
 const SAAM_SEEK_MS = 45000;   // (nobody found in this long: say so)
 const SAAM_SHOW_MS = 20000;   // (a match from the lobby that doesn't come into the room in this long: look again)
+const SAAM_JOIN_WAIT_MS = 60000;   // (28 Oct 2026) a friend's link whose host doesn't come in this long: they're gone
 function saamEnd() {
   saamTry++;
   clearTimeout(saamSeekTimer);
@@ -2967,7 +2971,9 @@ function saamWire(duel, { fromSeek = false } = {}) {
     } else if (e.t === 'gone' && !ride) {
       clearTimeout(noShow);
       ui.closeSaam();
-      ui.toast(duel.friend ? S.saamGone(duel.friend.name || S.saamFriend) : S.saamRoomGone, 3200);
+      // (28 Oct 2026: a full room's third friend saw this for 3.2 s, after a sheet that promised a waiting friend)
+      // (28 Oct 2026: a phone of another Saam gly version rides another river: js/rivier/duel.js DUEL_V)
+      ui.toast(e.why === 'version' ? S.saamOtherVersion : duel.friend ? S.saamGone(duel.friend.name || S.saamFriend) : S.saamRoomGone, 5000);
       saamEnd();
     }
   });
@@ -3043,8 +3049,17 @@ function saamJoin() {
   if (!code) { ui.closeSaam(); return; }
   if (!has3d()) { ui.closeSaam(); ui.toast(S.no3dRideFree, 3600); return; }
   saamEnd();
-  saamRoom(code, false);
+  const duel = saamRoom(code, false);
   ui.showSaam({ mode: 'wait' });
+  // (28 Oct 2026, two players on a private server: a host whose app is gone keeps its seat (for the WhatsApp trip), so
+  // the friend waited for ever) no host in SAAM_JOIN_WAIT_MS: say so and stop
+  const mine = saamTry;
+  setTimeout(() => {
+    if (mine !== saamTry || saam?.duel !== duel || duel.friend || ride) return;
+    ui.closeSaam();
+    ui.toast(S.saamNotBack, 5000);
+    saamEnd();
+  }, SAAM_JOIN_WAIT_MS);
 }
 /**
  * A friend's Saam gly link (?gly=CODE): kept to ask once the menu is up (after a new player's language; instead of the
@@ -3072,6 +3087,25 @@ bus.on('ui:saam-invite', saamHost);
 bus.on('ui:saam-seek', saamSeek);
 bus.on('ui:saam-join', saamJoin);
 bus.on('ui:saam-cancel', () => { saamLinkCode = null; saamEnd(); });
+/**
+ * (28 Oct 2026, the owner chose "a ghost rider when nobody is online") Nobody looking right now (or no wait wanted): Robot
+ * Rikus rides along, on this phone alone (js/rivier/rikusRider.js stands in for the room), going out near your own best.
+ * A free ride as ever (the same coins and metres); nothing goes to a server for him.
+ */
+async function saamRikus() {
+  if (!has3d()) { ui.toast(S.no3dRideFree, 3600); return; }
+  saamEnd();
+  const mine = saamTry;
+  // (fetched when wanted, as the river itself is: none of it in the game's start)
+  const { createRikusLink } = await import('./rivier/rikusRider.js');
+  if (mine !== saamTry) return;
+  const link = createRikusLink({ best: span.view().rideBest || 0 });
+  const duel = createRiverDuel(link, { host: true, name: duelNick(), skin: saamSkin() });
+  saam = { duel, code: 'rikus', link };
+  saamWire(duel);
+  ui.showSaam({ mode: 'wait' });
+}
+bus.on('ui:saam-rikus', saamRikus);
 
 /** Can this phone draw the 3D river (WebGL 2)? */
 let has3dCache = null;
@@ -3172,10 +3206,18 @@ function spanPrize() {
 bus.on('ui:rivier', startRide);
 /** (the results card offers the ride: its 3D code and models start downloading now, quietly, so the ride opens at once) */
 let riverPrefetched = false;
-function prefetchRiver() {
+function prefetchRiver(menuOnly = false) {
   if (riverPrefetched || !has3d()) return;
-  riverPrefetched = true;
-  const go = () => import('./rivier/models.js').then((m) => m.loadModels(['croc', 'hippo', 'monkey', 'builder', 'dorp', 'island', 'props', 'hazards'])).catch(() => {});
+  // (29 Oct 2026) the ride's own code too (view.js: nothing runs as it loads), not only its models. From the app's menu
+  // (menuOnly) only while the menu is still up: a game started meanwhile keeps its frames, and its results card fetches it.
+  const go = () => {
+    if (riverPrefetched || (menuOnly && screen !== 'menu')) return;
+    riverPrefetched = true;
+    Promise.all([
+      import('./rivier/view.js'),
+      import('./rivier/models.js').then((m) => m.loadModels(['croc', 'hippo', 'monkey', 'builder', 'dorp', 'island', 'props', 'hazards'])),
+    ]).catch(() => {});
+  };
   if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 3000 });
   else setTimeout(go, 1500);
 }
@@ -3345,8 +3387,11 @@ window.addEventListener('stapel:back', (e) => {
   if (!ride) return;
   e.preventDefault();
   e.stopImmediatePropagation();
-  ride.pause();
+  // (28 Oct 2026) the ride's own steps: the end card's Klaar, a pause lifted, else a pause (rivier/view.js `back`)
+  if (ride.back) ride.back(); else ride.pause();
 }, true);
+// (28 Oct 2026) the Android app: Back on the menu with nothing open closes the game only when pressed twice (app/shim.js)
+window.addEventListener('stapel:exit-hint', () => ui.toast(S.backAgain, 2000));
 
 bus.on('game:castle', (c) => {
   try {
@@ -4398,6 +4443,10 @@ function onReady() {
   if (askLanguage) ui.showLanguage({ first: true });
   else if (!openAccountLink()) askNameFirst(() => { if (!openDuelLink() && !openSaamLink()) firstVisit(); });
   ui.setLoading(false);
+  // (29 Oct 2026, the owner: "it still takes a second or two to load into stapel") in the app the River's code and models
+  // come in quietly once the menu is up (its files are on the phone: no data used), so a ride from the menu opens at once;
+  // the website waits for the results card, as before (some 5 MB)
+  if (IN_APP) setTimeout(() => prefetchRiver(true), 2500);
   if (recovered.length) ui.toast(recoveredCoins ? `${S.unfinished} +${recoveredCoins} 🪙` : S.unfinished, 3600);
   else if (liveElsewhere(todayKey())) ui.toast(S.otherTab, 3000);
   if (testerCode !== null) setTimeout(() => claimTesterGift(testerCode), 900);   // (1.13.2) the testers' gift

@@ -3,6 +3,9 @@ package com.lekkerlocal.stapel;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
+import android.webkit.RenderProcessGoneDetail;
+import android.webkit.WebView;
 
 import androidx.activity.EdgeToEdge;
 import androidx.core.view.WindowCompat;
@@ -10,6 +13,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.WebViewListener;
 
 public class MainActivity extends BridgeActivity {
     @Override
@@ -29,7 +33,26 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(StapelPushPlugin.class);
         super.onCreate(savedInstanceState);
         hideNavigationBar();
+        // (28 Oct 2026, the emulator: when Android ended the WebView's drawing process, as it does on a phone short of
+        // memory or while the WebView updates, the whole app closed) the game starts again in a fresh WebView instead.
+        // Three restarts within a minute: a phone that can't keep the game up; then Android closes the app as before.
+        bridge.addWebViewListener(new WebViewListener() {
+            @Override
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                long now = SystemClock.elapsedRealtime();
+                if (now - firstRestartAt > 60_000) {
+                    firstRestartAt = now;
+                    restarts = 0;
+                }
+                if (++restarts > 3) return false;
+                mainThread.post(MainActivity.this::recreate);
+                return true;
+            }
+        });
     }
+
+    private static long firstRestartAt = 0;
+    private static int restarts = 0;
 
     @Override
     public void onResume() {

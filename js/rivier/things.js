@@ -233,7 +233,8 @@ export function createThings(scene, pieces) {
     const f = foam(Math.max(W, H) * k * 1.7);
     f.position.y = 0.04;
     root.add(f);
-    root.userData = { block: g, w: W * k * 0.82, d: 3.2 * k * 0.8, phase: (it.spin || 0) * 10 + (blockN++ % 7) * 0.9, top: H * k * 0.68 };   // (1.22: each its own sway)
+    // (foam, foamY: the view keeps the ring on the water while the block bobs in it)
+    root.userData = { block: g, w: W * k * 0.82, d: 3.2 * k * 0.8, phase: (it.spin || 0) * 10 + (blockN++ % 7) * 0.9, top: H * k * 0.68, foam: f, foamY: f.position.y };   // (1.22: each its own sway)
     return root;
   }
   let rockN = 0;
@@ -258,7 +259,7 @@ export function createThings(scene, pieces) {
     const f = foam(bo ? 7.2 : 4.2);
     f.position.y = 0.05;
     root.add(f);
-    root.userData = { w: 2.4, d: 2.4, phase: 0 };
+    root.userData = { w: 2.4, d: 2.4, phase: 0, foam: f, foamY: f.position.y };
     return root;
   }
   /** A person on a rubber ring, waving, their face (the Living Tower's portrait) always towards you. */
@@ -316,7 +317,7 @@ export function createThings(scene, pieces) {
     const f = foam(2.2);
     f.position.y = 0.04;
     root.add(f);
-    root.userData = { arm, face, w: 1.6, d: 1.6, phase: i * 1.7 };
+    root.userData = { arm, face, w: 1.6, d: 1.6, phase: i * 1.7, foam: f, foamY: f.position.y };
     return root;
   }
 

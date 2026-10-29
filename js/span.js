@@ -17,7 +17,7 @@ const RIDE_MIN = 6;        // people on a ride at least (strays make up the rest
 const RIDE_MAX = 12;       // ...and at most
 const TIMEOUT_MS = 9000;
 
-const blank = (week) => ({ v: 1, week, floors: [], people: 0, days: {}, granted: {}, used: 0, rides: {}, rideM: {}, runs: {}, rideBest: 0, monuments: [], name: '', id: '', key: '', srv: null, queue: [] });
+const blank = (week) => ({ v: 1, week, floors: [], people: 0, days: {}, granted: {}, used: 0, rides: {}, rideM: {}, runs: {}, rideBest: 0, rideTop: 0, rideCount: 0, monuments: [], name: '', id: '', key: '', srv: null, queue: [] });
 
 function clean(raw, week) {
   const d = blank(week);
@@ -30,6 +30,9 @@ function clean(raw, week) {
   }
   d.used = Math.max(0, Math.min(99, raw.used | 0));
   d.rideBest = Math.max(0, Math.min(1e6, raw.rideBest | 0));
+  // (28 Oct 2026) the furthest ride ever and how many rides, for Statistiek: kept across the weeks
+  d.rideTop = Math.max(d.rideBest, Math.min(1e6, raw.rideTop | 0));
+  d.rideCount = Math.max(0, Math.min(1e7, raw.rideCount | 0));
   if (raw.rideRank && typeof raw.rideRank === 'object' && typeof raw.rideRank.day === 'string') d.rideRank = { day: raw.rideRank.day, rank: raw.rideRank.rank | 0, players: raw.rideRank.players | 0, m: raw.rideRank.m | 0 };
   if (Array.isArray(raw.monuments)) d.monuments = raw.monuments.filter((m) => m && typeof m.week === 'string').slice(0, MONUMENTS);
   d.name = typeof raw.name === 'string' ? raw.name.slice(0, 18) : '';
@@ -166,7 +169,7 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
       const sv = S();
       // (the endless river: this week's metres down it, all rides together, and your best single ride)
       const rm = Object.entries(d.rideM || {}).filter(([k]) => weekOf(k) === d.week).map(([, v]) => v | 0);
-      const base = { rideToday: d.rides[day] === 0, rodeToday: day in d.rides && d.rides[day] !== 0, dow: dowOf(day), online: !!sv, rideBest: d.rideBest | 0, rideMetres: rm.reduce((a, b) => a + b, 0), rideRank: d.rideRank?.day === day ? d.rideRank : null };
+      const base = { rideToday: d.rides[day] === 0, rodeToday: day in d.rides && d.rides[day] !== 0, dow: dowOf(day), online: !!sv, rideBest: d.rideBest | 0, rideTop: d.rideTop | 0, rideCount: d.rideCount | 0, rideMetres: rm.reduce((a, b) => a + b, 0), rideRank: d.rideRank?.day === day ? d.rideRank : null };
       if (sv) {
         const c = sv.crew;
         // (Saturday from noon the crane builds no new floors: turns wait for nothing; repairs go on. The server says.)
@@ -282,6 +285,8 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
         d.rideM[dateKey] = (d.rideM[dateKey] | 0) + m;
         d.runs[dateKey] = (d.runs[dateKey] | 0) + 1;
         d.rideBest = Math.max(d.rideBest | 0, m);
+        d.rideTop = Math.max(d.rideTop | 0, m);
+        d.rideCount = (d.rideCount | 0) + 1;
         save();
         if (online && m > 0) {
           const body = { day: dateKey, rescued: 0, metres: m, extra: true, durationMs: Math.round(durationMs), hidden: !!hidden, ticket: String(ticket || ''), rid: String(rid || '') };
@@ -299,6 +304,8 @@ export function createSpan({ backend = safeLocalStorage(), debug = false, castId
       d.rides[dateKey] = n || -1;
       d.rideM[dateKey] = (d.rideM[dateKey] | 0) + m;
       d.rideBest = Math.max(d.rideBest | 0, m);
+      d.rideTop = Math.max(d.rideTop | 0, m);
+      d.rideCount = (d.rideCount | 0) + 1;
       const coins = n ? earn(n * SPAN.coinsPerRescue) : 0;
       if (online) {
         const body = { day: dateKey, rescued: n, fromRiver: Math.min(fromRiver | 0, n), metres: m, durationMs: Math.round(durationMs), hidden: !!hidden, ticket: String(ticket || ''), rid: String(rid || 'r') };

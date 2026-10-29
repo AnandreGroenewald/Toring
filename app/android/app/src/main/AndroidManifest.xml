@@ -2,7 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- (28 Oct 2026, the emulator's Pixel Tablet: Android 16 ignores a portrait lock on screens 600 dp and wider unless
+         the app says it is a game) appCategory="game" keeps Stapel upright there too -->
     <application
+        android:appCategory="game"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"

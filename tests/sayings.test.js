@@ -56,6 +56,12 @@ test('saying of the day is the same for everyone and changes with the date', () 
   const days = new Set();
   for (let d = 1; d <= 28; d++) days.add(sayingOfTheDay(`2026-11-${String(d).padStart(2, '0')}`));
   assert.ok(days.size > 8);
+  // (28 Oct 2026) a whole round of days: every saying once, none twice
+  const n = SAYINGS.GENERAL.length;
+  const start = Math.ceil(Date.UTC(2026, 9, 1) / 86400000 / n) * n;
+  const round = new Set();
+  for (let k = 0; k < n; k++) round.add(sayingOfTheDay(new Date((start + k) * 86400000).toISOString().slice(0, 10)));
+  assert.equal(round.size, n);
 });
 
 test('milestone and result sayings depend only on seed and outcome', () => {

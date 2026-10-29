@@ -2,8 +2,12 @@
   "appId": "com.lekkerlocal.stapel",
   "appName": "Stapel",
   "webDir": "www",
+  "server": {
+    "errorPath": "webview-oud.html"
+  },
   "android": {
-    "backgroundColor": "#8fd3f4"
+    "backgroundColor": "#8fd3f4",
+    "minWebViewVersion": 93
   },
   "plugins": {
     "LocalNotifications": {

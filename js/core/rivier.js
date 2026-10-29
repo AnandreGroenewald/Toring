@@ -283,9 +283,10 @@ function buildCourse(key, len, who, crews) {
     // (1.21.3) the river's coins: laid on the rows as they're made, from their own seed (the river itself is the same
     // with or without them)
     const coinsOn = addCoins(key, rows, { nearIsland, rapidsAt });
-    const grow = (untilZ) => { fill(untilZ); coinsOn(); };
+    const fallsOn = addFalls(rows, { nearIsland, rapidsAt });
+    const grow = (untilZ) => { fill(untilZ); coinsOn(); fallsOn(untilZ); };
     grow(1600);
-    return { len, endless: true, rows, islands, rapids, lake, island, people: people.slice(0, pi), extend: grow };
+    return { len, endless: true, rows, islands, rapids, lake, island, falls: fallsOn.falls, people: people.slice(0, pi), extend: grow };
   }
   fill(stopAt);
   // people left over (a long list): along the calm finish stretch, lane by lane
@@ -296,6 +297,51 @@ function buildCourse(key, len, who, crews) {
     fz += 9;
   }
   return { len, rows, islands, rapids, people: people.slice(0, pi) };
+}
+
+/**
+ * (28 Oct 2026, the owner: "maybe even a waterfall or two"; his pick: ride through one) The endless river's waterfalls:
+ * water pours across the river from the cliff tops and you ride through it. At FALLS.first, then every FALLS.every
+ * metres, moved on (40 m at a time) out of white water and away from the lake; the stretch round each keeps only its
+ * people (no blocks, beasts or logs: the moment is the fall), with a line of coins through the spray and a row of its own
+ * (`fall: true`) for the ride to draw it. Laid on the rows after they and their coins are made, from fixed metres, so
+ * the river itself is the same (the same course on both phones in Saam gly). Rows a lesson needs (`teach`) are left be.
+ */
+export const FALLS = Object.freeze({ first: 760, every: 1400, before: 30, after: 24, coins: 4, coinSp: 3 });
+function addFalls(rows, { nearIsland, rapidsAt }) {
+  const falls = [];
+  let k = 0;
+  // (29 Oct 2026: nor where a lesson or the ride's diamond lies in its stretch: kept there, they put a log under its line)
+  const clear = (z) => ![z - FALLS.before, z, z + FALLS.after].some((q) => nearIsland(q) || rapidsAt(q))
+    && !rows.some((r) => r.z >= z - FALLS.before && r.z <= z + FALLS.after && (r.teach || r.items.some((it) => it.gem)));
+  const at = (z) => {
+    const i = rows.findIndex((r) => r.z > z);
+    return i < 0 ? rows.length : i;
+  };
+  const on = (untilZ) => {
+    // (only where the rows after it are made already: else next time)
+    const upTo = Math.min(untilZ, (rows.length ? rows[rows.length - 1].z : 0) - FALLS.after - 5);
+    for (;;) {
+      let f = FALLS.first + k * FALLS.every;
+      for (let i = 0; i < 12 && !clear(f); i++) f += 40;
+      if (f > upTo) return;
+      k++;
+      if (!clear(f)) continue;
+      for (const r of rows) {
+        // (a lesson's row, and the ride's one diamond over its log, stay as they are)
+        if (!r.teach && !r.items.some((it) => it.gem) && r.z >= f - FALLS.before && r.z <= f + FALLS.after) r.items = r.items.filter((it) => it.kind === 'person');
+      }
+      // (the line, 9 m: through the fall, in a lane none of its people are in, done before the next row)
+      const c0 = f - Math.round(((FALLS.coins - 1) * FALLS.coinSp) / 2);
+      const busy = new Set(rows.filter((r) => r.z >= c0 - 3 && r.z <= c0 + FALLS.coins * FALLS.coinSp + 3).flatMap((r) => r.items.map((it) => it.lane)));
+      const lane = [1, 0, 2].find((l) => !busy.has(l)) ?? 1;
+      rows.splice(at(c0), 0, { z: c0, items: [{ kind: 'coins', lane, n: FALLS.coins, dz: 0, sp: FALLS.coinSp, y: 0, val: 1 }], spray: true });
+      rows.splice(at(f), 0, { z: f, items: [], fall: true });
+      falls.push(f);
+    }
+  };
+  on.falls = falls;
+  return on;
 }
 
 /** Is course z in white water? (the endless river has a stretch every RIVER.rapidsEvery, none by the lake) */
@@ -325,51 +371,132 @@ export function rapidsWindow(course, z) {
 /**
  * (1.21.3) Coins on the endless river (the owner, 25 Oct 2026: "the objective of the game mode, should we add tokens,
  * starts or coins, just to make it more intreguing, but afcourse not easy"): only where taking them costs something —
- * five in the lane just behind a block (back in right after it, out again before the next row), three over a log (jump in
+ * up to five in the lane behind a block (back in once past it, out again before what's next: COINS.windowS), three over a log (jump in
  * that lane), three under a fallen tree (duck in that lane); a stack of ten behind a block every 700–900 m; once a ride,
  * a diamond worth fifty over the first long log after 2 km. Each row decides from its own seed (key + its metres), so
  * the river's things are the same as without coins. Items: { kind 'coins', lane, n, dz (m after the row), sp (m apart),
  * y (0 on the water, 1 in the air: a jump, 2 low: under a tree), val (each), stack?, gem? }.
  */
-export const COINS = Object.freeze({ from: 120, behindP: 0.3, logP: 0.45, treeP: 0.4, stackEvery: [700, 900], gemFrom: 2000, stackVal: 10, gemVal: 50 });
+export const COINS = Object.freeze({
+  from: 120, behindP: 0.3, logP: 0.45, treeP: 0.4, stackEvery: [700, 900], gemFrom: 2000, stackVal: 10, gemVal: 50,
+  // (29 Oct 2026, the owner: "Sometimes the coins are impossible to get which feels like a trap, the coins should be hard
+  // to get sometimes not impossible") every coin leaves at least windowS for the move it asks: into its lane once past what
+  // knocks you there (one lane change, or two with the lanes beside it shut as well) and out again before the next such
+  // thing. The ride's own measures (js/rivier/view.js): a knock reaches `zone` m along the river from a thing's middle (the
+  // longest block, 3.6 m, + 0.5), a coin is taken within `take` m of it; a lane change (RIVER.laneS) is clear of a block's
+  // side after `clearS` and at a coin after `takeS`; on the way out a coin is still taken until `leaveS` before it's clear
+  windowS: 0.25, zone: 2.3, take: 0.95, clearS: 0.07, takeS: 0.1, leaveS: 0.025,
+});
+/** What knocks you in a row's lanes: each one's lane, a crossing one's both, a whirlpool's pull the middle too (a log is
+ * jumped, a fallen tree ducked under, Hanswors's pies dodged, people taken: none of them shuts a lane). */
+function shutLanes(row) {
+  const shut = new Set();
+  for (const it of row.items) {
+    if (['person', 'clown', 'log', 'branch', 'coins'].includes(it.kind)) continue;
+    shut.add(it.lane);
+    if (it.drift) shut.add(it.lane + it.drift);
+    if (it.kind === 'whirl') shut.add(1);   // (its pull reaches the middle lane)
+  }
+  return shut;
+}
+/** Lane changes between `lane` and the nearest lane `shut` leaves open: 1, or 2 when the lanes beside it are shut too. */
+const laneMoves = (lane, shut) => ([lane - 1, lane + 1].some((l) => l >= 0 && l < RIVER.lanes && !shut.has(l)) ? 1 : 2);
+/** The least metres from a thing that knocks you to the first coin behind it in its lane, at `v` m/s, `n` lane changes in. */
+const coinIn = (v, n) => COINS.zone - COINS.take + v * ((n - 1) * RIVER.laneS + COINS.takeS - COINS.clearS + COINS.windowS);
+/** The least metres from the last coin to the next thing that knocks you in its lane, at `v` m/s, `n` lane changes out. */
+const coinOut = (v, n) => COINS.zone - COINS.take + v * ((n - 1) * RIVER.laneS + COINS.leaveS + COINS.windowS);
 function addCoins(key, rows, { nearIsland, rapidsAt }) {
-  let done = 0;
   let stackNext = COINS.from + COINS.stackEvery[0];
   let gem = false;
+  const laid = new WeakSet();
   return function coinsOn() {
-    for (; done < rows.length; done++) {
-      const row = rows[done];
-      if (row.z < COINS.from || row.teach || row.finish || nearIsland(row.z) || rapidsAt(row.z)) continue;
+    // (each row once the row after it is made too: a line has to end in time for what comes next. Kept by row, not
+    // counted: the waterfalls splice rows of their own in afterwards, and a count went over the last two again, 29 Oct)
+    for (let i = 0; i < rows.length - 1; i++) {
+      const row = rows[i];
+      if (laid.has(row)) continue;
+      laid.add(row);
+      if (row.z < COINS.from || row.teach || row.finish || row.spray || row.fall || nearIsland(row.z) || rapidsAt(row.z)) continue;
       const items = row.items;
       if (items.some((it) => it.kind === 'clown' || it.kind === 'whirl' || it.kind === 'ele' || it.kind === 'person')) continue;
       const r = createRng(`${key}/coins/${Math.round(row.z * 10)}`);
       const log = items.find((it) => it.kind === 'log');
       const tree = items.find((it) => it.kind === 'branch');
       const blocks = items.filter((it) => it.kind === 'block' && !it.drift);
+      const shut = shutLanes(row);
+      const open = [0, 1, 2].filter((l) => !shut.has(l));   // (a log's or a tree's coins: only in a lane nothing shuts)
       // (the diamond: once, over the first long log after 2 km, in the air: a jump at the right moment in its lane)
-      if (!gem && log && log.span === 3 && row.z >= COINS.gemFrom) {
+      if (!gem && log && log.span === 3 && row.z >= COINS.gemFrom && open.length) {
         gem = true;
-        items.push({ kind: 'coins', lane: r.pick([0, 1, 2]), n: 1, dz: 0, sp: 0, y: 1, val: COINS.gemVal, gem: true });
+        items.push({ kind: 'coins', lane: r.pick(open), n: 1, dz: 0, sp: 0, y: 1, val: COINS.gemVal, gem: true });
         continue;
       }
       if (log && r.chance(COINS.logP)) {
-        items.push({ kind: 'coins', lane: log.span === 3 ? r.pick([0, 1, 2]) : log.lane, n: 3, dz: -2.2, sp: 2.2, y: 1, val: 1 });
+        const lane = log.span === 3 ? r.pick(open) : log.lane;
+        if (open.includes(lane)) items.push({ kind: 'coins', lane, n: 3, dz: -2.2, sp: 2.2, y: 1, val: 1 });
         continue;
       }
       if (tree && r.chance(COINS.treeP)) {
-        items.push({ kind: 'coins', lane: r.pick([0, 1, 2]), n: 3, dz: -2.2, sp: 2.2, y: 2, val: 1 });
+        if (open.length) items.push({ kind: 'coins', lane: r.pick(open), n: 3, dz: -2.2, sp: 2.2, y: 2, val: 1 });
         continue;
       }
       if (!blocks.length || log || tree) continue;
       const b = r.pick(blocks);
+      // (29 Oct 2026) far enough behind the block for the move into its lane at this speed, and done in time to get out
+      // again before what comes next in it (or, with nothing there, before the next row)
+      const next = rows[i + 1];
+      const shutN = shutLanes(next);
+      const from = Math.max(4, Math.ceil(coinIn(paceAt(row.z), laneMoves(b.lane, shut)) * 10) / 10);
+      const vn = paceAt(next.z) * (rapidsAt(next.z) ? PACE.rapidsK : 1);
+      const until = next.z - row.z - (shutN.has(b.lane) ? coinOut(vn, laneMoves(b.lane, shutN)) : COINS.zone + COINS.take);
       if (row.z >= stackNext) {
-        stackNext = row.z + r.int(COINS.stackEvery[0], COINS.stackEvery[1]);
-        items.push({ kind: 'coins', lane: b.lane, n: 1, dz: 6, sp: 0, y: 0, val: COINS.stackVal, stack: true });
+        const dz = Math.max(6, from);
+        if (dz <= until) {
+          stackNext = row.z + r.int(COINS.stackEvery[0], COINS.stackEvery[1]);
+          items.push({ kind: 'coins', lane: b.lane, n: 1, dz, sp: 0, y: 0, val: COINS.stackVal, stack: true });
+        }
       } else if (r.chance(COINS.behindP)) {
-        items.push({ kind: 'coins', lane: b.lane, n: 5, dz: 4, sp: 2.1, y: 0, val: 1 });
+        const n = Math.min(5, Math.floor((until - from) / 2.1) + 1);
+        if (n >= 2) items.push({ kind: 'coins', lane: b.lane, n, dz: from, sp: 2.1, y: 0, val: 1 });
       }
     }
   };
+}
+
+/**
+ * (29 Oct 2026, the owner: "the coins should be hard to get sometimes not impossible") The coins that can't be taken
+ * without a knock: [] when every one can. A coin needs, at the river's speed there, COINS.windowS at least to move into
+ * its lane after the last thing that knocks you in it and to get out again before the next (one or two lane changes, as
+ * the lanes beside it allow). Each: { z, lane, why }.
+ */
+export function unreachableCoins(course) {
+  const speed = (z) => (course.endless ? paceAt(z) : speedAt(z, course.len)) * (inRapids(course, z) ? PACE.rapidsK : 1);
+  const byLane = Array.from({ length: RIVER.lanes }, () => []);
+  for (const row of course.rows) for (const l of shutLanes(row)) byLane[l]?.push(row);
+  const bad = [];
+  for (const row of course.rows) {
+    for (const it of row.items) {
+      if (it.kind !== 'coins') continue;
+      for (let k = 0; k < (it.n || 1); k++) {
+        const z = row.z + (it.dz || 0) + k * (it.sp || 0);
+        let before = null;
+        let after = null;
+        for (const h of byLane[it.lane]) {
+          if (h.z <= z) before = h;
+          else {
+            after = h;
+            break;
+          }
+        }
+        let why = null;
+        if ((before && z - before.z < COINS.zone) || (after && after.z - z < COINS.zone)) why = 'inside what knocks you';
+        else if (before && z - before.z < coinIn(speed(before.z), laneMoves(it.lane, shutLanes(before))) - 0.01) why = 'no time to move in';
+        else if (after && after.z - z < coinOut(speed(after.z), laneMoves(it.lane, shutLanes(after))) - 0.01) why = 'no time to get out';
+        if (why) bad.push({ z: Math.round(z * 10) / 10, lane: it.lane, why });
+      }
+    }
+  }
+  return bad;
 }
 
 /**
@@ -377,17 +504,9 @@ function addCoins(key, rows, { nearIsland, rapidsAt }) {
  * that lane can be reached in time (the gap at full speed holds two lane changes and a moment to react).
  */
 export function passable(course) {
-  // (a log is jumped, a fallen tree ducked under, Hanswors's pies dodged: none of them shuts a lane)
-  const hard = (it) => !['person', 'clown', 'log', 'branch', 'coins'].includes(it.kind);
   let prevZ = -Infinity;
   for (const row of course.rows) {
-    const shut = new Set();
-    for (const it of row.items) {
-      if (!hard(it)) continue;
-      shut.add(it.lane);
-      if (it.drift) shut.add(it.lane + it.drift);
-      if (it.kind === 'whirl') shut.add(1);   // (its pull reaches the middle lane)
-    }
+    const shut = shutLanes(row);
     if (shut.size >= RIVER.lanes) return false;
     // (a jump or a duck needs its time too, before and after)
     const act = row.items.some((it) => it.kind === 'log' || it.kind === 'branch');

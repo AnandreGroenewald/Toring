@@ -23,10 +23,17 @@
     };
   }
 
+  // (28 Oct 2026, the emulator: one Back on the menu closed the game at once) a first Back says so, a second within
+  // BACK_AGAIN_MS closes the app
+  var BACK_AGAIN_MS = 2000;
+  var lastBack = 0;
   cap.addListener('App', 'backButton', function () {
     var ev = new CustomEvent('stapel:back', { cancelable: true });
     window.dispatchEvent(ev);
-    if (!ev.defaultPrevented) cap.nativePromise('App', 'exitApp', {});
+    if (ev.defaultPrevented) { lastBack = 0; return; }
+    if (Date.now() - lastBack < BACK_AGAIN_MS) { cap.nativePromise('App', 'exitApp', {}); return; }
+    lastBack = Date.now();
+    window.dispatchEvent(new CustomEvent('stapel:exit-hint'));
   });
 
   // The daily reminder (js/main.js plans it): Android notifications at a time the player chose. Never
@@ -66,18 +73,44 @@
   // player. It is the daily reminder's Android question: a player who allowed that is in; the others are asked once,
   // at a start after they have played (never at the very first start). Firebase stays asleep until then.
   var NEWS = 'stapel';   // (its own topic: Firebase topics are shared by every app in the project; Handjie Tennis uses "news")
+  // (28 Oct 2026: one topic for both languages sent each note to everyone in one language) every phone is also on its
+  // game language's topic, "stapel-af" or "stapel-en", and off the other one's (a language change moves it at the next
+  // start); a note for everyone still goes to "stapel"
+  function newsLang() {
+    try { return localStorage.getItem('stapel.v1.lang') === 'en' ? 'en' : 'af'; } catch (err) { return 'af'; }
+  }
   function joinNews() {
-    return cap.nativePromise('StapelPush', 'join', { topic: NEWS }).catch(function () {});
+    var lang = newsLang();
+    return cap.nativePromise('StapelPush', 'join', { topic: NEWS })
+      .then(function () { return cap.nativePromise('StapelPush', 'join', { topic: NEWS + '-' + lang }); })
+      .then(function () { return cap.nativePromise('StapelPush', 'leave', { topic: NEWS + '-' + (lang === 'en' ? 'af' : 'en') }); })
+      .catch(function () {});
   }
   var askReminder = window.stapelApp.reminders.ask;
   window.stapelApp.reminders.ask = function () {
+    // (28 Oct 2026, the emulator: "Don't allow" in the reminder sheet, and the next start asked again, Android's last
+    // ask spent) any ask counts, the reminder sheet's too
+    try { localStorage.setItem('stapel.v1.newsAsked', '1'); } catch (err) { /* private */ }
     return askReminder().then(function (ok) { if (ok) joinNews(); return ok; });
   };
+  // (28 Oct 2026, the emulator: a new player who chose English was asked before the menu showed, because the first load
+  // had already saved a wallet) "played" is a finished game: a Daily, Oefen or match, a ride, or the River's lesson
+  function playedOnce() {
+    try {
+      var m = JSON.parse(localStorage.getItem('stapel.v1') || 'null') || {};
+      if ((m.stats && m.stats.played > 0) || (m.practice && m.practice.played > 0) || (m.duel && m.duel.played > 0)) return true;
+      var s = JSON.parse(localStorage.getItem('stapel.v1.span') || 'null') || {};
+      if (s.rideBest > 0) return true;
+      return !!localStorage.getItem('stapel.v1.rvTaught');
+    } catch (err) {
+      return false;
+    }
+  }
+  // (and never on the reload a language choice makes: ?lang=, read now, before the game tidies the address)
+  var langReload = /[?&]lang=/.test(location.search);
   window.stapelApp.reminders.permission().then(function (p) {
     if (p === 'granted') return joinNews();
-    var played = localStorage.getItem('stapel.v1.econ') || localStorage.getItem('stapel.v1.rvTaught');
-    if (String(p).indexOf('prompt') !== 0 || !played || localStorage.getItem('stapel.v1.newsAsked')) return null;
-    localStorage.setItem('stapel.v1.newsAsked', '1');
+    if (String(p).indexOf('prompt') !== 0 || langReload || !playedOnce() || localStorage.getItem('stapel.v1.newsAsked')) return null;
     return window.stapelApp.reminders.ask();
   }).catch(function () {});
 

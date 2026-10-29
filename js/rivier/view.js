@@ -184,7 +184,13 @@ function makeKit() {
 #rivier .rv-paused button { display: block; width: 100%; min-height: 48px; margin-top: 8px; border-radius: 14px; border: 0; font: inherit; font-weight: 900; font-size: 17px; }
 #rivier .rv-paused .rv-on { background: #ffd65c; color: #2b1a00; }
 #rivier .rv-paused .rv-off { background: rgba(255,255,255,.14); color: #fff; }
-@media (prefers-reduced-motion: reduce) { #rivier .rv-count.bump { animation: none; } }`;
+#rivier .rv-spray { position: absolute; inset: 0; pointer-events: none; opacity: 0; background:
+  radial-gradient(circle at 30% 40%, rgba(255,255,255,.75) 0 5px, transparent 6px) 0 0 / 58px 58px,
+  radial-gradient(circle at 70% 75%, rgba(225,246,255,.7) 0 3px, transparent 4px) 0 0 / 41px 41px,
+  radial-gradient(ellipse at 50% 45%, rgba(240,250,255,.55), rgba(205,236,248,.25)); }
+#rivier .rv-spray.on { animation: rv-spray 1.3s ease-out; }
+@keyframes rv-spray { 0% { opacity: 1; transform: scale(1.04); } 100% { opacity: 0; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { #rivier .rv-count.bump { animation: none; } #rivier .rv-spray.on { animation-duration: .45s; } }`;
     document.head.appendChild(st);
   }
   (document.getElementById('game') || document.body).appendChild(host);
@@ -1660,6 +1666,10 @@ function createRide(K, d) {
     }
   }
   const pausedEl = ov.querySelector('.rv-paused');
+  // (28 Oct 2026) the screen through a waterfall: white spray that clears (updateCurtains)
+  const sprayEl = document.createElement('div');
+  sprayEl.className = 'rv-spray';
+  ov.appendChild(sprayEl);
   const faceUrl = (id, n = 96) => portraitDataUrl(id, n) || '';
   const scopeEl = ov.querySelector('.rv-scope');
   const arrowEl = ov.querySelector('.rv-arrow');
@@ -1859,6 +1869,7 @@ function createRide(K, d) {
     if (endless && course.rows.at(-1).z < dist + AHEAD + 300) course.extend(dist + AHEAD + 1500);
     while (rowI < course.rows.length && course.rows[rowI].z < dist + AHEAD) {
       const row = course.rows[rowI++];
+      if (row.fall) addCurtain(row.z);
       for (const it of row.items) {
         let obj;
         if (it.kind === 'block') obj = things.floating({ ...it, skin: d.skin || 'kleur' });
@@ -1886,6 +1897,43 @@ function createRide(K, d) {
         } else obj = things.person(it.who, who.indexOf(it.who));
         scene.add(obj);
         live.push({ it, row, obj, z: row.z, x: laneX(it.lane), done: false, drift: it.drift || 0 });
+      }
+    }
+  }
+  // (28 Oct 2026, the owner's pick: ride through a waterfall) the endless river's falls (core/rivier.js FALLS): drawn
+  // from AHEAD, misting near, ridden through (Waterval!, a splash, spray on the screen), gone once well behind
+  const curtains = [];
+  function addCurtain(z) {
+    const obj = world.curtain();
+    scene.add(obj);
+    curtains.push({ z, obj, hit: false, mistT: 0 });
+  }
+  function dropCurtain(c) {
+    scene.remove(c.obj);
+    c.obj.userData.dispose?.();
+  }
+  function updateCurtains(dt) {
+    for (let i = curtains.length - 1; i >= 0; i--) {
+      const c = curtains[i];
+      const ahead = c.z - dist;
+      c.obj.position.set(0, 0, -ahead);
+      if (ahead > 8 && ahead < 140 && !reduced && (c.mistT -= dt) <= 0) {
+        c.mistT = 0.28;
+        things.emit((Math.random() - 0.5) * 12, 0.5, -ahead, 5, 1.4, 2);
+      }
+      if (!c.hit && ahead <= 0 && phase === 'run') {
+        c.hit = true;
+        pop(S.rvFall, 1300);
+        audio.play('splash');
+        haptics.heavy?.();
+        things.emit(x, 1.2, 0, 22, 1.6, 3);
+        sprayEl.classList.remove('on');
+        void sprayEl.offsetWidth;   // (the spray again, from the start)
+        sprayEl.classList.add('on');
+      }
+      if (ahead < -60) {
+        dropCurtain(c);
+        curtains.splice(i, 1);
       }
     }
   }
@@ -2375,6 +2423,10 @@ function createRide(K, d) {
         p.set(x * 0.15, 8.2, 17);
         l.set(x * 0.1, 0.6, -14);
       }
+      // (28 Oct 2026, the owner: "more twists and turns") the view looks a little into the bend ahead, and banks with it
+      // below (not in Saam gly: its wide view keeps both riders in the picture)
+      turnAhead = phase === 'run' && !duel && !d.debugCam ? bendX(60, dist + 60) : 0;
+      l.x += turnAhead * 0.35;
       // Saturday: the tallest tower coming by turns the camera halfway towards it (a little more while you aim), still
       // looking down a little, so he and the tower's lower part are both in the picture (a phone held upright is narrow)
       const tgt = raid ? targetIsle() : null;
@@ -2431,7 +2483,7 @@ function createRide(K, d) {
       const want = FOV0 + sp * 5 + rapK * 3 - (aiming ? 6 : 0);
       camera.fov += (want - camera.fov) * (1 - Math.exp(-dt * 3));
       camera.updateProjectionMatrix();
-      camRoll += (-leanV * 0.045 - camRoll) * (1 - Math.exp(-dt * 6));
+      camRoll += (-leanV * 0.045 - clamp(turnAhead / 8, -1, 1) * 0.05 - camRoll) * (1 - Math.exp(-dt * 6));
       camera.rotateZ(camRoll);
     } else if (Math.abs(camera.fov - FOV0) > 0.01) {
       camera.fov += (FOV0 - camera.fov) * (1 - Math.exp(-dt * 4));
@@ -2440,6 +2492,7 @@ function createRide(K, d) {
   }
   const FOV0 = camera.fov;
   let camRoll = 0;
+  let turnAhead = 0;   // (28 Oct 2026) how far across the river bends 60 m ahead: the view looks and banks into it
 
   // ---------------------------------------------------------------------------------------------- the loop
   let pilotOn = !!d.autopilot;
@@ -2696,6 +2749,7 @@ function createRide(K, d) {
     if (phase === 'run' && Math.random() < 0.85) things.emit(x - leanV * 0.3, 0.12, 0.9, 1 + Math.round(rapK * 2), 0.6 + rapK, 1.4 + Math.abs(leanV) * 2 + rapK * 1.5);
 
     if (phase !== 'zoo') spawn();
+    if (curtains.length) updateCurtains(dt);
     if (endless && dist > 8000) askElephant();
     pullNext = 0;
     for (const l of live) {
@@ -2722,6 +2776,10 @@ function createRide(K, d) {
       l.x = lx;
       const u = l.obj.userData;
       l.obj.position.set(lx, u.kind === 'croc' || u.kind === 'hippo' ? 0 : Math.sin(t * 1.9 + (u.phase || 0)) * 0.08, phase === 'zoo' ? -12 : -ahead);
+      // (29 Oct 2026, the owner: the white water round a floating block "disappears as you get closer and comes back")
+      // its ring lay 4 cm over the water and bobbed with it, 8 cm each way: a third of each bob under the water. It
+      // stays on the water now while the block, the rock or the swimmer bobs in it
+      if (u.foam) u.foam.position.y = u.foamY - l.obj.position.y;
       if (u.block && u.kind !== 'monkey') {
         // (1.22: it sways on the current instead of turning round and round: turned 40° by the time it reached you, a
         // block seemed to lie across two lanes)
@@ -3133,6 +3191,7 @@ function createRide(K, d) {
     removeEventListener('resize', place);
     removeEventListener('keydown', onKey);
     document.removeEventListener('visibilitychange', onVis);
+    for (const c of curtains.splice(0)) dropCurtain(c);
     sideMq?.removeEventListener?.('change', onSide);
     host.removeEventListener('pointerdown', onDown);
     host.removeEventListener('pointermove', onMoveP);
@@ -3189,9 +3248,29 @@ function createRide(K, d) {
     ready, close,
     pause: () => setPaused(true),
     resume: () => setPaused(false),
+    /**
+     * (28 Oct 2026, found on the emulator: Back did nothing once the ride was over) Android's Back, one step at a time:
+     * the open ranking shut, then the end card's own way out (Klaar / Later: `.rv-no`; where a card has only one
+     * button, `.rv-go` is its Klaar), a pause lifted, else a pause.
+     */
+    back: () => {
+      const board = ov.querySelector('.rv-board.on');
+      if (board) { board.classList.remove('on'); return; }
+      if (phase === 'done') {
+        (cardEl.querySelector('.rv-no') || cardEl.querySelector('.rv-go'))?.click();
+        return;
+      }
+      setPaused(!paused);
+    },
     /** For tests: where the ride stands. */
     state: () => ({ phase, dist: Math.round(dist * 10) / 10, len, endless, hearts, airY: Math.round(airY * 100) / 100, duckK: Math.round(duckK * 100) / 100, timeK: Math.round(timeK * 100) / 100, lesson: lesson && !lesson.done ? lesson.kind : null, pies: pies.length, clowns: live.filter((l) => l.obj.userData.kind === 'clown').map((l) => ({ z: Math.round(l.z * 10) / 10, x: Math.round(l.obj.position.x * 100) / 100, phase: l.cs?.phase, foot: Math.round((world.footAt?.(l.obj.userData.side || 1, l.z) ?? 0) * 100) / 100 })), pieAt: pies.map((pp) => { const v = pp.mesh.getWorldPosition(new THREE.Vector3()).project(camera); return { t: Math.round(pp.t * 100) / 100, x: Math.round(v.x * 100) / 100, y: Math.round(v.y * 100) / 100, z: Math.round(v.z * 1000) / 1000 }; }), headY: rider.headY?.(), lane, x: Math.round(x * 1000) / 1000, rescued: [...rescued], hits, lastKnock, who: [...who], live: live.length, paused, raid, bombsLeft, thrown, bombHits, bombLost: Math.round(bombLost * 10) / 10, aiming, aimV: Math.round(aimV * 100) / 100, onTarget, isles: isles.map((i) => ({ crew: i.crew, target: i.target, h: Math.round((i.island.top - 3.6) * 10) / 10, z: i.z })),
       coins: coinsGot,
+      // (tests: the white water rings on the river now, and the lowest one's height over the water: never under it)
+      foams: live.filter((l) => l.obj.userData.foam).length,
+      foamLow: Math.round(Math.min(9, ...live.filter((l) => l.obj.userData.foam).map((l) => l.obj.position.y + l.obj.userData.foam.position.y)) * 1000) / 1000,
+      // (29 Oct 2026: the rocks' rings too, his photo of near rocks without one)
+      foamRocks: live.filter((l) => l.obj.userData.foam && l.it.kind === 'rock').length,
+      foamLowRock: Math.round(Math.min(9, ...live.filter((l) => l.obj.userData.foam && l.it.kind === 'rock').map((l) => l.obj.position.y + l.obj.userData.foam.position.y)) * 1000) / 1000,
       coinLines: live.filter((l) => l.it.kind === 'coins').map((l) => ({ lane: l.it.lane, x: Math.round(l.x * 10) / 10, a: Math.round((l.z + (l.it.dz || 0) - dist) * 10) / 10, y: l.it.y, n: l.it.n, gem: !!l.it.gem, left: l.obj.userData.coins.filter((c) => !c.taken).length })),
       deep: live.filter((l) => l.it.kind === 'whirl' || l.it.kind === 'ele').map((l) => ({ k: l.it.kind, calf: !!l.it.calf, lane: l.it.lane, x: Math.round(l.x * 10) / 10, a: Math.round((l.z - dist) * 10) / 10, done: l.done, model: !!d.models?.elephant })), pullX: Math.round(pullX * 100) / 100, hint: hintEl.textContent, soft: !!soft,
       duel: fr ? { seen: fr.seen, d: Math.round(fr.sd * 10) / 10, x: Math.round(fr.sx * 100) / 100, out: fr.out, endM: fr.endM, gone: fr.gone, watching, counting, goAt, hits, shown: fr.rider.group.visible, tag: tagText, round: duel.round, way: { clips: wayLog.clips, kos: wayLog.kos, offMe: wayLog.offMe, offFr: wayLog.offFr, frames: wayLog.frames, kinds: wayLog.kinds.slice(0, 6), maxV: Math.round(wayLog.maxV * 10) / 10, flips: wayLog.flips, guesses: wayLog.guesses, wrong: wayLog.wrong, dodging: !!fr.dodge, up: !!fr.pj, y: Math.round((fr.rider.group.position.y) * 100) / 100, tx: Math.round(fr.tx * 100) / 100, wx: Math.round((fr.dodge ? fr.dodge.x : fr.tx) * 100) / 100, off: Math.round(fr.off * 100) / 100, me: Math.round(x * 100) / 100 } } : null }),

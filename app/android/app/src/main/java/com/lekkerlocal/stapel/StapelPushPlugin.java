@@ -45,4 +45,27 @@ public class StapelPushPlugin extends Plugin {
             call.reject("Firebase is not set up", "no_firebase");
         }
     }
+
+    /**
+     * (28 Oct 2026) A topic left: app/shim.js keeps each phone on its game language's news ("stapel-af" or "stapel-en")
+     * and takes it off the other one's when the player changes language.
+     */
+    @PluginMethod
+    public void leave(PluginCall call) {
+        String topic = call.getString("topic", "");
+        JSObject out = new JSObject();
+        if (topic == null || topic.isEmpty()) {
+            out.put("left", false);
+            call.resolve(out);
+            return;
+        }
+        try {
+            FirebaseMessaging.getInstance().unsubscribeFromTopic(topic).addOnCompleteListener(task -> {
+                out.put("left", task.isSuccessful());
+                call.resolve(out);
+            });
+        } catch (RuntimeException e) {
+            call.reject("Firebase is not set up", "no_firebase");
+        }
+    }
 }

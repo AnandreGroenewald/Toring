@@ -59,10 +59,13 @@ export function setBend(k) {
   bendK = k;
   bendUniforms.uBendK.value = k;
 }
+// (28 Oct 2026, the owner: "it needs to have more twists and turns") a turn every ~370 m (was ~750), sharper (up to ~30 m
+// across 160 m ahead, was 9), on a slow sweep so no two stretches turn alike, and a short S-wiggle; still straight under
+// the rider (a = 0 there), so the lanes stay where they are. The GLSL twin below must stay the same sum.
 export function bendX(d, z) {
   if (!bendK) return 0;
   const a = Math.max(0, d) / 160;
-  return Math.sin(z * 0.0042 + 0.6) * 9 * a * a + Math.sin(z * 0.011 + 2.1) * 2.2 * a;
+  return (Math.sin(z * 0.0085 + 0.6) * 20 + Math.sin(z * 0.0031 + 1.7) * 10) * a * a + Math.sin(z * 0.023 + 2.1) * 3 * a;
 }
 /**
  * The same bend for every lit thing in the river: its material's vertex shader moves each vertex across by bendX (from
@@ -71,7 +74,7 @@ export function bendX(d, z) {
 export const bendUniforms = { uDist: { value: 0 }, uBendK: { value: 1 } };
 const BEND_GLSL = `uniform float uDist;
 uniform float uBendK;
-float rvBend(float d, float z) { float a = max(0.0, d) / 160.0; return uBendK * (sin(z * 0.0042 + 0.6) * 9.0 * a * a + sin(z * 0.011 + 2.1) * 2.2 * a); }`;
+float rvBend(float d, float z) { float a = max(0.0, d) / 160.0; return uBendK * ((sin(z * 0.0085 + 0.6) * 20.0 + sin(z * 0.0031 + 1.7) * 10.0) * a * a + sin(z * 0.023 + 2.1) * 3.0 * a); }`;
 export function bendMaterial(m) {
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uDist = bendUniforms.uDist;
@@ -703,15 +706,18 @@ void main() {
   gl_Position = projectionMatrix * mv;
 }`;
 const FALL_FRAG = `uniform sampler2D uNoise; uniform float uT; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar; uniform vec3 uTint;
+uniform vec2 uRep; uniform float uSolid;
 varying vec2 vUv; varying float vDepth;
 void main() {
   float x = vUv.x;
-  float edge = smoothstep(0.0, 0.3, x) * smoothstep(1.0, 0.7, x);
+  // (28 Oct 2026) uRep / uSolid: the walls' strips (1, 0) as before; a fall across the river (Afgly) has many more streaks
+  // across its width, is fuller, and fades only at its very sides
+  float edge = mix(smoothstep(0.0, 0.3, x) * smoothstep(1.0, 0.7, x), smoothstep(0.0, 0.08, x) * smoothstep(1.0, 0.92, x), uSolid);
   // streaks of falling water: the pattern runs down, faster lower down
-  float n = texture2D(uNoise, vec2(x * 0.9, vUv.y * 0.5 + uT * 0.55)).r;
-  float n2 = texture2D(uNoise, vec2(x * 2.3 + 0.3, vUv.y * 1.4 + uT * 1.25)).b;
+  float n = texture2D(uNoise, vec2(x * 0.9 * uRep.x, vUv.y * 0.5 * uRep.y + uT * 0.55)).r;
+  float n2 = texture2D(uNoise, vec2(x * 2.3 * uRep.x + 0.3, vUv.y * 1.4 * uRep.y + uT * 1.25)).b;
   float st = smoothstep(0.3, 0.75, n * 0.55 + n2 * 0.45);
-  float a = edge * (0.35 + 0.65 * st);
+  float a = edge * mix(0.35 + 0.65 * st, 0.6 + 0.4 * st, uSolid);
   a *= smoothstep(1.0, 0.95, vUv.y);
   // (the body of the fall a cool green-grey with bright white streaks, glossier near the lip)
   vec3 col = mix(vec3(0.5, 0.64, 0.64), vec3(1.0), smoothstep(0.38, 0.82, n2) * (0.6 + 0.4 * st));
@@ -729,7 +735,7 @@ void main() {
 // ------------------------------------------------------------------------------------------------ the water
 const WATER_VERT = `uniform float uDist; uniform float uBendA; uniform float uBendB; uniform float uBendK; uniform mat4 uReflMat;
 varying vec3 vWorld; varying vec2 vRiver; varying float vAhead; varying vec4 vRefl;
-float bendX(float d, float z) { float a = max(0.0, d) / 160.0; return uBendK * (sin(z * 0.0042 + 0.6) * 9.0 * a * a + sin(z * 0.011 + 2.1) * 2.2 * a); }
+float bendX(float d, float z) { float a = max(0.0, d) / 160.0; return uBendK * ((sin(z * 0.0085 + 0.6) * 20.0 + sin(z * 0.0031 + 1.7) * 10.0) * a * a + sin(z * 0.023 + 2.1) * 3.0 * a); }
 void main() {
   vec3 p = position;
   float ahead = -p.z;
@@ -1172,7 +1178,13 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
   }
   const wallGeos = { '-1': cliffGeos['-1'].map((g, k) => mergeGeometries([g, plateauGeometry(-1, k + 1)])), 1: cliffGeos[1].map((g, k) => mergeGeometries([g, plateauGeometry(1, k + 4)])) };
   const fallMat = new THREE.ShaderMaterial({
-    uniforms: { uDist: bendUniforms.uDist, uBendK: bendUniforms.uBendK, uNoise: { value: noise }, uT: { value: 0 }, uFog: { value: fog }, uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uTint: { value: fxTint } },
+    uniforms: { uDist: bendUniforms.uDist, uBendK: bendUniforms.uBendK, uNoise: { value: noise }, uT: { value: 0 }, uFog: { value: fog }, uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uTint: { value: fxTint }, uRep: { value: new THREE.Vector2(1, 1) }, uSolid: { value: 0 } },
+    vertexShader: FALL_VERT, fragmentShader: FALL_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  });
+  // (28 Oct 2026) Afgly's falls across the river: the same water (the walls' clock and fog: the same uniform objects), with
+  // fine streaks all the way across and fuller
+  const curtainMat = new THREE.ShaderMaterial({
+    uniforms: { ...fallMat.uniforms, uRep: { value: new THREE.Vector2(9, 2.6) }, uSolid: { value: 1 } },
     vertexShader: FALL_VERT, fragmentShader: FALL_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
   });
   /** A strip of falling water on the wall `geo` (side ±1), 2.8 m wide, from the rim to the river, a little off the rock. */
@@ -1585,6 +1597,23 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
 
   return {
     group, water, sun, update, halfAt, footAt, setRockClear: (fn) => { rockClear = fn; }, setShadowFocus, shadows, reflect, fxTint, stoneMat, night,
+    /**
+     * (28 Oct 2026, the owner's pick: ride through a waterfall) Water pouring across the whole river from the cliff tops:
+     * one sheet of the walls' own falling water (the same streaks, white where it lands, the fog, the river's bend), 30 m
+     * across (its sides fade into the rock) and 34 m from the rims to the river. The ride places it (its z) and drops it
+     * after (`dispose`: its shape; the material is the walls' and stays).
+     */
+    curtain() {
+      const g = new THREE.Group();
+      const geo = new THREE.PlaneGeometry(30, 34, 12, 24);
+      geo.translate(0, 17, 0);
+      const sheet = new THREE.Mesh(geo, curtainMat);
+      sheet.renderOrder = 2;
+      sheet.frustumCulled = false;   // (the bend moves it sideways in the shader: its box would cull it wrongly)
+      g.add(sheet);
+      g.userData.dispose = () => geo.dispose();
+      return g;
+    },
     /** Open water at the river's head, up to course z `to` (where your tower stands). */
     setPool(to) {
       poolTo = to;
@@ -1639,6 +1668,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       reflRT?.dispose();
       sun.dispose();   // (its shadow map too)
       stoneMat.dispose();
+      curtainMat.dispose();   // (28 Oct 2026: Afgly's falls)
       for (const x of [...cliffGeos[-1], ...cliffGeos[1], mistTex, rayTex, dustTex, fallPuff, mistGeo, mistMat, rayMat, dustGeo, dustMat, fallMistGeo, fallFoamGeo, fallMistMat, fallFoamMat]) x.dispose();
       scene.environment = null;
       scene.fog = null;

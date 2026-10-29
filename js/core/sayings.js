@@ -100,9 +100,24 @@ export function pickSaying(category, key) {
   return createRng(`saying|${category}|${key}`).pick(list);
 }
 
-/** "Spreekwoord van die dag": the same line for everyone on the same date. */
+/**
+ * "Spreekwoord van die dag": the same line for everyone on the same date. (28 Oct 2026: a fresh pick every day said one
+ * saying 3× in 14 days) one shuffled order of the whole list, day after day: no saying comes back sooner than the
+ * list is long (a fresh shuffle per round could repeat across the seam).
+ */
 export function sayingOfTheDay(dateKey) {
-  return pickSaying('GENERAL', dateKey);
+  const list = SAYINGS.GENERAL;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || ''));
+  if (!list || !list.length || !m) return pickSaying('GENERAL', dateKey);
+  const day = Math.floor(Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000);
+  const n = list.length;
+  const order = list.map((_, i) => i);
+  const rng = createRng('saying-order');
+  for (let i = n - 1; i > 0; i--) {
+    const j = rng.int(0, i);
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return list[order[day % n]];
 }
 
 /** Milestone toast text: "50 m — Aanhouer wen!". Same for everyone on the same daily seed. */

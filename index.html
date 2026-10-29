@@ -120,6 +120,16 @@
     <div class="rot-phone emoji">📱</div>
     <p>Draai jou foon regop om te speel.</p>
   </div>
+  <script>
+    // (28 Oct 2026, the emulator: English players saw "Laai…" at every start; langboot.js only runs once the whole game
+    // has loaded) the page's own words in the player's language at once
+    try {
+      if (((/[?&]lang=(en|af)\b/.exec(location.search) || [])[1] || localStorage.getItem('stapel.v1.lang')) === 'en') {
+        document.querySelector('#splash .splash-msg').textContent = 'Loading…';
+        document.querySelector('#rotate p').textContent = 'Turn your phone upright to play.';
+      }
+    } catch (e) { /* no storage: Afrikaans */ }
+  </script>
 
   <noscript>
     <div class="nojs">Stapel het JavaScript nodig. Skakel dit asseblief aan en laai die bladsy weer.<br>Stapel needs JavaScript. Please turn it on and reload the page.</div>
