@@ -1619,3 +1619,14 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   1.24.1 internal/` (aab, notes, README), `Stapel-1.24.1-toets.apk` (1.24.0's in Older builds).
 - check-all live ALL CLEAR (board-live's hidden row removed).
 - A 1.24.0 phone and a 1.24.1 phone in one Duo ride: the room ends at once with "update" (protocol 3), as before.
+
+### 29 Oct 2026 ~13:25 — 1.24.1 sent to Google for PRODUCTION and CLOSED TESTING (his "release ... on the internal and external testing and also live")
+- Production was live on 12300 (1.23.0: 11 countries, 26 installs; the 28 Oct changes had gone through). New production
+  release 12401 (1.24.1) from the library, full rollout, notes af + 5 English; Closed testing - Alpha 12401 the same (it
+  had 12200). Publishing overview (managed publishing off): "Submit 2 changes for review" › Send: both "in review" after
+  Play's quick checks (up to 14 min). Internal has 12401 since 12:35.
+- Open testing: paused before today ("This track is paused", inactive, 12200 superseded): left as it is (production is
+  public; his call if he wants it resumed).
+- After Google approves: the update card (Worker APP_LATEST to 1.24.1: a Worker deploy ends live matches, a quiet moment,
+  his word) and production phones leave 1.23.0 (Duo rides between versions end with "update" until then).
+
