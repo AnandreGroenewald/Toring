@@ -1713,3 +1713,21 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   replace it with the newest build first).
 - A 1.24.2 phone (website) and a 1.24.3 phone in one Duo ride: the room ends with "update" (protocol 3).
 
+### 29 Oct 2026 ~17:30 — the wind down the canyon, longer rain and storms (local, not released)
+- His words: "The wind does not add up. Its in-between the canyons. So can we make it something else? Also the rain and
+  thunderstorms is a little too short, can we make it show a little longer. What do you have in mind?" I offered wind
+  down the canyon (a headwind slows a little, a tailwind pushes) or falling leaves; he: "1 Please."
+- The wind (world.js, view.js): blows down the canyon, never across. Its dust and spray ride along the river (RAIN_VERT
+  uWindZ: faster than the river at you in a headwind, slower in a tailwind; small specks), patches of fine ripples race
+  over the water its way (WATER_FRAG uWind / uWindV; the word 'patch' is reserved in GLSL ES 3: it broke the water till
+  renamed wPatch), the trees and bushes on the rims lean its way and toss (foliageMaterial uLeafWind / uLeafDir). A
+  headwind takes 8 % off your speed, a tailwind adds 8 %, gusts (🌬️) take up to 12 % as they come and go (solo rides;
+  Saam gly keeps its shared clock). Banners: 💨 Teenwind!/Headwind!, 💨 Rugwind!/Tailwind!, 🌬️ Rukwinde!/Gusts!. The
+  sideways push is gone.
+- Longer: rain 60 m before its spot to 360 m after (~420 m, ~15 s), a storm to 480 m (~540 m, ~20 s), hail to 180 m;
+  it builds over 120 m (you see the grey coming) and lifts over 80 m. A shower's streaks stretch over its whole length
+  (showerGeo 100 m, scale.z).
+- Tested: every weather's shaders compile (qa/rivier_shaders1244.mjs: 0 errors), wind/gusts/rain pictures, a ride through
+  the long rain (~17 s with the build-up), a real play-through 3.46 km (tailwind, Hanswors twice, rain, the end card),
+  check-all quick ALL CLEAR, River 32/32, Saam gly 29/29, later 21/21.
+

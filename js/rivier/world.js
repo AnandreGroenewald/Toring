@@ -628,13 +628,26 @@ function acaciaTrunkGeometry() {
  * Leaves on a bent material (the bushes, the acacias' crowns): clumps of light and shade broken up by noise in the
  * world, warmer and lighter where the clumps catch the sun, deep green in the gaps.
  */
+// (29 Oct 2026: wind down the canyon: the trees and bushes on the rims lean its way (leafDir: +1 towards you) and toss)
+const leafWind = { value: 0 };
+const leafDir = { value: 1 };
 function foliageMaterial(m, noise) {
   const prev = m.onBeforeCompile;
   m.onBeforeCompile = (sh, r) => {
     prev(sh, r);
     sh.uniforms.uLeafNoise = { value: noise };
+    sh.uniforms.uLeafWind = leafWind;
+    sh.uniforms.uLeafDir = leafDir;
+    sh.uniforms.uLeafT = rkClock;
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vLeafW;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vLeafW;\nuniform float uLeafWind; uniform float uLeafDir; uniform float uLeafT;')
+      .replace('rvW.x += rvBend(-rvW.z, uDist - rvW.z);', `rvW.x += rvBend(-rvW.z, uDist - rvW.z);
+  if (uLeafWind > 0.0) {
+    float lk = uLeafWind * max(0.0, transformed.y + 0.6);
+    float toss = sin(uLeafT * 3.1 + rvW.x * 0.35 + rvW.z * 0.21) * 0.55 + sin(uLeafT * 7.3 + rvW.z * 0.6) * 0.2;
+    rvW.z += lk * (1.4 * uLeafDir + 0.6 * toss);
+    rvW.x += lk * 0.35 * toss;
+  }`)
       .replace('#include <fog_vertex>', '#include <fog_vertex>\nvLeafW = rvW.xyz;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vLeafW;\nuniform sampler2D uLeafNoise;')
@@ -809,14 +822,16 @@ void main() {
 // round you, wrapped through a box ahead of the camera as the river flows past.
 const RAIN_VERT = `${BEND_GLSL}
 uniform float uT; uniform float uScale; uniform float uH; uniform float uWrap; uniform float uNear; uniform float uFall;
-uniform float uWindX; uniform float uLen;
+uniform float uWindZ; uniform float uLen;
 attribute vec4 aSeed;
 varying float vDepth; varying float vA;
 void main() {
   float f = fract(aSeed.y + uT * aSeed.w * uFall / uH);
-  float z = uNear > 0.5 ? 6.0 - mod(aSeed.z - uDist, uWrap) : aSeed.z;
-  // (29 Oct 2026: the wind blows it across, each a little faster or slower)
-  float x = uWindX == 0.0 ? aSeed.x + f * 0.9 : mod(aSeed.x + uWindX * uT * (0.75 + 0.5 * fract(aSeed.w * 7.13)) + 12.0, 24.0) - 12.0;
+  // (29 Oct 2026, the owner: the wind across "does not add up. Its in-between the canyons": it blows down the canyon, so
+  // its dust and spray ride along the river (uWindZ: m/s towards you, a headwind; less, a tailwind), each a little
+  // faster or slower, a little to and fro)
+  float z = uNear > 0.5 ? 6.0 - mod(aSeed.z - uDist - uWindZ * uT * (0.8 + 0.4 * fract(aSeed.w * 7.13)), uWrap) : aSeed.z;
+  float x = uWindZ == 0.0 ? aSeed.x + f * 0.9 : aSeed.x + sin(uT * 1.3 + aSeed.w * 3.7) * 0.6;
   vec4 w = modelMatrix * vec4(x, uH * (1.0 - f), z, 1.0);
   w.x += rvBend(-w.z, uDist - w.z);
   vec4 mv = viewMatrix * w;
@@ -864,7 +879,7 @@ const WATER_FRAG = `uniform float uT; uniform sampler2D uNoise; uniform vec3 uSu
 uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSkyRefl; uniform vec3 uFoam; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar;
 uniform float uHalf; uniform float uLakeHalf; uniform float uLakeFrom; uniform float uLakeTo; uniform float uDetail; uniform vec2 uRapids; uniform float uPoolTo;
 uniform vec3 uWall; uniform vec2 uRider; uniform sampler2D uRefl; uniform float uReflK;
-uniform vec3 uLampPos; uniform vec3 uLampDir; uniform vec3 uLampCol; uniform vec2 uLampCos; uniform vec3 uLanes;
+uniform vec3 uLampPos; uniform vec3 uLampDir; uniform vec3 uLampCol; uniform vec2 uLampCos; uniform vec3 uLanes; uniform float uWind; uniform float uWindV;
 varying vec3 vWorld; varying vec2 vRiver; varying float vAhead; varying vec4 vRefl;
 float h(vec2 p) {
   // the surface's height: long swells across, ripples and chop running with the current (stretched along it)
@@ -873,7 +888,14 @@ float h(vec2 p) {
   float c = texture2D(uNoise, vec2(p.x * 0.61, p.y * 0.21 - uT * 0.42)).r;
   // (1.22: less of the long swell, more of the small chop: the swells tilted whole patches to the pale sky, creamy
   // blotches on the water; now a finer sparkle)
-  return a * 0.36 + b * 0.4 + c * 0.24 * uDetail;
+  // (29 Oct 2026: wind down the canyon: patches of fine ripples racing over the water its way, uWindV m/s towards you)
+  float w = 0.0;
+  if (uWind > 0.0) {
+    float wy = p.y + uT * uWindV;
+    float wPatch = smoothstep(0.38, 0.72, texture2D(uNoise, vec2(p.x * 0.045, wy * 0.022)).r);   // ('patch' is a GLSL word)
+    w = (texture2D(uNoise, vec2(p.x * 0.9, wy * 0.34)).g - 0.5) * 0.34 * uWind * wPatch;
+  }
+  return a * 0.36 + b * 0.4 + c * 0.24 * uDetail + w;
 }
 void main() {
   vec2 p = vRiver;
@@ -1073,7 +1095,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       uHorizon: { value: lin(L.horizon) }, uSkyRefl: { value: lin(L.skyRefl) }, uFoam: { value: lin(COLORS.foam).multiply(fxTint) }, uFog: { value: fog },
       uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uHalf: { value: BANK.half }, uLakeHalf: { value: lakeHalf },
       uLakeFrom: { value: 1e6 }, uLakeTo: { value: 1e6 }, uDetail: { value: quality.name === 'low' ? 0 : 1 },
-      uBendA: { value: 0 }, uBendB: { value: 0 }, uBendK: bendUniforms.uBendK, uPath0: bendUniforms.uPath0, uRapids: { value: new THREE.Vector2(-1e6, -1e6) }, uPoolTo: { value: -1e6 },
+      uBendA: { value: 0 }, uBendB: { value: 0 }, uBendK: bendUniforms.uBendK, uPath0: bendUniforms.uPath0, uWind: { value: 0 }, uWindV: { value: 0 }, uRapids: { value: new THREE.Vector2(-1e6, -1e6) }, uPoolTo: { value: -1e6 },
       uWall: { value: lin(L.wall) }, uRider: { value: new THREE.Vector2(0, -1e6) },
       uRefl: { value: null }, uReflK: { value: 0 }, uReflMat: { value: new THREE.Matrix4() },
       uLampPos: { value: new THREE.Vector3() }, uLampDir: { value: new THREE.Vector3(0, 0, -1) }, uLampCol: { value: new THREE.Color(0, 0, 0) },
@@ -1307,7 +1329,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       uDist: bendUniforms.uDist, uBendK: bendUniforms.uBendK, uPath0: bendUniforms.uPath0, uT: rkClock, uScale: rainScale,
       uH: { value: near ? 26 : 60 }, uWrap: { value: 44 }, uNear: { value: near ? 1 : 0 }, uFog: { value: fog },
       uFogNear: { value: BANK.fogNear }, uFogFar: { value: BANK.fogFar }, uTint: { value: fxTint }, uK: { value: near ? 0 : 1 },
-      uFall: { value: 1 }, uWindX: { value: 0 }, uLen: { value: 1.3 }, uShape: { value: 0 }, uCol: { value: new THREE.Color(0.86, 0.9, 0.94) },
+      uFall: { value: 1 }, uWindZ: { value: 0 }, uLen: { value: 1.3 }, uShape: { value: 0 }, uCol: { value: new THREE.Color(0.86, 0.9, 0.94) },
     },
     vertexShader: RAIN_VERT, fragmentShader: RAIN_FRAG, transparent: true, depthWrite: false,
   });
@@ -1322,7 +1344,9 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     return g;
   };
   const lowQ = quality.name === 'low';
-  const showerGeo = rainGeo(lowQ ? 1200 : 2600, 14, -90, 40);   // (from 90 m past its spot to 40 m before it)
+  // (29 Oct 2026, the owner: "the rain and thunderstorms is a little too short": a shower's stretch is 100 m of this,
+  // stretched (scale.z) over its whole length, from where it starts)
+  const showerGeo = rainGeo(lowQ ? 1800 : 4200, 14, -100, 0);
   showerGeo.userData.shared = true;   // (the world frees them; a ride's warm-up leaves them be)
   // (29 Oct 2026: the weather that falls: rain, a storm's heavier rain, hail: white pellets falling fast)
   const FALLS_LOOK = { rain: {}, storm: { uFall: 1.25, uK: 1.25 }, hail: { uFall: 1.7, uLen: 0.38, uShape: 1, uK: 1.4, uCol: new THREE.Color(0.97, 0.98, 1) } };
@@ -1870,11 +1894,17 @@ void main() {
       const nu = nearRainMat.uniforms;
       const near = wet || kind === 'hail' || windy ? k : 0;
       nu.uK.value = near * (kind === 'storm' ? 1.6 : kind === 'hail' ? 1.4 : windy ? 1.6 : 1);
-      nu.uShape.value = kind === 'hail' ? 1 : windy ? 2 : 0;
-      nu.uFall.value = kind === 'hail' ? 1.7 : kind === 'storm' ? 1.25 : windy ? 0.12 : 1;
-      nu.uLen.value = kind === 'hail' ? 0.38 : windy ? 1.7 : 1.3;
-      nu.uWindX.value = windy ? dir * (kind === 'gust' ? 19 : 14) : 0;
-      nu.uCol.value.setRGB(...(kind === 'hail' ? [0.97, 0.98, 1] : windy ? [0.98, 0.84, 0.64] : [0.86, 0.9, 0.94]));
+      nu.uShape.value = kind === 'hail' || windy ? 1 : 0;
+      nu.uFall.value = kind === 'hail' ? 1.7 : kind === 'storm' ? 1.25 : windy ? 0.06 : 1;
+      nu.uLen.value = kind === 'hail' ? 0.38 : windy ? 0.2 : 1.3;
+      // (dir: +1 a tailwind, -1 a headwind; the air comes at you faster than the river in a headwind, slower in a tailwind)
+      nu.uWindZ.value = windy ? -dir * (kind === 'gust' ? 18 : 13) : 0;
+      nu.uCol.value.setRGB(...(kind === 'hail' ? [0.97, 0.98, 1] : windy ? [0.95, 0.9, 0.8] : [0.86, 0.9, 0.94]));
+      // the wind's ripples racing over the water, the trees on the rims leaning and tossing with it
+      water.uniforms.uWind.value = windy ? k * (kind === 'gust' ? 1.3 : 1) : 0;
+      water.uniforms.uWindV.value = windy ? -dir * 14 : 0;
+      leafWind.value = windy ? k * (kind === 'gust' ? 1.4 : 1) : 0;
+      leafDir.value = -dir;
       nearRain.visible = near > 0.01;
       // the light: the sun goes in for rain, a storm and hail; heat glares
       const dim = { rain: 0.5, storm: 0.85, hail: 0.35, fog: 0.3, heat: -0.25 }[kind] || 0;

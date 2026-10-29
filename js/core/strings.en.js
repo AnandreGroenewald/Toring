@@ -1014,6 +1014,10 @@ export const S_EN = {
   rvSlipped: (name) => `Oops! ${name} fell back in`,
   rvOuch: 'Ouch!',
   rvFall: '🌧️ Rain shower!',
+  // (29 Oct 2026) the wind down the canyon: against you, behind you, in gusts
+  rvHeadwind: '💨 Headwind!',
+  rvTailwind: '💨 Tailwind!',
+  rvGusts: '🌬️ Gusts!',
   rvAll: 'Everyone saved! 🛟',
   rvSaved: (n, t) => `🛟 ${n} of ${t} saved!`,
   rvNoneSaved: 'Nobody saved…',

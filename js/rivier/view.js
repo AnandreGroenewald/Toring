@@ -1934,10 +1934,13 @@ function createRide(K, d) {
   // scene", then "can you add thunderstorms, hail, wind, basically the same weather as stapel") the endless river's
   // weather, where its falls across the river were (core/rivier.js FALLS): each spot its own kind, the same for everyone
   // (from where it is), the first ones mild as in Stapel (rain, wind, fog), from 3 km storms, hail, whirlwinds and heat
-  // too. Riding in it builds over 50 m and lifts over 40 m after; rain leaves a rainbow behind.
+  // too. Riding in it builds over 120 m (you see it coming) and lifts over 80 m after; rain leaves a rainbow behind. (29
+  // Oct, his "the rain and thunderstorms is a little too short": rain ~420 m, a storm ~540 m, ~15 and ~20 s; his "the
+  // wind does not add up. Its in-between the canyons": the wind blows down the canyon, a headwind slowing you a little,
+  // a tailwind pushing, gusts that come and go)
   const WX_EARLY = ['rain', 'wind', 'fog', 'rain'];
   const WX_LATE = ['rain', 'storm', 'hail', 'wind', 'gust', 'fog', 'heat'];
-  const WX_SPAN = { rain: [40, 70], storm: [40, 90], hail: [40, 70], wind: [60, 200], gust: [60, 200], fog: [80, 220], heat: [60, 220] };   // (m before its spot, m after)
+  const WX_SPAN = { rain: [60, 360], storm: [60, 480], hail: [50, 180], wind: [60, 260], gust: [60, 220], fog: [80, 220], heat: [60, 220] };   // (m before its spot, m after)
   function weatherAt(z) {
     if (WX_SPAN[d.wx]) return d.wx;   // (tests: ?wx=storm on the River's test page)
     const h = Math.abs(Math.sin(Math.round(z) * 12.9898) * 43758.5453) % 1;
@@ -1948,7 +1951,7 @@ function createRide(K, d) {
   let wxK = 0;          // (how deep in the weather you are, 0-1)
   let wxKind = null;
   let wxDir = 1;
-  let wxPush = 0;       // (the wind's push on your lane's middle, m across: see the whirlpools' pull)
+  let wxSpeed = 0;      // (the wind's share on your speed: + a tailwind, - a headwind)
   let wxSoundT = 0;
   let wxDropT = 0;
   let wxSplashT = 0;
@@ -1959,7 +1962,10 @@ function createRide(K, d) {
   function addShower(z) {
     const kind = weatherAt(z);
     const obj = kind === 'rain' || kind === 'storm' || kind === 'hail' ? world.rain(kind) : null;
-    if (obj) scene.add(obj);
+    if (obj) {
+      obj.scale.z = (WX_SPAN[kind][0] + WX_SPAN[kind][1]) / 100;   // (its streaks over the whole stretch)
+      scene.add(obj);
+    }
     showers.push({ z, kind, obj, said: false, bow: false, dir: Math.sin(z * 0.37) < 0 ? -1 : 1 });
   }
   function dropShower(c) {
@@ -1971,19 +1977,19 @@ function createRide(K, d) {
       const c = showers[i];
       const [IN, OUT] = WX_SPAN[c.kind];
       const ahead = c.z - dist;
-      c.obj?.position.set(0, 0, -ahead);
-      const kin = clamp((IN + 50 - ahead) / 50, 0, 1) * clamp((ahead + OUT + 40) / 40, 0, 1);
+      c.obj?.position.set(0, 0, -(ahead - IN));   // (from where it starts)
+      const kin = clamp((IN + 120 - ahead) / 120, 0, 1) * clamp((ahead + OUT + 80) / 80, 0, 1);
       const kk = kin * kin * (3 - 2 * kin);
       if (kk > k || (kk > 0 && c.kind !== wxKind && wxK < 0.05)) { k = kk; wxKind = c.kind; wxDir = c.dir; }
       if (!c.said && ahead <= IN && phase === 'run') {
         c.said = true;
         const info = WEATHER_INFO[c.kind];
-        pop(c.kind === 'rain' ? S.rvFall : `${info.emoji} ${info.name}!`, 1300);
+        pop(c.kind === 'rain' ? S.rvFall : c.kind === 'wind' ? (c.dir > 0 ? S.rvTailwind : S.rvHeadwind) : c.kind === 'gust' ? S.rvGusts : `${info.emoji} ${info.name}!`, 1300);
         if (c.kind === 'rain' || c.kind === 'storm') audio.play('thunder', { intensity: c.kind === 'storm' ? 0.75 : 0.35 });
         else if (c.kind === 'fog' || c.kind === 'heat') audio.play(c.kind, { intensity: 0.8 });
       }
       // (rain behind you: a rainbow over the far end)
-      if (!c.bow && c.kind === 'rain' && ahead < -OUT - 40) {
+      if (!c.bow && c.kind === 'rain' && ahead < -OUT - 80) {
         c.bow = true;
         rainbowT = 0;
       }
@@ -2003,9 +2009,10 @@ function createRide(K, d) {
     }
     flashK = Math.max(0, flashK - dt * 4.5);
     if (thunderT >= 0 && (thunderT -= dt) < 0) audio.play('thunder', { intensity: 0.9 });
-    world.setWeather(kind, wxK, { dir: wxDir, flash: flashK * flashK });
-    // (the wind leans on you: a steady push its way, a whirlwind's to and fro)
-    wxPush = kind === 'wind' ? wxDir * wxK * 0.35 : kind === 'gust' ? Math.sin(t * 1.7) * wxK * 0.45 : 0;
+    // (gusts come and go: the wind, its dust, its ripples and its hold on you rise and fall together)
+    const gust = kind === 'gust' ? 0.5 + 0.5 * Math.sin(t * 1.2 + Math.sin(t * 0.5) * 2) : 1;
+    world.setWeather(kind, wxK * (kind === 'gust' ? 0.45 + 0.55 * gust : 1), { dir: wxDir, flash: flashK * flashK });
+    wxSpeed = kind === 'wind' ? wxDir * 0.08 * wxK : kind === 'gust' ? -0.12 * wxK * gust : 0;
     // (the rainbow: in over 2 s, gone after 14)
     if (rainbowT >= 0) {
       rainbowT += dt;
@@ -2757,7 +2764,7 @@ function createRide(K, d) {
         // came all at once and went all at once; now it dips over a tenth of a second and eases back)
         const hk = slowT > 0 ? 1 - slowT / RIVER.hitSlowS : 1;
         const dip = hk < 0.12 ? hk / 0.12 : 1 - (hk - 0.12) / 0.88 * ((hk - 0.12) / 0.88) * (3 - 2 * ((hk - 0.12) / 0.88));
-        const sp = speedAt(dist, len) * (1 - (1 - RIVER.hitSlowK) * (slowT > 0 ? dip : 0)) * (1 + 0.24 * rapK);
+        const sp = speedAt(dist, len) * (1 - (1 - RIVER.hitSlowK) * (slowT > 0 ? dip : 0)) * (1 + 0.24 * rapK) * (1 + wxSpeed);
         dist += sp * dt;
       }
       slowT = Math.max(0, slowT - dt);
@@ -2956,8 +2963,8 @@ function createRide(K, d) {
         }
       }
     }
-    // (the whirlpools' pull, eased: it grows on you and lets go; 29 Oct 2026: the wind's push with it)
-    pullX += (pullNext + wxPush - pullX) * (1 - Math.exp(-dt * 6));
+    // (the whirlpools' pull, eased: it grows on you and lets go)
+    pullX += (pullNext - pullX) * (1 - Math.exp(-dt * 6));
     for (let i = live.length - 1; i >= 0; i--) {
       if (live[i].z < dist - BEHIND) {
         despawn(live[i]);

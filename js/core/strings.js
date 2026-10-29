@@ -1060,6 +1060,10 @@ export const S = {
   rvSlipped: (name) => `Oeps! ${name} het weer ingeval`,
   rvOuch: 'Eina!',
   rvFall: '🌧️ Reënbui!',
+  // (29 Oct 2026) the wind down the canyon: against you, behind you, in gusts
+  rvHeadwind: '💨 Teenwind!',
+  rvTailwind: '💨 Rugwind!',
+  rvGusts: '🌬️ Rukwinde!',
   rvAll: 'Almal gered! 🛟',
   rvSaved: (n, t) => `🛟 ${n} van ${t} gered!`,
   rvNoneSaved: 'Niemand gered nie…',
