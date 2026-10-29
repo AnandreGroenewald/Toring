@@ -1662,3 +1662,14 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   before and after its first block; qa/rvrestart1242.mjs: the River run), rides through a shower looked at frame by
   frame, 60 fps through a shower at CPU x4 (mid).
 
+### 29 Oct 2026 ~15:10 — 1.24.2 RELEASED to the website, the old address and Play internal; production + closed saved, his Submit click
+- His words: "Yes please" (to releasing it the same way: website, internal, closed testing and production).
+- VERSION 1.24.2; check-all quick ALL CLEAR; scans clear; commit 9169d26 pushed to origin/rivier/1.20 and
+  claude/trusting-hopper-26qcax; `~/deploy-stapel-1.24.2.sh` (site only): stapelspel.pages.dev and the old address serve
+  stapel-v1.24.2; check-all live ALL CLEAR.
+- Play: internal 12402 since 15:02 (notes af + 5 English, the usual two warnings). Production 12402 (full rollout) and
+  Closed testing - Alpha 12402 are SAVED in the Publishing overview: "Submit 2 changes for review" was refused by auto
+  mode this time (production): **his click** (Play Console › Stapel › Publishing overview › Submit 2 changes for review ›
+  Send changes for review). Files: `Stapel app (Google Play)/Upload 1.24.2 all tracks/`, `Stapel-1.24.2-toets.apk`.
+- After approval: the update card (APP_LATEST 1.24.2, a Worker deploy: his word).
+
