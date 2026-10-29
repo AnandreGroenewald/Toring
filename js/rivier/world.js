@@ -10,9 +10,12 @@ import { mergeGeometries } from '../../lib/three-addons/utils/BufferGeometryUtil
 
 export const SUN = new THREE.Vector3(-0.45, 0.34, -0.83).normalize();   // low, ahead and a little left: rim light on what comes
 const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
+// (30 Oct 2026, the owner: "polish the current versions graphics ... till it shines") a richer midday: a deeper blue
+// overhead, the water a clearer, deeper teal and brighter aqua at its edges, the far haze a little warmer (the distance
+// read washed out); the sun a touch stronger
 export const COLORS = {
-  zenith: '#3f7fc4', horizon: '#e9dcc3', haze: '#dcd2bd', sun: '#fff0d2', skyRefl: '#8fb8dc',
-  deep: '#2a8a88', shallow: '#56bba8', foam: '#f6f8f4',
+  zenith: '#2f73c8', horizon: '#e9dcc3', haze: '#d8ccb2', sun: '#fff0d2', skyRefl: '#84b4e2',
+  deep: '#1f8790', shallow: '#4ec4b2', foam: '#f6f8f4',
   rock: ['#b9693f', '#cc8452', '#d9a06c', '#a35a36', '#e2bb8a', '#c27548', '#8f4d31'],
   bush: '#3f5a2a', bushL: '#5f7a35', grass: '#8a9a4a', wall: '#6b4430', mesa: '#a9705a', mesaTop: '#6f7d4f', bird: '#241d1a',
 };
@@ -25,7 +28,7 @@ export const BANK = { half: 8.2, lake: 46, fogNear: 90, fogFar: 520 };
 // (1.22: the day's sun a little higher, 26° instead of 20°: the shadows on the water were long dark streaks, about three
 // times the height of what made them, the rider's running away behind him)
 const DAY = {
-  zenith: COLORS.zenith, horizon: COLORS.horizon, haze: COLORS.haze, sun: COLORS.sun, sunDir: [-0.45, 0.46, -0.83], sunI: 2.6,
+  zenith: COLORS.zenith, horizon: COLORS.horizon, haze: COLORS.haze, sun: COLORS.sun, sunDir: [-0.45, 0.46, -0.83], sunI: 2.7,
   fill: '#ffd9b0', fillI: 0.9, hemiSky: '#bcd6ff', hemiGround: '#7a5a3a', hemiI: 0.75, deep: COLORS.deep, shallow: COLORS.shallow,
   skyRefl: COLORS.skyRefl, wall: COLORS.wall, stars: 0, aurora: 0, clouds: 1, exposure: 1.06, envI: 0.7,
 };

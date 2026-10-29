@@ -378,6 +378,21 @@ svg.ic {
 }
 
 .lb > span { transform: translateY(calc(-3 * var(--u))); }
+/* (30 Oct 2026, the owner: "polish ... till it shines") the title's letter blocks shine like the game's own blocks: a soft
+   sheen in the top band, a sparkle where the light catches it */
+.lb::after {
+  content: '';
+  position: absolute;
+  left: 9%;
+  right: 9%;
+  top: 5%;
+  height: 11%;
+  border-radius: 999px;
+  background:
+    radial-gradient(ellipse 16% 85% at 9% 50%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.28) 55%, rgba(255, 255, 255, 0.04));
+  pointer-events: none;
+}
 
 .lb:nth-child(1) { --c: var(--protea);    --cl: var(--protea-l);    --cd: var(--protea-d);    --r: -5deg;   --y: calc(4 * var(--u));  --dur: 3.1s; --delay: -0.4s; }
 .lb:nth-child(2) { --c: var(--karoo);     --cl: var(--karoo-l);     --cd: var(--karoo-d);     --r: 3deg;    --y: calc(-6 * var(--u)); --dur: 2.7s; --delay: -1.3s; }
@@ -2864,6 +2879,15 @@ body.is-trying #ui .screen { opacity: 0; pointer-events: none; transition: opaci
 }
 .btn-white > .emoji:first-child { background: rgba(10, 34, 78, 0.06); box-shadow: none; }
 .btn-big { border-radius: calc(32 * var(--u)); }
+/* (30 Oct 2026, the owner: "polish the current versions graphics ... till it shines") the menu's big play button: a gloss
+   over its top half and a gleam that sweeps across it three times when the menu comes (then rests: an endless animation in
+   the scrolling menu is a WebView trap); none with reduced motion */
+.screen-menu .btn-big { overflow: hidden; isolation: isolate; }
+.screen-menu .btn-big::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.1) 40%, rgba(255, 255, 255, 0) 54%); pointer-events: none; z-index: 0; }
+.screen-menu .btn-big::after { display: block; content: ''; position: absolute; top: -20%; bottom: -20%; left: -40%; right: auto; width: 26%; height: auto; border-radius: 0; background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.6) 50%, rgba(255, 255, 255, 0) 100%); transform: skewX(-18deg) translateX(-120%); animation: btn-gleam 3.4s ease-in-out 0.9s 3; pointer-events: none; z-index: 0; will-change: transform; }
+.screen-menu .btn-big > * { position: relative; z-index: 1; }
+@keyframes btn-gleam { 0%, 58% { transform: skewX(-18deg) translateX(-120%); } 100% { transform: skewX(-18deg) translateX(640%); } }
+@media (prefers-reduced-motion: reduce) { .screen-menu .btn-big::after { display: none; } }
 /* the pickers: the chosen mode a white pill with the gold line, the chosen stake a gold coin pill */
 .mode-btn[aria-pressed="true"] { border-color: transparent; box-shadow: inset 0 calc(-4 * var(--u)) 0 #ffc928, 0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(10, 34, 78, 0.12); }
 .stake-btn[aria-pressed="true"] { border-color: transparent; background: linear-gradient(180deg, #ffe27a, #ffc928); color: #4a3500; box-shadow: 0 calc(3 * var(--u)) 0 #c99a0c, 0 calc(5 * var(--u)) calc(10 * var(--u)) rgba(10, 34, 78, 0.14); }

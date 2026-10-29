@@ -122,7 +122,14 @@ function makeKit() {
 #rivier .rv-faces { position: absolute; left: 12px; right: 12px; top: calc(62px + var(--sat, 0px)); display: flex; flex-wrap: wrap; gap: 4px; }
 /* (eight faces on one line on any phone; more than eight wrap) */
 #rivier .rv-faces img { width: min(30px, calc((100vw - 24px - 7 * 4px) / 8)); aspect-ratio: 1; height: auto; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
-#rivier .rv-faces img.out { opacity: .25; filter: grayscale(1); }
+/* (30 Oct 2026, the owner: "polish ... till it shines") the people still to rescue: a white ring and a dark seat behind each
+   (they read as faces waiting, not as faded placeholders); one rescued lights up with a little pop */
+#rivier .rv-faces img { box-sizing: border-box; border: 2px solid rgba(255,255,255,.92); background: rgba(13,34,40,.55); }
+#rivier .rv-faces img.out { opacity: .6; filter: grayscale(1) brightness(.9); border-color: rgba(255,255,255,.4); }
+#rivier .rv-faces img:not(.out) { animation: rv-face-pop .42s cubic-bezier(.3,1.6,.5,1); }
+@keyframes rv-face-pop { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
+/* (and the picture itself framed a little, like a lens: the eye goes to the rider, the HUD reads on the darker edge) */
+#rivier .rv-ov::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 85% 75% at 50% 56%, rgba(8,18,28,0) 60%, rgba(8,18,28,.32) 100%); }
 #rivier .rv-hint { position: absolute; left: 50%; top: calc(104px + var(--sat, 0px)); transform: translateX(-50%); padding: 10px 18px; border-radius: 16px; background: rgba(13,34,40,.66); font-weight: 900; font-size: 18px; width: max-content; max-width: calc(100% - 32px); text-align: center; line-height: 1.25; text-wrap: balance; opacity: 0; transition: opacity .3s; }
 #rivier .rv-hint.on { opacity: 1; }
 #rivier .rv-pop { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%) scale(.6); opacity: 0; font-size: 34px; font-weight: 900; color: #fff3c4; -webkit-text-stroke: 1.5px rgba(40,24,0,.75); text-shadow: 0 4px 0 rgba(40,24,0,.45), 0 8px 24px rgba(0,0,0,.4); width: max-content; max-width: 88%; text-align: center; line-height: 1.12; text-wrap: balance; transition: opacity .25s, transform .35s cubic-bezier(.2,1.4,.4,1); }
@@ -249,7 +256,7 @@ function makeKit() {
 #rivier .rv-spray.on { animation: rv-spray 1.3s ease-out; }
 @keyframes rv-spray { 0% { opacity: 1; transform: translateY(-4px); } 100% { opacity: 0; transform: translateY(22px); } }
 @keyframes rv-spray-still { 0% { opacity: 1; } 100% { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { #rivier .rv-count.bump { animation: none; } #rivier .rv-spray.on { animation: rv-spray-still .45s ease-out; } }`;
+@media (prefers-reduced-motion: reduce) { #rivier .rv-count.bump { animation: none; } #rivier .rv-faces img { animation: none; } #rivier .rv-spray.on { animation: rv-spray-still .45s ease-out; } }`;
     document.head.appendChild(st);
   }
   (document.getElementById('game') || document.body).appendChild(host);
@@ -608,7 +615,7 @@ function createTown(K, d) {
     if (current === api) current = null;
   }
   const api = {
-    ready, close, state: () => ({ phase: 'town', h: Math.max(16, island.top, island.plotTop) + 6, rescued: [] }),
+    ready, close, fit: place, state: () => ({ phase: 'town', h: Math.max(16, island.top, island.plotTop) + 6, rescued: [] }),
     gpu: () => ({ ...stage.renderer.info.memory, programs: stage.renderer.info.programs?.length | 0 }),
     /** The server's newer answer: the panel again, the tower as it stands now. */
     refresh(v) {
@@ -3357,6 +3364,7 @@ function createRide(K, d) {
     if (!alive) return;
     // (the last ride's materials: their programs are this ride's now)
     for (const m of retired.splice(0)) m.dispose();
+    place();   // (the window may have changed while it loaded)
     stage.render(0);
     performance.mark?.('rv:frame');
     await new Promise((res) => requestAnimationFrame(res));
@@ -3434,6 +3442,8 @@ function createRide(K, d) {
 
   const api = {
     ready, close,
+    /** Stapel re-fitted its canvas (main.js relayout): the box goes over it again. */
+    fit: place,
     pause: () => setPaused(true),
     resume: () => setPaused(false),
     /**

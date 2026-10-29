@@ -3628,6 +3628,10 @@ function relayout() {
   }
   refitGuard = 0;
   ui.layout(rect);
+  // (1.24.6) the River's box follows the canvas once it is re-fitted: measured in the resize event itself it kept the
+  // old size, and back from the app switcher the River stayed small in the middle of the tower (the owner's photos)
+  ride?.fit?.();
+  dorp3d?.fit?.();
   const cs = getComputedStyle(insetProbe);
   const k = GAME_W / rect.width;
   const top = Math.max(0, (parseFloat(cs.paddingTop) || 0) - Math.max(0, rect.top)) * k;

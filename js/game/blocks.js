@@ -606,6 +606,39 @@ function drawCellBands(ctx, c, pal) {
   ctx.fillRect(c.x, c.y + c.h - b.bottom, c.w, b.bottom);
 }
 
+/**
+ * (30 Oct 2026, the owner: "polish the current versions graphics ... till it shines") a toy block's shine for one cell:
+ * the face a touch lighter at the top and darker at the foot (it has volume), and a soft rounded sheen in the top band,
+ * brightest on the left where the light comes from. (Inside the clip; a premium skin paints its own face instead.)
+ */
+function drawGloss(ctx, c) {
+  const v = ctx.createLinearGradient(0, c.y, 0, c.y + c.h);
+  v.addColorStop(0, 'rgba(255,255,255,0.15)');
+  v.addColorStop(0.45, 'rgba(255,255,255,0)');
+  v.addColorStop(1, 'rgba(0,0,0,0.16)');
+  ctx.fillStyle = v;
+  ctx.fillRect(c.x, c.y, c.w, c.h);
+  const b = bandSizes(c.h);
+  const h = Math.max(3, b.top * 0.7);
+  const x = c.x + Math.min(8, c.w * 0.07);
+  const w = Math.max(6, c.w - Math.min(16, c.w * 0.14));
+  const y = c.y + Math.max(2, b.top * 0.22);
+  const s = ctx.createLinearGradient(x, 0, x + w, 0);
+  s.addColorStop(0, 'rgba(255,255,255,0.78)');
+  s.addColorStop(0.55, 'rgba(255,255,255,0.32)');
+  s.addColorStop(1, 'rgba(255,255,255,0.06)');
+  ctx.fillStyle = s;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, h / 2);
+  else ctx.rect(x, y, w, h);
+  ctx.fill();
+  // (and a sparkle where the light catches it)
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.beginPath();
+  ctx.ellipse(x + h * 0.9, y + h * 0.5, h * 0.55, h * 0.36, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 /** Dark seam lines where two cells share an edge. */
 function drawSeams(ctx, cells, color) {
   ctx.strokeStyle = color;
@@ -2291,6 +2324,7 @@ function drawBlock(ctx, g, pal, key, name = null) {
     const detail = DETAIL[g.shape];
     if (detail) detail(ctx, g, pal, rnd);
     drawSkinPattern(ctx, g, pal, rnd);
+    for (const c of g.cells.length ? g.cells : [{ x: 0, y: 0, w: g.w, h: g.h }]) drawGloss(ctx, c);
     if (g.cells.length > 1) drawSeams(ctx, g.cells, rgba(outlineCol, 0.8));
   }
   if (name) drawName(ctx, g, pal, name);   // still clipped to the shape: the ghost silhouette is unchanged

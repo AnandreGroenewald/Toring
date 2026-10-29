@@ -1783,3 +1783,14 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
 - ~20:05: Play internal 12405 (1.24.5) "Available to internal testers"; closed Alpha 12405 saved and sent: "Changes in
   review" (the only change). Production = 12404 (1.24.4) live (his Submit click went through; the overview was empty).
   The website waits on **his** `bash ~/deploy-stapel-1.24.5.sh` (auto mode refuses Pages deploys).
+
+### 29 Oct 2026 ~22:55 — local, uncommitted (a 1.24.6 candidate): graphics polish + the River-size fix
+- Polish (his "polish the current versions graphics ... till it shines"): every default-skin block gets a soft sheen and
+  sparkle (js/game/blocks.js drawGloss); the menu's play button and the title's letter blocks a gloss (css/style.css; the
+  gleam runs 3 times, none with reduced motion); the River a soft vignette, rescue faces in white rings with a pop, a
+  deeper sky and water (js/rivier/view.js CSS, world.js COLORS, DAY sunI 2.7).
+- His photos (~22:30): back from the app switcher the River sat small in the middle of the tower. view.js place()
+  measured the canvas in the resize event itself, before main.js re-fits it (a frame later, again 120 ms later). Now
+  main.js relayout() calls `ride?.fit?.()` / `dorp3d?.fit?.()` after every re-fit, and the ride measures again in ready().
+  qa/rv_refit1246.mjs: the released 1.24.5 copy OFF in 4 of 5 steps, the fix ok 5/5.
+- Not released: VERSION still 1.24.5; release only on his word (website by his deploy script, Play internal + closed).
