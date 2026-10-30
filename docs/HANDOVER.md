@@ -1849,3 +1849,10 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
 - Play: internal 12410 "Available to internal testers"; closed: Publishing overview listed only Closed testing 12410
   → "Send changes for review" (in review). `~/deploy-stapel-1.24.10.sh` (Worker, site, old address) waits his word;
   pages-dist built at 1.24.10.
+
+### 30 Oct 2026 ~15:20 — 1.24.11 RELEASED to Play internal (live) + closed Alpha (in review); his "Yes please fix it"
+- No hitch on strong phones: on q=high the water's mirror is drawn into its own picture, and three draws into a picture
+  with other shader programs (no tone mapping); each thing's mirror programs were built mid-ride the first time it showed
+  in the water (nine on the hail route). `world.reflTarget()` + the warm-up compiles with it as the target, plain and
+  blinking. `scripts/qa/shaders12410.mjs high` → 0 built mid-ride (124 in the warm-up); mid → 0. Nonsense 33/33,
+  check-all quick ALL CLEAR. 1.24.10 had been approved on closed at 14:42. `~/deploy-stapel-1.24.11.sh` waits his word.
