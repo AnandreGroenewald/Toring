@@ -1833,3 +1833,19 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   sent for review. Website, Worker and production wait his word (`~/deploy-stapel-1.24.8.sh` does Worker → site → old
   address; the Worker must go with the site because its ride check uses the River's pace).
 - Tested: river_batch1248, river_fix1248, rivier_nonsense1248 33/33, saam1210 29/29, living1160 18/18, check-all quick.
+
+### 30 Oct 2026 ~14:45 — 1.24.9 and 1.24.10 RELEASED to Play internal (live) + closed Alpha; NOT production, NOT the website, NOT the Worker
+- 1.24.9 (12409, ~12:25): 1.24.8 + no sun-glow band on the water (his 11:46 video). Internal live; closed approved 12:42.
+- 1.24.10 (12410, d1b3462): his "in the gameplay the sun glare line is still an issue" (on the cartoon's gameplay clip,
+  recorded on 1.24.8, then again on 1.24.9: still there). The line was the mist patches (js/rivier/world.js): upright
+  26 x 7 m sheets across the river every 70 m; where a sheet met the water it cut a ruled line, the water behind it pale
+  through the haze, riding at you every few seconds. Not the glitter, not the shade box, not the mirror (each tried,
+  measured, reverted). Found with `scripts/qa/lineparts12410.mjs` (one paused frame, each part of the scene hidden in turn,
+  the colour step across the line measured: 87, and 30 with the nearest mist sheet hidden). Fix: mistFade() fades the
+  sheet to nothing at the water (full from 2.4 m up) and at its own top and bottom; its own program key 'rivier-mist'.
+  After: step 34; the cartoon's gameplay clip recorded again shows clean water. View test hook `world()`.
+- Checks: rivier_nonsense1248 33/33; check-all quick ALL CLEAR; shaders12410: q=mid 0 programs built mid-ride, q=high 9
+  (the builder's, hippo's and log's blink variants on the hail route; the same on 1.24.9: OPEN, not caused by this).
+- Play: internal 12410 "Available to internal testers"; closed: Publishing overview listed only Closed testing 12410
+  → "Send changes for review" (in review). `~/deploy-stapel-1.24.10.sh` (Worker, site, old address) waits his word;
+  pages-dist built at 1.24.10.
