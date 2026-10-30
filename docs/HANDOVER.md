@@ -1804,3 +1804,22 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   boulders make way where they float wide (rockClear). debugCam 'top' for tests.
 - Tested: qa/noodle_look1247.mjs (rider + top shots at 540/548/585/842/850 m and the head), check-all quick ALL CLEAR,
   rivier_nonsense1213 32/32 (GPU=1, private matchhost).
+
+### 30 Oct 2026 ~09:20 — 1.24.8 (local, waits his word): from his phone video — camera on the lanes, a count after a pause, steady rocks, calm water, no mid-ride shader stalls
+- His words: "the rocks glitches and the phone glitches, or lags ... look at the water ... a 2 second continue if you have
+  paused ... sometimes the rocks vibrates ... if you turn between the canyons then the camera angle should stay on the 3
+  lanes, because if you go to the right then you character goes out of the screen"; then: "No please do not take it out.
+  Its just the camera angle should still be on the screen, the Saterday game should focus more on the island".
+- Camera (view.js): the everyday ride no longer turns towards the crew's island (the island stays; Saturday's own ride
+  keeps its turn to the towers); a bend's look-in ≤ LOOK_IN 2.2 m, a third of that when it turns away from his outer lane.
+- Pause: back from it, "2", "1" on the still river (resumeT, RESUME_S 2), no lane change, jump or duck meanwhile.
+- Rocks (world.js): the sun's shadows every frame again on the lowest step (every 3rd frame made a moving rock's shadow
+  lag and jump), a 0.65× shadow box there instead (shadowK); river rocks don't bob.
+- Water (world.js WATER_FRAG): the sun's glitter from ~16 m, full by 50 m (glintFar); close by it was cream specks.
+- Stalls: the ride's kit in things.js and beasts.js is `userData.shared` (disposeTree skips it; dispose() frees it at the
+  ride's end), the swimmers' shirts and faces too: each thing leaving the river had freed it, so the next one compiled its
+  shader again (every hippo: its bubbles). The warm-up compiles his blink look (after a knock) and uploads every picture.
+- Test hooks on the ride: riderOnScreen(), programNames(keys), programUsers(id). proto/scene.js (the trailer scenes) lives
+  in proto/ now, not js/ (not shipped).
+- Tested: qa/river_fix1248.mjs, programs built mid-ride 7 → 0 (400 m-5.1 km), rivier_lowstep1245 linksAfter 4 → 0,
+  rivier_nonsense1248 33/33, saam1210 29/29, check-all quick ALL CLEAR.
