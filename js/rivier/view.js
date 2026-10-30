@@ -3493,6 +3493,21 @@ function createRide(K, d) {
         rider.setBlink?.(true);
         await stage.renderer.compileAsync(scene, camera);
         rider.setBlink?.(false);
+        // (30 Oct 2026, the owner: "Yes please fix it": on the strongest phones the water mirrors the river, drawn into a
+        // picture of its own first, and three draws into a picture with other shaders (no tone mapping): each thing's
+        // mirror shaders were built mid-ride the first time it showed in the water, a hippo, a log, him blinking (nine on
+        // the hail route). Built now for the mirror too, plain and blinking; the programs are made in the call itself,
+        // so the screen is drawn to again before the wait)
+        const rt = world.reflTarget?.(stage.renderer);
+        for (const blink of rt ? [false, true] : []) {
+          rider.setBlink?.(blink);
+          const prev = stage.renderer.getRenderTarget();
+          stage.renderer.setRenderTarget(rt);
+          const ready = stage.renderer.compileAsync(scene, camera);
+          stage.renderer.setRenderTarget(prev);
+          await ready;
+        }
+        rider.setBlink?.(false);
       }
       // (in parallel where the phone can: the screen keeps moving while the shaders compile; the owner, 25 Oct 2026: "if I
       // log in then the screen freezes for a second or two, just on river run")
@@ -3502,6 +3517,16 @@ function createRide(K, d) {
         rider.setBlink?.(true);
         stage.renderer.compile(scene, camera);
         rider.setBlink?.(false);
+        const rt = world.reflTarget?.(stage.renderer);
+        if (rt) {
+          const prev = stage.renderer.getRenderTarget();
+          stage.renderer.setRenderTarget(rt);
+          stage.renderer.compile(scene, camera);
+          rider.setBlink?.(true);
+          stage.renderer.compile(scene, camera);
+          rider.setBlink?.(false);
+          stage.renderer.setRenderTarget(prev);
+        }
       }
       // (30 Oct 2026: their pictures go up to the graphics chip now as well, the island's and the clown's too: on a phone
       // the first sight of a new thing waited for that mid-ride, one of the stalls of up to a third of a second the

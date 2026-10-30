@@ -1183,8 +1183,10 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
   const _sz = new THREE.Vector2();
   stage.onQuality?.((q) => { reflOn = q.name === 'high'; if (!reflOn) water.uniforms.uReflK.value = 0; });
   let catcherMesh = null;
-  function reflect(renderer, camera) {
-    if (!reflOn) return;
+  /** The mirror's own picture, made now if the mirror is on (else null). (30 Oct 2026: the ride's warm-up compiles every
+   *  shader for drawing into it as well: three draws into a picture with other shaders than onto the screen.) */
+  function reflTarget(renderer) {
+    if (!reflOn) return null;
     renderer.getDrawingBufferSize(_sz);
     const w = Math.max(64, Math.round(_sz.x * 0.5));
     const h = Math.max(64, Math.round(_sz.y * 0.5));
@@ -1193,6 +1195,10 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
       reflRT = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType });
       water.uniforms.uRefl.value = reflRT.texture;
     }
+    return reflRT;
+  }
+  function reflect(renderer, camera) {
+    if (!reflTarget(renderer)) return;
     camera.updateMatrixWorld();
     _cp.setFromMatrixPosition(camera.matrixWorld);
     if (_cp.y <= 0.05) { water.uniforms.uReflK.value = 0; return; }
@@ -1928,7 +1934,7 @@ void main() {
   }
 
   return {
-    group, water, sun, update, halfAt, footAt, setRockClear: (fn) => { rockClear = fn; }, setShadowFocus, shadows, reflect, fxTint, stoneMat, night,
+    group, water, sun, update, halfAt, footAt, setRockClear: (fn) => { rockClear = fn; }, setShadowFocus, shadows, reflect, reflTarget, fxTint, stoneMat, night,
     /**
      * (29 Oct 2026, the owner: "it looks like the waterfall comes out of thin air. Maybe we should just make it a rain
      * scene") A shower over the river where a fall across it was: streaks falling from high over the canyon (out of the
