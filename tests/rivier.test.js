@@ -106,12 +106,15 @@ test('rivier (endless): the river never ends — always passable at its speed, e
   assert.equal(speedAt(0, Infinity), PACE.start);
   assert.ok(PACE.start >= 18, 'not a slow start');
   let prev = 0;
-  for (let z = 0; z <= 7000; z += 250) {
+  for (let z = 0; z <= 12500; z += 250) {
     const v = speedAt(z, Infinity);
     assert.ok(v > prev, `faster at ${z} m (${v})`);
     prev = v;
   }
+  // (30 Oct 2026, the owner: "it doesnt get much faster at 10 000": still getting faster past 7 km, and at 10 km)
+  assert.ok(speedAt(10000, Infinity) >= speedAt(7000, Infinity) + 6, 'clearly faster at 10 km than at 7 km');
   assert.equal(speedAt(20000, Infinity), PACE.max);
+  assert.ok(PACE.max >= 50, 'a top speed past the old 40 m/s');
   // the server's limit: an honest ride is always within it, a forged one isn't
   for (const secs of [20, 60, 180, 600]) {
     let d = 0;
