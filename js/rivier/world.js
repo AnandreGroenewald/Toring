@@ -977,8 +977,11 @@ void main() {
   // (30 Oct 2026, the owner, filming his phone: "look at the water". Close in front of him the fine ripples tilt every
   // way, so the low sun glinted all over the near water: cream specks, and on the phone soft white smears. The glitter
   // lies further off now (from ~16 m, full by 50 m), a path of light towards the sun; the near water keeps its colour)
-  float glintFar = smoothstep(16.0, 50.0, length(cameraPosition - vWorld));
-  col += uSunCol * (pow(s, 260.0) * 1.7 * glintFar * glintFar + pow(s, 40.0) * 0.13 * glintFar);
+  // (30 Oct 2026, 11:46, the owner: "The lines are still there, I think its the sunlight": the glitter's soft glow, held
+  // back near him, came on across the water ~40-60 m ahead as a pale band with an edge. No glow now; only the glints,
+  // fading in so slowly (14-110 m) that nothing draws a line)
+  float glintFar = smoothstep(14.0, 110.0, length(cameraPosition - vWorld));
+  col += uSunCol * pow(s, 260.0) * 1.7 * glintFar;
   // white water: foam along the banks and streaks where the current breaks (thin, along the flow)
   float streak = texture2D(uNoise, vec2(p.x * 0.9, p.y * 0.02 - uT * 0.11)).b;
   // (30 Oct 2026, the owner: "The line still shows on the water. This happens every 10 seconds or so": the white water
