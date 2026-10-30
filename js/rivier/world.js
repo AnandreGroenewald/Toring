@@ -808,15 +808,19 @@ void main() {
   // across its width, is fuller, and fades only at its very sides
   float edge = mix(smoothstep(0.0, 0.3, x) * smoothstep(1.0, 0.7, x), smoothstep(0.0, 0.08, x) * smoothstep(1.0, 0.92, x), uSolid);
   // streaks of falling water: the pattern runs down, faster lower down
-  float n = texture2D(uNoise, vec2(x * 0.9 * uRep.x, vUv.y * 0.5 * uRep.y + uT * 0.55)).r;
-  float n2 = texture2D(uNoise, vec2(x * 2.3 * uRep.x + 0.3, vUv.y * 1.4 * uRep.y + uT * 1.25)).b;
+  // (30 Oct 2026, the owner: "The small waterfall looks dull to the rest of the design": the walls' falls were a pale
+  // grey-white haze you saw through; now clear blue water, fuller, its white streaks racing down faster)
+  float n = texture2D(uNoise, vec2(x * 0.9 * uRep.x, vUv.y * 0.5 * uRep.y + uT * mix(0.9, 0.55, uSolid))).r;
+  float n2 = texture2D(uNoise, vec2(x * 2.3 * uRep.x + 0.3, vUv.y * 1.4 * uRep.y + uT * mix(1.9, 1.25, uSolid))).b;
   float st = smoothstep(0.3, 0.75, n * 0.55 + n2 * 0.45);
   // (29 Oct 2026: a river-wide fall clear between its streaks, the canyon showing through: at 0.6 everywhere it lay
   // over the river like frosted glass and washed out everything behind it)
-  float a = edge * mix(0.35 + 0.65 * st, 0.16 + 0.8 * st, uSolid);
+  float a = edge * mix(0.6 + 0.4 * st, 0.16 + 0.8 * st, uSolid);
   a *= smoothstep(1.0, 0.95, vUv.y);
   // (the body of the fall a cool green-grey with bright white streaks, glossier near the lip)
-  vec3 col = mix(vec3(0.5, 0.64, 0.64), vec3(1.0), smoothstep(0.38, 0.82, n2) * (0.6 + 0.4 * st));
+  vec3 body = mix(vec3(0.36, 0.74, 0.92), vec3(0.5, 0.64, 0.64), uSolid);   // (the walls' falls: a clear blue)
+  vec3 col = mix(body, vec3(1.0), smoothstep(0.36, 0.78, n2) * (0.65 + 0.35 * st));
+  col = mix(col, vec3(1.0), smoothstep(0.8, 0.98, vUv.y) * (1.0 - uSolid) * 0.75);   // (bright where it tips over the lip)
   // white water where it lands (across the river a ragged edge, not a ruled white line)
   float foot = smoothstep(0.14 + (n - 0.5) * 0.14 * uSolid, 0.0, vUv.y);
   col = mix(col, vec3(1.0), foot);
@@ -838,7 +842,7 @@ void main() {
 // round you, wrapped through a box ahead of the camera as the river flows past.
 const RAIN_VERT = `${BEND_GLSL}
 uniform float uT; uniform float uScale; uniform float uH; uniform float uWrap; uniform float uNear; uniform float uFall;
-uniform float uWindZ; uniform float uLen;
+uniform float uWindZ; uniform float uLen; uniform float uShape;
 attribute vec4 aSeed;
 varying float vDepth; varying float vA;
 void main() {
@@ -854,7 +858,8 @@ void main() {
   vDepth = -mv.z;
   vA = smoothstep(0.0, 0.05, f) * (1.0 - smoothstep(0.95, 1.0, f));
   gl_Position = projectionMatrix * mv;
-  gl_PointSize = clamp(uLen * uScale / max(0.5, vDepth), 2.0, 56.0);
+  // (30 Oct 2026: hail stays small up close, a fast little stone, not a big soft blob drifting past the lens)
+  gl_PointSize = clamp(uLen * uScale / max(0.5, vDepth), 2.0, uShape > 0.5 && uShape < 1.5 ? 20.0 : 56.0);
 }`;
 // (uShape 0: a streak falling; 1: a hail pellet; 2: a streak blowing across)
 const RAIN_FRAG = `uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar; uniform vec3 uTint; uniform float uK; uniform float uShape;
@@ -862,13 +867,21 @@ uniform vec3 uCol;
 varying float vDepth; varying float vA;
 void main() {
   vec2 c = gl_PointCoord - 0.5;
+  // (30 Oct 2026, the owner: "the hail feels fake": soft white dots drifting like snow. A hailstone now: a little ball
+  // of ice at the foot of its point, bright on its upper side and icy blue under it, with a short blur above it from
+  // its speed)
+  vec2 hb = c - vec2(0.0, 0.24);
+  float ball = smoothstep(0.2, 0.15, length(hb));
+  float trail = exp(-c.x * c.x / 0.0035) * smoothstep(-0.48, 0.2, c.y) * 0.35;
   float a = uShape < 0.5 ? exp(-c.x * c.x / 0.0028) * smoothstep(0.5, 0.15, abs(c.y))
-    : uShape < 1.5 ? smoothstep(0.34, 0.2, length(c))
+    : uShape < 1.5 ? max(ball, trail)
     : exp(-c.y * c.y / 0.0028) * smoothstep(0.5, 0.15, abs(c.x));
   a *= vA * uK;
   if (a < 0.02) discard;
-  vec3 col = mix(uCol * uTint, uFog, smoothstep(uFogNear, uFogFar, vDepth));
-  gl_FragColor = vec4(col, min(1.0, a * 0.6));
+  vec3 base = uCol;
+  if (uShape > 0.5 && uShape < 1.5) base = mix(vec3(0.66, 0.8, 0.94), vec3(1.0), smoothstep(0.16, 0.02, length(hb - vec2(-0.05, -0.06))));
+  vec3 col = mix(base * uTint, uFog, smoothstep(uFogNear, uFogFar, vDepth));
+  gl_FragColor = vec4(col, min(1.0, a * (uShape > 0.5 && uShape < 1.5 ? 0.95 : 0.6)));
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -968,7 +981,10 @@ void main() {
   col += uSunCol * (pow(s, 260.0) * 1.7 * glintFar * glintFar + pow(s, 40.0) * 0.13 * glintFar);
   // white water: foam along the banks and streaks where the current breaks (thin, along the flow)
   float streak = texture2D(uNoise, vec2(p.x * 0.9, p.y * 0.02 - uT * 0.11)).b;
-  float rap = smoothstep(uRapids.x - 12.0, uRapids.x + 8.0, p.y) * (1.0 - smoothstep(uRapids.y - 8.0, uRapids.y + 12.0, p.y));
+  // (30 Oct 2026, the owner: "The line still shows on the water. This happens every 10 seconds or so": the white water
+  // came and went over 20 m, which far ahead lies flat into a ruled line across the river, at each end of a stretch of
+  // rapids; now it builds and fades over ~70 m)
+  float rap = smoothstep(uRapids.x - 45.0, uRapids.x + 25.0, p.y) * (1.0 - smoothstep(uRapids.y - 25.0, uRapids.y + 45.0, p.y));
   // (1.22: fainter outside the rapids: close to you they were big white smears down the side of the river)
   float foamLine = smoothstep(0.66 - rap * 0.2, 0.74, streak) * (1.0 - smoothstep(0.74, 0.86 + rap * 0.1, streak)) * (0.32 + rap * 0.63) * (1.0 - lake);
   foamLine += rap * smoothstep(0.55, 0.85, h0) * 0.6;
@@ -1383,7 +1399,7 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
   const showerGeo = rainGeo(lowQ ? 1800 : 4200, 14, -100, 0);
   showerGeo.userData.shared = true;   // (the world frees them; a ride's warm-up leaves them be)
   // (29 Oct 2026: the weather that falls: rain, a storm's heavier rain, hail: white pellets falling fast)
-  const FALLS_LOOK = { rain: {}, storm: { uFall: 1.25, uK: 1.25 }, hail: { uFall: 1.7, uLen: 0.38, uShape: 1, uK: 1.4, uCol: new THREE.Color(0.97, 0.98, 1) } };
+  const FALLS_LOOK = { rain: {}, storm: { uFall: 1.25, uK: 1.25 }, hail: { uFall: 2.6, uLen: 0.34, uShape: 1, uK: 1.4, uCol: new THREE.Color(0.97, 0.98, 1) } };
   const lookMat = (m, look) => { for (const [k, v] of Object.entries(look)) { if (v?.isColor) m.uniforms[k].value.copy(v); else m.uniforms[k].value = v; } return m; };
   const showerMats = Object.fromEntries(Object.entries(FALLS_LOOK).map(([k, look]) => [k, lookMat(rainMat(false), look)]));
   for (const m of Object.values(showerMats)) m.userData.shared = true;
@@ -1929,8 +1945,8 @@ void main() {
       const near = wet || kind === 'hail' || windy ? k : 0;
       nu.uK.value = near * (kind === 'storm' ? 1.6 : kind === 'hail' ? 1.4 : windy ? 1.6 : 1);
       nu.uShape.value = kind === 'hail' || windy ? 1 : 0;
-      nu.uFall.value = kind === 'hail' ? 1.7 : kind === 'storm' ? 1.25 : windy ? 0.06 : 1;
-      nu.uLen.value = kind === 'hail' ? 0.38 : windy ? 0.2 : 1.3;
+      nu.uFall.value = kind === 'hail' ? 2.6 : kind === 'storm' ? 1.25 : windy ? 0.06 : 1;
+      nu.uLen.value = kind === 'hail' ? 0.34 : windy ? 0.2 : 1.3;
       // (dir: +1 a tailwind, -1 a headwind; the air comes at you faster than the river in a headwind, slower in a tailwind)
       nu.uWindZ.value = windy ? -dir * (kind === 'gust' ? 18 : 13) : 0;
       nu.uCol.value.setRGB(...(kind === 'hail' ? [0.97, 0.98, 1] : windy ? [0.95, 0.9, 0.8] : [0.86, 0.9, 0.94]));

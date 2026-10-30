@@ -1,7 +1,7 @@
 // (1.20) Afgly, the rescue ride (the owner, 24 Oct 2026: "The river can be part of a rescue mission for the men you lost
 // on the towers", "it needs to a river with the blocks and you need to slide left and right to dodge them", the slide
 // "needs to integrate with the blocks"). After the Daily your builder dives off the top of the tower into the river and
-// surfs it down to your crew's island: swipe ⟵ ⟶ (or tap a side) past Stapel's blocks floating down and the rocks, and
+// surfs it down to your crew's island: swipe ⟵ ⟶ past Stapel's blocks floating down and the rocks, and
 // scoop up the people who fell off your tower (and a few strays). Whoever you save moves into the crew's Weektoring.
 // A knock never ends the ride: you stumble, and the last person you saved slips back into the water.
 //
@@ -92,6 +92,28 @@ function makeKit() {
    wider than a narrow phone) the pills may give way, the pause button never; on a narrow phone they pack closer */
 #rivier .rv-top > * { min-width: 0; }
 #rivier .rv-top > .rv-pause { flex: none; }
+/* (30 Oct 2026, the owner: "the graphics for this menu looks weak in comparison, also the icons on top") the top bar in the
+   game's own finish: glossy deep-teal pills with a light rim, a sheen along the top and a little depth under them; the
+   coins' pill rimmed in gold, the hearts glossy, the pause button a round 3D button (no blur: still light on a phone) */
+#rivier .rv-metres, #rivier .rv-cn, #rivier .rv-hearts, #rivier .rv-count {
+  background: linear-gradient(180deg, rgba(46,104,116,.94) 0%, rgba(17,56,68,.95) 52%, rgba(9,34,43,.97) 100%);
+  border: 1.5px solid rgba(255,255,255,.5);
+  box-shadow: 0 3px 0 rgba(3,16,21,.6), 0 6px 14px rgba(0,0,0,.28), inset 0 1.5px 0 rgba(255,255,255,.38);
+}
+#rivier .rv-cn { border-color: rgba(255,214,92,.85); }
+#rivier .rv-metres b, #rivier .rv-cn b, #rivier .rv-count b { text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+#rivier .rv-cn i.rv-coin-ic { width: 20px; height: 20px; box-shadow: 0 1px 0 rgba(0,0,0,.4), 0 0 8px rgba(255,214,92,.55); }
+#rivier .rv-hearts i { background: linear-gradient(180deg, #ff9aa4 0%, #ff4d5e 46%, #d4223a 100%); filter: drop-shadow(0 1.5px 0 rgba(0,0,0,.4)); }
+#rivier .rv-hearts i.gone { background: rgba(255,255,255,.22); filter: none; }
+#rivier .rv-pause {
+  background: linear-gradient(180deg, #5fd0de 0%, #2c9db1 55%, #1f7f93 100%);
+  border: 2px solid rgba(255,255,255,.75);
+  box-shadow: 0 4px 0 #14566a, 0 7px 14px rgba(0,0,0,.3), inset 0 2px 0 rgba(255,255,255,.45);
+  position: relative; font-size: 0; color: transparent; transition: transform .08s, box-shadow .08s;
+}
+/* (the two bars drawn, not a font's sign: on some phones it came out as a square) */
+#rivier .rv-pause::before { content: ''; position: absolute; left: 50%; top: 50%; width: 14px; height: 16px; transform: translate(-50%, -50%); border-radius: 2px; background: linear-gradient(90deg, #fff 0 5px, transparent 5px 9px, #fff 9px 14px); filter: drop-shadow(0 1.5px 0 rgba(0,0,0,.35)); }
+#rivier .rv-pause:active { transform: translateY(3px); box-shadow: 0 1px 0 #14566a, 0 3px 8px rgba(0,0,0,.3), inset 0 2px 0 rgba(255,255,255,.45); }
 #rivier .rv-metres { white-space: nowrap; overflow: hidden; }
 @media (max-width: 430px) {
   #rivier .rv-top { gap: 5px; left: 8px; right: 8px; }
@@ -233,6 +255,38 @@ function makeKit() {
 #rivier .rv-paused button { display: block; width: 100%; min-height: 48px; margin-top: 8px; border-radius: 14px; border: 0; font: inherit; font-weight: 900; font-size: 17px; }
 #rivier .rv-paused .rv-on { background: #ffd65c; color: #2b1a00; }
 #rivier .rv-paused .rv-off, #rivier .rv-paused .rv-redo { background: rgba(255,255,255,.14); color: #fff; }
+/* (30 Oct 2026, the owner: "the graphics for this menu looks weak") the pause card in the game's finish: a glossy teal
+   card with a rim and depth, a cream title, and chunky 3D buttons that press in, each with its sign */
+#rivier .rv-paused { background: radial-gradient(ellipse at 50% 42%, rgba(6,26,34,.38), rgba(3,12,16,.8)); }
+#rivier .rv-paused div {
+  width: min(84%, 340px); padding: 22px 20px 22px; border-radius: 28px;
+  background: linear-gradient(180deg, #2f7a88 0%, #175061 40%, #0c3341 100%);
+  border: 2px solid rgba(255,255,255,.55);
+  box-shadow: 0 8px 0 rgba(3,18,24,.8), 0 20px 44px rgba(0,0,0,.5), inset 0 2px 0 rgba(255,255,255,.32);
+}
+#rivier .rv-paused h2 { margin: 0 0 16px; font-size: 34px; font-weight: 900; letter-spacing: .02em; color: #fff3c4; text-shadow: 0 3px 0 rgba(0,0,0,.38); }
+#rivier .rv-paused button {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 58px; margin-top: 14px; border-radius: 18px; font-size: 20px; letter-spacing: .01em;
+  border: 2px solid rgba(255,255,255,.5); transition: transform .08s, box-shadow .08s;
+}
+#rivier .rv-paused button::before { font-size: 17px; line-height: 1; }
+#rivier .rv-paused .rv-on {
+  background: linear-gradient(180deg, #ffe58c 0%, #ffcf3f 55%, #f0ae1a 100%); color: #4a2a00; border-color: #fff4c8;
+  box-shadow: 0 5px 0 #a96f00, 0 9px 16px rgba(0,0,0,.32), inset 0 2px 0 rgba(255,255,255,.65);
+}
+#rivier .rv-paused .rv-on::before { content: '▶'; }
+#rivier .rv-paused .rv-redo {
+  background: linear-gradient(180deg, #5fd0de 0%, #2c9db1 55%, #1f7f93 100%); color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.28);
+  box-shadow: 0 5px 0 #14566a, 0 9px 16px rgba(0,0,0,.32), inset 0 2px 0 rgba(255,255,255,.45);
+}
+#rivier .rv-paused .rv-redo::before { content: '↻'; font-size: 22px; }
+#rivier .rv-paused .rv-off {
+  background: linear-gradient(180deg, #6e7f88 0%, #4a5b64 55%, #3a4950 100%); color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.3);
+  box-shadow: 0 5px 0 #242f35, 0 9px 16px rgba(0,0,0,.32), inset 0 2px 0 rgba(255,255,255,.3);
+}
+#rivier .rv-paused .rv-off::before { content: '✕'; }
+#rivier .rv-paused button:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(0,0,0,.45), 0 4px 8px rgba(0,0,0,.3); }
 /* (29 Oct 2026) water on the lens after a waterfall: clear drops with bright rims, scattered by hand and running down,
    a wash from above (a repeating grid of white dots read as a polka-dot pattern, not water) */
 #rivier .rv-spray { position: absolute; inset: 0; pointer-events: none; opacity: 0; background:
@@ -779,12 +833,19 @@ function createRide(K, d) {
   // by its walls, for its last ~75 m, and close in to the lanes as it opens out; across the open water at the lanes; none
   // inside a canyon's start, they stop where its walls close in. Before, they reached 75 m into both ends.)
   const PIPE_WIDE = 6.8;   // m out: by a canyon's walls (their foot stands 7.65 m out or more)
+  const HEAD_POOL = 80;    // m: the pool round your tower and the first canyon's mouth (setPool(18): the canyon from ~57 m)
   const narrowAt = (z) => world.halfAt(z) <= BANK.half + 0.5;
   /** How far out the pipes float at course metre z (m), or 0 where there are none. */
   function pipeX(z) {
     if (narrowAt(z)) return [10, 30, 50, 70, 85].some((dz) => !narrowAt(z + dz)) ? PIPE_WIDE : 0;
     const h = world.halfAt(z);
-    if (world.halfAt(z + 3) <= world.halfAt(z - 3)) return PIPE.x;   // open water, or a canyon closing in
+    // (30 Oct 2026, the owner, at the river's head: "the pool noodles needs to flare out") from your tower to the first
+    // canyon's mouth they open out like a trumpet: 10.5 m out across the pool, curving in to its walls at the mouth
+    if (z < HEAD_POOL) return clamp(PIPE_WIDE + (h - BANK.half) * 0.18, PIPE_WIDE, 10.5);
+    if (Math.abs(world.halfAt(z + 3) - world.halfAt(z - 3)) < 0.05) return PIPE.x;   // open water: at the lanes
+    // a canyon opening out, and (30 Oct 2026, the owner: "the pool noodles needs to flare out") one closing in: they
+    // follow its walls, wide by them where it's narrow and in at the lanes where it's open, so at a canyon's mouth they
+    // flare out to meet its walls instead of running on into the water and stopping
     return PIPE_WIDE + (PIPE.x - PIPE_WIDE) * Math.min(1, (h - BANK.half) / (BANK.lake - BANK.half));
   }
   /**
@@ -1876,6 +1937,9 @@ function createRide(K, d) {
 
   // ---------------------------------------------------------------------------------------------- input
   let down = null;
+  // (30 Oct 2026, the owner: "it moves with your finger not swipe to move": while the thumb slides he follows it across
+  // the river, a lane for every ~28 % of the screen's width; let go and he settles into the nearest lane)
+  let dragX = null;
   function move(dir) {
     if (phase !== 'run' || paused || resumeT > 0) return;
     const to = clamp(lane + dir, 0, RIVER.lanes - 1);
@@ -1892,7 +1956,7 @@ function createRide(K, d) {
   const onDown = (e) => {
     if (e.target.closest?.('button')) return;
     const hp = hostXY(e);
-    down = { x: e.clientX, y: e.clientY, hx: hp.x, hy: hp.y, t: performance.now(), used: false };
+    down = { x: e.clientX, y: e.clientY, hx: hp.x, hy: hp.y, t: performance.now(), used: false, rx0: dragX ?? laneX(lane) };
   };
   const hostXY = (e) => { const r = host.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   let aimPerPx = 0.05;   // (m of tower a pixel of thumb is worth: from the tower's size on screen, each frame)
@@ -1913,9 +1977,20 @@ function createRide(K, d) {
       down.ly = e.clientY;
       return;
     }
-    if (Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy)) {
-      down.used = true;
-      move(dx > 0 ? 1 : -1);
+    // (30 Oct 2026, the owner: "it moves with your finger": a slide steers him along with the thumb (dragX); a quick flick
+    // up or down still jumps or ducks; a tap alone doesn't steer)
+    if (!down.steer && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 0.8) down.steer = true;
+    if (down.steer) {
+      if (phase !== 'run' || paused || resumeT > 0) return;
+      const per = Math.max(60, host.clientWidth * 0.28);
+      dragX = clamp(down.rx0 + dx * RIVER.laneW / per, laneX(0), laneX(RIVER.lanes - 1));
+      const nl = clamp(Math.round(dragX / RIVER.laneW + (RIVER.lanes - 1) / 2), 0, RIVER.lanes - 1);
+      if (nl !== lane) {
+        lane = nl;
+        sendSoon();
+        haptics.tap?.();
+        hint(null);
+      }
     } else if (endless && Math.abs(dy) > 26 && Math.abs(dy) > Math.abs(dx) * 1.2) {
       // (the endless river: up jumps, down ducks)
       down.used = true;
@@ -1923,14 +1998,9 @@ function createRide(K, d) {
       else duck();
     }
   };
-  const onUp = (e) => {
-    if (!down) return;
-    const dx = e.clientX - down.x;
-    if (!down.used && Math.abs(dx) < 14 && performance.now() - down.t < 350) {
-      const r = host.getBoundingClientRect();
-      move(e.clientX - r.left < r.width / 2 ? -1 : 1);
-    }
+  const onUp = () => {
     down = null;
+    dragX = null;   // (he glides into the nearest lane)
   };
   // the fire button: fires on the touch (no wait for the finger to lift), pressed in while held
   const onFire = (e) => {
@@ -1956,6 +2026,7 @@ function createRide(K, d) {
   // (the phone took the touch away, e.g. a notification: the drag ends)
   const onCancel = () => {
     down = null;
+    dragX = null;
     fireEl.classList.remove('press');
   };
   host.addEventListener('pointercancel', onCancel);
@@ -2110,8 +2181,9 @@ function createRide(K, d) {
     const wet = kind === 'rain' || kind === 'storm';
     // (drops, or hailstones bouncing, on the water round you)
     if ((wet || kind === 'hail') && !reduced && (wxSplashT -= dt) <= 0) {
-      wxSplashT = kind === 'hail' ? 0.05 : kind === 'storm' ? 0.06 : 0.09;
-      things.emit(x + (Math.random() - 0.5) * 9, 0.05, -2 - Math.random() * 18, 2, 0.35, kind === 'hail' ? 1.3 : 0.5);
+      // (30 Oct 2026: hailstones bounce higher and more often, so the water round you jumps with them)
+      wxSplashT = kind === 'hail' ? 0.03 : kind === 'storm' ? 0.06 : 0.09;
+      things.emit(x + (Math.random() - 0.5) * 9, 0.05, -2 - Math.random() * 18, kind === 'hail' ? 3 : 2, 0.35, kind === 'hail' ? 2.2 : 0.5);
     }
     // (and on the lens, running down)
     if (wet && wxK > 0.7 && (wxDropT -= dt) <= 0) {
@@ -2462,6 +2534,7 @@ function createRide(K, d) {
     hits++;
     duel?.send({ t: 'ko' });
     lastKnock = l?.it?.kind ?? null;
+    if (l?.it?.kind === 'croc' && !reduced) l.bite = 0;   // (it rears up and bites: biteStep)
     if (endless) {
       hearts = Math.max(0, hearts - 1);
       setHearts();
@@ -2488,6 +2561,23 @@ function createRide(K, d) {
       pop(S.rvSlipped(CAST[back]?.name || ''), 1400);
     } else {
       pop(({ croc: S.rvCroc, hippo: S.rvHippo, monkey: S.rvMonkey, whirl: S.rvWhirlKo, ele: S.rvEleKo })[l.it.kind] || S.rvOuch, 1000);
+    }
+  }
+  /**
+   * (30 Oct 2026, the owner: "the crocodile once you ride over it can you make it bite the player") the croc you hit
+   * rears up out of the water, jaws wide, and snaps them shut at your board; then it sinks back.
+   */
+  function biteStep(l, dt) {
+    l.bite += dt;
+    const b = l.bite;
+    const up = b < 0.14 ? ease(b / 0.14) : b < 0.45 ? 1 : 1 - ease(clamp((b - 0.45) / 0.45, 0, 1));
+    l.obj.position.y += 0.42 * up;
+    l.obj.rotation.z = (l.obj.userData.side || 1) * 0.38 * up;
+    l.jaw ??= l.obj.getObjectByName('jaw') || null;
+    if (l.jaw) l.jaw.rotation.z = -(b < 0.16 ? 0.78 : Math.max(0, 0.78 - (b - 0.16) * 12));
+    if (b > 0.9) {
+      l.bite = -1;
+      l.obj.rotation.z = 0;
     }
   }
   /** The third knock: he goes head over heels into the river, and the ride is over (the card after a moment). */
@@ -2901,7 +2991,7 @@ function createRide(K, d) {
     // the lane: the spring glides him across (small steps: steady on a slow phone too)
     for (let left = dt; left > 1e-6;) {
       const h = Math.min(left, 1 / 120);
-      aimX += (laneX(lane) + pullX - aimX) * (1 - Math.exp(-h * 20));
+      aimX += ((dragX ?? laneX(lane)) + pullX - aimX) * (1 - Math.exp(-h * (dragX === null ? 20 : 34)));
       vx += (LANE_W0 * LANE_W0 * (aimX - x) - 2 * LANE_Z * LANE_W0 * vx) * h;
       x += vx * h;
       left -= h;
@@ -3001,6 +3091,7 @@ function createRide(K, d) {
       }
       if (u.arm && u.kind !== 'clown') u.arm.rotation.z = -0.4 + Math.sin(t * 9 + u.phase) * 0.7;
       u.update?.(t, ahead, dt);
+      if (l.bite >= 0) biteStep(l, dt);
       if (phase === 'run') cues(l, ahead);
       if (u.kind === 'coins') {
         l.obj.position.y = 0;
@@ -3042,6 +3133,12 @@ function createRide(K, d) {
         const reach = (u.w || 2.4) / 2 + HIT_R;
         if (l.it.kind === 'person') {
           if (dx < GRAB_R) grab(l);
+        } else if (l.it.kind === 'block' && dx < reach && airY > (u.top || 1) - 0.25) {
+          // (30 Oct 2026, the owner: "People moan that they cant jump over these blocks": a jump clears a floating block
+          // that isn't too tall for it, as it clears a log)
+          l.done = true;
+          cleared(l);
+          pop(S.rvOver, 600);
         } else if (graceT <= 0 && dx < reach && (l.it.kind !== 'hippo' || u.surfaced?.())) {
           l.done = true;
           knock(l);
@@ -3586,6 +3683,8 @@ function createRide(K, d) {
     setRank,
     /** For tests: what the graphics chip holds now ({ geometries, textures, programs }). */
     gpu: () => ({ ...stage.renderer.info.memory, programs: stage.renderer.info.programs?.length | 0 }),
+    /** For tests (30 Oct 2026): the river's half width and where the noodles float at course metre z. */
+    widthAt: (z) => ({ half: Math.round(world.halfAt(z) * 100) / 100, pipe: Math.round(pipeX(z) * 100) / 100 }),
     /** For tests (30 Oct 2026): the shader programs built so far, by name (which ones a ride still compiles mid-way). */
     programNames: (keys) => (stage.renderer.info.programs || []).map((g) => keys ? `${g.name}#${g.id} ${g.cacheKey}` : `${g.name}#${g.id}`),
     /** For tests (30 Oct 2026): which things draw with program `id` now (a material's type and name, its object's line). */

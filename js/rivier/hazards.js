@@ -432,8 +432,10 @@ export function createHazards(bend = (m) => m, models = {}) {
             if (c.glow) c.glow.visible = false;
             return;
           }
-          // (they sway rather than spin: their faces stay to you; the diamond turns)
-          c.m.rotation.y = it.gem ? t * 1.6 : it.stack ? t * 1.2 : Math.sin(t * 3 + k * 0.7) * 0.9;
+          // (30 Oct 2026, the owner: "the coins doesnt look like its rotating": they only swayed; now each coin spins round,
+          // the row a little apart like a ripple, and a stack spins and rocks so its turning shows from above)
+          if (it.stack) c.m.rotation.set(Math.sin(t * 2.2) * 0.25, t * 3.2, 0);
+          else c.m.rotation.y = it.gem ? t * 1.6 : t * 4.2 + k * 0.55;
           if (it.gem) c.m.position.y = y + 0.2 + Math.sin(t * 2.4) * 0.12;
         });
       },

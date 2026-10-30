@@ -160,7 +160,7 @@ export function createBeasts(bend = (m) => m, models = {}) {
     g.rotation.y = side * Math.PI / 2;
     let snapT = -1;
     holder.userData = {
-      w: 3.0, d: 1.5, kind: 'croc',
+      w: 3.0, d: 1.5, kind: 'croc', side,   // (side: which way its snout points, for its bite)
       update(t, ahead, dt) {
         const swish = Math.sin(t * 3.1 + g.id) * 0.35;
         segs.forEach((s, i) => { s.rotation.y = swish * (0.5 + i * 0.35); });
@@ -201,7 +201,7 @@ export function createBeasts(bend = (m) => m, models = {}) {
     holder.add(g);
     let snapT = -1;
     holder.userData = {
-      w: 3.0, d: 1.5, kind: 'croc',
+      w: 3.0, d: 1.5, kind: 'croc', side,   // (side: which way its snout points, for its bite)
       update(t, ahead, dt) {
         // the tail swishes (the tip a beat after the root), the body sways and rocks a little on the current
         const ph = t * 2.3 + g.id;
