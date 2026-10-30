@@ -1680,9 +1680,23 @@ void main() {
   const mistMat = bendMaterial(new THREE.MeshBasicMaterial({ map: mistTex, color: lin(L.haze), transparent: true, opacity: 0.55, depthWrite: false, fog: true }));
   const mistGeo = new THREE.PlaneGeometry(26, 7);
   const mists = [];
+  // (30 Oct 2026, the owner: "the sun glare line is still an issue", found by hiding the picture's parts one by one:
+  // each mist patch is an upright sheet across the river, and where it stood in the water it cut a ruled line across
+  // it, the water behind it pale through the haze, riding at you every few seconds. Now it thins out to nothing at the
+  // water (full from 2.4 m up) and at its own top and bottom edges, so it hangs over the river with no edge)
+  const mistFade = (m) => {
+    m.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vMistY;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\n  vMistY = (modelMatrix * vec4(transformed, 1.0)).y;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vMistY;')
+        .replace('#include <alphamap_fragment>', '#include <alphamap_fragment>\n  diffuseColor.a *= smoothstep(0.0, 2.4, vMistY) * smoothstep(0.0, 0.25, vMapUv.y) * (1.0 - smoothstep(0.8, 1.0, vMapUv.y));');
+    };
+    m.customProgramCacheKey = () => 'rivier-mist';
+    return m;
+  };
   if (airOn) {
     for (let k = 0; k < 9; k++) {
-      const m = new THREE.Mesh(mistGeo, mistMat.clone());
+      const m = new THREE.Mesh(mistGeo, mistFade(mistMat.clone()));
       m.frustumCulled = false;
       m.renderOrder = 3;
       group.add(m);

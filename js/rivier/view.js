@@ -3683,6 +3683,8 @@ function createRide(K, d) {
     setRank,
     /** For tests: what the graphics chip holds now ({ geometries, textures, programs }). */
     gpu: () => ({ ...stage.renderer.info.memory, programs: stage.renderer.info.programs?.length | 0 }),
+    /** For tests (30 Oct 2026): the River's world (the water's settings, the sun, its parts: the hunt for the line). */
+    world: () => world,
     /** For tests (30 Oct 2026): the river's half width and where the noodles float at course metre z. */
     widthAt: (z) => ({ half: Math.round(world.halfAt(z) * 100) / 100, pipe: Math.round(pipeX(z) * 100) / 100 }),
     /** For tests (30 Oct 2026): the shader programs built so far, by name (which ones a ride still compiles mid-way). */
