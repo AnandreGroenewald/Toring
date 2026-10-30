@@ -1013,7 +1013,7 @@ export const S_EN = {
   rvRaidCracked: (n) => (n === 1 ? '1 floor cracked.' : `${n} floors cracked.`),
   rvLeadChanged: 'The lead changed!',
   // --- (1.20) Afgly: the rescue ride down the river (js/rivier/view.js) ---
-  rvHint: 'Slide your finger ⟵ ⟶ to scoop up your people!',
+  rvHint: 'Swipe ⟵ ⟶ to scoop up your people!',
   rvPaused: 'Paused',
   rvResume: 'Keep riding',
   rvQuit: 'Get out',
@@ -1109,7 +1109,7 @@ export const S_EN = {
   saamSeekAgain: '🔍 Look again',
   saamFound: (name) => `Against ${name}!`,
   saamNoShow: 'They didn’t turn up. Looking again.',
-  rvHintFree: 'Slide your finger ← → and ride as far as you can!',
+  rvHintFree: 'Swipe ← → and ride as far as you can!',
   rvRecord: '🏆 Your best this week!',
   afgly: 'River run',
   afglyMenuSub: 'Go the distance',

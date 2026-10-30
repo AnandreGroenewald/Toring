@@ -1937,9 +1937,8 @@ function createRide(K, d) {
 
   // ---------------------------------------------------------------------------------------------- input
   let down = null;
-  // (30 Oct 2026, the owner: "it moves with your finger not swipe to move": while the thumb slides he follows it across
-  // the river, a lane for every ~28 % of the screen's width; let go and he settles into the nearest lane)
-  let dragX = null;
+  // (30 Oct 2026: 1.24.8's slide-with-your-finger steering is gone again, the owner: "The new touch to move is not
+  // running smoothly. Rather keep it as it was": a swipe or a tap moves him one lane, as before)
   function move(dir) {
     if (phase !== 'run' || paused || resumeT > 0) return;
     const to = clamp(lane + dir, 0, RIVER.lanes - 1);
@@ -1956,7 +1955,7 @@ function createRide(K, d) {
   const onDown = (e) => {
     if (e.target.closest?.('button')) return;
     const hp = hostXY(e);
-    down = { x: e.clientX, y: e.clientY, hx: hp.x, hy: hp.y, t: performance.now(), used: false, rx0: dragX ?? laneX(lane) };
+    down = { x: e.clientX, y: e.clientY, hx: hp.x, hy: hp.y, t: performance.now(), used: false };
   };
   const hostXY = (e) => { const r = host.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   let aimPerPx = 0.05;   // (m of tower a pixel of thumb is worth: from the tower's size on screen, each frame)
@@ -1977,20 +1976,9 @@ function createRide(K, d) {
       down.ly = e.clientY;
       return;
     }
-    // (30 Oct 2026, the owner: "it moves with your finger": a slide steers him along with the thumb (dragX); a quick flick
-    // up or down still jumps or ducks; a tap alone doesn't steer)
-    if (!down.steer && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 0.8) down.steer = true;
-    if (down.steer) {
-      if (phase !== 'run' || paused || resumeT > 0) return;
-      const per = Math.max(60, host.clientWidth * 0.28);
-      dragX = clamp(down.rx0 + dx * RIVER.laneW / per, laneX(0), laneX(RIVER.lanes - 1));
-      const nl = clamp(Math.round(dragX / RIVER.laneW + (RIVER.lanes - 1) / 2), 0, RIVER.lanes - 1);
-      if (nl !== lane) {
-        lane = nl;
-        sendSoon();
-        haptics.tap?.();
-        hint(null);
-      }
+    if (Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy)) {
+      down.used = true;
+      move(dx > 0 ? 1 : -1);
     } else if (endless && Math.abs(dy) > 26 && Math.abs(dy) > Math.abs(dx) * 1.2) {
       // (the endless river: up jumps, down ducks)
       down.used = true;
@@ -1998,9 +1986,14 @@ function createRide(K, d) {
       else duck();
     }
   };
-  const onUp = () => {
+  const onUp = (e) => {
+    if (!down) return;
+    const dx = e.clientX - down.x;
+    if (!down.used && Math.abs(dx) < 14 && performance.now() - down.t < 350) {
+      const r = host.getBoundingClientRect();
+      move(e.clientX - r.left < r.width / 2 ? -1 : 1);
+    }
     down = null;
-    dragX = null;   // (he glides into the nearest lane)
   };
   // the fire button: fires on the touch (no wait for the finger to lift), pressed in while held
   const onFire = (e) => {
@@ -2026,7 +2019,6 @@ function createRide(K, d) {
   // (the phone took the touch away, e.g. a notification: the drag ends)
   const onCancel = () => {
     down = null;
-    dragX = null;
     fireEl.classList.remove('press');
   };
   host.addEventListener('pointercancel', onCancel);
@@ -2991,7 +2983,7 @@ function createRide(K, d) {
     // the lane: the spring glides him across (small steps: steady on a slow phone too)
     for (let left = dt; left > 1e-6;) {
       const h = Math.min(left, 1 / 120);
-      aimX += ((dragX ?? laneX(lane)) + pullX - aimX) * (1 - Math.exp(-h * (dragX === null ? 20 : 34)));
+      aimX += (laneX(lane) + pullX - aimX) * (1 - Math.exp(-h * 20));
       vx += (LANE_W0 * LANE_W0 * (aimX - x) - 2 * LANE_Z * LANE_W0 * vx) * h;
       x += vx * h;
       left -= h;

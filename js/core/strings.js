@@ -1059,7 +1059,7 @@ export const S = {
   rvRaidCracked: (n) => (n === 1 ? '1 vloer gekraak.' : `${n} vloere gekraak.`),
   rvLeadChanged: 'Die leier het verander!',
   // --- (1.20) Afgly: the rescue ride down the river (js/rivier/view.js) ---
-  rvHint: 'Skuif jou vinger ⟵ ⟶ en skep jou mense op!',
+  rvHint: 'Swiep ⟵ ⟶ en skep jou mense op!',
   rvPaused: 'Gepouseer',
   rvResume: 'Ry verder',
   rvQuit: 'Klim uit',
@@ -1156,7 +1156,7 @@ export const S = {
   saamSeekAgain: '🔍 Soek weer',
   saamFound: (name) => `Teen ${name}!`,
   saamNoShow: 'Hulle het nie opgedaag nie. Ons soek weer.',
-  rvHintFree: 'Skuif jou vinger ← → en gly so ver as jy kan!',
+  rvHintFree: 'Swiep ← → en gly so ver as jy kan!',
   rvRecord: '🏆 Jou beste die week!',
   afgly: 'Afgly',
   afglyMenuSub: 'Hoe ver kom jy?',
