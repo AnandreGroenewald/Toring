@@ -351,6 +351,8 @@ if (diffuseColor.r - diffuseColor.b > 0.42) diffuseColor.rgb = diffuseColor.bgr;
   let t0 = 0;
   return {
     group,
+    /** (30 Oct 2026, the trailers) his arms, to pose after update(): upper arm and forearm, front and back. */
+    arms: { armF, armB, foreF, foreB },
     /**
      * `lean`: -1 (carving left) .. 1 (right); `yaw`: the board's heading (rad, + = nose left); `crouch` 0..1 (a knock);
      * `speed` m/s; `tuck` 0..1 (a jump: knees up, board nose up, arms out); `duck` 0..1 (ducking under a tree: low and

@@ -14,7 +14,7 @@ import { bus } from '../core/bus.js';
 import { S } from '../core/strings.js';
 import { audio, haptics } from '../audio.js';
 import { roomsFor, titleFor, titleProgress, createCasting, LIVING, CAST_TRIBE } from '../core/living.js';
-import { windowSlots, windowWorld, parachute, badgeKey, paintWindows, whenPortraits, CAST, burnRoom, waterWheel, vinesTo, throwBall } from './residents.js';
+import { windowSlots, windowWorld, parachute, badgeKey, paintWindows, porthole, whenPortraits, CAST, burnRoom, waterWheel, vinesTo, throwBall } from './residents.js';
 
 const RES = 1.5;           // the windows are painted this much sharper than the blocks (crisp faces on a phone)
 const PAD = 3;             // the block textures' padding (js/game/blocks.js)
@@ -227,15 +227,23 @@ export class Living {
     // nothing tells who is home)
     // (1.16 battles) a burnt window shows its soot on both sides; a window of theirs a mission found empty shows its curtains
     // pulled open (known: nobody there now)
-    const wins = f.wins.map((w) => (f.mine ? {
-      look: w.s === 'home' ? (w.gold ? 'lit' : 'face') : w.s === 'boarded' ? 'boarded' : w.s === 'burnt' ? 'burnt' : 'room',
+    // (30 Oct 2026, the owner: "the men in the block ... It takes the block design away"; his pick: small windows, only
+    // earned) only a room someone lives in shows, as a small round window (and a burnt one): no dark or boarded-up
+    // windows over the block's design any more. The rooms and their count are the game's rules as before.
+    const wins = f.wins.map((w) => (w.s !== 'home' && w.s !== 'burnt' ? null : f.mine ? {
+      look: w.s === 'home' ? (w.gold ? 'lit' : 'face') : 'burnt',
       who: w.who,
       tribe: w.who ? CAST_TRIBE[w.who] : this.tribe,
+      round: true,
     } : {
-      look: w.s === 'burnt' ? 'burnt' : w.s === 'boarded' ? 'boarded' : w.known && w.s !== 'home' ? 'open' : 'curtain',
-      who: null, tribe: this.theirTribe,
+      look: w.s === 'burnt' ? 'burnt' : 'curtain',
+      who: null, tribe: this.theirTribe, round: true,
     }));
-    const key = paintWindows(this.scene, f.key, b.geom, wins, PAD, RES);
+    if (!wins.some(Boolean)) {
+      b.setWindowTexture(null);
+      return;
+    }
+    const key = paintWindows(this.scene, f.key, b.geom, wins, PAD, RES, porthole(windowSlots(b.geom)));
     if (key) b.setWindowTexture(key, RES);
   }
 

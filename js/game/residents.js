@@ -176,7 +176,14 @@ function archPath(ctx, s, d = 0) {
   ctx.lineTo(x + w, y + h);
   ctx.closePath();
 }
-/** One window: `v` = { look: 'face'|'room'|'curtain'|'open'|'lit', who, tribe }. */
+/** (30 Oct 2026) the frame's outline: the arch, or a porthole (`round`: the small windows of the Living Tower). */
+function framePath(ctx, s, d, round) {
+  if (!round) return archPath(ctx, s, d);
+  ctx.beginPath();
+  ctx.arc(s.x, s.y, s.h / 2 + d, 0, Math.PI * 2);
+  ctx.closePath();
+}
+/** One window: `v` = { look: 'face'|'room'|'curtain'|'open'|'lit', who, tribe, round }. */
 function drawWindow(ctx, s, v) {
   const x = s.x - s.w / 2, y = s.y - s.h / 2;
   const t = TRIBES[v.tribe] || TRIBES.vuur;
@@ -203,21 +210,21 @@ function drawWindow(ctx, s, v) {
   ctx.shadowColor = 'rgba(0,0,0,0.45)';
   ctx.shadowBlur = 3;
   ctx.shadowOffsetY = 1.2;
-  archPath(ctx, s, 2.6);
+  framePath(ctx, s, 2.6, v.round);
   const fr = ctx.createLinearGradient(0, y - 3, 0, y + s.h + 3);
   fr.addColorStop(0, burnt ? '#5a4a42' : '#fffaf0');
   fr.addColorStop(1, burnt ? '#2a201c' : '#d9c39a');
   ctx.fillStyle = fr;
   ctx.fill();
   ctx.restore();
-  archPath(ctx, s, 2.6);
+  framePath(ctx, s, 2.6, v.round);
   ctx.lineWidth = 0.9;
   ctx.strokeStyle = 'rgba(70,45,20,0.55)';
   ctx.stroke();
 
   // inside
   ctx.save();
-  archPath(ctx, s, 0);
+  framePath(ctx, s, 0, v.round);
   ctx.clip();
   const room = ctx.createRadialGradient(s.x, y + s.h * 0.3, 1, s.x, y + s.h * 0.6, s.h);
   if (warm) {
@@ -232,8 +239,8 @@ function drawWindow(ctx, s, v) {
   ctx.fillRect(x - 1, y - 1, s.w + 2, s.h + 2);
   if ((v.look === 'face' || v.look === 'lit') && portraits.get(v.who)) {
     const p = portraits.get(v.who);
-    const size = s.h * 1.28;
-    ctx.drawImage(p, s.x - size / 2, y + s.h - size * 0.97, size, size);
+    const size = s.h * (v.round ? 1.12 : 1.28);   // (a porthole: the face fills it, a little lower)
+    ctx.drawImage(p, s.x - size / 2, y + s.h - size * (v.round ? 0.9 : 0.97), size, size);
     const sh = ctx.createLinearGradient(0, y + s.h * 0.66, 0, y + s.h);
     sh.addColorStop(0, 'rgba(70,25,0,0)');
     sh.addColorStop(1, 'rgba(70,25,0,0.4)');
@@ -330,13 +337,15 @@ function drawWindow(ctx, s, v) {
   ctx.fillStyle = glass;
   ctx.fillRect(x, y, s.w, s.h);
   ctx.restore();
-  // the sill
-  ctx.fillStyle = '#efe0bd';
-  ctx.fillRect(x - 3.5, y + s.h + 1.6, s.w + 7, 2.4);
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.fillRect(x - 3.5, y + s.h + 4, s.w + 7, 1);
+  // the sill (not under a porthole)
+  if (!v.round) {
+    ctx.fillStyle = '#efe0bd';
+    ctx.fillRect(x - 3.5, y + s.h + 1.6, s.w + 7, 2.4);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(x - 3.5, y + s.h + 4, s.w + 7, 1);
+  }
   if (v.look === 'lit') {
-    archPath(ctx, s, 4.5);
+    framePath(ctx, s, 4.5, v.round);
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#ffd23f';
     ctx.stroke();
@@ -344,7 +353,7 @@ function drawWindow(ctx, s, v) {
   if (burnt) {
     // charred inside, a few embers still glowing
     ctx.save();
-    archPath(ctx, s, 0);
+    framePath(ctx, s, 0, v.round);
     ctx.clip();
     ctx.fillStyle = '#140d0b';
     ctx.fillRect(x - 1, y - 1, s.w + 2, s.h + 2);
@@ -392,7 +401,7 @@ function drawWindow(ctx, s, v) {
 const spriteCache = new Map();
 const SPRITE_MAX = 120;      // (each ~50-130 KB: a game uses far fewer)
 function windowSprite(s, v, res) {
-  const key = `${v.look}|${v.who || ''}|${v.tribe || ''}|${s.w}x${s.h}|${res}|${readyVersion}`;
+  const key = `${v.look}|${v.who || ''}|${v.tribe || ''}|${s.w}x${s.h}|${v.round ? 'o' : ''}|${res}|${readyVersion}`;
   let c = spriteCache.get(key);
   if (c) return c;
   const m = Math.ceil(s.h * 1.15) + 6;          // room for the glow, the frame's shadow and the sill
@@ -459,6 +468,14 @@ export function ensureWindows(scene, g, wins, pad) {
 export function dropWindows(scene) {
   for (const key of overlayKeys) if (scene.textures.exists(key)) scene.textures.remove(key);
   overlayKeys.clear();
+}
+/**
+ * (30 Oct 2026, the owner: "the men in the block ... It takes the block design away"; his pick: small windows, only
+ * earned) the Living Tower's windows as small portholes in the same places: two thirds of the old window's height
+ * across (under half its size), so the block's own design shows round them.
+ */
+export function porthole(slots) {
+  return slots.map((s) => { const d = Math.max(12, Math.round(Math.min(s.w, s.h) * 0.85)); return { ...s, w: d, h: d }; });
 }
 /** Redraw callbacks for windows drawn before the portraits were ready. */
 export function whenPortraits(fn) {
