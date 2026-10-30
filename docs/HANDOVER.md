@@ -1823,3 +1823,13 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   in proto/ now, not js/ (not shipped).
 - Tested: qa/river_fix1248.mjs, programs built mid-ride 7 → 0 (400 m-5.1 km), rivier_lowstep1245 linksAfter 4 → 0,
   rivier_nonsense1248 33/33, saam1210 29/29, check-all quick ALL CLEAR.
+
+### 30 Oct 2026 ~11:40 — 1.24.8 round 2 + RELEASED to Play internal (live) and closed Alpha (in review); NOT production, NOT the website
+- His phone notes round 2 (see the skill's changelog for his words): faster past 7 km (riverpace max 55), tower residents
+  in small round windows only when earned (his pick), finger steering (dragX), jumpable floating blocks, the croc's bite,
+  the noodles' trumpet at the head, spinning coins, bright wall falls, hail as ice stones, the rapids' edge over ~70 m,
+  a game-finish top bar and pause card.
+- Released on his "publish it for the internal and external testers only": Play internal 12408 live; closed Alpha 12408
+  sent for review. Website, Worker and production wait his word (`~/deploy-stapel-1.24.8.sh` does Worker → site → old
+  address; the Worker must go with the site because its ride check uses the River's pace).
+- Tested: river_batch1248, river_fix1248, rivier_nonsense1248 33/33, saam1210 29/29, living1160 18/18, check-all quick.
