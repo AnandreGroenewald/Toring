@@ -42,6 +42,9 @@ export function createBeasts(bend = (m) => m, models = {}) {
   };
   const bubbleGeo = new THREE.SphereGeometry(0.12, 8, 6);
   const bubbleMat = bend(new THREE.MeshStandardMaterial({ color: '#e9f6f4', roughness: 0.1, transparent: true, opacity: 0.75 }));
+  // (30 Oct 2026: kept for the whole ride, freed once by dispose: each animal leaving the river freed them before, so the
+  // next hippo built its bubbles' shader again, a stall on a phone every couple of hundred metres)
+  for (const x of [...Object.values(M), bubbleMat, bubbleGeo]) x.userData.shared = true;
 
   // ------------------------------------------------------------------------------------------- the crocodile
   /** Lies low in the water facing you, tail swishing; its jaws open and snap when you are close. w across, d along. */

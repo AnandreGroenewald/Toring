@@ -961,7 +961,11 @@ void main() {
   // the low sun ahead: a path of glitter down the river
   float s = max(dot(r, uSun), 0.0);
   // (1.22: softer: at 3.2 the glints burnt to white smears down the left of the river)
-  col += uSunCol * (pow(s, 260.0) * 1.7 + pow(s, 40.0) * 0.13);
+  // (30 Oct 2026, the owner, filming his phone: "look at the water". Close in front of him the fine ripples tilt every
+  // way, so the low sun glinted all over the near water: cream specks, and on the phone soft white smears. The glitter
+  // lies further off now (from ~16 m, full by 50 m), a path of light towards the sun; the near water keeps its colour)
+  float glintFar = smoothstep(16.0, 50.0, length(cameraPosition - vWorld));
+  col += uSunCol * (pow(s, 260.0) * 1.7 * glintFar * glintFar + pow(s, 40.0) * 0.13 * glintFar);
   // white water: foam along the banks and streaks where the current breaks (thin, along the flow)
   float streak = texture2D(uNoise, vec2(p.x * 0.9, p.y * 0.02 - uT * 0.11)).b;
   float rap = smoothstep(uRapids.x - 12.0, uRapids.x + 8.0, p.y) * (1.0 - smoothstep(uRapids.y - 8.0, uRapids.y + 12.0, p.y));
@@ -1085,9 +1089,11 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     sc.far = 420;
   }
   let shadowR = 0;
+  let shadowK = 1;   // (the box's size on this quality step: below)
   /** Where the shadows are drawn: round (x, z) on the water, `r` metres either way (the box of light follows it). */
   function setShadowFocus(x, z, r = 42) {
     if (!shadows) return;
+    r *= shadowK;
     sun.target.position.set(x, 0, z);
     sun.position.set(x, 0, z).addScaledVector(sunNow, 200);
     if (r !== shadowR) {
@@ -1101,15 +1107,14 @@ export function buildRiverWorld(stage, lookId = 'dag', { air = true, lakeHalf = 
     }
   }
   setShadowFocus(0, -28);
-  // (29 Oct 2026) on the lowest step the sun's shadows are drawn every third frame: a slow phone saves most of a whole
-  // drawing of the river each frame before its picture has to go soft. (Switching them off instead made every lit
-  // material compile again in one frame: a second's freeze on the phone that was already struggling.)
-  let shadowEvery = 1;
-  let shadowTick = 0;
+  // (30 Oct 2026) on the lowest step the sun's shadows fall in a smaller box round him (two thirds as wide, about half
+  // the drawing). From 29 Oct they were drawn every third frame instead: on a busy phone a moving rock's shadow then
+  // lagged up to 2 m behind it and jumped after it, the rocks that "vibrate" the owner saw. (Switching them off made
+  // every lit material compile again in one frame: a second's freeze on the phone that was already struggling.)
   stage.onQuality?.((q) => {
     if (!shadows) return;
-    shadowEvery = q.name === 'low' ? 3 : 1;
-    sun.shadow.autoUpdate = shadowEvery === 1;
+    shadowK = q.name === 'low' ? 0.65 : 1;
+    shadowR = 0;   // (the box is set again at the next focus)
   });
   const fill = new THREE.DirectionalLight(L.fill, L.fillI);   // (from behind the camera: what comes at you is lit)
   fill.position.set(6, 10, 30);
@@ -1780,7 +1785,6 @@ void main() {
   }
   let rockClear = null;
   function update(dist, t, riderX = null) {
-    if (shadowEvery > 1) sun.shadow.needsUpdate = ++shadowTick % shadowEvery === 0;
     water.uniforms.uT.value = t;
     rkClock.value = t;
     water.uniforms.uDist.value = dist;

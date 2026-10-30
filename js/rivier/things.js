@@ -206,6 +206,7 @@ export function createThings(scene, pieces) {
         const src = o.material;
         // (wet and glossy where the river washes them)
         blockMats.set(key, Array.isArray(src) ? src.map((m) => wetMaterial(bendMaterial(m.clone()))) : wetMaterial(bendMaterial(src.clone())));
+        for (const x of [].concat(blockMats.get(key))) x.userData.shared = true;   // (the ride's: see dispose)
       }
       o.material = blockMats.get(key);
       o.castShadow = o.receiveShadow = true;
@@ -282,7 +283,8 @@ export function createThings(scene, pieces) {
         if (!o.isMesh || o.material?.name !== 'swim_shirt') return;
         if (!swimShirts.has(col)) {
           const m = o.material.clone();
-          delete m.userData.model;   // (this ride's own: freed with it)
+          delete m.userData.model;
+          m.userData.shared = true;   // (this ride's own: freed with it, in dispose; not with each swimmer)
           m.color.set(col);
           swimShirts.set(col, m);
         }
@@ -311,6 +313,7 @@ export function createThings(scene, pieces) {
     let tex = faceTex.get(who);
     if (!tex) {
       tex = faceBadge(who);
+      tex.userData.shared = true;   // (30 Oct 2026: the ride's, for every swimmer with this face; freed in dispose)
       faceTex.set(who, tex);
     }
     const face = new THREE.Sprite(bendSprite(new THREE.SpriteMaterial({ map: tex, depthTest: true, fog: true })));
@@ -433,6 +436,8 @@ attribute float aA; attribute float aS; attribute float aK; attribute float aR; 
     for (const tex of faceTex.values()) tex.dispose();
     faceTex.clear();
     for (const m of [foamMat, hullFoamMat, rockMat, ringMat, skinMat, ...shirtMats]) { m.map?.dispose?.(); m.dispose(); }
+    for (const m of swimShirts.values()) m.dispose();
+    swimShirts.clear();
     sprayMat.uniforms.map.value.dispose();
     sprayMat.uniforms.puffMap.value.dispose();
     sprayMat.dispose();
@@ -445,6 +450,10 @@ attribute float aA; attribute float aS; attribute float aK; attribute float aR; 
     sprayMat.uniforms.diffuse.value.set('#f4fbfa').multiply(c);
   }
 
+  // (30 Oct 2026) the ride's kit stays until the ride ends (dispose, above): each thing leaving the river freed it
+  // (disposeTree), so the next one built its shader and sent its pictures to the graphics chip again, among the
+  // stutters on the owner's phone
+  for (const x of [foamMat, hullFoamMat, rockMat, ringMat, skinMat, ...shirtMats, sprayMat, foamGeo, rockGeo, ringGeo, shirtGeo, armGeo, sprayGeo]) x.userData.shared = true;
   const api = { floating, rock, person, foam, riverBlock, emit, updateSpray, spray, tint, dispose, models: {}, stoneMat: null };
   return api;
 }

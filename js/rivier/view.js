@@ -1845,12 +1845,26 @@ function createRide(K, d) {
   });
   let lastR = null;   // (the ride's result once done() has it)
 
+  // (30 Oct 2026, the owner: "can we add a 2 second continue if you have paused"): back from the pause, 2 and 1 on the
+  // still river before it runs on, a moment to find your thumb and your lane
+  const RESUME_S = 2;
+  let resumeT = 0;     // (seconds of that count still to go)
+  let resumeSaid = 0;
   function setPaused(on) {
     if (phase === 'done') return;
+    const was = paused;
     paused = !!on;
     pausedEl.classList.toggle('on', paused);
     if (duel) return;   // (Saam gly: the menu is only a way out; the river and its sound run on)
-    if (paused) audio.suspend?.(); else { audio.resume?.(); last = performance.now(); }
+    if (paused) {
+      resumeT = 0;
+      go3El.classList.remove('on');
+      audio.suspend?.();
+    } else {
+      audio.resume?.();
+      last = performance.now();
+      if (was && phase === 'run') { resumeT = RESUME_S; resumeSaid = 0; }
+    }
   }
   const onVis = () => { if (document.hidden && !duel) setPaused(true); };
   document.addEventListener('visibilitychange', onVis);
@@ -1863,7 +1877,7 @@ function createRide(K, d) {
   // ---------------------------------------------------------------------------------------------- input
   let down = null;
   function move(dir) {
-    if (phase !== 'run' || paused) return;
+    if (phase !== 'run' || paused || resumeT > 0) return;
     const to = clamp(lane + dir, 0, RIVER.lanes - 1);
     if (to === lane) {
       // (against the bank: a little bump, so the thumb knows)
@@ -2236,7 +2250,7 @@ function createRide(K, d) {
   }
   /** Jump (swipe up): over a log; the board leaves the water. Asked for just before landing, it goes as he lands. */
   function jump() {
-    if (phase !== 'run' || paused || raid) return;
+    if (phase !== 'run' || paused || resumeT > 0 || raid) return;
     if (jumpT >= 0) {
       if (jumpT > JUMP_S * 0.7) jumpQ = t;
       return;
@@ -2251,7 +2265,7 @@ function createRide(K, d) {
   }
   /** Duck (swipe down): under a fallen tree. In the air, he drops back to the water first. */
   function duck() {
-    if (phase !== 'run' || paused || raid) return;
+    if (phase !== 'run' || paused || resumeT > 0 || raid) return;
     if (jumpT >= 0) jumpT = Math.max(jumpT, JUMP_S * 0.8);
     duckT = 0;
     sendSoon();
@@ -2608,22 +2622,18 @@ function createRide(K, d) {
       // below (not in Saam gly: its wide view keeps both riders in the picture). (29 Oct: the bends are real now, the
       // canyon fixed and the view turning through it; 60 m ahead lies up to ~11 m across, the bank full from 12 m)
       turnAhead = phase === 'run' && !duel && !d.debugCam ? bendX(60, dist + 60) : 0;
-      l.x += turnAhead * 0.35;
+      // (30 Oct 2026, the owner: "the camera angle should stay on the 3 lanes, because if you go to the right then you
+      // character goes out of the screen"): it looks into a bend at most 2.2 m across (about 3.8°), and when the bend
+      // turns away from his side, a third of that in an outer lane, so he stays well inside a phone held upright
+      const look = turnAhead * 0.35;
+      const lim = look * x >= 0 ? LOOK_IN : LOOK_IN * (1 - 0.65 * clamp(Math.abs(x) / RIVER.laneW, 0, 1));
+      l.x += clamp(look, -lim, lim);
       // Saturday: the tallest tower coming by turns the camera halfway towards it (a little more while you aim), still
       // looking down a little, so he and the tower's lower part are both in the picture (a phone held upright is narrow)
       const tgt = raid ? targetIsle() : null;
-      // (the endless ride: your crew's island coming by turns the camera a little towards it, so you see your tower)
-      // (not in Saam gly: its view is wide and high; turned, a rider in the right lane went off the screen's edge (the
-      // owner, 25 Oct 2026: "I lost myself there for a few secoonds when we were close to the island"))
-      if (endless && phase === 'run' && !duel) {
-        const ahead = islandZ - dist;
-        const k = clamp((150 - ahead) / 40, 0, 1) * clamp((ahead + 10) / 40, 0, 1) * 0.28;
-        if (k > 0) {
-          const far = 11.5 + ahead;
-          // (29 Oct 2026: where the bend draws it)
-          l.lerp(new THREE.Vector3(islandX + bendX(ahead, islandZ), 6.4 - 0.1 * far + Math.min(18, towerTop() * 0.3), -ahead), k);
-        }
-      }
+      // (30 Oct 2026, the owner: "the Saterday run needs to be seperate ... the camera angle should stay on the 3 lanes":
+      // your crew's island no longer turns the camera towards it on the everyday ride (it did from 150 m off, with the
+      // bend's look on top: a rider in the right lane went off the screen's edge). Saturday's towers still do, below)
       if (tgt) {
         const ahead = tgt.z - dist;
         const k = clamp((AIM_FAR + 8 - ahead) / 20, 0, 1) * clamp((ahead - AIM_NEAR + 6) / 12, 0, 1) * (aiming ? 0.6 : 0.42);
@@ -2651,6 +2661,13 @@ function createRide(K, d) {
     } else if (d.debugCam === 'top') {   // (tests: the river from above, the pool noodles' lines)
       p = new THREE.Vector3(0, 60, 8);
       l = new THREE.Vector3(0, 0, -50);
+    } else if (d.debugCam === 'croc') {   // (trailers: low beside the next crocodile, looking back at him coming)
+      const c = live.find((v) => v.it?.kind === 'croc' && v.z - dist > -1.5 && v.z - dist < 30);
+      if (c) {
+        const cp = c.obj.position;
+        p = new THREE.Vector3(cp.x + 2.4, 1.0, cp.z - 3.2);
+        l = new THREE.Vector3(cp.x - 0.4, 0.5, cp.z + 3.5);
+      }
     } else if (d.debugCam === 'left') {
       p = new THREE.Vector3(x - 1.9, 1.75, -0.6);
       l = new THREE.Vector3(x, 1.35, 0);
@@ -2679,6 +2696,7 @@ function createRide(K, d) {
   const FOV0 = camera.fov;
   let camRoll = 0;
   let turnAhead = 0;   // (28 Oct 2026) how far across the river bends 60 m ahead: the view looks and banks into it
+  const LOOK_IN = 2.2;   // (30 Oct 2026) metres the view may look across into a bend: he stays well inside the picture
 
   // ---------------------------------------------------------------------------------------------- the loop
   let pilotOn = !!d.autopilot;
@@ -2966,7 +2984,9 @@ function createRide(K, d) {
       l.x = lx;
       const u = l.obj.userData;
       // (the animals stand or swim in the river; what floats bobs on it)
-      l.obj.position.set(lx, u.kind === 'croc' || u.kind === 'hippo' || u.kind === 'ele' ? 0 : Math.sin(t * 1.9 + (u.phase || 0)) * 0.08, phase === 'zoo' ? -12 : -ahead);
+      // (30 Oct 2026: a rock stands still too, on the river bed: the owner saw rocks "vibrate")
+      const still = u.kind === 'croc' || u.kind === 'hippo' || u.kind === 'ele' || l.it.kind === 'rock';
+      l.obj.position.set(lx, still ? 0 : Math.sin(t * 1.9 + (u.phase || 0)) * 0.08, phase === 'zoo' ? -12 : -ahead);
       // (29 Oct 2026, the owner: the white water round a floating block "disappears as you get closer and comes back")
       // its ring lay 4 cm over the water and bobbed with it, 8 cm each way: a third of each bob under the water. It
       // stays on the water now while the block, the rock or the swimmer bobs in it
@@ -3189,7 +3209,21 @@ function createRide(K, d) {
       if (a > 3 && a < 55) want = Math.min(want, 0.42);
     }
     timeK += (want - timeK) * Math.min(1, dt * (want < timeK ? 7 : 14));
-    if (!paused || duel) step(dt * timeK);   // (Saam gly: the friend's river doesn't stop, so neither does yours)
+    if (resumeT > 0 && !paused && !duel) {
+      // (the count after a pause: the river waits, 2, 1, then runs on)
+      const left = Math.ceil(resumeT);
+      if (left !== resumeSaid) {
+        resumeSaid = left;
+        go3El.textContent = String(left);
+        go3El.classList.remove('on');
+        void go3El.offsetWidth;
+        go3El.classList.add('on');
+        audio.play('click');
+        haptics.tap?.();
+      }
+      resumeT -= dt;
+      if (resumeT <= 0) { resumeT = 0; go3El.classList.remove('on'); }
+    } else if (!paused || duel) step(dt * timeK);   // (Saam gly: the friend's river doesn't stop, so neither does yours)
     world.reflect(stage.renderer, camera);
     stage.render(dt);
   }
@@ -3329,6 +3363,7 @@ function createRide(K, d) {
   host.style.display = 'block';
   place();
   for (let i = 0; i < 30; i++) cameraFor(0.1);   // (the first frame already looks at the tower top)
+  const TEX_KEYS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap', 'alphaMap', 'bumpMap'];
   /** Every kind of thing the river brings, put out once out of sight so its shaders compile now (no stutter mid-ride). */
   const warmMats = [];   // (their own materials stay until the ride closes: freed while still compiling, WebGL complains)
   async function warmUp() {
@@ -3356,13 +3391,34 @@ function createRide(K, d) {
           for (const o of part) tmp.add(o);
           await stage.renderer.compileAsync(scene, camera);
         }
+        // (30 Oct 2026: and him blinking, as after a knock: his see-through look (two passes a part) was built at the
+        // first knock, eight shaders at once on the phone just as he was hit)
+        rider.setBlink?.(true);
+        await stage.renderer.compileAsync(scene, camera);
+        rider.setBlink?.(false);
       }
       // (in parallel where the phone can: the screen keeps moving while the shaders compile; the owner, 25 Oct 2026: "if I
       // log in then the screen freezes for a second or two, just on river run")
       if (!stage.renderer.compileAsync) {
         scene.add(tmp);
         stage.renderer.compile(scene, camera);
+        rider.setBlink?.(true);
+        stage.renderer.compile(scene, camera);
+        rider.setBlink?.(false);
       }
+      // (30 Oct 2026: their pictures go up to the graphics chip now as well, the island's and the clown's too: on a phone
+      // the first sight of a new thing waited for that mid-ride, one of the stalls of up to a third of a second the
+      // owner filmed)
+      const seen = new Set();
+      scene.traverse((o) => {
+        const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+        for (const m of ms) {
+          for (const k of TEX_KEYS) {
+            const tx = m[k];
+            if (tx?.isTexture && !seen.has(tx)) { seen.add(tx); stage.renderer.initTexture(tx); }
+          }
+        }
+      });
     } catch (e) {
       console.warn?.('[rivier] warm-up', e?.message);
     }
@@ -3530,6 +3586,37 @@ function createRide(K, d) {
     setRank,
     /** For tests: what the graphics chip holds now ({ geometries, textures, programs }). */
     gpu: () => ({ ...stage.renderer.info.memory, programs: stage.renderer.info.programs?.length | 0 }),
+    /** For tests (30 Oct 2026): the shader programs built so far, by name (which ones a ride still compiles mid-way). */
+    programNames: (keys) => (stage.renderer.info.programs || []).map((g) => keys ? `${g.name}#${g.id} ${g.cacheKey}` : `${g.name}#${g.id}`),
+    /** For tests (30 Oct 2026): which things draw with program `id` now (a material's type and name, its object's line). */
+    programUsers(id) {
+      const out = [];
+      scene.traverse((o) => {
+        const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+        for (const m of ms) {
+          if (stage.renderer.properties.get(m).currentProgram?.id !== id) continue;
+          const line = [];
+          for (let q = o; q && line.length < 4; q = q.parent) line.push(q.name || q.type);
+          const holder = live.find((l) => { let q = o; while (q && q !== l.obj) q = q.parent; return !!q; });
+          out.push(`${m.type}:${m.name || '-'} #${m.color?.getHexString?.() || ''} ${o.geometry?.type || ''} on ${line.join('<')}${holder ? ` (${holder.it.kind})` : ''}`);
+        }
+      });
+      return [...new Set(out)].slice(0, 6);
+    },
+    /** For tests (30 Oct 2026): where he shows across the screen, 0 (left edge) to 1 (right edge): his box's two sides. */
+    riderOnScreen() {
+      const b = new THREE.Box3();
+      rider.group.updateMatrixWorld(true);
+      rider.group.traverseVisible((o) => {   // (what shows: not Saturday's cannon)
+        if (!o.isMesh || !o.geometry) return;
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        b.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));
+      });
+      const xs = [];
+      const cz = (b.min.z + b.max.z) / 2;   // (across his middle: the board's near end would widen it)
+      for (const px of [b.min.x, b.max.x]) for (const py of [b.min.y, b.max.y]) xs.push(new THREE.Vector3(px, py, cz).project(camera).x);
+      return { min: Math.round((Math.min(...xs) + 1) * 500) / 1000, max: Math.round((Math.max(...xs) + 1) * 500) / 1000, lane, dist: Math.round(dist) };
+    },
   };
   return api;
 }
