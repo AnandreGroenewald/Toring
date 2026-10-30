@@ -1856,3 +1856,9 @@ test (Alpha) was still 1.15.1: 12104 promoted and sent for review. Website: his 
   in the water (nine on the hail route). `world.reflTarget()` + the warm-up compiles with it as the target, plain and
   blinking. `scripts/qa/shaders12410.mjs high` → 0 built mid-ride (124 in the warm-up); mid → 0. Nonsense 33/33,
   check-all quick ALL CLEAR. 1.24.10 had been approved on closed at 14:42. `~/deploy-stapel-1.24.11.sh` waits his word.
+
+### 30 Oct 2026 ~16:15 — 1.24.12 RELEASED to Play internal (live) + closed Alpha (in review): steering as it was
+- His "The new touch to move is not running smoothly. Rather keep it as it was": the pointer code and the hints are
+  1.24.7's again (swipe one lane, tap left/right half; flicks jump/duck); 1.24.8's finger-follow (dragX) is out.
+  `scripts/qa/steer12412.mjs`: a 60 % slide from the left lane moves ONE lane; taps steer. Nonsense 33/33, check-all
+  quick ALL CLEAR. 1.24.11 had been approved on closed at 15:32. `~/deploy-stapel-1.24.12.sh` waits his word.
